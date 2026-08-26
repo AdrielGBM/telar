@@ -137,15 +137,11 @@ mod smoke {
     #[test]
     fn nav_tracks_theme_after_navigation() {
         use platform_core::{PointerButton, PointerSource};
-        use telar::EventResult;
 
-        // The runner only bumps force-ticks in dev builds. The freeze must not appear in either mode, so the
-        // subscriptions themselves must stay intact; run the whole scenario under both to cover release too.
-        for force_tick in [true, false] {
-            run_theme_tracking_scenario(force_tick);
-        }
+        // This ran twice, once with the dev force-tick and once without, because the tick could hide a missing subscription. There is only one mode now.
+        run_theme_tracking_scenario();
 
-        fn run_theme_tracking_scenario(force_tick: bool) {
+        fn run_theme_tracking_scenario() {
             // A nav button's composed rect: center point + fill color, walking the matrix stack.
             fn nav_rects(tree: &telar::ComponentList) -> Vec<(f32, f32, telar::Color)> {
                 collect_button_rects(tree, |w, _cy| (190.0..230.0).contains(&w))
@@ -180,13 +176,10 @@ mod smoke {
                 out
             }
 
-            // One runner cycle for a single event: begin (new_events), dispatch, dev force-tick, end (flush).
+            // One runner cycle for a single event: begin (new_events), dispatch, end (flush).
             let feed = move |tree: &mut telar::ComponentList, ev: &Event| {
                 telar::begin_batch();
-                let handled = tree.on_event(ev);
-                if force_tick && handled == EventResult::Handled {
-                    tree.bump_force_ticks();
-                }
+                let _ = tree.on_event(ev);
                 telar::end_batch();
             };
             let mv = |x: f32, y: f32| Event::PointerMoved {
@@ -281,7 +274,7 @@ mod smoke {
                     };
                     assert!(
                         close(fill, want),
-                        "force_tick={force_tick} theme={} nav[{i}] of {found} at ({cx:.0},{cy:.0}) fill={:?} != expected {:?} (frozen at a stale theme)",
+                        "theme={} nav[{i}] of {found} at ({cx:.0},{cy:.0}) fill={:?} != expected {:?} (frozen at a stale theme)",
                         theme.name,
                         (fill.r, fill.g, fill.b),
                         (want.r, want.g, want.b),

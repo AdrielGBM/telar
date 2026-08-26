@@ -176,8 +176,6 @@ impl PluginInstance {
     }
 
     /// Lay the content out to the host-assigned sub-rect size, then let it re-lay-out its own scroll viewports.
-    /// `bump_force_ticks` re-runs every segment's view effect so it reads the fresh layout positions — the
-    /// plugin's own reactive runtime doesn't track the host's layout writes, exactly like the hot-reload path.
     pub fn relayout(&mut self, width: f32, height: f32) {
         let _g = self.surface.enter();
         self.size = (width, height);
@@ -191,7 +189,6 @@ impl PluginInstance {
         // synchronous flush re-runs the segment's `view()`, which borrows the same `RefCell` (double borrow).
         let embedded = &self.embedded;
         reactive_core::batch(|| embedded.borrow_mut().relayout_viewports());
-        self.tree.bump_force_ticks();
     }
 
     /// Re-lay-out only what the plugin's own reactive changes dirtied (a list grew, a panel toggled), at the
@@ -299,7 +296,6 @@ impl PluginInstance {
         let _g = self.surface.enter();
         let embedded = &self.embedded;
         reactive_core::batch(|| embedded.borrow_mut().activate());
-        self.tree.bump_force_ticks();
     }
 
     pub fn clear_color(&self) -> Option<Color> {

@@ -11,35 +11,11 @@ use std::cell::{Cell, Ref, RefCell};
 use std::rc::Rc;
 
 use geometry_core::Rect;
-use reactive_core::{RwSignal, effect, signal};
+use reactive_core::effect;
 use renderer_core::DrawCommand;
 
 use crate::component::Component;
 use crate::render_node::RenderNode;
-
-reactive_core::surface_local! {
-    /// A per-surface force-tick signal, subscribed by every segment on that surface. Bumped after each event
-    /// so segments re-run even when their view reads signals the effect cannot auto-track — notably the
-    /// binary-side root segment under hot reload, whose view reads signals created in the app dylib
-    /// (cross-boundary tracking is unreliable, so the force-tick makes it re-read current values, e.g. the
-    /// real viewport). Per-surface so one surface's event does not force-render the others; a global change
-    /// (theme) re-renders all surfaces via its own shared signal, not this tick.
-    slot FORCE_TICK: RwSignal<u64> = signal(0);
-    access with_force_tick, with_force_tick_ref;
-    context ForceTickContext, ForceTickGuard;
-}
-
-/// The active surface's force-tick signal (cloned out of the slot so callers never hold the slot borrow
-/// across a `.set()`, whose flush would re-enter the slot to read the tick).
-fn force_tick() -> RwSignal<u64> {
-    with_force_tick_ref(|s| *s)
-}
-
-/// Forces every segment subscribed to the active surface's `FORCE_TICK` to re-run on the next flush.
-pub fn bump_force_ticks() {
-    let tick = force_tick();
-    tick.set(tick.peek().wrapping_add(1));
-}
 
 /// (index into `own` where the child's commands splice, child segment, whether inside an `Overlay`).
 type ChildSlots = Vec<(usize, Rc<Segment>, bool)>;
@@ -128,7 +104,6 @@ impl Segment {
         let slots_c = Rc::clone(&child_slots);
         let dirty_c = Rc::clone(&is_dirty);
         effect(move || {
-            force_tick().get(); // re-run on force-tick (cross-boundary inputs / hot reload)
             let Some(node) = render() else {
                 return; // widget is mutably borrowed (event dispatch); keep last render
             };

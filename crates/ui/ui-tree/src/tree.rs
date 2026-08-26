@@ -51,11 +51,6 @@ impl ComponentList {
         // consumed the event. See `overlay_dispatch` and `crate::app::App::dispatch_overlays`.
         batch(|| self.root.borrow_mut().on_event(event))
     }
-
-    // In hot-reload mode the dylib's reactive signals are not tracked by the binary's effects, so state changes from on_event (e.g. WindowResized updating layout) would never trigger a re-render. Call this after on_event to force every segment's view effect to re-run so it reads fresh layout and state.
-    pub fn bump_force_ticks(&self) {
-        batch(segment::bump_force_ticks);
-    }
 }
 
 #[cfg(test)]

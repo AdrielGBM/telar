@@ -51,10 +51,10 @@ pub fn new_container(style: LayoutStyle, children: &[NodeId]) -> Result<NodeId, 
     with_runtime(|rt| rt.new_container(style, children))
 }
 
-/// Lays out `root` against the given space and reflects the result into each node's rect signal.
-/// Collects the (signal, rect) updates while holding the runtime borrow, then applies them in a batch
-/// *after* releasing it — a rect `.set()` can flush effects, and one of those may itself touch the
-/// layout runtime (a reactive list), which would re-enter the borrow.
+/// Lays out `root` against the given space and reflects the result into the signals that watch it.
+/// Collects the updates while holding the runtime borrow, then applies them in a batch *after* releasing it
+/// — a `.set()` can flush effects, and one of those may itself touch the layout runtime (a reactive list),
+/// which would re-enter the borrow.
 pub fn compute_layout(
     root: NodeId,
     width: AvailableSpace,
@@ -65,9 +65,14 @@ pub fn compute_layout(
     with_runtime(|rt| rt.engine.set_direction(direction));
     let updates = with_runtime(|rt| rt.compute_layout(root, width, height))?;
     batch(|| {
-        for (sig, rect) in updates {
-            if sig.peek() != rect {
-                sig.set(rect);
+        for update in updates {
+            match update {
+                Update::Rect(sig, rect) => {
+                    if sig.peek() != rect {
+                        sig.set(rect);
+                    }
+                }
+                Update::Position(sig, at) => sig.set(at),
             }
         }
     });
@@ -92,6 +97,13 @@ pub fn relayout_if_dirty() {
     }
 }
 
+/// One signal a completed layout has to move, collected under the runtime borrow and applied outside it.
+enum Update {
+    Rect(RwSignal<Rect>, Rect),
+    /// Window-absolute top-left, for the nodes something anchors to. See `LayoutRuntime::abs_pos_signals`.
+    Position(RwSignal<(f32, f32)>, (f32, f32)),
+}
+
 pub fn track_layout(node: NodeId) -> Option<RwSignal<Rect>> {
     with_runtime(|rt| rt.track_layout(node))
 }
@@ -105,11 +117,18 @@ pub fn track_layout(node: NodeId) -> Option<RwSignal<Rect>> {
 /// it out, so a node inside a scrolled viewport appears somewhere else on screen — `ui_core::visible_rect`
 /// applies the offsets on top of this, which is what an anchored overlay wants.
 pub fn absolute_rect(node: NodeId) -> Option<Rect> {
-    with_runtime(|rt| {
-        let &(x, y) = rt.abs_pos.get(&node)?;
-        let size = rt.registry.get(&node).map(|s| s.peek()).unwrap_or_default();
-        Some(Rect::new(x, y, size.width, size.height))
-    })
+    // Both halves subscribe, which is what makes an anchored overlay follow its trigger on its own. It peeked at both before — position through a plain map with no signal at all — so nothing could wake on a move, and the only way to refresh a reader was to re-run every segment on the surface. That was the force-tick, and this is what removed the need for it.
+    let (position, size) = with_runtime(|rt| {
+        let position = *rt.abs_pos.get(&node)?;
+        let signal = *rt
+            .abs_pos_signals
+            .entry(node)
+            .or_insert_with(|| reactive_core::detached(|| reactive_core::signal(position)));
+        Some((signal, rt.registry.get(&node).copied()))
+    })?;
+    let (x, y) = position.get();
+    let size = size.map(|s| s.get()).unwrap_or_default();
+    Some(Rect::new(x, y, size.width, size.height))
 }
 
 /// The node `node` hangs from, or `None` at a root.
@@ -330,6 +349,12 @@ struct LayoutRuntime {
     // map is the ONE place with window-absolute positions, so `absolute_rect` can anchor a portaled overlay
     // (which hoists out of ancestor transforms → needs absolute coords) to a trigger in a sub-root.
     abs_pos: FxHashMap<NodeId, (f32, f32)>,
+    /// The observable half of `abs_pos`, minted on first `absolute_rect` and never eagerly.
+    ///
+    /// Lazy is a constraint, not a preference: `new_leaf` already creates a rect signal per node, so minting
+    /// a second one per node would double the reactive arena and its subscription bookkeeping for a value
+    /// almost nothing reads. Absolute position is what a portalled overlay anchors to — a handful of nodes.
+    abs_pos_signals: FxHashMap<NodeId, RwSignal<(f32, f32)>>,
     // Guards against recursive compute(): an effect that reads a layout signal and calls compute_layout() again creates a re-layout cycle caught immediately in debug builds.
     #[cfg(debug_assertions)]
     is_computing: bool,
@@ -346,6 +371,7 @@ impl LayoutRuntime {
             overlay_host: None,
             host_pinned: false,
             abs_pos: FxHashMap::default(),
+            abs_pos_signals: FxHashMap::default(),
             #[cfg(debug_assertions)]
             is_computing: false,
         }
@@ -397,7 +423,7 @@ impl LayoutRuntime {
         root: NodeId,
         width: AvailableSpace,
         height: AvailableSpace,
-    ) -> Result<Vec<(RwSignal<Rect>, Rect)>, LayoutError> {
+    ) -> Result<Vec<Update>, LayoutError> {
         // A top-level root (no parent) computed against the window is the overlay host: overlays attach
         // their content here so a portal fills the viewport wherever it is declared. Refreshed each compute
         // so it stays current across a hot-reload rebuild (which mints a new root node). A definite height
@@ -469,7 +495,7 @@ impl LayoutRuntime {
             .compute_layout(layout_root, layout_width, layout_height)?;
         // Collect the changed rects while holding the runtime borrow, but apply them (`sig.set`) only
         // after the caller releases it: a set flushes effects, one of which may re-enter the runtime.
-        let mut updates: Vec<(RwSignal<Rect>, Rect)> = Vec::new();
+        let mut updates: Vec<Update> = Vec::new();
         // Only a full walk of a parent-less root runs from the window origin, so only then are the walked
         // rects window-absolute. A sub-boundary or sub-root walk is root-local — don't capture those.
         let is_window_walk = layout_root == root && with_parents_ref(|p| !p.contains_key(&root));
@@ -478,7 +504,7 @@ impl LayoutRuntime {
         let walk_result = self.engine.walk(layout_root, &mut |node_id, rect| {
             if let Some(sig) = registry.get(&node_id) {
                 if sig.peek() != rect {
-                    updates.push((*sig, rect));
+                    updates.push(Update::Rect(*sig, rect));
                 }
             }
             if is_window_walk {
@@ -488,6 +514,12 @@ impl LayoutRuntime {
         });
         for (n, x, y) in abs_updates {
             self.abs_pos.insert(n, (x, y));
+            // Only where somebody asked: a node nobody anchors to has no signal and never gets one.
+            if let Some(sig) = self.abs_pos_signals.get(&n)
+                && sig.peek() != (x, y)
+            {
+                updates.push(Update::Position(*sig, (x, y)));
+            }
         }
         #[cfg(debug_assertions)]
         {
@@ -557,6 +589,7 @@ impl LayoutRuntime {
         self.last_space.remove(&node);
         self.root_auto.remove(&node);
         self.abs_pos.remove(&node);
+        self.abs_pos_signals.remove(&node);
     }
 }
 

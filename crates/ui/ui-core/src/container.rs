@@ -343,7 +343,7 @@ mod tests {
     }
 
     #[test]
-    fn click_with_force_tick_does_not_panic() {
+    fn a_click_that_rerenders_the_widget_it_landed_on_does_not_panic() {
         use crate::context::track_layout;
         use crate::styled_container::StyledContainer;
         use platform_core::PointerButton;
@@ -407,7 +407,6 @@ mod tests {
                 }
             };
             if tree.on_event(&ev) == EventResult::Handled {
-                tree.bump_force_ticks();
                 end_batch();
                 begin_batch();
             }

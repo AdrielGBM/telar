@@ -10,5 +10,5 @@ pub use overlay_dispatch::{
     unregister_overlay,
 };
 pub use render_node::{NodeVec, RenderNode};
-pub use segment::{ForceTickContext, ForceTickGuard, Segment, SegmentNodeInfo, SegmentRoot};
+pub use segment::{Segment, SegmentNodeInfo, SegmentRoot};
 pub use tree::ComponentList;

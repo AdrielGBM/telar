@@ -1443,7 +1443,7 @@ mod tests {
 
     // Clicking a theme button (which sets the global THEME) while a themed StyledContainer ancestor is on the dispatch stack must not re-enter that ancestor's render segment mid borrow_mut.
     #[test]
-    fn theme_button_click_force_tick_no_panic() {
+    fn a_theme_button_click_that_repaints_the_tree_does_not_panic() {
         set_theme(TestTheme(Color::RED));
 
         reset_layout_runtime();
@@ -1487,7 +1487,6 @@ mod tests {
             source: PointerSource::Mouse,
         });
         if handled == EventResult::Handled {
-            tree.bump_force_ticks();
             reactive_core::end_batch();
             reactive_core::begin_batch();
         }

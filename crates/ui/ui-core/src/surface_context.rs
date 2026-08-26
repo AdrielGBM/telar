@@ -20,7 +20,7 @@ use reactive_core::{
     SurfaceEnterGuard, SurfaceHandle, dispose_surface_owners, set_current_surface,
     set_surface_enter_hook,
 };
-use ui_tree::{ForceTickContext, ForceTickGuard, OverlayContext, OverlayGuard};
+use ui_tree::{OverlayContext, OverlayGuard};
 
 use crate::focus::{FocusContext, FocusGuard};
 use crate::input_region::{InputRegionContext, InputRegionGuard};
@@ -35,7 +35,6 @@ pub struct Surface {
     overlay: OverlayContext,
     focus: FocusContext,
     input_region: InputRegionContext,
-    force_tick: ForceTickContext,
     window_commands: WindowCommandContext,
 }
 
@@ -53,7 +52,6 @@ impl Surface {
             overlay: OverlayContext::new(),
             focus: FocusContext::new(),
             input_region: InputRegionContext::new(),
-            force_tick: ForceTickContext::new(),
             window_commands: WindowCommandContext::new(),
         });
         SURFACES.with(|s| s.borrow_mut().insert(handle, Rc::downgrade(&surface)));
@@ -78,7 +76,6 @@ impl Surface {
             _overlay: self.overlay.enter(),
             _focus: self.focus.enter(),
             _input_region: self.input_region.enter(),
-            _force_tick: self.force_tick.enter(),
             _window_commands: self.window_commands.enter(),
             _prev_surface: RestoreSurface(prev_surface),
         }
@@ -101,7 +98,6 @@ impl Surface {
             _overlay: OverlayContext::enter_ambient(),
             _focus: FocusContext::enter_ambient(),
             _input_region: InputRegionContext::enter_ambient(),
-            _force_tick: ForceTickContext::enter_ambient(),
             _window_commands: WindowCommandContext::enter_ambient(),
             _prev_surface: RestoreSurface(prev_surface),
         }
@@ -130,7 +126,6 @@ pub struct SurfaceGuard {
     _overlay: OverlayGuard,
     _focus: FocusGuard,
     _input_region: InputRegionGuard,
-    _force_tick: ForceTickGuard,
     _window_commands: WindowCommandGuard,
     _prev_surface: RestoreSurface,
 }

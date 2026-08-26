@@ -98,17 +98,13 @@ impl crate::app::App for HotApp {
 
     // Mount inside the dylib, where the app's signals live: a tree mounted out here would register its segment
     // effects in the host's reactive runtime and never subscribe to anything the app writes (see `crate::tree`).
-    // A dylib built before these shims existed falls back to the old host-side mount, which still runs — driven
-    // by the force-tick workaround — rather than failing to start.
+    // A dylib too old to export them has no fallback any more: the host-side mount only worked because the force-tick re-ran every segment on every event, and that is gone. An app that repaints when the mouse moves and at no other time is worse than one that refuses to start.
     fn mount(&mut self) -> Box<dyn crate::tree::UiTree> {
         match HotTreeHandle::mount(&self._lib, self.inner.as_ref()) {
             Some(handle) => Box::new(handle),
-            None => {
-                tracing::warn!(
-                    "dylib exports no app-side tree mount; falling back to host-side mounting (rebuild it)"
-                );
-                Box::new(crate::tree::LocalTree::new(self.inner.root()))
-            }
+            None => panic!(
+                "this dylib exports no app-side tree mount — rebuild it against the current telar"
+            ),
         }
     }
 

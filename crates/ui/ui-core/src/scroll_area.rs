@@ -924,7 +924,7 @@ mod tests {
     }
 
     #[test]
-    fn scroll_content_click_force_tick_no_panic() {
+    fn a_click_inside_scrolled_content_that_rerenders_it_does_not_panic() {
         use crate::container::Container;
         use crate::context::track_layout;
         use crate::styled_container::StyledContainer;
@@ -989,7 +989,6 @@ mod tests {
                 }
             };
             if tree.on_event(&ev) == EventResult::Handled {
-                tree.bump_force_ticks();
                 end_batch();
                 begin_batch();
             }
