@@ -76,7 +76,7 @@ pub fn memo<T: PartialEq + 'static>(f: impl Fn() -> T + 'static) -> Memo<T> {
     let inner: Rc<RefCell<MemoInner<T>>> = Rc::new(RefCell::new(MemoInner {
         state: MemoState::Dirty,
         subscribers: SmallVec::new(),
-        effect_id: 0,
+        effect_id: EffectId::default(),
     }));
 
     let weak: Weak<RefCell<MemoInner<T>>> = Rc::downgrade(&inner);

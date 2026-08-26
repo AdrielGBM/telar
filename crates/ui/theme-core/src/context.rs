@@ -162,7 +162,7 @@ pub trait ThemeTokens: 'static {
 }
 
 thread_local! {
-    // ManuallyDrop suppresses RwSignal's Drop impl so no TLS destructor is registered. Cleanup happens via reset_runtime() which drops the entire Runtime (and its signals slab).
+    // ManuallyDrop suppresses RwSignal's Drop impl so no TLS destructor is registered. Cleanup happens via reset_runtime() which drops the entire Runtime (and its signal arena).
     // The same value behind two views: the catalogue asks it questions through `ThemeTokens`, and `use_theme` hands the application its own type back. `Rc<dyn Any>` is the whole of what the downcast needs, which is why a theme no longer implements a trait to supply it.
     static THEME: ManuallyDrop<RwSignal<Option<Rc<dyn Any>>>> = ManuallyDrop::new(signal(None));
     static THEME_TOKENS: ManuallyDrop<RwSignal<Option<Rc<dyn ThemeTokens>>>> =

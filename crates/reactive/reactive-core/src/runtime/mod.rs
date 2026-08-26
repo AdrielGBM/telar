@@ -5,6 +5,7 @@ use std::panic::Location;
 use std::rc::Rc;
 
 use rustc_hash::FxHashSet;
+use slotmap::SlotMap;
 
 mod effects;
 mod flush;
@@ -24,8 +25,11 @@ pub use surface::{
     SurfaceEnterGuard, SurfaceHandle, current_surface, set_current_surface, set_surface_enter_hook,
 };
 
-pub(crate) type EffectId = usize;
-pub(crate) type SignalId = usize;
+// Versioned, not raw arena indices: a freed slot is handed straight back, so under a plain index a handle outliving its signal addressed whatever moved in — and `with_signal_value` only noticed when the new value had a different type. Same type, same index, wrong signal, no panic. The version is what turns that read into a miss.
+slotmap::new_key_type! {
+    pub(crate) struct EffectId;
+    pub(crate) struct SignalId;
+}
 
 pub(crate) struct EffectEntry {
     pub(crate) callback: Box<dyn Fn()>,
@@ -49,14 +53,14 @@ pub(crate) struct SignalStorage {
     pub(crate) subscribers: Vec<EffectId>,
     // For each subscriber: the index in that effect's `source_slots` vec that records this signal.
     pub(crate) observer_slots: Vec<usize>,
-    // Handle reference count; the slab slot is freed when it reaches zero.
+    // Handle reference count; the slot is freed when it reaches zero.
     pub(crate) ref_count: usize,
 }
 
 pub(crate) struct Runtime {
     pub(crate) observer_stack: Vec<EffectId>,
-    pub(crate) effects: slab::Slab<EffectEntry>,
-    pub(crate) signals: slab::Slab<SignalStorage>,
+    pub(crate) effects: SlotMap<EffectId, EffectEntry>,
+    pub(crate) signals: SlotMap<SignalId, SignalStorage>,
     pub(crate) batch_depth: usize,
     pub(crate) pending: Vec<EffectId>,
     pub(crate) memo_pending: BinaryHeap<(Reverse<u32>, EffectId)>,
@@ -73,8 +77,8 @@ impl Runtime {
     fn new() -> Self {
         Runtime {
             observer_stack: Vec::new(),
-            effects: slab::Slab::new(),
-            signals: slab::Slab::new(),
+            effects: SlotMap::with_key(),
+            signals: SlotMap::with_key(),
             batch_depth: 0,
             pending: Vec::new(),
             memo_pending: BinaryHeap::new(),

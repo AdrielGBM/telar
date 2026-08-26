@@ -49,11 +49,7 @@ pub(crate) fn deregister_effect(id: EffectId) {
     clean_effect(id);
     let removed = RUNTIME.with(|rt| {
         let mut rt = rt.borrow_mut();
-        let removed = if rt.effects.contains(id) {
-            Some(rt.effects.remove(id))
-        } else {
-            None
-        };
+        let removed = rt.effects.remove(id);
         rt.pending_set.remove(&id);
         removed
     });
@@ -61,13 +57,13 @@ pub(crate) fn deregister_effect(id: EffectId) {
 }
 
 pub(crate) fn is_alive(id: EffectId) -> bool {
-    RUNTIME.with(|rt| rt.borrow().effects.contains(id))
+    RUNTIME.with(|rt| rt.borrow().effects.contains_key(id))
 }
 
 pub(crate) fn schedule(id: EffectId) {
     let should_flush = RUNTIME.with(|rt| {
         let mut rt = rt.borrow_mut();
-        let alive = rt.effects.contains(id);
+        let alive = rt.effects.contains_key(id);
         if alive {
             // schedule() is only ever called by memo change notification; flag the subscriber so run_effect's signal-version shortcut cannot skip a genuinely-dirty memo read.
             rt.effects[id].memo_dirty = true;
@@ -102,7 +98,7 @@ pub(crate) fn clean_effect(id: EffectId) {
     for (&sig_id, &slot) in sources.iter().zip(source_slots.iter()) {
         RUNTIME.with(|rt| {
             let mut rt = rt.borrow_mut();
-            if !rt.signals.contains(sig_id) {
+            if !rt.signals.contains_key(sig_id) {
                 return;
             }
             let sig = &mut rt.signals[sig_id];
@@ -133,7 +129,7 @@ pub(crate) fn clean_effect(id: EffectId) {
 pub(crate) fn run_effect(id: EffectId) {
     let ptr = RUNTIME.with(|rt| {
         let mut rt = rt.borrow_mut();
-        if !rt.effects.contains(id) {
+        if !rt.effects.contains_key(id) {
             return None;
         }
         // Epoch-based dedup: skip if already ran this flush cycle
@@ -159,7 +155,7 @@ pub(crate) fn run_effect(id: EffectId) {
                 .iter()
                 .zip(stored_versions.iter())
                 .all(|(&sig_id, &ver)| {
-                    if rt.signals.contains(sig_id) {
+                    if rt.signals.contains_key(sig_id) {
                         rt.signals[sig_id].version == ver
                     } else {
                         false
@@ -170,7 +166,7 @@ pub(crate) fn run_effect(id: EffectId) {
             }
         }
 
-        // SAFETY: The slab owns this Box. No effect closure in this codebase captures its own Effect handle, so deregistration cannot happen during execution.
+        // SAFETY: The arena owns this Box. No effect closure in this codebase captures its own Effect handle, so deregistration cannot happen during execution.
         let ptr: *const dyn Fn() = &*rt.effects[id].callback;
         let surface = rt.effects[id].surface;
         Some((ptr, surface)) // Don't push observer_stack yet; clean_effect must run first
@@ -207,7 +203,7 @@ pub(crate) fn run_effect(id: EffectId) {
             let versions: Vec<u64> = sig_ids
                 .iter()
                 .map(|&sig_id| {
-                    if rt.signals.contains(sig_id) {
+                    if rt.signals.contains_key(sig_id) {
                         rt.signals[sig_id].version
                     } else {
                         0

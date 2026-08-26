@@ -5,23 +5,20 @@ use super::{EffectId, RUNTIME, SignalId, SignalStorage};
 
 pub(crate) fn create_signal_storage<T: 'static>(value: T, initial_ref_count: usize) -> SignalId {
     RUNTIME.with(|rt| {
-        let mut rt = rt.borrow_mut();
-        let id = rt.signals.insert(SignalStorage {
+        rt.borrow_mut().signals.insert(SignalStorage {
             value: Box::new(value),
             version: 0,
             subscribers: Vec::new(),
             observer_slots: Vec::new(),
             ref_count: initial_ref_count,
-        });
-        id
+        })
     })
 }
 
 pub(crate) fn clone_signal(id: SignalId) {
     RUNTIME.with(|rt| {
-        let mut rt = rt.borrow_mut();
-        if rt.signals.contains(id) {
-            rt.signals[id].ref_count += 1;
+        if let Some(storage) = rt.borrow_mut().signals.get_mut(id) {
+            storage.ref_count += 1;
         }
     });
 }
@@ -32,12 +29,10 @@ pub(crate) fn drop_signal(id: SignalId) {
     // while still holding the borrow here would double-borrow the runtime and abort during teardown.
     let removed = RUNTIME.with(|rt| {
         let mut rt = rt.borrow_mut();
-        if !rt.signals.contains(id) {
-            return None;
-        }
-        rt.signals[id].ref_count -= 1;
-        if rt.signals[id].ref_count == 0 {
-            Some(rt.signals.remove(id))
+        let storage = rt.signals.get_mut(id)?;
+        storage.ref_count -= 1;
+        if storage.ref_count == 0 {
+            rt.signals.remove(id)
         } else {
             None
         }
@@ -45,10 +40,12 @@ pub(crate) fn drop_signal(id: SignalId) {
     drop(removed);
 }
 
+const DEAD: &str = "signal read after its storage was freed";
+
 pub(crate) fn with_signal_value<T: 'static, R>(id: SignalId, f: impl FnOnce(&T) -> R) -> R {
     RUNTIME.with(|rt| {
         let rt = rt.borrow();
-        let storage = &rt.signals[id];
+        let storage = rt.signals.get(id).expect(DEAD);
         f(storage
             .value
             .downcast_ref::<T>()
@@ -59,7 +56,7 @@ pub(crate) fn with_signal_value<T: 'static, R>(id: SignalId, f: impl FnOnce(&T) 
 pub(crate) fn set_signal_value<T: 'static>(id: SignalId, value: T) {
     RUNTIME.with(|rt| {
         let mut rt = rt.borrow_mut();
-        let storage = &mut rt.signals[id];
+        let storage = rt.signals.get_mut(id).expect(DEAD);
         *storage
             .value
             .downcast_mut::<T>()
@@ -70,7 +67,7 @@ pub(crate) fn set_signal_value<T: 'static>(id: SignalId, value: T) {
 pub(crate) fn update_signal_value<T: 'static>(id: SignalId, f: impl FnOnce(&mut T)) {
     RUNTIME.with(|rt| {
         let mut rt = rt.borrow_mut();
-        let storage = &mut rt.signals[id];
+        let storage = rt.signals.get_mut(id).expect(DEAD);
         f(storage
             .value
             .downcast_mut::<T>()
@@ -85,14 +82,14 @@ pub(crate) fn track_signal(id: SignalId) {
             Some(id) => id,
             None => return,
         };
-        if !rt.effects.contains(observer_id) {
+        if !rt.effects.contains_key(observer_id) {
             return;
         }
         // Already subscribed during this run.
         if rt.effects[observer_id].sources.contains(&id) {
             return;
         }
-        if !rt.signals.contains(id) {
+        if !rt.signals.contains_key(id) {
             return;
         }
         let sub_slot = rt.signals[id].subscribers.len();
@@ -110,7 +107,7 @@ pub(crate) fn track_signal(id: SignalId) {
 pub(crate) fn notify_signal(id: SignalId) {
     let should_flush = RUNTIME.with(|rt| {
         let mut rt = rt.borrow_mut();
-        if !rt.signals.contains(id) {
+        if !rt.signals.contains_key(id) {
             return false;
         }
         rt.signals[id].version += 1;
@@ -126,7 +123,7 @@ pub(crate) fn notify_signal(id: SignalId) {
         let mut any_scheduled = false;
         let mut dead: Vec<EffectId> = Vec::new();
         for &sub_id in &subs {
-            if rt.effects.contains(sub_id) {
+            if rt.effects.contains_key(sub_id) {
                 if rt.pending_set.insert(sub_id) {
                     if rt.effects[sub_id].is_pure {
                         let h = rt.effects[sub_id].height;
@@ -142,7 +139,7 @@ pub(crate) fn notify_signal(id: SignalId) {
         }
 
         // Drop dead subscribers inline; we already hold the runtime borrow.
-        if !dead.is_empty() && rt.signals.contains(id) {
+        if !dead.is_empty() && rt.signals.contains_key(id) {
             let sig = &mut rt.signals[id];
             let mut i = 0;
             while i < sig.subscribers.len() {
@@ -162,5 +159,31 @@ pub(crate) fn notify_signal(id: SignalId) {
     });
     if should_flush {
         flush();
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use slotmap::Key;
+
+    use super::*;
+
+    /// The hazard versioned keys exist for, written down. The arena hands the freed slot straight back, so
+    /// under a raw index the id that freed it addressed whatever moved in — and when that was the same type,
+    /// `with_signal_value` downcast cleanly and returned the wrong signal's value with nothing to notice.
+    #[test]
+    fn the_id_that_freed_a_slot_cannot_read_what_moves_into_it() {
+        let first = create_signal_storage(1i32, 1);
+        drop_signal(first);
+        let second = create_signal_storage(2i32, 1);
+
+        let slot = |key: SignalId| key.data().as_ffi() as u32;
+        assert_eq!(slot(first), slot(second), "the slot is reused immediately");
+        assert_ne!(first, second, "but the id that freed it is not");
+        assert_eq!(with_signal_value::<i32, _>(second, |v| *v), 2);
+        assert!(
+            RUNTIME.with(|rt| !rt.borrow().signals.contains_key(first)),
+            "and the stale id resolves to nothing, though its slot is occupied"
+        );
     }
 }
