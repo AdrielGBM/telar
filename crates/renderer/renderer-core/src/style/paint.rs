@@ -25,6 +25,20 @@ impl Paint {
                 .map_or(Color::TRANSPARENT, |s| s.color),
         }
     }
+
+    /// The same paint at a fraction of the opacity it already had.
+    ///
+    /// Scales the alpha rather than setting one, so quieting something already quiet makes it quieter rather
+    /// than louder — which is what a caller means when the paint is one it was handed rather than one it chose.
+    pub fn faded(self, factor: f32) -> Self {
+        match self {
+            Paint::Solid(c) => Paint::Solid(c.with_alpha(c.a * factor)),
+            Paint::Gradient(g) => Paint::Gradient(Gradient {
+                stops: g.stops.faded(factor),
+                ..g
+            }),
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]

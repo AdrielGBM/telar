@@ -39,6 +39,14 @@ impl GradientStops {
     pub fn active(&self) -> &[GradientStop] {
         &self.stops[..self.count as usize]
     }
+
+    /// Every stop at a fraction of the opacity it already had.
+    pub fn faded(mut self, factor: f32) -> Self {
+        for stop in &mut self.stops[..self.count as usize] {
+            stop.color = stop.color.with_alpha(stop.color.a * factor);
+        }
+        self
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
