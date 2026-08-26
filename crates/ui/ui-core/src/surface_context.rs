@@ -14,7 +14,7 @@ use std::cell::{Cell, RefCell};
 use std::collections::HashMap;
 use std::rc::{Rc, Weak};
 
-use layout_reactive::{LayoutContext, LayoutGuard};
+use layout_reactive::{LayoutContext, LayoutGuard, ParentsContext, ParentsGuard};
 use platform_core::{WindowCommandContext, WindowCommandGuard};
 use reactive_core::{
     SurfaceEnterGuard, SurfaceHandle, set_current_surface, set_surface_enter_hook,
@@ -30,6 +30,8 @@ use crate::input_region::{InputRegionContext, InputRegionGuard};
 pub struct Surface {
     handle: SurfaceHandle,
     layout: LayoutContext,
+    /// Which node hangs from which, swapped with `layout` and never apart from it. Each surface's layout tree mints its node ids from its own counter, so the same `NodeId` names a different node in every surface — one shared map would have them overwrite each other's links, and a climb would leave the surface it started in. It is a separate world only because a measure closure runs inside the layout runtime's borrow and reaching back into it would re-enter.
+    parents: ParentsContext,
     overlay: OverlayContext,
     focus: FocusContext,
     input_region: InputRegionContext,
@@ -51,6 +53,7 @@ impl Surface {
         let surface = Rc::new(Self {
             handle,
             layout: LayoutContext::new(),
+            parents: ParentsContext::new(),
             overlay: OverlayContext::new(),
             focus: FocusContext::new(),
             input_region: InputRegionContext::new(),
@@ -76,6 +79,7 @@ impl Surface {
         let prev_surface = set_current_surface(self.handle);
         SurfaceGuard {
             _layout: self.layout.enter(),
+            _parents: self.parents.enter(),
             _overlay: self.overlay.enter(),
             _focus: self.focus.enter(),
             _input_region: self.input_region.enter(),
@@ -99,6 +103,7 @@ impl Surface {
         let prev_surface = set_current_surface(SurfaceHandle::NONE);
         SurfaceGuard {
             _layout: LayoutContext::enter_ambient(),
+            _parents: ParentsContext::enter_ambient(),
             _overlay: OverlayContext::enter_ambient(),
             _focus: FocusContext::enter_ambient(),
             _input_region: InputRegionContext::enter_ambient(),
@@ -123,6 +128,7 @@ impl Drop for Surface {
 #[must_use = "the surface is only active while this guard is alive"]
 pub struct SurfaceGuard {
     _layout: LayoutGuard,
+    _parents: ParentsGuard,
     _overlay: OverlayGuard,
     _focus: FocusGuard,
     _input_region: InputRegionGuard,
@@ -189,6 +195,36 @@ mod tests {
     use reactive_core::{current_surface, effect, signal};
 
     use super::Surface;
+
+    // While the parent links lived in a single ambient map, namesakes from different surfaces overwrote each other and a climb begun in one surface walked another's tree — which is how a shell with eleven surfaces found an "ancestor" that was a sibling elsewhere, and hung climbing to a root that was not on that path.
+    #[test]
+    fn one_surfaces_parent_links_never_answer_for_another() {
+        use layout_reactive::{LayoutStyle, new_container, parent};
+
+        let a = Surface::new();
+        let b = Surface::new();
+
+        let (child_in_a, host_in_a) = {
+            let _guard = a.enter();
+            let child = new_container(LayoutStyle::new(), &[]).unwrap();
+            let host = new_container(LayoutStyle::new(), &[child]).unwrap();
+            assert_eq!(parent(child), Some(host));
+            (child, host)
+        };
+
+        let _guard = b.enter();
+        let child_in_b = new_container(LayoutStyle::new(), &[]).unwrap();
+        assert_eq!(
+            child_in_b, child_in_a,
+            "the two surfaces must really collide on ids, or this proves nothing"
+        );
+        assert_eq!(
+            parent(child_in_b),
+            None,
+            "a's link answered for b's node — the namesake, not the node"
+        );
+        assert_ne!(parent(child_in_b), Some(host_in_a));
+    }
 
     // Two surfaces on one thread keep isolated layout worlds, and an effect built under surface A re-enters A
     // when a shared signal set "from" surface B triggers it (the M3 owner-scope contract, end-to-end).
