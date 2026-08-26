@@ -34,9 +34,11 @@ fn bubble_pad_x() -> f32 {
 fn bubble_pad_y() -> f32 {
     shared::spacing() * 0.6
 }
-fn bubble_text_size() -> f32 {
-    shared::font_size() * 0.85
-}
+/// A bubble's share of the text around whatever it is describing. The name line takes it whole; the shortcut
+/// and the sentence step down from there, because a bubble that says three things has to rank them.
+const BUBBLE_RATIO: f32 = 0.85;
+const SHORTCUT_RATIO: f32 = BUBBLE_RATIO * 0.9;
+const DESCRIPTION_RATIO: f32 = BUBBLE_RATIO * 0.92;
 
 /// A hover popup: wraps its slot (the trigger content) and, while the mouse is over it, shows a small `text`
 /// bubble anchored just below the trigger. Built on the `overlay` primitive's anchored variant (the bubble is
@@ -234,15 +236,13 @@ impl Content {
             shortcut,
             description,
         } = self;
-        // `auto` (measured) so each line gets its intrinsic WIDTH in the row; a plain `Text::new` only
-        // stretches its cross-axis, leaving width 0 and the bubble empty.
-        let name = Text::new(
+        let name = Text::declaring(
             move || text(),
             LayoutStyle::new(),
-            || TextStyle::new(bubble_text_size(), BUBBLE_INK).with_text_wrap(TextWrap::NoWrap),
+            |t| bubble_text(t, BUBBLE_RATIO, 1.0).with_text_wrap(TextWrap::NoWrap),
         )?;
-        let key = optional_line(shortcut, || {
-            TextStyle::new(bubble_text_size() * 0.9, dim(0.6)).with_text_wrap(TextWrap::NoWrap)
+        let key = optional_line(shortcut, |t| {
+            bubble_text(t, SHORTCUT_RATIO, 0.6).with_text_wrap(TextWrap::NoWrap)
         })?;
         // The shortcut is pushed apart with `SPACE_BETWEEN` and not with a growing spacer: a spacer wants all
         // the width there is, so the bubble took its 240px maximum whatever it said. This way the row
@@ -257,9 +257,8 @@ impl Content {
             vec![box_item(name), box_item(key)],
         )?;
         // The only line in a bubble that wraps, so the only one whose leading is set: at the shaper's default 1.2 a two-line hint reads as squashed *text* rather than as short leading.
-        let body = optional_line(description, || {
-            TextStyle::new(bubble_text_size() * 0.92, dim(0.72))
-                .with_line_height(DESCRIPTION_LEADING)
+        let body = optional_line(description, |t| {
+            bubble_text(t, DESCRIPTION_RATIO, 0.72).with_line_height(DESCRIPTION_LEADING)
         })?;
         Ok(vec![box_item(title), box_item(body)])
     }
@@ -269,7 +268,7 @@ impl Content {
 /// height of what it actually says.
 fn optional_line(
     text: shared::ReactiveText,
-    style: impl Fn() -> TextStyle + Clone + 'static,
+    style: impl Fn(TextStyle) -> TextStyle + Clone + 'static,
 ) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let present = text.clone();
     Ok(box_item(ReactiveList::new(
@@ -283,7 +282,7 @@ fn optional_line(
                 )?));
             }
             let text = text.clone();
-            Ok(box_item(Text::new(
+            Ok(box_item(Text::declaring(
                 move || text(),
                 LayoutStyle::new(),
                 style.clone(),
@@ -293,9 +292,14 @@ fn optional_line(
     )?))
 }
 
-/// The bubble ink at reduced strength, for the parts that are not the name.
-fn dim(alpha: f32) -> Color {
-    Color::rgba(BUBBLE_INK.r, BUBBLE_INK.g, BUBBLE_INK.b, alpha)
+/// A bubble line: sized from the text around the control it describes, inked against the chip it is drawn on
+/// rather than against the page.
+///
+/// The ink is the one thing here that does not inherit, and deliberately: the bubble paints its own dark
+/// surface, so a page that declared black text would hand this line black-on-black. Size still follows the
+/// region — a hint in a compact panel is a hint at that panel's scale.
+fn bubble_text(inherited: TextStyle, ratio: f32, strength: f32) -> TextStyle {
+    shared::control_text(inherited, ratio).with_color(BUBBLE_INK.with_alpha(strength))
 }
 
 #[cfg(test)]
@@ -319,6 +323,53 @@ mod tests {
         let mut slots = Slots::new();
         slots.push(None, box_item(inner));
         slots
+    }
+
+    /// A hint is sized from the text it is describing, not from the theme: a compact panel that says its
+    /// region is 11px gets a bubble at that panel's scale, and `TooltipProps` has no size to correct it with.
+    #[test]
+    fn a_bubble_takes_the_size_the_region_around_it_declared() {
+        crate::test_support::fresh_layout_runtime();
+        let tooltip = tooltip(
+            TooltipProps {
+                text: Box::new(|| "Move".to_string()),
+                ..Default::default()
+            },
+            slot_with_trigger(),
+        )
+        .unwrap();
+        let root = new_container(
+            LayoutStyle::new().flex_column().width(400.0).height(400.0),
+            &[tooltip.layout_node()],
+        )
+        .unwrap();
+        ui_core::declare(
+            root,
+            renderer_core::Declared::default().with_font_size(11.0),
+        );
+        compute_layout(
+            root,
+            AvailableSpace::Definite(400.0),
+            AvailableSpace::Definite(400.0),
+        )
+        .unwrap();
+
+        let mut tree = ComponentList::new(tooltip);
+        let _ = tree.commands();
+        tree.on_event(&moved(40.0, 15.0));
+        relayout_if_dirty();
+
+        let size = tree
+            .commands()
+            .iter()
+            .find_map(|c| match c {
+                DrawCommand::Text { text, style, .. } if text.as_ref() == "Move" => {
+                    Some(style.font_size)
+                }
+                _ => None,
+            })
+            .expect("the bubble drew its name");
+        assert_eq!(size, 11.0 * BUBBLE_RATIO);
     }
 
     // Hovering the trigger shows the bubble; leaving hides it. Driven through the full component tree, like

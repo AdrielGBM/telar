@@ -76,12 +76,16 @@ pub fn button(props: ButtonProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
         move || label(),
         LayoutStyle::new(),
         move |t| {
-            shared::control_text(t, 1.0).with_color(label_color(
+            let text = shared::control_text(t, 1.0);
+            match label_color(
                 label_fill.as_ref(),
                 label_outline.as_ref(),
                 ghost,
                 label_hover.get(),
-            ))
+            ) {
+                Some(color) => text.with_color(color),
+                None => text,
+            }
         },
     )?;
 
@@ -139,31 +143,34 @@ fn variant_rect(
     RectStyle::default().with_fill(base).with_radius(radius)
 }
 
-/// The label colour for the current frame and hover state, mirroring the old `ButtonStyle` text/text_hover:
-/// ghost is a dark neutral, outline is its own colour (white on hover), filled is white, and the no-variant
-/// default is the theme's on-primary.
+/// The label colour for the current frame and hover state: outline is its own colour (white on hover), filled
+/// contrasts with whatever it is filled with, and the no-variant default is the theme's on-primary.
+///
+/// `None` is the ghost variant, and means "whatever the page says". A ghost button paints no surface of its
+/// own, so its label sits on the page beside ordinary text — naming the theme's `ink` here made it the one
+/// word in a region that had declared its colour that came out in the theme's.
 fn label_color(
     fill: &dyn Fn() -> Color,
     outline: &dyn Fn() -> Color,
     ghost: bool,
     hovered: bool,
-) -> Color {
+) -> Option<Color> {
     if ghost {
-        return shared::ink();
+        return None;
     }
     let outline_c = outline();
     if outline_c != Color::TRANSPARENT {
-        return if hovered {
+        return Some(if hovered {
             shared::ink_on(outline_c)
         } else {
             outline_c
-        };
+        });
     }
     let fill_c = fill();
     if fill_c != Color::TRANSPARENT {
-        return shared::ink_on(fill_c);
+        return Some(shared::ink_on(fill_c));
     }
-    shared::on_accent()
+    Some(shared::on_accent())
 }
 
 #[cfg(test)]
@@ -173,9 +180,53 @@ mod tests {
 
     use layout_core::AvailableSpace;
     use platform_core::{Event, PointerButton, PointerSource};
-    use ui_core::{Component, compute_layout, track_layout};
+    use renderer_core::DrawCommand;
+    use ui_core::{Component, ComponentList, compute_layout, new_container, track_layout};
 
     use super::*;
+
+    /// A ghost button paints no surface, so its label is a word on the page like any other and takes the ink
+    /// the page is written in. It is the variant a toolbar is made of, which is exactly where a region that
+    /// declared its own colour would have had one word come out in the theme's instead.
+    #[test]
+    fn a_ghost_label_keeps_the_ink_of_the_region_around_it() {
+        crate::test_support::fresh_layout_runtime();
+        let btn = button(ButtonProps {
+            label: Box::new(|| "Undo".to_string()),
+            ghost: true,
+            ..Default::default()
+        })
+        .unwrap();
+        let root = new_container(
+            LayoutStyle::new().flex_column().width(200.0).height(80.0),
+            &[btn.layout_node()],
+        )
+        .unwrap();
+        let declared = Color::rgba(0.9, 0.2, 0.1, 1.0);
+        ui_core::declare(
+            root,
+            renderer_core::Declared::default().with_color(declared),
+        );
+        compute_layout(
+            root,
+            AvailableSpace::Definite(200.0),
+            AvailableSpace::Definite(80.0),
+        )
+        .unwrap();
+
+        let tree = ComponentList::new(btn);
+        let ink = tree
+            .commands()
+            .iter()
+            .find_map(|c| match c {
+                DrawCommand::Text { text, style, .. } if text.as_ref() == "Undo" => {
+                    Some(style.color.solid_color())
+                }
+                _ => None,
+            })
+            .expect("the button drew its label");
+        assert_eq!(ink, declared);
+    }
 
     // A tap (press then release inside) fires on_press; press alone does not.
     #[test]

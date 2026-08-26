@@ -41,20 +41,23 @@ pub(crate) fn amend(style: RectStyle, over: &SurfaceStyle) -> RectStyle {
     }
 }
 
-/// The catalogue's text ink. Call it INSIDE a style closure so widget text recolours when the theme switches
-/// (e.g. dark mode).
-pub(crate) fn ink() -> Color {
-    use_theme_tokens().ink()
+/// The ink the document starts in — the root of the cascade, not the text at any particular node.
+///
+/// Only for choosing *between* candidate inks, where what is wanted is one of the theme's two extremes rather
+/// than the colour in force somewhere. To paint text, take what was inherited: this reads past the cascade,
+/// and a component that writes it puts the theme's ink into a region that had declared its own.
+fn base_ink() -> Color {
+    ui_core::Inherited::initial().text.color.solid_color()
 }
-/// Readable ink for a label sitting on `fill`: whichever of the theme's `ink` and `on_primary` contrasts
-/// with it more.
+/// Readable ink for a label sitting on `fill`: whichever of the document's own ink and the theme's
+/// `on_primary` contrasts with it more.
 ///
 /// A hard-coded white was right only while a filled control was assumed to carry a saturated accent. A
 /// neutral palette — the greys a shadcn-style theme builds on, say — makes `primary` a near-white in dark
 /// mode, and the label disappeared into its own button. Reading both ends of the theme and picking by luminance keeps a caller
 /// free to pass any colour at all — which the `fill:` prop already lets them do.
 pub(crate) fn ink_on(fill: Color) -> Color {
-    let dark = ink();
+    let dark = base_ink();
     let light = use_theme_tokens().on_primary();
     if contrast(fill, dark) >= contrast(fill, light) {
         dark
@@ -119,24 +122,14 @@ pub(crate) fn radius_md() -> f32 {
 pub(crate) fn spacing() -> f32 {
     use_theme_tokens().spacing() * theme_core::control_scale()
 }
-/// Base body text size from the theme, scaled by the ambient control size.
-///
-/// A component scales this by a ratio of its own — `font_size() * 1.4` for a heading, `* 0.85` for a caption —
-/// instead of asking for a named role. Naming the roles here would decide for every application which roles it
-/// is allowed to have, and a theme's own vocabulary belongs to its own type.
-///
-/// For the *text* of a control, prefer [`control_text`]: this reads the theme directly and so cannot see a
-/// container that declared a size for the region the control sits in.
-pub(crate) fn font_size() -> f32 {
-    use_theme_tokens().font_size() * theme_core::control_scale()
-}
-
 /// A single line's box height, as a multiple of the text in it.
 pub(crate) const LINE_LEADING: f32 = 1.4;
 /// A caption's share of the text it labels.
 pub(crate) const CAPTION_RATIO: f32 = 0.85;
 /// A title's share of the body text around it.
 pub(crate) const HEADING_RATIO: f32 = 1.4;
+/// What is left of a line's ink once it is only supporting the line above it.
+pub(crate) const QUIET_ALPHA: f32 = 0.65;
 
 /// The text a control draws: whatever the tree above it says, at the ambient control density, at this
 /// control's own ratio to the body size around it.
@@ -148,6 +141,18 @@ pub(crate) const HEADING_RATIO: f32 = 1.4;
 pub(crate) fn control_text(inherited: TextStyle, ratio: f32) -> TextStyle {
     let size = inherited.font_size * theme_core::control_scale() * ratio;
     inherited.with_font_size(size)
+}
+
+/// [`control_text`] in a fainter shade of the ink around it: a hint, a group heading, an inactive tab.
+///
+/// Fades what the tree above declared instead of naming `ink()`, because `ink()` is the very value the
+/// cascade seeds itself with — writing it can only repeat the root or overrule a region that said otherwise,
+/// and a label reading "quieter than its neighbours" has to know who its neighbours are. Fading also keeps a
+/// colour that arrived already soft from being pushed back up to 0.65.
+pub(crate) fn quiet(inherited: TextStyle, ratio: f32) -> TextStyle {
+    let text = control_text(inherited, ratio);
+    let ink = text.color.faded(QUIET_ALPHA);
+    text.with_color(ink)
 }
 
 /// [`control_text`]'s size on its own, for the box a control sizes to hold that text.
@@ -253,7 +258,7 @@ pub(crate) fn captioned(
     }
     let caption = Text::declaring(
         move || label(),
-        caption_box(font_size() * CAPTION_RATIO),
+        LayoutStyle::new(),
         |t| control_text(t, CAPTION_RATIO).with_color(muted()),
     )?;
     // The caption is a leaf, so its own node's style is followed from here — the column outlives it and is where an effect belonging to this subtree wants to be owned.

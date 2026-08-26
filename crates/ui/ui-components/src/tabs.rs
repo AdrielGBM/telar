@@ -2,7 +2,7 @@ use std::rc::Rc;
 
 use layout_core::{AlignItems, JustifyContent, LayoutError, LayoutStyle};
 use reactive_core::{RwSignal, signal};
-use renderer_core::{BorderRadius, Color, RectStyle, ShapeStyle};
+use renderer_core::{BorderRadius, Color, RectStyle, ShapeStyle, TextStyle};
 use ui_core::focus::Role;
 use ui_core::{Container, LayoutItem, StyledContainer, Text, box_item};
 
@@ -21,8 +21,6 @@ fn gap() -> f32 {
 fn radius() -> f32 {
     shared::radius() * 1.5
 }
-const INK_MUTED: Color = Color::rgba(0.45, 0.45, 0.52, 1.0);
-
 fn tab_box() -> LayoutStyle {
     LayoutStyle::new()
         .flex_row()
@@ -73,7 +71,7 @@ pub fn tabs(props: TabsProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
         let label_widget = Text::declaring(
             move || label.to_string(),
             LayoutStyle::new(),
-            move |t| shared::control_text(t, 1.0).with_color(tab_ink(label_selected.get() == idx)),
+            move |t| tab_text(t, label_selected.get() == idx),
         )?;
 
         let base_selected = selected.clone();
@@ -116,22 +114,70 @@ fn tab_rect(active: bool, color: &dyn Fn() -> Color, hovered: bool) -> RectStyle
     RectStyle::default().with_radius(radius)
 }
 
-/// The label ink: white on the active (filled) tab for contrast, muted on the rest.
-fn tab_ink(active: bool) -> Color {
+/// A tab's label: legible on the accent pill when it is the selected one, and otherwise a quieter shade of
+/// whatever the bar around it is written in.
+///
+/// The inactive tone was a flat grey literal — the same grey in dark mode, and the same grey under a region
+/// that had declared its own ink. It was also, to two decimals, what fading the default ink over a white page
+/// produces: a light-mode screenshot of a value the cascade already knows how to work out.
+fn tab_text(inherited: TextStyle, active: bool) -> TextStyle {
     if active {
-        shared::on_accent()
+        shared::control_text(inherited, 1.0).with_color(shared::on_accent())
     } else {
-        INK_MUTED
+        shared::quiet(inherited, 1.0)
     }
 }
 
 #[cfg(test)]
 mod tests {
 
-    use ui_core::{Component, NodeId};
+    use layout_core::AvailableSpace;
+    use renderer_core::DrawCommand;
+    use ui_core::{Component, ComponentList, NodeId, compute_layout, new_container};
 
     use super::*;
     use crate::harness::{press, release};
+
+    /// A bar in a region that declared its own ink writes the tabs that are not selected in a quieter shade
+    /// of *that*, rather than in a grey no theme and no declaration can move.
+    #[test]
+    fn an_inactive_tab_fades_the_ink_of_the_region_around_it() {
+        crate::test_support::fresh_layout_runtime();
+        let item = tabs(TabsProps {
+            items: vec!["One", "Two"],
+            ..Default::default()
+        })
+        .unwrap();
+        let root = new_container(
+            LayoutStyle::new().flex_column().width(400.0).height(100.0),
+            &[item.layout_node()],
+        )
+        .unwrap();
+        let declared = Color::rgba(0.9, 0.2, 0.1, 1.0);
+        ui_core::declare(
+            root,
+            renderer_core::Declared::default().with_color(declared),
+        );
+        compute_layout(
+            root,
+            AvailableSpace::Definite(400.0),
+            AvailableSpace::Definite(100.0),
+        )
+        .unwrap();
+
+        let tree = ComponentList::new(item);
+        let ink = tree
+            .commands()
+            .iter()
+            .find_map(|c| match c {
+                DrawCommand::Text { text, style, .. } if text.as_ref() == "Two" => {
+                    Some(style.color.solid_color())
+                }
+                _ => None,
+            })
+            .expect("the bar drew the tab that is not selected");
+        assert_eq!(ink, declared.with_alpha(shared::QUIET_ALPHA));
+    }
 
     // Lays `node` out as the sole child of a 400×100 root (an auto-size ROOT fills its available space, so
     // laying `node` itself out as the root would force it to 400px wide instead of its natural content
@@ -154,10 +200,7 @@ mod tests {
         let _ = item.view();
     }
 
-    // Pressing the last tab sets the bound `selected` signal to its index. With exactly two (content-sized,
-    // `Text::new`) tabs and no `flex_grow`/stretch on the row, its right edge sits flush against the second
-    // tab's own padding, so a point just inside that edge deterministically lands on index 1 — without
-    // hardcoding font metrics to compute the boundary between the two pills.
+    // With exactly two content-sized tabs and no `flex_grow` on the row, its right edge sits flush against the second tab's own padding, so a point just inside that edge lands on index 1 without hardcoding font metrics.
     #[test]
     fn pressing_the_last_tab_sets_selected_index() {
         crate::test_support::fresh_layout_runtime();

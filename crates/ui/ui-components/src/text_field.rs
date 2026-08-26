@@ -42,9 +42,9 @@ pub struct TextFieldProps {
     pub label: Box<dyn Fn() -> String>,
     /// Box width in logical px. `0.0` (the default) means "unset" and resolves to `DEFAULT_WIDTH`.
     pub width: f32,
-    /// The entered text's colour. `Color::TRANSPARENT` (the default) means "unset" -> `shared::ink()`. A
-    /// closure (re-read every frame) so a theme token or `$signal` colour re-colours live, like `button`'s
-    /// `fill`/`outline`.
+    /// The entered text's colour. `Color::TRANSPARENT` (the default) means "unset", and leaves the field in
+    /// whatever the region around it is written in. A closure (re-read every frame) so a theme token or
+    /// `$signal` colour re-colours live, like `button`'s `fill`/`outline`.
     pub color: Box<dyn Fn() -> Color>,
     /// Runs when Enter is pressed while the field is focused.
     pub on_submit: Option<Box<dyn Fn()>>,
@@ -78,7 +78,7 @@ pub fn text_field(props: TextFieldProps) -> Result<Box<dyn LayoutItem>, LayoutEr
     // Always a live `Input` (with a muted placeholder shown while empty) so the field is tappable/typable
     // from a cold start — a swapped-in placeholder `Text` takes no focus, so an empty field couldn't be
     // clicked to begin typing.
-    let mut input = Input::declaring(value.clone(), line_box(shared::font_size()), move |t| {
+    let mut input = Input::declaring(value.clone(), LayoutStyle::new(), move |t| {
         let t = shared::control_text(t, 1.0);
         match color() {
             c if c == Color::TRANSPARENT => t,
@@ -160,9 +160,10 @@ mod tests {
             ..Default::default()
         })
         .unwrap();
+        let box_node = field.layout_node();
         let root = new_container(
             LayoutStyle::new().flex_column().width(400.0).height(200.0),
-            &[field.layout_node()],
+            &[box_node],
         )
         .unwrap();
         ui_core::declare(
@@ -188,6 +189,13 @@ mod tests {
             })
             .expect("the field drew its value");
         assert_eq!(size, 11.0);
+
+        // The box is sized before the field has a parent to inherit from, so this half of the fix arrives by effect; within a pixel because taffy rounds, and 4px clear of the 39.6 an unfollowed box would have kept.
+        let height = track_layout(box_node).unwrap().get().height;
+        assert!(
+            (height - (2.0 * pad_y() + 11.0 * shared::LINE_LEADING)).abs() < 1.0,
+            "the box closes down to the text instead of keeping the room the theme's size wanted, got {height}"
+        );
     }
 
     // A controlled, non-empty value renders through the real Input (not the placeholder).
