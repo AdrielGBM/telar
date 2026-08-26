@@ -9,6 +9,7 @@ use slotmap::SlotMap;
 
 mod effects;
 mod flush;
+mod owner;
 mod signals;
 mod surface;
 
@@ -17,6 +18,9 @@ pub(crate) use effects::{
     run_effect, schedule,
 };
 pub use flush::{batch, begin_batch, end_batch, reset_runtime, set_flush_notify};
+pub use owner::{
+    OwnerGuard, OwnerId, current_owner, dispose_owner, dispose_surface_owners, owner_scope,
+};
 pub(crate) use signals::{
     clone_signal, create_signal_storage, drop_signal, notify_signal, set_signal_value,
     track_signal, update_signal_value, with_signal_value,
@@ -59,6 +63,8 @@ pub(crate) struct SignalStorage {
 
 pub(crate) struct Runtime {
     pub(crate) observer_stack: Vec<EffectId>,
+    pub(crate) owners: SlotMap<OwnerId, owner::OwnerEntry>,
+    pub(crate) owner_stack: Vec<OwnerId>,
     pub(crate) effects: SlotMap<EffectId, EffectEntry>,
     pub(crate) signals: SlotMap<SignalId, SignalStorage>,
     pub(crate) batch_depth: usize,
@@ -77,6 +83,8 @@ impl Runtime {
     fn new() -> Self {
         Runtime {
             observer_stack: Vec::new(),
+            owners: SlotMap::with_key(),
+            owner_stack: Vec::new(),
             effects: SlotMap::with_key(),
             signals: SlotMap::with_key(),
             batch_depth: 0,

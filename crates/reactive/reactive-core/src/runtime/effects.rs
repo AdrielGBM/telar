@@ -22,6 +22,7 @@ pub(crate) fn register_effect(f: Box<dyn Fn()>) -> EffectId {
             height: 0,
             memo_dirty: false,
         });
+        super::owner::attach_effect(&mut rt, id);
         id
     })
 }
@@ -40,6 +41,7 @@ pub(crate) fn register_pure_effect(f: Box<dyn Fn()>) -> EffectId {
             height: 0,
             memo_dirty: false,
         });
+        super::owner::attach_effect(&mut rt, id);
         id
     })
 }

@@ -17,7 +17,8 @@ use std::rc::{Rc, Weak};
 use layout_reactive::{LayoutContext, LayoutGuard, ParentsContext, ParentsGuard};
 use platform_core::{WindowCommandContext, WindowCommandGuard};
 use reactive_core::{
-    SurfaceEnterGuard, SurfaceHandle, set_current_surface, set_surface_enter_hook,
+    SurfaceEnterGuard, SurfaceHandle, dispose_surface_owners, set_current_surface,
+    set_surface_enter_hook,
 };
 use services_core::{ServiceContext, ServiceGuard};
 use ui_tree::{ForceTickContext, ForceTickGuard, OverlayContext, OverlayGuard};
@@ -117,6 +118,11 @@ impl Surface {
 
 impl Drop for Surface {
     fn drop(&mut self) {
+        // Entered while disposing, because an owner's teardown reaches into the surface-local worlds this struct is about to drop — a cascade declaration withdrawn against whichever surface happened to be active would land on somebody else's layout tree.
+        {
+            let _entered = self.enter();
+            dispose_surface_owners(self.handle);
+        }
         SURFACES.with(|s| {
             s.borrow_mut().remove(&self.handle);
         });

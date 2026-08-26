@@ -5,13 +5,16 @@ use super::{EffectId, RUNTIME, SignalId, SignalStorage};
 
 pub(crate) fn create_signal_storage<T: 'static>(value: T, initial_ref_count: usize) -> SignalId {
     RUNTIME.with(|rt| {
-        rt.borrow_mut().signals.insert(SignalStorage {
+        let mut rt = rt.borrow_mut();
+        let id = rt.signals.insert(SignalStorage {
             value: Box::new(value),
             version: 0,
             subscribers: Vec::new(),
             observer_slots: Vec::new(),
             ref_count: initial_ref_count,
-        })
+        });
+        super::owner::attach_signal(&mut rt, id);
+        id
     })
 }
 

@@ -20,6 +20,9 @@ pub use runtime::{
     FlushNotifyHandle, SurfaceEnterGuard, SurfaceHandle, batch, begin_batch, current_surface,
     end_batch, reset_runtime, set_current_surface, set_flush_notify, set_surface_enter_hook,
 };
+pub use runtime::{
+    OwnerGuard, OwnerId, current_owner, dispose_owner, dispose_surface_owners, owner_scope,
+};
 pub use signal::{ReadSignal, RwSignal, signal};
 pub use source::{Source, derive, derive_pair};
 pub use task::{
