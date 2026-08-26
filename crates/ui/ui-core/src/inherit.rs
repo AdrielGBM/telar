@@ -22,6 +22,15 @@
 //! What the eager design bought is kept by putting each declaration behind its own signal: a walk reads the
 //! signals of the ancestors that actually declare, so a leaf ends up subscribed to those and nothing else,
 //! and changing one re-runs exactly the leaves beneath it rather than every text on the surface.
+//!
+//! **The key is a layout `NodeId` and the walk is layout-shaped, while the *lifetime* is an owner's.** Those
+//! answer different questions and it is worth saying why they are allowed to disagree. Inheritance follows
+//! the document, so the walk has to climb the layout parent chain — a component boundary is not a document
+//! boundary, and children handed in through a slot are built under a different owner but inherit from where
+//! the markup put them. Re-keying on owners would silently change what inherits from what. Withdrawal is the
+//! opposite: it used to be the declaring widget's `Drop`, which raced the independent path that frees layout
+//! nodes, and a replaced layout runtime hands the next tree the same ids. So `declare` registers its own
+//! withdrawal on the owner active at the time, and disposal runs it in order.
 
 use std::rc::Rc;
 

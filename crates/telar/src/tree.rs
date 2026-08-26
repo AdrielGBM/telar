@@ -5,7 +5,10 @@
 //! copies: a tree mounted on the host's side registers its segment effects in the *host's* reactive runtime while
 //! `view()` reads the *dylib's* signals, so no subscription is ever established and nothing re-renders on its own.
 //! The workaround was `bump_force_ticks`, which re-ran every segment and only fired on input events — so an
-//! animation, a background thread's result or a timer stayed invisible until the user moved the mouse.
+//! animation, a background thread's result or a timer stayed invisible until the user moved the mouse. It is
+//! gone now, and this seam is only half of why: the other half was that a node's absolute position lived in a
+//! plain map nothing could subscribe to, so refreshing one reader meant re-running all of them. See
+//! `layout_reactive::absolute_rect`.
 //!
 //! So mounting is the app's job: [`App::mount`](crate::app::App::mount) hands the runner a [`UiTree`] it drives
 //! through this trait, and a dylib-backed app mounts a [`HotTree`] inside itself. Same shape the plugin subsystem
