@@ -137,18 +137,25 @@ pub(crate) struct AndroidMetadata {
     pub(crate) package: Option<String>,
 }
 
+// A `*` in any segment, not just a trailing one: a workspace that nests its members two levels deep
+// (`crates/*/*`) expanded to nothing, leaving every crate under it unwatched and unfindable by name.
 pub(crate) fn expand_member(workspace_root: &Path, pattern: &str) -> Vec<PathBuf> {
-    if let Some(prefix) = pattern.strip_suffix("/*") {
-        std::fs::read_dir(workspace_root.join(prefix))
-            .into_iter()
-            .flatten()
-            .filter_map(|e| e.ok())
-            .map(|e| e.path())
-            .filter(|p| p.is_dir())
-            .collect()
-    } else {
-        vec![workspace_root.join(pattern)]
+    let mut paths = vec![workspace_root.to_path_buf()];
+    for segment in pattern.split('/') {
+        paths = if segment == "*" {
+            paths
+                .iter()
+                .filter_map(|path| std::fs::read_dir(path).ok())
+                .flatten()
+                .filter_map(|entry| entry.ok())
+                .map(|entry| entry.path())
+                .filter(|path| path.is_dir())
+                .collect()
+        } else {
+            paths.into_iter().map(|path| path.join(segment)).collect()
+        };
     }
+    paths
 }
 
 fn find_package_dir_in_workspace(workspace_root: &Path, package_name: &str) -> Option<PathBuf> {
