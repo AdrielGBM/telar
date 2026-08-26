@@ -4,7 +4,7 @@ use geometry_core::Rect;
 use layout_core::{LayoutError, LayoutStyle};
 use platform_core::{Event, Key, ModifiersState, NamedKey, PointerButton};
 use reactive_core::{RwSignal, signal};
-use renderer_core::{Color, Paint, RectStyle, ShapeStyle, TextStyle};
+use renderer_core::{RectStyle, ShapeStyle, TextStyle};
 use ui_tree::{Component, EventResult, RenderNode};
 
 use crate::focus::{self, FocusId};
@@ -316,12 +316,8 @@ impl Component for Input {
         // Empty value → draw the muted placeholder in the text's place (the field itself stays live: the
         // caret and hit-test still work, so it's tappable/typable from empty).
         let text_node = if text.is_empty() && !self.placeholder.is_empty() {
-            let muted = match style.color {
-                Paint::Solid(c) => Paint::Solid(c.with_alpha(c.a * 0.5)),
-                _ => Paint::Solid(Color::rgba(0.5, 0.5, 0.55, 0.5)),
-            };
             let mut ph_style = style.clone();
-            ph_style.color = muted;
+            ph_style.color = style.color.faded(0.5);
             RenderNode::text(self.placeholder.clone(), full, ph_style)
         } else {
             RenderNode::text(self.shown(&text), full, style.clone())
@@ -344,10 +340,7 @@ impl Component for Input {
                     .0
                 };
                 let (start, end) = (measure(from), measure(to));
-                let fill = match style.color {
-                    Paint::Solid(c) => c.with_alpha(0.25),
-                    _ => Color::rgba(0.4, 0.6, 0.9, 0.3),
-                };
+                let fill = style.color.faded(0.25);
                 RenderNode::rect(
                     Rect {
                         x: start,
@@ -355,7 +348,7 @@ impl Component for Input {
                         width: (end - start).max(1.0),
                         height: crate::text_metrics::line_height(style.font_size),
                     },
-                    RectStyle::default().with_fill(Paint::Solid(fill)),
+                    RectStyle::default().with_fill(fill),
                 )
             });
             // Measured against what is *drawn*: a mask character is not the width of the character it hides,

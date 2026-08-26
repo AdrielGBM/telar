@@ -5,7 +5,7 @@ use geometry_core::Rect;
 use layout_core::{LayoutError, LayoutStyle};
 use platform_core::{Event, Key, ModifiersState, NamedKey, PointerButton};
 use reactive_core::{Effect, RwSignal, effect, signal};
-use renderer_core::{Color, Paint, RectStyle, ShapeStyle, TextStyle};
+use renderer_core::{RectStyle, ShapeStyle, TextStyle};
 use ui_tree::{Component, EventResult, RenderNode};
 
 use crate::context::{mark_dirty, new_measured_leaf};
@@ -307,12 +307,8 @@ impl Component for TextArea {
             height: r.height.max(line_h),
         };
         let text_node = if text.is_empty() && !self.placeholder.is_empty() {
-            let muted = match style.color {
-                Paint::Solid(c) => Paint::Solid(c.with_alpha(c.a * 0.5)),
-                _ => Paint::Solid(Color::rgba(0.5, 0.5, 0.55, 0.5)),
-            };
             let mut ph_style = style.clone();
-            ph_style.color = muted;
+            ph_style.color = style.color.faded(0.5);
             RenderNode::text(self.placeholder.clone(), full, ph_style)
         } else {
             RenderNode::text(Arc::<str>::from(text.as_str()), full, style.clone())
@@ -341,10 +337,7 @@ impl Component for TextArea {
                         // rather than a gap the eye reads as the selection having ended.
                         caret_x(&text, end, &style).max(x0 + line_h * 0.35)
                     };
-                    let fill = match style.color {
-                        Paint::Solid(c) => c.with_alpha(0.25),
-                        _ => Color::rgba(0.4, 0.6, 0.9, 0.3),
-                    };
+                    let fill = style.color.faded(0.25);
                     bands.push(RenderNode::rect(
                         Rect {
                             x: x0,
@@ -352,7 +345,7 @@ impl Component for TextArea {
                             width: (x1 - x0).max(1.0),
                             height: line_h,
                         },
-                        RectStyle::default().with_fill(Paint::Solid(fill)),
+                        RectStyle::default().with_fill(fill),
                     ));
                 }
                 RenderNode::group(bands)
