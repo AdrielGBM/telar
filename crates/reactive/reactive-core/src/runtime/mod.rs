@@ -20,7 +20,7 @@ pub(crate) use effects::{
 pub use flush::{batch, begin_batch, end_batch, reset_runtime, set_flush_notify};
 pub use owner::{
     OwnerGuard, OwnerId, current_owner, dispose_owner, dispose_surface_owners, live_effect_count,
-    live_signal_count, owner_scope,
+    live_signal_count, on_cleanup, owner_scope,
 };
 pub(crate) use signals::{
     clone_signal, create_signal_storage, drop_signal, notify_signal, set_signal_value,
@@ -41,6 +41,9 @@ pub(crate) struct EffectEntry {
     // The surface active when this effect was registered; the flush re-enters it before running the
     // callback so a cross-surface signal write resolves the effect against its own surface's world.
     pub(crate) surface: SurfaceHandle,
+    /// The owner active at registration, re-entered for each run so a re-run creates and registers under the
+    /// scope that built it rather than under whatever the flush happens to be inside.
+    pub(crate) owner: Option<OwnerId>,
     pub(crate) is_pure: bool,
     pub(crate) last_run_epoch: u64,
     pub(crate) sources: Vec<SignalId>,

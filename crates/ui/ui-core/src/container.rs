@@ -188,7 +188,6 @@ impl Component for Container {
 impl Drop for Container {
     fn drop(&mut self) {
         crate::input_region::unregister_interactive(self.node);
-        crate::inherit::undeclare(self.node);
     }
 }
 
@@ -203,21 +202,72 @@ mod tests {
     use crate::context::{compute_layout, new_container};
     use crate::text::Text;
 
-    /// A declaration outliving the container that made it would reach whatever is built on that node next,
-    /// which is what a rebuilt subtree does every time it is rebuilt.
-    #[test]
-    fn a_container_takes_its_declaration_with_it() {
-        reset_layout_runtime();
-        let container = Container::new(LayoutStyle::new(), vec![])
+    fn declaring_container(size: f32) -> Container {
+        Container::new(LayoutStyle::new(), vec![])
             .unwrap()
-            .declaring(|| Declared::default().with_font_size(11.0));
-        let node = container.node;
+            .declaring(move || Declared::default().with_font_size(size))
+    }
+
+    /// The first half of the bug `crate::context` describes: a declaration left behind lands on whatever the
+    /// next tree builds on that id.
+    ///
+    /// Note what this does *not* call. `crate::context::reset_layout_runtime` sweeps the cascade too, and
+    /// that pairing is the workaround — the reason the two "have to go together". Here only the layout half
+    /// runs, so what keeps the second tree clean is the owner having withdrawn, not the reset.
+    ///
+    /// It also has to replace the runtime rather than merely drop and rebuild. Taffy's `NodeId` packs a
+    /// slotmap version, so within one runtime a recycled slot yields a *different* id and the collision
+    /// cannot happen. A fresh `LayoutRuntime` starts its versions over, which is what hands the second tree
+    /// the first tree's ids exactly.
+    #[test]
+    fn a_second_tree_is_not_styled_by_what_the_first_declared() {
+        reset_layout_runtime();
+        let scope = reactive_core::owner_scope();
+        let owner = scope.id();
+        let first = declaring_container(11.0);
+        let node = first.node;
         assert_eq!(crate::inherit::context(node).text.font_size, 11.0);
 
-        drop(container);
+        drop(scope);
+        reactive_core::dispose_owner(owner);
+        drop(first);
+        layout_reactive::reset_layout_runtime();
+
+        let second = Container::new(LayoutStyle::new(), vec![]).unwrap();
+        assert_eq!(second.node, node, "the second tree got the first tree's id");
+        assert_eq!(
+            crate::inherit::context(second.node).text.font_size,
+            crate::inherit::Inherited::initial().text.font_size,
+            "and nothing declared for it"
+        );
+    }
+
+    /// The second half: a widget withdrawing one it no longer owns when it is finally dropped.
+    ///
+    /// Nothing about a late `Drop` needs a recycled id to be wrong — it only needs the declaration on that id
+    /// to be somebody else's by then. Under the owner it withdraws nothing, because withdrawal is not its
+    /// job any more.
+    #[test]
+    fn a_declaring_widget_dropped_late_withdraws_nothing() {
+        reset_layout_runtime();
+        let gone = reactive_core::owner_scope();
+        let gone_owner = gone.id();
+        let stale = declaring_container(11.0);
+        let node = stale.node;
+        drop(gone);
+        reactive_core::dispose_owner(gone_owner);
+        layout_reactive::reset_layout_runtime();
+
+        let live = reactive_core::owner_scope();
+        let current = declaring_container(22.0);
+        assert_eq!(current.node, node, "built on the id the first one used");
+        drop(live);
+
+        drop(stale);
         assert_eq!(
             crate::inherit::context(node).text.font_size,
-            crate::inherit::Inherited::initial().text.font_size
+            22.0,
+            "the late drop took the live declaration with it"
         );
     }
 

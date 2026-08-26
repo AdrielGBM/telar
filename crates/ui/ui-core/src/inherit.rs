@@ -153,6 +153,8 @@ pub fn declare(node: NodeId, declared: Declared) {
                 c.declared.insert(node, signal(declared));
                 c.structure.clone()
             });
+            // The owner that started declaring is what stops. It used to be the declaring widget's `Drop`, racing the independent path that frees layout nodes — see `crate::context` for what that costs, which is text at the wrong size and nothing else.
+            reactive_core::on_cleanup(move || undeclare(node));
             structure.set(structure.peek().wrapping_add(1));
         }
         (None, true) => {}

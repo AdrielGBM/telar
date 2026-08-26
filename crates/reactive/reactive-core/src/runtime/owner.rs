@@ -23,6 +23,7 @@
 
 use std::any::Any;
 
+use super::flush::batch;
 use super::surface::current_surface;
 use super::{EffectId, RUNTIME, Runtime, SignalId, SurfaceHandle};
 use crate::runtime::effects::deregister_effect;
@@ -36,6 +37,10 @@ pub(crate) struct OwnerEntry {
     children: Vec<OwnerId>,
     signals: Vec<SignalId>,
     effects: Vec<EffectId>,
+    /// What this owner has to undo elsewhere. The escape hatch for state an owner's lifetime governs but
+    /// this crate cannot name — a cascade declaration is keyed by a layout `NodeId`, which lives three
+    /// crates up.
+    cleanups: Vec<Box<dyn FnOnce()>>,
     surface: SurfaceHandle,
 }
 
@@ -47,6 +52,7 @@ impl OwnerEntry {
             children: Vec::new(),
             signals: Vec::new(),
             effects: Vec::new(),
+            cleanups: Vec::new(),
             surface,
         }
     }
@@ -102,6 +108,26 @@ impl Drop for OwnerGuard {
     }
 }
 
+/// Makes `owner` current for as long as the guard lives, for an effect re-entering the scope that built it.
+///
+/// Unlike [`owner_scope`] this mints nothing — the owner already exists, and a re-run must land in it rather
+/// than beside it. `None` still pushes nothing, so an effect registered outside every scope keeps running
+/// outside every scope instead of inheriting whatever the flush was called from.
+pub(crate) fn enter_owner(owner: Option<OwnerId>) -> OwnerGuard {
+    RUNTIME.with(|rt| {
+        let mut rt = rt.borrow_mut();
+        let depth = rt.owner_stack.len();
+        let id = match owner {
+            Some(owner) if rt.owners.contains_key(owner) => {
+                rt.owner_stack.push(owner);
+                owner
+            }
+            _ => OwnerId::default(),
+        };
+        OwnerGuard { id, depth }
+    })
+}
+
 // Both take the runtime rather than reaching for it, so recording an owner costs nothing beyond a push on the borrow the creation already holds.
 pub(crate) fn attach_signal(rt: &mut Runtime, id: SignalId) {
     if let Some(entry) = owning(rt) {
@@ -129,9 +155,34 @@ fn owning(rt: &mut Runtime) -> Option<&mut OwnerEntry> {
     rt.owners.get_mut(owner)
 }
 
+/// Registers work the current owner runs when it is disposed.
+///
+/// For state whose lifetime is an owner's but whose *name* is somebody else's — the cascade keys its
+/// declarations by layout `NodeId`, which this crate sits three below and cannot mention. A closure crosses
+/// that where a field could not.
+///
+/// Outside every owner the closure is dropped unrun, which is the honest answer: nothing will ever dispose
+/// it, so pretending otherwise would only move the leak.
+pub fn on_cleanup(f: impl FnOnce() + 'static) {
+    RUNTIME.with(|rt| {
+        let mut rt = rt.borrow_mut();
+        if let Some(entry) = owning(&mut rt) {
+            entry.cleanups.push(Box::new(f));
+        }
+    });
+}
+
 /// Disposes an owner and everything below it, children first.
 pub fn dispose_owner(id: OwnerId) {
-    let (effects, signals) = uproot(id);
+    let (cleanups, effects, signals) = uproot(id);
+
+    // One wave, not one per withdrawal. `undeclare` bumps the cascade's `structure` signal, which every context read subscribes to, so tearing down N declaring nodes outside a batch is N invalidations across every reader in the tree.
+    batch(|| {
+        for cleanup in cleanups {
+            cleanup();
+        }
+    });
+
     for effect in effects {
         deregister_effect(effect);
     }
@@ -180,7 +231,9 @@ pub fn live_effect_count() -> usize {
 ///
 /// Iterative rather than recursive: the depth is the component nesting of a real view, and a stack
 /// overflow inside disposal would abort rather than unwind.
-fn uproot(root: OwnerId) -> (Vec<EffectId>, Vec<SignalId>) {
+type Uprooted = (Vec<Box<dyn FnOnce()>>, Vec<EffectId>, Vec<SignalId>);
+
+fn uproot(root: OwnerId) -> Uprooted {
     RUNTIME.with(|rt| {
         let mut rt = rt.borrow_mut();
 
@@ -200,15 +253,17 @@ fn uproot(root: OwnerId) -> (Vec<EffectId>, Vec<SignalId>) {
             order.push(id);
         }
 
+        let mut cleanups = Vec::new();
         let mut effects = Vec::new();
         let mut signals = Vec::new();
         for id in order.into_iter().rev() {
             if let Some(entry) = rt.owners.remove(id) {
+                cleanups.extend(entry.cleanups);
                 effects.extend(entry.effects);
                 signals.extend(entry.signals);
             }
         }
-        (effects, signals)
+        (cleanups, effects, signals)
     })
 }
 

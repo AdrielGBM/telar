@@ -19,8 +19,8 @@ pub use reactive_local::{SurfaceSlot, detached, surface_local};
 pub use runtime::{
     FlushNotifyHandle, OwnerGuard, OwnerId, SurfaceEnterGuard, SurfaceHandle, batch, begin_batch,
     current_owner, current_surface, dispose_owner, dispose_surface_owners, end_batch,
-    live_effect_count, live_signal_count, owner_scope, reset_runtime, set_current_surface,
-    set_flush_notify, set_surface_enter_hook,
+    live_effect_count, live_signal_count, on_cleanup, owner_scope, reset_runtime,
+    set_current_surface, set_flush_notify, set_surface_enter_hook,
 };
 pub use signal::{ReadSignal, RwSignal, signal};
 pub use source::{Source, derive, derive_pair};

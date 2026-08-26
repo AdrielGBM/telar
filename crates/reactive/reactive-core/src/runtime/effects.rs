@@ -1,6 +1,7 @@
 use std::cmp::Reverse;
 
 use super::flush::flush;
+use super::owner::enter_owner;
 use super::surface::current_surface;
 use super::{EffectEntry, EffectId, RUNTIME, SignalId};
 
@@ -11,9 +12,12 @@ pub(crate) fn current_observer() -> Option<EffectId> {
 pub(crate) fn register_effect(f: Box<dyn Fn()>) -> EffectId {
     RUNTIME.with(|rt| {
         let mut rt = rt.borrow_mut();
+        // Read off the stack we already hold rather than through `current_owner`, whose own borrow would collide with this one.
+        let owner = rt.owner_stack.last().copied();
         let id = rt.effects.insert(EffectEntry {
             callback: f,
             surface: current_surface(),
+            owner,
             is_pure: false,
             last_run_epoch: 0,
             sources: Vec::new(),
@@ -30,9 +34,12 @@ pub(crate) fn register_effect(f: Box<dyn Fn()>) -> EffectId {
 pub(crate) fn register_pure_effect(f: Box<dyn Fn()>) -> EffectId {
     RUNTIME.with(|rt| {
         let mut rt = rt.borrow_mut();
+        // Read off the stack we already hold rather than through `current_owner`, whose own borrow would collide with this one.
+        let owner = rt.owner_stack.last().copied();
         let id = rt.effects.insert(EffectEntry {
             callback: f,
             surface: current_surface(),
+            owner,
             is_pure: true,
             last_run_epoch: 0,
             sources: Vec::new(),
@@ -171,9 +178,10 @@ pub(crate) fn run_effect(id: EffectId) {
         // SAFETY: The arena owns this Box. No effect closure in this codebase captures its own Effect handle, so deregistration cannot happen during execution.
         let ptr: *const dyn Fn() = &*rt.effects[id].callback;
         let surface = rt.effects[id].surface;
-        Some((ptr, surface)) // Don't push observer_stack yet; clean_effect must run first
+        let owner = rt.effects[id].owner;
+        Some((ptr, surface, owner)) // Don't push observer_stack yet; clean_effect must run first
     });
-    if let Some((ptr, surface)) = ptr {
+    if let Some((ptr, surface, owner)) = ptr {
         // Clean stale subscriptions before re-running so fresh subscriptions are tracked (Finding 1.7). clean_effect acquires the runtime borrow internally (safe: we released it above).
         clean_effect(id);
         // Push observer_stack only after cleanup so clean_effect doesn't accidentally re-register.
@@ -191,6 +199,8 @@ pub(crate) fn run_effect(id: EffectId) {
         // for single-surface apps (surface == current surface → no-op).
         {
             let _surface_guard = surface.enter();
+            // And its owner, for the same reason one step in: a re-run that starts declaring, or creates a signal it did not create the first time, has to attribute it to the scope that built this effect rather than to whatever build the flush interrupted.
+            let _owner_guard = enter_owner(owner);
             unsafe { (*ptr)() };
         }
         drop(_guard);

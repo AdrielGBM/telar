@@ -946,7 +946,6 @@ impl Drop for StyledContainer {
             focus::unregister_scope(scope);
         }
         crate::input_region::unregister_interactive(self.node);
-        crate::inherit::undeclare(self.node);
     }
 }
 
