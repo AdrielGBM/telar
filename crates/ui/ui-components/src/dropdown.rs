@@ -389,23 +389,27 @@ fn trigger_rect_style(color: &dyn Fn() -> Color, bordered: bool) -> RectStyle {
 /// The caret every trigger carries, drawn rather than spelled: a glyph would depend on the face having it
 /// and on it being the size the label is. Two strokes, 11px across: wide enough to read beside a label at the
 /// body size, narrow enough not to compete with it.
+///
+/// Drawn, it still takes the label's ink at reduced strength — being artwork rather than text is not a reason
+/// to stop following the region the trigger sits in.
 fn caret() -> Result<Box<dyn LayoutItem>, LayoutError> {
     const W: f32 = 11.0;
     const H: f32 = 5.5;
-    let canvas = ui_core::Canvas::new(LayoutStyle::new().width(W).height(H), |rect| {
-        let top = (rect.height - H) / 2.0;
-        let data = std::sync::Arc::new(
-            renderer_core::PathData::new()
-                .move_to(geometry_core::Point::new(0.0, top))
-                .line_to(geometry_core::Point::new(W / 2.0, top + H))
-                .line_to(geometry_core::Point::new(W, top)),
-        );
-        ui_core::RenderNode::path(
-            data,
-            renderer_core::PathStyle::default()
-                .with_stroke(Stroke::new(shared::ink().with_alpha(0.6), 1.4)),
-        )
-    })?;
+    let canvas =
+        ui_core::Canvas::declaring(LayoutStyle::new().width(W).height(H), |rect, text| {
+            let top = (rect.height - H) / 2.0;
+            let data = std::sync::Arc::new(
+                renderer_core::PathData::new()
+                    .move_to(geometry_core::Point::new(0.0, top))
+                    .line_to(geometry_core::Point::new(W / 2.0, top + H))
+                    .line_to(geometry_core::Point::new(W, top)),
+            );
+            ui_core::RenderNode::path(
+                data,
+                renderer_core::PathStyle::default()
+                    .with_stroke(Stroke::new(text.color.faded(0.6), 1.4)),
+            )
+        })?;
     Ok(box_item(canvas))
 }
 
