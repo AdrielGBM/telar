@@ -763,7 +763,7 @@ dependencies = [
 
 [[package]]
 name = "cargo-telar"
-version = "0.1.5"
+version = "0.1.6"
 dependencies = [
  "clap",
  "notify",
@@ -2318,7 +2318,7 @@ checksum = "3752f229dcc5a481d60f385fa479ff46818033d881d2d801aa27dffcfb5e8306"
 
 [[package]]
 name = "landing"
-version = "0.1.5"
+version = "0.1.6"
 dependencies = [
  "telar",
  "tracing-subscriber",
@@ -4964,7 +4964,7 @@ dependencies = [
 
 [[package]]
 name = "sandbox"
-version = "0.1.5"
+version = "0.1.6"
 dependencies = [
  "serde",
  "telar",
@@ -5394,7 +5394,7 @@ dependencies = [
 
 [[package]]
 name = "telar"
-version = "0.1.5"
+version = "0.1.6"
 dependencies = [
  "image",
  "libc",
@@ -5433,7 +5433,7 @@ dependencies = [
 
 [[package]]
 name = "telar-analyzer"
-version = "0.1.5"
+version = "0.1.6"
 dependencies = [
  "anyhow",
  "lsp-types",
@@ -5457,7 +5457,7 @@ dependencies = [
 
 [[package]]
 name = "telar-diagnostics"
-version = "0.1.5"
+version = "0.1.6"
 dependencies = [
  "lsp-types",
  "telar-parser",
@@ -5466,11 +5466,11 @@ dependencies = [
 
 [[package]]
 name = "telar-geometry-core"
-version = "0.1.5"
+version = "0.1.6"
 
 [[package]]
 name = "telar-i18n-core"
-version = "0.1.5"
+version = "0.1.6"
 dependencies = [
  "telar-reactive-core",
  "toml",
@@ -5478,14 +5478,14 @@ dependencies = [
 
 [[package]]
 name = "telar-i18n-fixture"
-version = "0.1.5"
+version = "0.1.6"
 dependencies = [
  "telar",
 ]
 
 [[package]]
 name = "telar-layout-core"
-version = "0.1.5"
+version = "0.1.6"
 dependencies = [
  "rustc-hash 2.1.3",
  "taffy",
@@ -5495,7 +5495,7 @@ dependencies = [
 
 [[package]]
 name = "telar-layout-reactive"
-version = "0.1.5"
+version = "0.1.6"
 dependencies = [
  "rustc-hash 2.1.3",
  "telar-geometry-core",
@@ -5505,7 +5505,7 @@ dependencies = [
 
 [[package]]
 name = "telar-macros"
-version = "0.1.5"
+version = "0.1.6"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -5515,7 +5515,7 @@ dependencies = [
 
 [[package]]
 name = "telar-motion-core"
-version = "0.1.5"
+version = "0.1.6"
 dependencies = [
  "telar-geometry-core",
  "telar-reactive-core",
@@ -5523,7 +5523,7 @@ dependencies = [
 
 [[package]]
 name = "telar-navigate-core"
-version = "0.1.5"
+version = "0.1.6"
 dependencies = [
  "telar-layout-core",
  "telar-motion-core",
@@ -5534,14 +5534,14 @@ dependencies = [
 
 [[package]]
 name = "telar-parser"
-version = "0.1.5"
+version = "0.1.6"
 dependencies = [
  "thiserror 2.0.20",
 ]
 
 [[package]]
 name = "telar-platform-android"
-version = "0.1.5"
+version = "0.1.6"
 dependencies = [
  "android-activity",
  "libc",
@@ -5557,7 +5557,7 @@ dependencies = [
 
 [[package]]
 name = "telar-platform-core"
-version = "0.1.5"
+version = "0.1.6"
 dependencies = [
  "telar-geometry-core",
  "telar-reactive-local",
@@ -5566,7 +5566,7 @@ dependencies = [
 
 [[package]]
 name = "telar-platform-desktop"
-version = "0.1.5"
+version = "0.1.6"
 dependencies = [
  "accesskit",
  "accesskit_winit",
@@ -5585,7 +5585,7 @@ dependencies = [
 
 [[package]]
 name = "telar-platform-headless"
-version = "0.1.5"
+version = "0.1.6"
 dependencies = [
  "raw-window-handle",
  "telar-platform-core",
@@ -5593,7 +5593,7 @@ dependencies = [
 
 [[package]]
 name = "telar-platform-winit"
-version = "0.1.5"
+version = "0.1.6"
 dependencies = [
  "raw-window-handle",
  "telar-platform-core",
@@ -5602,7 +5602,7 @@ dependencies = [
 
 [[package]]
 name = "telar-reactive-core"
-version = "0.1.5"
+version = "0.1.6"
 dependencies = [
  "rustc-hash 2.1.3",
  "slab",
@@ -5612,11 +5612,11 @@ dependencies = [
 
 [[package]]
 name = "telar-reactive-local"
-version = "0.1.5"
+version = "0.1.6"
 
 [[package]]
 name = "telar-renderer-assets"
-version = "0.1.5"
+version = "0.1.6"
 dependencies = [
  "image",
  "resvg",
@@ -5629,7 +5629,7 @@ dependencies = [
 
 [[package]]
 name = "telar-renderer-cache"
-version = "0.1.5"
+version = "0.1.6"
 dependencies = [
  "clru",
  "rustc-hash 2.1.3",
@@ -5637,7 +5637,7 @@ dependencies = [
 
 [[package]]
 name = "telar-renderer-core"
-version = "0.1.5"
+version = "0.1.6"
 dependencies = [
  "bytemuck",
  "rustc-hash 2.1.3",
@@ -5651,7 +5651,7 @@ dependencies = [
 
 [[package]]
 name = "telar-renderer-hardware"
-version = "0.1.5"
+version = "0.1.6"
 dependencies = [
  "bytemuck",
  "criterion",
@@ -5671,14 +5671,14 @@ dependencies = [
 
 [[package]]
 name = "telar-renderer-record"
-version = "0.1.5"
+version = "0.1.6"
 dependencies = [
  "telar-renderer-core",
 ]
 
 [[package]]
 name = "telar-renderer-software"
-version = "0.1.5"
+version = "0.1.6"
 dependencies = [
  "criterion",
  "image",
@@ -5709,7 +5709,7 @@ dependencies = [
 
 [[package]]
 name = "telar-renderer-text"
-version = "0.1.5"
+version = "0.1.6"
 dependencies = [
  "cosmic-text",
  "criterion",
@@ -5725,7 +5725,7 @@ dependencies = [
 
 [[package]]
 name = "telar-services-core"
-version = "0.1.5"
+version = "0.1.6"
 dependencies = [
  "rustc-hash 2.1.3",
  "telar-reactive-local",
@@ -5735,7 +5735,7 @@ dependencies = [
 
 [[package]]
 name = "telar-theme-core"
-version = "0.1.5"
+version = "0.1.6"
 dependencies = [
  "telar-geometry-core",
  "telar-reactive-core",
@@ -5744,7 +5744,7 @@ dependencies = [
 
 [[package]]
 name = "telar-transpiler"
-version = "0.1.5"
+version = "0.1.6"
 dependencies = [
  "serde",
  "serde_json",
@@ -5757,7 +5757,7 @@ dependencies = [
 
 [[package]]
 name = "telar-ui-components"
-version = "0.1.5"
+version = "0.1.6"
 dependencies = [
  "telar-geometry-core",
  "telar-layout-core",
@@ -5772,7 +5772,7 @@ dependencies = [
 
 [[package]]
 name = "telar-ui-core"
-version = "0.1.5"
+version = "0.1.6"
 dependencies = [
  "rustc-hash 2.1.3",
  "telar-geometry-core",
@@ -5791,7 +5791,7 @@ dependencies = [
 
 [[package]]
 name = "telar-ui-tree"
-version = "0.1.5"
+version = "0.1.6"
 dependencies = [
  "criterion",
  "telar-geometry-core",
