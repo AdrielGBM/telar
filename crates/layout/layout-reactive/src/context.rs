@@ -122,6 +122,53 @@ pub fn parent(node: NodeId) -> Option<NodeId> {
     with_parents_ref(|p| p.get(&node).copied())
 }
 
+/// `node` and everything above it, nearest first — and it ends even when the links form a cycle.
+///
+/// Parent links are a map the runtime maintains, not a tree it owns, so a loop in them is reachable: an overlay attached under its own content closes one. Every climb then spins instead of answering, which costs the whole surface rather than the one node that is wrong — resolving a text's inherited style walks this on every build. Tortoise-and-hare ends the walk at the repeat, allocating nothing and costing one extra lookup per two steps, which is what lets the hot path use it.
+pub fn ancestors(node: NodeId) -> Ancestors {
+    Ancestors {
+        cursor: Some(node),
+        trail: node,
+        halve: false,
+    }
+}
+
+/// The iterator [`ancestors`] returns.
+pub struct Ancestors {
+    cursor: Option<NodeId>,
+    /// Trails `cursor` at half its speed, so the two meet only inside a cycle.
+    trail: NodeId,
+    halve: bool,
+}
+
+impl Iterator for Ancestors {
+    type Item = NodeId;
+
+    fn next(&mut self) -> Option<NodeId> {
+        let current = self.cursor?;
+        let next = parent(current);
+        if self.halve {
+            self.trail = parent(self.trail).unwrap_or(self.trail);
+        }
+        self.halve = !self.halve;
+        self.cursor = match next {
+            Some(node) if node == self.trail => None,
+            next => next,
+        };
+        Some(current)
+    }
+}
+
+/// Records that `child` hangs from `parent`.
+///
+/// The one place a parent link is written, because the invariant every climb here depends on — that following these links from any node reaches a root — belongs to no single caller. A link that would close a cycle is refused rather than stored.
+fn link_parent(child: NodeId, parent: NodeId) {
+    if ancestors(parent).any(|above| above == child) {
+        return;
+    }
+    with_parents(|p| p.insert(child, parent));
+}
+
 /// Whether `node` is `ancestor` or sits anywhere beneath it. Follows the parent links the runtime records, so
 /// it crosses into a separately-computed sub-root (a scroll's content) the way the layout tree does.
 pub fn is_descendant_of(node: NodeId, ancestor: NodeId) -> bool {
@@ -233,10 +280,14 @@ pub fn attach_overlay(node: NodeId) -> bool {
         let Some(host) = rt.overlay_host else {
             return false;
         };
+        // A host sitting inside the content it would carry closes a parent cycle, and no root is reachable from under `node` afterwards. `overlay_host` is auto-detected and moves as sub-roots are laid out, so this needs nobody to ask for it; refuse, and the caller lays the overlay out in place.
+        if ancestors(host).any(|above| above == node) {
+            return false;
+        }
         if rt.engine.add_child(host, node).is_err() {
             return false;
         }
-        with_parents(|p| p.insert(node, host));
+        link_parent(node, host);
         rt.engine.mark_dirty(host).ok();
         true
     })
@@ -333,7 +384,7 @@ impl LayoutRuntime {
         let signal = signal(Rect::default());
         self.registry.insert(node, signal);
         for &child in children {
-            with_parents(|p| p.insert(child, node));
+            link_parent(child, node);
         }
         if let Some(dimensions) = self.engine.is_fixed_size(node) {
             self.boundary_nodes.insert(node, dimensions);
@@ -469,37 +520,16 @@ impl LayoutRuntime {
         }
     }
 
-    fn find_nearest_boundary(&self, mut node: NodeId) -> Option<(NodeId, f32, f32)> {
-        loop {
-            if let Some(&(w, h)) = self.boundary_nodes.get(&node) {
-                return Some((node, w, h));
-            }
-            node = with_parents_ref(|p| p.get(&node).copied())?;
-        }
+    fn find_nearest_boundary(&self, node: NodeId) -> Option<(NodeId, f32, f32)> {
+        ancestors(node).find_map(|at| self.boundary_nodes.get(&at).map(|&(w, h)| (at, w, h)))
     }
 
-    fn is_hidden_by_display(&self, mut node: NodeId) -> bool {
-        loop {
-            if self.engine.is_display_none(node) {
-                return true;
-            }
-            match with_parents_ref(|p| p.get(&node).copied()) {
-                Some(parent) => node = parent,
-                None => return false,
-            }
-        }
+    fn is_hidden_by_display(&self, node: NodeId) -> bool {
+        ancestors(node).any(|at| self.engine.is_display_none(at))
     }
 
-    fn is_in_subtree(&self, mut node: NodeId, ancestor: NodeId) -> bool {
-        loop {
-            if node == ancestor {
-                return true;
-            }
-            match with_parents_ref(|p| p.get(&node).copied()) {
-                Some(parent) => node = parent,
-                None => return false,
-            }
-        }
+    fn is_in_subtree(&self, node: NodeId, ancestor: NodeId) -> bool {
+        ancestors(node).any(|at| at == ancestor)
     }
 
     pub(crate) fn track_layout(&self, node: NodeId) -> Option<RwSignal<Rect>> {
@@ -509,7 +539,7 @@ impl LayoutRuntime {
     fn set_children(&mut self, parent: NodeId, children: &[NodeId]) -> Result<(), LayoutError> {
         self.engine.set_children(parent, children)?;
         for &child in children {
-            with_parents(|p| p.insert(child, parent));
+            link_parent(child, parent);
         }
         self.engine.mark_dirty(parent).ok();
         Ok(())
@@ -518,7 +548,11 @@ impl LayoutRuntime {
     fn remove_node(&mut self, node: NodeId) {
         self.engine.remove(node);
         self.registry.remove(&node);
-        with_parents(|p| p.remove(&node));
+        // Every link *naming* `node` goes with it, not only the one it owned. Taffy hands a freed index back out under a new generation, so a link left pointing here does not dangle harmlessly — it comes to name whichever node is minted next, and a climb that should have reached a root finds a cycle instead. `retain` drops only the links that still name it, so a child re-parented since keeps where it moved.
+        with_parents(|p| {
+            p.remove(&node);
+            p.retain(|_, above| *above != node);
+        });
         self.boundary_nodes.remove(&node);
         self.last_space.remove(&node);
         self.root_auto.remove(&node);
@@ -532,6 +566,64 @@ mod tests {
     use layout_core::{LayoutStyle, SizeDimension};
 
     use super::*;
+
+    // These hang rather than fail when the guard is gone, which is how the bug reached a desktop: the shell burned a core in `inherit::context` from its first frame and never drew.
+    #[test]
+    fn an_overlay_is_refused_a_host_that_sits_inside_it() {
+        reset_layout_runtime();
+        let inner = new_container(LayoutStyle::new(), &[]).unwrap();
+        let content = new_container(LayoutStyle::new(), &[inner]).unwrap();
+        // What auto-detection can leave behind once a sub-root of the overlay has been laid out on its own.
+        set_overlay_host(inner);
+
+        assert!(
+            !attach_overlay(content),
+            "a host beneath the content it would carry closes a parent cycle"
+        );
+        assert_eq!(
+            parent(content),
+            None,
+            "a refused attach leaves the content parentless rather than half-linked"
+        );
+    }
+
+    #[test]
+    fn removing_a_node_leaves_no_link_pointing_at_it() {
+        reset_layout_runtime();
+        let child = new_container(LayoutStyle::new(), &[]).unwrap();
+        let host = new_container(LayoutStyle::new(), &[child]).unwrap();
+        assert_eq!(parent(child), Some(host));
+
+        remove_node(host);
+
+        assert_eq!(
+            parent(child),
+            None,
+            "a link to a freed node outlives it and then names whatever reuses the id"
+        );
+    }
+
+    #[test]
+    fn a_cycle_in_the_parent_links_ends_the_climb_instead_of_spinning() {
+        reset_layout_runtime();
+        let a = new_container(LayoutStyle::new(), &[]).unwrap();
+        let b = new_container(LayoutStyle::new(), &[]).unwrap();
+        let unrelated = new_container(LayoutStyle::new(), &[]).unwrap();
+        with_parents(|p| {
+            p.insert(a, b);
+            p.insert(b, a);
+        });
+
+        let climbed: Vec<_> = ancestors(a).collect();
+        assert!(
+            climbed.iter().all(|node| *node == a || *node == b),
+            "the climb stays inside the cycle it found: {climbed:?}"
+        );
+        assert!(
+            !is_descendant_of(a, unrelated),
+            "a question asked from inside a cycle answers instead of hanging"
+        );
+    }
 
     // A child whose HEIGHT depends on the width it is given, which is the case a `max-width` box used to get
     // wrong: taffy 0.11 measured it at its uncapped one-line intrinsic width, so `layout-reactive` pinned

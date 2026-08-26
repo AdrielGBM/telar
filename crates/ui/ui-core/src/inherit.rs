@@ -180,12 +180,10 @@ pub fn context(node: NodeId) -> Rc<Inherited> {
     let _ = structure.get();
 
     let mut chain: Vec<Declared> = Vec::new();
-    let mut at = Some(node);
-    while let Some(current) = at {
+    for current in layout_reactive::ancestors(node) {
         if let Some(sig) = with_cascade_ref(|c| c.declared.get(&current).cloned()) {
             chain.push(sig.get());
         }
-        at = layout_reactive::parent(current);
     }
     if chain.is_empty() {
         return root;
