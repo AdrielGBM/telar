@@ -38,12 +38,21 @@ pub fn new_leaf(style: LayoutStyle) -> Result<(NodeId, RwSignal<Rect>), LayoutEr
     with_runtime(|rt| rt.new_leaf(style))
 }
 
-/// A leaf whose intrinsic size is computed by `measure` at layout time (e.g. text
-/// whose height depends on how many lines it wraps into at the resolved width).
+/// A leaf whose intrinsic size is computed by `measure` at layout time (e.g. text whose height depends on
+/// how many lines it wraps into at the resolved width).
+///
+/// The closure re-enters the owner that registered it, which is the third place this has to happen and the
+/// least obvious: a measure runs deep inside taffy's recursion, long after the build, with no owner stack at
+/// all. Text sized from something ambient — the region it sits in, a value its component provided — would
+/// otherwise resolve against the surface root and read whatever happened to be there. The effect flush and
+/// the event dispatch do the same thing for the same reason.
 pub fn new_measured_leaf(
     style: LayoutStyle,
-    measure: MeasureFn,
+    mut measure: MeasureFn,
 ) -> Result<(NodeId, RwSignal<Rect>), LayoutError> {
+    let owner = reactive_core::current_owner();
+    let measure: MeasureFn =
+        Box::new(move |input| reactive_core::with_owner(owner, || measure(input)));
     with_runtime(|rt| rt.new_measured_leaf(style, measure))
 }
 
