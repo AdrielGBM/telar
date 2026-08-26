@@ -5728,6 +5728,7 @@ name = "telar-services-core"
 version = "0.1.6"
 dependencies = [
  "rustc-hash 2.1.3",
+ "telar-reactive-core",
  "telar-reactive-local",
  "thiserror 2.0.20",
  "tracing",

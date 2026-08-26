@@ -93,7 +93,9 @@ impl Children {
     /// Builds the children with `context` visible to every one of them, and to anything they build in turn.
     ///
     /// The scope is nested, so a select inside a select's own row shadows the outer one rather than
-    /// colliding with it, and it closes when this returns — a widget built afterwards sees nothing.
+    /// colliding with it. It no longer *closes* when this returns: the owner it opens lives as long as the
+    /// children built under it, which is what lets one of their handlers read the context later — the one
+    /// moment it was previously unavailable, and the one that matters.
     pub fn build_with<T: Any + 'static>(&self, context: T) -> Result<Slots, LayoutError> {
         services_core::Scope::with(|| {
             // The scope is fresh, so the only way this fails is a caller providing the same type twice into

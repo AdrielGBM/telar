@@ -35,6 +35,11 @@ impl Child {
     pub(crate) fn node(&self) -> layout_core::NodeId {
         self.node
     }
+
+    /// Runs `f` under this child's owner, for a handler firing long after the build that made it.
+    pub(crate) fn owning<R>(&self, f: impl FnOnce() -> R) -> R {
+        reactive_core::with_owner(self.owner, f)
+    }
 }
 
 /// Registers an already-built widget as a container child: tracks its layout rect and mounts its render

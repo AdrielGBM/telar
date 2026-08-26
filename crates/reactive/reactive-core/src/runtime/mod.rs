@@ -18,8 +18,9 @@ pub(crate) use effects::{
 };
 pub use flush::{batch, begin_batch, end_batch, reset_runtime, set_flush_notify};
 pub use owner::{
-    OwnerGuard, OwnerId, current_owner, dispose_owner, dispose_surface_owners, live_effect_count,
-    live_signal_count, on_cleanup, owner_scope,
+    OwnerGuard, OwnerId, context_provided_here, current_owner, dispose_owner,
+    dispose_surface_owners, live_effect_count, live_signal_count, on_cleanup, owner_scope,
+    provide_context, with_context, with_owner,
 };
 pub(crate) use signals::{
     create_signal_storage, notify_signal, set_signal_value, track_signal, update_signal_value,

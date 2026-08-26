@@ -20,7 +20,6 @@ use reactive_core::{
     SurfaceEnterGuard, SurfaceHandle, dispose_surface_owners, set_current_surface,
     set_surface_enter_hook,
 };
-use services_core::{ServiceContext, ServiceGuard};
 use ui_tree::{ForceTickContext, ForceTickGuard, OverlayContext, OverlayGuard};
 
 use crate::focus::{FocusContext, FocusGuard};
@@ -38,10 +37,6 @@ pub struct Surface {
     input_region: InputRegionContext,
     force_tick: ForceTickContext,
     window_commands: WindowCommandContext,
-    // Per-surface DI/context scope: `provide`/`inject` (services-core) resolve against this while the surface
-    // is active, so an app carries per-window context (config, theme, locale) as typed values, read even from
-    // effects (the flush re-enters the surface). The generic per-surface-context primitive, à la Floem/Leptos.
-    services: ServiceContext,
 }
 
 impl Surface {
@@ -60,7 +55,6 @@ impl Surface {
             input_region: InputRegionContext::new(),
             force_tick: ForceTickContext::new(),
             window_commands: WindowCommandContext::new(),
-            services: ServiceContext::new(),
         });
         SURFACES.with(|s| s.borrow_mut().insert(handle, Rc::downgrade(&surface)));
         surface
@@ -86,7 +80,6 @@ impl Surface {
             _input_region: self.input_region.enter(),
             _force_tick: self.force_tick.enter(),
             _window_commands: self.window_commands.enter(),
-            _services: self.services.enter(),
             _prev_surface: RestoreSurface(prev_surface),
         }
     }
@@ -110,7 +103,6 @@ impl Surface {
             _input_region: InputRegionContext::enter_ambient(),
             _force_tick: ForceTickContext::enter_ambient(),
             _window_commands: WindowCommandContext::enter_ambient(),
-            _services: ServiceContext::enter_ambient(),
             _prev_surface: RestoreSurface(prev_surface),
         }
     }
@@ -140,7 +132,6 @@ pub struct SurfaceGuard {
     _input_region: InputRegionGuard,
     _force_tick: ForceTickGuard,
     _window_commands: WindowCommandGuard,
-    _services: ServiceGuard,
     _prev_surface: RestoreSurface,
 }
 

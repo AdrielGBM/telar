@@ -224,7 +224,7 @@ pub(crate) fn dispatch_container_event(
             // one is not: a `click_through` bar declines to shadow the pane under it and was then told the
             // pane was shadowing *it*, so nothing inside it could be hovered.
             let _covered = (over.is_some_and(|top| top > i)).then(occlude);
-            if child.item.borrow_mut().on_event(event) == EventResult::Handled {
+            if child.owning(|| child.item.borrow_mut().on_event(event)) == EventResult::Handled {
                 any_handled = true;
             }
         }
@@ -248,7 +248,7 @@ pub(crate) fn dispatch_container_event(
         if !rect.is_none_or(|r| r.contains(x, y)) {
             continue;
         }
-        let result = child.item.borrow_mut().on_event(event);
+        let result = child.owning(|| child.item.borrow_mut().on_event(event));
         // A widget that is not there for hit-testing purposes (an overlay, routed by its own registry) lets
         // the search carry on to whatever it was drawn over.
         if result == EventResult::Handled
@@ -265,7 +265,7 @@ fn dispatch_to_children(
     event: &Event,
 ) -> EventResult {
     for child in children.iter_mut() {
-        if child.item.borrow_mut().on_event(event) == EventResult::Handled {
+        if child.owning(|| child.item.borrow_mut().on_event(event)) == EventResult::Handled {
             return EventResult::Handled;
         }
     }

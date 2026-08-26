@@ -13,9 +13,7 @@ pub use paths::{AppPathsProvider, NoPaths};
 #[cfg(feature = "di")]
 pub use registry::ServiceError;
 #[cfg(feature = "di")]
-pub use scope::{
-    Scope, ServiceContext, ServiceGuard, context, provide, set_context, try_inject, with_service,
-};
+pub use scope::{Scope, context, provide, set_context, try_inject, with_service};
 
 #[cfg(all(test, feature = "di"))]
 mod tests {
@@ -23,28 +21,6 @@ mod tests {
     use std::rc::Rc;
 
     use super::*;
-    use crate::registry::ServiceRegistry;
-
-    #[test]
-    fn registry_insert_get() {
-        let mut reg = ServiceRegistry::new();
-        reg.insert(42u32).unwrap();
-        assert_eq!(reg.get::<u32>(), Some(&42));
-    }
-
-    #[test]
-    fn registry_insert_duplicate_returns_error() {
-        let mut reg = ServiceRegistry::new();
-        assert!(reg.insert(1u32).is_ok());
-        assert_eq!(reg.insert(2u32), Err(ServiceError::AlreadyRegistered));
-        assert_eq!(reg.get::<u32>(), Some(&1));
-    }
-
-    #[test]
-    fn registry_missing_type() {
-        let reg = ServiceRegistry::new();
-        assert_eq!(reg.get::<u32>(), None);
-    }
 
     #[test]
     fn scope_provide_inject() {

@@ -1,83 +1,70 @@
+//! Ambient values a widget can read without being handed them, scoped to the owner that provided them.
+//!
+//! This used to be a per-surface stack of registries, pushed and popped around a call. That shape had one
+//! thing wrong with it and it was not the storage: **a call-stack scope closes when the call returns**, and
+//! an `on_press` handler runs long after the build that made it did. So the values a component wanted its
+//! subtree to read were readable only *during* the build, which is the one moment nothing needs to ask.
+//!
+//! Backed by [the owner tree](reactive_core) instead, a scope lives as long as the node that opened it.
+
 use std::any::Any;
 
-use crate::registry::ServiceRegistry;
+use crate::registry::ServiceError;
 
-reactive_local::surface_local! {
-    /// A per-surface service stack. Under M3 many surfaces share one UI thread, so each surface owns its own
-    /// stack; the runner activates it with [`ServiceContext::enter`] around the surface's build/event/frame
-    /// (and the reactive flush re-enters it for that surface's effects), so `provide`/`try_inject` resolve
-    /// against the surface whose context is active — the generic per-surface context primitive.
-    slot STACK: Vec<ServiceRegistry> = vec![ServiceRegistry::new()];
-    access with_stack, with_stack_ref;
-    context ServiceContext, ServiceGuard;
+/// Makes `service` readable by everything built under the current owner.
+///
+/// Returns `Err(AlreadyRegistered)` when this owner has already provided that type — a component saying the
+/// same thing twice about its own subtree, which is a mistake rather than an intent. Shadowing from a
+/// *nested* scope is fine and always was: the walk finds the nearest one.
+pub fn provide<T: Any + 'static>(service: T) -> Result<(), ServiceError> {
+    if reactive_core::context_provided_here::<Provided<T>>() {
+        return Err(ServiceError::AlreadyRegistered);
+    }
+    reactive_core::provide_context(Provided(service));
+    Ok(())
 }
 
-pub fn provide<T: Any + 'static>(service: T) -> Result<(), crate::registry::ServiceError> {
-    with_stack(|stack| {
-        stack
-            .last_mut()
-            .expect("service stack is empty — this is a bug")
-            .insert(service)
-    })
-}
+/// A newtype so "this owner provided a `T`" is a different question from "a `T` is visible here", which is
+/// what tells an owner repeating itself apart from one shadowing its parent.
+struct Provided<T>(T);
 
+/// The nearest `T` at or above the current owner, cloned.
 pub fn try_inject<T: Any + Clone + 'static>() -> Option<T> {
-    with_stack_ref(|stack| stack.last().and_then(|scope| scope.get::<T>()).cloned())
+    reactive_core::with_context::<Provided<T>, _>(|p| p.0.clone())
 }
 
+/// The nearest `T` at or above the current owner, read in place — for a service too large to clone, or one
+/// that is not `Clone` at all.
 pub fn with_service<T: Any + 'static, R>(f: impl FnOnce(&T) -> R) -> Option<R> {
-    with_stack_ref(|stack| stack.last().and_then(|scope| scope.get::<T>()).map(f))
+    reactive_core::with_context::<Provided<T>, _>(|p| f(&p.0))
 }
 
+/// Opens a nested scope for the duration of `f`.
+///
+/// Kept as a spelling for code that wants a scope around a call and nothing more. Note what it no longer
+/// does: the scope it opens outlives `f`, and is disposed with the owner rather than at the closing brace.
 pub struct Scope(());
 
 impl Scope {
     pub fn with<R>(f: impl FnOnce() -> R) -> R {
-        with_stack(|stack| {
-            let mut new_scope = ServiceRegistry::new();
-            if let Some(parent) = stack.last() {
-                new_scope.merge_from(parent);
-            }
-            stack.push(new_scope);
-        });
-        struct PopGuard;
-        impl Drop for PopGuard {
-            fn drop(&mut self) {
-                with_stack(|stack| {
-                    if stack.len() > 1 {
-                        stack.pop();
-                    }
-                });
-            }
-        }
-        let _guard = PopGuard;
+        let _scope = reactive_core::owner_scope();
         f()
     }
 }
 
-/// A surface's context of some type, in a cell so a rebuild can replace it.
-#[derive(Clone)]
-struct Slot<T>(std::rc::Rc<std::cell::RefCell<T>>);
-
-/// Sets this surface's context of type `T` — what its content wants every widget under it to be able to read
-/// without being handed it: which page a panel shows, which screen a chip is on.
+/// Sets the current owner's context of type `T`, replacing whatever it had.
 ///
-/// **Written rather than provided, and that is the whole point.** [`provide`] registers a type once per scope
-/// and refuses the second attempt, while a surface's scope outlives every build of its content — so a rebuild
-/// that provided again would be told it already had one and go on drawing against the context of an edit ago.
+/// The difference from [`provide`] is repetition: a rebuild says the same things about the same subtree, and
+/// this is the spelling that means "again". It used to be implemented by providing an `Rc<RefCell<T>>` once
+/// and writing through the cell forever after, because the only scope available outlived every build of its
+/// content and would refuse the second `provide`. An owner per build removes the reason for the cell.
 pub fn set_context<T: Clone + 'static>(value: T) {
-    match try_inject::<Slot<T>>() {
-        Some(slot) => *slot.0.borrow_mut() = value,
-        None => {
-            let _ = provide(Slot(std::rc::Rc::new(std::cell::RefCell::new(value))));
-        }
-    }
+    reactive_core::provide_context(Provided(value));
 }
 
-/// This surface's context of type `T`, as the latest build left it. `None` before anything set one — a widget
-/// built outside a surface, which is every unit test.
+/// The nearest context of type `T`. `None` before anything set one.
 pub fn context<T: Clone + 'static>() -> Option<T> {
-    try_inject::<Slot<T>>().map(|slot| slot.0.borrow().clone())
+    try_inject::<T>()
 }
 
 #[cfg(test)]
@@ -105,5 +92,39 @@ mod context_tests {
         struct Unset(u8);
 
         Scope::with(|| assert_eq!(context::<Unset>(), None));
+    }
+
+    /// The reason this phase exists. A handler runs long after the build that made it returned, and a
+    /// call-stack scope has closed by then — so the value a component provided for its own subtree was
+    /// readable everywhere except from the events that subtree raises.
+    ///
+    /// **Backing the registry with the tree is only half of it.** A handler is a plain closure: when it runs
+    /// there is no owner stack, so an ambient read resolves against the surface root rather than against the
+    /// component. Something has to put it back in its owner. Here that is explicit; in a real tree it is
+    /// `dispatch_container_event`, which re-enters the child's owner around `on_event` the same way the
+    /// reactive flush re-enters an effect's surface.
+    #[test]
+    fn a_context_provided_during_a_build_is_readable_from_a_handler_that_fires_later() {
+        #[derive(Clone, PartialEq, Debug)]
+        struct Desk(u8);
+
+        let scope = reactive_core::owner_scope();
+        let owner = scope.id();
+        set_context(Desk(7));
+        let handler: Box<dyn Fn() -> Option<Desk>> = Box::new(context::<Desk>);
+        drop(scope);
+
+        assert_eq!(
+            reactive_core::with_owner(Some(owner), &handler),
+            Some(Desk(7)),
+            "the build is long over"
+        );
+
+        reactive_core::dispose_owner(owner);
+        assert_eq!(
+            reactive_core::with_owner(Some(owner), &handler),
+            None,
+            "and disposing the owner takes it away"
+        );
     }
 }

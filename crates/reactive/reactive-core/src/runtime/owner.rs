@@ -2,16 +2,16 @@
 //!
 //! Every signal, memo and effect belongs to a node in a tree, recorded at creation from whatever owner is
 //! active, the same way [`EffectEntry::surface`](super::EffectEntry) records the surface. Disposing an
-//! owner walks its children first, then frees what it holds itself. Nothing mints an owner yet; this is
-//! the tree the later phases hang lifetimes on.
+//! owner walks its children first, then frees what it holds itself. A view mints one per component instance, per
+//! reactive `if` branch and per list row.
 //!
 //! # How this composes with `surface_local!`
 //!
 //! **A surface is the outer world; an owner is a node in the inner tree.** They are not competing scoping
 //! mechanisms and must not be read as one.
 //!
-//! A surface owns a set of swappable thread-local worlds — its layout tree, service stack, overlays,
-//! focus, input region, window-command queue (`ui-core/src/surface_context.rs`). Those keep their job
+//! A surface owns a set of swappable thread-local worlds — its layout tree, overlays, focus, input region,
+//! window-command queue (`ui-core/src/surface_context.rs`). Those keep their job
 //! exactly as it is. An owner owns *reactive state*: the entries in this runtime's arenas. An owner
 //! belongs to exactly one surface, the one active when it was created, and disposing a surface disposes
 //! the owner roots stamped with it — never the reverse. Owners nest inside a surface; a surface never
@@ -21,7 +21,10 @@
 //! the other. They clean up different things, on different schedules — a surface lives for a window, an
 //! owner for a component instance, an `if` branch, or one row of a list.
 
-use std::any::Any;
+use std::any::{Any, TypeId};
+use std::rc::Rc;
+
+use rustc_hash::FxHashMap;
 
 use super::flush::batch;
 use super::surface::current_surface;
@@ -41,6 +44,8 @@ pub(crate) struct OwnerEntry {
     /// this crate cannot name — a cascade declaration is keyed by a layout `NodeId`, which lives three
     /// crates up.
     cleanups: Vec<Box<dyn FnOnce()>>,
+    /// What this owner tells everything below it, keyed by type. Empty for almost every owner: only a scope that provides something ever reaches the allocator for this.
+    context: FxHashMap<TypeId, Rc<dyn Any>>,
     surface: SurfaceHandle,
 }
 
@@ -53,6 +58,7 @@ impl OwnerEntry {
             signals: Vec::new(),
             effects: Vec::new(),
             cleanups: Vec::new(),
+            context: FxHashMap::default(),
             surface,
         }
     }
@@ -60,8 +66,8 @@ impl OwnerEntry {
 
 /// The owner a signal or effect created right now would belong to, or `None` outside every owner scope.
 ///
-/// Reactive state created outside an owner is recorded nowhere and stays governed by the handle refcount,
-/// which is exactly today's behaviour. That hole closes when the refcount does; see Decisions 5.
+/// `None` does not mean unowned: creation falls back to the active surface's root, which `owning_id` mints
+/// on demand. This answers the narrower question of whether a scope is open.
 pub fn current_owner() -> Option<OwnerId> {
     RUNTIME.with(|rt| rt.borrow().owner_stack.last().copied())
 }
@@ -156,6 +162,87 @@ pub(crate) fn owning_id(rt: &mut Runtime) -> Option<OwnerId> {
     let root = rt.owners.insert(OwnerEntry::new(None, surface));
     rt.roots.insert(surface, root);
     Some(root)
+}
+
+/// Runs `f` under `owner`, for code that executes long after the build that made it.
+///
+/// The counterpart to the surface re-entry in `run_effect`, and needed for the same reason one layer in. An
+/// event handler is a plain closure: by the time it is called the owner stack is empty, so anything it asks
+/// for ambiently would resolve against the surface root rather than against the component it belongs to.
+/// Mints nothing — the owner already exists, and the handler must land *in* it rather than beside it.
+pub fn with_owner<R>(owner: Option<OwnerId>, f: impl FnOnce() -> R) -> R {
+    let depth = RUNTIME.with(|rt| {
+        let mut rt = rt.borrow_mut();
+        let depth = rt.owner_stack.len();
+        if let Some(owner) = owner
+            && rt.owners.contains_key(owner)
+        {
+            rt.owner_stack.push(owner);
+        }
+        depth
+    });
+    struct Restore(usize);
+    impl Drop for Restore {
+        fn drop(&mut self) {
+            RUNTIME.with(|rt| rt.borrow_mut().owner_stack.truncate(self.0));
+        }
+    }
+    let _restore = Restore(depth);
+    f()
+}
+
+/// Whether the *current* owner provided a `T` itself, as opposed to inheriting one from above.
+///
+/// What tells an owner repeating itself apart from one shadowing its parent: the first is a mistake, the
+/// second is what nesting is for.
+pub fn context_provided_here<T: 'static>() -> bool {
+    RUNTIME.with(|rt| {
+        let mut rt = rt.borrow_mut();
+        let Some(id) = owning_id(&mut rt) else {
+            return false;
+        };
+        rt.owners
+            .get(id)
+            .is_some_and(|entry| entry.context.contains_key(&TypeId::of::<T>()))
+    })
+}
+
+/// Puts `value` in the current owner's context, replacing whatever this owner had of that type.
+///
+/// Replacing rather than refusing, because a rebuild is the normal case: the same owner builds its content
+/// again and says the same things about it. The old spelling worked around a scope that could not be
+/// provided to twice by writing through an `Rc<RefCell<T>>` slot, which is a mutable cell standing in for a
+/// scope that ends.
+pub fn provide_context<T: 'static>(value: T) {
+    RUNTIME.with(|rt| {
+        let mut rt = rt.borrow_mut();
+        if let Some(entry) = owning(&mut rt) {
+            entry.context.insert(TypeId::of::<T>(), Rc::new(value));
+        }
+    });
+}
+
+/// Reads the nearest value of type `T` at or above the current owner.
+///
+/// A walk rather than a copy. The scope stack this replaces merged every parent entry into each new scope on
+/// entry, so opening one cost an `Rc` clone per inherited service; a walk makes entry free and pays on the
+/// read instead, which happens at user speed inside a handler rather than per compound-component build.
+pub fn with_context<T: 'static, R>(f: impl FnOnce(&T) -> R) -> Option<R> {
+    // Cloned out before the borrow is released, because `f` is the caller's and may read a signal — which would re-enter the runtime and abort.
+    let found: Rc<dyn Any> = RUNTIME.with(|rt| {
+        let mut rt = rt.borrow_mut();
+        let mut at = owning_id(&mut rt);
+        let wanted = TypeId::of::<T>();
+        while let Some(id) = at {
+            let entry = rt.owners.get(id)?;
+            if let Some(value) = entry.context.get(&wanted) {
+                return Some(Rc::clone(value));
+            }
+            at = entry.parent;
+        }
+        None
+    })?;
+    found.downcast_ref::<T>().map(f)
 }
 
 /// Registers work the current owner runs when it is disposed.
