@@ -4,7 +4,7 @@ use std::rc::Rc;
 use geometry_core::Rect;
 use layout_core::{LayoutError, LayoutStyle, NodeId};
 use platform_core::Event;
-use reactive_core::{OwnerId, RwSignal, owner_scope};
+use reactive_core::{OwnerId, RwSignal, current_owner, owner_scope};
 use ui_tree::{Component, EventResult, RenderNode, Segment};
 
 use crate::context::{new_container, track_layout};
@@ -29,6 +29,17 @@ pub(crate) struct Child {
     /// The owner everything this child's build created belongs to, for the children whose lifetime is their
     /// own. `None` for a child handed in already built, whose lifetime is somebody else's.
     owner: Option<OwnerId>,
+    /// The owner that was active while this child was built — which is not the same question as [`owner`],
+    /// and conflating them was a bug.
+    ///
+    /// [`owner`] answers *what do I dispose*, and only a child with a lifetime of its own has one. This
+    /// answers *what do I run under*, and every child has one: a static child built inside a component
+    /// belongs to that component's scope even though it disposes nothing. A handler needs the second, or a
+    /// static child resolves its ambient reads against the surface root instead of the component it is part
+    /// of. For a reactive row the two are the same owner, which is why one field looked like enough.
+    ///
+    /// [`owner`]: Self::owner
+    built_under: Option<OwnerId>,
 }
 
 impl Child {
@@ -36,9 +47,9 @@ impl Child {
         self.node
     }
 
-    /// Runs `f` under this child's owner, for a handler firing long after the build that made it.
+    /// Runs `f` under the scope this child was built in, for a handler firing long after that build.
     pub(crate) fn owning<R>(&self, f: impl FnOnce() -> R) -> R {
-        reactive_core::with_owner(self.owner, f)
+        reactive_core::with_owner(self.built_under, f)
     }
 }
 
@@ -56,6 +67,7 @@ pub(crate) fn make_child(widget: Box<dyn LayoutItem>) -> Child {
         segment,
         node,
         owner: None,
+        built_under: current_owner(),
     }
 }
 

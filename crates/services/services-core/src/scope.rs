@@ -85,6 +85,31 @@ mod context_tests {
         });
     }
 
+    /// Two components saying different things about their own subtrees must not collide, which is what a
+    /// scope *per component* buys and what nothing else does. Without one they share whoever built them: the
+    /// second `provide` is refused as a repeat, and — worse than the error — it reads the first one's value.
+    ///
+    /// The transpiler opens the scope; this pins the behaviour that depends on it.
+    #[test]
+    fn two_sibling_scopes_each_provide_their_own() {
+        #[derive(Clone, PartialEq, Debug)]
+        struct Ctx(u8);
+
+        let seen = |value: u8| {
+            Scope::with(|| {
+                provide(Ctx(value)).expect("a fresh scope has provided nothing");
+                context::<Ctx>()
+            })
+        };
+
+        assert_eq!(seen(1), Some(Ctx(1)));
+        assert_eq!(
+            seen(2),
+            Some(Ctx(2)),
+            "and the second is not shown the first"
+        );
+    }
+
     /// Nothing set is `None` rather than a default, so a widget built outside a surface says so.
     #[test]
     fn an_unset_context_is_absent() {

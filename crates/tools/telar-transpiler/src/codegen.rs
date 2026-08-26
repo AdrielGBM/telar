@@ -849,6 +849,8 @@ fn transpile(input: TranspileInput<'_>) -> Result<TranspiledSource, TranspileErr
     code.push("#[allow(dead_code, unused_variables, unused_mut)]\n", None);
     code.push(&signature, None);
     code.push(" {\n", None);
+    // One owner per component instance, which is what makes `provide` mean "for my subtree" rather than "for whoever built me": two siblings without one share their parent's scope, so the second is refused as a repeat and reads the first's value. The guard drops at the end of the build, popping the stack and leaving the owner in place for a handler to re-enter.
+    code.push("    let __owner = telar::owner_scope();\n", None);
     // use_theme inside the fn so multiple include!-ed files don't conflict at crate scope.
     if uses_theme {
         code.push("    #[allow(unused_imports)] use telar::use_theme;\n", None);
