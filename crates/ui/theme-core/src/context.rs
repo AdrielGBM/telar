@@ -4,6 +4,7 @@ use std::rc::Rc;
 
 use geometry_core::Color;
 use reactive_core::{RwSignal, signal};
+use renderer_core::Declared;
 
 /// Opt-in semantic-token contract the built-in component catalogue reads through, so a component can resolve a
 /// token without knowing the concrete theme type.
@@ -14,9 +15,13 @@ use reactive_core::{RwSignal, signal};
 /// own type, reachable in full through [`use_theme`]. What is here is only the subset a component written
 /// without knowledge of that type has to be able to ask for.
 ///
-/// The metric tokens are *bases*, not a size scale. A catalogue component derives its own proportions from
-/// [`font_size`](Self::font_size) rather than asking for a named role, because naming the roles would decide for
-/// every application which roles may exist. One number scales the type; the component keeps its own ratios.
+/// The metric tokens are *bases*, not a size scale: a component derives its own proportions from one rather
+/// than asking for a named role, because naming the roles would decide for every application which roles may
+/// exist. One number scales the thing; the component keeps its own ratios.
+///
+/// Nothing here answers what size the text is, and that is the point. Text size inherits, so it is not a
+/// question a component asks a theme — it is one it asks the region it is standing in. A theme that wants to
+/// move it declares it once, at [`root`](Self::root).
 pub trait ThemeTokens: 'static {
     fn primary(&self) -> Color {
         Color::rgba(0.24, 0.47, 0.98, 1.0)
@@ -54,10 +59,18 @@ pub trait ThemeTokens: 'static {
     fn spacing(&self) -> f32 {
         8.0
     }
-    /// Base body text size in px. Every catalogue component scales its own text off this, so changing it scales
-    /// the whole type ramp.
-    fn font_size(&self) -> f32 {
-        14.0
+    /// What this theme puts at the root of the document, over [`ink`](Self::ink) and the document's own size.
+    ///
+    /// Every property of a [`Declared`] is an *inheriting* one, which makes this the only honest place for a
+    /// theme to set one: said here it is a property of the document that anything below can override, rather
+    /// than an answer each component has to remember to ask for. Said as a token it would be a second channel
+    /// for a value the cascade already carries, and the two disagree the moment a region declares its own —
+    /// which is how a hint ends up in the theme's near-black inside a panel written in white.
+    ///
+    /// This is also the whole of a theme's typography. Eight of the ten inherited properties never had a token
+    /// at all, so a theme with a face or a leading of its own had to write it at every call site.
+    fn root(&self) -> Declared {
+        Declared::default()
     }
     /// Default size of a standalone icon in px.
     fn icon_size(&self) -> f32 {

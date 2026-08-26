@@ -11,7 +11,6 @@ const REQUIRED: &[&str] = &[
     "on_primary",
     "radius",
     "spacing",
-    "font_size",
     "icon_size",
     "muted",
     "scrollbar",
@@ -40,8 +39,13 @@ const DERIVED: &[&str] = &[
     "spacing_xl",
 ];
 
+/// Tokens a silent theme does not contradict, because their built-in adds nothing to the screen rather than
+/// asserting a number beside one the theme chose. `root` is the theme's row at the top of the document: say
+/// nothing and the document keeps its own, which is exactly right.
+const OPTIONAL: &[&str] = &["root"];
+
 fn is_token(name: &str) -> bool {
-    REQUIRED.contains(&name) || DERIVED.contains(&name)
+    REQUIRED.contains(&name) || DERIVED.contains(&name) || OPTIONAL.contains(&name)
 }
 
 #[derive(Default)]
@@ -123,11 +127,8 @@ fn parse_fields(input: &DeriveInput) -> syn::Result<HashMap<String, TokenStream2
 
 fn return_type(token: &str) -> TokenStream2 {
     match token {
-        t if t.starts_with("radius")
-            || t.starts_with("spacing")
-            || t == "font_size"
-            || t == "icon_size" =>
-        {
+        "root" => quote!(::telar::Declared),
+        t if t.starts_with("radius") || t.starts_with("spacing") || t == "icon_size" => {
             quote!(f32)
         }
         _ => quote!(::telar::Color),
@@ -143,7 +144,7 @@ pub fn expand(input: DeriveInput) -> syn::Result<TokenStream2> {
     let mut methods = Vec::new();
     let mut missing = Vec::new();
 
-    for token in REQUIRED.iter().chain(DERIVED) {
+    for token in REQUIRED.iter().chain(DERIVED).chain(OPTIONAL) {
         let token = *token;
         if options.defaulted.iter().any(|d| d == token) {
             continue;

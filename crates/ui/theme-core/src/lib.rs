@@ -15,10 +15,11 @@
 //! be a global — a process-wide font family, a thread-local control size, a catalogue reading tokens behind
 //! the markup's back and arriving at a different answer from the `text` beside it.
 //!
-//! What a theme is *not* is a second channel beside the cascade. [`set_theme`] fills the root of it: a token
-//! this trait defines is the value every layer below starts from, so "the body text is 11px" is a theme
-//! change rather than something every leaf has to be told. See `telar-ui-core`'s `inherit` module for how
-//! that value reaches a node.
+//! What a theme is *not* is a second channel beside the cascade, and the trait is shaped to make that
+//! unwritable: a property that *inherits* has no token here, only a place in [`ThemeTokens::root`]. So "the
+//! body text is 11px" is a theme change said once at the top, and there is no reader a component could use to
+//! reach past the region it is standing in. See `telar-ui-core`'s `inherit` module for how a declaration
+//! reaches a node.
 //!
 //! [`Inherited`]: https://docs.rs/telar-ui-core/latest/telar_ui_core/struct.Inherited.html
 

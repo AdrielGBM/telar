@@ -7,7 +7,6 @@ use telar::{Color, ThemeTokens, use_theme};
 #[theme(default(
     radius,
     spacing,
-    font_size,
     icon_size,
     scrollbar,
     ink,

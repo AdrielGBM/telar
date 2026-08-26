@@ -129,8 +129,8 @@ fn the_markup_default_and_the_catalogue_default_are_one_number() {
     #[derive(Clone)]
     struct Eleven;
     impl telar::ThemeTokens for Eleven {
-        fn font_size(&self) -> f32 {
-            11.0
+        fn root(&self) -> telar::Declared {
+            telar::Declared::default().with_font_size(11.0)
         }
     }
     /// Answers nothing, so it puts the built-in row back for whatever test shares this thread.
@@ -247,5 +247,35 @@ fn a_container_can_say_what_the_text_below_it_looks_like() {
         drawn(&tree).font_size,
         telar::Inherited::initial().text.font_size,
         "and withdrawing it returns the leaf to the initial row"
+    );
+}
+
+/// A theme's own row at the root, for the eight inherited properties that never had a token of their own.
+///
+/// `font_size` and `ink` had one, so a theme could set two of the ten and had to write the other eight at
+/// every call site — which is the repetition the cascade exists to remove. What the row leaves unsaid still
+/// falls through to the tokens underneath it.
+#[test]
+fn a_themes_root_row_reaches_a_text_that_declares_nothing() {
+    #[derive(Clone)]
+    struct Serif;
+    impl telar::ThemeTokens for Serif {
+        fn root(&self) -> telar::Declared {
+            telar::Declared::default()
+                .with_font_family("Iosevka")
+                .with_line_height(1.75)
+        }
+    }
+    telar::set_theme(Serif);
+
+    let style = resolved(|| {
+        box_item(Text::declaring(|| "themed".to_string(), LayoutStyle::new(), |t| t).unwrap())
+    });
+
+    assert_eq!(style.font_family, FontFamily::from("Iosevka"));
+    assert_eq!(style.line_height, telar::LineHeight::Times(1.75));
+    assert_eq!(
+        style.font_size, 14.0,
+        "what the row leaves unsaid still comes from the tokens under it"
     );
 }

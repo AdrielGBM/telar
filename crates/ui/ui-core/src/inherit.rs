@@ -53,6 +53,13 @@ impl Inherited {
         Self::from_tokens(&*use_theme_tokens())
     }
 
+    /// The size a document is set in before a theme or any markup has said otherwise.
+    ///
+    /// A constant here rather than a theme token: text size *inherits*, so a theme that wants to move it
+    /// declares it at [`ThemeTokens::root`] like any other inherited property, and there is no second channel
+    /// a component can read past the cascade to reach.
+    pub const BASE_FONT_SIZE: f32 = 14.0;
+
     /// The row `tokens` puts at the root of the tree.
     ///
     /// This is what makes a theme able to *set a property* rather than only supply a value: "the body text is
@@ -60,8 +67,9 @@ impl Inherited {
     /// where the size a `text` takes when nobody says otherwise now lives — a constant here and a token there
     /// were two numbers that happened to agree, and setting the theme moved only one of them.
     pub fn from_tokens(tokens: &dyn ThemeTokens) -> Self {
+        let base = TextStyle::new(Self::BASE_FONT_SIZE, tokens.ink());
         Self {
-            text: TextStyle::new(tokens.font_size(), tokens.ink()),
+            text: tokens.root().over(&base),
             cursor: Cursor::Default,
             direction: Direction::Ltr,
         }
@@ -323,8 +331,8 @@ mod tests {
         #[derive(Clone)]
         struct Small;
         impl ThemeTokens for Small {
-            fn font_size(&self) -> f32 {
-                11.0
+            fn root(&self) -> Declared {
+                Declared::default().with_font_size(11.0)
             }
         }
 

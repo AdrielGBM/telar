@@ -5739,6 +5739,7 @@ version = "0.1.5"
 dependencies = [
  "telar-geometry-core",
  "telar-reactive-core",
+ "telar-renderer-core",
 ]
 
 [[package]]

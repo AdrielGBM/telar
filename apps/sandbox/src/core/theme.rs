@@ -10,7 +10,7 @@ pub const DEFAULT_MODE: &str = "modern";
 #[theme(scrollbar = Color::rgba(self.muted.r, self.muted.g, self.muted.b, 0.55))]
 // A documentation app deliberately reads like the catalogue's own defaults, so these stay the built-ins —
 // stated rather than left silent.
-#[theme(default(radius, font_size, icon_size, info, highlight_low, highlight_med, highlight_high))]
+#[theme(default(radius, icon_size, info, highlight_low, highlight_med, highlight_high))]
 pub struct SandboxTheme {
     pub name: &'static str,
     // Structure
