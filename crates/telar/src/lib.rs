@@ -121,9 +121,10 @@ pub use platform_core::{
 pub use platform_desktop::DesktopPathsProvider;
 #[cfg(feature = "runtime")]
 pub use reactive_core::{
-    Effect, Emitter, Memo, ReadSignal, RwSignal, Source, Task, batch, begin_batch, derive,
-    derive_pair, drain_tasks, effect, end_batch, memo, reset_runtime, reset_tasks, set_task_waker,
-    signal, spawn_stream, spawn_task,
+    Effect, Emitter, Memo, OwnerGuard, OwnerId, ReadSignal, RwSignal, Source, Task, batch,
+    begin_batch, current_owner, derive, derive_pair, detached, dispose_owner, drain_tasks, effect,
+    end_batch, memo, on_cleanup, owner_scope, reset_runtime, reset_tasks, set_task_waker, signal,
+    spawn_stream, spawn_task, with_owner,
 };
 #[cfg(all(feature = "runtime", feature = "dynamic-image"))]
 pub use renderer_assets::{ImageError, decode};
