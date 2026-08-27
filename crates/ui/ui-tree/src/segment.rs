@@ -701,7 +701,7 @@ mod tests {
             0.0f32,
             motion_core::tween(Duration::from_millis(100), motion_core::Easing::Linear),
         );
-        let root = SegmentRoot::mount(AnimatedLeaf { x: anim.clone() });
+        let root = SegmentRoot::mount(AnimatedLeaf { x: anim });
 
         // Baseline compose at the resting value.
         assert_eq!(animated_rect_x(&root), 0.0);

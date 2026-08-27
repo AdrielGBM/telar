@@ -1,4 +1,5 @@
 use std::cell::RefCell;
+use std::marker::PhantomData;
 use std::rc::Rc;
 use std::time::Instant;
 
@@ -132,17 +133,31 @@ impl<T: Lerp + 'static> Tickable for RefCell<AnimInner<T>> {
 }
 
 /// A signal-backed value that chases a `target` over time under a [`Curve`], driven by the central ticker.
+///
+/// `Copy`, like every other reactive handle. The state it used to hold directly now lives in the reactive
+/// runtime's arena and this is an id into it, so a closure that reads an animation takes a register copy
+/// rather than an `Rc` bump — and the animation is disposed with the owner that built it instead of with its
+/// last handle. The ticker's `Weak` is unaffected: the `Rc` did not disappear, it changed owner.
 pub struct Animated<T: Lerp + 'static> {
-    inner: Rc<RefCell<AnimInner<T>>>,
+    state: RwSignal<Shared<T>>,
     id: u64,
+    _marker: PhantomData<T>,
 }
+
+type Shared<T> = Rc<RefCell<AnimInner<T>>>;
 
 impl<T: Lerp + 'static> Clone for Animated<T> {
     fn clone(&self) -> Self {
-        Animated {
-            inner: Rc::clone(&self.inner),
-            id: self.id,
-        }
+        *self
+    }
+}
+
+// Hand-written: `#[derive(Copy)]` would demand `T: Copy`, and the parameter names what the animation carries, never what the handle stores.
+impl<T: Lerp + 'static> Copy for Animated<T> {}
+
+impl<T: Lerp + 'static> Animated<T> {
+    fn inner(&self) -> Shared<T> {
+        self.state.with(Rc::clone)
     }
 }
 
@@ -162,15 +177,17 @@ impl<T: Lerp + 'static> Animated<T> {
             last: None,
         }));
         Animated {
-            inner,
+            state: reactive_core::signal(inner),
             id: ticker::next_id(),
+            _marker: PhantomData,
         }
     }
 
     /// Aim at a new `target`. Springs keep position and velocity (interruptible); tweens restart from the current value over the full duration. Retargeting to the current goal is a no-op.
     pub fn retarget(&self, target: T) {
         {
-            let mut inner = self.inner.borrow_mut();
+            let shared = self.inner();
+            let mut inner = shared.borrow_mut();
             if target.sub(&inner.target).magnitude_sq() <= NOOP_EPS_SQ {
                 return;
             }
@@ -189,23 +206,23 @@ impl<T: Lerp + 'static> Animated<T> {
             inner.last = None;
         }
         // Bind the concrete Weak first so it unsize-coerces to Weak<dyn Tickable> at the call.
-        let weak = Rc::downgrade(&self.inner);
+        let weak = Rc::downgrade(&self.inner());
         ticker::register(self.id, weak);
     }
 
     /// Reactive read: subscribes the calling segment to the animated value.
     pub fn get(&self) -> T {
-        self.inner.borrow().signal.get()
+        self.inner().borrow().signal.get()
     }
 
     /// A read-only handle to the underlying signal.
     pub fn read(&self) -> ReadSignal<T> {
-        self.inner.borrow().signal.read_only()
+        self.inner().borrow().signal.read_only()
     }
 
     /// Whether the animation has reached its target and deregistered.
     pub fn is_settled(&self) -> bool {
-        self.inner.borrow().settled
+        self.inner().borrow().settled
     }
 }
 
@@ -381,14 +398,28 @@ mod tests {
         );
     }
 
+    /// An animation stops when the scope that made it goes, not when a handle does.
+    ///
+    /// The registry holds a `Weak` and prunes what it cannot upgrade, which is unchanged — what changed is
+    /// who holds the strong reference. It used to be the handles, so the last one dropping ended the
+    /// animation; it is the reactive arena now, so disposing the owner does.
     #[test]
-    fn dropped_animation_deregisters() {
+    fn an_animation_ends_with_the_scope_that_made_it() {
         let base = fresh();
+        let scope = reactive_core::owner_scope();
+        let owner = scope.id();
         let a = Animated::new(0.0f32, tween(Duration::from_millis(200), Easing::Linear));
         a.retarget(1.0);
         tick(base);
         assert!(has_active());
-        drop(a);
+
+        drop(scope);
+        assert!(
+            has_active(),
+            "a handle going out of scope is not the end of it"
+        );
+
+        reactive_core::dispose_owner(owner);
         assert!(!has_active());
     }
 }
