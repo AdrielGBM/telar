@@ -314,10 +314,22 @@ impl ViewGen<'_> {
         if let Some(closure) = already_a_closure(attr) {
             return closure;
         }
-        let wrapped = wrap_signal_clones(
-            &[attr.value.text()],
-            format!("move || {}", body(self, attr)),
-        );
+        let body = body(self, attr);
+        // A markup value ends at the first space, so an expression with one in it has to be parenthesised — `active:(a == b)`. Those parens are the syntax's, not the author's, and rustc warns about them if they reach the closure body.
+        let body = Self::redundant_parens(&body)
+            .map(str::to_string)
+            .unwrap_or(body);
+        // The closure is `Fn`, so a body that is nothing but a captured binding moves it out on the first call and cannot be called again. What to do about that depends on the binding: a reactive handle is *read*, which is the whole point of the prop being a closure, and anything else is cloned.
+        let bare_local = self.is_local(&body) || self.loop_variables.iter().any(|l| l == &body);
+        let body = match (
+            bare_local,
+            self.signal_named_in(&body) == Some(body.as_str()),
+        ) {
+            (true, true) => format!("{body}.get()"),
+            (true, false) => format!("{body}.clone()"),
+            _ => body,
+        };
+        let wrapped = wrap_signal_clones(&[attr.value.text()], format!("move || {body}"));
         format!("Box::new({wrapped})")
     }
 
@@ -465,6 +477,7 @@ impl ViewGen<'_> {
         // binding named `radius` or `muted` would read the theme instead of itself without a word.
         let looks_like_color_name = is_ident(v)
             && !self.is_local(v)
+            && !self.loop_variables.iter().any(|l| l == v)
             && v.chars()
                 .next()
                 .is_some_and(|c| c.is_ascii_lowercase() || c == '_');
@@ -479,9 +492,12 @@ impl ViewGen<'_> {
         //
         // `captured_idents` does not cover this: it collects `$signal`s and loop variables, so a plain
         // `[logic]` binding reaches a reactive closure with nothing else keeping it alive.
-        if self.is_local(v) {
+        // A loop variable counts as a local here. Without that a bare `panel:p` falls through to the style scope and resolves against the theme, so `p` came out as a colour constant — hidden for as long as every call site wrote `.clone()` and took the verbatim path below instead.
+        let in_loop = self.loop_variables.iter().any(|l| l == v);
+        if self.is_local(v) || in_loop {
             let marker = expr_marker(attr.value_start + lead, v.len());
-            return if self.must_clone_local(v) {
+            // A loop variable is bound once per iteration and the builder closure is `Fn`, so a use that moves it is a use that cannot happen twice.
+            return if in_loop || self.must_clone_local(v) {
                 format!("{marker}{v}.clone()")
             } else {
                 format!("{marker}{v}")
