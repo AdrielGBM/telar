@@ -101,8 +101,8 @@ pub fn external_component_sigs() -> Vec<(&'static str, ComponentSig)> {
         // The catalogue takes its owned-string props through `Box<dyn Fn() -> String>`, so it declares none.
         string_fields: Vec::new(),
         text_fields: Vec::new(),
-        optional_fields: optional.iter().map(|f| f.to_string()).collect(),
         bool_fields: Vec::new(),
+        optional_fields: optional.iter().map(|f| f.to_string()).collect(),
         defers_children: false,
     };
     // A compound component: its pieces are built inside its own context rather than handed to it already made.
@@ -362,10 +362,10 @@ pub fn scan_component_sig(source: &str) -> ComponentSig {
         has_slot,
         color_fields: props.color,
         reading_fields: Vec::new(),
+        bool_fields: props.predicate,
         text_fields: props.text,
         optional_fields: props.optional,
         string_fields: props.owned_text,
-        bool_fields: Vec::new(),
         // A `Context` struct in `[logic]` is what makes a `.rsx` compound: it is the type the component's
         // children read, so the component takes the recipe for them and runs it inside one. Without somewhere
         // to put children it declares a type nobody is handed, so the slot is half of the condition.
@@ -390,6 +390,13 @@ struct ScannedProps {
     text: Vec<String>,
     /// The same for `Box<dyn Fn() -> Color>`.
     color: Vec<String>,
+    /// The same for `Box<dyn Fn() -> bool>` — read off the declared type, as the other two are.
+    ///
+    /// Without it a `.rsx` component could only take a `Memo<bool>`, so a call site with no reactivity to
+    /// express had to invent some: `let never_add = memo(|| false)`, a signal allocated and subscribed to so a
+    /// prop could be handed the word `false`. The built-in catalogue always had this; only user components did
+    /// not.
+    predicate: Vec<String>,
     /// The subset typed as a plain owned `String`.
     owned_text: Vec<String>,
 }
@@ -450,6 +457,7 @@ fn scan_props_struct(logic: &str) -> ScannedProps {
             match returned_closure_type(&field.ty) {
                 Some("String") => scanned.text.push(field.name.clone()),
                 Some("Color") => scanned.color.push(field.name.clone()),
+                Some("bool") => scanned.predicate.push(field.name.clone()),
                 _ if is_owned_string(&field.ty) => scanned.owned_text.push(field.name.clone()),
                 _ => {}
             }
@@ -496,6 +504,7 @@ fn returned_closure_type(ty: &str) -> Option<&str> {
     match last {
         "String" => Some("String"),
         "Color" => Some("Color"),
+        "bool" => Some("bool"),
         _ => None,
     }
 }
