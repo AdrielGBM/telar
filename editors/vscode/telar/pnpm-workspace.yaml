@@ -1,0 +1,3 @@
+# pnpm refuses dependency build scripts by default, and esbuild's is what puts the platform binary the compile step runs in place.
+allowBuilds:
+  esbuild: true
