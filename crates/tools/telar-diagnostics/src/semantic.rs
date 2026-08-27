@@ -59,6 +59,7 @@ pub fn semantic_diagnostics(
     };
 
     check_nodes(&doc.view.nodes, &ctx, false, &mut diagnostics);
+    diagnostics.extend(unsigiled_captures(doc));
 
     diagnostics
 }
@@ -250,5 +251,169 @@ fn check_i18n_keys(el: &Element, ctx: &Ctx, span: &Span, diagnostics: &mut Vec<D
         if attr.value.is_i18n() {
             check(attr.value.text(), &format!("`{}:`", attr.key));
         }
+    }
+}
+
+/// Bindings a `[logic]` zone constructs from something that is certainly not `Copy`, with the line each was
+/// bound on.
+///
+/// Certainly, not probably: only shapes whose type is knowable from the text alone. Nothing here has type
+/// information, so a guess would warn about an `i32` a closure captures perfectly well, and a warning that
+/// fires on correct code is worse than none.
+fn non_copy_bindings(logic: &str) -> Vec<(String, usize)> {
+    const CONSTRUCTORS: [&str; 8] = [
+        "Rc::new(",
+        "Arc::new(",
+        "String::from(",
+        "Vec::new(",
+        "vec![",
+        "HashMap::new(",
+        "BTreeMap::new(",
+        ".to_string()",
+    ];
+    logic
+        .lines()
+        .enumerate()
+        .filter_map(|(index, line)| {
+            let rest = line.trim().strip_prefix("let ")?;
+            if !CONSTRUCTORS.iter().any(|c| rest.contains(c)) {
+                return None;
+            }
+            let name = rest
+                .split(['=', ':'])
+                .next()?
+                .trim()
+                .trim_start_matches("mut ")
+                .trim();
+            is_plain_ident(name).then(|| (name.to_string(), index + 1))
+        })
+        .collect()
+}
+
+fn is_plain_ident(s: &str) -> bool {
+    !s.is_empty()
+        && s.chars().all(|c| c.is_ascii_alphanumeric() || c == '_')
+        && !s.chars().next().is_some_and(|c| c.is_ascii_digit())
+}
+
+/// Every closure body the view contains, as raw text. Enough to ask which of them name a binding, which is
+/// all this check needs and all it can get without types.
+fn closure_bodies(nodes: &[ViewNode], out: &mut Vec<String>) {
+    for node in nodes {
+        match node {
+            ViewNode::Element(el) => {
+                for attr in &el.attributes {
+                    let text = attr.value.text();
+                    if attr.key.starts_with("on_") || text.contains("||") {
+                        out.push(text.to_string());
+                    }
+                }
+                closure_bodies(&el.children, out);
+            }
+            ViewNode::ForBlock(block) => closure_bodies(&block.body, out),
+            ViewNode::IfBlock(block) => {
+                closure_bodies(&block.then_branch, out);
+                if let Some(other) = &block.else_branch {
+                    closure_bodies(other, out);
+                }
+            }
+            ViewNode::MatchBlock(block) => {
+                for arm in &block.arms {
+                    closure_bodies(&arm.body, out);
+                }
+            }
+            _ => {}
+        }
+    }
+}
+
+/// Warns when a binding that cannot be `Copy` is captured, without its sigil, by more than one closure.
+///
+/// The second closure to capture it finds it moved. rustc says so eventually and says it well — the terminal
+/// maps the error onto this line — but it says it after a compile, and its advice is to clone, which is the
+/// bookkeeping the sigil exists to remove. `$name` is the answer, and this is early enough to be the first
+/// place the author reads it.
+fn unsigiled_captures(doc: &RsxDocument) -> Vec<Diagnostic> {
+    let mut bodies = Vec::new();
+    closure_bodies(&doc.view.nodes, &mut bodies);
+    non_copy_bindings(&doc.logic.source)
+        .into_iter()
+        .filter(|(name, _)| {
+            let sigiled = format!("${name}");
+            bodies
+                .iter()
+                .filter(|body| mentions(body, name) && !body.contains(&sigiled))
+                .count()
+                > 1
+        })
+        .map(|(name, line)| {
+            Diagnostic::warning(
+                format!(
+                    "`{name}` is captured by more than one closure without its sigil; write `${name}` so each gets its own copy"
+                ),
+                Span::line(line),
+            )
+        })
+        .collect()
+}
+
+/// Whether `body` names `binding` as a whole word, so `held` does not match `withheld`.
+fn mentions(body: &str, binding: &str) -> bool {
+    body.match_indices(binding).any(|(at, _)| {
+        let before = body[..at].chars().next_back();
+        let after = body[at + binding.len()..].chars().next();
+        let boundary = |c: Option<char>| !c.is_some_and(|c| c.is_ascii_alphanumeric() || c == '_');
+        boundary(before) && boundary(after)
+    })
+}
+
+#[cfg(test)]
+mod capture_tests {
+    use super::*;
+
+    fn warnings(src: &str) -> Vec<String> {
+        let doc = telar_parser::parse(src).expect("the probe parses");
+        unsigiled_captures(&doc)
+            .into_iter()
+            .map(|d| d.message)
+            .collect()
+    }
+
+    /// The case the compiler catches a whole build later, and answers with the wrong advice for this language.
+    #[test]
+    fn a_non_copy_binding_captured_twice_without_its_sigil_is_reported() {
+        let found = warnings(
+            "[logic]\nlet held = Rc::new(RefCell::new(0));\n\n[view]\ncol\n    button label:\"a\" on_press(|| { held.take(); })\n    button label:\"b\" on_press(|| { held.take(); })\n",
+        );
+        assert_eq!(found.len(), 1, "{found:?}");
+        assert!(found[0].contains("`$held`"), "{}", found[0]);
+    }
+
+    /// Sigiled is the fix, so saying it again would be noise.
+    #[test]
+    fn the_sigil_settles_it() {
+        let found = warnings(
+            "[logic]\nlet held = Rc::new(RefCell::new(0));\n\n[view]\ncol\n    button label:\"a\" on_press(|| { $held.take(); })\n    button label:\"b\" on_press(|| { $held.take(); })\n",
+        );
+        assert!(found.is_empty(), "{found:?}");
+    }
+
+    /// One closure moves it and that is correct, so there is nothing to warn about.
+    #[test]
+    fn one_closure_may_take_it() {
+        let found = warnings(
+            "[logic]\nlet held = Rc::new(RefCell::new(0));\n\n[view]\ncol\n    button label:\"a\" on_press(|| { held.take(); })\n",
+        );
+        assert!(found.is_empty(), "{found:?}");
+    }
+
+    /// Nothing here knows types, so the check only fires on constructions whose type the text settles. A
+    /// `Copy` binding captured by two closures is correct code, and warning about it would be the worse error.
+    #[test]
+    fn a_binding_that_might_be_copy_is_left_alone() {
+        let found = warnings(
+            "[logic]\nlet count = compute();\n\n[view]\ncol\n    button label:\"a\" on_press(|| { use_it(count); })\n    button label:\"b\" on_press(|| { use_it(count); })\n",
+        );
+        assert!(found.is_empty(), "{found:?}");
     }
 }
