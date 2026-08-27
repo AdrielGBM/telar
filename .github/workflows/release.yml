@@ -163,13 +163,13 @@ jobs:
       # Packaged once and published from the file, so both registries receive the identical artifact.
       - name: Package platform VSIX
         working-directory: editors/vscode/telar
-        run: pnpx @vscode/vsce package --target ${{ matrix.vsce-target }} --no-dependencies -o telar-analyzer-${{ matrix.vsce-target }}.vsix
+        run: pnpx @vscode/vsce@3.9.2 package --target ${{ matrix.vsce-target }} --no-dependencies -o telar-analyzer-${{ matrix.vsce-target }}.vsix
 
       - name: Publish to the VS Code Marketplace
         working-directory: editors/vscode/telar
-        run: pnpx @vscode/vsce publish --packagePath telar-analyzer-${{ matrix.vsce-target }}.vsix
+        run: pnpx @vscode/vsce@3.9.2 publish --packagePath telar-analyzer-${{ matrix.vsce-target }}.vsix
 
       - name: Publish to Open VSX
         if: env.OVSX_PAT != ''
         working-directory: editors/vscode/telar
-        run: pnpx ovsx publish telar-analyzer-${{ matrix.vsce-target }}.vsix
+        run: pnpx ovsx@1.1.1 publish telar-analyzer-${{ matrix.vsce-target }}.vsix

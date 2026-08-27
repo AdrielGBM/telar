@@ -77,8 +77,8 @@
   "scripts": {
     "compile": "esbuild src/extension.ts --bundle --outfile=out/extension.js --external:vscode --format=cjs --platform=node --minify",
     "compile:typecheck": "tsc -p ./ --noEmit",
-    "package": "pnpm run compile && pnpx @vscode/vsce package --no-dependencies",
-    "package:platform": "pnpm run compile && pnpx @vscode/vsce package --no-dependencies --target <target>"
+    "package": "pnpm run compile && pnpx @vscode/vsce@3.9.2 package --no-dependencies",
+    "package:platform": "pnpm run compile && pnpx @vscode/vsce@3.9.2 package --no-dependencies --target <target>"
   },
   "dependencies": {
     "vscode-languageclient": "^10.0.0"
