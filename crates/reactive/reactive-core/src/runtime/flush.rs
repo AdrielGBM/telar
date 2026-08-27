@@ -6,6 +6,10 @@ use super::{EffectId, FlushNotifyHandle, RUNTIME};
 const MAX_FLUSH_ITERATIONS: usize = 1_000;
 
 pub(crate) fn flush() {
+    // A teardown holds its tree half-applied: owners uprooted, effects still registered, signals not yet removed. An effect that ran now would read state its own disposal has already freed, so `dispose_owner` takes the flush back once the tree is whole again.
+    if RUNTIME.with(|rt| rt.borrow().disposing > 0) {
+        return;
+    }
     RUNTIME.with(|rt| rt.borrow_mut().flushing = true);
 
     // With the runtime shared across surfaces, a panic mid-effect must not leave `flushing` stuck true —

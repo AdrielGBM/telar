@@ -26,7 +26,7 @@ use std::rc::Rc;
 
 use rustc_hash::FxHashMap;
 
-use super::flush::batch;
+use super::flush::{batch, flush};
 use super::surface::current_surface;
 use super::{EffectId, RUNTIME, Runtime, SignalId, SurfaceHandle};
 use crate::runtime::effects::deregister_effect;
@@ -262,30 +262,75 @@ pub fn on_cleanup(f: impl FnOnce() + 'static) {
     });
 }
 
+/// Raised for as long as a teardown is mid-flight, so nothing flushes against a tree that is half taken down.
+///
+/// The window is the whole of [`dispose_owner`]: [`uproot`] has already removed the owner entries, the effects are still registered and still subscribed, and the signals come out last. An effect that runs in there reads a tree that no longer describes itself — and the read that finds a freed storage panics, in the middle of a window closing, where nothing can act on it.
+///
+/// Counted rather than a flag, because the nesting is real: a cleanup may dispose another owner, and [`dispose_surface_owners`] takes down a whole set. Only the outermost one is finished when it says it is.
+struct Disposing;
+
+impl Disposing {
+    fn enter() -> Self {
+        RUNTIME.with(|rt| rt.borrow_mut().disposing += 1);
+        Disposing
+    }
+}
+
+impl Drop for Disposing {
+    fn drop(&mut self) {
+        RUNTIME.with(|rt| {
+            let mut rt = rt.borrow_mut();
+            rt.disposing = rt.disposing.saturating_sub(1);
+        });
+    }
+}
+
+/// Runs what a teardown's cleanups invalidated, once there is no teardown left to run it over.
+///
+/// Deferred rather than dropped: a cleanup that writes a signal a *surviving* effect reads still has to reach it, and by here everything the teardown was going to free is freed, so the effects that referenced it are deregistered and the flush skips them. What this cannot rescue is an effect that outlives the owner of a memo it reads — that is a lifetime error in the tree itself, and moving the flush only moves where it surfaces.
+fn flush_when_settled() {
+    let settled = RUNTIME.with(|rt| {
+        let rt = rt.borrow();
+        rt.disposing == 0
+            && rt.batch_depth == 0
+            && !rt.flushing
+            && (!rt.pending.is_empty() || !rt.memo_pending.is_empty())
+    });
+    if settled {
+        flush();
+    }
+}
+
 /// Disposes an owner and everything below it, children first.
 pub fn dispose_owner(id: OwnerId) {
     let (cleanups, effects, signals) = uproot(id);
 
-    // One wave, not one per withdrawal. `undeclare` bumps the cascade's `structure` signal, which every context read subscribes to, so tearing down N declaring nodes outside a batch is N invalidations across every reader in the tree.
-    batch(|| {
-        for cleanup in cleanups {
-            cleanup();
-        }
-    });
+    {
+        let _disposing = Disposing::enter();
 
-    for effect in effects {
-        deregister_effect(effect);
+        // One wave, not one per withdrawal. `undeclare` bumps the cascade's `structure` signal, which every context read subscribes to, so tearing down N declaring nodes outside a batch is N invalidations across every reader in the tree.
+        batch(|| {
+            for cleanup in cleanups {
+                cleanup();
+            }
+        });
+
+        for effect in effects {
+            deregister_effect(effect);
+        }
+        // Take the storages out under the borrow and drop them after releasing it. A signal whose value owns signal handles re-enters the runtime as that value drops, and doing it under the borrow aborts — the same hazard `drop_signal` carries a note about.
+        let removed: Vec<Box<dyn Any>> = RUNTIME.with(|rt| {
+            let mut rt = rt.borrow_mut();
+            signals
+                .into_iter()
+                .filter_map(|signal| rt.signals.remove(signal))
+                .map(|storage| storage.value)
+                .collect()
+        });
+        drop(removed);
     }
-    // Take the storages out under the borrow and drop them after releasing it. A signal whose value owns signal handles re-enters the runtime as that value drops, and doing it under the borrow aborts — the same hazard `drop_signal` carries a note about.
-    let removed: Vec<Box<dyn Any>> = RUNTIME.with(|rt| {
-        let mut rt = rt.borrow_mut();
-        signals
-            .into_iter()
-            .filter_map(|signal| rt.signals.remove(signal))
-            .map(|storage| storage.value)
-            .collect()
-    });
-    drop(removed);
+
+    flush_when_settled();
 }
 
 /// Disposes every owner root belonging to a surface. What `Surface`'s teardown calls.
@@ -298,9 +343,14 @@ pub fn dispose_surface_owners(surface: SurfaceHandle) {
             .map(|(id, _)| id)
             .collect()
     });
-    for root in roots {
-        dispose_owner(root);
+    {
+        // Held across the whole set rather than left to each root: the roots of one surface read each other, so a flush landing between two of them runs effects over what the one before it just freed.
+        let _disposing = Disposing::enter();
+        for root in roots {
+            dispose_owner(root);
+        }
     }
+    flush_when_settled();
 }
 
 /// How many signals the runtime is holding.
@@ -365,7 +415,7 @@ mod tests {
 
     use super::*;
     use crate::runtime::signals::create_signal_storage;
-    use crate::{effect, signal};
+    use crate::{effect, memo, signal};
 
     fn alive(id: SignalId) -> bool {
         RUNTIME.with(|rt| rt.borrow().signals.contains_key(id))
@@ -472,5 +522,68 @@ mod tests {
             assert_eq!(entry.effects.capacity(), 0);
         });
         dispose_owner(owner);
+    }
+
+    /// A teardown must not run effects over what it has already freed.
+    ///
+    /// `dispose_surface_owners` frees one root at a time, and a root's cleanups run inside a batch that ends in a flush. An effect that is still registered — its own root's turn has not come yet — re-runs in that flush and reads a memo the previous root already freed, which is a panic in the middle of a window closing rather than an error anyone can act on.
+    #[test]
+    fn a_teardown_does_not_run_effects_over_what_it_already_freed() {
+        let ticks = signal(0i32);
+        let read = ticks.read_only();
+
+        let holder = owner_scope();
+        let title = memo(move || read.get().to_string());
+        let holder_id = holder.id();
+        drop(holder);
+
+        let reader = owner_scope();
+        let seen: Rc<RefCell<Vec<String>>> = Rc::new(RefCell::new(Vec::new()));
+        let seen_c = Rc::clone(&seen);
+        effect(move || {
+            let _ = read.get();
+            seen_c.borrow_mut().push(title.get());
+        });
+        // Stands in for what a real teardown does: `undeclare` bumps the cascade's `structure` signal, and every reader of it is invalidated while the tree is half gone.
+        on_cleanup(move || ticks.set(1));
+        let reader_id = reader.id();
+        drop(reader);
+
+        assert_eq!(*seen.borrow(), vec!["0".to_string()]);
+
+        dispose_owner(holder_id);
+        dispose_owner(reader_id);
+
+        assert_eq!(
+            *seen.borrow(),
+            vec!["0".to_string()],
+            "the effect did not run again over a memo that was already gone"
+        );
+    }
+
+    /// The same teardown, through the door a closing window actually uses. `dispose_surface_owners` frees the surface's roots one after another, and the guard has to span the set rather than each root: between two of them is exactly where the flush used to land.
+    #[test]
+    fn a_surface_teardown_does_not_run_effects_over_what_it_already_freed() {
+        // Detached, so the surface teardown that frees the roots below does not also free what the cleanup writes — that is a different hazard, and letting it in here would hide the one this test is for.
+        let ticks = crate::detached(|| signal(0i32));
+        let read = ticks.read_only();
+
+        let holder = owner_scope();
+        let title = memo(move || read.get().to_string());
+        drop(holder);
+
+        let reader = owner_scope();
+        let seen: Rc<RefCell<Vec<String>>> = Rc::new(RefCell::new(Vec::new()));
+        let seen_c = Rc::clone(&seen);
+        effect(move || {
+            let _ = read.get();
+            seen_c.borrow_mut().push(title.get());
+        });
+        on_cleanup(move || ticks.set(1));
+        drop(reader);
+
+        dispose_surface_owners(current_surface());
+
+        assert_eq!(*seen.borrow(), vec!["0".to_string()]);
     }
 }

@@ -79,6 +79,8 @@ pub(crate) struct Runtime {
     subscriber_scratch: Vec<EffectId>,
     flush_callbacks: Vec<(u64, Rc<dyn Fn()>)>,
     next_flush_callback_id: u64,
+    /// How many teardowns are in flight. Non-zero means the arenas are mid-surgery — see `owner::Disposing` — and `flush` stays out until it is back to zero.
+    pub(crate) disposing: usize,
     pub(crate) flushing: bool,
     flush_epoch: u64,
 }
@@ -99,6 +101,7 @@ impl Runtime {
             subscriber_scratch: Vec::new(),
             flush_callbacks: Vec::new(),
             next_flush_callback_id: 0,
+            disposing: 0,
             flushing: false,
             flush_epoch: 0,
         }
