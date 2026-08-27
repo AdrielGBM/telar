@@ -142,7 +142,8 @@ jobs:
         with:
           node-version: "20"
 
-      - run: npm install -g pnpm
+      # Pinned because an unpinned major is what broke the 0.1.7 release: pnpm 11 turned an ignored build script from a warning into an error.
+      - run: npm install -g pnpm@11.24.0
 
       - name: Install extension dependencies
         run: pnpm install
