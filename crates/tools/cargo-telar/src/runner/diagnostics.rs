@@ -194,7 +194,7 @@ pub(crate) fn collect(reader: impl BufRead) -> Report {
                 underline,
                 level: level.to_string(),
                 message: text.clone(),
-                notes: notes_of(message),
+                notes: sigil_advice(message, notes_of(message)),
             });
             mapped_any = true;
         }
@@ -211,6 +211,34 @@ fn str_field(message: &serde_json::Value, key: &str) -> String {
         .and_then(serde_json::Value::as_str)
         .unwrap_or_default()
         .to_string()
+}
+
+/// Replaces rustc's advice on a move-out-of-closure error with the one that applies in `.rsx`.
+///
+/// rustc says "consider cloning the value", which is right for Rust and wrong here: writing `held.clone()`
+/// in markup is the bookkeeping the sigil exists to remove, and it clones on every call rather than once per
+/// closure. `$held` is the answer — the transpiler emits one clone per capturing closure and leaves the
+/// binding usable. The diagnostic already knew *where*; this is what to write.
+fn sigil_advice(message: &serde_json::Value, notes: Vec<Note>) -> Vec<Note> {
+    let code = message
+        .get("code")
+        .and_then(|c| c.get("code"))
+        .and_then(serde_json::Value::as_str)
+        .unwrap_or_default();
+    if code != "E0382" {
+        return notes;
+    }
+    let mut notes: Vec<Note> = notes
+        .into_iter()
+        .filter(|n| !n.message.contains("cloning the value"))
+        .collect();
+    notes.push(Note {
+        level: "help".to_string(),
+        message:
+            "mark it with the sigil — `$name` — so each closure that captures it gets its own copy"
+                .to_string(),
+    });
+    notes
 }
 
 /// The `help`/`note` children, flattened to their text. Nested children are not followed: rustc uses those
