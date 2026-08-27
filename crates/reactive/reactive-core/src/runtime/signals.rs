@@ -1,3 +1,13 @@
+//! Signal storage, and what a handle that outlived it gets.
+//!
+//! The three answers differ on purpose, and this is the one place they are written down.
+//!
+//! **A read panics.** There is no value to return and no honest stand-in: a default would travel through a layout as if it were real, and a wrong number in a reactive UI is far more expensive to find than a stack trace. The message names the type the caller expected, which usually identifies the handle on its own.
+//!
+//! **A write panics, except during a teardown.** Outside one it is the same lifetime error as a dead read. Inside one the storage is not missing but destroyed, deliberately, by the pass that is running — a cleanup writing a signal a sibling root already freed is doing meaningless work rather than wrong work, and there is no subscriber left to deliver it to. See [`super::owner::dispose_owner`].
+//!
+//! **Tracking is silent.** Subscribing to a dead signal is bookkeeping with nothing to record; no value is involved, so nothing can be got wrong by doing nothing.
+
 use std::cmp::Reverse;
 
 use super::flush::flush;
@@ -17,12 +27,18 @@ pub(crate) fn create_signal_storage<T: 'static>(value: T) -> SignalId {
     })
 }
 
-const DEAD: &str = "signal read after its storage was freed";
+/// Names the type the handle expected, because the id alone identifies nothing a reader can act on.
+fn dead(action: &str, type_name: &'static str) -> String {
+    format!("signal of type {type_name} {action} after its storage was freed")
+}
 
 pub(crate) fn with_signal_value<T: 'static, R>(id: SignalId, f: impl FnOnce(&T) -> R) -> R {
     RUNTIME.with(|rt| {
         let rt = rt.borrow();
-        let storage = rt.signals.get(id).expect(DEAD);
+        let storage = rt
+            .signals
+            .get(id)
+            .unwrap_or_else(|| panic!("{}", dead("read", std::any::type_name::<T>())));
         f(storage
             .value
             .downcast_ref::<T>()
@@ -33,8 +49,14 @@ pub(crate) fn with_signal_value<T: 'static, R>(id: SignalId, f: impl FnOnce(&T) 
 pub(crate) fn set_signal_value<T: 'static>(id: SignalId, value: T) {
     RUNTIME.with(|rt| {
         let mut rt = rt.borrow_mut();
-        let storage = rt.signals.get_mut(id).expect(DEAD);
-        *storage
+        if !rt.signals.contains_key(id) {
+            // A teardown destroying what a cleanup then writes to is the shape of the pass, not a mistake in it.
+            if rt.disposing > 0 {
+                return;
+            }
+            panic!("{}", dead("written", std::any::type_name::<T>()));
+        }
+        *rt.signals[id]
             .value
             .downcast_mut::<T>()
             .expect("signal type mismatch") = value;
@@ -44,8 +66,13 @@ pub(crate) fn set_signal_value<T: 'static>(id: SignalId, value: T) {
 pub(crate) fn update_signal_value<T: 'static>(id: SignalId, f: impl FnOnce(&mut T)) {
     RUNTIME.with(|rt| {
         let mut rt = rt.borrow_mut();
-        let storage = rt.signals.get_mut(id).expect(DEAD);
-        f(storage
+        if !rt.signals.contains_key(id) {
+            if rt.disposing > 0 {
+                return;
+            }
+            panic!("{}", dead("updated", std::any::type_name::<T>()));
+        }
+        f(rt.signals[id]
             .value
             .downcast_mut::<T>()
             .expect("signal type mismatch"));
@@ -141,6 +168,8 @@ pub(crate) fn notify_signal(id: SignalId) {
 
 #[cfg(test)]
 mod tests {
+    use std::panic::catch_unwind;
+
     use slotmap::Key;
 
     use super::*;
@@ -166,4 +195,47 @@ mod tests {
             "and the stale id resolves to nothing, though its slot is occupied"
         );
     }
+
+    /// The policy in the module doc, as three assertions. A dead read is an error, a dead write is an error outside a teardown, and the messages say which of the two happened — the one message for both used to send a reader looking for a call that was never made.
+    #[test]
+    fn a_dead_handle_reads_and_writes_differently() {
+        let scope = crate::owner_scope();
+        let owner = scope.id();
+        let id = create_signal_storage(7i32);
+        drop(scope);
+        crate::dispose_owner(owner);
+
+        let read = catch_unwind(|| with_signal_value::<i32, _>(id, |v| *v)).unwrap_err();
+        let written = catch_unwind(|| set_signal_value(id, 8i32)).unwrap_err();
+
+        let message = |e: &Box<dyn std::any::Any + Send>| {
+            e.downcast_ref::<String>().cloned().unwrap_or_default()
+        };
+        assert!(
+            message(&read).contains("i32 read after"),
+            "{}",
+            message(&read)
+        );
+        assert!(
+            message(&written).contains("i32 written after"),
+            "{}",
+            message(&written)
+        );
+    }
+
+    /// A cleanup writing a signal a sibling root already freed is the shape of a teardown, not a mistake in it: `dispose_surface_owners` frees roots in arena order, and the surface root owns everything created outside a scope.
+    #[test]
+    fn a_write_during_a_teardown_is_tolerated() {
+        let scope = crate::owner_scope();
+        let owner = scope.id();
+        let id = create_signal_storage(1i32);
+        drop(scope);
+        crate::dispose_owner(owner);
+
+        RUNTIME.with(|rt| rt.borrow_mut().disposing += 1);
+        set_signal_value(id, 2i32);
+        update_signal_value::<i32>(id, |v| *v += 1);
+        RUNTIME.with(|rt| rt.borrow_mut().disposing -= 1);
+    }
+
 }
