@@ -140,7 +140,8 @@ jobs:
 
       - uses: actions/setup-node@v7
         with:
-          node-version: "20"
+          # pnpm 11 needs at least 22.13 — it loads `node:sqlite`, which Node 20 does not have, and Node 20 is past end of life.
+          node-version: "22"
 
       # Pinned because an unpinned major is what broke the 0.1.7 release: pnpm 11 turned an ignored build script from a warning into an error.
       - run: npm install -g pnpm@11.24.0
