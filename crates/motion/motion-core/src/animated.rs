@@ -220,6 +220,11 @@ impl<T: Lerp + 'static> Animated<T> {
         self.inner().borrow().signal.read_only()
     }
 
+    /// Whether the storage behind this handle is still there — see [`reactive_core::RwSignal::is_alive`]. A `Copy` handle kept past its owner has no other way to ask.
+    pub fn is_alive(&self) -> bool {
+        self.state.is_alive()
+    }
+
     /// Whether the animation has reached its target and deregistered.
     pub fn is_settled(&self) -> bool {
         self.inner().borrow().settled

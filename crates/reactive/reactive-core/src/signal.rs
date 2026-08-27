@@ -11,6 +11,11 @@ fn peek_with<T: 'static, R>(id: SignalId, f: impl FnOnce(&T) -> R) -> R {
     runtime::with_signal_value::<T, R>(id, f)
 }
 
+fn try_read_with<T: 'static, R>(id: SignalId, f: impl FnOnce(&T) -> R) -> Option<R> {
+    runtime::track_signal(id);
+    runtime::try_with_signal_value::<T, R>(id, f)
+}
+
 /// A read handle on a signal.
 ///
 /// `Copy`, and the reason is the whole of [`crate::runtime::owner`]: the handle is an id, the *owner* is what
@@ -40,11 +45,28 @@ impl<T: Clone + 'static> ReadSignal<T> {
     pub fn peek(&self) -> T {
         peek_with::<T, T>(self.id, |v| v.clone())
     }
+
+    /// [`get`](Self::get), answering `None` rather than panicking when the storage is gone.
+    pub fn try_get(&self) -> Option<T> {
+        try_read_with::<T, T>(self.id, |v| v.clone())
+    }
 }
 
 impl<T: 'static> ReadSignal<T> {
     pub fn with<R>(&self, f: impl FnOnce(&T) -> R) -> R {
         read_with::<T, R>(self.id, f)
+    }
+
+    /// [`with`](Self::with), answering `None` rather than panicking when the storage is gone.
+    pub fn try_with<R>(&self, f: impl FnOnce(&T) -> R) -> Option<R> {
+        try_read_with::<T, R>(self.id, f)
+    }
+
+    /// Whether the storage this handle names is still there.
+    ///
+    /// For the handle that legitimately outlives its owner — one kept in a store the tree does not own — so it can ask rather than find out by crashing. A handle that lives inside the tree that built it never needs this: its owner outlives it by construction.
+    pub fn is_alive(&self) -> bool {
+        runtime::signal_is_alive(self.id)
     }
 }
 
@@ -83,6 +105,18 @@ impl<T: 'static> RwSignal<T> {
         peek_with::<T, R>(self.id, f)
     }
 
+    /// [`with`](Self::with), answering `None` rather than panicking when the storage is gone.
+    pub fn try_with<R>(&self, f: impl FnOnce(&T) -> R) -> Option<R> {
+        try_read_with::<T, R>(self.id, f)
+    }
+
+    /// Whether the storage this handle names is still there.
+    ///
+    /// For the handle that legitimately outlives its owner — one kept in a store the tree does not own — so it can ask rather than find out by crashing. A handle that lives inside the tree that built it never needs this: its owner outlives it by construction.
+    pub fn is_alive(&self) -> bool {
+        runtime::signal_is_alive(self.id)
+    }
+
     pub fn read_only(&self) -> ReadSignal<T> {
         ReadSignal {
             id: self.id,
@@ -98,6 +132,11 @@ impl<T: Clone + 'static> RwSignal<T> {
 
     pub fn peek(&self) -> T {
         peek_with::<T, T>(self.id, |v| v.clone())
+    }
+
+    /// [`get`](Self::get), answering `None` rather than panicking when the storage is gone.
+    pub fn try_get(&self) -> Option<T> {
+        try_read_with::<T, T>(self.id, |v| v.clone())
     }
 }
 

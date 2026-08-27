@@ -23,8 +23,8 @@ pub use owner::{
     provide_context, with_context, with_owner,
 };
 pub(crate) use signals::{
-    create_signal_storage, notify_signal, set_signal_value, track_signal, update_signal_value,
-    with_signal_value,
+    create_signal_storage, notify_signal, set_signal_value, signal_is_alive, track_signal,
+    try_with_signal_value, update_signal_value, with_signal_value,
 };
 pub use surface::{
     SurfaceEnterGuard, SurfaceHandle, current_surface, set_current_surface, set_surface_enter_hook,

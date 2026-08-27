@@ -57,6 +57,11 @@ impl<T: 'static> Memo<T> {
         }
     }
 
+    /// Whether the storage behind this handle is still there — see [`crate::RwSignal::is_alive`].
+    pub fn is_alive(&self) -> bool {
+        runtime::signal_is_alive(self.id)
+    }
+
     fn track(&self, inner: &Shared<T>) {
         if let Some(id) = runtime::current_observer() {
             let mut borrow = inner.borrow_mut();
@@ -70,6 +75,11 @@ impl<T: 'static> Memo<T> {
 impl<T: Clone + 'static> Memo<T> {
     pub fn get(&self) -> T {
         self.with(T::clone)
+    }
+
+    /// [`get`](Self::get), answering `None` rather than panicking when the storage is gone.
+    pub fn try_get(&self) -> Option<T> {
+        self.is_alive().then(|| self.get())
     }
 }
 

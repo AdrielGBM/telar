@@ -7,6 +7,8 @@
 //! **A write panics, except during a teardown.** Outside one it is the same lifetime error as a dead read. Inside one the storage is not missing but destroyed, deliberately, by the pass that is running — a cleanup writing a signal a sibling root already freed is doing meaningless work rather than wrong work, and there is no subscriber left to deliver it to. See [`super::owner::dispose_owner`].
 //!
 //! **Tracking is silent.** Subscribing to a dead signal is bookkeeping with nothing to record; no value is involved, so nothing can be got wrong by doing nothing.
+//!
+//! A caller that legitimately holds a handle longer than its owner — one kept in a store the tree does not own — should not be finding this out by crashing. [`crate::RwSignal::is_alive`] and the `try_*` reads are there to be asked first, and [`crate::detached`] is there so the question does not arise.
 
 use std::cmp::Reverse;
 
@@ -32,6 +34,10 @@ fn dead(action: &str, type_name: &'static str) -> String {
     format!("signal of type {type_name} {action} after its storage was freed")
 }
 
+pub(crate) fn signal_is_alive(id: SignalId) -> bool {
+    RUNTIME.with(|rt| rt.borrow().signals.contains_key(id))
+}
+
 pub(crate) fn with_signal_value<T: 'static, R>(id: SignalId, f: impl FnOnce(&T) -> R) -> R {
     RUNTIME.with(|rt| {
         let rt = rt.borrow();
@@ -43,6 +49,21 @@ pub(crate) fn with_signal_value<T: 'static, R>(id: SignalId, f: impl FnOnce(&T) 
             .value
             .downcast_ref::<T>()
             .expect("signal type mismatch"))
+    })
+}
+
+/// [`with_signal_value`] for a caller that would rather ask than crash.
+pub(crate) fn try_with_signal_value<T: 'static, R>(
+    id: SignalId,
+    f: impl FnOnce(&T) -> R,
+) -> Option<R> {
+    RUNTIME.with(|rt| {
+        let rt = rt.borrow();
+        let storage = rt.signals.get(id)?;
+        Some(f(storage
+            .value
+            .downcast_ref::<T>()
+            .expect("signal type mismatch")))
     })
 }
 
@@ -238,4 +259,21 @@ mod tests {
         RUNTIME.with(|rt| rt.borrow_mut().disposing -= 1);
     }
 
+    /// What a handle kept past its owner is supposed to do instead of crashing.
+    #[test]
+    fn a_handle_can_ask_whether_its_storage_is_there() {
+        let live = crate::signal(1i32);
+        assert!(live.is_alive());
+        assert_eq!(live.try_get(), Some(1));
+
+        let scope = crate::owner_scope();
+        let owner = scope.id();
+        let doomed = crate::signal(2i32);
+        drop(scope);
+        crate::dispose_owner(owner);
+
+        assert!(!doomed.is_alive());
+        assert_eq!(doomed.try_get(), None);
+        assert_eq!(doomed.try_with(|v| *v), None);
+    }
 }
