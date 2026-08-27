@@ -163,6 +163,8 @@ impl<T: Lerp + 'static> Animated<T> {
 
 impl<T: Lerp + 'static> Animated<T> {
     /// Create an animation resting at `initial`. It registers with the ticker only once retargeted away from its current goal.
+    ///
+    /// Belongs to whatever reactive owner is active at the call, and is freed with it — which is what you want for an animation a view builds and draws. A handle kept somewhere that outlives that owner (a store keyed by slot, a thread-local the tree does not own) wants [`Animated::detached`] instead: this one would be read after its storage was freed the first time anything retargeted it.
     pub fn new(initial: T, curve: impl Into<Curve>) -> Self {
         let signal = signal(initial.clone());
         let inner = Rc::new(RefCell::new(AnimInner {
@@ -181,6 +183,13 @@ impl<T: Lerp + 'static> Animated<T> {
             id: ticker::next_id(),
             _marker: PhantomData,
         }
+    }
+
+    /// [`new`](Self::new), belonging to no reactive owner.
+    ///
+    /// For an animation whose handle lives somewhere the tree does not own — a store keyed by slot, a thread-local that outlives the widget it draws. Under [`new`](Self::new) that handle is freed with whatever scope happened to be active at the call, and the next `retarget` reads storage that is already gone; here nothing frees it but the caller dropping it from wherever it is kept, which is the lifetime such a store meant to have in the first place.
+    pub fn detached(initial: T, curve: impl Into<Curve>) -> Self {
+        reactive_core::detached(|| Self::new(initial, curve))
     }
 
     /// Aim at a new `target`. Springs keep position and velocity (interruptible); tweens restart from the current value over the full duration. Retargeting to the current goal is a no-op.
