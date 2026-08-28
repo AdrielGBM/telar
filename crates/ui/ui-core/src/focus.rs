@@ -232,6 +232,32 @@ pub fn release(id: FocusId) {
     }
 }
 
+/// Takes the keyboard away when a press lands on nothing that wants it.
+///
+/// **The rule every platform has, and the one a toolkit cannot leave to its applications.** Focus was only
+/// ever *taken* here — by a tap on a focusable, by Tab — so a field kept the caret until something else asked
+/// for it, and clicking away from a form left it sitting there looking editable, eating the keys, and telling
+/// an application asking [`text_entry_focused`] that somebody was still typing.
+///
+/// Asked before the press is dispatched, so a focusable that is pressed takes focus back on its way through
+/// and only a press with no focusable under it clears anything. The test is the on-screen rect — where the
+/// widget is drawn rather than where it was laid out — so a field inside a scrolled viewport answers about
+/// the place the pointer actually is.
+pub fn blur_from_pointer(x: f32, y: f32) {
+    if current().is_none() {
+        return;
+    }
+    // Collected before the rects are asked for: reading layout under the focus borrow is a borrow of one runtime held across a call into another.
+    let nodes: Vec<NodeId> =
+        with_focus_ref(|s| s.order.iter().filter_map(|entry| entry.node).collect());
+    let on_a_focusable = nodes.into_iter().any(|node| {
+        crate::scroll_region::visible_rect(node).is_some_and(|rect| rect.contains(x, y))
+    });
+    if !on_a_focusable {
+        clear();
+    }
+}
+
 /// Clears focus entirely, whoever holds it.
 pub fn clear() {
     let focused = focused_signal();
