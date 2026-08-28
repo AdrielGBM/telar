@@ -3,10 +3,11 @@ use std::rc::Rc;
 use geometry_core::Rect;
 use layout_core::{LayoutError, LayoutStyle};
 use platform_core::{Event, Key, ModifiersState, NamedKey, PointerButton};
-use reactive_core::{RwSignal, signal};
+use reactive_core::{Effect, RwSignal, effect, signal};
 use renderer_core::{RectStyle, ShapeStyle, TextStyle};
 use ui_tree::{Component, EventResult, RenderNode};
 
+use crate::caret::{Blink, align_origin};
 use crate::focus::{self, FocusId};
 use crate::impl_leaf_widget;
 use crate::layout_leaf::LayoutLeaf;
@@ -37,6 +38,9 @@ pub struct Input {
     // Character drawn in place of every character of the value. Affects rendering only: the bound signal, the
     // caret offsets and every edit still work on the real text.
     mask: Option<char>,
+    blink: Blink,
+    // Keeps the blink running while the field holds the keyboard, and stops it when it does not.
+    _blinking: Effect,
 }
 
 impl Input {
@@ -72,6 +76,8 @@ impl Input {
         // Join the tab order so Tab/Shift-Tab can reach this field, as the kind that takes keys as text — so
         // an app-level shortcut table can stand aside while the caret is here.
         focus::register_at(id, focus::FocusKind::TextEntry, leaf.node);
+        let blink = Blink::new();
+        let watching = blink.clone();
         Ok(Self {
             value,
             caret: signal(caret),
@@ -82,6 +88,8 @@ impl Input {
             on_submit: None,
             placeholder: String::new(),
             mask: None,
+            blink,
+            _blinking: effect(move || watching.follow(focus::is_focused(id))),
         })
     }
 
@@ -171,6 +179,8 @@ impl Input {
     /// Applies a key while focused, editing the bound signal and/or moving the caret. Returns whether the
     /// key was consumed.
     fn edit(&mut self, key: &Key, mods: &ModifiersState) -> EventResult {
+        // Lit again from the top, before the key is even read: a caret that blinked out under the hand is missing at the one moment somebody is looking for it.
+        self.blink.wake();
         let mut text = self.value.get();
         let mut caret = self.caret_at(&text);
         let chord = mods.is_ctrl || mods.is_meta;
@@ -326,6 +336,10 @@ impl Component for Input {
         // The caret is drawn only while focused; reading `is_focused` subscribes this view to focus moves.
         if focus::is_focused(self.id) {
             let caret = self.caret_at(&text);
+            // Where the shaper is about to put the first glyph. Everything drawn beside the letters — the caret, the selection — is placed from here rather than from the edge of the box, or a field that inherited a centred alignment draws its text in the middle and its caret at the left.
+            let line = self.shown(&text);
+            let (line_w, _) = crate::text_metrics::measure_text(&line, None, 1.0e6, &style);
+            let origin = align_origin(style.text_align, full.width, line_w);
             // The selection paints *behind* the text, in the ink at low alpha rather than a token of its own:
             // a field is unstyled by design and has no palette to reach for, and the ink is the one colour it
             // is already guaranteed to contrast with.
@@ -343,10 +357,10 @@ impl Component for Input {
                 let fill = style.color.faded(0.25);
                 RenderNode::rect(
                     Rect {
-                        x: start,
+                        x: origin + start,
                         y: 0.0,
                         width: (end - start).max(1.0),
-                        height: crate::text_metrics::line_height(style.font_size),
+                        height: crate::text_metrics::line_box(&style),
                     },
                     RectStyle::default().with_fill(fill),
                 )
@@ -355,14 +369,16 @@ impl Component for Input {
             // so measuring the real prefix would put the caret somewhere the text is not.
             let prefix = self.shown(&text[..caret]);
             let (prefix_w, _) = crate::text_metrics::measure_text(&prefix, None, 1.0e6, &style);
-            let line_h = crate::text_metrics::line_height(style.font_size);
+            let line_h = crate::text_metrics::line_box(&style);
             let caret_rect = Rect {
-                x: prefix_w,
+                x: origin + prefix_w,
                 y: 0.0,
                 width: CARET_WIDTH,
                 height: line_h,
             };
-            let caret_node = RenderNode::rect(caret_rect, RectStyle::default().with_fill(paint));
+            // Read here rather than anywhere else: this is what subscribes the field's own view to the blink, so the caret is the only thing on the surface that redraws on its account.
+            let lit = paint.faded(self.blink.opacity());
+            let caret_node = RenderNode::rect(caret_rect, RectStyle::default().with_fill(lit));
             let layers = match highlight {
                 Some(highlight) => vec![highlight, text_node, caret_node],
                 None => vec![text_node, caret_node],
@@ -441,7 +457,8 @@ mod tests {
     use crate::context::reset_layout_runtime;
     use layout_core::AvailableSpace;
     use platform_core::PointerSource;
-    use renderer_core::Color;
+    use renderer_core::{Color, DrawCommand, LineHeight, Paint, TextAlign};
+    use std::time::Duration;
 
     use super::*;
     use crate::context::{compute_layout, new_container};
@@ -551,6 +568,164 @@ mod tests {
         .unwrap();
         focus::request(input.id);
         (input, value)
+    }
+
+    /// A field styled to the given alignment, focused, with its rect laid out.
+    fn aligned_input(initial: &str, align: TextAlign) -> Input {
+        reset_layout_runtime();
+        let value = signal(initial.to_string());
+        let input = Input::new(
+            value,
+            LayoutStyle::new().width(200.0).height(20.0),
+            move || {
+                let mut style = TextStyle::new(14.0, Color::BLACK);
+                style.text_align = align;
+                style
+            },
+        )
+        .unwrap();
+        let root = new_container(
+            LayoutStyle::new().flex_column().width(200.0).height(100.0),
+            &[input.layout_node()],
+        )
+        .unwrap();
+        compute_layout(
+            root,
+            AvailableSpace::Definite(200.0),
+            AvailableSpace::Definite(100.0),
+        )
+        .unwrap();
+        focus::request(input.id);
+        input
+    }
+
+    /// Where the caret was drawn, and how lit it was.
+    fn caret_of(input: &Input) -> (Rect, f32) {
+        fn walk(node: &RenderNode, found: &mut Option<(Rect, f32)>) {
+            match node {
+                RenderNode::Primitive(DrawCommand::Rect { rect, style })
+                    if rect.width == CARET_WIDTH =>
+                {
+                    let lit = match style.fill {
+                        Some(Paint::Solid(color)) => color.a,
+                        _ => 0.0,
+                    };
+                    *found = Some((*rect, lit));
+                }
+                RenderNode::Group { children }
+                | RenderNode::Transform { children, .. }
+                | RenderNode::Clip { children, .. }
+                | RenderNode::Layer { children, .. } => {
+                    for child in children.iter() {
+                        walk(child, found);
+                    }
+                }
+                _ => {}
+            }
+        }
+        let view = input.view();
+        let mut found = None;
+        walk(&view, &mut found);
+        found.expect("a focused field draws its caret")
+    }
+
+    /// **The caret goes where the letters went.** A field inherits its alignment from the region around it —
+    /// a centred column of chrome hands one down — and the text is placed by the shaper while the caret is
+    /// placed here, so the two have to answer the same question. They did not: the letters sat in the middle
+    /// of the box and the caret against its left edge, a whole field's width away from the text it was in.
+    #[test]
+    fn the_caret_follows_the_alignment_the_text_was_drawn_with() {
+        let left = caret_of(&aligned_input("hola", TextAlign::Start)).0.x;
+        let middle = caret_of(&aligned_input("hola", TextAlign::Center)).0.x;
+        let right = caret_of(&aligned_input("hola", TextAlign::End)).0.x;
+
+        assert!(
+            middle > left && right > middle,
+            "el cursor no sigue la alineación: {left} / {middle} / {right}"
+        );
+        // At the end of the text in a box 200 wide, so the caret lands on the far edge whatever the face measures.
+        assert!(
+            (right - 200.0).abs() < 1.0,
+            "alineado a la derecha el cursor va al borde, no a {right}"
+        );
+    }
+
+    /// **A caret that does not blink is a caret nobody finds** — a hairline of ink that may be sitting in an
+    /// empty field, and the eye goes to what changes.
+    #[test]
+    fn the_caret_blinks_while_the_field_holds_the_keyboard() {
+        let input = aligned_input("hola", TextAlign::Start);
+        motion_core::reset();
+        input.blink.follow(true);
+
+        let start = std::time::Instant::now();
+        motion_core::tick(start);
+        let lit = caret_of(&input).1;
+        motion_core::tick(start + Duration::from_millis(700));
+        let out = caret_of(&input).1;
+
+        assert!(lit > 0.9, "el cursor empieza encendido, no en {lit}");
+        assert!(out < 0.1, "y se apaga a la mitad del ciclo, no en {out}");
+    }
+
+    /// And it is lit again by the key, so it is never missing at the moment somebody is looking for it.
+    #[test]
+    fn typing_lights_the_caret_again() {
+        let (mut input, _) = focused_input("hola");
+        motion_core::reset();
+        input.blink.follow(true);
+        let start = std::time::Instant::now();
+        motion_core::tick(start);
+        motion_core::tick(start + Duration::from_millis(700));
+        assert!(caret_of(&input).1 < 0.1, "el cursor debería estar apagado");
+
+        input.on_event(&key(Key::Char('x')));
+
+        assert!(
+            caret_of(&input).1 > 0.9,
+            "la tecla no volvió a encender el cursor"
+        );
+    }
+
+    /// **The caret stands in the line, not over it.** The height came from the face's natural leading while
+    /// the text was laid out at whatever the tree declared, so under a `line_height: 1.0` — a pixel face kept
+    /// on its own grid — the caret hung below the descenders of the very word it was standing in.
+    #[test]
+    fn the_caret_is_as_tall_as_the_line_the_text_is_laid_out_on() {
+        reset_layout_runtime();
+        let value = signal("hola".to_string());
+        let input = Input::new(value, LayoutStyle::new().width(200.0).height(20.0), || {
+            let mut style = TextStyle::new(14.0, Color::BLACK);
+            style.line_height = LineHeight::Times(1.0);
+            style
+        })
+        .unwrap();
+        focus::request(input.id);
+
+        let tall = caret_of(&input).0.height;
+
+        assert!(
+            (tall - 14.0).abs() < 0.01,
+            "una línea de 1.0 sobre 14 mide 14, no {tall}"
+        );
+        assert!(
+            crate::text_metrics::line_height(14.0) > 14.5,
+            "la natural es más alta, que es lo que hacía el cursor demasiado largo"
+        );
+    }
+
+    /// The other half of the blink, and the one that decides what the window costs: a sequence registered with
+    /// the ticker is a standing request to redraw, so a field nobody is typing into must not be running one.
+    #[test]
+    fn a_field_without_the_keyboard_asks_for_no_frames() {
+        motion_core::reset();
+        let input = aligned_input("hola", TextAlign::Start);
+        input.blink.follow(false);
+        motion_core::tick(std::time::Instant::now());
+        assert!(
+            !motion_core::has_active(),
+            "un campo sin el teclado sigue pidiendo cuadros"
+        );
     }
 
     /// The guard a global shortcut handler consults ([`focus::text_entry_takes_key`]) is a second list of

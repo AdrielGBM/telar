@@ -3,6 +3,7 @@ pub mod accessibility;
 mod async_asset;
 mod border;
 mod canvas;
+mod caret;
 mod child_host;
 mod container;
 mod context;

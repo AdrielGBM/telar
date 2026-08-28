@@ -8,6 +8,7 @@ use reactive_core::{Effect, RwSignal, effect, signal};
 use renderer_core::{RectStyle, ShapeStyle, TextStyle};
 use ui_tree::{Component, EventResult, RenderNode};
 
+use crate::caret::Blink;
 use crate::context::{mark_dirty, new_measured_leaf};
 use crate::focus::{self, FocusId};
 use crate::impl_leaf_widget;
@@ -43,6 +44,9 @@ pub struct TextArea {
     // Re-measures the leaf's height whenever the bound value changes — from a keystroke or a programmatic set
     // (e.g. loading a file) — so the line count drives the layout in both cases. Kept alive for the widget's life.
     _remeasure: Effect,
+    blink: Blink,
+    // Keeps the blink running while the area holds the keyboard, and stops it when it does not.
+    _blinking: Effect,
 }
 
 impl TextArea {
@@ -58,7 +62,7 @@ impl TextArea {
         let measure_style = Rc::clone(&style);
         let measure = Box::new(move |_max_width: f32| {
             let s = (measure_style)();
-            let line_h = crate::text_metrics::line_height(s.font_size);
+            let line_h = crate::text_metrics::line_box(&s);
             let lines = measure_value.with(|t| t.matches('\n').count() + 1);
             (0.0, lines as f32 * line_h)
         });
@@ -79,6 +83,8 @@ impl TextArea {
                 mark_dirty(node).ok();
             })
         };
+        let blink = Blink::new();
+        let watching = blink.clone();
         Ok(Self {
             value,
             caret: signal(caret),
@@ -88,6 +94,8 @@ impl TextArea {
             leaf: LayoutLeaf { node, rect },
             placeholder: String::new(),
             _remeasure: remeasure,
+            blink,
+            _blinking: effect(move || watching.follow(focus::is_focused(id))),
         })
     }
 
@@ -115,7 +123,7 @@ impl TextArea {
     }
 
     fn line_height(&self) -> f32 {
-        crate::text_metrics::line_height((self.style)().font_size)
+        crate::text_metrics::line_box(&(self.style)())
     }
 
     /// The current caret byte offset, clamped to the text and snapped to a char boundary.
@@ -154,6 +162,8 @@ impl TextArea {
     /// was consumed. On a text change the leaf is marked dirty so the runner re-measures the (possibly new)
     /// line count on the next frame.
     fn edit(&mut self, key: &Key, mods: &ModifiersState, style: &TextStyle) -> EventResult {
+        // Lit again from the top, before the key is even read: see `Input::edit`.
+        self.blink.wake();
         let mut text = self.value.get();
         let mut caret = self.caret_at(&text);
         let mut changed = false;
@@ -357,8 +367,9 @@ impl Component for TextArea {
                 width: CARET_WIDTH,
                 height: line_h,
             };
-            let caret_node =
-                RenderNode::rect(caret_rect, RectStyle::default().with_fill(style.color));
+            // Read here rather than anywhere else: this is what subscribes the area's own view to the blink.
+            let lit = style.color.faded(self.blink.opacity());
+            let caret_node = RenderNode::rect(caret_rect, RectStyle::default().with_fill(lit));
             let layers = match highlight {
                 Some(highlight) => vec![highlight, text_node, caret_node],
                 None => vec![text_node, caret_node],
@@ -381,7 +392,7 @@ impl Component for TextArea {
                 if rect.contains(*x as f32, *y as f32) {
                     focus::request_from_pointer(self.id);
                     let style = (self.style)();
-                    let line_h = crate::text_metrics::line_height(style.font_size);
+                    let line_h = crate::text_metrics::line_box(&style);
                     // Read the text out (borrow released) before setting the caret: `set` inside a `with`
                     // closure would re-borrow the reactive runtime.
                     let text = self.value.get();
