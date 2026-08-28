@@ -32,6 +32,7 @@ pub struct Input {
     id: FocusId,
     leaf: LayoutLeaf,
     on_submit: Option<Box<dyn Fn()>>,
+    on_cancel: Option<Box<dyn Fn()>>,
     // Hint shown (muted) while the value is empty. Rendered in place of the text so the field stays a live,
     // tappable `Input` even when empty — a separate placeholder widget swapped in would not take focus.
     placeholder: String,
@@ -86,6 +87,7 @@ impl Input {
             id,
             leaf,
             on_submit: None,
+            on_cancel: None,
             placeholder: String::new(),
             mask: None,
             blink,
@@ -119,6 +121,17 @@ impl Input {
     /// Runs when Enter is pressed while focused (e.g. submit a form / run a search).
     pub fn on_submit(mut self, f: impl Fn() + 'static) -> Self {
         self.on_submit = Some(Box::new(f));
+        self
+    }
+
+    /// Runs when Escape is pressed while focused, just before the field hands the keyboard back.
+    ///
+    /// **The other half of [`on_submit`](Self::on_submit).** A field that can be committed but not abandoned
+    /// is half a contract, and the missing half is the one a caller cannot write for itself: Escape is a key a
+    /// focused field eats, so an application watching from outside sees the keyboard leave and has no way to
+    /// tell «they gave up» from «they clicked somewhere else» — opposite answers wherever losing focus commits.
+    pub fn on_cancel(mut self, f: impl Fn() + 'static) -> Self {
+        self.on_cancel = Some(Box::new(f));
         self
     }
 
@@ -285,6 +298,10 @@ impl Input {
                 return EventResult::Handled;
             }
             Key::Named(NamedKey::Escape) => {
+                // Said before the keyboard goes back, so a caller watching focus sees the giving-up first and reads what follows as the consequence rather than as a second event.
+                if let Some(cb) = &self.on_cancel {
+                    cb();
+                }
                 focus::release(self.id);
                 return EventResult::Handled;
             }
@@ -712,6 +729,21 @@ mod tests {
             crate::text_metrics::line_height(14.0) > 14.5,
             "la natural es más alta, que es lo que hacía el cursor demasiado largo"
         );
+    }
+
+    /// Escape is a key a focused field eats, so an application watching from the outside cannot tell it from
+    /// a click elsewhere — and where losing focus commits, those are opposite answers.
+    #[test]
+    fn escape_says_so_before_it_hands_the_keyboard_back() {
+        let (mut input, _) = focused_input("hola");
+        let given_up = Rc::new(std::cell::Cell::new(false));
+        let said = Rc::clone(&given_up);
+        input = input.on_cancel(move || said.set(true));
+
+        input.on_event(&key(Key::Named(NamedKey::Escape)));
+
+        assert!(given_up.get(), "el campo se rindió sin decirlo");
+        assert!(!focus::is_focused(input.id), "y soltó el teclado");
     }
 
     /// The other half of the blink, and the one that decides what the window costs: a sequence registered with
