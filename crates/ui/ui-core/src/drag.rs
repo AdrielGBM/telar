@@ -22,6 +22,26 @@ thread_local! {
     /// than a callback parameter for the reason [`PointerButtons`] gives: widening `on_drag` would make the
     /// whole catalogue pay for a question two widgets ask.
     static ACTIVE: Cell<Option<(DragStart, f32)>> = const { Cell::new(None) };
+    /// Whether the press being dispatched right now has already armed a drag somewhere below. See [`claimed`].
+    static CLAIMED: Cell<bool> = const { Cell::new(false) };
+}
+
+/// Marks the press being dispatched as claimed by a drag. Called by every gesture that arms one.
+pub(crate) fn claim() {
+    CLAIMED.with(|c| c.set(true));
+}
+
+/// Runs `dispatch` over the children and reports whether one of them armed a drag on this press.
+///
+/// **The innermost drag owns the stroke.** A tab that reorders sits in a strip that moves the window, and a
+/// slider sits in a card that can be dragged around; with both armed, one press runs two gestures and the
+/// answer is whichever one the eye notices first. The parent asks this and stands its own down — it is the
+/// same rule the pointer already follows for hit-testing, said for gestures.
+pub(crate) fn claimed<R>(dispatch: impl FnOnce() -> R) -> (R, bool) {
+    let outer = CLAIMED.with(|c| c.replace(false));
+    let answer = dispatch();
+    let claimed = CLAIMED.with(|c| c.replace(outer || c.get()));
+    (answer, claimed)
 }
 
 /// What armed the drag whose callback is running, or `None` outside one.
@@ -143,6 +163,8 @@ impl DragGesture {
             ));
             self.travel = 0.0;
             self.started = !self.has_threshold();
+            // Said before anything else runs: whatever contains this box asks, once the press has been through its children, whether the stroke was already spoken for.
+            claim();
             if self.started {
                 self.report(local.0, local.1);
             }

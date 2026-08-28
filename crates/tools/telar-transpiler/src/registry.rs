@@ -183,6 +183,8 @@ const CONTAINER_PAINT: &[&str] = &[
     "drag_threshold",
     // A box that is drawn over something without standing between it and the pointer.
     "click_through",
+    // A control inside something draggable, saying the stroke that starts on it is its own.
+    "holds_stroke",
     "hover_style",
     "active_style",
     // Not a paint prop: the framework reads it to close the pointer, the hover tracking and the cursor, which is what stops each author re-deriving a different subset by hand.
@@ -380,7 +382,9 @@ pub fn value_kind(tag: &str, key: &str) -> Option<ValueKind> {
         "text_align" => return Some(ValueKind::Keywords(TEXT_ALIGN_VALUES)),
         "text_wrap" => return Some(ValueKind::Keywords(TEXT_WRAP_VALUES)),
         "font_style" => return Some(ValueKind::Keywords(FONT_STYLE_VALUES)),
-        "ellipsis" | "click_through" | "secret" => return Some(ValueKind::Keywords(FLAG_VALUES)),
+        "ellipsis" | "click_through" | "holds_stroke" | "secret" => {
+            return Some(ValueKind::Keywords(FLAG_VALUES));
+        }
         "font_weight" => return Some(ValueKind::KeywordsOrNumber(FONT_WEIGHT_VALUES)),
         // A stroke *width* on an `svg`, where every other tag means a colour by the same name; a `path`'s
         // fill rule is a keyword, not a paint.

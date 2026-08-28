@@ -79,6 +79,12 @@ impl ViewGen<'_> {
             .find(|a| a.key == "click_through")
             .map(|_| ".click_through(true)".to_string())
             .unwrap_or_default();
+        let holds_stroke = el
+            .attributes
+            .iter()
+            .find(|a| a.key == "holds_stroke")
+            .map(|_| ".holds_stroke()".to_string())
+            .unwrap_or_default();
         let on_press = self.on_press_call(el);
         // A forwarded (non-closure) `on_press` wires `.maybe_on_press`, which only StyledContainer has.
         let on_press_forwarded = el
@@ -160,7 +166,7 @@ impl ViewGen<'_> {
             Some((closure, opacity_call)) => {
                 let _ = writeln!(
                     code,
-                    "{inner_pad}{bind}StyledContainer::{ctor}({style}, {closure}, {children})?{opacity_call}{hover_call}{active_call}{disabled_call}{focus_ring}{disabled}{on_press}{transform_call}{on_hover}{on_pointer_move}{on_key}{on_drag}{on_drag_end}{on_scroll}{on_focus}{on_long_press}{on_alt_press}{cursor}{drag_button}{drag_threshold}{click_through}{styled_by}{declaring}{terminator}"
+                    "{inner_pad}{bind}StyledContainer::{ctor}({style}, {closure}, {children})?{opacity_call}{hover_call}{active_call}{disabled_call}{focus_ring}{disabled}{on_press}{transform_call}{on_hover}{on_pointer_move}{on_key}{on_drag}{on_drag_end}{on_scroll}{on_focus}{on_long_press}{on_alt_press}{cursor}{drag_button}{drag_threshold}{click_through}{holds_stroke}{styled_by}{declaring}{terminator}"
                 );
             }
             None => {

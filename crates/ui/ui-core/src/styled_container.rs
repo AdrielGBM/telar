@@ -132,6 +132,8 @@ pub struct StyledContainer {
     // Whether the box declines to shadow what it is drawn over (`pointer-events: none`). Set from
     // `click_through` in the DSL; see `LayoutItem::pointer_opaque`.
     click_through: bool,
+    // Whether a stroke that starts here is this box's and goes no further out. See `holds_stroke`.
+    holds_stroke: bool,
 }
 
 impl StyledContainer {
@@ -169,6 +171,7 @@ impl StyledContainer {
             on_key: None,
             focusable: Focusable::default(),
             click_through: false,
+            holds_stroke: false,
         }
     }
 
@@ -211,6 +214,8 @@ impl StyledContainer {
             && !self.pointer.is_set()
             && self.on_key.is_none()
             && self.focusable.id.is_none()
+            // Holding the stroke is something a box *does* with a press, though it answers none — and the third time this shape has cost an omission, exactly as the note above says it would.
+            && !self.holds_stroke
     }
 
     fn dispatch_children(&mut self, event: &Event) -> EventResult {
@@ -399,6 +404,22 @@ impl StyledContainer {
     /// hold a real button — the same split CSS makes with `pointer-events: auto` on a child.
     pub fn click_through(mut self, through: bool) -> Self {
         self.click_through = through;
+        self
+    }
+
+    /// A stroke that starts on this box is this box's, and goes no further out.
+    ///
+    /// **The other half of «the innermost drag owns the stroke».** A band that moves the window is dragged by
+    /// its empty space, and the controls sitting in it are not empty space — but a button claims nothing, so
+    /// its press was the band.s and the compositor took the pointer away to move the window before the button
+    /// could answer. The same shape holds for a menu panel over a dismissing backdrop, and for any control
+    /// inside anything draggable.
+    ///
+    /// Not `on_drag` with an empty body, which is what this replaces: that says «I drag, and do nothing», and
+    /// what is meant is «this one is mine». It claims for every button, because a stroke is a stroke whichever
+    /// one started it.
+    pub fn holds_stroke(mut self) -> Self {
+        self.holds_stroke = true;
         self
     }
 
@@ -800,9 +821,17 @@ impl Component for StyledContainer {
                 if !primary && !self.press.wants_alt() && !self.drag.arms(button) {
                     return self.dispatch_children(event);
                 }
-                if self.dispatch_children(event) == EventResult::Handled {
+                // **A child takes the tap; the innermost drag takes the stroke.** Standing this box's drag down because a child took the press made a strip draggable only where it had nothing pressable in it — tabs that can be clicked could never be dragged. Arming it regardless is the other half of the same mistake: the tab reorders and the band it sits in moves the window, on one press. So the children are asked whether one of them claimed the stroke.
+                let (below, claimed) = crate::drag::claimed(|| self.dispatch_children(event));
+                // Said once the children have had the press and before this returns, so it reaches whatever contains this box: a stroke that starts here is this box's, and nothing further out takes it.
+                if self.holds_stroke && rect.contains(*x as f32, *y as f32) {
+                    crate::drag::claim();
+                }
+                if below == EventResult::Handled {
                     self.press.cancel();
-                    self.drag.end(None);
+                    if self.drag.is_set() && !claimed {
+                        self.drag.press(event, rect);
+                    }
                     return EventResult::Handled;
                 }
                 // A primary press inside the box enters the pressed state (purely visual; independent of on_press).
@@ -819,8 +848,9 @@ impl Component for StyledContainer {
                 };
                 let tapped =
                     self.press.is_set() && self.press.arm(event, rect) == EventResult::Handled;
-                let dragged =
-                    self.drag.is_set() && self.drag.press(event, rect) == EventResult::Handled;
+                let dragged = !claimed
+                    && self.drag.is_set()
+                    && self.drag.press(event, rect) == EventResult::Handled;
                 if tapped || dragged || focused {
                     EventResult::Handled
                 } else {
@@ -1126,6 +1156,149 @@ mod tests {
             button: PointerButton::Primary,
             source,
         }
+    }
+
+    /// **A strip is draggable even where the thing under the pointer is pressable.** A row of tabs that can be
+    /// clicked *and* dragged into another order is the ordinary shape of a reorderable list, and the press was
+    /// standing the parent's drag down the instant a child took it — so the threshold was never reached and
+    /// the strip could only be dragged by its gaps.
+    ///
+    /// What the child takes is the tap. The stroke is still the box's, and the child's own tap is cancelled by
+    /// its slop once the stroke has committed to being a drag.
+    #[test]
+    fn a_child_that_takes_the_press_does_not_take_the_drag_with_it() {
+        reset_layout_runtime();
+        let dragged: Rc<Cell<u32>> = Rc::new(Cell::new(0));
+        let sink = dragged.clone();
+        let tab = StyledContainer::new(
+            LayoutStyle::new().width(100.0).height(30.0),
+            |_r| RectStyle::default(),
+            vec![],
+        )
+        .unwrap()
+        .on_press(|| {});
+        let mut strip = StyledContainer::new(
+            LayoutStyle::new().flex_row().width(100.0).height(30.0),
+            |_r| RectStyle::default(),
+            vec![Box::new(tab)],
+        )
+        .unwrap()
+        .drag_threshold(4.0)
+        .on_drag(move |_x, _y| sink.set(sink.get() + 1));
+        compute_layout(
+            strip.layout_node(),
+            AvailableSpace::Definite(100.0),
+            AvailableSpace::Definite(30.0),
+        )
+        .unwrap();
+
+        strip.on_event(&press(10.0, 15.0, PointerSource::Mouse));
+        strip.on_event(&Event::PointerMoved {
+            x: 60.0,
+            y: 15.0,
+            source: PointerSource::Mouse,
+        });
+
+        assert!(
+            dragged.get() > 0,
+            "la pulsación del hijo se llevó el arrastre del padre"
+        );
+    }
+
+    /// **And a box that holds the stroke stops it without pretending to drag.** The rule needs a way to be
+    /// said by something that is not draggable at all — a button in a band that moves the window, a panel over
+    /// a backdrop that dismisses — and saying it with an `on_drag` that does nothing is a lie about what the
+    /// widget is.
+    #[test]
+    fn a_box_that_holds_the_stroke_keeps_it_from_whatever_contains_it() {
+        reset_layout_runtime();
+        let moved: Rc<Cell<u32>> = Rc::new(Cell::new(0));
+        let sink = moved.clone();
+        let control = StyledContainer::new(
+            LayoutStyle::new().width(60.0).height(30.0),
+            |_r| RectStyle::default(),
+            vec![],
+        )
+        .unwrap()
+        .on_press(|| {})
+        .holds_stroke();
+        let mut band = StyledContainer::new(
+            LayoutStyle::new().flex_row().width(200.0).height(30.0),
+            |_r| RectStyle::default(),
+            vec![Box::new(control)],
+        )
+        .unwrap()
+        .on_drag(move |_x, _y| sink.set(sink.get() + 1));
+        compute_layout(
+            band.layout_node(),
+            AvailableSpace::Definite(200.0),
+            AvailableSpace::Definite(30.0),
+        )
+        .unwrap();
+
+        band.on_event(&press(30.0, 15.0, PointerSource::Mouse));
+        band.on_event(&Event::PointerMoved {
+            x: 80.0,
+            y: 15.0,
+            source: PointerSource::Mouse,
+        });
+        assert_eq!(moved.get(), 0, "la banda se llevó el trazo del control");
+
+        band.on_event(&release(80.0, 15.0, PointerSource::Mouse));
+        band.on_event(&press(150.0, 15.0, PointerSource::Mouse));
+        assert!(moved.get() > 0, "y donde no hay control sigue siendo suya");
+    }
+
+    /// **And the innermost drag owns the stroke.** The other half of the rule above: a tab that reorders sits
+    /// in a band that moves the window, so a press that armed both ran two gestures at once — the tab went
+    /// nowhere because the window went with it.
+    #[test]
+    fn a_drag_inside_another_one_is_the_only_one_that_runs() {
+        reset_layout_runtime();
+        let (inner, outer) = (Rc::new(Cell::new(0u32)), Rc::new(Cell::new(0u32)));
+        let (near, far) = (inner.clone(), outer.clone());
+        let tab = StyledContainer::new(
+            LayoutStyle::new().width(60.0).height(30.0),
+            |_r| RectStyle::default(),
+            vec![],
+        )
+        .unwrap()
+        .drag_threshold(4.0)
+        .on_drag(move |_x, _y| near.set(near.get() + 1));
+        let mut band = StyledContainer::new(
+            LayoutStyle::new().flex_row().width(200.0).height(30.0),
+            |_r| RectStyle::default(),
+            vec![Box::new(tab)],
+        )
+        .unwrap()
+        .drag_threshold(4.0)
+        .on_drag(move |_x, _y| far.set(far.get() + 1));
+        compute_layout(
+            band.layout_node(),
+            AvailableSpace::Definite(200.0),
+            AvailableSpace::Definite(30.0),
+        )
+        .unwrap();
+
+        // On the tab: the tab reorders and the band stays put.
+        band.on_event(&press(30.0, 15.0, PointerSource::Mouse));
+        band.on_event(&Event::PointerMoved {
+            x: 80.0,
+            y: 15.0,
+            source: PointerSource::Mouse,
+        });
+        assert!(inner.get() > 0, "la pestaña no se arrastró");
+        assert_eq!(outer.get(), 0, "y la banda se fue con ella");
+
+        // Past the tabs, where the band is the only thing there: the band is what moves.
+        band.on_event(&release(80.0, 15.0, PointerSource::Mouse));
+        band.on_event(&press(150.0, 15.0, PointerSource::Mouse));
+        band.on_event(&Event::PointerMoved {
+            x: 190.0,
+            y: 15.0,
+            source: PointerSource::Mouse,
+        });
+        assert!(outer.get() > 0, "la banda ya no se puede arrastrar");
     }
 
     #[test]
