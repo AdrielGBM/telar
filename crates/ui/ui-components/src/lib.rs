@@ -5,6 +5,7 @@ mod badge;
 mod button;
 mod checkbox;
 mod chip;
+mod context_menu;
 mod drawer;
 mod dropdown;
 #[cfg(test)]
@@ -36,6 +37,7 @@ pub use badge::{BadgeProps, badge};
 pub use button::{ButtonProps, button};
 pub use checkbox::{CheckboxProps, checkbox};
 pub use chip::{ChipProps, chip};
+pub use context_menu::{ContextMenuProps, Entry as MenuEntry, MenuStyle, context_menu};
 pub use drawer::{DrawerProps, drawer};
 pub use heading::{HeadingProps, heading};
 pub use list::{GroupProps, ItemProps, group, item, separator};
