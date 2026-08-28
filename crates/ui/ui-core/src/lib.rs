@@ -57,7 +57,7 @@ pub use context::{
     set_direction, set_display, set_min_height, set_overlay_host, track_layout, use_direction,
 };
 pub use dismiss::{dismiss_depth, dismiss_top, use_dismiss_depth};
-pub use drag::{DragStart, drag_start, drag_travel};
+pub use drag::{DragAxis, DragStart, drag_start, drag_travel};
 pub use image::Image;
 pub use inherit::{Inherited, context, declare, inherited_text_style, undeclare};
 pub use input::Input;

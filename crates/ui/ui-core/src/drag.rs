@@ -60,6 +60,20 @@ pub fn drag_travel() -> f32 {
     ACTIVE.with(|a| a.get()).map_or(0.0, |(_, travel)| travel)
 }
 
+/// Which way a drag is allowed to travel.
+///
+/// **A gesture with one meaning should not report two numbers.** A strip of tabs is reordered along its own
+/// axis and a slider has only one; without this each of them takes the pointer's other coordinate and throws
+/// it away, which is the same arithmetic written once per widget — and the ones that forget let what they are
+/// dragging wander off the line it lives on.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum DragAxis {
+    #[default]
+    Free,
+    Horizontal,
+    Vertical,
+}
+
 /// A drag gesture any container can opt into: reports the pointer position on a press inside its bounds
 /// and on every move until release. Because pointer events are broadcast to every widget, a drag keeps
 /// receiving moves even after the pointer leaves the widget's bounds — no explicit pointer capture is
@@ -87,6 +101,17 @@ pub(crate) struct DragGesture {
     started: bool,
     /// The last position the drag reported, so an end with no event of its own still knows where it got to.
     last: (f32, f32),
+    /// Which way it may travel. The other coordinate is reported as it was at the press, so a widget on a
+    /// line stays on it.
+    axis: DragAxis,
+    /// The box the reported point is kept inside, **in the widget's own coordinates**, or `None` for a drag
+    /// that may be reported anywhere the pointer goes.
+    ///
+    /// A drag keeps receiving moves after the pointer leaves the widget — that is what makes a slider still
+    /// track when the hand overshoots — and the same broadcast is what lets a pointer that left the window
+    /// report a position no layout could ever produce. Bounding it is the caller saying where the answer is
+    /// allowed to be, once, instead of clamping it at every use.
+    within: Option<Box<dyn Fn() -> Rect>>,
 }
 
 impl Default for DragGesture {
@@ -103,6 +128,8 @@ impl Default for DragGesture {
             travel: 0.0,
             started: false,
             last: (0.0, 0.0),
+            axis: DragAxis::Free,
+            within: None,
         }
     }
 }
@@ -127,6 +154,36 @@ impl DragGesture {
 
     pub(crate) fn is_set(&self) -> bool {
         self.on_drag.is_some() || self.on_drag_end.is_some()
+    }
+
+    pub(crate) fn lock_to(&mut self, axis: DragAxis) {
+        self.axis = axis;
+    }
+
+    pub(crate) fn keep_within(&mut self, within: impl Fn() -> Rect + 'static) {
+        self.within = Some(Box::new(within));
+    }
+
+    /// The point as the callbacks are told it: on the axis it is allowed to travel, and inside the box it is
+    /// allowed to be. Applied once, here, so every reader of `on_drag`, `on_drag_end` and the travel measured
+    /// against the threshold sees the same answer.
+    fn held(&self, local: (f32, f32)) -> (f32, f32) {
+        let start = self.origin.map(|(at, _)| at).unwrap_or(local);
+        let (x, y) = match self.axis {
+            DragAxis::Free => local,
+            DragAxis::Horizontal => (local.0, start.1),
+            DragAxis::Vertical => (start.0, local.1),
+        };
+        match &self.within {
+            Some(box_of) => {
+                let bounds = box_of();
+                (
+                    x.clamp(bounds.x, bounds.x + bounds.width),
+                    y.clamp(bounds.y, bounds.y + bounds.height),
+                )
+            }
+            None => (x, y),
+        }
     }
 
     pub(crate) fn set_threshold(&mut self, px: f32) {
@@ -193,6 +250,8 @@ impl DragGesture {
     }
 
     fn report(&mut self, x: f32, y: f32) {
+        // Held to its axis and its box here, at the one place every report goes through, so `on_drag_end` and a `last` read after a stroke that left the window answer the same as the moves did.
+        let (x, y) = self.held((x, y));
         self.last = (x, y);
         let Some((_, start)) = self.origin else {
             return;
@@ -212,12 +271,14 @@ impl DragGesture {
     /// the release belongs to whatever else the widget arms — which is how a click and a drag on one button
     /// stop being ambiguous.
     pub(crate) fn end(&mut self, at: Option<(f32, f32)>) -> bool {
+        // Held before the origin goes: the axis is measured from where the press was.
+        let landed = at.map(|at| self.held(at));
         let Some((_, start)) = self.origin.take() else {
             return false;
         };
         let was_dragging = std::mem::take(&mut self.started);
         if was_dragging {
-            let (x, y) = at.unwrap_or(self.last);
+            let (x, y) = landed.unwrap_or(self.last);
             self.last = (x, y);
             if let Some(cb) = &self.on_drag_end {
                 in_drag(start, self.travel, || cb(x, y));

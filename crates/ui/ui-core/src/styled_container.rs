@@ -567,6 +567,27 @@ impl StyledContainer {
         self
     }
 
+    /// Holds the drag to one axis: the other coordinate is reported as it stood when the press landed.
+    ///
+    /// What a gesture with one meaning owes its reader. A strip reordered along its own axis, a slider, a
+    /// splitter — each takes one number and throws the other away, and the ones that forget let what they are
+    /// dragging wander off the line it lives on.
+    pub fn drag_axis(mut self, axis: crate::drag::DragAxis) -> Self {
+        self.drag.lock_to(axis);
+        self
+    }
+
+    /// Keeps the reported point inside `bounds`, in this box's own coordinates.
+    ///
+    /// A drag goes on receiving moves after the pointer has left the widget — that is what keeps a slider
+    /// tracking when the hand overshoots — and the same broadcast is what lets a pointer dragged out of the
+    /// window report a place no layout could produce. This is where a caller says how far out the answer may
+    /// go: once, rather than at every use. Read on each report, so a box that resizes takes its bounds with it.
+    pub fn drag_within(mut self, bounds: impl Fn() -> Rect + 'static) -> Self {
+        self.drag.keep_within(bounds);
+        self
+    }
+
     /// Records this box as a pointer target in the per-surface interactive registry, so a surface that carves
     /// its input region from its content (a click-through overlay) receives input over it. See
     /// [`crate::interactive_rects`].
