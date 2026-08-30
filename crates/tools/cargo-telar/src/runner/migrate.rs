@@ -195,14 +195,17 @@ fn colonise_line(line: &str) -> String {
             i = end;
             continue;
         }
+        // One char, not one byte: a `.rsx` line holds prose, and an em dash outside a string literal is
+        // three bytes of it.
+        let step = line[i..].chars().next().unwrap().len_utf8();
         let Some((key, open)) = key_before_paren(line, i) else {
-            out.push_str(&line[i..i + 1]);
-            i += 1;
+            out.push_str(&line[i..i + step]);
+            i += step;
             continue;
         };
         let Some(close) = closing_paren(bytes, open) else {
-            out.push_str(&line[i..i + 1]);
-            i += 1;
+            out.push_str(&line[i..i + step]);
+            i += step;
             continue;
         };
         if DIRECTIVES.contains(&key) {
@@ -709,6 +712,16 @@ mod tests {
         assert_eq!(
             out,
             "[view]\nbtn label:\"Save\" gap:8 on_press:(|| f()) transition(fill 250ms ease-out)\n"
+        );
+    }
+
+    /// A `.rsx` line holds prose, and a codemod that walks it byte by byte splits an em dash in three.
+    #[test]
+    fn a_line_of_prose_survives_the_walk() {
+        let source = "[view]\n// Un guion largo — y un acento: canción\ncol gap(8)\n";
+        assert_eq!(
+            migrated(source),
+            "[view]\n// Un guion largo — y un acento: canción\ncol gap:8\n"
         );
     }
 
