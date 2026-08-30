@@ -287,7 +287,6 @@ impl ViewGen<'_> {
     fn component_attr_expr(&self, attr: &Attr) -> String {
         let v = match &attr.value {
             Value::Quoted(text) => return rust_str(text),
-            Value::I18n(key) => return self.i18n_lookup(key),
             Value::Flag => return "true".to_string(),
             value => value.text().trim(),
         };

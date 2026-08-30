@@ -247,11 +247,7 @@ fn check_i18n_keys(el: &Element, ctx: &Ctx, span: &Span, diagnostics: &mut Vec<D
     {
         check(content, "t\"…\"");
     }
-    for attr in &el.attributes {
-        if attr.value.is_i18n() {
-            check(attr.value.text(), &format!("`{}:`", attr.key));
-        }
-    }
+    // An attribute's catalogue lookup is `t!("…")` now, and the macro validates its own key.
 }
 
 /// Bindings a `[logic]` zone constructs from something that is certainly not `Copy`, with the line each was

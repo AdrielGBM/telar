@@ -159,9 +159,6 @@ pub enum Value {
     Bare(String),
     /// A string literal (`"Save"` or `r"…"`), de-quoted, with the escapes of the former already interpreted.
     Quoted(String),
-    /// A `t"buttons.save"` catalog key, kept apart from a plain literal because it resolves through the i18n
-    /// catalog at build time instead of reaching the output as written.
-    I18n(String),
     /// The text between the balanced parens of the `key(…)` form, the one spelling that admits spaces at
     /// depth 0 — so it carries closures (`on_press(|| f())`) and space-separated specs
     /// (`transition(fill 250ms ease-out)`) alike, in any position on the line.
@@ -174,7 +171,7 @@ impl Value {
     pub fn text(&self) -> &str {
         match self {
             Value::Flag => "",
-            Value::Bare(text) | Value::Quoted(text) | Value::I18n(text) | Value::Spec(text) => text,
+            Value::Bare(text) | Value::Quoted(text) | Value::Spec(text) => text,
         }
     }
 
@@ -191,15 +188,10 @@ impl Value {
         matches!(self, Value::Quoted(_))
     }
 
-    /// Whether the value is a `t"…"` catalog key, whose text names a translation rather than being one.
-    pub fn is_i18n(&self) -> bool {
-        matches!(self, Value::I18n(_))
-    }
-
     /// Whether the value was written as a string literal in either spelling — `"…"` or `t"…"`. The question a
     /// consumer asks when it wants to know that the text is *not* source it may read identifiers out of.
     pub fn is_literal(&self) -> bool {
-        matches!(self, Value::Quoted(_) | Value::I18n(_))
+        matches!(self, Value::Quoted(_))
     }
 
     /// Whether the author wrote a closure out in place, in either spelling Rust accepts, as opposed to

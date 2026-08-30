@@ -90,7 +90,6 @@ impl ViewGen<'_> {
             .iter()
             .find(|a| a.key == "placeholder")
             .map(|a| match &a.value {
-                Value::I18n(key) => self.i18n_lookup(key),
                 Value::Quoted(text) => format!("{}.to_string()", rust_str(text)),
                 value => value.text().trim().to_string(),
             });

@@ -391,7 +391,6 @@ fn format_attr(attr: &Attr) -> String {
         Value::Flag => attr.key.clone(),
         Value::Bare(text) => format!("{}:{text}", attr.key),
         Value::Quoted(text) => format!("{}:\"{}\"", attr.key, escape_rsx_string(text)),
-        Value::I18n(key) => format!("{}:t\"{}\"", attr.key, escape_rsx_string(key)),
         Value::Spec(text) => format!("{}({text})", attr.key),
     }
 }
@@ -571,12 +570,13 @@ mod tests {
     }
 
     /// An attribute must come back in the form it was written in, because the form is what it means: a `t"…"`
-    /// re-emitted as a plain literal turns a catalog lookup into its own key, and a parenthesized spec
-    /// re-emitted with a colon becomes one attribute followed by a run of stray flags. Both were possible
-    /// while the spelling was guessed from the text rather than read off the value.
+    /// re-emitted with a colon becomes one attribute followed by a run of stray flags, and a catalogue
+    /// lookup re-emitted as a plain literal turns into its own key. Both were possible while the spelling
+    /// was guessed from the text rather than read off the value.
     #[test]
-    fn an_i18n_key_and_a_parenthesized_spec_survive_a_round_trip() {
-        let src = "[view]\nbox transition(fill 250ms ease-out)\n    btn label:t\"buttons.save\"\n";
+    fn a_directive_and_a_lookup_survive_a_round_trip() {
+        let src =
+            "[view]\nbox transition(fill 250ms ease-out)\n    btn label:t!(\"buttons.save\")\n";
         let out = format_document(src).unwrap();
         assert_eq!(out, src);
         assert_eq!(format_document(&out).unwrap(), out, "and it is idempotent");

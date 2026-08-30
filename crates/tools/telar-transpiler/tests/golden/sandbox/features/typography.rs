@@ -396,17 +396,62 @@ pub fn features_typography(props: FeaturesTypographyProps, children: Children) -
                 move || {
                     let mut __slots = Slots::new();
                     let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
+                    let __node_25 = {
+                        let __deferred = Children::new(
+                            move || {
+                                let mut __slots = Slots::new();
+                                let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
+                                let __row_0 = {
+                                    let __node_26 = button(ButtonProps::props().label(t!("nav.overview")).ghost(true).build(), Children::default())?;
+                                    let __text_23 = {
+                                        Text::declaring(
+                                            move || format!("{}", { t!("greeting", name = "Ada") }),
+                                            LayoutStyle::new(),
+                                            move |__inherited: TextStyle| __inherited.with_font_size(13.0).with_color(use_theme::<core::theme::SandboxTheme>().muted()),
+                                        )?
+                                    };
+                                    Container::new(LayoutStyle::new().flex_row().gap(12.0).align_items(AlignItems::CENTER), children![__node_26, __text_23])?
+                                };
+                                __children.push(box_item(__row_0));
+                                let __text_24 = {
+                                    Text::declaring(
+                                        || "The macro validates the key against locales/ at compile time and re-reads the locale, so a language switch re-renders both.".to_string(),
+                                        LayoutStyle::new(),
+                                        move |__inherited: TextStyle| __inherited.with_font_size(12.0).with_color(use_theme::<core::theme::SandboxTheme>().muted()),
+                                    )?
+                                };
+                                __children.push(box_item(__text_24));
+                                __slots.extend_default(__children);
+                                Ok(__slots)
+                            }
+                        );
+                        card(CardProps::props().gap(10.0).build(), __deferred)?
+                    };
+                    __children.push(box_item(__node_25));
+                    let __node_27 = code_line(CodeLineProps::props().code("button label:t!('nav.overview')   ·   text '{t!(\\'greeting\\', name = n)}'").build(), Children::default())?;
+                    __children.push(box_item(__node_27));
+                    __slots.extend_default(__children);
+                    Ok(__slots)
+                }
+            );
+            example(ExampleProps::props().title("t! — a catalogue lookup is Rust, so it goes where any value goes").build(), __deferred)?
+        };
+        let __node_28 = {
+            let __deferred = Children::new(
+                move || {
+                    let mut __slots = Slots::new();
+                    let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
                     let __col_1 = {
-                        let __node_25 = prop_row(PropRowProps::props().name("font_size").values("number").about("Font size in px (default 14).").build(), Children::default())?;
-                        let __node_26 = prop_row(PropRowProps::props().name("color").values("token · #hex · $signal").about("Text color (default ink via a token).").build(), Children::default())?;
-                        let __node_27 = prop_row(PropRowProps::props().name("font_weight").values("thin…black · 100–900").about("Font weight, keyword or number (default 400).").build(), Children::default())?;
-                        let __node_28 = prop_row(PropRowProps::props().name("font_style").values("normal·italic·oblique").about("Slant the text.").build(), Children::default())?;
-                        let __node_29 = prop_row(PropRowProps::props().name("text_align").values("left·center·right·justify").about("Horizontal alignment within the box.").build(), Children::default())?;
-                        let __node_30 = prop_row(PropRowProps::props().name("lines").values("number").about("Clamp to at most N lines (extra dropped).").build(), Children::default())?;
-                        let __node_31 = prop_row(PropRowProps::props().name("ellipsis").values("flag").about("Replace the clamped tail with a … .").build(), Children::default())?;
-                        let __node_32 = prop_row(PropRowProps::props().name("max_width").values("number").about("Wrap boundary for long copy.").build(), Children::default())?;
-                        let __node_33 = prop_row(PropRowProps::props().name("height").values("number").about("Pin the box instead of auto-measuring.").build(), Children::default())?;
-                        Container::new(LayoutStyle::new().flex_column().gap(6.0), children![__node_25, __node_26, __node_27, __node_28, __node_29, __node_30, __node_31, __node_32, __node_33])?
+                        let __node_29 = prop_row(PropRowProps::props().name("font_size").values("number").about("Font size in px (default 14).").build(), Children::default())?;
+                        let __node_30 = prop_row(PropRowProps::props().name("color").values("token · #hex · $signal").about("Text color (default ink via a token).").build(), Children::default())?;
+                        let __node_31 = prop_row(PropRowProps::props().name("font_weight").values("thin…black · 100–900").about("Font weight, keyword or number (default 400).").build(), Children::default())?;
+                        let __node_32 = prop_row(PropRowProps::props().name("font_style").values("normal·italic·oblique").about("Slant the text.").build(), Children::default())?;
+                        let __node_33 = prop_row(PropRowProps::props().name("text_align").values("left·center·right·justify").about("Horizontal alignment within the box.").build(), Children::default())?;
+                        let __node_34 = prop_row(PropRowProps::props().name("lines").values("number").about("Clamp to at most N lines (extra dropped).").build(), Children::default())?;
+                        let __node_35 = prop_row(PropRowProps::props().name("ellipsis").values("flag").about("Replace the clamped tail with a … .").build(), Children::default())?;
+                        let __node_36 = prop_row(PropRowProps::props().name("max_width").values("number").about("Wrap boundary for long copy.").build(), Children::default())?;
+                        let __node_37 = prop_row(PropRowProps::props().name("height").values("number").about("Pin the box instead of auto-measuring.").build(), Children::default())?;
+                        Container::new(LayoutStyle::new().flex_column().gap(6.0), children![__node_29, __node_30, __node_31, __node_32, __node_33, __node_34, __node_35, __node_36, __node_37])?
                     };
                     __children.push(box_item(__col_1));
                     __slots.extend_default(__children);
@@ -415,7 +460,7 @@ pub fn features_typography(props: FeaturesTypographyProps, children: Children) -
             );
             example(ExampleProps::props().title("Attributes").build(), __deferred)?
         };
-        Container::new(LayoutStyle::new().flex_column().gap(20.0), children![__node_0, __node_1, __node_4, __node_7, __node_10, __node_13, __node_16, __node_19, __node_24])?
+        Container::new(LayoutStyle::new().flex_column().gap(20.0), children![__node_0, __node_1, __node_4, __node_7, __node_10, __node_13, __node_16, __node_19, __node_24, __node_28])?
     };
     Ok(Box::new(__col_0))
 }

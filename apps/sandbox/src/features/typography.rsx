@@ -54,6 +54,13 @@ col gap:20
                 text "The heading sits above these children in a small-gap column." font_size:13 color:theme.muted
                 text "Use it to group a labelled block without hand-building the column." font_size:13 color:theme.muted
         code_line code:"heading 'Title'      section 'Title' > …children…"
+    example title:"t! — a catalogue lookup is Rust, so it goes where any value goes"
+        card gap:10
+            row gap:12 align:center
+                button label:t!("nav.overview") ghost
+                text "{t!(\"greeting\", name = \"Ada\")}" font_size:13 color:theme.muted
+            text "The macro validates the key against locales/ at compile time and re-reads the locale, so a language switch re-renders both." font_size:12 color:theme.muted
+        code_line code:"button label:t!('nav.overview')   ·   text '{t!(\'greeting\', name = n)}'"
     example title:"Attributes"
         col gap:6
             prop_row name:"font_size" values:"number" about:"Font size in px (default 14)."

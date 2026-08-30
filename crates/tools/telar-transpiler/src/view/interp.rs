@@ -54,6 +54,12 @@ impl ViewGen<'_> {
         if trimmed.contains('$') {
             return format!("{{ {} }}", substitute_reads(trimmed));
         }
+        // Nor does an expression carrying a string literal of its own. The parser hands the content back
+        // unescaped, so a `"` here was `\"` in the `.rsx` — two bytes where the generated Rust has one, and
+        // every offset after it is off by that much. The span is dropped rather than made to lie.
+        if trimmed.contains('"') {
+            return format!("{{ {trimmed} }}");
+        }
         let lead = expr.len() - expr.trim_start().len();
         let marker = expr_marker(raw_start + lead, trimmed.len());
         if is_ident(trimmed) {

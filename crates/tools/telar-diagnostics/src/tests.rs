@@ -286,40 +286,6 @@ fn unknown_i18n_key_in_markup_warns() {
 }
 
 #[test]
-fn known_i18n_key_is_ok_in_content_and_in_an_attribute() {
-    let attr = Attr {
-        key: "label".into(),
-        value: Value::I18n("buttons.save".into()),
-        value_start: 0,
-    };
-    let mut el = i18n_element("nav.title", 3);
-    el.attributes = vec![attr];
-    let doc = document(StyleSection::default(), vec![ViewNode::Element(el)]);
-    let keys = catalog_keys();
-    let catalog = CatalogView { keys: &keys };
-    assert!(semantic_diagnostics(&doc, None, Some(&catalog)).is_empty());
-}
-
-#[test]
-fn unknown_i18n_key_in_an_attribute_warns_and_names_the_attribute() {
-    let attr = Attr {
-        key: "label".into(),
-        value: Value::I18n("buttons.sav".into()),
-        value_start: 0,
-    };
-    let doc = document(
-        StyleSection::default(),
-        vec![ViewNode::Element(element(&[], vec![attr], 4))],
-    );
-    let keys = catalog_keys();
-    let catalog = CatalogView { keys: &keys };
-    let diags = semantic_diagnostics(&doc, None, Some(&catalog));
-    assert_eq!(diags.len(), 1, "{diags:?}");
-    assert!(diags[0].message.contains("buttons.sav"));
-    assert!(diags[0].message.contains("label"), "it names where");
-}
-
-#[test]
 fn a_project_without_a_catalog_gets_no_key_diagnostics() {
     // Otherwise every `t"…"` in a project that has not added translations yet would light up.
     let doc = document(
@@ -327,23 +293,6 @@ fn a_project_without_a_catalog_gets_no_key_diagnostics() {
         vec![ViewNode::Element(i18n_element("anything.at.all", 2))],
     );
     assert!(semantic_diagnostics(&doc, None, None).is_empty());
-}
-
-#[test]
-fn a_plain_quoted_string_is_not_checked_as_a_key() {
-    // `label:"Save"` is a literal, not a lookup; only the `t"…"` form is a `Value::I18n`.
-    let attr = Attr {
-        key: "label".into(),
-        value: Value::Quoted("Save".into()),
-        value_start: 0,
-    };
-    let doc = document(
-        StyleSection::default(),
-        vec![ViewNode::Element(element(&[], vec![attr], 4))],
-    );
-    let keys = catalog_keys();
-    let catalog = CatalogView { keys: &keys };
-    assert!(semantic_diagnostics(&doc, None, Some(&catalog)).is_empty());
 }
 
 #[test]

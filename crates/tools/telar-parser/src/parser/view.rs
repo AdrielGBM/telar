@@ -512,13 +512,22 @@ fn parse_element_header(
                         message: "unterminated string literal in attribute value".to_string(),
                         line,
                     })?;
+                if is_key {
+                    // A value is a Rust expression, and `t!` is the macro the Rust side already uses — it
+                    // validates the key against the catalogue at compile time, which a second spelling of
+                    // the same lookup could only duplicate. The content position keeps `t"…"`, because
+                    // there the literal *is* the syntax.
+                    return Err(ParseError {
+                        message: format!(
+                            "`{0}:t\"{text}\"` is not a value — write the macro: `{0}:t!(\"{text}\")`",
+                            key.trim()
+                        ),
+                        line,
+                    });
+                }
                 element.attributes.push(Attr {
                     key: key.trim().to_string(),
-                    value: if is_key {
-                        Value::I18n(text)
-                    } else {
-                        Value::Quoted(text)
-                    },
+                    value: Value::Quoted(text),
                     value_start: content_start + byte_at(&chars, content_at),
                 });
                 i = next;

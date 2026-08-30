@@ -207,18 +207,22 @@ mod tests {
         );
     }
 
+    /// A catalogue lookup in a value position is the `t!` macro, spliced like any other Rust — the macro
+    /// validates its own key and reads the locale signal, so nothing here has to know it is a lookup at all.
     #[test]
-    fn i18n_component_label_emits_reactive_lookup() {
-        // A built-in component's text prop written as `t"key"` becomes a reactive catalog lookup inside the
-        // `Box<dyn Fn() -> String>` the prop now takes; a plain quoted label becomes a static string closure.
-        let out =
-            transpile_source("[view]\nbutton label:t\"btn.save\"\n", "demo", None, None).unwrap();
+    fn a_lookup_in_a_value_is_the_macro_spliced_verbatim() {
+        let out = transpile_source(
+            "[view]\nbutton label:t!(\"btn.save\")\n",
+            "demo",
+            None,
+            None,
+        )
+        .unwrap();
         assert!(
-            out.rust_code.contains(".label(telar::i18n::translate"),
+            out.rust_code.contains(".label(t!(\"btn.save\"))"),
             "{}",
             out.rust_code
         );
-        assert!(out.rust_code.contains("\"btn.save\""), "{}", out.rust_code);
         let plain =
             transpile_source("[view]\nbutton label:\"Save\"\n", "demo", None, None).unwrap();
         assert!(
