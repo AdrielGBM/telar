@@ -306,7 +306,9 @@ fn colonise_line(line: &str) -> String {
         out.truncate(out.len() - key.len());
         out.push_str(key);
         out.push(':');
-        match top_level_space(inner) {
+        // Parenthesised when the expression holds a top-level space, and when it opens with `::` — a
+        // leading path separator against the colon reads as `key::…`, which is a key nobody wrote.
+        match top_level_space(inner) || inner.trim_start().starts_with("::") {
             true => out.push_str(&format!("({inner})")),
             false => out.push_str(inner),
         }
@@ -957,6 +959,15 @@ mod tests {
         assert_eq!(
             migrated(source),
             "[view]\nif shown($seen)\n    let over = signal(false)\n    for (i, x) in options()\n        row gap:4\n"
+        );
+    }
+
+    /// A leading `::` against the colon reads as `key::…`, which is a key nobody wrote.
+    #[test]
+    fn a_value_that_opens_with_a_path_separator_is_parenthesised() {
+        assert_eq!(
+            migrated("[view]\nrow gap(::ui::scale::space::md())\n"),
+            "[view]\nrow gap:(::ui::scale::space::md())\n"
         );
     }
 

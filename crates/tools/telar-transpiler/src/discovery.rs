@@ -122,6 +122,9 @@ pub fn discover_rust_modules(
         .map(|c| c.as_os_str().to_string_lossy())
         .collect::<Vec<_>>()
         .join("__");
+    // Discovery is for a directory that has no `mod.rs`. A nested invocation is *in* one — the file wrote
+    // its own `mod` statements, and re-declaring them from inside it is a redefinition of each.
+    let discover = auto_modules && from_dir == src_dir;
     let mut out = String::new();
     let mut written = Vec::new();
     emit_children(
@@ -129,7 +132,7 @@ pub fn discover_rust_modules(
         &prefix,
         modtree_dir,
         generated_dir,
-        auto_modules,
+        discover,
         &mut out,
         &mut written,
     )?;
@@ -467,6 +470,7 @@ mod tests {
         std::fs::create_dir_all(root.join("app/editor")).unwrap();
         std::fs::write(root.join("app/mod.rs"), "").unwrap();
         std::fs::write(root.join("app/editor/mod.rs"), "").unwrap();
+        std::fs::write(root.join("app/editor/act.rs"), "").unwrap();
         std::fs::write(root.join("app/editor/top_bar.rsx"), "[view]\ncol\n").unwrap();
 
         let modtree = root.join("__modules");
