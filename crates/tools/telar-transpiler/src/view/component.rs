@@ -555,3 +555,39 @@ fn delimiters_balanced(expr: &str) -> bool {
 fn reads_state(expr: &str) -> String {
     format!("Reactive::of(move || {expr})")
 }
+
+impl ViewGen<'_> {
+    /// `canvas paint:(|rect| …) width:200 height:120` — a leaf the renderer hands its own rect to draw into.
+    ///
+    /// **This is the tag the `widget` escape existed for.** `Canvas` is a `ui-core` primitive with no tag of
+    /// its own, so the only way to place one was to build it in `[logic]` and splice the binding — which is
+    /// also why a `widget` could never sit inside anything that rebuilds: a built widget cannot be made
+    /// twice. Named as a tag, it is constructed where it is placed, and the question stops arising.
+    pub(super) fn emit_canvas(&mut self, el: &Element) -> ChildEmit {
+        let var = self.next_variable_name("canvas");
+        let pad = self.indent_str();
+        let Some(paint) = el.attributes.iter().find(|a| a.key == "paint") else {
+            let msg = "`canvas` needs a `paint:` closure — `canvas paint:(|rect| …)`";
+            return ChildEmit::Simple {
+                name: format!("compile_error!({})", rust_str(msg)),
+                code: String::new(),
+            };
+        };
+        let layout: Vec<Attr> = el
+            .attributes
+            .iter()
+            .filter(|a| a.key != "paint")
+            .cloned()
+            .collect();
+        let style = self.make_layout_style(&el.tag, &el.classes, &layout);
+        // A closure written in place is desugared like any other; a name is already the drawing and passing
+        // it through a `move ||` would hand `Canvas` a closure returning one.
+        let text = paint.value.text().trim();
+        let closure = match text.starts_with('|') || text.starts_with("move |") {
+            true => self.emit_closure_value(paint),
+            false => self.component_attr_expr(paint),
+        };
+        let code = format!("{pad}let {var} = Canvas::new({style}, {closure})?;");
+        ChildEmit::Simple { name: var, code }
+    }
+}

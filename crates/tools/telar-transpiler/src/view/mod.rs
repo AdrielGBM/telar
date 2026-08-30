@@ -402,6 +402,7 @@ impl<'a> ViewGen<'a> {
             "input" => "input",
             "svg" => "svg",
             "path" => "path",
+            "canvas" => "canvas",
             _ => "node",
         };
         let count = self.counters.entry(prefix.to_string()).or_insert(0);
@@ -680,6 +681,7 @@ impl<'a> ViewGen<'a> {
             "input" => self.emit_input(el),
             "svg" => self.emit_svg(el),
             "path" => self.emit_path(el),
+            "canvas" => self.emit_canvas(el),
             "scroll" => self.emit_scroll(el),
             "widget" => self.emit_widget_ref(el),
             "build" => self.emit_build_expr(el),
@@ -2238,5 +2240,30 @@ mod tests {
         let src = "[view]\ntext \"x\" font_size:12\n";
         let out = crate::transpile_source(src, "demo", None, None, None).unwrap();
         assert!(!out.rust_code.contains("with_font_family"));
+    }
+
+    /// A `Canvas` is a `ui-core` primitive that had no tag, so the only way to place one was to build it in
+    /// `[logic]` and splice the binding through `widget` — which is also why a canvas could never sit inside
+    /// anything that rebuilds. Named as a tag, it is constructed where it is placed.
+    #[test]
+    fn canvas_tag_builds_the_primitive_where_it_is_placed() {
+        let src = "[logic]\nlet paint = |rect: Rect| RenderNode::group([]);\n\n[view]\ncol\n    canvas paint:paint width:196 height:56\n";
+        let code = crate::transpile_source(src, "demo", None, None, None)
+            .unwrap()
+            .rust_code;
+        assert!(
+            code.contains("Canvas::new(LayoutStyle::new().width(196.0).height(56.0), paint)?"),
+            "the layout attrs shape the leaf and the closure paints it:\n{code}"
+        );
+    }
+
+    /// Without one there is nothing to draw, and the leaf would be a silent empty rect.
+    #[test]
+    fn a_canvas_without_paint_says_so() {
+        let src = "[view]\ncol\n    canvas width:10 height:10\n";
+        let code = crate::transpile_source(src, "demo", None, None, None)
+            .unwrap()
+            .rust_code;
+        assert!(code.contains("compile_error!"), "{code}");
     }
 }

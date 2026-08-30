@@ -27,6 +27,7 @@ pub fn builtin_tags() -> &'static [(&'static str, &'static str)] {
         ("input", "Input::new"),
         ("svg", "Svg::new"),
         ("path", "Path::new"),
+        ("canvas", "Canvas::new"),
         ("scroll", "LayoutScrollArea::new"),
         ("overlay", "Overlay::new"),
         ("lazy", "Lazy::new"),
@@ -546,6 +547,8 @@ pub fn tag_attr_keys(tag: &str) -> Vec<&'static str> {
         }
         // `keep:` names the surface-kept position of this viewport, so a remounted tree reopens where it was.
         "scroll" => with(&["keep"]),
+        // `paint` is the drawing itself; everything else shapes the leaf it draws into.
+        "canvas" => with(&["paint"]),
         // `input` binds `value:$signal` and takes text-style keys plus an optional Enter handler.
         "input" => with(&[
             "value",
