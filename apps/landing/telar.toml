@@ -1,0 +1,5 @@
+[telar]
+backend = "auto"
+# The crate declares no `mod` statements of its own: `app.rs`, `theme.rs` and `demo_images.rs` are found by
+# walking `src/`, the same way the `.rsx` files beside them are.
+auto_modules = true

@@ -101,18 +101,34 @@ pub fn assets_root(package_root: &Path) -> PathBuf {
 ///
 /// Returns the declarations alongside every generated file path it wrote under `modtree_dir`, so a caller that
 /// prunes stale build output can tell these apart from an orphaned directory's leftover file.
+///
+/// **`from_dir` is where the macro was invoked, which is not always `src_dir`.** A module declares its own
+/// children, so `rsx_modules!()` in `app/editor/mod.rs` places the `.rsx` files of `app/editor` — declaring
+/// `pub mod app;` there instead would name an ancestor of the file doing the declaring, which is a cycle.
+/// The generated `.rs` a `.rsx` compiles to still mirrors the whole `src` tree, so the walk carries the
+/// prefix from `src_dir` even when it starts below it.
 pub fn discover_rust_modules(
     src_dir: &Path,
+    from_dir: &Path,
     modtree_dir: &Path,
     generated_dir: &Path,
+    auto_modules: bool,
 ) -> std::io::Result<(String, Vec<PathBuf>)> {
+    let prefix = from_dir
+        .strip_prefix(src_dir)
+        .unwrap_or(Path::new(""))
+        .components()
+        .map(|c| c.as_os_str().to_string_lossy())
+        .collect::<Vec<_>>()
+        .join("__");
     let mut out = String::new();
     let mut written = Vec::new();
     emit_children(
-        src_dir,
-        "",
+        from_dir,
+        &prefix,
         modtree_dir,
         generated_dir,
+        auto_modules,
         &mut out,
         &mut written,
     )?;
@@ -127,6 +143,7 @@ fn emit_children(
     flat_prefix: &str,
     modtree_dir: &Path,
     generated_dir: &Path,
+    auto_modules: bool,
     out: &mut String,
     written: &mut Vec<PathBuf>,
 ) -> std::io::Result<()> {
@@ -149,22 +166,37 @@ fn emit_children(
         if path.is_dir() {
             let mod_rs = path.join("mod.rs");
             if mod_rs.exists() {
-                out.push_str(&mod_decl(name, &mod_rs));
-            } else if dir_has_rust_module(&path) {
+                // A directory with a `mod.rs` is a module the crate already declares unless it asked for
+                // discovery. Its `.rsx` children are that file's own business — it places them by invoking
+                // `rsx_modules!()` itself, which is the only place they *can* be declared from.
+                if auto_modules {
+                    out.push_str(&mod_decl(name, &mod_rs));
+                }
+            } else if dir_has_rust_module(&path) && (auto_modules || dir_has_rsx(&path)) {
                 let flat = if flat_prefix.is_empty() {
                     name.to_string()
                 } else {
                     format!("{flat_prefix}__{name}")
                 };
                 let mut body = String::new();
-                emit_children(&path, &flat, modtree_dir, generated_dir, &mut body, written)?;
+                emit_children(
+                    &path,
+                    &flat,
+                    modtree_dir,
+                    generated_dir,
+                    auto_modules,
+                    &mut body,
+                    written,
+                )?;
                 let gen_file = modtree_dir.join(format!("{flat}.rs"));
                 write_if_changed(&gen_file, &body)?;
                 written.push(gen_file.clone());
                 out.push_str(&mod_decl(name, &gen_file));
             }
         } else if is_rust_module_file(&path) {
-            out.push_str(&mod_decl(name, &path));
+            if auto_modules {
+                out.push_str(&mod_decl(name, &path));
+            }
         } else if path.extension().and_then(|e| e.to_str()) == Some("rsx") {
             // A `.rsx` is a module where the file sits, so `shared/components/card.rsx` is
             // `crate::shared::components::card` — the path a reader would guess, and the one
@@ -241,6 +273,12 @@ fn dir_has_rust_module(dir: &Path) -> bool {
         .iter()
         .any(|p| is_rust_module_file(p) || p.file_name().and_then(|n| n.to_str()) == Some("mod.rs"))
         || !collect_files_by_ext(dir, "rsx", &|_| true).is_empty()
+}
+
+/// Whether any `.rsx` sits under `dir`, which is what makes a directory with no `mod.rs` worth declaring
+/// even when hand-written modules are the crate's own business.
+fn dir_has_rsx(dir: &Path) -> bool {
+    !collect_files_by_ext(dir, "rsx", &|_| true).is_empty()
 }
 
 /// Where the transpiler wrote a `.rsx`'s Rust. The generated tree mirrors the source tree, and
@@ -343,6 +381,72 @@ mod tests {
         let _ = std::fs::remove_dir_all(&root);
     }
 
+    /// With `auto_modules` off the crate declares its own `.rs` modules, so the tree must place the `.rsx`
+    /// files and nothing else — declaring a hand-written one is a redefinition, and declaring a directory
+    /// whose `mod.rs` the crate already names is one too.
+    #[test]
+    fn without_auto_modules_only_the_rsx_files_are_placed() {
+        let root = std::env::temp_dir().join(format!("rsx_opt_in_modules_{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        for d in ["editor", "loose"] {
+            std::fs::create_dir_all(root.join(d)).unwrap();
+        }
+        std::fs::write(root.join("editor/mod.rs"), "").unwrap();
+        std::fs::write(root.join("editor/act.rs"), "").unwrap();
+        std::fs::write(root.join("editor/top_bar.rsx"), "[view]\ncol\n").unwrap();
+        std::fs::write(root.join("loose/panel.rsx"), "[view]\ncol\n").unwrap();
+        std::fs::write(root.join("helper.rs"), "").unwrap();
+
+        let modtree = root.join("__modules");
+        std::fs::create_dir_all(&modtree).unwrap();
+        let generated = root.join("build");
+        let (out, _) = discover_rust_modules(&root, &root, &modtree, &generated, false).unwrap();
+
+        assert!(
+            !out.contains("pub mod helper;"),
+            "a hand-written module: {out}"
+        );
+        assert!(
+            !out.contains("pub mod editor;"),
+            "a directory the crate declares, and whose own file places its `.rsx`: {out}"
+        );
+        assert!(
+            out.contains("pub mod loose;"),
+            "a directory with no `mod.rs` still has to be created to hold a `.rsx`: {out}"
+        );
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    /// A nested `rsx_modules!()` places its own directory. Rooting the walk at `src/` instead would declare
+    /// an ancestor of the file doing the declaring, which rustc reads as a circular module.
+    #[test]
+    fn a_nested_invocation_places_its_own_directory() {
+        let root = std::env::temp_dir().join(format!("rsx_nested_modules_{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(root.join("app/editor")).unwrap();
+        std::fs::write(root.join("app/mod.rs"), "").unwrap();
+        std::fs::write(root.join("app/editor/mod.rs"), "").unwrap();
+        std::fs::write(root.join("app/editor/top_bar.rsx"), "[view]\ncol\n").unwrap();
+
+        let modtree = root.join("__modules");
+        std::fs::create_dir_all(&modtree).unwrap();
+        let generated = root.join("build");
+        let (out, _) =
+            discover_rust_modules(&root, &root.join("app/editor"), &modtree, &generated, false)
+                .unwrap();
+
+        assert!(
+            !out.contains("pub mod app;"),
+            "no ancestor is declared: {out}"
+        );
+        assert!(out.contains("pub mod top_bar;"), "{out}");
+        assert!(
+            out.contains("build/app/editor/top_bar.rs"),
+            "the generated path still mirrors the whole src tree: {out}"
+        );
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
     #[test]
     fn discover_rust_modules_mirrors_tree() {
         let root =
@@ -376,7 +480,8 @@ mod tests {
         let modtree = root.join("__modules");
         std::fs::create_dir_all(&modtree).unwrap();
         let generated = root.join("__generated");
-        let (out, written) = discover_rust_modules(&root, &modtree, &generated).unwrap();
+        let (out, written) =
+            discover_rust_modules(&root, &root, &modtree, &generated, true).unwrap();
         let core_rs = std::fs::read_to_string(modtree.join("core.rs")).unwrap_or_default();
         let shared_rs = std::fs::read_to_string(modtree.join("shared.rs")).unwrap_or_default();
         let features_rs = std::fs::read_to_string(modtree.join("features.rs")).unwrap_or_default();

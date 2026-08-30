@@ -178,6 +178,11 @@ fn colonise(body: &str) -> String {
 }
 
 fn colonise_line(line: &str) -> String {
+    // A control-flow line is Rust, not an attribute list: `if shown($seen)`, `for (i, x) in items()` and a
+    // `[view]`-level `let` all hold calls, and a call is not a key however much the shape rhymes.
+    if leading_token(line).is_some_and(is_control_flow) {
+        return line.to_string();
+    }
     let bytes = line.as_bytes();
     let mut out = String::with_capacity(line.len());
     let mut i = 0;
@@ -225,6 +230,12 @@ fn colonise_line(line: &str) -> String {
         i = close + 1;
     }
     out
+}
+
+/// The keywords that open a Rust line rather than an element. `match` and `else` carry no parenthesised
+/// value of their own, but a scrutinee or a guard on the same line does.
+fn is_control_flow(word: &str) -> bool {
+    matches!(word, "if" | "else" | "for" | "let" | "match" | "while")
 }
 
 /// The key immediately before the `(` at or after `i`, when that `(` opens an attribute's value.
@@ -609,18 +620,23 @@ fn imports_for_tags(source: &str, modules: &BTreeMap<String, String>, own: &str)
 }
 
 fn leading_tag(line: &str) -> Option<&str> {
+    let tag = leading_token(line)?;
+    let ok = tag
+        .chars()
+        .next()
+        .is_some_and(|c| c.is_ascii_lowercase() || c == '_')
+        && tag.chars().all(|c| c.is_ascii_alphanumeric() || c == '_');
+    (ok && !is_control_flow(tag)).then_some(tag)
+}
+
+/// The first word of a line, skipping its indent. `None` for a blank line or a comment.
+fn leading_token(line: &str) -> Option<&str> {
     let trimmed = line.trim_start();
     if trimmed.starts_with("//") {
         return None;
     }
-    let tag = trimmed.split([' ', '\t']).next()?;
-    let ok = !tag.is_empty()
-        && tag
-            .chars()
-            .next()
-            .is_some_and(|c| c.is_ascii_lowercase() || c == '_')
-        && tag.chars().all(|c| c.is_ascii_alphanumeric() || c == '_');
-    ok.then_some(tag)
+    let token = trimmed.split([' ', '\t', '(', ':']).next()?;
+    (!token.is_empty()).then_some(token)
 }
 
 fn pascal(name: &str) -> String {
@@ -722,6 +738,17 @@ mod tests {
         assert_eq!(
             migrated(source),
             "[view]\n// Un guion largo — y un acento: canción\ncol gap:8\n"
+        );
+    }
+
+    /// A control-flow line is Rust: `if shown($seen)` is a call, `for … in options()` is a call, and a
+    /// `[view]`-level `let` holds one. None of the three has an attribute in it.
+    #[test]
+    fn a_control_flow_line_is_left_alone() {
+        let source = "[view]\nif shown($seen)\n    let over = signal(false)\n    for (i, x) in options()\n        row gap(4)\n";
+        assert_eq!(
+            migrated(source),
+            "[view]\nif shown($seen)\n    let over = signal(false)\n    for (i, x) in options()\n        row gap:4\n"
         );
     }
 

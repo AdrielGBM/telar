@@ -1,7 +1,7 @@
 use proc_macro::TokenStream;
 use proc_macro2::{Ident, Span, TokenStream as TokenStream2};
 use quote::{ToTokens, quote};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 mod app_input;
 mod props;
@@ -515,6 +515,7 @@ fn transpile_project(theme_type_str: Option<&str>) -> Result<TranspileOutput, To
     // Nothing tracks a borrowed component any more. Its signature used to be baked into this crate's call
     // sites, so editing its `Props` elsewhere had to rebuild this crate or the call kept the old arity; the
     // call now spells only names, and rustc checks them against the real type at the usual time.
+    let auto_modules = telar_transpiler::auto_modules_enabled(&manifest_dir);
 
     let telar_toml = manifest_dir.join("telar.toml");
     if telar_toml.exists() {
@@ -525,7 +526,17 @@ fn transpile_project(theme_type_str: Option<&str>) -> Result<TranspileOutput, To
     // Always, not opt-in: a `.rsx` is a module where its file sits, so the tree that places it has to
     // exist whatever `auto_modules` says. What the setting still decides is whether hand-written `.rs`
     // siblings are declared for you.
+    //
+    // Rooted where the macro was written, not at `src/`. A module declares its own children, so
+    // `rsx_modules!()` in `app/editor/mod.rs` places `app/editor`'s files; declaring `pub mod app;` there
+    // would name an ancestor of the file doing the declaring, which rustc reads as a cycle.
     {
+        // The compiler's own span, not proc-macro2's shim: only the real one carries a file.
+        let invoked_in = proc_macro::Span::call_site()
+            .local_file()
+            .and_then(|f| f.parent().map(Path::to_path_buf))
+            .filter(|dir| dir.starts_with(&src_dir))
+            .unwrap_or_else(|| src_dir.clone());
         // The discovered tree is split across real generated files (one per directory) so every module is a
         // file-based `#[path] mod`; see `discover_rust_modules` for why inline `mod` blocks break rust-analyzer.
         let modtree_dir = generated_dir.join("__modules");
@@ -533,14 +544,19 @@ fn transpile_project(theme_type_str: Option<&str>) -> Result<TranspileOutput, To
             let msg = format!("Failed to create {}: {e}", modtree_dir.display());
             return Err(quote! { compile_error!(#msg) });
         }
-        let (modules_src, modtree_written) =
-            match telar_transpiler::discover_rust_modules(&src_dir, &modtree_dir, &generated_dir) {
-                Ok(s) => s,
-                Err(e) => {
-                    let msg = format!("Failed to write the auto-discovered module tree: {e}");
-                    return Err(quote! { compile_error!(#msg) });
-                }
-            };
+        let (modules_src, modtree_written) = match telar_transpiler::discover_rust_modules(
+            &src_dir,
+            &invoked_in,
+            &modtree_dir,
+            &generated_dir,
+            auto_modules,
+        ) {
+            Ok(s) => s,
+            Err(e) => {
+                let msg = format!("Failed to write the auto-discovered module tree: {e}");
+                return Err(quote! { compile_error!(#msg) });
+            }
+        };
         written_files.extend(modtree_written);
         match modules_src.parse::<TokenStream2>() {
             Ok(tokens) => include_stmts.extend(tokens),
