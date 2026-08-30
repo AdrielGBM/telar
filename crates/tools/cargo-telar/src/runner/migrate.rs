@@ -30,6 +30,7 @@ pub(crate) fn run_migrate_cmd(args: MigrateArgs) {
     sources.dedup();
 
     let modules = component_modules(&sources);
+    let reactive = reactive_props(&sources);
     let (mut changed, mut failed, mut manual) = (Vec::new(), Vec::new(), Vec::new());
     for path in &sources {
         let Ok(source) = std::fs::read_to_string(path) else {
@@ -37,7 +38,7 @@ pub(crate) fn run_migrate_cmd(args: MigrateArgs) {
             continue;
         };
         manual.extend(escapes_needing_a_person(path, &source));
-        let migrated = migrate(&source, &modules, own_stem(path));
+        let migrated = migrate(&source, &modules, own_stem(path), &reactive);
         if migrated == source {
             continue;
         }
@@ -81,24 +82,103 @@ pub(crate) fn run_migrate_cmd(args: MigrateArgs) {
 
 /// Every rewrite, in the order the later ones depend on: the colon form first, so what follows reads one
 /// grammar rather than two.
-fn migrate(source: &str, modules: &BTreeMap<String, String>, own: &str) -> String {
+fn migrate(
+    source: &str,
+    modules: &BTreeMap<String, String>,
+    own: &str,
+    reactive: &BTreeMap<String, Vec<String>>,
+) -> String {
+    // A file that binds `theme` itself is not talking about the view's handle: its own binding shadows it,
+    // and `theme.base` is a field access on what it bound. Leaving it alone keeps exactly the behaviour the
+    // file had — the author adopts `$theme` by dropping their `let`.
+    let binds_own_theme = zones(source)
+        .iter()
+        .any(|z| z.section == Section::Logic && z.body.contains("let theme ="));
+    let read_theme = |body: &str| match binds_own_theme {
+        true => body.to_string(),
+        false => theme_reads(body),
+    };
+
     let mut out = String::with_capacity(source.len());
     for zone in zones(source) {
         let body = match zone.section {
             Section::View | Section::Preview => {
                 let body = colonise(zone.body);
                 let body = i18n_macro(&body);
-                let body = theme_reads(&body);
-                clip_shapes(&body)
+                let body = read_theme(&body);
+                reactive_closures(&clip_shapes(&body), reactive)
             }
-            Section::Style => theme_reads(zone.body),
-            Section::Logic => shared_handlers(&theme_calls(zone.body)),
+            Section::Style => read_theme(zone.body),
+            Section::Logic => match binds_own_theme {
+                true => shared_handlers(zone.body),
+                false => shared_handlers(&theme_calls(zone.body)),
+            },
             Section::None => zone.body.to_string(),
         };
         out.push_str(zone.header);
         out.push_str(&body);
     }
     style_constants_to_logic(&imports_for_tags(&out, modules, own))
+}
+
+/// `tag key:(|| …)` → `tag key:(Reactive::of(|| …))` for the props this sweep turned into a `Reactive`.
+///
+/// A closure was how a call site said "a value that changes", and it fitted the `Box<dyn Fn() -> T>` the
+/// prop used to be. `Reactive<T>` cannot take one through `Into` — the blanket `From<T>` already claims
+/// every type — so the wrapper is spelled out. Only for props this pass rewrote, by tag and by name: any
+/// other closure is a handler and stays one.
+fn reactive_closures(body: &str, reactive: &BTreeMap<String, Vec<String>>) -> String {
+    let mut out = String::with_capacity(body.len());
+    for line in body.split_inclusive('\n') {
+        let Some(props) = leading_tag(line).and_then(|tag| reactive.get(tag)) else {
+            out.push_str(line);
+            continue;
+        };
+        let mut rewritten = line.to_string();
+        for prop in props {
+            let needle = format!("{prop}:(");
+            let Some(at) = rewritten.find(&needle) else {
+                continue;
+            };
+            let open = at + needle.len() - 1;
+            let Some(close) = closing_paren(rewritten.as_bytes(), open) else {
+                continue;
+            };
+            let inner = &rewritten[open + 1..close];
+            if !inner.trim_start().starts_with('|') && !inner.trim_start().starts_with("move |") {
+                continue;
+            }
+            rewritten = format!(
+                "{}{prop}:(Reactive::of({inner})){}",
+                &rewritten[..at],
+                &rewritten[close + 1..]
+            );
+        }
+        out.push_str(&rewritten);
+    }
+    out
+}
+
+/// The props each component turned into a `Reactive`, by file stem — read before anything is rewritten,
+/// because a call site is in a different file from the declaration it has to agree with.
+fn reactive_props(sources: &[PathBuf]) -> BTreeMap<String, Vec<String>> {
+    let mut out = BTreeMap::new();
+    for path in sources {
+        let Ok(source) = std::fs::read_to_string(path) else {
+            continue;
+        };
+        let Some(at) = source.find("pub struct Props {") else {
+            continue;
+        };
+        let Some(end) = source[at..].find("\n}").map(|i| at + i) else {
+            continue;
+        };
+        let (_, names) = rewrite_boxed_props(&source[at..end]);
+        if !names.is_empty() {
+            out.insert(own_stem(path).to_string(), names);
+        }
+    }
+    out
 }
 
 // === zones =================================================================
@@ -832,7 +912,7 @@ mod tests {
     use super::*;
 
     fn migrated(source: &str) -> String {
-        migrate(source, &BTreeMap::new(), "demo")
+        migrate(source, &BTreeMap::new(), "demo", &BTreeMap::new())
     }
 
     #[test]
@@ -935,6 +1015,37 @@ mod tests {
         );
     }
 
+    /// A file that binds `theme` itself means its own binding, not the view's handle — `$theme.base` on a
+    /// `NordTheme` is a `.get()` the type does not have.
+    #[test]
+    fn a_file_that_binds_theme_keeps_meaning_its_own() {
+        let source =
+            "[logic]\nlet theme = use_theme::<NordTheme>();\n\n[view]\nbox fill:theme.base\n";
+        assert_eq!(migrated(source), source);
+    }
+
+    /// A closure was how a call site said "a value that changes", and it fitted the `Box<dyn Fn() -> T>` the
+    /// prop used to be. Only the props this sweep rewrote are wrapped; any other closure is a handler.
+    #[test]
+    fn a_closure_on_a_rewritten_prop_becomes_a_reactive() {
+        let mut reactive = BTreeMap::new();
+        reactive.insert("icon_glyph".to_string(), vec!["name".to_string()]);
+        let out = migrate(
+            "[view]\ncol\n    icon_glyph name:(|| \"cpu\".to_string()) on_press:(|| pick())\n",
+            &BTreeMap::new(),
+            "demo",
+            &reactive,
+        );
+        assert!(
+            out.contains("name:(Reactive::of(|| \"cpu\".to_string()))"),
+            "{out}"
+        );
+        assert!(
+            out.contains("on_press:(|| pick())"),
+            "a handler stays one: {out}"
+        );
+    }
+
     #[test]
     fn a_clip_axis_becomes_the_shape_it_named() {
         let out = migrated("[view]\nrow clip:x\ncol clip:y\nbox clip\n");
@@ -976,6 +1087,7 @@ mod tests {
             "[logic]\nlet n = 1;\n\n[view]\ncol\n    card gap:8\n",
             &modules,
             "demo",
+            &BTreeMap::new(),
         );
         assert!(
             out.starts_with("[logic]\nuse crate::ui::card::{card, CardProps};\nlet n = 1;"),
@@ -991,7 +1103,7 @@ mod tests {
         modules.insert("stat".to_string(), "crate::ui::stat".to_string());
         let source =
             "[logic]\nlet n = 1;\n\n[view]\ncol\n\n[preview \"Stat\"]\nstat value:\"60\"\n";
-        assert_eq!(migrate(source, &modules, "stat"), source);
+        assert_eq!(migrate(source, &modules, "stat", &BTreeMap::new()), source);
     }
 
     #[test]
