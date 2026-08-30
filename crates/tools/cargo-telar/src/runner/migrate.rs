@@ -530,9 +530,12 @@ fn shared_handlers(body: &str) -> String {
 }
 
 fn rewrite_boxed_props(declaration: &str) -> (String, Vec<String>) {
+    // A `#[props(default = Box::new(…))]` defaults a handler, and a handler is shared now.
+    let declaration =
+        &declaration.replace("#[props(default = Box::new(", "#[props(default = Rc::new(");
     let mut out = String::with_capacity(declaration.len());
     let mut reactive = Vec::new();
-    let mut rest = declaration;
+    let mut rest = declaration.as_str();
     // `Rc` as well as `Box`, because what decides is whether the closure *returns* something — a prop
     // already moved to `Rc<dyn Fn() -> T>` by hand is still a value wearing a handler's shape.
     while let Some((at, owner)) = ["Box<dyn Fn", "Rc<dyn Fn"]
@@ -1034,6 +1037,19 @@ mod tests {
         assert!(
             out.contains("pub text: Reactive<String> = Reactive::of(String::new),"),
             "{out}"
+        );
+
+        // And the attribute form, which defaults a handler.
+        let handler = migrated(
+            "[logic]\npub struct Props {\n    #[props(default = Box::new(|_| {}))]\n    pub on_pick: Box<dyn Fn(bool)>,\n}\n\n[view]\ncol\n",
+        );
+        assert!(
+            handler.contains("#[props(default = Rc::new(|_| {}))]"),
+            "{handler}"
+        );
+        assert!(
+            handler.contains("pub on_pick: Rc<dyn Fn(bool)>,"),
+            "{handler}"
         );
     }
 
