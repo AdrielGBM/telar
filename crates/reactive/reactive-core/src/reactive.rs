@@ -22,34 +22,48 @@ use crate::{Memo, ReadSignal, RwSignal};
 /// `From<T>` the moment a plain value implements `Source`, which `f32` and `bool` already do, and Rust has no
 /// way to prove two impls disjoint. So the conversions are enumerated. A closure is the one case the list
 /// cannot hold, for the same coherence reason, and it gets [`Reactive::of`].
-pub struct Reactive<T>(Rc<dyn Fn() -> T>);
+/// **A constant is held as itself, not as a closure returning it.** Most props are given a literal, and
+/// boxing one would put an allocation and a virtual call on every `gap:8` in the corpus for a value that
+/// cannot change. The enum is what lets a prop be uniformly readable without charging for it.
+pub enum Reactive<T> {
+    Const(T),
+    Read(Rc<dyn Fn() -> T>),
+}
 
 impl<T> Reactive<T> {
     /// A reading derived on the spot — `Reactive::of(move || a.get() + b.get())`.
     pub fn of(read: impl Fn() -> T + 'static) -> Self {
-        Self(Rc::new(read))
+        Self::Read(Rc::new(read))
     }
+}
 
+impl<T: Clone> Reactive<T> {
     pub fn get(&self) -> T {
-        (self.0)()
+        match self {
+            Self::Const(value) => value.clone(),
+            Self::Read(read) => read(),
+        }
     }
 }
 
-impl<T> Clone for Reactive<T> {
+impl<T: Clone> Clone for Reactive<T> {
     fn clone(&self) -> Self {
-        Self(Rc::clone(&self.0))
+        match self {
+            Self::Const(value) => Self::Const(value.clone()),
+            Self::Read(read) => Self::Read(Rc::clone(read)),
+        }
     }
 }
 
-impl<T: Default + 'static> Default for Reactive<T> {
+impl<T: Default> Default for Reactive<T> {
     fn default() -> Self {
-        Self::of(T::default)
+        Self::Const(T::default())
     }
 }
 
-impl<T: Clone + 'static> From<T> for Reactive<T> {
+impl<T> From<T> for Reactive<T> {
     fn from(value: T) -> Self {
-        Self::of(move || value.clone())
+        Self::Const(value)
     }
 }
 
