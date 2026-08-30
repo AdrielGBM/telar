@@ -1,7 +1,3 @@
-pub mod app;
-pub mod demo_images;
-pub mod theme;
-
 telar::app!(
     theme::LandingTheme,
     {
@@ -19,8 +15,8 @@ mod layout_tests {
     fn page_rect_at(window_width: f32) -> (f32, f32) {
         telar::set_theme(crate::theme::LandingTheme::light());
         telar::reset_layout_runtime();
-        let page = crate::home(
-            crate::HomeProps::props().build(),
+        let page = crate::home::home(
+            crate::home::HomeProps::props().build(),
             telar::Children::default(),
         )
         .expect("home build");
@@ -107,8 +103,8 @@ mod layout_tests {
         let cards: Vec<Box<dyn LayoutItem>> = bodies
             .iter()
             .map(|(icon, title, body)| {
-                crate::feature_card(
-                    crate::FeatureCardProps::props()
+                crate::feature_card::feature_card(
+                    crate::feature_card::FeatureCardProps::props()
                         .icon(icon)
                         .title(title)
                         .body(body)
@@ -182,8 +178,8 @@ mod layout_tests {
 
         telar::set_theme(crate::theme::LandingTheme::light());
         telar::reset_layout_runtime();
-        let page = crate::home(
-            crate::HomeProps::props().build(),
+        let page = crate::home::home(
+            crate::home::HomeProps::props().build(),
             telar::Children::default(),
         )
         .unwrap();

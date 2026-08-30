@@ -127,10 +127,18 @@ pub fn assets_root(package_root: &Path) -> PathBuf {
 pub fn discover_rust_modules(
     src_dir: &Path,
     modtree_dir: &Path,
+    generated_dir: &Path,
 ) -> std::io::Result<(String, Vec<PathBuf>)> {
     let mut out = String::new();
     let mut written = Vec::new();
-    emit_children(src_dir, "", modtree_dir, &mut out, &mut written)?;
+    emit_children(
+        src_dir,
+        "",
+        modtree_dir,
+        generated_dir,
+        &mut out,
+        &mut written,
+    )?;
     Ok((out, written))
 }
 
@@ -141,6 +149,7 @@ fn emit_children(
     dir: &Path,
     flat_prefix: &str,
     modtree_dir: &Path,
+    generated_dir: &Path,
     out: &mut String,
     written: &mut Vec<PathBuf>,
 ) -> std::io::Result<()> {
@@ -171,7 +180,7 @@ fn emit_children(
                     format!("{flat_prefix}__{name}")
                 };
                 let mut body = String::new();
-                emit_children(&path, &flat, modtree_dir, &mut body, written)?;
+                emit_children(&path, &flat, modtree_dir, generated_dir, &mut body, written)?;
                 let gen_file = modtree_dir.join(format!("{flat}.rs"));
                 write_if_changed(&gen_file, &body)?;
                 written.push(gen_file.clone());
@@ -179,6 +188,15 @@ fn emit_children(
             }
         } else if is_rust_module_file(&path) {
             out.push_str(&mod_decl(name, &path));
+        } else if path.extension().and_then(|e| e.to_str()) == Some("rsx") {
+            // A `.rsx` is a module where the file sits, so `shared/components/card.rsx` is
+            // `crate::shared::components::card` — the path a reader would guess, and the one
+            // go-to-definition can follow. It used to be pulled to the crate root under a flattened name and
+            // re-exported by basename, which is why two files could not share one.
+            out.push_str(&mod_decl(
+                name,
+                &rsx_output(generated_dir, flat_prefix, name),
+            ));
         }
     }
     Ok(())
@@ -239,10 +257,23 @@ fn is_rust_module_file(path: &Path) -> bool {
     )
 }
 
+/// Whether a directory earns a module node: it holds a declarable `.rs`, a `mod.rs`, or a `.rsx` — a
+/// directory of nothing but markup is still a module once its `.rsx` files live where they sit.
 fn dir_has_rust_module(dir: &Path) -> bool {
     collect_files_by_ext(dir, "rs", &|_| true)
         .iter()
         .any(|p| is_rust_module_file(p) || p.file_name().and_then(|n| n.to_str()) == Some("mod.rs"))
+        || !collect_files_by_ext(dir, "rsx", &|_| true).is_empty()
+}
+
+/// Where the transpiler wrote a `.rsx`'s Rust. The generated tree mirrors the source tree, and
+/// `flat_prefix` is that same path with `__` between the segments, so the two agree by construction.
+fn rsx_output(generated_dir: &Path, flat_prefix: &str, name: &str) -> PathBuf {
+    let mut out = generated_dir.to_path_buf();
+    for segment in flat_prefix.split("__").filter(|s| !s.is_empty()) {
+        out.push(segment);
+    }
+    out.join(format!("{name}.rs"))
 }
 
 #[cfg(test)]
@@ -356,10 +387,10 @@ mod tests {
             ("util.rs", ""),                    // top-level module
             ("core/app.rs", ""),                // nested module
             ("core/theme.rs", ""),              // nested module
-            ("core/sidebar.rsx", ""),           // markup: ignored
+            ("core/sidebar.rsx", ""),           // markup: a module where it sits
             ("shared/demo.rs", ""),             // nested module
-            ("shared/components/card.rsx", ""), // markup-only subdir: pruned
-            ("features/home.rsx", ""),          // markup-only tree: pruned
+            ("shared/components/card.rsx", ""), // markup-only subdir: still a module
+            ("features/home.rsx", ""),          // markup-only tree: still a module
             ("features/assets/x.png", ""),      // asset: pruned
             ("hand/mod.rs", ""),                // hand-managed: declared, not descended
             ("hand/nested/inner.rs", ""),
@@ -369,16 +400,29 @@ mod tests {
 
         let modtree = root.join("__modules");
         std::fs::create_dir_all(&modtree).unwrap();
-        let (out, written) = discover_rust_modules(&root, &modtree).unwrap();
+        let generated = root.join("__generated");
+        let (out, written) = discover_rust_modules(&root, &modtree, &generated).unwrap();
         let core_rs = std::fs::read_to_string(modtree.join("core.rs")).unwrap_or_default();
         let shared_rs = std::fs::read_to_string(modtree.join("shared.rs")).unwrap_or_default();
+        let features_rs = std::fs::read_to_string(modtree.join("features.rs")).unwrap_or_default();
         let _ = std::fs::remove_dir_all(&root);
 
         // Every generated tree file it wrote is reported back, for a caller that prunes stale build output.
+        // A directory of nothing but markup earns a node too: a `.rsx` is a module where its file sits,
+        // which is what lets two files share a basename.
         assert_eq!(
             written,
-            vec![modtree.join("core.rs"), modtree.join("shared.rs")],
+            vec![
+                modtree.join("core.rs"),
+                modtree.join("features.rs"),
+                modtree.join("shared__components.rs"),
+                modtree.join("shared.rs")
+            ],
             "{written:?}"
+        );
+        assert!(
+            features_rs.contains("pub mod home;"),
+            "the markup is the module:\n{features_rs}"
         );
 
         // Every module is a file-based `#[path] pub mod` — never an inline `mod dir { … }` block (which breaks rust-analyzer's `#[path]` resolution).
@@ -396,15 +440,13 @@ mod tests {
             !out.contains("nested") && !out.contains("inner") && !core_rs.contains("nested"),
             "{out}"
         );
-        // Markup/asset-only trees and crate roots produce nothing.
+        // Markup earns a node, and it sits where the file does — `core/sidebar.rsx` is `core::sidebar`.
         assert!(
-            !out.contains("features") && !core_rs.contains("components"),
+            core_rs.contains("pub mod sidebar;"),
             "{out}\n---\n{core_rs}"
         );
-        assert!(
-            !out.contains("home") && !core_rs.contains("sidebar"),
-            "{out}"
-        );
+        // An asset directory still produces nothing.
+        assert!(!features_rs.contains("assets"), "{features_rs}");
         assert!(
             !out.contains("pub mod lib") && !out.contains("pub mod main"),
             "{out}"

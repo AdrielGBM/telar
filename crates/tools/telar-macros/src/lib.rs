@@ -385,7 +385,7 @@ fn hot_reload_build() -> bool {
 struct TranspileOutput {
     include_stmts: TokenStream2,
     rerun_stmts: TokenStream2,
-    preview_const_idents: Vec<Ident>,
+    preview_const_idents: Vec<TokenStream2>,
 }
 
 // Transpiles every `.rsx` file under `src/` into `.telar/build/` (`.telar/build-hot/` for a hot-reload build), wiring each as a `#[path] mod` and aliasing
@@ -418,7 +418,7 @@ fn transpile_project(theme_type_str: Option<&str>) -> Result<TranspileOutput, To
 
     let mut include_stmts = TokenStream2::new();
     let mut rerun_stmts = TokenStream2::new();
-    let mut preview_const_idents: Vec<Ident> = Vec::new();
+    let mut preview_const_idents: Vec<TokenStream2> = Vec::new();
     // Every path this run writes under `generated_dir`, so a stale file left behind by a renamed or deleted `.rsx` (or a toggled-off `auto_modules`/i18n catalog) can be told apart from live output and pruned.
     let mut written_files: std::collections::HashSet<PathBuf> = std::collections::HashSet::new();
 
@@ -431,7 +431,12 @@ fn transpile_project(theme_type_str: Option<&str>) -> Result<TranspileOutput, To
             }
         };
 
-        let stem = telar_transpiler::relative_stem(rsx_file, &src_dir);
+        // The component is named after its file, not after its path. Two files may share a basename now:
+        // they are different modules, which is what the flattened name existed to work around.
+        let stem = rsx_file
+            .file_stem()
+            .map(|s| s.to_string_lossy().to_string())
+            .unwrap_or_default();
 
         let result = match telar_transpiler::transpile_source(
             &source,
@@ -491,58 +496,21 @@ fn transpile_project(theme_type_str: Option<&str>) -> Result<TranspileOutput, To
         // Wire each generated file as a real `#[path] mod` (not `include!`) so rust-analyzer treats it as a
         // first-class module and offers completion inside it; `pub use` keeps the component fns, preview consts
         // and `Props` types reachable by bare name, exactly as `include!` did.
-        let out_path_str = out_path.to_string_lossy().to_string();
-        let mod_ident = Ident::new(
-            &format!(
-                "__rsx_mod_{}",
-                telar_transpiler::naming::to_snake_case(&stem)
-            ),
-            Span::call_site(),
-        );
-        include_stmts.extend(quote! {
-            #[path = #out_path_str]
-            mod #mod_ident;
-            #[allow(unused_imports)]
-            pub use #mod_ident::*;
-        });
-
-        // Let a nested component be referenced in markup by its bare file name, not its path-flattened name:
-        // alias the path-derived fn (and Props type) to the basename at crate root. Skipped for files directly
-        // under src/ (basename already equals the full name).
-        let base_name = rsx_file
-            .file_stem()
-            .map(|s| s.to_string_lossy().to_string())
-            .unwrap_or_default();
-        let base_fn = telar_transpiler::naming::to_snake_case(&base_name);
-        let full_fn = telar_transpiler::naming::to_snake_case(&stem);
-        if !base_fn.is_empty() && base_fn != full_fn {
-            let full_fn_ident = Ident::new(&full_fn, Span::call_site());
-            let base_fn_ident = Ident::new(&base_fn, Span::call_site());
-            include_stmts.extend(quote! {
-                #[allow(unused_imports)]
-                pub use #mod_ident::#full_fn_ident as #base_fn_ident;
-            });
-            {
-                let full_props = Ident::new(
-                    &(telar_transpiler::naming::to_pascal_case(&full_fn) + "Props"),
-                    Span::call_site(),
-                );
-                let base_props = Ident::new(
-                    &(telar_transpiler::naming::to_pascal_case(&base_fn) + "Props"),
-                    Span::call_site(),
-                );
-                include_stmts.extend(quote! {
-                    #[allow(unused_imports)]
-                    pub use #mod_ident::#full_props as #base_props;
-                });
-            }
-        }
 
         let rsx_path_str = rsx_file.to_string_lossy().to_string();
         rerun_stmts.extend(quote! { const _: &str = include_str!(#rsx_path_str); });
 
         if !result.preview_names.is_empty() {
-            preview_const_idents.push(preview_const_ident(&stem));
+            // The const lives inside the file's own module now, so it is named by its path rather than
+            // reached by a bare name the crate root used to re-export.
+            let module: Vec<Ident> = telar_transpiler::relative_output_path(rsx_file, &src_dir)
+                .unwrap_or_default()
+                .with_extension("")
+                .components()
+                .map(|c| Ident::new(&c.as_os_str().to_string_lossy(), Span::call_site()))
+                .collect();
+            let name = preview_const_ident(&stem);
+            preview_const_idents.push(quote! { crate::#(#module)::*::#name });
         }
     }
 
@@ -559,7 +527,10 @@ fn transpile_project(theme_type_str: Option<&str>) -> Result<TranspileOutput, To
         let telar_toml_str = telar_toml.to_string_lossy().to_string();
         rerun_stmts.extend(quote! { const _: &str = include_str!(#telar_toml_str); });
     }
-    if telar_transpiler::auto_modules_enabled(&manifest_dir) {
+    // Always, not opt-in: a `.rsx` is a module where its file sits, so the tree that places it has to
+    // exist whatever `auto_modules` says. What the setting still decides is whether hand-written `.rs`
+    // siblings are declared for you.
+    {
         // The discovered tree is split across real generated files (one per directory) so every module is a
         // file-based `#[path] mod`; see `discover_rust_modules` for why inline `mod` blocks break rust-analyzer.
         let modtree_dir = generated_dir.join("__modules");
@@ -568,7 +539,7 @@ fn transpile_project(theme_type_str: Option<&str>) -> Result<TranspileOutput, To
             return Err(quote! { compile_error!(#msg) });
         }
         let (modules_src, modtree_written) =
-            match telar_transpiler::discover_rust_modules(&src_dir, &modtree_dir) {
+            match telar_transpiler::discover_rust_modules(&src_dir, &modtree_dir, &generated_dir) {
                 Ok(s) => s,
                 Err(e) => {
                     let msg = format!("Failed to write the auto-discovered module tree: {e}");

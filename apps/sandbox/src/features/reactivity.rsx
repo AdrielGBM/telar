@@ -1,4 +1,9 @@
 [logic]
+use crate::shared::components::card::{card, CardProps};
+use crate::shared::components::code_line::{code_line, CodeLineProps};
+use crate::shared::components::doc_header::{doc_header, DocHeaderProps};
+use crate::shared::components::example::{example, ExampleProps};
+use crate::shared::components::prop_row::{prop_row, PropRowProps};
 let count = signal(0i32);
 let doubled = memo(move || count.get() * 2);
 let remaining = memo(move || (10 - count.get()).max(0));

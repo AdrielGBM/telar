@@ -1,3 +1,10 @@
+[logic]
+use crate::shared::components::card::{card, CardProps};
+use crate::shared::components::code_line::{code_line, CodeLineProps};
+use crate::shared::components::doc_header::{doc_header, DocHeaderProps};
+use crate::shared::components::example::{example, ExampleProps};
+use crate::shared::components::prop_row::{prop_row, PropRowProps};
+
 [view]
 col gap:20
     doc_header kicker:"FOUNDATIONS" title:"Layout" desc:"Everything is a flex row or column. Nest them freely, space children with gap, pad the edges, and align on either axis."

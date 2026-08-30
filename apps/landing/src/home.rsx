@@ -1,4 +1,5 @@
 [logic]
+use crate::feature_card::{feature_card, FeatureCardProps};
 use crate::demo_images::{make_checker, make_gradient, make_radial_alpha};
 use std::sync::Arc;
 

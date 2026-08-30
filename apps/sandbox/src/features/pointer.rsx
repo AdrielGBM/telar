@@ -1,4 +1,9 @@
 [logic]
+use crate::shared::components::card::{card, CardProps};
+use crate::shared::components::code_line::{code_line, CodeLineProps};
+use crate::shared::components::doc_header::{doc_header, DocHeaderProps};
+use crate::shared::components::example::{example, ExampleProps};
+use crate::shared::components::prop_row::{prop_row, PropRowProps};
 // The marker is positioned from this, so neither box has to know the other's size — a sliding indicator.
 let handle = signal(Rect::default());
 let marker_x = memo(move || handle.get().x);

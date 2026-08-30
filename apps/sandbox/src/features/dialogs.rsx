@@ -1,3 +1,9 @@
+[logic]
+use crate::shared::components::card::{card, CardProps};
+use crate::shared::components::code_line::{code_line, CodeLineProps};
+use crate::shared::components::doc_header::{doc_header, DocHeaderProps};
+use crate::shared::components::example::{example, ExampleProps};
+
 [view]
 col gap:20
     doc_header kicker:"OVERLAYS" title:"Dialogs" desc:"Modal, drawer and tooltip — high-level widgets built on the overlay primitive (a top-layer portal that escapes clipping and blocks the page). Each renders its content only while open, so a closed overlay costs nothing and never eats a background click."

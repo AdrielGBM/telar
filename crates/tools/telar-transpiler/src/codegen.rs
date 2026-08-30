@@ -299,8 +299,11 @@ fn transpile(input: TranspileInput<'_>) -> Result<TranspiledSource, TranspileErr
     // them back onto the `.rsx` source), so real mistakes in `[logic]`/`[view]` are unaffected.
     code.push("#![allow(clippy::all)]\n", None);
     code.push("#[allow(unused_imports)] use telar::*;\n", None);
-    // Each `.rsx` is wired as its own `mod` (so rust-analyzer treats it as a real module and offers completion); `use super::*` re-imports the sibling components the host re-exports, so cross-component calls like `feature_card()` resolve by bare name just as they did under the old `include!`.
-    code.push("#[allow(unused_imports)] use super::*;\n", None);
+    // A `.rsx` is a module where its file sits, so `super` is its directory rather than the crate root.
+    // The glob is the crate root's own items — an app's `theme` module, its constants — which is what a
+    // `[logic]` line naming `core::theme::SandboxTheme` means. A *component* is not among them any more: it
+    // lives at its own path and the author imports it, which is the whole of the namespacing fix.
+    code.push("#[allow(unused_imports)] use crate::*;\n", None);
 
     // The logic zone's own imports, lifted to module scope: `Props` and each `[preview]` are emitted as siblings
     // of the component function, so a `use` left in its body would be out of scope for exactly the declarations

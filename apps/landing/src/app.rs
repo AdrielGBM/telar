@@ -6,8 +6,8 @@ pub struct LandingRoot;
 impl App for LandingRoot {
     fn root(&self) -> Box<dyn telar::Component> {
         reset_layout_runtime();
-        let content = crate::home(
-            crate::HomeProps::props().build(),
+        let content = crate::home::home(
+            crate::home::HomeProps::props().build(),
             telar::Children::default(),
         )
         .expect("layout failed");

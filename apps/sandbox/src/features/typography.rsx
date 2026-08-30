@@ -1,3 +1,10 @@
+[logic]
+use crate::shared::components::card::{card, CardProps};
+use crate::shared::components::code_line::{code_line, CodeLineProps};
+use crate::shared::components::doc_header::{doc_header, DocHeaderProps};
+use crate::shared::components::example::{example, ExampleProps};
+use crate::shared::components::prop_row::{prop_row, PropRowProps};
+
 [view]
 col gap:20
     doc_header kicker:"FOUNDATIONS" title:"Typography" desc:"Text takes a size and a color token, measures its own height, and wraps to the available width automatically."

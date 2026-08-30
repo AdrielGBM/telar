@@ -112,10 +112,7 @@ impl ViewGen<'_> {
         if let Some(amendment) = self.class_surface_style(classes) {
             let _ = write!(setters, ".style({amendment})");
         }
-        // Bare (not `crate::`) so the type resolves whether the component lives in this crate (via the
-        // `use super::*` glob at crate root) or in a component library re-exported through `use telar::*`.
-        let props_type = to_pascal_case(tag) + "Props";
-        format!("{props_type}::props(){setters}.build()")
+        format!("{}::props(){setters}.build()", props_type(tag))
     }
 
     /// A `@class` on a component call, compiled onto the callee's **principal surface**.
@@ -444,5 +441,17 @@ impl ViewGen<'_> {
         };
         let code = format!("{pad}let {var} = Canvas::new({style}, {closure})?;");
         ChildEmit::Simple { name: var, code }
+    }
+}
+
+/// The `Props` type belonging to `tag`, which may be a path.
+///
+/// Only the last segment is the component's name, so `topbar::strip` wants `topbar::StripProps` — Pascal-
+/// casing the whole path would ask for a `TopbarstripProps` that exists nowhere. A bare tag keeps resolving
+/// however it did: through the crate root today, through an author's `use` once tags are paths.
+fn props_type(tag: &str) -> String {
+    match tag.rsplit_once("::") {
+        Some((module, name)) => format!("{module}::{}Props", to_pascal_case(name)),
+        None => to_pascal_case(tag) + "Props",
     }
 }
