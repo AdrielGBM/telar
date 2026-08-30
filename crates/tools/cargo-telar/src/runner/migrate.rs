@@ -92,7 +92,7 @@ fn migrate(source: &str, modules: &BTreeMap<String, String>, own: &str) -> Strin
                 clip_shapes(&body)
             }
             Section::Style => theme_reads(zone.body),
-            Section::Logic => theme_calls(zone.body),
+            Section::Logic => shared_handlers(&theme_calls(zone.body)),
             Section::None => zone.body.to_string(),
         };
         out.push_str(zone.header);
@@ -410,6 +410,29 @@ fn replace_outside_strings(body: &str, f: impl Fn(&str) -> String) -> String {
     }
     out.push_str(&f(&body[chunk_at..]));
     out
+}
+
+/// A handler prop becomes an `Rc<dyn Fn…>`: a props struct is `Clone` now, and a unique box has no second
+/// owner to give — which is what a value reaching a region that rebuilds needs.
+///
+/// Only inside the `Props` declaration. A `Box<dyn Fn…>` elsewhere in `[logic]` is the author's own, and a
+/// props struct is the one place the framework has an opinion about.
+fn shared_handlers(body: &str) -> String {
+    let Some(at) = body.find("pub struct Props {") else {
+        return body.to_string();
+    };
+    let Some(end) = body[at..].find("\n}").map(|i| at + i) else {
+        return body.to_string();
+    };
+    let declaration = body[at..end].replace("Box<dyn Fn", "Rc<dyn Fn");
+    if declaration == body[at..end] {
+        return body.to_string();
+    }
+    let out = format!("{}{declaration}{}", &body[..at], &body[end..]);
+    match out.contains("use std::rc::Rc;") || out.contains("::rc::{") {
+        true => out,
+        false => format!("use std::rc::Rc;\n\n{out}"),
+    }
 }
 
 /// `clip:x` → `clip:Clip::x()`. A clip is a shape now, not an axis from a closed set of three.
@@ -784,6 +807,22 @@ mod tests {
     fn a_qualified_theme_call_is_not_the_views_binding() {
         let source = "[logic]\nfn draw() {\n    let t = crate::core::theme::theme();\n}\n";
         assert_eq!(migrated(source), source);
+    }
+
+    /// A props struct is `Clone` now, so a unique box in one is a struct that cannot reach a region that
+    /// rebuilds. Only the declaration is rewritten — a `Box<dyn Fn>` elsewhere in `[logic]` is the
+    /// author's own.
+    #[test]
+    fn a_handler_prop_becomes_a_shared_one() {
+        let out = migrated(
+            "[logic]\npub struct Props {\n    pub act: Box<dyn Fn()>,\n}\n\nlet held: Box<dyn Fn()> = Box::new(|| {});\n\n[view]\ncol\n",
+        );
+        assert!(out.starts_with("[logic]\nuse std::rc::Rc;\n"), "{out}");
+        assert!(out.contains("pub act: Rc<dyn Fn()>,"), "{out}");
+        assert!(
+            out.contains("let held: Box<dyn Fn()> = Box::new(|| {});"),
+            "a binding outside the declaration is left alone: {out}"
+        );
     }
 
     #[test]
