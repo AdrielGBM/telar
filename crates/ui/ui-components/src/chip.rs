@@ -1,3 +1,5 @@
+use std::rc::Rc;
+
 use reactive_core::Reactive;
 use telar_macros::Props;
 
@@ -60,7 +62,7 @@ pub struct ChipProps {
     /// When `Some`, a small `×` press target renders on the right and calls it on tap. `None` (the default)
     /// omits it entirely, leaving a non-interactive chip.
     #[props(some, default)]
-    pub on_close: Option<Box<dyn Fn()>>,
+    pub on_close: Option<Rc<dyn Fn()>>,
 }
 
 pub fn chip(props: ChipProps, _children: Children) -> Result<Box<dyn LayoutItem>, LayoutError> {
@@ -102,7 +104,7 @@ pub fn chip(props: ChipProps, _children: Children) -> Result<Box<dyn LayoutItem>
             vec![box_item(close_label)],
         )?
         .control(Role::Button)
-        .on_press(cb);
+        .on_press(move || cb());
         children.push(box_item(close));
     }
 
@@ -178,7 +180,7 @@ mod tests {
         let mut chip = chip(
             ChipProps::props()
                 .label("Tag")
-                .on_close(Box::new(move || sink.set(true)) as Box<dyn Fn()>)
+                .on_close(Rc::new(move || sink.set(true)) as Rc<dyn Fn()>)
                 .build(),
             Children::default(),
         )

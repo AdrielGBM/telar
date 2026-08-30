@@ -58,7 +58,7 @@ pub struct StepperProps {
     pub color: Reactive<Color>,
     /// Fires with the new (already clamped) value on every − / + press.
     #[props(some, default)]
-    pub on_change: Option<Box<dyn Fn(f32)>>,
+    pub on_change: Option<Rc<dyn Fn(f32)>>,
 }
 
 pub fn stepper(
@@ -77,7 +77,7 @@ pub fn stepper(
     let step = if step == 0.0 { 1.0 } else { step };
     // Uncontrolled: own the value so the stepper still works when the caller binds no signal.
     let value = value.unwrap_or_else(|| signal(min));
-    // Shared across the − and + buttons' fill closures (a `Box<dyn Fn>` is not `Clone`, an `Rc` handle is).
+    // Shared across the − and + buttons' fill closures (a `Rc<dyn Fn>` is not `Clone`, an `Rc` handle is).
     // Re-erased to `Rc` so both buttons' `on_press` closures can hold a copy (the field itself is a one-shot `Box`).
     let on_change: Option<Rc<dyn Fn(f32)>> = on_change.map(Rc::from);
 
@@ -265,7 +265,7 @@ mod tests {
                 .min(0.0)
                 .max(5.0)
                 .step(1.0)
-                .on_change(Box::new(move |v| sink.set(v)))
+                .on_change(Rc::new(move |v| sink.set(v)))
                 .build(),
             Children::default(),
         )

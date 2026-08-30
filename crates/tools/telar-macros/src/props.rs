@@ -175,6 +175,15 @@ pub fn expand(input: DeriveInput) -> Result<TokenStream2, syn::Error> {
         quote! { #field: self.#field }
     });
 
+    // A `Clone` of its own rather than a derive the author writes, because a props struct that cannot be
+    // cloned cannot reach a closure that runs again — and `[view]` puts one around any node whose layout is
+    // computed. This is also why a handler prop is an `Rc<dyn Fn…>` and not a `Box`: a unique box has no
+    // second owner to give.
+    let cloned = props.iter().map(|p| {
+        let field = &p.name;
+        quote! { #field: ::core::clone::Clone::clone(&self.#field) }
+    });
+
     Ok(quote! {
         #(
             /// Stands in for a required prop that has not been set, and names it in the error when `build`
@@ -204,6 +213,12 @@ pub fn expand(input: DeriveInput) -> Result<TokenStream2, syn::Error> {
         impl #builder #all_set {
             pub fn build(self) -> #name {
                 #name { #(#moved),* }
+            }
+        }
+
+        impl ::core::clone::Clone for #name {
+            fn clone(&self) -> Self {
+                #name { #(#cloned),* }
             }
         }
     })

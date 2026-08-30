@@ -73,7 +73,7 @@ pub struct TooltipProps {
     /// they point at a tooltip. See [`shared::SurfaceStyle`] for why it takes the finished style rather than
     /// naming one property, and for when a theme token is the right instrument instead.
     #[props(some, default)]
-    pub style: Option<Box<dyn Fn(RectStyle) -> RectStyle>>,
+    pub style: Option<Rc<dyn Fn(RectStyle) -> RectStyle>>,
     /// Let the trigger take the space its parent offers instead of hugging its content.
     ///
     /// The wrapper the tooltip puts around the trigger is a real node in the parent's flow, so without this

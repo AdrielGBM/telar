@@ -1,3 +1,5 @@
+use std::rc::Rc;
+
 use layout_core::{AlignItems, LayoutError, LayoutStyle};
 use reactive_core::{Reactive, RwSignal, signal};
 use renderer_core::{BorderRadius, Color, RectStyle, ShapeStyle};
@@ -34,7 +36,7 @@ pub struct ToggleProps {
     pub color: Reactive<Color>,
     /// Fires with the new state on every toggle.
     #[props(some, default)]
-    pub on_toggle: Option<Box<dyn Fn(bool)>>,
+    pub on_toggle: Option<Rc<dyn Fn(bool)>>,
 }
 
 pub fn toggle(props: ToggleProps, _children: Children) -> Result<Box<dyn LayoutItem>, LayoutError> {
@@ -148,7 +150,7 @@ mod tests {
         crate::test_support::fresh_layout_runtime();
         let mut widget = toggle(
             ToggleProps::props()
-                .on_toggle(Box::new(move |v| sink.set(Some(v))))
+                .on_toggle(Rc::new(move |v| sink.set(Some(v))))
                 .build(),
             Children::default(),
         )

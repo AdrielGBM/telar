@@ -61,12 +61,12 @@ pub(crate) struct Dropdown {
     /// each one has to be built inside the [`ListContext`](crate::list::ListContext) this scaffold provides.
     pub rows: Children,
     pub color: Reactive<Color>,
-    pub on_pick: Option<Box<dyn Fn(u32)>>,
+    pub on_pick: Option<Rc<dyn Fn(u32)>>,
     pub selected: Option<RwSignal<u32>>,
     pub stretch: bool,
     pub bordered: bool,
     pub caret: bool,
-    pub style: Option<Box<dyn Fn(RectStyle) -> RectStyle>>,
+    pub style: Option<Rc<dyn Fn(RectStyle) -> RectStyle>>,
 }
 
 pub(crate) fn dropdown(props: Dropdown) -> Result<Box<dyn LayoutItem>, LayoutError> {
@@ -84,7 +84,7 @@ pub(crate) fn dropdown(props: Dropdown) -> Result<Box<dyn LayoutItem>, LayoutErr
     let surface: shared::SurfaceStyle =
         surface.map(|f| -> Rc<dyn Fn(RectStyle) -> RectStyle> { Rc::from(f) });
     // Erased to `Rc` so the colour/callback can be cloned into the trigger, every option row, and the panel
-    // builder (which re-runs on each open) — a `Box<dyn Fn>` can't be shared, but the widget needs to.
+    // builder (which re-runs on each open) — a `Rc<dyn Fn>` can't be shared, but the widget needs to.
     let on_pick: Option<Rc<dyn Fn(u32)>> = on_pick.map(|f| -> Rc<dyn Fn(u32)> { Rc::from(f) });
     let open = signal(false);
     let dismiss_open = open;

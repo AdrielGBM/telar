@@ -102,9 +102,9 @@ pub fn features_buttons(props: FeaturesButtonsProps, children: Children) -> Resu
                                 };
                                 __children.push(box_item(__text_0));
                                 let __row_1 = {
-                                    let __node_11 = button(ButtonProps::props().label("+1").fill(Reactive::of({ let theme = theme.clone(); move || theme.get().primary })).on_press(Box::new({ let clicks = clicks.clone(); move || clicks.update(|__v| *__v += 1) })).build(), Children::default())?;
-                                    let __node_12 = button(ButtonProps::props().label("+10").fill(Reactive::of({ let theme = theme.clone(); move || theme.get().primary })).on_press(Box::new({ let clicks = clicks.clone(); move || clicks.update(|__v| *__v += 10) })).build(), Children::default())?;
-                                    let __node_13 = button(ButtonProps::props().label("Reset").ghost(true).on_press(Box::new({ let clicks = clicks.clone(); move || clicks.set(0) })).build(), Children::default())?;
+                                    let __node_11 = button(ButtonProps::props().label("+1").fill(Reactive::of({ let theme = theme.clone(); move || theme.get().primary })).on_press(std::rc::Rc::new({ let clicks = clicks.clone(); move || clicks.update(|__v| *__v += 1) })).build(), Children::default())?;
+                                    let __node_12 = button(ButtonProps::props().label("+10").fill(Reactive::of({ let theme = theme.clone(); move || theme.get().primary })).on_press(std::rc::Rc::new({ let clicks = clicks.clone(); move || clicks.update(|__v| *__v += 10) })).build(), Children::default())?;
+                                    let __node_13 = button(ButtonProps::props().label("Reset").ghost(true).on_press(std::rc::Rc::new({ let clicks = clicks.clone(); move || clicks.set(0) })).build(), Children::default())?;
                                     Container::new(LayoutStyle::new().flex_row().gap(10.0), children![__node_11, __node_12, __node_13])?
                                 };
                                 __children.push(box_item(__row_1));

@@ -1,3 +1,5 @@
+use std::rc::Rc;
+
 use layout_core::LayoutError;
 use reactive_core::Reactive;
 use renderer_core::Color;
@@ -24,7 +26,7 @@ pub struct MenuProps {
     pub label: Reactive<String>,
     /// Fired with the index of the chosen item when it is picked.
     #[props(some, default)]
-    pub on_select: Option<Box<dyn Fn(u32)>>,
+    pub on_select: Option<Rc<dyn Fn(u32)>>,
     /// Accent colour (trigger border, hover highlight). `Color::TRANSPARENT` (the default) means "unset" and
     /// falls back to the theme accent. A closure so a theme token re-reads on every render.
     #[props(into, default = Reactive::of(|| Color::TRANSPARENT))]
@@ -46,7 +48,7 @@ pub struct MenuProps {
     /// when they point at a menu. See `shared::SurfaceStyle` for why it takes the finished style rather than
     /// naming one property, and for when a theme token is the right instrument instead.
     #[props(some, default)]
-    pub style: Option<Box<dyn Fn(renderer_core::RectStyle) -> renderer_core::RectStyle>>,
+    pub style: Option<Rc<dyn Fn(renderer_core::RectStyle) -> renderer_core::RectStyle>>,
 }
 
 // A menu carries no bound selection (`selected: None`), so its rows are one-shot actions: no index is written
@@ -167,7 +169,7 @@ fn a_caller_can_amend_the_paint_the_trigger_worked_out_for_itself() {
         MenuProps::props()
             .label("File")
             .bordered(true)
-            .style(Box::new(|s| {
+            .style(Rc::new(|s| {
                 s.with_radius(BorderRadius::all(0.0))
                     .with_fill(Color::rgba(1.0, 0.0, 0.0, 1.0))
             }))
@@ -326,7 +328,7 @@ mod tests {
         let item = menu(
             MenuProps::props()
                 .label("Actions")
-                .on_select(Box::new(move |i| sink.set(Some(i))))
+                .on_select(Rc::new(move |i| sink.set(Some(i))))
                 .build(),
             rows(&["Rename", "Duplicate", "Delete"]),
         )
@@ -369,7 +371,7 @@ mod tests {
         let item = menu(
             MenuProps::props()
                 .label("Actions")
-                .on_select(Box::new(move |i| sink.set(Some(i))))
+                .on_select(Rc::new(move |i| sink.set(Some(i))))
                 .build(),
             rows(&["Rename", "Duplicate"]),
         )
@@ -403,7 +405,7 @@ mod tests {
         let item = menu(
             MenuProps::props()
                 .label("Actions")
-                .on_select(Box::new(move |i| sink.set(Some(i))))
+                .on_select(Rc::new(move |i| sink.set(Some(i))))
                 .build(),
             rows(&["Rename", "Duplicate", "Delete"]),
         )
@@ -492,7 +494,7 @@ mod tests {
         let item = menu(
             MenuProps::props()
                 .label("Actions")
-                .on_select(Box::new(move |i| sink.set(Some(i))))
+                .on_select(Rc::new(move |i| sink.set(Some(i))))
                 .build(),
             structured,
         )
@@ -544,7 +546,7 @@ mod tests {
         let item = menu(
             MenuProps::props()
                 .label("Actions")
-                .on_select(Box::new(move |i| sink.set(Some(i))))
+                .on_select(Rc::new(move |i| sink.set(Some(i))))
                 .build(),
             structured,
         )
@@ -605,7 +607,7 @@ mod tests {
         let item = menu(
             MenuProps::props()
                 .label("Actions")
-                .on_select(Box::new(move |i| sink.set(Some(i))))
+                .on_select(Rc::new(move |i| sink.set(Some(i))))
                 .build(),
             structured,
         )

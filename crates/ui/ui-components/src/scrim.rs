@@ -108,7 +108,7 @@ fn collapsed() -> Result<Box<dyn LayoutItem>, LayoutError> {
 /// true, so the built scrim is never disposed.
 pub(crate) fn scrim_overlay(
     open: Option<RwSignal<bool>>,
-    on_close: Option<Box<dyn Fn()>>,
+    on_close: Option<Rc<dyn Fn()>>,
     build_inner: impl FnOnce(DismissFn) -> Result<Box<dyn LayoutItem>, LayoutError> + 'static,
 ) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let Some(open) = open else {

@@ -24,3 +24,5 @@ i18n-core = { workspace = true, features = ["runtime-catalog"] }
 telar-parser = { workspace = true }
 thiserror = { workspace = true }
 toml = { workspace = true }
+syn = { version = "3.0.4", features = ["full", "visit"] }
+proc-macro2 = "1.0.107"

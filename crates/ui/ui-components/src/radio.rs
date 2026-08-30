@@ -1,3 +1,5 @@
+use std::rc::Rc;
+
 use telar_macros::Props;
 
 use layout_core::{AlignItems, JustifyContent, LayoutError, LayoutStyle};
@@ -29,7 +31,7 @@ pub struct RadioProps {
     pub color: Reactive<Color>,
     /// Fires with this button's `value` when it becomes selected.
     #[props(some, default)]
-    pub on_select: Option<Box<dyn Fn(u32)>>,
+    pub on_select: Option<Rc<dyn Fn(u32)>>,
 }
 
 pub fn radio(props: RadioProps, _children: Children) -> Result<Box<dyn LayoutItem>, LayoutError> {
@@ -42,7 +44,7 @@ pub fn radio(props: RadioProps, _children: Children) -> Result<Box<dyn LayoutIte
     } = props;
     // Uncontrolled: own the selection so the widget is self-consistent when the caller binds no group signal.
     let selected = selected.unwrap_or_else(|| signal(0u32));
-    // Shared across the dot and ring style closures (a `Box<dyn Fn>` is not `Clone`, an `Rc` handle is).
+    // Shared across the dot and ring style closures (a `Rc<dyn Fn>` is not `Clone`, an `Rc` handle is).
 
     // The dot: an inner circle that paints the accent only while this value is selected, so selecting never reflows.
     let dot_selected = selected;
@@ -148,7 +150,7 @@ mod tests {
             RadioProps::props()
                 .selected(signal(0u32))
                 .value(5)
-                .on_select(Box::new(move |v| sink.set(Some(v))))
+                .on_select(Rc::new(move |v| sink.set(Some(v))))
                 .build(),
             Children::default(),
         )

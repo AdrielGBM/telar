@@ -1,3 +1,5 @@
+use std::rc::Rc;
+
 use crate::shared;
 use layout_core::{LayoutError, LayoutStyle};
 use reactive_core::{Reactive, RwSignal, signal};
@@ -54,7 +56,7 @@ pub struct TextFieldProps {
     pub color: Reactive<Color>,
     /// Runs when Enter is pressed while the field is focused.
     #[props(some, default)]
-    pub on_submit: Option<Box<dyn Fn()>>,
+    pub on_submit: Option<Rc<dyn Fn()>>,
 }
 
 /// Builds a `text_field`: a bordered/padded box around `ui_core::Input`, swapping in a muted placeholder
@@ -88,7 +90,7 @@ pub fn text_field(
     })?
     .placeholder(placeholder.get());
     if let Some(cb) = on_submit {
-        input = input.on_submit(cb);
+        input = input.on_submit(move || cb());
     }
     // The input is a leaf, so its node's style is followed from the box that outlives it.
     let line_node = input.layout_node();
@@ -248,7 +250,7 @@ mod tests {
         let (field, rect) = laid_out_field(
             TextFieldProps::props()
                 .value(value)
-                .on_submit(Box::new(move || sink.set(true)) as Box<dyn Fn()>)
+                .on_submit(Rc::new(move || sink.set(true)) as Rc<dyn Fn()>)
                 .build(),
         );
         let mut tree = ComponentList::new(field);

@@ -57,8 +57,8 @@ pub fn features_indicators(props: FeaturesIndicatorsProps, children: Children) -
                                             { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(14.0).with_color(theme.get().muted) },
                                         )?
                                     };
-                                    let __node_4 = button(ButtonProps::props().label("Advance").fill(Reactive::of({ let theme = theme.clone(); move || theme.get().primary })).on_press(Box::new({ let p = p.clone(); move || { p.set((p.get() + 0.15).min(1.0)) } })).build(), Children::default())?;
-                                    let __node_5 = button(ButtonProps::props().label("Reset").ghost(true).on_press(Box::new({ let p = p.clone(); move || { p.set(0.0) } })).build(), Children::default())?;
+                                    let __node_4 = button(ButtonProps::props().label("Advance").fill(Reactive::of({ let theme = theme.clone(); move || theme.get().primary })).on_press(std::rc::Rc::new({ let p = p.clone(); move || { p.set((p.get() + 0.15).min(1.0)) } })).build(), Children::default())?;
+                                    let __node_5 = button(ButtonProps::props().label("Reset").ghost(true).on_press(std::rc::Rc::new({ let p = p.clone(); move || { p.set(0.0) } })).build(), Children::default())?;
                                     Container::new(LayoutStyle::new().flex_row().gap(12.0).align_items(AlignItems::CENTER), children![__text_0, __node_4, __node_5])?
                                 };
                                 __children.push(box_item(__row_0));

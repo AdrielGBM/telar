@@ -125,7 +125,7 @@ pub fn home(props: HomeProps, children: Children) -> Result<Box<dyn LayoutItem>,
                             { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(14.0).with_color(theme.get().muted) },
                         )?
                     };
-                    let __node_0 = button(ButtonProps::props().label("Get started").fill(PRIMARY).on_press(Box::new({ let signups = signups.clone(); move || signups.update(|n| *n += 1) })).build(), Children::default())?;
+                    let __node_0 = button(ButtonProps::props().label("Get started").fill(PRIMARY).on_press(std::rc::Rc::new({ let signups = signups.clone(); move || signups.update(|n| *n += 1) })).build(), Children::default())?;
                     Container::new(LayoutStyle::new().flex_row().gap(24.0).align_items(AlignItems::CENTER), children![__text_1, __text_2, __text_3, __node_0])?
                 };
                 Container::new(style_navwrap(), children![__text_0, __row_1])?
@@ -151,7 +151,7 @@ pub fn home(props: HomeProps, children: Children) -> Result<Box<dyn LayoutItem>,
                             )?
                         };
                         let __row_3 = {
-                            let __node_1 = button(ButtonProps::props().label("Get started").fill(PRIMARY).on_press(Box::new({ let signups = signups.clone(); move || signups.update(|n| *n += 1) })).build(), Children::default())?;
+                            let __node_1 = button(ButtonProps::props().label("Get started").fill(PRIMARY).on_press(std::rc::Rc::new({ let signups = signups.clone(); move || signups.update(|n| *n += 1) })).build(), Children::default())?;
                             let __node_2 = button(ButtonProps::props().label("Read the docs").outline(PRIMARY).build(), Children::default())?;
                             Container::new(LayoutStyle::new().flex_row().gap(12.0).flex_wrap(), children![__node_1, __node_2])?
                         };
@@ -443,7 +443,7 @@ pub fn home(props: HomeProps, children: Children) -> Result<Box<dyn LayoutItem>,
                     )?
                 };
                 let __row_8 = {
-                    let __node_7 = button(ButtonProps::props().label("Reserve a seat").fill(Reactive::of({ let theme = theme.clone(); move || theme.get().accent })).on_press(Box::new({ let signups = signups.clone(); move || signups.update(|n| *n += 1) })).build(), Children::default())?;
+                    let __node_7 = button(ButtonProps::props().label("Reserve a seat").fill(Reactive::of({ let theme = theme.clone(); move || theme.get().accent })).on_press(std::rc::Rc::new({ let signups = signups.clone(); move || signups.update(|n| *n += 1) })).build(), Children::default())?;
                     let __text_28 = {
                         let signups = signups.clone();
                         Text::declaring(

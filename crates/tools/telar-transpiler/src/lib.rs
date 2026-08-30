@@ -9,6 +9,7 @@ mod i18n;
 pub mod naming;
 mod paths;
 mod registry;
+mod rust;
 mod signal_scan;
 mod source_map;
 mod style;
@@ -150,11 +151,17 @@ mod tests {
     /// is not, and claiming it would shadow a token the author does mean.
     #[test]
     fn a_binding_nested_inside_a_fn_is_not_in_view_scope() {
+        // `props` is always first: the generated scope binds it whether `[logic]` says anything or not.
         let locals = scan_locals("let outer = 1.0;\nfn helper() {\n    let inner = 2.0;\n}\n");
-        assert_eq!(locals, vec!["outer".to_string()]);
+        assert_eq!(locals, vec!["props".to_string(), "outer".to_string()]);
         assert_eq!(
             scan_locals("let (a, b) = pair();\nlet mut c: f32 = 0.0;\n"),
-            vec!["a".to_string(), "b".to_string(), "c".to_string()],
+            vec![
+                "props".to_string(),
+                "a".to_string(),
+                "b".to_string(),
+                "c".to_string()
+            ],
             "a destructuring pattern contributes every name it binds, and a type annotation none"
         );
     }

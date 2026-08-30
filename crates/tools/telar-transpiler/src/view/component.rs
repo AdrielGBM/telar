@@ -176,7 +176,7 @@ impl ViewGen<'_> {
             .flatten()
             .collect();
         let closure = wrap_signal_clones(&raw, format!("move |__s: RectStyle| __s{chain}"));
-        Some(format!("Box::new({closure})"))
+        Some(format!("std::rc::Rc::new({closure})"))
     }
 
     /// A reactive string prop (e.g. a button's `label`): a `move ||` closure re-read every frame, so a
@@ -301,7 +301,7 @@ impl ViewGen<'_> {
         // would be if that could be written at all.
         let v = super::redundant_parens(v).unwrap_or(v);
         if v.starts_with('|') || v.starts_with("move |") {
-            return format!("Box::new({})", self.emit_closure_value(attr));
+            return format!("std::rc::Rc::new({})", self.emit_closure_value(attr));
         }
         // A lone `$signal`: pass the cloned handle so the caller's binding stays usable elsewhere.
         if let Some(rest) = v.strip_prefix('$')

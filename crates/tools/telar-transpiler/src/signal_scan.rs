@@ -33,7 +33,9 @@ pub fn scan_locals(logic_source: &str) -> Vec<String> {
         .min()
         .unwrap_or(0);
 
-    let mut locals = Vec::new();
+    // `props` is a binding of the generated scope, not of `[logic]`, and it is one a rebuilding closure has
+    // to clone rather than move — `#[derive(Props)]` writes the `Clone` that makes it possible.
+    let mut locals = vec!["props".to_string()];
     for raw in logic_source.lines() {
         if raw.trim().is_empty() || raw.len() - raw.trim_start().len() != base {
             continue;

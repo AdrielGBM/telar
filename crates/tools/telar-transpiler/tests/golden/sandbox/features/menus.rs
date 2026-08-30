@@ -122,7 +122,7 @@ pub fn features_menus(props: FeaturesMenusProps, children: Children) -> Result<B
                                             Ok(__slots)
                                         }
                                     );
-                                    menu(MenuProps::props().label("Actions").on_select(Box::new({ let action = action.clone(); move |i| action.set(i) })).build(), __deferred)?
+                                    menu(MenuProps::props().label("Actions").on_select(std::rc::Rc::new({ let action = action.clone(); move |i| action.set(i) })).build(), __deferred)?
                                 };
                                 __children.push(box_item(__node_10));
                                 let __text_1 = {
@@ -191,7 +191,7 @@ pub fn features_menus(props: FeaturesMenusProps, children: Children) -> Result<B
                                             __children.push(box_item(__node_20));
                                             let __node_21 = item(ItemProps::props().label("Cut").hint("⌘X").build(), Children::default())?;
                                             __children.push(box_item(__node_21));
-                                            let __node_22 = item(ItemProps::props().label("Show ruler").checked(ruler.clone()).on_press(Box::new({ let ruler = ruler.clone(); move || ruler.set(!ruler.get()) })).build(), Children::default())?;
+                                            let __node_22 = item(ItemProps::props().label("Show ruler").checked(ruler.clone()).on_press(std::rc::Rc::new({ let ruler = ruler.clone(); move || ruler.set(!ruler.get()) })).build(), Children::default())?;
                                             __children.push(box_item(__node_22));
                                             __slots.extend_default(__children);
                                             Ok(__slots)

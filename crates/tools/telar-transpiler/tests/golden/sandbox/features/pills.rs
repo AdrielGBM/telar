@@ -90,7 +90,7 @@ pub fn features_pills(props: FeaturesPillsProps, children: Children) -> Result<B
                                 let __row_1 = {
                                     let __node_9 = chip(ChipProps::props().label("design").build(), Children::default())?;
                                     let __node_10 = chip(ChipProps::props().label("rust").build(), Children::default())?;
-                                    let __node_11 = chip(ChipProps::props().label("removable").on_close(Box::new({ let tags = tags.clone(); move || { tags.update(|n| if *n > 0 { *n -= 1 }) } })).build(), Children::default())?;
+                                    let __node_11 = chip(ChipProps::props().label("removable").on_close(std::rc::Rc::new({ let tags = tags.clone(); move || { tags.update(|n| if *n > 0 { *n -= 1 }) } })).build(), Children::default())?;
                                     Container::new(LayoutStyle::new().flex_row().gap(8.0).align_items(AlignItems::CENTER), children![__node_9, __node_10, __node_11])?
                                 };
                                 __children.push(box_item(__row_1));

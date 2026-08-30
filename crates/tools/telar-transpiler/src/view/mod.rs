@@ -1625,6 +1625,50 @@ mod tests {
         );
     }
 
+    /// D2's bug: a layout value that reads state through a *call* was frozen, because the reactivity test
+    /// was `contains('$')` and a call carries no sigil. `styled_by` is what re-resolves a `LayoutStyle`, and
+    /// the runtime tracks whatever the closure reads — so the closure is all the emitter has to produce.
+    #[test]
+    fn a_computed_layout_value_is_re_resolved_even_without_a_sigil() {
+        let src = "[logic]\nlet dock = signal(0.0f32);\nfn measured() -> f32 { 12.0 }\n[view]\ncol gap:measured() pad:8\n    text \"x\"\n";
+        let out = crate::transpile_source(src, "demo", None, None).unwrap();
+        assert!(
+            out.rust_code
+                .contains(".styled_by(move || LayoutStyle::new().flex_column().gap(measured()).padding_all(8.0))"),
+            "a call is a reading:\n{}",
+            out.rust_code
+        );
+
+        // The literal check that survives is an optimisation and nothing more: a node whose every layout
+        // value is a literal keeps no effect at all.
+        let flat = crate::transpile_source(
+            "[view]\ncol gap:8 pad:12 align:center\n    text \"x\"\n",
+            "demo",
+            None,
+            None,
+        )
+        .unwrap()
+        .rust_code;
+        assert!(!flat.contains(".styled_by("), "{flat}");
+    }
+
+    /// A closure that runs again cannot move what it names, and a computed value names whatever the author
+    /// had in scope — including `props`, which the generated scope binds and `#[derive(Props)]` makes
+    /// cloneable for exactly this.
+    #[test]
+    fn a_re_resolving_style_clones_what_it_names_instead_of_moving_it() {
+        let src =
+            "[logic]\nlet side = 4.0f32;\n[view]\ncol gap:side pad:props.pad\n    text \"x\"\n";
+        let out = crate::transpile_source(src, "demo", None, None).unwrap();
+        assert!(
+            out.rust_code.contains(
+                ".styled_by({ let props = props.clone(); let side = side.clone(); move ||"
+            ),
+            "{}",
+            out.rust_code
+        );
+    }
+
     /// A theme read is a `$` read: the view binds `theme` as a handle, so the same sugar that reads a signal
     /// reads the theme, and it re-reads inside the paint closure instead of freezing at construction.
     #[test]

@@ -7,7 +7,7 @@ use telar_parser::{Attr, ViewNode};
 use crate::naming::contains_ident;
 use crate::style::format_f32;
 
-use super::expr_marker;
+use super::{ViewGen, expr_marker};
 
 pub(super) enum Segment {
     Literal(String),
@@ -285,18 +285,46 @@ pub(super) fn captured_idents_with(
             }
         }
     }
+    let named: Vec<Option<Vec<String>>> = snippets
+        .iter()
+        .map(|s| crate::rust::free_idents(&substitute_reads(s)))
+        .collect();
     for var in loop_variables.iter().chain(locals) {
-        if snippets.iter().any(|s| contains_ident(s, var)) && !idents.contains(var) {
+        let used = snippets.iter().zip(&named).any(|(s, free)| match free {
+            // The expression parsed, so what it names is known rather than matched: `seat(&desk, id).x` does
+            // not use a binding called `x`, and a clone of one is a compile error in generated code.
+            Some(free) => free.contains(var),
+            // It did not — a macro's tokens, a half-written value mid-keystroke. A missed capture is a move
+            // out of an `Fn`, which is worse than a clone nobody needed, so the scan stands in.
+            None => contains_ident(s, var),
+        });
+        if used && !idents.contains(var) {
             idents.push(var.clone());
         }
     }
     idents
 }
 
+/// The same as [`wrap_signal_clones`], with the view's loop variables and `[logic]` bindings in scope.
+///
+/// A closure that re-runs cannot *move* what it names, and a computed layout value names whatever the author
+/// had in scope — `inset_start:seat(&desk, id).x` captures `desk` and `id`, neither of which carries a `$`.
+impl ViewGen<'_> {
+    pub(super) fn clone_captures(&self, raw_values: &[&str], closure_expr: String) -> String {
+        let idents = captured_idents_with(raw_values, &self.loop_variables, &self.locals);
+        clone_block(&idents, closure_expr)
+    }
+}
+
 /// Wraps a `move` closure literal in a block that clones every `$name` signal referenced (raw, still carrying `$`) across `raw_values` first, generalized for `color_expr` callers, whose reads (e.g. `accent.get()`) are embedded inside an already-built closure string rather than assembled inline. A no-op when none of `raw_values` reference a signal, so a purely static/theme color emits the closure unchanged.
 pub(super) fn wrap_signal_clones(raw_values: &[&str], closure_expr: String) -> String {
     // No loop scope is available here (free function), so loop variables are captured by move as before.
-    let idents = captured_idents(raw_values, &[]);
+    clone_block(&captured_idents(raw_values, &[]), closure_expr)
+}
+
+/// Prefixes a closure literal with one `let x = x.clone();` per name, inside a block so the whole thing is
+/// still an expression. A no-op when there is nothing to clone.
+fn clone_block(idents: &[String], closure_expr: String) -> String {
     if idents.is_empty() {
         return closure_expr;
     }
@@ -320,8 +348,15 @@ fn collect_snippets(nodes: &[ViewNode], out: &mut Vec<String>) {
     for node in nodes {
         match node {
             ViewNode::Element(el) => {
+                // A text node's content is prose, and only its `{…}` holes are source. Pushing the whole
+                // string made `syn` lex a sentence — where an `I"` or a stray exponent is a hard lexer error
+                // inside a proc macro, not a `Result` a caller can fall back from.
                 if let Some(content) = &el.content {
-                    out.push(content.clone());
+                    for segment in parse_interpolation(content) {
+                        if let Segment::Expr { text, .. } = segment {
+                            out.push(text);
+                        }
+                    }
                 }
                 for attr in &el.attributes {
                     // A quoted value is the author's data, never source: `component_attr_expr` hands it

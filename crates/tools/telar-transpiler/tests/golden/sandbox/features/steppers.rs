@@ -98,7 +98,7 @@ pub fn features_steppers(props: FeaturesSteppersProps, children: Children) -> Re
                                 let mut __slots = Slots::new();
                                 let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
                                 let __row_1 = {
-                                    let __node_7 = stepper(StepperProps::props().value(seats.clone()).min(1.0).max(8.0).step(1.0).on_change(Box::new({ let last_change = last_change.clone(); move |v| last_change.set(format!("stepped to {v:.0}")) })).build(), Children::default())?;
+                                    let __node_7 = stepper(StepperProps::props().value(seats.clone()).min(1.0).max(8.0).step(1.0).on_change(std::rc::Rc::new({ let last_change = last_change.clone(); move |v| last_change.set(format!("stepped to {v:.0}")) })).build(), Children::default())?;
                                     let __text_1 = {
                                         let last_change = last_change.clone();
                                         Text::declaring(

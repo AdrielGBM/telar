@@ -169,7 +169,7 @@ pub fn features_positioning(props: FeaturesPositioningProps, children: Children)
                                 };
                                 __children.push(box_item(__sbox_5));
                                 let __row_0 = {
-                                    let __node_9 = button(ButtonProps::props().label("Move the badge").ghost(true).on_press(Box::new({ let corner = corner.clone(); move || corner.set((corner.get() + 1) % 4) })).build(), Children::default())?;
+                                    let __node_9 = button(ButtonProps::props().label("Move the badge").ghost(true).on_press(std::rc::Rc::new({ let corner = corner.clone(); move || corner.set((corner.get() + 1) % 4) })).build(), Children::default())?;
                                     Container::new(LayoutStyle::new().flex_row().gap(10.0), children![__node_9])?
                                 };
                                 __children.push(box_item(__row_0));
@@ -442,8 +442,8 @@ pub fn features_positioning(props: FeaturesPositioningProps, children: Children)
                                 )?;
                                 __children.push(box_item(__node_23));
                                 let __row_2 = {
-                                    let __node_24 = button(ButtonProps::props().label("Fill").fill(Reactive::of({ let theme = theme.clone(); move || theme.get().primary })).on_press(Box::new({ let slot = slot.clone(); move || slot.set(Slot::Filled(7)) })).build(), Children::default())?;
-                                    let __node_25 = button(ButtonProps::props().label("Clear").ghost(true).on_press(Box::new({ let slot = slot.clone(); move || slot.set(Slot::Empty) })).build(), Children::default())?;
+                                    let __node_24 = button(ButtonProps::props().label("Fill").fill(Reactive::of({ let theme = theme.clone(); move || theme.get().primary })).on_press(std::rc::Rc::new({ let slot = slot.clone(); move || slot.set(Slot::Filled(7)) })).build(), Children::default())?;
+                                    let __node_25 = button(ButtonProps::props().label("Clear").ghost(true).on_press(std::rc::Rc::new({ let slot = slot.clone(); move || slot.set(Slot::Empty) })).build(), Children::default())?;
                                     Container::new(LayoutStyle::new().flex_row().gap(10.0), children![__node_24, __node_25])?
                                 };
                                 __children.push(box_item(__row_2));

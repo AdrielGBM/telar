@@ -1,6 +1,7 @@
 use layout_core::{AlignItems, JustifyContent, LayoutError, LayoutStyle};
 use reactive_core::{Reactive, RwSignal};
 use renderer_core::{Border, BorderRadius, Color, RectStyle, ShapeStyle};
+use std::rc::Rc;
 use telar_macros::Props;
 #[cfg(test)]
 use ui_core::Slots;
@@ -69,7 +70,7 @@ pub struct ModalProps {
     pub title: Reactive<String>,
     /// Runs after the modal sets `open = false` (scrim tap or Close), so a caller can react to dismissal.
     #[props(some, default)]
-    pub on_close: Option<Box<dyn Fn()>>,
+    pub on_close: Option<Rc<dyn Fn()>>,
     /// Dialog surface colour. `Color::TRANSPARENT` (the default) means "unset" -> the theme's `surface`. A closure
     /// (re-read every frame) so a theme token or `$signal` colour re-colours live, like `button`'s `fill`.
     #[props(into, default = Reactive::of(|| Color::TRANSPARENT))]

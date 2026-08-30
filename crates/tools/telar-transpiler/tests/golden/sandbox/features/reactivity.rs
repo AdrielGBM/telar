@@ -130,9 +130,9 @@ pub fn features_reactivity(props: FeaturesReactivityProps, children: Children) -
                                 };
                                 __children.push(box_item(__text_2));
                                 let __row_0 = {
-                                    let __node_3 = button(ButtonProps::props().label("−").outline(Reactive::of({ let theme = theme.clone(); move || theme.get().primary })).on_press(Box::new({ let count = count.clone(); move || count.update(|n| *n = (*n - 1).max(0)) })).build(), Children::default())?;
-                                    let __node_4 = button(ButtonProps::props().label("+").fill(Reactive::of({ let theme = theme.clone(); move || theme.get().primary })).on_press(Box::new({ let count = count.clone(); move || count.update(|n| *n = (*n + 1).min(10)) })).build(), Children::default())?;
-                                    let __node_5 = button(ButtonProps::props().label("Reset").ghost(true).on_press(Box::new({ let count = count.clone(); move || count.set(0) })).build(), Children::default())?;
+                                    let __node_3 = button(ButtonProps::props().label("−").outline(Reactive::of({ let theme = theme.clone(); move || theme.get().primary })).on_press(std::rc::Rc::new({ let count = count.clone(); move || count.update(|n| *n = (*n - 1).max(0)) })).build(), Children::default())?;
+                                    let __node_4 = button(ButtonProps::props().label("+").fill(Reactive::of({ let theme = theme.clone(); move || theme.get().primary })).on_press(std::rc::Rc::new({ let count = count.clone(); move || count.update(|n| *n = (*n + 1).min(10)) })).build(), Children::default())?;
+                                    let __node_5 = button(ButtonProps::props().label("Reset").ghost(true).on_press(std::rc::Rc::new({ let count = count.clone(); move || count.set(0) })).build(), Children::default())?;
                                     Container::new(LayoutStyle::new().flex_row().gap(10.0), children![__node_3, __node_4, __node_5])?
                                 };
                                 __children.push(box_item(__row_0));
@@ -158,11 +158,9 @@ pub fn features_reactivity(props: FeaturesReactivityProps, children: Children) -
                 {
                     let theme = theme.clone();
                     let level = level.clone();
-                    let count = count.clone();
                 move || {
                     let theme = theme.clone();
                     let level = level.clone();
-                    let count = count.clone();
                     let mut __slots = Slots::new();
                     let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
                     let __node_8 = {
@@ -170,11 +168,9 @@ pub fn features_reactivity(props: FeaturesReactivityProps, children: Children) -
                             {
                                 let theme = theme.clone();
                                 let level = level.clone();
-                                let count = count.clone();
                             move || {
                                 let theme = theme.clone();
                                 let level = level.clone();
-                                let count = count.clone();
                                 let mut __slots = Slots::new();
                                 let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
                                 let __sbox_0 = {
@@ -234,9 +230,9 @@ pub fn features_reactivity(props: FeaturesReactivityProps, children: Children) -
                                 let mut __slots = Slots::new();
                                 let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
                                 let __row_1 = {
-                                    let __node_12 = button(ButtonProps::props().label("Add").fill(Reactive::of({ let theme = theme.clone(); move || theme.get().primary })).on_press(Box::new({ let todos = todos.clone(); move || todos.update(|v| { let id = v.iter().map(|t| t.id).max().unwrap_or(0) + 1; v.push(Todo { id, label: "New task" }); }) })).build(), Children::default())?;
-                                    let __node_13 = button(ButtonProps::props().label("Reverse").outline(Reactive::of({ let theme = theme.clone(); move || theme.get().primary })).on_press(Box::new({ let todos = todos.clone(); move || todos.update(|v| v.reverse()) })).build(), Children::default())?;
-                                    let __node_14 = button(ButtonProps::props().label("Remove first").ghost(true).on_press(Box::new({ let todos = todos.clone(); move || todos.update(|v| { if !v.is_empty() { v.remove(0); } }) })).build(), Children::default())?;
+                                    let __node_12 = button(ButtonProps::props().label("Add").fill(Reactive::of({ let theme = theme.clone(); move || theme.get().primary })).on_press(std::rc::Rc::new({ let todos = todos.clone(); move || todos.update(|v| { let id = v.iter().map(|t| t.id).max().unwrap_or(0) + 1; v.push(Todo { id, label: "New task" }); }) })).build(), Children::default())?;
+                                    let __node_13 = button(ButtonProps::props().label("Reverse").outline(Reactive::of({ let theme = theme.clone(); move || theme.get().primary })).on_press(std::rc::Rc::new({ let todos = todos.clone(); move || todos.update(|v| v.reverse()) })).build(), Children::default())?;
+                                    let __node_14 = button(ButtonProps::props().label("Remove first").ghost(true).on_press(std::rc::Rc::new({ let todos = todos.clone(); move || todos.update(|v| { if !v.is_empty() { v.remove(0); } }) })).build(), Children::default())?;
                                     Container::new(LayoutStyle::new().flex_row().gap(8.0), children![__node_12, __node_13, __node_14])?
                                 };
                                 __children.push(box_item(__row_1));
@@ -307,7 +303,7 @@ pub fn features_reactivity(props: FeaturesReactivityProps, children: Children) -
                                 let count = count.clone();
                                 let mut __slots = Slots::new();
                                 let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-                                let __node_19 = button(ButtonProps::props().label("Toggle").fill(Reactive::of({ let theme = theme.clone(); move || theme.get().primary })).on_press(Box::new({ let show = show.clone(); move || show.toggle() })).build(), Children::default())?;
+                                let __node_19 = button(ButtonProps::props().label("Toggle").fill(Reactive::of({ let theme = theme.clone(); move || theme.get().primary })).on_press(std::rc::Rc::new({ let show = show.clone(); move || show.toggle() })).build(), Children::default())?;
                                 __children.push(box_item(__node_19));
                                 let __node_20 = ReactiveList::new(
                                     { let show = show.clone(); move || vec![show.get()] },
@@ -400,7 +396,7 @@ pub fn features_reactivity(props: FeaturesReactivityProps, children: Children) -
                                     )?
                                 };
                                 __children.push(box_item(__text_8));
-                                let __node_24 = button(ButtonProps::props().label("Toggle panel").fill(Reactive::of({ let theme = theme.clone(); move || theme.get().primary })).on_press(Box::new({ let show_panel = show_panel.clone(); move || show_panel.toggle() })).build(), Children::default())?;
+                                let __node_24 = button(ButtonProps::props().label("Toggle panel").fill(Reactive::of({ let theme = theme.clone(); move || theme.get().primary })).on_press(std::rc::Rc::new({ let show_panel = show_panel.clone(); move || show_panel.toggle() })).build(), Children::default())?;
                                 __children.push(box_item(__node_24));
                                 let __lazy_0 = {
                                     Lazy::new(
@@ -643,7 +639,7 @@ pub fn features_reactivity(props: FeaturesReactivityProps, children: Children) -
                                 let show_modal = show_modal.clone();
                                 let mut __slots = Slots::new();
                                 let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-                                let __node_37 = button(ButtonProps::props().label("Open modal").fill(Reactive::of({ let theme = theme.clone(); move || theme.get().primary })).on_press(Box::new({ let show_modal = show_modal.clone(); move || show_modal.set(true) })).build(), Children::default())?;
+                                let __node_37 = button(ButtonProps::props().label("Open modal").fill(Reactive::of({ let theme = theme.clone(); move || theme.get().primary })).on_press(std::rc::Rc::new({ let show_modal = show_modal.clone(); move || show_modal.set(true) })).build(), Children::default())?;
                                 __children.push(box_item(__node_37));
                                 __slots.extend_default(__children);
                                 Ok(__slots)
@@ -678,7 +674,7 @@ pub fn features_reactivity(props: FeaturesReactivityProps, children: Children) -
                                                     { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(13.0).with_color(theme.get().muted) },
                                                 )?
                                             };
-                                            let __node_39 = button(ButtonProps::props().label("Close").outline(Reactive::of({ let theme = theme.clone(); move || theme.get().primary })).on_press(Box::new({ let show_modal = show_modal.clone(); move || show_modal.set(false) })).build(), Children::default())?;
+                                            let __node_39 = button(ButtonProps::props().label("Close").outline(Reactive::of({ let theme = theme.clone(); move || theme.get().primary })).on_press(std::rc::Rc::new({ let show_modal = show_modal.clone(); move || show_modal.set(false) })).build(), Children::default())?;
                                             StyledContainer::new(LayoutStyle::new().flex_column().padding_all(24.0).gap(12.0), { let theme = theme.clone(); move |_| RectStyle { fill: Some(Paint::Solid(theme.get().surface)), border: Some(Border { paint: Paint::Solid(theme.get().border), widths: [1.0; 4] }), shadow: None, radius: BorderRadius::all(12.0) } }, children![__text_13, __text_14, __node_39])?.on_press(move || ())
                                         };
                                         StyledContainer::new(LayoutStyle::new().flex_column().flex_grow(1.0).align_items(AlignItems::CENTER).justify_content(JustifyContent::CENTER), move |_| RectStyle::default().with_fill(Color::rgba(0.0 / 255.0, 0.0 / 255.0, 0.0 / 255.0, 128.0 / 255.0)).with_radius(BorderRadius::zero()), children![__sbox_10])?.on_press({ let show_modal = show_modal.clone(); move || show_modal.set(false) })

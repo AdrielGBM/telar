@@ -63,7 +63,7 @@ pub struct SliderProps {
     pub label: Reactive<String>,
     /// Fires with the new `min..=max` value on every drag report (the press and each subsequent move).
     #[props(some, default)]
-    pub on_change: Option<Box<dyn Fn(f32)>>,
+    pub on_change: Option<Rc<dyn Fn(f32)>>,
 }
 
 pub fn slider(props: SliderProps, _children: Children) -> Result<Box<dyn LayoutItem>, LayoutError> {
@@ -83,7 +83,7 @@ pub fn slider(props: SliderProps, _children: Children) -> Result<Box<dyn LayoutI
     // Uncontrolled: own the value so the slider still works when the caller binds no signal.
     let value = value.unwrap_or_else(|| signal(min));
     let width = if width > 0.0 { width } else { 220.0 };
-    // Shared across the fill and thumb style closures (a `Box<dyn Fn>` is not `Clone`, an `Rc` handle is).
+    // Shared across the fill and thumb style closures (a `Rc<dyn Fn>` is not `Clone`, an `Rc` handle is).
     // The drag and the arrow keys are two ways into one commit, so the callback has to reach both.
     let on_change: Option<Rc<dyn Fn(f32)>> = on_change.map(|f| -> Rc<dyn Fn(f32)> { Rc::from(f) });
     let key_on_change = on_change.clone();
@@ -258,7 +258,7 @@ mod tests {
         let mut widget = slider(
             SliderProps::props()
                 .width(100.0)
-                .on_change(Box::new(move |v| sink.set(v)))
+                .on_change(Rc::new(move |v| sink.set(v)))
                 .build(),
             Children::default(),
         )

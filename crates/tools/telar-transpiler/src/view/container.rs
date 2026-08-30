@@ -31,17 +31,18 @@ impl ViewGen<'_> {
         let var = self.next_variable_name(&el.tag);
         let pad = self.indent_str();
         let style = self.make_layout_style(&el.tag, &el.classes, &el.attributes);
-        // A layout prop reading a signal (`width:$dock_w`) makes the whole style reactive: the node keeps an
-        // effect that re-resolves it, because a `LayoutStyle` is a value handed to the tree once, not a
-        // closure the renderer re-runs. Paint needs no equivalent — see `StyledContainer::styled_by`.
-        let reactive = self.reactive_layout_values(&el.attributes);
+        // A computed layout prop (`width:$dock_w`, `inset_start:seat(&desk, id).x`) makes the whole style
+        // reactive: the node keeps an effect that re-resolves it, because a `LayoutStyle` is a value handed
+        // to the tree once, not a closure the renderer re-runs. Paint needs no equivalent — see
+        // `StyledContainer::styled_by`.
+        let reactive = self.reactive_layout_values(&el.tag, &el.attributes);
         let styled_by = if reactive.is_empty() {
             String::new()
         } else {
             let raw: Vec<&str> = reactive.iter().map(String::as_str).collect();
             format!(
                 ".styled_by({})",
-                wrap_signal_clones(&raw, format!("move || {style}"))
+                self.clone_captures(&raw, format!("move || {style}"))
             )
         };
         let cursor = el

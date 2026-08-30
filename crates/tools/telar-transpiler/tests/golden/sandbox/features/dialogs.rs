@@ -42,7 +42,7 @@ pub fn features_dialogs(props: FeaturesDialogsProps, children: Children) -> Resu
                                     )?
                                 };
                                 __children.push(box_item(__text_0));
-                                let __node_3 = button(ButtonProps::props().label("Open modal").fill(Reactive::of({ let theme = theme.clone(); move || theme.get().primary })).on_press(Box::new(move || open_overlay("confirm"))).build(), Children::default())?;
+                                let __node_3 = button(ButtonProps::props().label("Open modal").fill(Reactive::of({ let theme = theme.clone(); move || theme.get().primary })).on_press(std::rc::Rc::new(move || open_overlay("confirm"))).build(), Children::default())?;
                                 __children.push(box_item(__node_3));
                                 let __node_4 = {
                                     let __deferred = Children::new(
@@ -101,7 +101,7 @@ pub fn features_dialogs(props: FeaturesDialogsProps, children: Children) -> Resu
                                 let theme = theme.clone();
                                 let mut __slots = Slots::new();
                                 let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-                                let __node_8 = button(ButtonProps::props().label("Open drawer").fill(Reactive::of({ let theme = theme.clone(); move || theme.get().primary })).on_press(Box::new(move || open_overlay("nav"))).build(), Children::default())?;
+                                let __node_8 = button(ButtonProps::props().label("Open drawer").fill(Reactive::of({ let theme = theme.clone(); move || theme.get().primary })).on_press(std::rc::Rc::new(move || open_overlay("nav"))).build(), Children::default())?;
                                 __children.push(box_item(__node_8));
                                 let __node_9 = {
                                     let __deferred = Children::new(

@@ -5,6 +5,7 @@ use std::collections::HashMap;
 use telar_parser::{Attr, Element, Value};
 
 use crate::naming::style_function_name;
+use crate::registry::ValueKind;
 use crate::style::{PropCall, format_f32, layout_prop_call};
 
 use super::ViewGen;
@@ -330,12 +331,17 @@ impl ViewGen<'_> {
         expr
     }
 
-    /// The raw values of this element's layout attributes that read a signal, so the caller can wrap the
+    /// The raw values of this element's layout attributes that are not literals, so the caller can wrap the
     /// style expression in an effect. Empty means the style is a constant and the node needs none.
-    pub(super) fn reactive_layout_values(&self, attrs: &[Attr]) -> Vec<String> {
+    ///
+    /// **A literal is the only thing that cannot change**, and that is the whole of the test. It used to be
+    /// `contains('$')`, which made the sigil the reactivity rule rather than sugar — so `pad:$theme.gutter`
+    /// followed a theme switch and `pad:gutter()` silently did not, from one expression to the next. The
+    /// runtime already tracks what a closure reads; the closure is all it needs to be given.
+    pub(super) fn reactive_layout_values(&self, tag: &str, attrs: &[Attr]) -> Vec<String> {
         attrs
             .iter()
-            .filter(|a| !a.value.is_quoted() && a.value.text().contains('$'))
+            .filter(|a| !a.value.is_quoted() && !is_literal_value(tag, &a.key, a.value.text()))
             .filter(|a| matches!(layout_prop_call(&a.key, a.value.text()), PropCall::Call(_)))
             .map(|a| a.value.text().to_string())
             .collect()
@@ -378,5 +384,27 @@ impl ViewGen<'_> {
             .find(|c| c.name == class_name)
             .map(|c| c.props.iter().any(|p| p.key == "axis"))
             .unwrap_or(false)
+    }
+}
+
+/// Whether `value` under `key` is a literal — a number, a percentage, or a spelling from the key's own
+/// closed set. Everything else names something, and a name can answer differently the next time it is asked.
+fn is_literal_value(tag: &str, key: &str, value: &str) -> bool {
+    let v = value.trim();
+    let number = |s: &str| {
+        s.parse::<f32>().is_ok()
+            || s.strip_suffix('%')
+                .is_some_and(|pct| pct.trim().parse::<f32>().is_ok())
+    };
+    match crate::registry::value_kind(tag, key) {
+        Some(ValueKind::Keywords(table)) => table.iter().any(|(name, _)| *name == v),
+        Some(ValueKind::KeywordsOrNumber(table)) => {
+            number(v) || table.iter().any(|(name, _)| *name == v)
+        }
+        Some(ValueKind::Number) => number(v),
+        Some(ValueKind::Edges) => v.split_whitespace().all(number),
+        // A colour is paint, and paint is already a closure the renderer re-runs; anything else is a key
+        // with no schema, which is a key this style does not build from.
+        Some(ValueKind::Color) | None => true,
     }
 }

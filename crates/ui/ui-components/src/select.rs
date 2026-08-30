@@ -1,3 +1,5 @@
+use std::rc::Rc;
+
 use layout_core::LayoutError;
 use reactive_core::{Reactive, RwSignal, signal};
 use renderer_core::Color;
@@ -34,7 +36,7 @@ pub struct SelectProps {
     pub color: Reactive<Color>,
     /// Fired with the picked index whenever a selection is made.
     #[props(some, default)]
-    pub on_select: Option<Box<dyn Fn(u32)>>,
+    pub on_select: Option<Rc<dyn Fn(u32)>>,
     /// Take the width the row offers instead of the fixed trigger width — what a form field wants, where a
     /// 180px control beside full-width ones reads as a mistake. The panel opens at that width too.
     #[props(default = false)]
@@ -135,7 +137,7 @@ mod tests {
         let item = select(
             SelectProps::props()
                 .selected(picked)
-                .on_select(Box::new(move |i| sink.set(Some(i))))
+                .on_select(Rc::new(move |i| sink.set(Some(i))))
                 .build(),
             sizes(),
         )
@@ -233,7 +235,7 @@ mod tests {
         let item = select(
             SelectProps::props()
                 .selected(picked)
-                .on_select(Box::new(move |i| sink.set(Some(i))))
+                .on_select(Rc::new(move |i| sink.set(Some(i))))
                 .build(),
             rows,
         )

@@ -1,3 +1,5 @@
+use std::rc::Rc;
+
 use telar_macros::Props;
 
 use layout_core::{AlignItems, JustifyContent, LayoutError, LayoutStyle};
@@ -46,8 +48,8 @@ pub struct ButtonProps {
     pub outline: Reactive<Color>,
     #[props(default = false)]
     pub ghost: bool,
-    #[props(default = Box::new(|| {}))]
-    pub on_press: Box<dyn Fn()>,
+    #[props(default = Rc::new(|| {}))]
+    pub on_press: Rc<dyn Fn()>,
 }
 
 pub fn button(props: ButtonProps, _children: Children) -> Result<Box<dyn LayoutItem>, LayoutError> {
@@ -89,7 +91,7 @@ pub fn button(props: ButtonProps, _children: Children) -> Result<Box<dyn LayoutI
     .hover_style(move |_r| variant_rect(&hover_fill, &hover_outline, ghost, true))
     .on_hover(move |h| hovered.set(h))
     .control(Role::Button)
-    .on_press(on_press);
+    .on_press(move || on_press());
     Ok(box_item(container))
 }
 
@@ -226,7 +228,7 @@ mod tests {
             ButtonProps::props()
                 .label("OK")
                 .fill(Reactive::of(|| Color::rgba(0.2, 0.4, 0.9, 1.0)))
-                .on_press(Box::new(move || sink.set(true)))
+                .on_press(Rc::new(move || sink.set(true)))
                 .build(),
             Children::default(),
         )

@@ -11,7 +11,7 @@ use ui_core::{
 };
 
 /// One item's widget, built on demand from its position in the caller's storage.
-pub type ItemBuilder = Box<dyn Fn(usize) -> Result<Box<dyn LayoutItem>, LayoutError>>;
+pub type ItemBuilder = Rc<dyn Fn(usize) -> Result<Box<dyn LayoutItem>, LayoutError>>;
 
 /// What a live drag has established: which item was picked up, and which slot it currently sits over.
 ///
@@ -42,12 +42,12 @@ pub struct ReorderableProps {
     pub count: Reactive<usize>,
     /// Builds the widget for the item stored at `index`. Called once per item and reused across a drag, so it
     /// may hold state of its own.
-    #[props(default = Box::new(|_| Err(LayoutError::Engine("reorderable: no item builder".into()))))]
+    #[props(default = Rc::new(|_| Err(LayoutError::Engine("reorderable: no item builder".into()))))]
     pub item: ItemBuilder,
     /// The drop landed: move the item stored at `from` into slot `to`, counting slots in the list *before*
     /// the move. [`ui_core::apply_move`] is that rule over a `Vec`, if the caller's storage is one.
-    #[props(default = Box::new(|_, _| {}))]
-    pub on_move: Box<dyn Fn(usize, usize)>,
+    #[props(default = Rc::new(|_, _| {}))]
+    pub on_move: Rc<dyn Fn(usize, usize)>,
     /// Lay the strip out along the horizontal axis. A column otherwise, matching `ReactiveList`'s own default.
     #[props(default)]
     pub row: bool,
@@ -294,14 +294,14 @@ mod tests {
         let widget = reorderable(
             ReorderableProps::props()
                 .count(Reactive::of(move || count_items.get().len()))
-                .item(Box::new(|_| {
+                .item(Rc::new(|_| {
                     Ok(box_item(StyledContainer::new(
                         LayoutStyle::new().width(ITEM).height(40.0),
                         |_| RectStyle::default(),
                         vec![],
                     )?))
                 }))
-                .on_move(Box::new(move |from, to| {
+                .on_move(Rc::new(move |from, to| {
                     recorded.borrow_mut().push((from, to));
                     let mut current = moved_items.peek();
                     ui_core::apply_move(&mut current, from, to);

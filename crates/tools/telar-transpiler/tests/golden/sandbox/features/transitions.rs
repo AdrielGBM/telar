@@ -76,7 +76,7 @@ pub fn features_transitions(props: FeaturesTransitionsProps, children: Children)
                                         };
                                         Container::new(LayoutStyle::new().flex_column().gap(6.0).align_items(AlignItems::CENTER), children![__sbox_1, __text_1])?
                                     };
-                                    let __node_3 = button(ButtonProps::props().label("Toggle").fill(Reactive::of({ let theme = theme.clone(); move || theme.get().primary })).on_press(Box::new({ let alt = alt.clone(); let accent = accent.clone(); let theme = theme.clone(); move || { alt.toggle(); accent.set(if alt.get() { theme.get().purple } else { theme.get().primary }) } })).build(), Children::default())?;
+                                    let __node_3 = button(ButtonProps::props().label("Toggle").fill(Reactive::of({ let theme = theme.clone(); move || theme.get().primary })).on_press(std::rc::Rc::new({ let alt = alt.clone(); let accent = accent.clone(); let theme = theme.clone(); move || { alt.toggle(); accent.set(if alt.get() { theme.get().purple } else { theme.get().primary }) } })).build(), Children::default())?;
                                     Container::new(LayoutStyle::new().flex_row().gap(14.0).align_items(AlignItems::CENTER).flex_wrap(), children![__col_1, __col_2, __node_3])?
                                 };
                                 __children.push(box_item(__row_0));
@@ -129,7 +129,7 @@ pub fn features_transitions(props: FeaturesTransitionsProps, children: Children)
                                         let __transition_2 = motion::Animated::new(fade.get(), motion::tween(std::time::Duration::from_millis(300), motion::Easing::EaseInOut));
                                         StyledContainer::new(LayoutStyle::new().flex_column().width(130.0).height(64.0).align_items(AlignItems::CENTER).justify_content(JustifyContent::CENTER), { let theme = theme.clone(); let fade = fade.clone(); move |_| RectStyle::default().with_fill(theme.get().primary).with_radius(BorderRadius::all(12.0)) }, children![__text_2])?.with_opacity({ let fade = fade.clone(); move || { __transition_2.retarget(fade.get()); __transition_2.get() } })
                                     };
-                                    let __node_7 = button(ButtonProps::props().label("Toggle").fill(Reactive::of({ let theme = theme.clone(); move || theme.get().primary })).on_press(Box::new({ let fade = fade.clone(); move || { let v = fade.peek(); fade.set(if v > 0.5 { 0.15 } else { 1.0 }) } })).build(), Children::default())?;
+                                    let __node_7 = button(ButtonProps::props().label("Toggle").fill(Reactive::of({ let theme = theme.clone(); move || theme.get().primary })).on_press(std::rc::Rc::new({ let fade = fade.clone(); move || { let v = fade.peek(); fade.set(if v > 0.5 { 0.15 } else { 1.0 }) } })).build(), Children::default())?;
                                     Container::new(LayoutStyle::new().flex_row().gap(14.0).align_items(AlignItems::CENTER).flex_wrap(), children![__sbox_2, __node_7])?
                                 };
                                 __children.push(box_item(__row_1));

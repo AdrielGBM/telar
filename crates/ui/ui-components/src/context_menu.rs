@@ -26,6 +26,7 @@ use ui_core::{Children, LayoutItem, Overlay, StyledContainer, Text, box_item};
 /// The action rides on the entry rather than coming back as an index, because the rows of a context menu are
 /// heterogeneous by nature — half of them are only there when they apply — and a caller matching on numbers
 /// keeps a second list in step with the first for no reason.
+#[derive(Clone)]
 pub enum Entry {
     /// A label, the key that does the same thing, and what picking it does.
     Row {
@@ -41,8 +42,11 @@ pub enum Entry {
     /// A row the caller draws: the strip of icons a file manager puts at the top of its menu, a colour
     /// swatch, a preview. `act` makes it a stop for the keyboard as well as for the pointer; without one the
     /// arrows step over it, which is what a heading or a self-contained strip of buttons wants.
+    ///
+    /// A recipe rather than a built widget, so a menu can be opened twice — and so the entry list is
+    /// `Clone`, which is what lets it ride on props that reach a region that rebuilds.
     Custom {
-        widget: Box<dyn LayoutItem>,
+        widget: Rc<dyn Fn() -> Result<Box<dyn LayoutItem>, LayoutError>>,
         act: Option<Rc<dyn Fn()>>,
     },
     /// A line between two groups of rows. Never a stop.
@@ -138,8 +142,8 @@ pub struct ContextMenuProps {
     pub entries: Vec<Entry>,
     /// Run when the menu is done with: a row was picked, Escape was pressed, or the hand went elsewhere. The
     /// caller owns whether the menu exists, so this is how it says the answer is in.
-    #[props(default = Box::new(|| {}))]
-    pub on_close: Box<dyn Fn()>,
+    #[props(default = Rc::new(|| {}))]
+    pub on_close: Rc<dyn Fn()>,
     #[props(default = 180.0)]
     pub width: f32,
     /// The box the panel is kept inside. The window, usually; a pane for a menu that belongs to one.
@@ -209,7 +213,7 @@ fn panel(
     width: f32,
     within: Rect,
     style: MenuStyle,
-    closing: Rc<Box<dyn Fn()>>,
+    closing: Rc<Rc<dyn Fn()>>,
 ) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let stops: Vec<usize> = entries
         .iter()
@@ -299,7 +303,7 @@ fn keys(
     acts: Vec<Act>,
     highlighted: RwSignal<Option<usize>>,
     opened: RwSignal<Option<usize>>,
-    closing: Rc<Box<dyn Fn()>>,
+    closing: Rc<Rc<dyn Fn()>>,
 ) -> impl Fn(&Key) + 'static {
     move |key| {
         if opened.peek().is_some() && !matches!(key, Key::Named(NamedKey::ArrowLeft)) {
@@ -367,7 +371,7 @@ fn row(
     within: Rect,
     highlighted: RwSignal<Option<usize>>,
     opened: RwSignal<Option<usize>>,
-    closing: Rc<Box<dyn Fn()>>,
+    closing: Rc<Rc<dyn Fn()>>,
 ) -> Result<(Box<dyn LayoutItem>, Act), LayoutError> {
     match entry {
         Entry::Separator => Ok((
@@ -400,7 +404,7 @@ fn row(
                             .flex_row()
                             .width(SizeDimension::Percent(1.0)),
                         move |_| lit(),
-                        vec![widget],
+                        vec![widget()?],
                     )?
                     .on_hover(move |now| {
                         if now && act.is_some() {
@@ -618,7 +622,7 @@ mod tests {
             ContextMenuProps::props()
                 .at((40.0, 30.0))
                 .entries(entries)
-                .on_close(Box::new(move || closing.borrow_mut().push("cerrar".into())))
+                .on_close(Rc::new(move || closing.borrow_mut().push("cerrar".into())))
                 .width(120.0)
                 .within(WINDOW)
                 .build(),

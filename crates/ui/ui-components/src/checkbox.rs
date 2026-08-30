@@ -1,3 +1,5 @@
+use std::rc::Rc;
+
 use telar_macros::Props;
 
 use layout_core::{AlignItems, JustifyContent, LayoutError, LayoutStyle};
@@ -25,7 +27,7 @@ pub struct CheckboxProps {
     pub color: Reactive<Color>,
     /// Fires with the new state on every toggle.
     #[props(some, default)]
-    pub on_toggle: Option<Box<dyn Fn(bool)>>,
+    pub on_toggle: Option<Rc<dyn Fn(bool)>>,
 }
 
 pub fn checkbox(
@@ -148,7 +150,7 @@ mod tests {
         crate::test_support::fresh_layout_runtime();
         let mut widget = checkbox(
             CheckboxProps::props()
-                .on_toggle(Box::new(move |v| sink.set(Some(v))))
+                .on_toggle(Rc::new(move |v| sink.set(Some(v))))
                 .build(),
             Children::default(),
         )

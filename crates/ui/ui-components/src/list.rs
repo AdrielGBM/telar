@@ -294,7 +294,7 @@ pub struct ItemProps {
     pub hint: Option<Reactive<String>>,
     /// Fired when the row is committed, on top of whatever the enclosing list does with the index.
     #[props(some, default)]
-    pub on_press: Option<Box<dyn Fn()>>,
+    pub on_press: Option<Rc<dyn Fn()>>,
 }
 
 pub fn item(props: ItemProps, children: Children) -> Result<Box<dyn LayoutItem>, LayoutError> {

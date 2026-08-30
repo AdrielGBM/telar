@@ -42,9 +42,9 @@ pub fn core_sidebar(props: CoreSidebarProps, children: Children) -> Result<Box<d
             };
             let __col_3 = {
                 let __row_0 = {
-                    let __node_0 = button(ButtonProps::props().label("Modern").fill(Reactive::of({ let theme = theme.clone(); move || theme.get().primary })).on_press(Box::new(move || set_mode("modern"))).build(), Children::default())?;
-                    let __node_1 = button(ButtonProps::props().label("Pastel").fill(Reactive::of({ let theme = theme.clone(); move || theme.get().primary })).on_press(Box::new(move || set_mode("pastel"))).build(), Children::default())?;
-                    let __node_2 = button(ButtonProps::props().label("Midnight").fill(Reactive::of({ let theme = theme.clone(); move || theme.get().primary })).on_press(Box::new(move || set_mode("midnight"))).build(), Children::default())?;
+                    let __node_0 = button(ButtonProps::props().label("Modern").fill(Reactive::of({ let theme = theme.clone(); move || theme.get().primary })).on_press(std::rc::Rc::new(move || set_mode("modern"))).build(), Children::default())?;
+                    let __node_1 = button(ButtonProps::props().label("Pastel").fill(Reactive::of({ let theme = theme.clone(); move || theme.get().primary })).on_press(std::rc::Rc::new(move || set_mode("pastel"))).build(), Children::default())?;
+                    let __node_2 = button(ButtonProps::props().label("Midnight").fill(Reactive::of({ let theme = theme.clone(); move || theme.get().primary })).on_press(std::rc::Rc::new(move || set_mode("midnight"))).build(), Children::default())?;
                     Container::new(LayoutStyle::new().flex_row().gap(6.0).flex_wrap(), children![__node_0, __node_1, __node_2])?
                 };
                 let __text_3 = {
