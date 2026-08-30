@@ -12,6 +12,7 @@
 //! hand over a whole widget for a row that is not a line of text, and the panel's paint is amendable.
 
 use std::rc::Rc;
+use telar_macros::Props;
 
 use geometry_core::Rect;
 use layout_core::{AlignItems, JustifyContent, LayoutError, LayoutStyle, SizeDimension};
@@ -19,8 +20,6 @@ use platform_core::{Key, NamedKey, PointerButton};
 use reactive_core::{RwSignal, signal};
 use renderer_core::{Color, RectStyle, TextStyle};
 use ui_core::{LayoutItem, Overlay, StyledContainer, Text, box_item};
-
-use crate::shared::props_default;
 
 /// One line of a menu.
 ///
@@ -130,27 +129,25 @@ impl Default for MenuStyle {
     }
 }
 
+#[derive(Props)]
 pub struct ContextMenuProps {
     /// Where it was asked for, in surface coordinates.
+    #[props(default = (0.0, 0.0))]
     pub at: (f32, f32),
+    #[props(default = Vec::new())]
     pub entries: Vec<Entry>,
     /// Run when the menu is done with: a row was picked, Escape was pressed, or the hand went elsewhere. The
     /// caller owns whether the menu exists, so this is how it says the answer is in.
+    #[props(default = Box::new(|| {}))]
     pub on_close: Box<dyn Fn()>,
+    #[props(default = 180.0)]
     pub width: f32,
     /// The box the panel is kept inside. The window, usually; a pane for a menu that belongs to one.
+    #[props(default = Rect::new(0.0, 0.0, f32::MAX, f32::MAX))]
     pub within: Rect,
+    #[props(default = MenuStyle::default())]
     pub style: MenuStyle,
 }
-
-props_default!(ContextMenuProps {
-    at: ((0.0, 0.0)),
-    entries: (Vec::new()),
-    on_close: (Box::new(|| {})),
-    width: (180.0),
-    within: (Rect::new(0.0, 0.0, f32::MAX, f32::MAX)),
-    style: (MenuStyle::default()),
-});
 
 /// A menu opened at a point: rows, submenus, the keyboard, and every way out.
 pub fn context_menu(props: ContextMenuProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
@@ -170,7 +167,7 @@ pub fn context_menu(props: ContextMenuProps) -> Result<Box<dyn LayoutItem>, Layo
         width,
         within,
         style,
-        Rc::clone(&closing),
+        closing.clone(),
     )?;
 
     // A see-through sheet over everything, inside a blocking overlay: it keeps the press off whatever the menu
@@ -181,7 +178,7 @@ pub fn context_menu(props: ContextMenuProps) -> Result<Box<dyn LayoutItem>, Layo
     // itself, so this fires the moment the button goes down — which is when a menu should get out of the way,
     // and the only reading that also covers the hand that presses away and keeps moving. A tap as well would be
     // the same answer twice, once at each end of one gesture.
-    let dragged = Rc::clone(&closing);
+    let dragged = closing.clone();
     let backdrop = StyledContainer::new(
         LayoutStyle::new().flex_column().flex_grow(1.0),
         |_| RectStyle::default(),
@@ -234,7 +231,7 @@ fn panel(
             within,
             highlighted,
             opened,
-            Rc::clone(&closing),
+            closing.clone(),
         )?;
         rows.push(widget);
         acts.push(act);
@@ -392,7 +389,7 @@ fn row(
                 Some(act) => Act::Pick(Rc::clone(act)),
                 None => Act::None,
             };
-            let done = Rc::clone(&closing);
+            let done = closing.clone();
             Ok((
                 box_item(
                     StyledContainer::new(
@@ -425,10 +422,10 @@ fn row(
         } => {
             // The entry's own action and nothing else: closing is the panel's to do, once, wherever the pick came from.
             let stopping = match enabled {
-                true => Act::Pick(Rc::clone(&act)),
+                true => Act::Pick(act.clone()),
                 false => Act::None,
             };
-            let done = Rc::clone(&closing);
+            let done = closing.clone();
             let widget = line(
                 label,
                 hint,
@@ -595,7 +592,7 @@ mod tests {
         fresh_layout_runtime();
         let said: Rc<RefCell<Vec<String>>> = Rc::new(RefCell::new(Vec::new()));
         let entries = {
-            let (one, two, three) = (Rc::clone(&said), Rc::clone(&said), Rc::clone(&said));
+            let (one, two, three) = (said.clone(), said.clone(), said.clone());
             vec![
                 Entry::row("copiar", "ctrl+c", move || {
                     one.borrow_mut().push("copiar".into())
@@ -613,15 +610,16 @@ mod tests {
                 },
             ]
         };
-        let closing = Rc::clone(&said);
-        let menu = context_menu(ContextMenuProps {
-            at: (40.0, 30.0),
-            entries,
-            on_close: Box::new(move || closing.borrow_mut().push("cerrar".into())),
-            width: 120.0,
-            within: WINDOW,
-            ..Default::default()
-        })
+        let closing = said.clone();
+        let menu = context_menu(
+            ContextMenuProps::props()
+                .at((40.0, 30.0))
+                .entries(entries)
+                .on_close(Box::new(move || closing.borrow_mut().push("cerrar".into())))
+                .width(120.0)
+                .within(WINDOW)
+                .build(),
+        )
         .unwrap();
         lay_out(menu.layout_node(), WINDOW.width, WINDOW.height);
         let tree = ComponentList::new(menu);

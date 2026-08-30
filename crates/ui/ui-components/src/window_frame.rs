@@ -81,7 +81,7 @@ fn resize_grip(
     )?;
     let grip_rect = track_layout(grip.layout_node());
     let grab: Rc<Cell<Option<(f32, f32)>>> = Rc::new(Cell::new(None));
-    let release = Rc::clone(&grab);
+    let release = grab.clone();
     Ok(box_item(
         grip.on_drag(move |local_x, local_y| {
             let (Some(grip_rect), Some(card_rect)) = (&grip_rect, *card_rect.borrow()) else {
@@ -262,7 +262,7 @@ pub fn window_frame(
                 .padding_horizontal(4.0)
                 .padding_bottom(4.0),
             |_| RectStyle::default(),
-            vec![resize_grip(style.close, Rc::clone(&card_rect), resize)?],
+            vec![resize_grip(style.close, card_rect.clone(), resize)?],
         )?));
     }
 
@@ -278,6 +278,25 @@ pub fn window_frame(
     )?;
     *card_rect.borrow_mut() = track_layout(card.layout_node());
     Ok(box_item(card))
+}
+
+/// A frame with no colours of its own and no controls — what a caller fills in. Exists so adding a field to
+/// this struct does not break every construction of it.
+impl Default for SurfaceFrameStyle {
+    fn default() -> Self {
+        Self {
+            background: Color::TRANSPARENT,
+            title_bar: Color::TRANSPARENT,
+            title_text: Color::TRANSPARENT,
+            close: Color::TRANSPARENT,
+            radius: 0.0,
+            font_size: 14.0,
+            controls: WindowControls::default(),
+            body_inset: 12.0,
+            control_hover: Color::TRANSPARENT,
+            close_hover: Color::TRANSPARENT,
+        }
+    }
 }
 
 #[cfg(test)]
@@ -311,7 +330,7 @@ mod tests {
         crate::test_support::fresh_layout_runtime();
 
         let asked: Rc<RefCell<Vec<(f32, f32)>>> = Rc::new(RefCell::new(Vec::new()));
-        let sink = Rc::clone(&asked);
+        let sink = asked.clone();
         let style = SurfaceFrameStyle {
             background: Color::TRANSPARENT,
             title_bar: Color::TRANSPARENT,
@@ -402,7 +421,7 @@ mod tests {
         );
         let asked: Rc<std::cell::RefCell<Vec<(f32, f32)>>> =
             Rc::new(std::cell::RefCell::new(Vec::new()));
-        let sink = Rc::clone(&asked);
+        let sink = asked.clone();
         let mut frame = window_frame(
             "Settings",
             None,
@@ -529,24 +548,5 @@ mod tests {
             inset.x, 12.0,
             "the default inset must still hold the body off the edge"
         );
-    }
-}
-
-/// A frame with no colours of its own and no controls — what a caller fills in. Exists so adding a field to
-/// this struct does not break every construction of it.
-impl Default for SurfaceFrameStyle {
-    fn default() -> Self {
-        Self {
-            background: Color::TRANSPARENT,
-            title_bar: Color::TRANSPARENT,
-            title_text: Color::TRANSPARENT,
-            close: Color::TRANSPARENT,
-            radius: 0.0,
-            font_size: 14.0,
-            controls: WindowControls::default(),
-            body_inset: 12.0,
-            control_hover: Color::TRANSPARENT,
-            close_hover: Color::TRANSPARENT,
-        }
     }
 }

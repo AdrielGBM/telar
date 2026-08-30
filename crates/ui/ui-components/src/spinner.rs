@@ -1,4 +1,6 @@
+use reactive_core::Reactive;
 use std::time::Duration;
+use telar_macros::Props;
 
 use layout_core::{AlignItems, JustifyContent, LayoutError, LayoutStyle};
 use motion_core::{Easing, Keyframes, Repeat};
@@ -6,7 +8,6 @@ use renderer_core::{Border, BorderRadius, Color, RectStyle, ShapeStyle};
 use ui_core::{LayoutItem, StyledContainer, box_item, box_transform};
 
 use crate::shared;
-use crate::shared::props_default;
 
 /// Track stroke thickness and orbiting head diameter, as fractions of `size`.
 const TRACK_STROKE_FRACTION: f32 = 0.12;
@@ -27,17 +28,15 @@ const ROTATION: Duration = Duration::from_millis(900);
 /// per-frame trigonometry. Rotation is driven by `motion_core::Keyframes` under `Repeat::Loop`: the same
 /// self-driving, indefinitely-repeating primitive `motion.rsx`'s equalizer bars use with `Repeat::PingPong`,
 /// here a single 0 -> 360 degree leg instead.
+#[derive(Props)]
 pub struct SpinnerProps {
     /// Head (orbiting dot) accent. `Color::TRANSPARENT` (the default) means "unset": fall back to the theme accent.
-    pub color: Box<dyn Fn() -> Color>,
+    #[props(into, default = Reactive::of(|| Color::TRANSPARENT))]
+    pub color: Reactive<Color>,
     /// Ring diameter in px. `0.0` (the default) means "unset" — the spinner uses `24.0`.
+    #[props(default)]
     pub size: f32,
 }
-
-props_default!(SpinnerProps {
-    color: color,
-    size: zero,
-});
 
 pub fn spinner(props: SpinnerProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let SpinnerProps { color, size } = props;
@@ -55,7 +54,7 @@ pub fn spinner(props: SpinnerProps) -> Result<Box<dyn LayoutItem>, LayoutError> 
     let head = StyledContainer::new(
         LayoutStyle::new().width(head_size).height(head_size),
         move |_r| {
-            let fill = shared::resolve(color.as_ref(), || shared::accent());
+            let fill = shared::resolve(&color, shared::accent);
             RectStyle::default()
                 .with_fill(fill)
                 .with_radius(BorderRadius::all(head_size / 2.0))
@@ -107,7 +106,7 @@ mod tests {
     #[test]
     fn spinner_builds_with_default_size() {
         crate::test_support::fresh_layout_runtime();
-        let widget = spinner(SpinnerProps::default());
+        let widget = spinner(SpinnerProps::props().build());
         assert!(widget.is_ok());
         lay_out(widget.unwrap().layout_node());
     }
@@ -115,11 +114,7 @@ mod tests {
     #[test]
     fn spinner_builds_with_custom_size() {
         crate::test_support::fresh_layout_runtime();
-        let widget = spinner(SpinnerProps {
-            size: 48.0,
-            ..Default::default()
-        })
-        .unwrap();
+        let widget = spinner(SpinnerProps::props().size(48.0).build()).unwrap();
         lay_out(widget.layout_node());
     }
 }

@@ -4,10 +4,13 @@
 #[allow(unused_imports)] use super::*;
 
 // One documentation row for an attribute: its name, accepted values, and a short description.
-#[derive(Default)]
+#[derive(::telar::Props)]
 pub struct SharedComponentsPropRowProps {
+    #[props(default)]
     pub name: &'static str,
+    #[props(default)]
     pub values: &'static str,
+    #[props(default)]
     pub about: &'static str,
 }
 
@@ -45,7 +48,7 @@ pub fn shared_components_prop_row(props: SharedComponentsPropRowProps) -> Result
 #[allow(dead_code, unused_variables, unused_mut)]
 pub fn shared_components_prop_row_preview_0() -> Result<Box<dyn LayoutItem>, LayoutError> {
     #[allow(unused_imports)] use telar::use_theme;
-    let __node_0 = prop_row(PropRowProps { name: "align", values: "start · center · end · stretch", about: "Cross-axis alignment of children." })?;
+    let __node_0 = prop_row(PropRowProps::props().name("align").values("start · center · end · stretch").about("Cross-axis alignment of children.").build())?;
     Ok(Box::new(__node_0))
 }
 

@@ -1,13 +1,12 @@
-use std::rc::Rc;
+use telar_macros::Props;
 
 use layout_core::{AlignItems, JustifyContent, LayoutError, LayoutStyle};
-use reactive_core::{RwSignal, signal};
+use reactive_core::{Reactive, RwSignal, signal};
 use renderer_core::{BorderRadius, Color, RectStyle, ShapeStyle, TextStyle};
 use ui_core::focus::Role;
 use ui_core::{Container, LayoutItem, StyledContainer, Text, box_item};
 
 use crate::shared;
-use crate::shared::props_default;
 
 fn pad_x() -> f32 {
     shared::spacing() * 2.0
@@ -38,20 +37,18 @@ fn bar() -> LayoutStyle {
 /// `if selected == i`, mirroring the sandbox's own nav-button/section-switch split). Modelled on
 /// `select.rs`'s items/selected handling, but rendered inline (a row) rather than as an anchored overlay.
 /// High-level sugar over the primitives; lives in `ui-components`, not the kernel.
+#[derive(Props)]
 pub struct TabsProps {
     /// The tab labels, rendered in order.
+    #[props(default)]
     pub items: Vec<&'static str>,
     /// Bound active index. `None` (the default) is uncontrolled — the widget owns its own `signal(0)`.
+    #[props(some, into, default)]
     pub selected: Option<RwSignal<u32>>,
     /// Accent (active tab fill). `Color::TRANSPARENT` (the default) means "unset": falls back to the theme accent.
-    pub color: Box<dyn Fn() -> Color>,
+    #[props(into, default = Reactive::of(|| Color::TRANSPARENT))]
+    pub color: Reactive<Color>,
 }
-
-props_default!(TabsProps {
-    items: zero,
-    selected: none,
-    color: color,
-});
 
 pub fn tabs(props: TabsProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let TabsProps {
@@ -62,7 +59,6 @@ pub fn tabs(props: TabsProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
     // Uncontrolled: own the index so the bar still tracks the active tab when the caller binds no signal.
     let selected = selected.unwrap_or_else(|| signal(0u32));
     // Erased to `Rc` so the same colour closure feeds every tab's fill, hover and label style.
-    let color: shared::ReactiveColor = Rc::from(color);
 
     let mut tab_items: Vec<Box<dyn LayoutItem>> = Vec::with_capacity(items.len());
     for (i, label) in items.into_iter().enumerate() {
@@ -82,11 +78,11 @@ pub fn tabs(props: TabsProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
         let press_selected = selected;
         let tab = StyledContainer::new(
             tab_box(),
-            move |_r| tab_rect(base_selected.get() == idx, base_color.as_ref(), false),
+            move |_r| tab_rect(base_selected.get() == idx, &base_color, false),
             vec![box_item(label_widget)],
         )?
         .styled_by(tab_box)
-        .hover_style(move |_r| tab_rect(hover_selected.get() == idx, hover_color.as_ref(), true))
+        .hover_style(move |_r| tab_rect(hover_selected.get() == idx, &hover_color, true))
         .control(Role::Tab)
         .toggled(move || announced_selected.get() == idx)
         .on_press(move || press_selected.set(idx));
@@ -99,9 +95,9 @@ pub fn tabs(props: TabsProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
 
 /// The tab pill's paint: the active tab fills with the accent (a touch darker on hover); an inactive tab
 /// blends in until hovered, when it lifts to a faint accent wash.
-fn tab_rect(active: bool, color: &dyn Fn() -> Color, hovered: bool) -> RectStyle {
+fn tab_rect(active: bool, color: &Reactive<Color>, hovered: bool) -> RectStyle {
     let radius = BorderRadius::all(radius());
-    let accent = shared::resolve(color, || shared::accent());
+    let accent = shared::resolve(color, shared::accent);
     if active {
         let fill = if hovered { accent.darken(0.15) } else { accent };
         return RectStyle::default().with_fill(fill).with_radius(radius);
@@ -143,11 +139,7 @@ mod tests {
     #[test]
     fn an_inactive_tab_fades_the_ink_of_the_region_around_it() {
         crate::test_support::fresh_layout_runtime();
-        let item = tabs(TabsProps {
-            items: vec!["One", "Two"],
-            ..Default::default()
-        })
-        .unwrap();
+        let item = tabs(TabsProps::props().items(vec!["One", "Two"]).build()).unwrap();
         let root = new_container(
             LayoutStyle::new().flex_column().width(400.0).height(100.0),
             &[item.layout_node()],
@@ -190,10 +182,11 @@ mod tests {
     #[test]
     fn builds_and_lays_out() {
         crate::test_support::fresh_layout_runtime();
-        let item = tabs(TabsProps {
-            items: vec!["One", "Two", "Three"],
-            ..Default::default()
-        })
+        let item = tabs(
+            TabsProps::props()
+                .items(vec!["One", "Two", "Three"])
+                .build(),
+        )
         .unwrap();
         let r = lay_out(item.layout_node());
         assert!(r.width > 0.0, "the tab row takes some width");
@@ -205,11 +198,12 @@ mod tests {
     fn pressing_the_last_tab_sets_selected_index() {
         crate::test_support::fresh_layout_runtime();
         let selected = signal(0u32);
-        let mut item = tabs(TabsProps {
-            items: vec!["One", "Two"],
-            selected: Some(selected),
-            ..Default::default()
-        })
+        let mut item = tabs(
+            TabsProps::props()
+                .items(vec!["One", "Two"])
+                .selected(selected)
+                .build(),
+        )
         .unwrap();
         let r = lay_out(item.layout_node());
         let (cx, cy) = ((r.x + r.width - 2.0) as f64, (r.y + r.height / 2.0) as f64);

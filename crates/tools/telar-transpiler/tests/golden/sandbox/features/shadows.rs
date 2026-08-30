@@ -15,7 +15,7 @@ pub fn features_shadows() -> Result<Box<dyn LayoutItem>, LayoutError> {
     let __owner = telar::owner_scope();
     #[allow(unused_imports)] use telar::use_theme;
     let __col_0 = {
-        let __node_0 = doc_header(DocHeaderProps { kicker: "SURFACES", title: "Shadows", desc: "Drop shadows take an offset, a blur radius, and a color. Use a soft neutral shadow for elevation or a matching color for a glow." })?;
+        let __node_0 = doc_header(DocHeaderProps::props().kicker("SURFACES").title("Shadows").desc("Drop shadows take an offset, a blur radius, and a color. Use a soft neutral shadow for elevation or a matching color for a glow.").build())?;
         let __node_1 = {
             let mut __slots = Slots::new();
             let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
@@ -65,10 +65,10 @@ pub fn features_shadows() -> Result<Box<dyn LayoutItem>, LayoutError> {
                 StyledContainer::new(LayoutStyle::new().flex_column().padding_all(24.0), move |_| RectStyle { fill: Some(Paint::Solid(use_theme::<core::theme::SandboxTheme>().surface_alt())), border: Some(Border { paint: Paint::Solid(use_theme::<core::theme::SandboxTheme>().border()), widths: [1.0; 4] }), shadow: None, radius: BorderRadius::all(12.0) }, children![__row_0])?
             };
             __children.push(box_item(__sbox_0));
-            let __node_2 = code_line(CodeLineProps { code: "box shadow_y:6 shadow_blur:16 shadow_color:#00000033" })?;
+            let __node_2 = code_line(CodeLineProps::props().code("box shadow_y:6 shadow_blur:16 shadow_color:#00000033").build())?;
             __children.push(box_item(__node_2));
             __slots.extend_default(__children);
-            example(ExampleProps { title: "Elevation — offset and blur lift a card off the page" }, __slots)?
+            example(ExampleProps::props().title("Elevation — offset and blur lift a card off the page").build(), __slots)?
         };
         let __node_3 = {
             let mut __slots = Slots::new();
@@ -111,13 +111,13 @@ pub fn features_shadows() -> Result<Box<dyn LayoutItem>, LayoutError> {
                 };
                 __children.push(box_item(__row_1));
                 __slots.extend_default(__children);
-                card(CardProps { pad: 24.0, ..Default::default() }, __slots)?
+                card(CardProps::props().pad(24.0).build(), __slots)?
             };
             __children.push(box_item(__node_4));
-            let __node_5 = code_line(CodeLineProps { code: "box fill:theme.primary shadow_y:8 shadow_blur:22 shadow_color:theme.primary" })?;
+            let __node_5 = code_line(CodeLineProps::props().code("box fill:theme.primary shadow_y:8 shadow_blur:22 shadow_color:theme.primary").build())?;
             __children.push(box_item(__node_5));
             __slots.extend_default(__children);
-            example(ExampleProps { title: "Colored glows — a shadow the same hue as the fill" }, __slots)?
+            example(ExampleProps::props().title("Colored glows — a shadow the same hue as the fill").build(), __slots)?
         };
         let __node_6 = {
             let mut __slots = Slots::new();
@@ -130,26 +130,26 @@ pub fn features_shadows() -> Result<Box<dyn LayoutItem>, LayoutError> {
                 };
                 __children.push(box_item(__sbox_7));
                 __slots.extend_default(__children);
-                card(CardProps { pad: 24.0, ..Default::default() }, __slots)?
+                card(CardProps::props().pad(24.0).build(), __slots)?
             };
             __children.push(box_item(__node_7));
-            let __node_8 = code_line(CodeLineProps { code: "box shadow_x:8 shadow_y:8 shadow_blur:4 shadow_color:theme.warning" })?;
+            let __node_8 = code_line(CodeLineProps::props().code("box shadow_x:8 shadow_y:8 shadow_blur:4 shadow_color:theme.warning").build())?;
             __children.push(box_item(__node_8));
             __slots.extend_default(__children);
-            example(ExampleProps { title: "Offset — push the shadow on the x and y axes" }, __slots)?
+            example(ExampleProps::props().title("Offset — push the shadow on the x and y axes").build(), __slots)?
         };
         let __node_9 = {
             let mut __slots = Slots::new();
             let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
             let __col_4 = {
-                let __node_10 = prop_row(PropRowProps { name: "shadow_x / shadow_y", values: "number", about: "Shadow offset (default 0 / 4)." })?;
-                let __node_11 = prop_row(PropRowProps { name: "shadow_blur", values: "number", about: "Blur radius (default 8)." })?;
-                let __node_12 = prop_row(PropRowProps { name: "shadow_color", values: "token · #rrggbbaa", about: "Shadow color; use alpha for softness." })?;
+                let __node_10 = prop_row(PropRowProps::props().name("shadow_x / shadow_y").values("number").about("Shadow offset (default 0 / 4).").build())?;
+                let __node_11 = prop_row(PropRowProps::props().name("shadow_blur").values("number").about("Blur radius (default 8).").build())?;
+                let __node_12 = prop_row(PropRowProps::props().name("shadow_color").values("token · #rrggbbaa").about("Shadow color; use alpha for softness.").build())?;
                 Container::new(LayoutStyle::new().flex_column().gap(6.0), children![__node_10, __node_11, __node_12])?
             };
             __children.push(box_item(__col_4));
             __slots.extend_default(__children);
-            example(ExampleProps { title: "Attributes" }, __slots)?
+            example(ExampleProps::props().title("Attributes").build(), __slots)?
         };
         Container::new(LayoutStyle::new().flex_column().gap(20.0), children![__node_0, __node_1, __node_3, __node_6, __node_9])?
     };

@@ -109,11 +109,20 @@ impl ViewGen<'_> {
             .join(", ")
     }
 
-    /// Builds the `NameProps { … }` argument for a component call, or `None` when no props are needed.
-    /// Emits `..Default::default()` only when the callee opts in (its `Props` derives `Default`) and the
-    /// call omits some fields, so a full-field call stays literal (no `clippy::needless_update`). When no
-    /// props are passed but the callee requires a `Props`, defaults them all. A field the sig marks optional
-    /// (its type is `Option<...>`) has its value wrapped in `Some(...)`; omitting it defaults to `None`.
+    /// Builds a component call's props argument: `NameProps::props()`, one setter per attribute the author
+    /// wrote, `.build()`.
+    ///
+    /// **This is where the second type system used to live.** The old form was a `NameProps { … }` literal,
+    /// which meant the emitter had to know the callee's field types to write each value: eight lists on
+    /// `ComponentSig` said which props were colours, strings, readings, predicates, owned strings or
+    /// `Option`s, and whether the struct derived `Default` so the tail could be `..Default::default()`. Every
+    /// one of those was re-deriving something rustc already knew, and for the shipped catalogue they were
+    /// hand-mirrored and free to drift.
+    ///
+    /// A setter answers all of it. `into` on the callee's field decides whether a literal coerces, the
+    /// field's own type decides whether a `$signal` means the handle or a reading, `Option` needs no
+    /// `Some(…)` because `From<T> for Option<T>` is std's, and a prop nobody set keeps its declared default.
+    /// The emitter spells names it read from the markup and knows nothing else.
     fn component_props_arg(
         &self,
         tag: &str,
@@ -121,63 +130,22 @@ impl ViewGen<'_> {
         classes: &[String],
         sig: Option<&crate::codegen::ComponentSig>,
     ) -> Option<String> {
-        let callee_has_props = sig.map(|s| s.has_props);
-        let props_default = sig.is_some_and(|s| s.props_default);
-        let field_count = sig.map(|s| s.prop_fields.len());
-        let color_fields: &[String] = sig.map_or(&[], |s| s.color_fields.as_slice());
-        let reading_fields: &[String] = sig.map_or(&[], |s| s.reading_fields.as_slice());
-        let text_fields: &[String] = sig.map_or(&[], |s| s.text_fields.as_slice());
-        let bool_fields: &[String] = sig.map_or(&[], |s| s.bool_fields.as_slice());
-        let string_fields: &[String] = sig.map_or(&[], |s| s.string_fields.as_slice());
-        let optional_fields: &[String] = sig.map_or(&[], |s| s.optional_fields.as_slice());
+        let mut setters: String = props_attrs
+            .iter()
+            .map(|attr| format!(".{}({})", attr.key, self.component_attr_expr(attr)))
+            .collect();
+        if let Some(amendment) = self.class_surface_style(classes, sig) {
+            let _ = write!(setters, ".style({amendment})");
+        }
+        // A callee with no `Props` takes no argument at all; one that has them takes the builder even when
+        // the call names none, since every prop it declares either has a default or is required.
+        if setters.is_empty() && sig.map(|s| s.has_props) != Some(true) {
+            return None;
+        }
         // Bare (not `crate::`) so the type resolves whether the component lives in this crate (via the
         // `use super::*` glob at crate root) or in a component library re-exported through `use telar::*`.
         let props_type = to_pascal_case(tag) + "Props";
-        {
-            let mut fields: Vec<String> = props_attrs
-                .iter()
-                .map(|attr| {
-                    let value = if color_fields.iter().any(|f| f == &attr.key) {
-                        self.component_color_attr_expr(attr)
-                    } else if reading_fields.iter().any(|f| f == &attr.key) {
-                        self.component_reading_attr_expr(attr)
-                    } else if text_fields.iter().any(|f| f == &attr.key) {
-                        self.component_text_attr_expr(attr)
-                    } else if bool_fields.iter().any(|f| f == &attr.key) {
-                        self.component_bool_attr_expr(attr)
-                    } else if attr.value.is_quoted() && string_fields.iter().any(|f| f == &attr.key)
-                    {
-                        // The conversion is what the markup cannot express: a value ends at the first space, so `name:"Box select".to_string()` parses as a second attribute, and the only way out was a `[logic]` local per label.
-                        format!("{}.to_string()", rust_str(attr.value.text()))
-                    } else {
-                        self.component_attr_expr(attr)
-                    };
-                    // An `Option<...>` prop: wrap the value so a `$signal`, closure, or plain value all fit
-                    // (`Some(sig.clone())` / `Some(Box::new(move || …))` / `Some(<expr>)`).
-                    let value = if optional_fields.iter().any(|f| f == &attr.key) {
-                        format!("Some({value})")
-                    } else {
-                        value
-                    };
-                    format!("{}: {}", attr.key, value)
-                })
-                .collect();
-            if let Some(amendment) = self.class_surface_style(classes, sig) {
-                fields.push(format!("style: Some({amendment})"));
-            }
-            if fields.is_empty() {
-                // No props passed but the callee has a `Props`: default them all (works when it derives Default).
-                return (callee_has_props == Some(true))
-                    .then(|| format!("{props_type} {{ ..Default::default() }}"));
-            }
-            let omits = field_count.is_some_and(|n| fields.len() < n);
-            let tail = if props_default && omits {
-                ", ..Default::default()"
-            } else {
-                ""
-            };
-            Some(format!("{props_type} {{ {}{tail} }}", fields.join(", ")))
-        }
+        Some(format!("{props_type}::props(){setters}.build()"))
     }
 
     /// A `@class` on a component call, compiled onto the callee's **principal surface**.
@@ -263,75 +231,11 @@ impl ViewGen<'_> {
             .map(|(_, sig)| sig)
     }
 
-    /// A reactive colour prop (e.g. a button's `fill`): a `move ||` closure re-read every frame, so a
-    /// theme token or `$signal` colour re-colours live. Mirrors the treatment of a `text` colour: the
-    /// raw value is scanned for `$idents` to clone in, and `color_expr` applies the same `[style]`/theme
-    /// precedence as built-in elements. The Props field is expected to be `Box<dyn Fn() -> Color>`.
-    fn component_color_attr_expr(&self, attr: &Attr) -> String {
-        self.boxed_prop_closure(attr, |s, attr| s.color_expr(attr.value.text()))
-    }
-
     /// A reactive string prop (e.g. a button's `label`): a `move ||` closure re-read every frame, so a
     /// `t"key"` translation re-renders on a locale switch and a `$signal` string re-renders on state change.
     /// Mirrors [`Self::component_color_attr_expr`]; the Props field is expected to be `Box<dyn Fn() -> String>`.
     /// A `t"key"` value becomes a catalog lookup, a plain `"literal"` a static string, and a `$signal`/expr a
     /// reactive read.
-    /// A reactive reading prop (a progress bar's `value`): a `move ||` closure re-read every frame, so a
-    /// `$signal` follows state and a value derived from several services follows all of them. The Props field
-    /// is expected to be `Box<dyn Fn() -> T>`.
-    fn component_reading_attr_expr(&self, attr: &Attr) -> String {
-        self.boxed_prop_closure(attr, |_, attr| substitute_reads(attr.value.text().trim()))
-    }
-
-    fn component_text_attr_expr(&self, attr: &Attr) -> String {
-        self.boxed_prop_closure(attr, |s, attr| match &attr.value {
-            Value::I18n(key) => s.i18n_lookup(key),
-            Value::Quoted(text) => format!("{}.to_string()", rust_str(text)),
-            value => substitute_reads(value.text().trim()),
-        })
-    }
-
-    /// The same for a `Box<dyn Fn() -> bool>` prop — `disabled:$cant_undo`, `checked:$is_on`.
-    ///
-    /// A predicate rather than a `bool` for the reason the paint props are closures: it is re-read, so a row
-    /// that becomes unusable while its menu is open stops being usable then, not at the next rebuild. Any
-    /// expression works, not just a bare signal — `!$on`, `$depth == 0` — since the value is spliced with its
-    /// `$` reads substituted, exactly as a `box`'s own `disabled:` is.
-    fn component_bool_attr_expr(&self, attr: &Attr) -> String {
-        self.boxed_prop_closure(attr, |_, attr| {
-            // A bare flag (`disabled` with no value) is the attribute asserting itself, as `wrap` and `absolute` do.
-            if attr.value.is_flag() {
-                "true".to_string()
-            } else {
-                substitute_reads(attr.value.text().trim())
-            }
-        })
-    }
-
-    /// The shape every reactive component prop shares: an explicit closure passes through, anything else becomes
-    /// a `move ||` re-read with its `$signal`s cloned in, boxed for a `Box<dyn Fn() -> T>` field.
-    fn boxed_prop_closure(&self, attr: &Attr, body: impl FnOnce(&Self, &Attr) -> String) -> String {
-        if let Some(closure) = already_a_closure(attr) {
-            return closure;
-        }
-        let body = body(self, attr);
-        // A markup value ends at the first space, so an expression with one in it has to be parenthesised — `active:(a == b)`. Those parens are the syntax's, not the author's, and rustc warns about them if they reach the closure body.
-        let body = Self::redundant_parens(&body)
-            .map(str::to_string)
-            .unwrap_or(body);
-        // The closure is `Fn`, so a body that is nothing but a captured binding moves it out on the first call and cannot be called again. What to do about that depends on the binding: a reactive handle is *read*, which is the whole point of the prop being a closure, and anything else is cloned.
-        let bare_local = self.is_local(&body) || self.loop_variables.iter().any(|l| l == &body);
-        let body = match (
-            bare_local,
-            self.signal_named_in(&body) == Some(body.as_str()),
-        ) {
-            (true, true) => format!("{body}.get()"),
-            (true, false) => format!("{body}.clone()"),
-            _ => body,
-        };
-        let wrapped = wrap_signal_clones(&[attr.value.text()], format!("move || {body}"));
-        format!("Box::new({wrapped})")
-    }
 
     /// Emits the markup children of a component call into a `Slots` value: a child written with
     /// `slot:"name"` goes to that named slot; every other child (including `if`/`for` control flow) goes
@@ -465,7 +369,7 @@ impl ViewGen<'_> {
         if !v.contains('$')
             && let Some(expr) = crate::style::theme_field_expr(v, self.theme_type.as_deref())
         {
-            return expr;
+            return reads_state(&expr);
         }
         let snake = to_snake_case(v);
         let in_style = self
@@ -482,7 +386,7 @@ impl ViewGen<'_> {
                 .next()
                 .is_some_and(|c| c.is_ascii_lowercase() || c == '_');
         if in_style || (self.theme_type.is_some() && looks_like_color_name) {
-            return self.color_expr(v);
+            return reads_state(&self.color_expr(v));
         }
         let lead = attr.value.text().len() - attr.value.text().trim_start().len();
         // A lone `[logic]` binding, cloned only where the clone is load-bearing: inside a reactive branch the
@@ -502,6 +406,13 @@ impl ViewGen<'_> {
             } else {
                 format!("{marker}{v}")
             };
+        }
+        // An expression with a `$` read in it is a *reading*, not a value: `disabled:$a && $b` has to be
+        // re-evaluated or it is the state it read at construction, forever. A lone `$sig` took the arm above
+        // and stays a handle, which is what a two-way binding needs.
+        if v.contains('$') {
+            let read = wrap_signal_clones(&[v], format!("move || {}", substitute_reads(v)));
+            return format!("Reactive::of({read})");
         }
         // Verbatim pass-through: tag the value with its source span so the analyzer can complete in it. The
         // delimiting parens are dropped here rather than at the call, so the span still covers the expression
@@ -633,13 +544,14 @@ fn delimiters_balanced(expr: &str) -> bool {
     stack.is_empty() && quote.is_none()
 }
 
-/// A reactive text/colour prop whose value the caller already wrote as a closure, boxed as-is.
+/// Wraps a value that reads state in a closure, so the prop follows it instead of freezing at the value it
+/// happened to have when the tree was built.
 ///
-/// Auto-boxing exists so `label:"Save"` and `tint:$accent` can be written plainly; a caller who wrote
-/// `tint(move || fg.get())` has already said what they mean, and wrapping that again yields a closure returning
-/// a closure — a type error inside generated code, pointing at a line the author never wrote.
-fn already_a_closure(attr: &Attr) -> Option<String> {
-    attr.value
-        .is_closure()
-        .then(|| format!("Box::new({})", attr.value.text().trim()))
+/// **The regression this exists to prevent.** A theme read is an `RwSignal` read
+/// (`theme-core/src/context.rs:166`), so `fill:theme.primary` handed over as a `Color` is the colour the
+/// theme had at construction and never moves again — `Reactive::Const` of a snapshot. The old emitter got
+/// this right by boxing every prop its `ComponentSig` table called reactive; without the table the rule has
+/// to come from the *value*, which is the honest place for it: an expression that reads is a reading.
+fn reads_state(expr: &str) -> String {
+    format!("Reactive::of(move || {expr})")
 }

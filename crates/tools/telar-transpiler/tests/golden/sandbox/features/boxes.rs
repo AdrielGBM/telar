@@ -20,7 +20,7 @@ pub fn features_boxes() -> Result<Box<dyn LayoutItem>, LayoutError> {
     let __owner = telar::owner_scope();
     #[allow(unused_imports)] use telar::use_theme;
     let __col_0 = {
-        let __node_0 = doc_header(DocHeaderProps { kicker: "SURFACES", title: "Boxes & borders", desc: "A box is a styled container: give it a fill, a stroke, and a corner radius. Those same paint attributes work on any row or col too." })?;
+        let __node_0 = doc_header(DocHeaderProps::props().kicker("SURFACES").title("Boxes & borders").desc("A box is a styled container: give it a fill, a stroke, and a corner radius. Those same paint attributes work on any row or col too.").build())?;
         let __node_1 = {
             let mut __slots = Slots::new();
             let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
@@ -62,13 +62,13 @@ pub fn features_boxes() -> Result<Box<dyn LayoutItem>, LayoutError> {
                 };
                 __children.push(box_item(__row_0));
                 __slots.extend_default(__children);
-                card(CardProps { ..Default::default() }, __slots)?
+                card(CardProps::props().build(), __slots)?
             };
             __children.push(box_item(__node_2));
-            let __node_3 = code_line(CodeLineProps { code: "box fill:theme.primary radius:10      box stroke:theme.primary stroke_width:2" })?;
+            let __node_3 = code_line(CodeLineProps::props().code("box fill:theme.primary radius:10      box stroke:theme.primary stroke_width:2").build())?;
             __children.push(box_item(__node_3));
             __slots.extend_default(__children);
-            example(ExampleProps { title: "Fill, stroke, and both" }, __slots)?
+            example(ExampleProps::props().title("Fill, stroke, and both").build(), __slots)?
         };
         let __node_4 = {
             let mut __slots = Slots::new();
@@ -121,13 +121,13 @@ pub fn features_boxes() -> Result<Box<dyn LayoutItem>, LayoutError> {
                 };
                 __children.push(box_item(__row_1));
                 __slots.extend_default(__children);
-                card(CardProps { ..Default::default() }, __slots)?
+                card(CardProps::props().build(), __slots)?
             };
             __children.push(box_item(__node_5));
-            let __node_6 = code_line(CodeLineProps { code: "box radius:0   ·   radius:8   ·   radius:20   ·   radius:40" })?;
+            let __node_6 = code_line(CodeLineProps::props().code("box radius:0   ·   radius:8   ·   radius:20   ·   radius:40").build())?;
             __children.push(box_item(__node_6));
             __slots.extend_default(__children);
-            example(ExampleProps { title: "Corner radius — from sharp to a full pill" }, __slots)?
+            example(ExampleProps::props().title("Corner radius — from sharp to a full pill").build(), __slots)?
         };
         let __node_7 = {
             let mut __slots = Slots::new();
@@ -149,13 +149,13 @@ pub fn features_boxes() -> Result<Box<dyn LayoutItem>, LayoutError> {
                 };
                 __children.push(box_item(__row_2));
                 __slots.extend_default(__children);
-                card(CardProps { ..Default::default() }, __slots)?
+                card(CardProps::props().build(), __slots)?
             };
             __children.push(box_item(__node_8));
-            let __node_9 = code_line(CodeLineProps { code: "box stroke:theme.success stroke_width:4" })?;
+            let __node_9 = code_line(CodeLineProps::props().code("box stroke:theme.success stroke_width:4").build())?;
             __children.push(box_item(__node_9));
             __slots.extend_default(__children);
-            example(ExampleProps { title: "Stroke width — a plain box makes a hairline or a heavy border" }, __slots)?
+            example(ExampleProps::props().title("Stroke width — a plain box makes a hairline or a heavy border").build(), __slots)?
         };
         let __node_10 = {
             let mut __slots = Slots::new();
@@ -198,13 +198,13 @@ pub fn features_boxes() -> Result<Box<dyn LayoutItem>, LayoutError> {
                 };
                 __children.push(box_item(__row_3));
                 __slots.extend_default(__children);
-                card(CardProps { ..Default::default() }, __slots)?
+                card(CardProps::props().build(), __slots)?
             };
             __children.push(box_item(__node_11));
-            let __node_12 = code_line(CodeLineProps { code: "box stroke:theme.success stroke_width:'0 0 2 0'   ·   stroke_end:2   (start/end follow RTL)" })?;
+            let __node_12 = code_line(CodeLineProps::props().code("box stroke:theme.success stroke_width:'0 0 2 0'   ·   stroke_end:2   (start/end follow RTL)").build())?;
             __children.push(box_item(__node_12));
             __slots.extend_default(__children);
-            example(ExampleProps { title: "One side at a time — a rule, a divider, a seam" }, __slots)?
+            example(ExampleProps::props().title("One side at a time — a rule, a divider, a seam").build(), __slots)?
         };
         let __node_13 = {
             let mut __slots = Slots::new();
@@ -247,13 +247,13 @@ pub fn features_boxes() -> Result<Box<dyn LayoutItem>, LayoutError> {
                 };
                 __children.push(box_item(__row_4));
                 __slots.extend_default(__children);
-                card(CardProps { ..Default::default() }, __slots)?
+                card(CardProps::props().build(), __slots)?
             };
             __children.push(box_item(__node_14));
-            let __node_15 = code_line(CodeLineProps { code: "box radius:'16 16 0 0'   ·   radius:16 radius_bottom:0   ·   radius_start:20" })?;
+            let __node_15 = code_line(CodeLineProps::props().code("box radius:'16 16 0 0'   ·   radius:16 radius_bottom:0   ·   radius_start:20").build())?;
             __children.push(box_item(__node_15));
             __slots.extend_default(__children);
-            example(ExampleProps { title: "Corners one at a time — a panel that meets an edge" }, __slots)?
+            example(ExampleProps::props().title("Corners one at a time — a panel that meets an edge").build(), __slots)?
         };
         let __node_16 = {
             let mut __slots = Slots::new();
@@ -273,13 +273,13 @@ pub fn features_boxes() -> Result<Box<dyn LayoutItem>, LayoutError> {
                 };
                 __children.push(box_item(__sbox_16));
                 __slots.extend_default(__children);
-                card(CardProps { ..Default::default() }, __slots)?
+                card(CardProps::props().build(), __slots)?
             };
             __children.push(box_item(__node_17));
-            let __node_18 = code_line(CodeLineProps { code: "box align:center justify:center   (a box is a flex column)" })?;
+            let __node_18 = code_line(CodeLineProps::props().code("box align:center justify:center   (a box is a flex column)").build())?;
             __children.push(box_item(__node_18));
             __slots.extend_default(__children);
-            example(ExampleProps { title: "Content alignment inside a box" }, __slots)?
+            example(ExampleProps::props().title("Content alignment inside a box").build(), __slots)?
         };
         let __node_19 = {
             let mut __slots = Slots::new();
@@ -302,30 +302,30 @@ pub fn features_boxes() -> Result<Box<dyn LayoutItem>, LayoutError> {
                 };
                 __children.push(box_item(__row_5));
                 __slots.extend_default(__children);
-                card(CardProps { ..Default::default() }, __slots)?
+                card(CardProps::props().build(), __slots)?
             };
             __children.push(box_item(__node_20));
-            let __node_21 = code_line(CodeLineProps { code: "box @center @tile   ([style] classes compose: last wins, inline still overrides)" })?;
+            let __node_21 = code_line(CodeLineProps::props().code("box @center @tile   ([style] classes compose: last wins, inline still overrides)").build())?;
             __children.push(box_item(__node_21));
             __slots.extend_default(__children);
-            example(ExampleProps { title: "Class composition — a layout class and a paint recipe on one element" }, __slots)?
+            example(ExampleProps::props().title("Class composition — a layout class and a paint recipe on one element").build(), __slots)?
         };
         let __node_22 = {
             let mut __slots = Slots::new();
             let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
             let __col_1 = {
-                let __node_23 = prop_row(PropRowProps { name: "fill", values: "token · #hex · $signal", about: "Solid background color." })?;
-                let __node_24 = prop_row(PropRowProps { name: "stroke", values: "token · #hex", about: "Border color (pair with stroke_width)." })?;
-                let __node_25 = prop_row(PropRowProps { name: "stroke_width", values: "number · \"t r b l\"", about: "Border thickness: one value for all four sides, or the CSS shorthand for one per side." })?;
-                let __node_26 = prop_row(PropRowProps { name: "stroke_*", values: "number", about: "One side: top · right · bottom · left · x · y, plus start/end, which follow the writing direction." })?;
-                let __node_27 = prop_row(PropRowProps { name: "radius", values: "number · \"tl tr br bl\"", about: "Corner radius: one value for all four corners, or the CSS shorthand." })?;
-                let __node_28 = prop_row(PropRowProps { name: "radius_*", values: "number", about: "One edge's corners: top · bottom · left · right · start · end, or one corner: top_left · top_right · bottom_right · bottom_left." })?;
-                let __node_29 = prop_row(PropRowProps { name: "opacity", values: "0–1 · $signal", about: "Fades the box and its children as a layer." })?;
+                let __node_23 = prop_row(PropRowProps::props().name("fill").values("token · #hex · $signal").about("Solid background color.").build())?;
+                let __node_24 = prop_row(PropRowProps::props().name("stroke").values("token · #hex").about("Border color (pair with stroke_width).").build())?;
+                let __node_25 = prop_row(PropRowProps::props().name("stroke_width").values("number · \"t r b l\"").about("Border thickness: one value for all four sides, or the CSS shorthand for one per side.").build())?;
+                let __node_26 = prop_row(PropRowProps::props().name("stroke_*").values("number").about("One side: top · right · bottom · left · x · y, plus start/end, which follow the writing direction.").build())?;
+                let __node_27 = prop_row(PropRowProps::props().name("radius").values("number · \"tl tr br bl\"").about("Corner radius: one value for all four corners, or the CSS shorthand.").build())?;
+                let __node_28 = prop_row(PropRowProps::props().name("radius_*").values("number").about("One edge's corners: top · bottom · left · right · start · end, or one corner: top_left · top_right · bottom_right · bottom_left.").build())?;
+                let __node_29 = prop_row(PropRowProps::props().name("opacity").values("0–1 · $signal").about("Fades the box and its children as a layer.").build())?;
                 Container::new(LayoutStyle::new().flex_column().gap(6.0), children![__node_23, __node_24, __node_25, __node_26, __node_27, __node_28, __node_29])?
             };
             __children.push(box_item(__col_1));
             __slots.extend_default(__children);
-            example(ExampleProps { title: "Attributes" }, __slots)?
+            example(ExampleProps::props().title("Attributes").build(), __slots)?
         };
         Container::new(LayoutStyle::new().flex_column().gap(20.0), children![__node_0, __node_1, __node_4, __node_7, __node_10, __node_13, __node_16, __node_19, __node_22])?
     };

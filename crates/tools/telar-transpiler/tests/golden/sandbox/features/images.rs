@@ -23,7 +23,7 @@ pub fn features_images() -> Result<Box<dyn LayoutItem>, LayoutError> {
     let alpha = Arc::new(make_radial_alpha(128, 128));
 
     let __col_0 = {
-        let __node_0 = doc_header(DocHeaderProps { kicker: "MEDIA", title: "Images", desc: "img draws an RGBA bitmap. Feed it an Arc<ImageData> built in Rust, or a quoted path that is decoded and baked into the binary at build time." })?;
+        let __node_0 = doc_header(DocHeaderProps::props().kicker("MEDIA").title("Images").desc("img draws an RGBA bitmap. Feed it an Arc<ImageData> built in Rust, or a quoted path that is decoded and baked into the binary at build time.").build())?;
         let __node_1 = {
             let mut __slots = Slots::new();
             let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
@@ -41,13 +41,13 @@ pub fn features_images() -> Result<Box<dyn LayoutItem>, LayoutError> {
                 };
                 __children.push(box_item(__img_0));
                 __slots.extend_default(__children);
-                card(CardProps { ..Default::default() }, __slots)?
+                card(CardProps::props().build(), __slots)?
             };
             __children.push(box_item(__node_2));
-            let __node_3 = code_line(CodeLineProps { code: "let gradient = Arc::new(make_gradient(128, 128));   img src:gradient" })?;
+            let __node_3 = code_line(CodeLineProps::props().code("let gradient = Arc::new(make_gradient(128, 128));   img src:gradient").build())?;
             __children.push(box_item(__node_3));
             __slots.extend_default(__children);
-            example(ExampleProps { title: "A procedural bitmap built from raw pixels" }, __slots)?
+            example(ExampleProps::props().title("A procedural bitmap built from raw pixels").build(), __slots)?
         };
         let __node_4 = {
             let mut __slots = Slots::new();
@@ -98,13 +98,13 @@ pub fn features_images() -> Result<Box<dyn LayoutItem>, LayoutError> {
                 };
                 __children.push(box_item(__row_0));
                 __slots.extend_default(__children);
-                card(CardProps { ..Default::default() }, __slots)?
+                card(CardProps::props().build(), __slots)?
             };
             __children.push(box_item(__node_5));
-            let __node_6 = code_line(CodeLineProps { code: "img src:checker raster:nearest   (a 64px bitmap upscaled to 120)" })?;
+            let __node_6 = code_line(CodeLineProps::props().code("img src:checker raster:nearest   (a 64px bitmap upscaled to 120)").build())?;
             __children.push(box_item(__node_6));
             __slots.extend_default(__children);
-            example(ExampleProps { title: "Scaling filter — Linear smooths, Nearest keeps hard pixels" }, __slots)?
+            example(ExampleProps::props().title("Scaling filter — Linear smooths, Nearest keeps hard pixels").build(), __slots)?
         };
         let __node_7 = {
             let mut __slots = Slots::new();
@@ -174,13 +174,13 @@ pub fn features_images() -> Result<Box<dyn LayoutItem>, LayoutError> {
                 };
                 __children.push(box_item(__row_1));
                 __slots.extend_default(__children);
-                card(CardProps { ..Default::default() }, __slots)?
+                card(CardProps::props().build(), __slots)?
             };
             __children.push(box_item(__node_8));
-            let __node_9 = code_line(CodeLineProps { code: "img src:gradient fit:cover width:150 height:80" })?;
+            let __node_9 = code_line(CodeLineProps::props().code("img src:gradient fit:cover width:150 height:80").build())?;
             __children.push(box_item(__node_9));
             __slots.extend_default(__children);
-            example(ExampleProps { title: "object-fit — how the bitmap fills a non-square box" }, __slots)?
+            example(ExampleProps::props().title("object-fit — how the bitmap fills a non-square box").build(), __slots)?
         };
         let __node_10 = {
             let mut __slots = Slots::new();
@@ -211,26 +211,26 @@ pub fn features_images() -> Result<Box<dyn LayoutItem>, LayoutError> {
                 };
                 __children.push(box_item(__row_2));
                 __slots.extend_default(__children);
-                card(CardProps { ..Default::default() }, __slots)?
+                card(CardProps::props().build(), __slots)?
             };
             __children.push(box_item(__node_11));
-            let __node_12 = code_line(CodeLineProps { code: "img src:'assets/dot.png'   (decoded + baked, no runtime loader)" })?;
+            let __node_12 = code_line(CodeLineProps::props().code("img src:'assets/dot.png'   (decoded + baked, no runtime loader)").build())?;
             __children.push(box_item(__node_12));
             __slots.extend_default(__children);
-            example(ExampleProps { title: "A PNG baked from disk at build time" }, __slots)?
+            example(ExampleProps::props().title("A PNG baked from disk at build time").build(), __slots)?
         };
         let __node_13 = {
             let mut __slots = Slots::new();
             let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
             let __col_6 = {
-                let __node_14 = prop_row(PropRowProps { name: "src", values: "Arc<ImageData> · 'path'", about: "Runtime bitmap, or a baked file path." })?;
-                let __node_15 = prop_row(PropRowProps { name: "filter", values: "Linear · Nearest", about: "Sampling when scaled (default Linear)." })?;
-                let __node_16 = prop_row(PropRowProps { name: "fit", values: "contain · cover · fill", about: "Aspect handling in the box (default contain)." })?;
+                let __node_14 = prop_row(PropRowProps::props().name("src").values("Arc<ImageData> · 'path'").about("Runtime bitmap, or a baked file path.").build())?;
+                let __node_15 = prop_row(PropRowProps::props().name("filter").values("Linear · Nearest").about("Sampling when scaled (default Linear).").build())?;
+                let __node_16 = prop_row(PropRowProps::props().name("fit").values("contain · cover · fill").about("Aspect handling in the box (default contain).").build())?;
                 Container::new(LayoutStyle::new().flex_column().gap(6.0), children![__node_14, __node_15, __node_16])?
             };
             __children.push(box_item(__col_6));
             __slots.extend_default(__children);
-            example(ExampleProps { title: "Attributes" }, __slots)?
+            example(ExampleProps::props().title("Attributes").build(), __slots)?
         };
         Container::new(LayoutStyle::new().flex_column().gap(20.0), children![__node_0, __node_1, __node_4, __node_7, __node_10, __node_13])?
     };

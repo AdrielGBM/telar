@@ -82,7 +82,7 @@ pub fn features_motion() -> Result<Box<dyn LayoutItem>, LayoutError> {
     })?;
 
     let __col_0 = {
-        let __node_0 = doc_header(DocHeaderProps { kicker: "INTERACTION", title: "Motion", desc: "Beyond transitions, the motion kernel gives you springs and keyframe timelines driven from Rust — velocity-preserving bounces, staggered loops, and one-shot playback." })?;
+        let __node_0 = doc_header(DocHeaderProps::props().kicker("INTERACTION").title("Motion").desc("Beyond transitions, the motion kernel gives you springs and keyframe timelines driven from Rust — velocity-preserving bounces, staggered loops, and one-shot playback.").build())?;
         let __node_1 = {
             let mut __slots = Slots::new();
             let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
@@ -96,18 +96,18 @@ pub fn features_motion() -> Result<Box<dyn LayoutItem>, LayoutError> {
                         };
                         StyledContainer::new(LayoutStyle::new().flex_column().width(100.0).height(100.0).align_items(AlignItems::CENTER).justify_content(JustifyContent::CENTER), move |_| RectStyle::default(), children![__sbox_1])?
                     };
-                    let __node_3 = button(ButtonProps { label: Box::new(move || "Bounce".to_string()), fill: Box::new(move || use_theme::<core::theme::SandboxTheme>().primary()), on_press: Box::new({ let big = big.clone(); let scale = scale.clone(); move || { big.toggle(); scale.retarget(if big.get() { 1.3 } else { 0.6 }) } }), ..Default::default() })?;
+                    let __node_3 = button(ButtonProps::props().label("Bounce").fill(Reactive::of(move || use_theme::<core::theme::SandboxTheme>().primary())).on_press(Box::new({ let big = big.clone(); let scale = scale.clone(); move || { big.toggle(); scale.retarget(if big.get() { 1.3 } else { 0.6 }) } })).build())?;
                     Container::new(LayoutStyle::new().flex_row().gap(20.0).align_items(AlignItems::CENTER), children![__sbox_0, __node_3])?
                 };
                 __children.push(box_item(__row_0));
                 __slots.extend_default(__children);
-                card(CardProps { gap: 12.0, ..Default::default() }, __slots)?
+                card(CardProps::props().gap(12.0).build(), __slots)?
             };
             __children.push(box_item(__node_2));
-            let __node_4 = code_line(CodeLineProps { code: "box fill:theme.primary radius:12 width:60 height:60 scale:$scale   // scale.retarget(1.3)" })?;
+            let __node_4 = code_line(CodeLineProps::props().code("box fill:theme.primary radius:12 width:60 height:60 scale:$scale   // scale.retarget(1.3)").build())?;
             __children.push(box_item(__node_4));
             __slots.extend_default(__children);
-            example(ExampleProps { title: "Spring — retarget a value and it settles with a natural bounce" }, __slots)?
+            example(ExampleProps::props().title("Spring — retarget a value and it settles with a natural bounce").build(), __slots)?
         };
         let __node_5 = {
             let mut __slots = Slots::new();
@@ -118,13 +118,13 @@ pub fn features_motion() -> Result<Box<dyn LayoutItem>, LayoutError> {
 
                 __children.push(box_item(equalizer));
                 __slots.extend_default(__children);
-                card(CardProps { ..Default::default() }, __slots)?
+                card(CardProps::props().build(), __slots)?
             };
             __children.push(box_item(__node_6));
-            let __node_7 = code_line(CodeLineProps { code: "Keyframes::new(8.0).hold(i·110ms).then(48.0, 300ms, EaseInOut).start(Repeat::PingPong)" })?;
+            let __node_7 = code_line(CodeLineProps::props().code("Keyframes::new(8.0).hold(i·110ms).then(48.0, 300ms, EaseInOut).start(Repeat::PingPong)").build())?;
             __children.push(box_item(__node_7));
             __slots.extend_default(__children);
-            example(ExampleProps { title: "Staggered keyframes — six PingPong loops offset by hold()" }, __slots)?
+            example(ExampleProps::props().title("Staggered keyframes — six PingPong loops offset by hold()").build(), __slots)?
         };
         let __node_8 = {
             let mut __slots = Slots::new();
@@ -142,18 +142,18 @@ pub fn features_motion() -> Result<Box<dyn LayoutItem>, LayoutError> {
                             move |__inherited: TextStyle| __inherited.with_font_size(12.0).with_color(use_theme::<core::theme::SandboxTheme>().muted()),
                         )?
                     };
-                    let __node_10 = button(ButtonProps { label: Box::new(move || "Replay".to_string()), fill: Box::new(move || use_theme::<core::theme::SandboxTheme>().primary()), on_press: Box::new({ let progress = progress.clone(); move || { progress.restart() } }), ..Default::default() })?;
+                    let __node_10 = button(ButtonProps::props().label("Replay").fill(Reactive::of(move || use_theme::<core::theme::SandboxTheme>().primary())).on_press(Box::new({ let progress = progress.clone(); move || { progress.restart() } })).build())?;
                     Container::new(LayoutStyle::new().flex_row().gap(12.0).align_items(AlignItems::CENTER), children![progress_bar, __text_0, __node_10])?
                 };
                 __children.push(box_item(__row_1));
                 __slots.extend_default(__children);
-                card(CardProps { gap: 12.0, ..Default::default() }, __slots)?
+                card(CardProps::props().gap(12.0).build(), __slots)?
             };
             __children.push(box_item(__node_9));
-            let __node_11 = code_line(CodeLineProps { code: "Keyframes::new(0.0).then(100.0, 1100ms, EaseInOut).start(Repeat::Once)" })?;
+            let __node_11 = code_line(CodeLineProps::props().code("Keyframes::new(0.0).then(100.0, 1100ms, EaseInOut).start(Repeat::Once)").build())?;
             __children.push(box_item(__node_11));
             __slots.extend_default(__children);
-            example(ExampleProps { title: "One-shot timeline — Replay restarts the same handle" }, __slots)?
+            example(ExampleProps::props().title("One-shot timeline — Replay restarts the same handle").build(), __slots)?
         };
         Container::new(LayoutStyle::new().flex_column().gap(20.0), children![__node_0, __node_1, __node_5, __node_8])?
     };

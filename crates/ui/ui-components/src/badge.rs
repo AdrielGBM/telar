@@ -1,9 +1,10 @@
 use layout_core::{AlignItems, JustifyContent, LayoutError, LayoutStyle};
+use reactive_core::Reactive;
 use renderer_core::{BorderRadius, Color, RectStyle, ShapeStyle, TextStyle};
+use telar_macros::Props;
 use ui_core::{LayoutItem, StyledContainer, Text, box_item};
 
 use crate::shared;
-use crate::shared::props_default;
 
 fn pad_x() -> f32 {
     shared::spacing()
@@ -29,28 +30,26 @@ fn pill() -> LayoutStyle {
 /// A small solid pill tag: an accent-filled box with a short label in a contrasting on-accent colour.
 /// Non-interactive (unlike `button`) — pure presentation sugar over `StyledContainer` + `Text`; lives in
 /// `ui-components`, not the kernel, so an app can drop it or ship its own.
+#[derive(Props)]
 pub struct BadgeProps {
-    pub label: Box<dyn Fn() -> String>,
+    #[props(into, default)]
+    pub label: Reactive<String>,
     /// Fill colour. `Color::TRANSPARENT` (the default) means "unset" -> the theme's `primary()`. A
     /// closure (re-read every frame) so a theme token or `$signal` colour re-colours live, like `button`'s `fill`.
-    pub color: Box<dyn Fn() -> Color>,
+    #[props(into, default = Reactive::of(|| Color::TRANSPARENT))]
+    pub color: Reactive<Color>,
 }
-
-props_default!(BadgeProps {
-    label: text,
-    color: color,
-});
 
 pub fn badge(props: BadgeProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let BadgeProps { label, color } = props;
 
-    let label_widget = Text::declaring(move || label(), LayoutStyle::new(), on_accent_style)?;
+    let label_widget = Text::declaring(move || label.get(), LayoutStyle::new(), on_accent_style)?;
 
     let container = StyledContainer::new(
         pill(),
         move |_r| {
             RectStyle::default()
-                .with_fill(shared::resolve(color.as_ref(), fill_default))
+                .with_fill(shared::resolve(&color, fill_default))
                 .with_radius(BorderRadius::all(radius()))
         },
         vec![box_item(label_widget)],
@@ -102,11 +101,7 @@ mod tests {
     #[test]
     fn renders_label() {
         crate::test_support::fresh_layout_runtime();
-        let badge = badge(BadgeProps {
-            label: Box::new(|| "New".to_string()),
-            ..Default::default()
-        })
-        .unwrap();
+        let badge = badge(BadgeProps::props().label("New").build()).unwrap();
         let tree = laid_out(badge);
         assert!(find_text(&tree.commands(), "New"));
     }
@@ -115,7 +110,7 @@ mod tests {
     #[test]
     fn empty_label_builds_without_panic() {
         crate::test_support::fresh_layout_runtime();
-        let badge = badge(BadgeProps::default()).unwrap();
+        let badge = badge(BadgeProps::props().build()).unwrap();
         let tree = laid_out(badge);
         let _ = tree.commands();
     }

@@ -19,7 +19,7 @@ pub fn features_buttons() -> Result<Box<dyn LayoutItem>, LayoutError> {
     let keys = signal(0i32);
 
     let __col_0 = {
-        let __node_0 = doc_header(DocHeaderProps { kicker: "INTERACTION", title: "Buttons", desc: "button is a component (from the components feature, not a base tag): it takes a label, a variant, and an on_press closure. The variant is the color token you pass to fill or outline; ghost is a bare flag." })?;
+        let __node_0 = doc_header(DocHeaderProps::props().kicker("INTERACTION").title("Buttons").desc("button is a component (from the components feature, not a base tag): it takes a label, a variant, and an on_press closure. The variant is the color token you pass to fill or outline; ghost is a bare flag.").build())?;
         let __node_1 = {
             let mut __slots = Slots::new();
             let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
@@ -27,22 +27,22 @@ pub fn features_buttons() -> Result<Box<dyn LayoutItem>, LayoutError> {
                 let mut __slots = Slots::new();
                 let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
                 let __row_0 = {
-                    let __node_3 = button(ButtonProps { label: Box::new(move || "Filled".to_string()), fill: Box::new(move || use_theme::<core::theme::SandboxTheme>().primary()), ..Default::default() })?;
-                    let __node_4 = button(ButtonProps { label: Box::new(move || "Outline".to_string()), outline: Box::new(move || use_theme::<core::theme::SandboxTheme>().primary()), ..Default::default() })?;
-                    let __node_5 = button(ButtonProps { label: Box::new(move || "Ghost".to_string()), ghost: true, ..Default::default() })?;
-                    let __node_6 = button(ButtonProps { label: Box::new(move || "Danger".to_string()), fill: Box::new(move || use_theme::<core::theme::SandboxTheme>().danger), ..Default::default() })?;
-                    let __node_7 = button(ButtonProps { label: Box::new(move || "Success".to_string()), fill: Box::new(move || use_theme::<core::theme::SandboxTheme>().success()), ..Default::default() })?;
+                    let __node_3 = button(ButtonProps::props().label("Filled").fill(Reactive::of(move || use_theme::<core::theme::SandboxTheme>().primary())).build())?;
+                    let __node_4 = button(ButtonProps::props().label("Outline").outline(Reactive::of(move || use_theme::<core::theme::SandboxTheme>().primary())).build())?;
+                    let __node_5 = button(ButtonProps::props().label("Ghost").ghost(true).build())?;
+                    let __node_6 = button(ButtonProps::props().label("Danger").fill(Reactive::of(move || use_theme::<core::theme::SandboxTheme>().danger)).build())?;
+                    let __node_7 = button(ButtonProps::props().label("Success").fill(Reactive::of(move || use_theme::<core::theme::SandboxTheme>().success())).build())?;
                     Container::new(LayoutStyle::new().flex_row().gap(12.0).flex_wrap().align_items(AlignItems::CENTER), children![__node_3, __node_4, __node_5, __node_6, __node_7])?
                 };
                 __children.push(box_item(__row_0));
                 __slots.extend_default(__children);
-                card(CardProps { ..Default::default() }, __slots)?
+                card(CardProps::props().build(), __slots)?
             };
             __children.push(box_item(__node_2));
-            let __node_8 = code_line(CodeLineProps { code: "button label:'Filled' fill:theme.primary   ·   outline:theme.primary   ·   ghost" })?;
+            let __node_8 = code_line(CodeLineProps::props().code("button label:'Filled' fill:theme.primary   ·   outline:theme.primary   ·   ghost").build())?;
             __children.push(box_item(__node_8));
             __slots.extend_default(__children);
-            example(ExampleProps { title: "Variants" }, __slots)?
+            example(ExampleProps::props().title("Variants").build(), __slots)?
         };
         let __node_9 = {
             let mut __slots = Slots::new();
@@ -60,20 +60,20 @@ pub fn features_buttons() -> Result<Box<dyn LayoutItem>, LayoutError> {
                 };
                 __children.push(box_item(__text_0));
                 let __row_1 = {
-                    let __node_11 = button(ButtonProps { label: Box::new(move || "+1".to_string()), fill: Box::new(move || use_theme::<core::theme::SandboxTheme>().primary()), on_press: Box::new({ let clicks = clicks.clone(); move || clicks.update(|__v| *__v += 1) }), ..Default::default() })?;
-                    let __node_12 = button(ButtonProps { label: Box::new(move || "+10".to_string()), fill: Box::new(move || use_theme::<core::theme::SandboxTheme>().primary()), on_press: Box::new({ let clicks = clicks.clone(); move || clicks.update(|__v| *__v += 10) }), ..Default::default() })?;
-                    let __node_13 = button(ButtonProps { label: Box::new(move || "Reset".to_string()), ghost: true, on_press: Box::new({ let clicks = clicks.clone(); move || clicks.set(0) }), ..Default::default() })?;
+                    let __node_11 = button(ButtonProps::props().label("+1").fill(Reactive::of(move || use_theme::<core::theme::SandboxTheme>().primary())).on_press(Box::new({ let clicks = clicks.clone(); move || clicks.update(|__v| *__v += 1) })).build())?;
+                    let __node_12 = button(ButtonProps::props().label("+10").fill(Reactive::of(move || use_theme::<core::theme::SandboxTheme>().primary())).on_press(Box::new({ let clicks = clicks.clone(); move || clicks.update(|__v| *__v += 10) })).build())?;
+                    let __node_13 = button(ButtonProps::props().label("Reset").ghost(true).on_press(Box::new({ let clicks = clicks.clone(); move || clicks.set(0) })).build())?;
                     Container::new(LayoutStyle::new().flex_row().gap(10.0), children![__node_11, __node_12, __node_13])?
                 };
                 __children.push(box_item(__row_1));
                 __slots.extend_default(__children);
-                card(CardProps { gap: 12.0, ..Default::default() }, __slots)?
+                card(CardProps::props().gap(12.0).build(), __slots)?
             };
             __children.push(box_item(__node_10));
-            let __node_14 = code_line(CodeLineProps { code: "button label:'+1' fill:theme.primary on_press:|| $clicks += 1      ($x += n desugars to .update)" })?;
+            let __node_14 = code_line(CodeLineProps::props().code("button label:'+1' fill:theme.primary on_press:|| $clicks += 1      ($x += n desugars to .update)").build())?;
             __children.push(box_item(__node_14));
             __slots.extend_default(__children);
-            example(ExampleProps { title: "on_press — every click runs a closure that mutates a signal" }, __slots)?
+            example(ExampleProps::props().title("on_press — every click runs a closure that mutates a signal").build(), __slots)?
         };
         let __node_15 = {
             let mut __slots = Slots::new();
@@ -102,13 +102,13 @@ pub fn features_buttons() -> Result<Box<dyn LayoutItem>, LayoutError> {
                 };
                 __children.push(box_item(__text_2));
                 __slots.extend_default(__children);
-                card(CardProps { gap: 10.0, ..Default::default() }, __slots)?
+                card(CardProps::props().gap(10.0).build(), __slots)?
             };
             __children.push(box_item(__node_16));
-            let __node_17 = code_line(CodeLineProps { code: "box on_press(|| $clicks += 1)      (paren form: delimited, order-independent)" })?;
+            let __node_17 = code_line(CodeLineProps::props().code("box on_press(|| $clicks += 1)      (paren form: delimited, order-independent)").build())?;
             __children.push(box_item(__node_17));
             __slots.extend_default(__children);
-            example(ExampleProps { title: "A whole box is clickable — on_press works on any container, not just buttons" }, __slots)?
+            example(ExampleProps::props().title("A whole box is clickable — on_press works on any container, not just buttons").build(), __slots)?
         };
         let __node_18 = {
             let mut __slots = Slots::new();
@@ -149,13 +149,13 @@ pub fn features_buttons() -> Result<Box<dyn LayoutItem>, LayoutError> {
                 };
                 __children.push(box_item(__text_5));
                 __slots.extend_default(__children);
-                card(CardProps { gap: 10.0, ..Default::default() }, __slots)?
+                card(CardProps::props().gap(10.0).build(), __slots)?
             };
             __children.push(box_item(__node_19));
-            let __node_20 = code_line(CodeLineProps { code: "box fill:theme.surface_alt hover_style(fill:theme.primary)      (swap style while hovered)" })?;
+            let __node_20 = code_line(CodeLineProps::props().code("box fill:theme.surface_alt hover_style(fill:theme.primary)      (swap style while hovered)").build())?;
             __children.push(box_item(__node_20));
             __slots.extend_default(__children);
-            example(ExampleProps { title: "hover — a container restyles while the pointer is over it (mouse only)" }, __slots)?
+            example(ExampleProps::props().title("hover — a container restyles while the pointer is over it (mouse only)").build(), __slots)?
         };
         let __node_21 = {
             let mut __slots = Slots::new();
@@ -196,27 +196,27 @@ pub fn features_buttons() -> Result<Box<dyn LayoutItem>, LayoutError> {
                 };
                 __children.push(box_item(__text_8));
                 __slots.extend_default(__children);
-                card(CardProps { gap: 10.0, ..Default::default() }, __slots)?
+                card(CardProps::props().gap(10.0).build(), __slots)?
             };
             __children.push(box_item(__node_22));
-            let __node_23 = code_line(CodeLineProps { code: "box on_hover(|h| $hovering.set(h))   ·   col on_key(|k| …)" })?;
+            let __node_23 = code_line(CodeLineProps::props().code("box on_hover(|h| $hovering.set(h))   ·   col on_key(|k| …)").build())?;
             __children.push(box_item(__node_23));
             __slots.extend_default(__children);
-            example(ExampleProps { title: "Event callbacks — on_hover (a bool) and on_key (global shortcut)" }, __slots)?
+            example(ExampleProps::props().title("Event callbacks — on_hover (a bool) and on_key (global shortcut)").build(), __slots)?
         };
         let __node_24 = {
             let mut __slots = Slots::new();
             let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
             let __col_2 = {
-                let __node_25 = prop_row(PropRowProps { name: "fill", values: "token", about: "Filled button; label is drawn in white." })?;
-                let __node_26 = prop_row(PropRowProps { name: "outline", values: "token", about: "Outlined button that fills on hover." })?;
-                let __node_27 = prop_row(PropRowProps { name: "ghost", values: "flag", about: "Transparent button with neutral text." })?;
-                let __node_28 = prop_row(PropRowProps { name: "on_press", values: "closure", about: "Runs on click; use $signal to read or mutate state." })?;
+                let __node_25 = prop_row(PropRowProps::props().name("fill").values("token").about("Filled button; label is drawn in white.").build())?;
+                let __node_26 = prop_row(PropRowProps::props().name("outline").values("token").about("Outlined button that fills on hover.").build())?;
+                let __node_27 = prop_row(PropRowProps::props().name("ghost").values("flag").about("Transparent button with neutral text.").build())?;
+                let __node_28 = prop_row(PropRowProps::props().name("on_press").values("closure").about("Runs on click; use $signal to read or mutate state.").build())?;
                 Container::new(LayoutStyle::new().flex_column().gap(6.0), children![__node_25, __node_26, __node_27, __node_28])?
             };
             __children.push(box_item(__col_2));
             __slots.extend_default(__children);
-            example(ExampleProps { title: "Attributes" }, __slots)?
+            example(ExampleProps::props().title("Attributes").build(), __slots)?
         };
         Container::new(LayoutStyle::new().flex_column().gap(20.0), children![__node_0, __node_1, __node_9, __node_15, __node_18, __node_21, __node_24])?
     };

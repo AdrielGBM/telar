@@ -3,10 +3,13 @@
 #[allow(unused_imports)] use telar::*;
 #[allow(unused_imports)] use super::*;
 
-#[derive(Default)]
+#[derive(::telar::Props)]
 pub struct FeatureCardProps {
+    #[props(default)]
     pub icon: &'static str,
+    #[props(default)]
     pub title: &'static str,
+    #[props(default)]
     pub body: &'static str,
 }
 
@@ -44,14 +47,14 @@ pub fn feature_card(props: FeatureCardProps) -> Result<Box<dyn LayoutItem>, Layo
 #[allow(dead_code, unused_variables, unused_mut)]
 pub fn feature_card_preview_0() -> Result<Box<dyn LayoutItem>, LayoutError> {
     #[allow(unused_imports)] use telar::use_theme;
-    let __node_0 = feature_card(FeatureCardProps { icon: "⚡", title: "Fast", body: "Software and wgpu renderers with dirty-tracking and scroll-blit detection." })?;
+    let __node_0 = feature_card(FeatureCardProps::props().icon("⚡").title("Fast").body("Software and wgpu renderers with dirty-tracking and scroll-blit detection.").build())?;
     Ok(Box::new(__node_0))
 }
 
 #[allow(dead_code, unused_variables, unused_mut)]
 pub fn feature_card_preview_1() -> Result<Box<dyn LayoutItem>, LayoutError> {
     #[allow(unused_imports)] use telar::use_theme;
-    let __node_0 = feature_card(FeatureCardProps { icon: "📱", title: "Cross-platform", body: "One codebase targets desktop and Android with native event loops, plus a longer body to test how the card wraps multi-line text." })?;
+    let __node_0 = feature_card(FeatureCardProps::props().icon("📱").title("Cross-platform").body("One codebase targets desktop and Android with native event loops, plus a longer body to test how the card wraps multi-line text.").build())?;
     Ok(Box::new(__node_0))
 }
 

@@ -1,35 +1,32 @@
-use std::rc::Rc;
+use telar_macros::Props;
 
 use layout_core::{AlignItems, JustifyContent, LayoutError, LayoutStyle};
-use reactive_core::{RwSignal, signal};
+use reactive_core::{Reactive, RwSignal, signal};
 use renderer_core::{Border, BorderRadius, Color, RectStyle, ShapeStyle};
 use ui_core::focus::Role;
 use ui_core::{LayoutItem, StyledContainer, box_item};
 
 use crate::shared;
-use crate::shared::props_default;
 
 /// A labelled checkbox: an 18px box that fills with the accent and shows a check while its bound `checked`
 /// signal is on; tapping the row toggles it (and fires `on_toggle`). High-level sugar over the primitives
 /// (`box` + `on_press` + a reactive fill); lives in `ui-components`, not the kernel, so an app can drop it.
 /// `checked` is `Option` so `Props` can derive `Default`: `None` is uncontrolled (the widget owns its own
 /// signal), `Some` is caller-bound.
+#[derive(Props)]
 pub struct CheckboxProps {
     /// Bound checked state. `None` (the default) is uncontrolled — the widget makes its own `signal(false)`.
+    #[props(some, into, default)]
     pub checked: Option<RwSignal<bool>>,
-    pub label: Box<dyn Fn() -> String>,
+    #[props(into, default)]
+    pub label: Reactive<String>,
     /// Accent (the checked fill). `Color::TRANSPARENT` (the default) means "unset": fall back to the theme accent.
-    pub color: Box<dyn Fn() -> Color>,
+    #[props(into, default = Reactive::of(|| Color::TRANSPARENT))]
+    pub color: Reactive<Color>,
     /// Fires with the new state on every toggle.
+    #[props(some, default)]
     pub on_toggle: Option<Box<dyn Fn(bool)>>,
 }
-
-props_default!(CheckboxProps {
-    checked: none,
-    label: text,
-    color: color,
-    on_toggle: none,
-});
 
 pub fn checkbox(props: CheckboxProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let CheckboxProps {
@@ -42,7 +39,6 @@ pub fn checkbox(props: CheckboxProps) -> Result<Box<dyn LayoutItem>, LayoutError
     let checked = checked.unwrap_or_else(|| signal(false));
 
     // Shared between the box's fill and the mark, which reads it to pick an ink that contrasts with it.
-    let color: shared::ReactiveColor = Rc::from(color);
 
     // The check: a small inner square that only paints while checked, so toggling never reflows. Its ink is read off the box's own fill — a hard white vanished on the near-white `primary` of a neutral palette.
     let mark_checked = checked;
@@ -51,7 +47,7 @@ pub fn checkbox(props: CheckboxProps) -> Result<Box<dyn LayoutItem>, LayoutError
         LayoutStyle::new().width(10.0).height(10.0),
         move |_r| {
             let fill = if mark_checked.get() {
-                shared::ink_on(shared::resolve(mark_color.as_ref(), shared::accent))
+                shared::ink_on(shared::resolve(&mark_color, shared::accent))
             } else {
                 Color::TRANSPARENT
             };
@@ -74,7 +70,7 @@ pub fn checkbox(props: CheckboxProps) -> Result<Box<dyn LayoutItem>, LayoutError
         move |_r| {
             let radius = BorderRadius::all(5.0);
             if box_checked.get() {
-                let fill = shared::resolve(color.as_ref(), || shared::accent());
+                let fill = shared::resolve(&color, shared::accent);
                 RectStyle::default().with_fill(fill).with_radius(radius)
             } else {
                 RectStyle::default()
@@ -123,11 +119,12 @@ mod tests {
     fn tap_toggles_bound_signal() {
         crate::test_support::fresh_layout_runtime();
         let checked = signal(false);
-        let mut widget = checkbox(CheckboxProps {
-            checked: Some(checked),
-            label: Box::new(|| "Agree".to_string()),
-            ..Default::default()
-        })
+        let mut widget = checkbox(
+            CheckboxProps::props()
+                .checked(checked)
+                .label("Agree")
+                .build(),
+        )
         .unwrap();
         let (cx, cy) = lay_out(widget.layout_node());
 
@@ -145,10 +142,11 @@ mod tests {
         let seen: Rc<Cell<Option<bool>>> = Rc::new(Cell::new(None));
         let sink = seen.clone();
         crate::test_support::fresh_layout_runtime();
-        let mut widget = checkbox(CheckboxProps {
-            on_toggle: Some(Box::new(move |v| sink.set(Some(v)))),
-            ..Default::default()
-        })
+        let mut widget = checkbox(
+            CheckboxProps::props()
+                .on_toggle(Box::new(move |v| sink.set(Some(v))))
+                .build(),
+        )
         .unwrap();
         let (cx, cy) = lay_out(widget.layout_node());
 

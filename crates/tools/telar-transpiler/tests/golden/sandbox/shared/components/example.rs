@@ -6,8 +6,9 @@
 // A documented example block: a small title above its demo and snippet. Replaces the repeated
 // `col gap:8 > text "…" font_size:13 color:theme.ink > …children…` scaffold used across every feature section,
 // so a block is one `example title:"…"` line plus its content instead of two lines of boilerplate.
-#[derive(Default)]
+#[derive(::telar::Props)]
 pub struct SharedComponentsExampleProps {
+    #[props(default)]
     pub title: &'static str,
 }
 
@@ -49,13 +50,13 @@ pub fn shared_components_example_preview_0() -> Result<Box<dyn LayoutItem>, Layo
             };
             __children.push(box_item(__text_0));
             __slots.extend_default(__children);
-            card(CardProps { gap: 10.0, ..Default::default() }, __slots)?
+            card(CardProps::props().gap(10.0).build(), __slots)?
         };
         __children.push(box_item(__node_1));
-        let __node_2 = code_line(CodeLineProps { code: "row justify:between" })?;
+        let __node_2 = code_line(CodeLineProps::props().code("row justify:between").build())?;
         __children.push(box_item(__node_2));
         __slots.extend_default(__children);
-        example(ExampleProps { title: "justify — distribute along the main axis" }, __slots)?
+        example(ExampleProps::props().title("justify — distribute along the main axis").build(), __slots)?
     };
     Ok(Box::new(__node_0))
 }

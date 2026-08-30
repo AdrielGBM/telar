@@ -846,36 +846,29 @@ mod tests {
         );
     }
 
+    /// `field: Type = expr` sugar reaches the builder as the attribute that says the same thing. The struct
+    /// stops deriving `Default` along the way: nothing constructs a `Props` that way any more, and keeping it
+    /// would demand a `Default` of every field type the builder does not need one for.
     #[test]
-    fn inline_field_default_synthesizes_default_impl() {
-        // `field: Type = expr` sugar: the emitted struct drops the default (invalid Rust otherwise) and a
-        // synthesized `Default` impl carries it; the `#[derive(Default)]` is stripped to avoid a collision.
+    fn an_inline_field_default_becomes_a_props_attribute() {
         let src = "[logic]\n#[derive(Default)]\npub struct Props {\n    pub gap: f32,\n    pub pad: f32 = 16.0,\n}\n[view]\ntext \"x\"\n";
         let out = crate::transpile_source(src, "card", None, None, None).unwrap();
         let code = &out.rust_code;
         assert!(
             code.contains("pub pad: f32,"),
-            "field default not stripped:\n{code}"
+            "the `= 16.0` must come off the field — Rust has no field defaults:\n{code}"
         );
         assert!(
-            !code.contains("= 16.0"),
-            "inline default leaked into struct:\n{code}"
+            code.contains("#[props(default = 16.0)]"),
+            "and land on the attribute that carries it:\n{code}"
         );
         assert!(
-            code.contains("impl Default for CardProps"),
-            "missing synthesized Default impl:\n{code}"
+            code.contains("#[props(default)]"),
+            "a field the struct defaulted wholesale is optional too:\n{code}"
         );
         assert!(
-            code.contains("pad: 16.0"),
-            "default value missing from impl:\n{code}"
-        );
-        assert!(
-            code.contains("gap: Default::default()"),
-            "non-defaulted field missing from impl:\n{code}"
-        );
-        assert!(
-            !code.contains("#[derive(Default)]"),
-            "derive(Default) should be stripped when an impl is synthesized:\n{code}"
+            code.contains("#[derive(::telar::Props)]") && !code.contains("#[derive(Default)]"),
+            "the builder replaces `Default` rather than sitting beside it:\n{code}"
         );
     }
 
@@ -1227,7 +1220,7 @@ mod tests {
         let out = crate::transpile_source(src, "demo", None, None, None).unwrap();
         let code = &out.rust_code;
         assert!(
-            code.contains("CardProps { elevated: true }"),
+            code.contains("CardProps::props().elevated(true).build()"),
             "a bare flag prop should be bool true:\n{code}"
         );
     }
@@ -1239,7 +1232,7 @@ mod tests {
         let out = crate::transpile_source(src, "demo", None, None, None).unwrap();
         let code = &out.rust_code;
         assert!(
-            code.contains("count: count.clone()"),
+            code.contains(".count(count.clone())"),
             "a $signal prop should pass the cloned handle:\n{code}"
         );
     }
@@ -1306,7 +1299,7 @@ mod tests {
             crate::transpile_source("[view]\ncard\n", "demo", None, None, Some(&reg)).unwrap();
         assert!(
             out.rust_code
-                .contains("card(CardProps { ..Default::default() }, Slots::new())?"),
+                .contains("card(CardProps::props().build(), Slots::new())?"),
             "childless slotted call should pass defaulted props + empty Slots:\n{}",
             out.rust_code
         );
@@ -1330,7 +1323,7 @@ mod tests {
         .unwrap();
         assert!(
             out.rust_code
-                .contains("DocHeaderProps { title: \"X\", ..Default::default() }"),
+                .contains("DocHeaderProps::props().title(\"X\").build()"),
             "an omitted field should default:\n{}",
             out.rust_code
         );
@@ -1780,9 +1773,7 @@ mod tests {
             .unwrap()
             .rust_code;
         assert!(
-            code.contains(
-                "heading(HeadingProps { text: Box::new(move || \"Title\".to_string()) })"
-            ),
+            code.contains("heading(HeadingProps::props().text(\"Title\").build())"),
             "heading is a component call carrying its text:\n{code}"
         );
     }
@@ -1790,18 +1781,21 @@ mod tests {
     // A `$signal` button colour must be cloned into the reactive colour closure (color_expr drops the `$`,
     // so the clone scan needs the raw fill value) — otherwise reusing the signal elsewhere fails to compile.
     #[test]
-    fn btn_signal_color_is_cloned_into_style_closure() {
+    /// A `$signal` on a reactive prop hands over the *handle*, and the prop's own type turns it into a
+    /// reading. The emitter used to build that closure itself, which is why it needed a table saying which
+    /// props were reactive; `From<RwSignal<T>> for Reactive<T>` is where the `.get()` lives now.
+    fn btn_signal_color_reaches_the_prop_as_a_handle() {
         let src = "[logic]\nlet c = signal(Color::WHITE);\n[view]\nbutton label:\"x\" fill:$c\n";
         let code = crate::transpile_source(src, "demo", None, None, None)
             .unwrap()
             .rust_code;
         assert!(
-            code.contains("let c = c.clone();"),
-            "signal colour cloned:\n{code}"
+            code.contains(".fill(c.clone())"),
+            "the signal reaches the prop as a handle, not as a sampled colour:\n{code}"
         );
         assert!(
-            code.contains("c.get()"),
-            "read inside the style closure:\n{code}"
+            !code.contains("Box::new(move || c.get())"),
+            "and the emitter no longer hand-builds the reading:\n{code}"
         );
     }
 

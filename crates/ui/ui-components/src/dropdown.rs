@@ -6,7 +6,7 @@ use std::rc::Rc;
 use geometry_core::Rect;
 use layout_core::{AlignItems, LayoutError, LayoutStyle};
 use platform_core::{Key, NamedKey};
-use reactive_core::{RwSignal, effect, signal};
+use reactive_core::{Reactive, RwSignal, effect, signal};
 use renderer_core::{Border, BorderRadius, Color, RectStyle, ShapeStyle, Stroke};
 use ui_core::focus::Role;
 use ui_core::{
@@ -32,7 +32,7 @@ pub(crate) fn panel_pad() -> f32 {
 /// actions, so its trigger is a name the caller fixes; a select holds a choice, so its trigger *is* that
 /// choice — and has to say it before the panel has ever been opened.
 pub(crate) enum TriggerLabel {
-    Fixed(Box<dyn Fn() -> String>),
+    Fixed(Reactive<String>),
     /// Whatever the chosen row says it is, falling back to `placeholder` for an index naming no row.
     Selected {
         placeholder: &'static str,
@@ -60,7 +60,7 @@ pub(crate) struct Dropdown {
     /// [`Children`](ui_core::Children). Two things need it that way: the rows are remade on every open, and
     /// each one has to be built inside the [`ListContext`](crate::list::ListContext) this scaffold provides.
     pub rows: Children,
-    pub color: Box<dyn Fn() -> Color>,
+    pub color: Reactive<Color>,
     pub on_pick: Option<Box<dyn Fn(u32)>>,
     pub selected: Option<RwSignal<u32>>,
     pub stretch: bool,
@@ -85,7 +85,6 @@ pub(crate) fn dropdown(props: Dropdown) -> Result<Box<dyn LayoutItem>, LayoutErr
         surface.map(|f| -> Rc<dyn Fn(RectStyle) -> RectStyle> { Rc::from(f) });
     // Erased to `Rc` so the colour/callback can be cloned into the trigger, every option row, and the panel
     // builder (which re-runs on each open) — a `Box<dyn Fn>` can't be shared, but the widget needs to.
-    let color: shared::ReactiveColor = Rc::from(color);
     let on_pick: Option<Rc<dyn Fn(u32)>> = on_pick.map(|f| -> Rc<dyn Fn(u32)> { Rc::from(f) });
     let open = signal(false);
     let dismiss_open = open;
@@ -110,7 +109,7 @@ pub(crate) fn dropdown(props: Dropdown) -> Result<Box<dyn LayoutItem>, LayoutErr
     // so the key handler — which lives as long as the trigger — asks the same registry the last build filled.
     let list = crate::list::ListContext::new(pick.clone(), highlighted, selected, color.clone());
 
-    let trigger_label: Box<dyn Fn() -> String> = match trigger_label {
+    let trigger_label: Reactive<String> = match trigger_label {
         TriggerLabel::Fixed(fixed) => fixed,
         TriggerLabel::Selected { placeholder } => {
             // Ask the rows what they say without asking them to be rows — the panel has not been opened, so
@@ -118,7 +117,7 @@ pub(crate) fn dropdown(props: Dropdown) -> Result<Box<dyn LayoutItem>, LayoutErr
             list.declare(&rows)?;
             let list = list.clone();
             let selected = selected;
-            Box::new(move || {
+            Reactive::of(move || {
                 selected
                     .as_ref()
                     .and_then(|s| list.label_of(s.get()))
@@ -129,13 +128,15 @@ pub(crate) fn dropdown(props: Dropdown) -> Result<Box<dyn LayoutItem>, LayoutErr
     // Trigger: a bordered button with the label; a tap toggles `open`.
     // `no_wrap`: a trigger's label is the *name* of a control, and splitting `File` across two lines to make
     // room for the caret beside it turns one word into two.
-    let label_text = Text::declaring(trigger_label, LayoutStyle::new(), |t| {
-        shared::control_text(t, 1.0).with_text_wrap(TextWrap::NoWrap)
-    })?;
+    let label_text = Text::declaring(
+        move || trigger_label.get(),
+        LayoutStyle::new(),
+        |t| shared::control_text(t, 1.0).with_text_wrap(TextWrap::NoWrap),
+    )?;
     let trigger_style = {
         let color = color.clone();
         let surface = surface.clone();
-        move |_r: Rect| shared::amend(trigger_rect_style(color.as_ref(), bordered), &surface)
+        move |_r: Rect| shared::amend(trigger_rect_style(&color, bordered), &surface)
     };
     // Key events are broadcast, so without this a bare Enter or Down would open every dropdown on the page rather than this one.
     let trigger_focused = signal(false);
@@ -368,7 +369,7 @@ pub(crate) fn dropdown(props: Dropdown) -> Result<Box<dyn LayoutItem>, LayoutErr
 /// A select is a form control and wears a border; a **menu** is a button that happens to open a list, so it
 /// wears none. A bordered menu trigger reads as a field with the caret in it — or, sitting alone in a header,
 /// as a button stuck in its focused state. `bordered` is there for the caller who wants the other reading.
-fn trigger_rect_style(color: &dyn Fn() -> Color, bordered: bool) -> RectStyle {
+fn trigger_rect_style(color: &Reactive<Color>, bordered: bool) -> RectStyle {
     let radius = BorderRadius::all(shared::radius_md());
     if !bordered {
         return RectStyle::default().with_radius(radius);
@@ -416,7 +417,7 @@ fn panel_rect_style() -> RectStyle {
 
 // A menu row (`selected: None` → always `is_selected == false`) yields the plain radius-only style; a select
 // row highlights the bound choice with a faint accent fill.
-pub(crate) fn option_row_style(is_selected: bool, color: &dyn Fn() -> Color) -> RectStyle {
+pub(crate) fn option_row_style(is_selected: bool, color: &Reactive<Color>) -> RectStyle {
     let radius = BorderRadius::all(shared::radius_sm());
     if is_selected {
         let accent = shared::resolve(color, shared::accent);
@@ -428,7 +429,7 @@ pub(crate) fn option_row_style(is_selected: bool, color: &dyn Fn() -> Color) -> 
     }
 }
 
-pub(crate) fn option_row_hover_style(color: &dyn Fn() -> Color) -> RectStyle {
+pub(crate) fn option_row_hover_style(color: &Reactive<Color>) -> RectStyle {
     let accent = shared::resolve(color, shared::accent);
     RectStyle::default()
         .with_fill(accent.with_alpha(0.10))

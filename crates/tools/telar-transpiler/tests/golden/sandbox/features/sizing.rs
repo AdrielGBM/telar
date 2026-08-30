@@ -15,7 +15,7 @@ pub fn features_sizing() -> Result<Box<dyn LayoutItem>, LayoutError> {
     let __owner = telar::owner_scope();
     #[allow(unused_imports)] use telar::use_theme;
     let __col_0 = {
-        let __node_0 = doc_header(DocHeaderProps { kicker: "FOUNDATIONS", title: "Sizing & grid", desc: "Size in pixels or percentages, clamp with min/max, and reach for the grid when you need aligned columns or a responsive gallery." })?;
+        let __node_0 = doc_header(DocHeaderProps::props().kicker("FOUNDATIONS").title("Sizing & grid").desc("Size in pixels or percentages, clamp with min/max, and reach for the grid when you need aligned columns or a responsive gallery.").build())?;
         let __node_1 = {
             let mut __slots = Slots::new();
             let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
@@ -35,13 +35,13 @@ pub fn features_sizing() -> Result<Box<dyn LayoutItem>, LayoutError> {
                 };
                 __children.push(box_item(__sbox_2));
                 __slots.extend_default(__children);
-                card(CardProps { gap: 10.0, ..Default::default() }, __slots)?
+                card(CardProps::props().gap(10.0).build(), __slots)?
             };
             __children.push(box_item(__node_2));
-            let __node_3 = code_line(CodeLineProps { code: "box width:120   ·   width:50%   ·   width:100%" })?;
+            let __node_3 = code_line(CodeLineProps::props().code("box width:120   ·   width:50%   ·   width:100%").build())?;
             __children.push(box_item(__node_3));
             __slots.extend_default(__children);
-            example(ExampleProps { title: "Fixed vs percentage width" }, __slots)?
+            example(ExampleProps::props().title("Fixed vs percentage width").build(), __slots)?
         };
         let __node_4 = {
             let mut __slots = Slots::new();
@@ -63,13 +63,13 @@ pub fn features_sizing() -> Result<Box<dyn LayoutItem>, LayoutError> {
                 };
                 __children.push(box_item(__row_0));
                 __slots.extend_default(__children);
-                card(CardProps { ..Default::default() }, __slots)?
+                card(CardProps::props().build(), __slots)?
             };
             __children.push(box_item(__node_5));
-            let __node_6 = code_line(CodeLineProps { code: "box min_width:200 grow:1   (also max_width, min_height, max_height)" })?;
+            let __node_6 = code_line(CodeLineProps::props().code("box min_width:200 grow:1   (also max_width, min_height, max_height)").build())?;
             __children.push(box_item(__node_6));
             __slots.extend_default(__children);
-            example(ExampleProps { title: "min_width — a box refuses to shrink below its floor, then wraps" }, __slots)?
+            example(ExampleProps::props().title("min_width — a box refuses to shrink below its floor, then wraps").build(), __slots)?
         };
         let __node_7 = {
             let mut __slots = Slots::new();
@@ -132,13 +132,13 @@ pub fn features_sizing() -> Result<Box<dyn LayoutItem>, LayoutError> {
                 };
                 __children.push(box_item(__node_9));
                 __slots.extend_default(__children);
-                card(CardProps { ..Default::default() }, __slots)?
+                card(CardProps::props().build(), __slots)?
             };
             __children.push(box_item(__node_8));
-            let __node_10 = code_line(CodeLineProps { code: "grid cols:3 gap:10      >      box span:2" })?;
+            let __node_10 = code_line(CodeLineProps::props().code("grid cols:3 gap:10      >      box span:2").build())?;
             __children.push(box_item(__node_10));
             __slots.extend_default(__children);
-            example(ExampleProps { title: "Grid — fixed column count with repeat(3, 1fr)" }, __slots)?
+            example(ExampleProps::props().title("Grid — fixed column count with repeat(3, 1fr)").build(), __slots)?
         };
         let __node_11 = {
             let mut __slots = Slots::new();
@@ -160,13 +160,13 @@ pub fn features_sizing() -> Result<Box<dyn LayoutItem>, LayoutError> {
                 };
                 __children.push(box_item(__node_13));
                 __slots.extend_default(__children);
-                card(CardProps { ..Default::default() }, __slots)?
+                card(CardProps::props().build(), __slots)?
             };
             __children.push(box_item(__node_12));
-            let __node_14 = code_line(CodeLineProps { code: "grid cols:'1fr 2fr 1fr' gap:10" })?;
+            let __node_14 = code_line(CodeLineProps::props().code("grid cols:'1fr 2fr 1fr' gap:10").build())?;
             __children.push(box_item(__node_14));
             __slots.extend_default(__children);
-            example(ExampleProps { title: "Grid — explicit fractional tracks" }, __slots)?
+            example(ExampleProps::props().title("Grid — explicit fractional tracks").build(), __slots)?
         };
         let __node_15 = {
             let mut __slots = Slots::new();
@@ -194,27 +194,27 @@ pub fn features_sizing() -> Result<Box<dyn LayoutItem>, LayoutError> {
                 };
                 __children.push(box_item(__node_17));
                 __slots.extend_default(__children);
-                card(CardProps { ..Default::default() }, __slots)?
+                card(CardProps::props().build(), __slots)?
             };
             __children.push(box_item(__node_16));
-            let __node_18 = code_line(CodeLineProps { code: "grid cols:'fit 160'   (auto-fit, minmax(160px, 1fr))" })?;
+            let __node_18 = code_line(CodeLineProps::props().code("grid cols:'fit 160'   (auto-fit, minmax(160px, 1fr))").build())?;
             __children.push(box_item(__node_18));
             __slots.extend_default(__children);
-            example(ExampleProps { title: "Grid — responsive tracks that reflow like wrap but keep their height" }, __slots)?
+            example(ExampleProps::props().title("Grid — responsive tracks that reflow like wrap but keep their height").build(), __slots)?
         };
         let __node_19 = {
             let mut __slots = Slots::new();
             let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
             let __col_1 = {
-                let __node_20 = prop_row(PropRowProps { name: "width / height", values: "number · N%", about: "Pixels, or a percentage of the parent." })?;
-                let __node_21 = prop_row(PropRowProps { name: "min_/max_width", values: "number · N%", about: "Clamp a flexible size." })?;
-                let __node_22 = prop_row(PropRowProps { name: "cols", values: "N · tracks · fit/fill N", about: "Turn a grid on: count, explicit tracks, or responsive." })?;
-                let __node_23 = prop_row(PropRowProps { name: "span / row_span", values: "number", about: "How many grid tracks a cell covers." })?;
+                let __node_20 = prop_row(PropRowProps::props().name("width / height").values("number · N%").about("Pixels, or a percentage of the parent.").build())?;
+                let __node_21 = prop_row(PropRowProps::props().name("min_/max_width").values("number · N%").about("Clamp a flexible size.").build())?;
+                let __node_22 = prop_row(PropRowProps::props().name("cols").values("N · tracks · fit/fill N").about("Turn a grid on: count, explicit tracks, or responsive.").build())?;
+                let __node_23 = prop_row(PropRowProps::props().name("span / row_span").values("number").about("How many grid tracks a cell covers.").build())?;
                 Container::new(LayoutStyle::new().flex_column().gap(6.0), children![__node_20, __node_21, __node_22, __node_23])?
             };
             __children.push(box_item(__col_1));
             __slots.extend_default(__children);
-            example(ExampleProps { title: "Attributes" }, __slots)?
+            example(ExampleProps::props().title("Attributes").build(), __slots)?
         };
         Container::new(LayoutStyle::new().flex_column().gap(20.0), children![__node_0, __node_1, __node_4, __node_7, __node_11, __node_15, __node_19])?
     };

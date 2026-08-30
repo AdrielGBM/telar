@@ -201,7 +201,7 @@ pub fn features_paths() -> Result<Box<dyn LayoutItem>, LayoutError> {
     })?;
 
     let __col_0 = {
-        let __node_0 = doc_header(DocHeaderProps { kicker: "MEDIA", title: "Paths", desc: "Build vector geometry with PathData — lines, quadratic and cubic Béziers, winding vs even-odd fills, stroke caps, and per-path shadows — then draw it in a Canvas." })?;
+        let __node_0 = doc_header(DocHeaderProps::props().kicker("MEDIA").title("Paths").desc("Build vector geometry with PathData — lines, quadratic and cubic Béziers, winding vs even-odd fills, stroke caps, and per-path shadows — then draw it in a Canvas.").build())?;
         let __node_1 = {
             let mut __slots = Slots::new();
             let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
@@ -211,13 +211,13 @@ pub fn features_paths() -> Result<Box<dyn LayoutItem>, LayoutError> {
 
                 __children.push(box_item(result));
                 __slots.extend_default(__children);
-                card(CardProps { ..Default::default() }, __slots)?
+                card(CardProps::props().build(), __slots)?
             };
             __children.push(box_item(__node_2));
-            let __node_3 = code_line(CodeLineProps { code: "PathData::new().move_to(p).cubic_to(a, b, c)   >   RenderNode::path(d, style)" })?;
+            let __node_3 = code_line(CodeLineProps::props().code("PathData::new().move_to(p).cubic_to(a, b, c)   >   RenderNode::path(d, style)").build())?;
             __children.push(box_item(__node_3));
             __slots.extend_default(__children);
-            example(ExampleProps { title: "Polygons, curves, fills and a path shadow" }, __slots)?
+            example(ExampleProps::props().title("Polygons, curves, fills and a path shadow").build(), __slots)?
         };
         let __node_4 = {
             let mut __slots = Slots::new();
@@ -242,27 +242,27 @@ pub fn features_paths() -> Result<Box<dyn LayoutItem>, LayoutError> {
                 };
                 __children.push(box_item(__row_0));
                 __slots.extend_default(__children);
-                card(CardProps { ..Default::default() }, __slots)?
+                card(CardProps::props().build(), __slots)?
             };
             __children.push(box_item(__node_5));
-            let __node_6 = code_line(CodeLineProps { code: "path d:\"M0,0 L100,0 L50,80 Z\" fill:theme.primary stroke:theme.ink stroke_width:2 width:100 height:80" })?;
+            let __node_6 = code_line(CodeLineProps::props().code("path d:\"M0,0 L100,0 L50,80 Z\" fill:theme.primary stroke:theme.ink stroke_width:2 width:100 height:80").build())?;
             __children.push(box_item(__node_6));
             __slots.extend_default(__children);
-            example(ExampleProps { title: "Declarative paths in [view]" }, __slots)?
+            example(ExampleProps::props().title("Declarative paths in [view]").build(), __slots)?
         };
         let __node_7 = {
             let mut __slots = Slots::new();
             let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
             let __col_1 = {
-                let __node_8 = prop_row(PropRowProps { name: "move_to / line_to", values: "Point", about: "Start a subpath, add a straight segment." })?;
-                let __node_9 = prop_row(PropRowProps { name: "quad_to / cubic_to", values: "Points", about: "Quadratic and cubic Bézier curves." })?;
-                let __node_10 = prop_row(PropRowProps { name: "fill_rule", values: "Winding · EvenOdd", about: "How overlapping regions are filled." })?;
-                let __node_11 = prop_row(PropRowProps { name: "Stroke::with_cap", values: "Butt·Round·Square", about: "Line ends (and with_join for corners)." })?;
+                let __node_8 = prop_row(PropRowProps::props().name("move_to / line_to").values("Point").about("Start a subpath, add a straight segment.").build())?;
+                let __node_9 = prop_row(PropRowProps::props().name("quad_to / cubic_to").values("Points").about("Quadratic and cubic Bézier curves.").build())?;
+                let __node_10 = prop_row(PropRowProps::props().name("fill_rule").values("Winding · EvenOdd").about("How overlapping regions are filled.").build())?;
+                let __node_11 = prop_row(PropRowProps::props().name("Stroke::with_cap").values("Butt·Round·Square").about("Line ends (and with_join for corners).").build())?;
                 Container::new(LayoutStyle::new().flex_column().gap(6.0), children![__node_8, __node_9, __node_10, __node_11])?
             };
             __children.push(box_item(__col_1));
             __slots.extend_default(__children);
-            example(ExampleProps { title: "The PathData API" }, __slots)?
+            example(ExampleProps::props().title("The PathData API").build(), __slots)?
         };
         Container::new(LayoutStyle::new().flex_column().gap(20.0), children![__node_0, __node_1, __node_4, __node_7])?
     };

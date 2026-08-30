@@ -1,12 +1,12 @@
 use layout_core::{AlignItems, LayoutError, LayoutStyle};
-use reactive_core::{RwSignal, signal};
+use reactive_core::{Reactive, RwSignal, signal};
 use renderer_core::{BorderRadius, Color, RectStyle, ShapeStyle};
+use telar_macros::Props;
 use theme_core::use_theme_tokens;
 use ui_core::focus::Role;
 use ui_core::{LayoutItem, StyledContainer, box_item, box_transform};
 
 use crate::shared;
-use crate::shared::props_default;
 
 /// How far the knob slides between off (left inset) and on (right inset): track 40 − knob 16 − 3px each side.
 const KNOB_TRAVEL: f32 = 18.0;
@@ -22,22 +22,20 @@ fn off_track() -> Color {
 /// sugar over the primitives (`box` + `on_press` + a reactive fill + a `translate`); lives in `ui-components`,
 /// not the kernel. `checked` is `Option` so `Props` can derive `Default`: `None` is uncontrolled (the widget
 /// owns its own signal), `Some` is caller-bound.
+#[derive(Props)]
 pub struct ToggleProps {
     /// Bound on/off state. `None` (the default) is uncontrolled — the widget makes its own `signal(false)`.
+    #[props(some, into, default)]
     pub checked: Option<RwSignal<bool>>,
-    pub label: Box<dyn Fn() -> String>,
+    #[props(into, default)]
+    pub label: Reactive<String>,
     /// Accent (the on-track fill). `Color::TRANSPARENT` (the default) means "unset": fall back to the theme accent.
-    pub color: Box<dyn Fn() -> Color>,
+    #[props(into, default = Reactive::of(|| Color::TRANSPARENT))]
+    pub color: Reactive<Color>,
     /// Fires with the new state on every toggle.
+    #[props(some, default)]
     pub on_toggle: Option<Box<dyn Fn(bool)>>,
 }
-
-props_default!(ToggleProps {
-    checked: none,
-    label: text,
-    color: color,
-    on_toggle: none,
-});
 
 pub fn toggle(props: ToggleProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let ToggleProps {
@@ -76,7 +74,7 @@ pub fn toggle(props: ToggleProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
             .align_items(AlignItems::CENTER),
         move |_r| {
             let fill = if track_on.get() {
-                shared::resolve(color.as_ref(), || shared::accent())
+                shared::resolve(&color, shared::accent)
             } else {
                 off_track()
             };
@@ -124,11 +122,12 @@ mod tests {
     fn tap_toggles_bound_signal() {
         crate::test_support::fresh_layout_runtime();
         let on = signal(false);
-        let mut widget = toggle(ToggleProps {
-            checked: Some(on),
-            label: Box::new(|| "Notifications".to_string()),
-            ..Default::default()
-        })
+        let mut widget = toggle(
+            ToggleProps::props()
+                .checked(on)
+                .label("Notifications")
+                .build(),
+        )
         .unwrap();
         let (cx, cy) = lay_out(widget.layout_node());
 
@@ -146,10 +145,11 @@ mod tests {
         let seen: Rc<Cell<Option<bool>>> = Rc::new(Cell::new(None));
         let sink = seen.clone();
         crate::test_support::fresh_layout_runtime();
-        let mut widget = toggle(ToggleProps {
-            on_toggle: Some(Box::new(move |v| sink.set(Some(v)))),
-            ..Default::default()
-        })
+        let mut widget = toggle(
+            ToggleProps::props()
+                .on_toggle(Box::new(move |v| sink.set(Some(v))))
+                .build(),
+        )
         .unwrap();
         let (cx, cy) = lay_out(widget.layout_node());
 

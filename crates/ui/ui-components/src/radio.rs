@@ -1,13 +1,12 @@
-use std::rc::Rc;
+use telar_macros::Props;
 
 use layout_core::{AlignItems, JustifyContent, LayoutError, LayoutStyle};
-use reactive_core::{RwSignal, signal};
+use reactive_core::{Reactive, RwSignal, signal};
 use renderer_core::{Border, BorderRadius, Color, RectStyle, ShapeStyle};
 use ui_core::focus::Role;
 use ui_core::{LayoutItem, StyledContainer, box_item};
 
 use crate::shared;
-use crate::shared::props_default;
 
 /// One radio button in a group: an 18px ring that fills its centre dot (and accents its border) while the
 /// bound `selected` signal equals this button's `value`; tapping the row sets `selected` to `value` (and fires
@@ -15,25 +14,23 @@ use crate::shared::props_default;
 /// High-level sugar over the primitives (`box` + `on_press` + a reactive fill); lives in `ui-components`, not
 /// the kernel. `selected` is `Option` so `Props` can derive `Default`: `None` is uncontrolled (the widget owns
 /// its own signal, so it never matches — a lone default radio), `Some` is the shared group signal.
+#[derive(Props)]
 pub struct RadioProps {
     /// The group's bound selection. `None` (the default) is uncontrolled — the widget makes its own `signal(0)`.
+    #[props(some, into, default)]
     pub selected: Option<RwSignal<u32>>,
     /// This button's value: it is selected when `selected` equals it, and a tap sets `selected` to it.
+    #[props(default)]
     pub value: u32,
-    pub label: Box<dyn Fn() -> String>,
+    #[props(into, default)]
+    pub label: Reactive<String>,
     /// Accent (the selected dot and border). `Color::TRANSPARENT` (the default) means "unset": fall back to the theme accent.
-    pub color: Box<dyn Fn() -> Color>,
+    #[props(into, default = Reactive::of(|| Color::TRANSPARENT))]
+    pub color: Reactive<Color>,
     /// Fires with this button's `value` when it becomes selected.
+    #[props(some, default)]
     pub on_select: Option<Box<dyn Fn(u32)>>,
 }
-
-props_default!(RadioProps {
-    selected: none,
-    value: zero,
-    label: text,
-    color: color,
-    on_select: none,
-});
 
 pub fn radio(props: RadioProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let RadioProps {
@@ -46,7 +43,6 @@ pub fn radio(props: RadioProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
     // Uncontrolled: own the selection so the widget is self-consistent when the caller binds no group signal.
     let selected = selected.unwrap_or_else(|| signal(0u32));
     // Shared across the dot and ring style closures (a `Box<dyn Fn>` is not `Clone`, an `Rc` handle is).
-    let color: shared::ReactiveColor = Rc::from(color);
 
     // The dot: an inner circle that paints the accent only while this value is selected, so selecting never reflows.
     let dot_selected = selected;
@@ -55,7 +51,7 @@ pub fn radio(props: RadioProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
         LayoutStyle::new().width(10.0).height(10.0),
         move |_r| {
             let fill = if dot_selected.get() == value {
-                shared::resolve(dot_color.as_ref(), || shared::accent())
+                shared::resolve(&dot_color, shared::accent)
             } else {
                 Color::TRANSPARENT
             };
@@ -78,7 +74,7 @@ pub fn radio(props: RadioProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
             .justify_content(JustifyContent::CENTER),
         move |_r| {
             let stroke = if ring_selected.get() == value {
-                shared::resolve(ring_color.as_ref(), || shared::accent())
+                shared::resolve(&ring_color, shared::accent)
             } else {
                 shared::border()
             };
@@ -126,12 +122,13 @@ mod tests {
     fn tap_sets_group_selection_to_value() {
         crate::test_support::fresh_layout_runtime();
         let selected = signal(0u32);
-        let mut widget = radio(RadioProps {
-            selected: Some(selected),
-            value: 2,
-            label: Box::new(|| "Large".to_string()),
-            ..Default::default()
-        })
+        let mut widget = radio(
+            RadioProps::props()
+                .selected(selected)
+                .value(2)
+                .label("Large")
+                .build(),
+        )
         .unwrap();
         let (cx, cy) = lay_out(widget.layout_node());
 
@@ -146,12 +143,13 @@ mod tests {
         let seen: Rc<Cell<Option<u32>>> = Rc::new(Cell::new(None));
         let sink = seen.clone();
         crate::test_support::fresh_layout_runtime();
-        let mut widget = radio(RadioProps {
-            selected: Some(signal(0u32)),
-            value: 5,
-            on_select: Some(Box::new(move |v| sink.set(Some(v)))),
-            ..Default::default()
-        })
+        let mut widget = radio(
+            RadioProps::props()
+                .selected(signal(0u32))
+                .value(5)
+                .on_select(Box::new(move |v| sink.set(Some(v))))
+                .build(),
+        )
         .unwrap();
         let (cx, cy) = lay_out(widget.layout_node());
 

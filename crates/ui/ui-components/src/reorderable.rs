@@ -1,14 +1,13 @@
 use std::cell::RefCell;
 use std::rc::Rc;
+use telar_macros::Props;
 
 use geometry_core::Rect;
 use layout_core::{LayoutError, LayoutStyle};
-use reactive_core::{RwSignal, signal};
+use reactive_core::{Reactive, RwSignal, signal};
 use ui_core::{
     Axis, LayoutItem, ReactiveList, StyledContainer, box_item, insertion_index, track_layout,
 };
-
-use crate::shared::props_default;
 
 /// One item's widget, built on demand from its position in the caller's storage.
 pub type ItemBuilder = Box<dyn Fn(usize) -> Result<Box<dyn LayoutItem>, LayoutError>>;
@@ -35,30 +34,28 @@ struct Drag {
 /// and reporting the move once. The items, their identity and what happens to them stay with the caller —
 /// [`on_move`](Self::on_move) is called with the two positions and writes nothing itself, so a strip backed
 /// by a config file, a plugin host or three separate zones all use the same widget.
+#[derive(Props)]
 pub struct ReorderableProps {
     /// How many items there are, read reactively — the strip rebuilds when it changes.
-    pub count: Box<dyn Fn() -> usize>,
+    #[props(into, default)]
+    pub count: Reactive<usize>,
     /// Builds the widget for the item stored at `index`. Called once per item and reused across a drag, so it
     /// may hold state of its own.
+    #[props(default = Box::new(|_| Err(LayoutError::Engine("reorderable: no item builder".into()))))]
     pub item: ItemBuilder,
     /// The drop landed: move the item stored at `from` into slot `to`, counting slots in the list *before*
     /// the move. [`ui_core::apply_move`] is that rule over a `Vec`, if the caller's storage is one.
+    #[props(default = Box::new(|_, _| {}))]
     pub on_move: Box<dyn Fn(usize, usize)>,
     /// Lay the strip out along the horizontal axis. A column otherwise, matching `ReactiveList`'s own default.
+    #[props(default)]
     pub row: bool,
+    #[props(default)]
     pub gap: f32,
     /// How far the pointer must travel before a press counts as a drag rather than a click on the item.
+    #[props(default = 4.0)]
     pub drag_threshold: f32,
 }
-
-props_default!(ReorderableProps {
-    count: (Box::new(|| 0)),
-    item: (Box::new(|_| Err(LayoutError::Engine("reorderable: no item builder".into())))),
-    on_move: (Box::new(|_, _| {})),
-    row: zero,
-    gap: zero,
-    drag_threshold: (4.0),
-});
 
 pub fn reorderable(props: ReorderableProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let ReorderableProps {
@@ -79,14 +76,13 @@ pub fn reorderable(props: ReorderableProps) -> Result<Box<dyn LayoutItem>, Layou
     let rects: Rc<RefCell<Vec<Option<RwSignal<Rect>>>>> = Rc::new(RefCell::new(Vec::new()));
     let on_move = Rc::new(on_move);
 
-    let count = Rc::new(count);
-    let source_count = Rc::clone(&count);
-    let source = move || (0..source_count()).collect::<Vec<usize>>();
+    let source_count = count.clone();
+    let source = move || (0..source_count.get()).collect::<Vec<usize>>();
 
-    let build_rects = Rc::clone(&rects);
+    let build_rects = rects.clone();
     let build_drag = drag;
-    let build_move = Rc::clone(&on_move);
-    let build_count = Rc::clone(&count);
+    let build_move = on_move.clone();
+    let build_count = count.clone();
     let build = move |index: usize| -> Result<Box<dyn LayoutItem>, LayoutError> {
         let child = item(index)?;
         let node = child.layout_node();
@@ -95,17 +91,18 @@ pub fn reorderable(props: ReorderableProps) -> Result<Box<dyn LayoutItem>, Layou
         })?;
         remember(&build_rects, index, rect);
 
-        let move_rects = Rc::clone(&build_rects);
+        let move_rects = build_rects.clone();
         let move_drag = build_drag;
         let move_rect = rect;
         let end_drag = build_drag;
-        let end_move = Rc::clone(&build_move);
+        let end_move = build_move.clone();
         let gap_drag = build_drag;
-        let gap_count = Rc::clone(&build_count);
-        let bounds_rects = Rc::clone(&build_rects);
+        let gap_count = build_count.clone();
+        let bounds_rects = build_rects.clone();
         let bounds_rect = rect;
         let bounds_drag = build_drag;
-        let slot_style = move || slot_style(index, gap_count(), gap_drag.get().as_ref(), axis, gap);
+        let slot_style =
+            move || slot_style(index, gap_count.get(), gap_drag.get().as_ref(), axis, gap);
         // The drag signal is read only by `styled_by`'s own effect, never here and never by the list's
         // `source`: `build` runs inside the reconcile effect, so a read at either of those places would
         // subscribe *that* effect to the drag and make the next pointer move reconcile the list from inside
@@ -288,27 +285,29 @@ mod tests {
         let moves = Rc::new(RefCell::new(Vec::new()));
 
         let count_items = items;
-        let recorded = Rc::clone(&moves);
+        let recorded = moves.clone();
         let moved_items = items;
-        let widget = reorderable(ReorderableProps {
-            count: Box::new(move || count_items.get().len()),
-            item: Box::new(|_| {
-                Ok(box_item(StyledContainer::new(
-                    LayoutStyle::new().width(ITEM).height(40.0),
-                    |_| RectStyle::default(),
-                    vec![],
-                )?))
-            }),
-            on_move: Box::new(move |from, to| {
-                recorded.borrow_mut().push((from, to));
-                let mut current = moved_items.peek();
-                ui_core::apply_move(&mut current, from, to);
-                moved_items.set(current);
-            }),
-            row: true,
-            gap: 0.0,
-            drag_threshold: 0.0,
-        })
+        let widget = reorderable(
+            ReorderableProps::props()
+                .count(Reactive::of(move || count_items.get().len()))
+                .item(Box::new(|_| {
+                    Ok(box_item(StyledContainer::new(
+                        LayoutStyle::new().width(ITEM).height(40.0),
+                        |_| RectStyle::default(),
+                        vec![],
+                    )?))
+                }))
+                .on_move(Box::new(move |from, to| {
+                    recorded.borrow_mut().push((from, to));
+                    let mut current = moved_items.peek();
+                    ui_core::apply_move(&mut current, from, to);
+                    moved_items.set(current);
+                }))
+                .row(true)
+                .gap(0.0)
+                .drag_threshold(0.0)
+                .build(),
+        )
         .unwrap();
         (widget, items, moves)
     }

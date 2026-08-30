@@ -1,4 +1,5 @@
-use std::rc::Rc;
+use reactive_core::Reactive;
+use telar_macros::Props;
 
 use layout_core::{AlignItems, LayoutError, LayoutStyle};
 use renderer_core::{Border, BorderRadius, Color, RectStyle, ShapeStyle};
@@ -6,7 +7,6 @@ use ui_core::focus::Role;
 use ui_core::{Container, LayoutItem, StyledContainer, Text, box_item};
 
 use crate::shared;
-use crate::shared::props_default;
 
 fn pad_x() -> f32 {
     shared::spacing() * 1.25
@@ -48,22 +48,20 @@ fn pill_box() -> LayoutStyle {
 /// an optional small accent dot when `color` is set, and an optional `×` affordance that fires `on_close`.
 /// Non-interactive unless `on_close` is set. High-level sugar over `StyledContainer`/`Container` + `Text`;
 /// lives in `ui-components`, not the kernel, so an app can drop it or ship its own.
+#[derive(Props)]
 pub struct ChipProps {
-    pub label: Box<dyn Fn() -> String>,
+    #[props(into, default)]
+    pub label: Reactive<String>,
     /// Small leading accent dot colour. `Color::TRANSPARENT` (the default) means "unset": no dot is shown at
     /// all (not just an invisible one) — see `chip`'s doc. A closure (re-read every frame) so a theme token
     /// or `$signal` colour re-colours the dot live, like `button`'s `fill`.
-    pub color: Box<dyn Fn() -> Color>,
+    #[props(into, default = Reactive::of(|| Color::TRANSPARENT))]
+    pub color: Reactive<Color>,
     /// When `Some`, a small `×` press target renders on the right and calls it on tap. `None` (the default)
     /// omits it entirely, leaving a non-interactive chip.
+    #[props(some, default)]
     pub on_close: Option<Box<dyn Fn()>>,
 }
-
-props_default!(ChipProps {
-    label: text,
-    color: color,
-    on_close: none,
-});
 
 pub fn chip(props: ChipProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let ChipProps {
@@ -73,21 +71,20 @@ pub fn chip(props: ChipProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
     } = props;
     // Erased to `Rc` so the same colour closure can feed both the dot's presence check (read once, below)
     // and its per-frame fill style, like `button`'s `fill`/`outline`.
-    let color: shared::ReactiveColor = Rc::from(color);
 
     let mut children: Vec<Box<dyn LayoutItem>> = Vec::with_capacity(3);
 
     // The dot's presence is decided once at build time (an unset colour means "no dot", not an invisible
     // one); its shade is still re-read every frame so a live theme/signal colour tracks.
-    if (color.as_ref())() != Color::TRANSPARENT {
-        let dot_color = Rc::clone(&color);
-        let dot = StyledContainer::new(dot_box(), move |_r| dot_style(dot_color.as_ref()), vec![])?
+    if color.get() != Color::TRANSPARENT {
+        let dot_color = color.clone();
+        let dot = StyledContainer::new(dot_box(), move |_r| dot_style(&dot_color), vec![])?
             .styled_by(dot_box);
         children.push(box_item(dot));
     }
 
     let label_widget = Text::declaring(
-        move || label(),
+        move || label.get(),
         LayoutStyle::new(),
         |t| shared::control_text(t, TEXT_RATIO),
     )?;
@@ -125,9 +122,9 @@ pub fn chip(props: ChipProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
     Ok(box_item(pill))
 }
 
-fn dot_style(color: &dyn Fn() -> Color) -> RectStyle {
+fn dot_style(color: &Reactive<Color>) -> RectStyle {
     RectStyle::default()
-        .with_fill(color())
+        .with_fill(color.get())
         .with_radius(BorderRadius::all(dot_size() / 2.0))
 }
 
@@ -152,11 +149,7 @@ mod tests {
     #[test]
     fn renders_label() {
         crate::test_support::fresh_layout_runtime();
-        let chip = chip(ChipProps {
-            label: Box::new(|| "Draft".to_string()),
-            ..Default::default()
-        })
-        .unwrap();
+        let chip = chip(ChipProps::props().label("Draft").build()).unwrap();
         let root = new_container(
             LayoutStyle::new().flex_row().width(200.0).height(60.0),
             &[chip.layout_node()],
@@ -178,11 +171,12 @@ mod tests {
         crate::test_support::fresh_layout_runtime();
         let flag = Rc::new(Cell::new(false));
         let sink = flag.clone();
-        let mut chip = chip(ChipProps {
-            label: Box::new(|| "Tag".to_string()),
-            on_close: Some(Box::new(move || sink.set(true))),
-            ..Default::default()
-        })
+        let mut chip = chip(
+            ChipProps::props()
+                .label("Tag")
+                .on_close(Box::new(move || sink.set(true)) as Box<dyn Fn()>)
+                .build(),
+        )
         .unwrap();
         let node = chip.layout_node();
         // Wrapped in a non-stretching root (like `checkbox`'s test helper) so the pill shrink-wraps to its
@@ -226,7 +220,7 @@ mod tests {
     #[test]
     fn empty_label_builds_without_panic() {
         crate::test_support::fresh_layout_runtime();
-        let chip = chip(ChipProps::default()).unwrap();
+        let chip = chip(ChipProps::props().build()).unwrap();
         let root = new_container(
             LayoutStyle::new().flex_row().width(200.0).height(60.0),
             &[chip.layout_node()],

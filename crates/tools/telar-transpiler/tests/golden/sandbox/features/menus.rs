@@ -15,7 +15,7 @@ pub fn features_menus() -> Result<Box<dyn LayoutItem>, LayoutError> {
     let ruler = signal(true);
 
     let __col_0 = {
-        let __node_0 = doc_header(DocHeaderProps { kicker: "INTERACTION", title: "Menus & Selects", desc: "select and menu are components (from the components feature, not base tags) built on the overlay anchor: a trigger button opens a panel positioned next to it, and only that panel blocks clicks — taps elsewhere fall through and dismiss it." })?;
+        let __node_0 = doc_header(DocHeaderProps::props().kicker("INTERACTION").title("Menus & Selects").desc("select and menu are components (from the components feature, not base tags) built on the overlay anchor: a trigger button opens a panel positioned next to it, and only that panel blocks clicks — taps elsewhere fall through and dismiss it.").build())?;
         let __node_1 = {
             let mut __slots = Slots::new();
             let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
@@ -27,17 +27,17 @@ pub fn features_menus() -> Result<Box<dyn LayoutItem>, LayoutError> {
                         move || {
                             let mut __slots = Slots::new();
                             let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-                            let __node_4 = item(ItemProps { label: Box::new(move || "Small".to_string()), ..Default::default() }, Slots::new())?;
+                            let __node_4 = item(ItemProps::props().label("Small").build(), Slots::new())?;
                             __children.push(box_item(__node_4));
-                            let __node_5 = item(ItemProps { label: Box::new(move || "Medium".to_string()), ..Default::default() }, Slots::new())?;
+                            let __node_5 = item(ItemProps::props().label("Medium").build(), Slots::new())?;
                             __children.push(box_item(__node_5));
-                            let __node_6 = item(ItemProps { label: Box::new(move || "Large".to_string()), ..Default::default() }, Slots::new())?;
+                            let __node_6 = item(ItemProps::props().label("Large").build(), Slots::new())?;
                             __children.push(box_item(__node_6));
                             __slots.extend_default(__children);
                             Ok(__slots)
                         }
                     );
-                    select(SelectProps { selected: Some(picked.clone()), ..Default::default() }, __deferred)?
+                    select(SelectProps::props().selected(picked.clone()).build(), __deferred)?
                 };
                 __children.push(box_item(__node_3));
                 let __text_0 = {
@@ -50,13 +50,13 @@ pub fn features_menus() -> Result<Box<dyn LayoutItem>, LayoutError> {
                 };
                 __children.push(box_item(__text_0));
                 __slots.extend_default(__children);
-                card(CardProps { gap: 10.0, ..Default::default() }, __slots)?
+                card(CardProps::props().gap(10.0).build(), __slots)?
             };
             __children.push(box_item(__node_2));
-            let __node_7 = code_line(CodeLineProps { code: "select selected:$picked / item label:'Small' / item label:'Medium'" })?;
+            let __node_7 = code_line(CodeLineProps::props().code("select selected:$picked / item label:'Small' / item label:'Medium'").build())?;
             __children.push(box_item(__node_7));
             __slots.extend_default(__children);
-            example(ExampleProps { title: "select — a dropdown bound to a signal" }, __slots)?
+            example(ExampleProps::props().title("select — a dropdown bound to a signal").build(), __slots)?
         };
         let __node_8 = {
             let mut __slots = Slots::new();
@@ -69,15 +69,15 @@ pub fn features_menus() -> Result<Box<dyn LayoutItem>, LayoutError> {
                         move || {
                             let mut __slots = Slots::new();
                             let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-                            let __node_11 = item(ItemProps { label: Box::new(move || "Rename".to_string()), ..Default::default() }, Slots::new())?;
+                            let __node_11 = item(ItemProps::props().label("Rename").build(), Slots::new())?;
                             __children.push(box_item(__node_11));
-                            let __node_12 = item(ItemProps { label: Box::new(move || "Duplicate".to_string()), ..Default::default() }, Slots::new())?;
+                            let __node_12 = item(ItemProps::props().label("Duplicate").build(), Slots::new())?;
                             __children.push(box_item(__node_12));
                             __slots.extend_default(__children);
                             Ok(__slots)
                         }
                     );
-                    menu(MenuProps { label: Box::new(move || "Actions".to_string()), on_select: Some(Box::new({ let action = action.clone(); move |i| action.set(i) })), ..Default::default() }, __deferred)?
+                    menu(MenuProps::props().label("Actions").on_select(Box::new({ let action = action.clone(); move |i| action.set(i) })).build(), __deferred)?
                 };
                 __children.push(box_item(__node_10));
                 let __text_1 = {
@@ -90,13 +90,13 @@ pub fn features_menus() -> Result<Box<dyn LayoutItem>, LayoutError> {
                 };
                 __children.push(box_item(__text_1));
                 __slots.extend_default(__children);
-                card(CardProps { gap: 10.0, ..Default::default() }, __slots)?
+                card(CardProps::props().gap(10.0).build(), __slots)?
             };
             __children.push(box_item(__node_9));
-            let __node_13 = code_line(CodeLineProps { code: "menu label:'Actions'   >   item label:'Rename'" })?;
+            let __node_13 = code_line(CodeLineProps::props().code("menu label:'Actions'   >   item label:'Rename'").build())?;
             __children.push(box_item(__node_13));
             __slots.extend_default(__children);
-            example(ExampleProps { title: "menu — a click-triggered list of one-shot actions" }, __slots)?
+            example(ExampleProps::props().title("menu — a click-triggered list of one-shot actions").build(), __slots)?
         };
         let __node_14 = {
             let mut __slots = Slots::new();
@@ -112,56 +112,56 @@ pub fn features_menus() -> Result<Box<dyn LayoutItem>, LayoutError> {
                         move || {
                             let mut __slots = Slots::new();
                             let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-                            let __node_17 = item(ItemProps { label: Box::new(move || "Undo".to_string()), hint: Some(Box::new(move || "⌘Z".to_string())), ..Default::default() }, Slots::new())?;
+                            let __node_17 = item(ItemProps::props().label("Undo").hint("⌘Z").build(), Slots::new())?;
                             __children.push(box_item(__node_17));
-                            let __node_18 = item(ItemProps { label: Box::new(move || "Redo".to_string()), hint: Some(Box::new(move || "⇧⌘Z".to_string())), disabled: Box::new({ let cant_redo = cant_redo.clone(); move || cant_redo.get() }), ..Default::default() }, Slots::new())?;
+                            let __node_18 = item(ItemProps::props().label("Redo").hint("⇧⌘Z").disabled(cant_redo.clone()).build(), Slots::new())?;
                             __children.push(box_item(__node_18));
                             let __node_19 = separator()?;
                             __children.push(box_item(__node_19));
-                            let __node_20 = group(GroupProps { label: Box::new(move || "Clipboard".to_string()) })?;
+                            let __node_20 = group(GroupProps::props().label("Clipboard").build())?;
                             __children.push(box_item(__node_20));
-                            let __node_21 = item(ItemProps { label: Box::new(move || "Cut".to_string()), hint: Some(Box::new(move || "⌘X".to_string())), ..Default::default() }, Slots::new())?;
+                            let __node_21 = item(ItemProps::props().label("Cut").hint("⌘X").build(), Slots::new())?;
                             __children.push(box_item(__node_21));
-                            let __node_22 = item(ItemProps { label: Box::new(move || "Show ruler".to_string()), checked: Some(Box::new({ let ruler = ruler.clone(); move || ruler.get() })), on_press: Some(Box::new({ let ruler = ruler.clone(); move || ruler.set(!ruler.get()) })), ..Default::default() }, Slots::new())?;
+                            let __node_22 = item(ItemProps::props().label("Show ruler").checked(ruler.clone()).on_press(Box::new({ let ruler = ruler.clone(); move || ruler.set(!ruler.get()) })).build(), Slots::new())?;
                             __children.push(box_item(__node_22));
                             __slots.extend_default(__children);
                             Ok(__slots)
                         }
                         }
                     );
-                    menu(MenuProps { label: Box::new(move || "Edit".to_string()), bordered: true, ..Default::default() }, __deferred)?
+                    menu(MenuProps::props().label("Edit").bordered(true).build(), __deferred)?
                 };
                 __children.push(box_item(__node_16));
                 let __row_0 = {
-                    let __node_23 = toggle(ToggleProps { checked: Some(cant_redo.clone()), label: Box::new(move || "Disable Redo".to_string()), ..Default::default() })?;
-                    let __node_24 = toggle(ToggleProps { checked: Some(ruler.clone()), label: Box::new(move || "Ruler".to_string()), ..Default::default() })?;
+                    let __node_23 = toggle(ToggleProps::props().checked(cant_redo.clone()).label("Disable Redo").build())?;
+                    let __node_24 = toggle(ToggleProps::props().checked(ruler.clone()).label("Ruler").build())?;
                     Container::new(LayoutStyle::new().flex_row().gap(10.0).align_items(AlignItems::CENTER), children![__node_23, __node_24])?
                 };
                 __children.push(box_item(__row_0));
                 __slots.extend_default(__children);
-                card(CardProps { gap: 10.0, ..Default::default() }, __slots)?
+                card(CardProps::props().gap(10.0).build(), __slots)?
             };
             __children.push(box_item(__node_15));
-            let __node_25 = code_line(CodeLineProps { code: "item label:'Redo' disabled:$x   ·   separator   ·   group label:'…'   ·   item checked:$on" })?;
+            let __node_25 = code_line(CodeLineProps::props().code("item label:'Redo' disabled:$x   ·   separator   ·   group label:'…'   ·   item checked:$on").build())?;
             __children.push(box_item(__node_25));
             __slots.extend_default(__children);
-            example(ExampleProps { title: "A menu is a compound component — its rows are markup, not a list of strings" }, __slots)?
+            example(ExampleProps::props().title("A menu is a compound component — its rows are markup, not a list of strings").build(), __slots)?
         };
         let __node_26 = {
             let mut __slots = Slots::new();
             let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
             let __col_1 = {
-                let __node_27 = prop_row(PropRowProps { name: "selected", values: "signal", about: "select: the bound choice index; omit for an uncontrolled select." })?;
-                let __node_28 = prop_row(PropRowProps { name: "options", values: "vec![…]", about: "select: the labels listed in the panel, in order." })?;
-                let __node_29 = prop_row(PropRowProps { name: "item", values: "child", about: "menu: one row. Takes label, disabled, checked, hint, on_press — or markup children as its content." })?;
-                let __node_30 = prop_row(PropRowProps { name: "separator / group", values: "child", about: "menu: a rule between groups, and a heading over one. The keyboard steps over both." })?;
-                let __node_31 = prop_row(PropRowProps { name: "on_select", values: "closure", about: "Runs with the picked index when a choice is made." })?;
-                let __node_32 = prop_row(PropRowProps { name: "color", values: "token", about: "Accent for the trigger border and highlight; falls back to the theme." })?;
+                let __node_27 = prop_row(PropRowProps::props().name("selected").values("signal").about("select: the bound choice index; omit for an uncontrolled select.").build())?;
+                let __node_28 = prop_row(PropRowProps::props().name("options").values("vec![…]").about("select: the labels listed in the panel, in order.").build())?;
+                let __node_29 = prop_row(PropRowProps::props().name("item").values("child").about("menu: one row. Takes label, disabled, checked, hint, on_press — or markup children as its content.").build())?;
+                let __node_30 = prop_row(PropRowProps::props().name("separator / group").values("child").about("menu: a rule between groups, and a heading over one. The keyboard steps over both.").build())?;
+                let __node_31 = prop_row(PropRowProps::props().name("on_select").values("closure").about("Runs with the picked index when a choice is made.").build())?;
+                let __node_32 = prop_row(PropRowProps::props().name("color").values("token").about("Accent for the trigger border and highlight; falls back to the theme.").build())?;
                 Container::new(LayoutStyle::new().flex_column().gap(6.0), children![__node_27, __node_28, __node_29, __node_30, __node_31, __node_32])?
             };
             __children.push(box_item(__col_1));
             __slots.extend_default(__children);
-            example(ExampleProps { title: "Attributes" }, __slots)?
+            example(ExampleProps::props().title("Attributes").build(), __slots)?
         };
         Container::new(LayoutStyle::new().flex_column().gap(20.0), children![__node_0, __node_1, __node_8, __node_14, __node_26])?
     };

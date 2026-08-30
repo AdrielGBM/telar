@@ -1,7 +1,7 @@
-use crate::shared::props_default;
 use layout_core::LayoutError;
-use reactive_core::{RwSignal, signal};
+use reactive_core::{Reactive, RwSignal, signal};
 use renderer_core::Color;
+use telar_macros::Props;
 #[cfg(test)]
 use ui_core::Slots;
 use ui_core::{Children, LayoutItem};
@@ -22,26 +22,24 @@ use ui_core::track_layout;
 /// carry an icon — which a list of strings could never say. What made that impossible for a select and not for
 /// a menu was the trigger: it has to name the current choice before the panel has ever been opened, and the
 /// rows only exist once it has. See [`ListContext::declare`](crate::list::ListContext).
+#[derive(Props)]
 pub struct SelectProps {
     /// The bound selection index. `None` (the default) makes the select uncontrolled — it owns an internal
     /// signal so it still tracks a choice, just not one the caller can read.
+    #[props(some, into, default)]
     pub selected: Option<RwSignal<u32>>,
     /// Accent colour (trigger border, selected/hover highlight). `Color::TRANSPARENT` (the default) means
     /// "unset" and falls back to the theme accent. A closure so a theme token re-reads on every render.
-    pub color: Box<dyn Fn() -> Color>,
+    #[props(into, default = Reactive::of(|| Color::TRANSPARENT))]
+    pub color: Reactive<Color>,
     /// Fired with the picked index whenever a selection is made.
+    #[props(some, default)]
     pub on_select: Option<Box<dyn Fn(u32)>>,
     /// Take the width the row offers instead of the fixed trigger width — what a form field wants, where a
     /// 180px control beside full-width ones reads as a mistake. The panel opens at that width too.
+    #[props(default = false)]
     pub stretch: bool,
 }
-
-props_default!(SelectProps {
-    selected: none,
-    color: color,
-    on_select: none,
-    stretch: (false),
-});
 
 pub fn select(props: SelectProps, rows: Children) -> Result<Box<dyn LayoutItem>, LayoutError> {
     // `None` selection is uncontrolled: own an internal signal so the trigger still tracks a choice.
@@ -85,10 +83,9 @@ mod tests {
                 slots.push(
                     None,
                     crate::list::item(
-                        crate::list::ItemProps {
-                            label: Box::new(move || label.to_string()),
-                            ..Default::default()
-                        },
+                        crate::list::ItemProps::props()
+                            .label(Reactive::of(move || label.to_string()))
+                            .build(),
                         Slots::new(),
                     )?,
                 );
@@ -105,14 +102,7 @@ mod tests {
     fn builds_and_lays_out() {
         crate::test_support::fresh_layout_runtime();
         let picked = signal(1u32);
-        let item = select(
-            SelectProps {
-                selected: Some(picked),
-                ..Default::default()
-            },
-            sizes(),
-        )
-        .unwrap();
+        let item = select(SelectProps::props().selected(picked).build(), sizes()).unwrap();
         let root_node = item.layout_node();
         let root_rect = track_layout(root_node).unwrap();
         compute_layout(
@@ -142,11 +132,10 @@ mod tests {
         let seen: Rc<Cell<Option<u32>>> = Rc::new(Cell::new(None));
         let sink = seen.clone();
         let item = select(
-            SelectProps {
-                selected: Some(picked),
-                on_select: Some(Box::new(move |i| sink.set(Some(i)))),
-                ..Default::default()
-            },
+            SelectProps::props()
+                .selected(picked)
+                .on_select(Box::new(move |i| sink.set(Some(i))))
+                .build(),
             sizes(),
         )
         .unwrap();
@@ -197,14 +186,7 @@ mod tests {
     fn the_trigger_names_the_chosen_row_before_the_panel_has_ever_opened() {
         crate::test_support::fresh_layout_runtime();
         let picked = signal(1u32);
-        let item = select(
-            SelectProps {
-                selected: Some(picked),
-                ..Default::default()
-            },
-            sizes(),
-        )
-        .unwrap();
+        let item = select(SelectProps::props().selected(picked).build(), sizes()).unwrap();
         compute_layout(
             item.layout_node(),
             AvailableSpace::Definite(400.0),
@@ -237,11 +219,10 @@ mod tests {
                 slots.push(
                     None,
                     crate::list::item(
-                        crate::list::ItemProps {
-                            label: Box::new(move || label.to_string()),
-                            disabled: Box::new(move || disabled),
-                            ..Default::default()
-                        },
+                        crate::list::ItemProps::props()
+                            .label(Reactive::of(move || label.to_string()))
+                            .disabled(Reactive::of(move || disabled))
+                            .build(),
                         Slots::new(),
                     )?,
                 );
@@ -249,11 +230,10 @@ mod tests {
             Ok(slots)
         });
         let item = select(
-            SelectProps {
-                selected: Some(picked),
-                on_select: Some(Box::new(move |i| sink.set(Some(i)))),
-                ..Default::default()
-            },
+            SelectProps::props()
+                .selected(picked)
+                .on_select(Box::new(move |i| sink.set(Some(i))))
+                .build(),
             rows,
         )
         .unwrap();

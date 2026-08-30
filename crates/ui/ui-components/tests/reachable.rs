@@ -56,11 +56,12 @@ fn a_button_can_be_reached_and_pressed_without_a_mouse() {
     focus::clear();
     let fired: Rc<Cell<bool>> = Rc::new(Cell::new(false));
     let sink = fired.clone();
-    let item = button(ButtonProps {
-        label: Box::new(|| "Save".to_string()),
-        on_press: Box::new(move || sink.set(true)),
-        ..Default::default()
-    })
+    let item = button(
+        ButtonProps::props()
+            .label("Save")
+            .on_press(Box::new(move || sink.set(true)))
+            .build(),
+    )
     .unwrap();
     let mut tree = mount(vec![item]);
 
@@ -78,12 +79,7 @@ fn a_slider_moves_under_the_arrow_keys() {
     ui_core::reset_layout_runtime();
     focus::clear();
     let value = signal(0.5f32);
-    let item = slider(SliderProps {
-        value: Some(value),
-        step: 0.25,
-        ..Default::default()
-    })
-    .unwrap();
+    let item = slider(SliderProps::props().value(value).step(0.25).build()).unwrap();
     let mut tree = mount(vec![item]);
 
     focus::focus_next();
@@ -102,11 +98,12 @@ fn enter_toggles_a_focused_checkbox() {
     ui_core::reset_layout_runtime();
     focus::clear();
     let checked = signal(false);
-    let item = checkbox(CheckboxProps {
-        checked: Some(checked),
-        label: Box::new(|| "Wireframe".to_string()),
-        ..Default::default()
-    })
+    let item = checkbox(
+        CheckboxProps::props()
+            .checked(checked)
+            .label("Wireframe")
+            .build(),
+    )
     .unwrap();
     let mut tree = mount(vec![item]);
 
@@ -123,11 +120,12 @@ fn a_checked_box_is_announced_as_checked() {
     ui_core::reset_layout_runtime();
     focus::clear();
     let checked = signal(true);
-    let item = checkbox(CheckboxProps {
-        checked: Some(checked),
-        label: Box::new(|| "Wireframe".to_string()),
-        ..Default::default()
-    })
+    let item = checkbox(
+        CheckboxProps::props()
+            .checked(checked)
+            .label("Wireframe")
+            .build(),
+    )
     .unwrap();
     let _tree = mount(vec![item]);
 
@@ -148,22 +146,10 @@ fn the_catalogue_says_what_each_control_is() {
     ui_core::reset_layout_runtime();
     focus::clear();
     let items: Vec<Box<dyn LayoutItem>> = vec![
-        button(ButtonProps {
-            label: Box::new(|| "Save".to_string()),
-            ..Default::default()
-        })
-        .unwrap(),
-        checkbox(CheckboxProps {
-            label: Box::new(|| "Wireframe".to_string()),
-            ..Default::default()
-        })
-        .unwrap(),
-        toggle(ToggleProps {
-            label: Box::new(|| "Snap".to_string()),
-            ..Default::default()
-        })
-        .unwrap(),
-        slider(SliderProps::default()).unwrap(),
+        button(ButtonProps::props().label("Save").build()).unwrap(),
+        checkbox(CheckboxProps::props().label("Wireframe").build()).unwrap(),
+        toggle(ToggleProps::props().label("Snap").build()).unwrap(),
+        slider(SliderProps::props().build()).unwrap(),
     ];
     let _tree = mount(items);
 

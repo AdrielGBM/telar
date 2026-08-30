@@ -40,9 +40,9 @@ pub fn core_sidebar() -> Result<Box<dyn LayoutItem>, LayoutError> {
             };
             let __col_3 = {
                 let __row_0 = {
-                    let __node_0 = button(ButtonProps { label: Box::new(move || "Modern".to_string()), fill: Box::new(move || use_theme::<core::theme::SandboxTheme>().primary()), on_press: Box::new(move || set_mode("modern")), ..Default::default() })?;
-                    let __node_1 = button(ButtonProps { label: Box::new(move || "Pastel".to_string()), fill: Box::new(move || use_theme::<core::theme::SandboxTheme>().primary()), on_press: Box::new(move || set_mode("pastel")), ..Default::default() })?;
-                    let __node_2 = button(ButtonProps { label: Box::new(move || "Midnight".to_string()), fill: Box::new(move || use_theme::<core::theme::SandboxTheme>().primary()), on_press: Box::new(move || set_mode("midnight")), ..Default::default() })?;
+                    let __node_0 = button(ButtonProps::props().label("Modern").fill(Reactive::of(move || use_theme::<core::theme::SandboxTheme>().primary())).on_press(Box::new(move || set_mode("modern"))).build())?;
+                    let __node_1 = button(ButtonProps::props().label("Pastel").fill(Reactive::of(move || use_theme::<core::theme::SandboxTheme>().primary())).on_press(Box::new(move || set_mode("pastel"))).build())?;
+                    let __node_2 = button(ButtonProps::props().label("Midnight").fill(Reactive::of(move || use_theme::<core::theme::SandboxTheme>().primary())).on_press(Box::new(move || set_mode("midnight"))).build())?;
                     Container::new(LayoutStyle::new().flex_row().gap(6.0).flex_wrap(), children![__node_0, __node_1, __node_2])?
                 };
                 let __text_3 = {

@@ -22,7 +22,7 @@ pub fn features_color() -> Result<Box<dyn LayoutItem>, LayoutError> {
     let __owner = telar::owner_scope();
     #[allow(unused_imports)] use telar::use_theme;
     let __col_0 = {
-        let __node_0 = doc_header(DocHeaderProps { kicker: "FOUNDATIONS", title: "Color & theme", desc: "Colors are semantic tokens, not fixed values. Every token resolves through the active theme — switch it in the sidebar and the whole app recolors reactively." })?;
+        let __node_0 = doc_header(DocHeaderProps::props().kicker("FOUNDATIONS").title("Color & theme").desc("Colors are semantic tokens, not fixed values. Every token resolves through the active theme — switch it in the sidebar and the whole app recolors reactively.").build())?;
         let __node_1 = {
             let mut __slots = Slots::new();
             let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
@@ -112,13 +112,13 @@ pub fn features_color() -> Result<Box<dyn LayoutItem>, LayoutError> {
                 };
                 __children.push(box_item(__node_3));
                 __slots.extend_default(__children);
-                card(CardProps { ..Default::default() }, __slots)?
+                card(CardProps::props().build(), __slots)?
             };
             __children.push(box_item(__node_2));
-            let __node_4 = code_line(CodeLineProps { code: "box fill:theme.primary   ·   fill:theme.success   ·   fill:theme.danger …" })?;
+            let __node_4 = code_line(CodeLineProps::props().code("box fill:theme.primary   ·   fill:theme.success   ·   fill:theme.danger …").build())?;
             __children.push(box_item(__node_4));
             __slots.extend_default(__children);
-            example(ExampleProps { title: "Accent tokens" }, __slots)?
+            example(ExampleProps::props().title("Accent tokens").build(), __slots)?
         };
         let __node_5 = {
             let mut __slots = Slots::new();
@@ -209,13 +209,13 @@ pub fn features_color() -> Result<Box<dyn LayoutItem>, LayoutError> {
                 };
                 __children.push(box_item(__node_7));
                 __slots.extend_default(__children);
-                card(CardProps { ..Default::default() }, __slots)?
+                card(CardProps::props().build(), __slots)?
             };
             __children.push(box_item(__node_6));
-            let __node_8 = code_line(CodeLineProps { code: "box fill:theme.surface stroke:theme.border   (card recipe)" })?;
+            let __node_8 = code_line(CodeLineProps::props().code("box fill:theme.surface stroke:theme.border   (card recipe)").build())?;
             __children.push(box_item(__node_8));
             __slots.extend_default(__children);
-            example(ExampleProps { title: "Neutrals & surfaces (outlined so light tones stay visible)" }, __slots)?
+            example(ExampleProps::props().title("Neutrals & surfaces (outlined so light tones stay visible)").build(), __slots)?
         };
         let __node_9 = {
             let mut __slots = Slots::new();
@@ -237,13 +237,13 @@ pub fn features_color() -> Result<Box<dyn LayoutItem>, LayoutError> {
                 };
                 __children.push(box_item(__row_0));
                 __slots.extend_default(__children);
-                card(CardProps { ..Default::default() }, __slots)?
+                card(CardProps::props().build(), __slots)?
             };
             __children.push(box_item(__node_10));
-            let __node_11 = code_line(CodeLineProps { code: "box fill:#4ecdc4      (also #rgb and #rrggbbaa)" })?;
+            let __node_11 = code_line(CodeLineProps::props().code("box fill:#4ecdc4      (also #rgb and #rrggbbaa)").build())?;
             __children.push(box_item(__node_11));
             __slots.extend_default(__children);
-            example(ExampleProps { title: "One-off colors — inline hex when a token does not fit" }, __slots)?
+            example(ExampleProps::props().title("One-off colors — inline hex when a token does not fit").build(), __slots)?
         };
         let __node_12 = {
             let mut __slots = Slots::new();
@@ -268,13 +268,13 @@ pub fn features_color() -> Result<Box<dyn LayoutItem>, LayoutError> {
                 };
                 __children.push(box_item(__text_13));
                 __slots.extend_default(__children);
-                card(CardProps { gap: 8.0, ..Default::default() }, __slots)?
+                card(CardProps::props().gap(8.0).build(), __slots)?
             };
             __children.push(box_item(__node_13));
-            let __node_14 = code_line(CodeLineProps { code: "on_press:|| set_mode(\"midnight\")" })?;
+            let __node_14 = code_line(CodeLineProps::props().code("on_press:|| set_mode(\"midnight\")").build())?;
             __children.push(box_item(__node_14));
             __slots.extend_default(__children);
-            example(ExampleProps { title: "Reactive theming" }, __slots)?
+            example(ExampleProps::props().title("Reactive theming").build(), __slots)?
         };
         Container::new(LayoutStyle::new().flex_column().gap(20.0), children![__node_0, __node_1, __node_5, __node_9, __node_12])?
     };

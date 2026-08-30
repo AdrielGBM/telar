@@ -15,7 +15,7 @@ pub fn features_opacity() -> Result<Box<dyn LayoutItem>, LayoutError> {
     let __owner = telar::owner_scope();
     #[allow(unused_imports)] use telar::use_theme;
     let __col_0 = {
-        let __node_0 = doc_header(DocHeaderProps { kicker: "SURFACES", title: "Opacity & layers", desc: "opacity fades a box and everything inside it as a single layer, so nested transparencies multiply the way you would expect." })?;
+        let __node_0 = doc_header(DocHeaderProps::props().kicker("SURFACES").title("Opacity & layers").desc("opacity fades a box and everything inside it as a single layer, so nested transparencies multiply the way you would expect.").build())?;
         let __node_1 = {
             let mut __slots = Slots::new();
             let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
@@ -67,13 +67,13 @@ pub fn features_opacity() -> Result<Box<dyn LayoutItem>, LayoutError> {
                 };
                 __children.push(box_item(__row_0));
                 __slots.extend_default(__children);
-                card(CardProps { ..Default::default() }, __slots)?
+                card(CardProps::props().build(), __slots)?
             };
             __children.push(box_item(__node_2));
-            let __node_3 = code_line(CodeLineProps { code: "box fill:theme.danger opacity:0.3" })?;
+            let __node_3 = code_line(CodeLineProps::props().code("box fill:theme.danger opacity:0.3").build())?;
             __children.push(box_item(__node_3));
             __slots.extend_default(__children);
-            example(ExampleProps { title: "A single fill at descending opacity" }, __slots)?
+            example(ExampleProps::props().title("A single fill at descending opacity").build(), __slots)?
         };
         let __node_4 = {
             let mut __slots = Slots::new();
@@ -93,13 +93,13 @@ pub fn features_opacity() -> Result<Box<dyn LayoutItem>, LayoutError> {
                 };
                 __children.push(box_item(__sbox_4));
                 __slots.extend_default(__children);
-                card(CardProps { ..Default::default() }, __slots)?
+                card(CardProps::props().build(), __slots)?
             };
             __children.push(box_item(__node_5));
-            let __node_6 = code_line(CodeLineProps { code: "box fill:linear(horizontal, theme.primary, theme.danger) opacity:0.75" })?;
+            let __node_6 = code_line(CodeLineProps::props().code("box fill:linear(horizontal, theme.primary, theme.danger) opacity:0.75").build())?;
             __children.push(box_item(__node_6));
             __slots.extend_default(__children);
-            example(ExampleProps { title: "Layer opacity applies to a gradient and its label together" }, __slots)?
+            example(ExampleProps::props().title("Layer opacity applies to a gradient and its label together").build(), __slots)?
         };
         let __node_7 = {
             let mut __slots = Slots::new();
@@ -129,13 +129,13 @@ pub fn features_opacity() -> Result<Box<dyn LayoutItem>, LayoutError> {
                 };
                 __children.push(box_item(__sbox_5));
                 __slots.extend_default(__children);
-                card(CardProps { ..Default::default() }, __slots)?
+                card(CardProps::props().build(), __slots)?
             };
             __children.push(box_item(__node_8));
-            let __node_9 = code_line(CodeLineProps { code: "box opacity:0.6   >   box opacity:0.6   (layers multiply)" })?;
+            let __node_9 = code_line(CodeLineProps::props().code("box opacity:0.6   >   box opacity:0.6   (layers multiply)").build())?;
             __children.push(box_item(__node_9));
             __slots.extend_default(__children);
-            example(ExampleProps { title: "Nested — outer 0.6 × inner 0.6 combine to about 0.36" }, __slots)?
+            example(ExampleProps::props().title("Nested — outer 0.6 × inner 0.6 combine to about 0.36").build(), __slots)?
         };
         Container::new(LayoutStyle::new().flex_column().gap(20.0), children![__node_0, __node_1, __node_4, __node_7])?
     };

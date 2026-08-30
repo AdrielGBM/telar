@@ -11,16 +11,16 @@ pub fn features_text_fields() -> Result<Box<dyn LayoutItem>, LayoutError> {
     let query = signal(String::new());
 
     let __col_0 = {
-        let __node_0 = doc_header(DocHeaderProps { kicker: "INTERACTION", title: "Text field", desc: "text_field wraps the input primitive in a bordered, padded box (from the components catalogue, not a base tag): an optional label stacks above it, and a muted placeholder shows while the bound value is empty." })?;
+        let __node_0 = doc_header(DocHeaderProps::props().kicker("INTERACTION").title("Text field").desc("text_field wraps the input primitive in a bordered, padded box (from the components catalogue, not a base tag): an optional label stacks above it, and a muted placeholder shows while the bound value is empty.").build())?;
         let __node_1 = {
             let mut __slots = Slots::new();
             let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
             let __node_2 = {
                 let mut __slots = Slots::new();
                 let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-                let __node_3 = text_field(TextFieldProps { value: Some(name.clone()), label: Box::new(move || "Name".to_string()), placeholder: Box::new(move || "Type your name".to_string()), ..Default::default() })?;
+                let __node_3 = text_field(TextFieldProps::props().value(name.clone()).label("Name").placeholder("Type your name").build())?;
                 __children.push(box_item(__node_3));
-                let __node_4 = text_field(TextFieldProps { value: Some(query.clone()), placeholder: Box::new(move || "Search…".to_string()), ..Default::default() })?;
+                let __node_4 = text_field(TextFieldProps::props().value(query.clone()).placeholder("Search…").build())?;
                 __children.push(box_item(__node_4));
                 let __text_0 = {
                     let name = name.clone();
@@ -32,13 +32,13 @@ pub fn features_text_fields() -> Result<Box<dyn LayoutItem>, LayoutError> {
                 };
                 __children.push(box_item(__text_0));
                 __slots.extend_default(__children);
-                card(CardProps { gap: 10.0, ..Default::default() }, __slots)?
+                card(CardProps::props().gap(10.0).build(), __slots)?
             };
             __children.push(box_item(__node_2));
-            let __node_5 = code_line(CodeLineProps { code: "text_field value:$name label:'Name' placeholder:'Type your name'   (bordered box + label + muted placeholder while empty)" })?;
+            let __node_5 = code_line(CodeLineProps::props().code("text_field value:$name label:'Name' placeholder:'Type your name'   (bordered box + label + muted placeholder while empty)").build())?;
             __children.push(box_item(__node_5));
             __slots.extend_default(__children);
-            example(ExampleProps { title: "A labelled field and a placeholder-only field, both bound to their own signal" }, __slots)?
+            example(ExampleProps::props().title("A labelled field and a placeholder-only field, both bound to their own signal").build(), __slots)?
         };
         Container::new(LayoutStyle::new().flex_column().gap(20.0), children![__node_0, __node_1])?
     };

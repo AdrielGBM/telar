@@ -11,14 +11,14 @@ pub fn features_navigation() -> Result<Box<dyn LayoutItem>, LayoutError> {
     let open = signal(true);
 
     let __col_0 = {
-        let __node_0 = doc_header(DocHeaderProps { kicker: "NAVIGATION", title: "Tabs & accordion", desc: "tabs is a bound selected-index bar; pair it with reactive ifs to swap panels. accordion is an inline collapsible section that pushes its siblings as it opens. Both are components." })?;
+        let __node_0 = doc_header(DocHeaderProps::props().kicker("NAVIGATION").title("Tabs & accordion").desc("tabs is a bound selected-index bar; pair it with reactive ifs to swap panels. accordion is an inline collapsible section that pushes its siblings as it opens. Both are components.").build())?;
         let __node_1 = {
             let mut __slots = Slots::new();
             let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
             let __node_2 = {
                 let mut __slots = Slots::new();
                 let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-                let __node_3 = tabs(TabsProps { selected: Some(tab.clone()), items: vec!["Overview","Pricing","Team"], ..Default::default() })?;
+                let __node_3 = tabs(TabsProps::props().selected(tab.clone()).items(vec!["Overview","Pricing","Team"]).build())?;
                 __children.push(box_item(__node_3));
                 let __node_4 = ReactiveList::new(
                     { let tab = tab.clone(); move || vec![tab.get() == 0] },
@@ -81,13 +81,13 @@ pub fn features_navigation() -> Result<Box<dyn LayoutItem>, LayoutError> {
                 )?;
                 __children.push(box_item(__node_6));
                 __slots.extend_default(__children);
-                card(CardProps { gap: 10.0, ..Default::default() }, __slots)?
+                card(CardProps::props().gap(10.0).build(), __slots)?
             };
             __children.push(box_item(__node_2));
-            let __node_7 = code_line(CodeLineProps { code: "tabs selected:$tab items:vec!['Overview','Pricing','Team']" })?;
+            let __node_7 = code_line(CodeLineProps::props().code("tabs selected:$tab items:vec!['Overview','Pricing','Team']").build())?;
             __children.push(box_item(__node_7));
             __slots.extend_default(__children);
-            example(ExampleProps { title: "tabs — a bound index; swap panels with reactive ifs" }, __slots)?
+            example(ExampleProps::props().title("tabs — a bound index; swap panels with reactive ifs").build(), __slots)?
         };
         let __node_8 = {
             let mut __slots = Slots::new();
@@ -107,7 +107,7 @@ pub fn features_navigation() -> Result<Box<dyn LayoutItem>, LayoutError> {
                     };
                     __children.push(box_item(__text_3));
                     __slots.extend_default(__children);
-                    accordion(AccordionProps { title: Box::new(move || "Shipping details".to_string()), open: Some(open.clone()), ..Default::default() }, __slots)?
+                    accordion(AccordionProps::props().title("Shipping details").open(open.clone()).build(), __slots)?
                 };
                 __children.push(box_item(__node_10));
                 let __text_4 = {
@@ -120,27 +120,27 @@ pub fn features_navigation() -> Result<Box<dyn LayoutItem>, LayoutError> {
                 };
                 __children.push(box_item(__text_4));
                 __slots.extend_default(__children);
-                card(CardProps { gap: 10.0, ..Default::default() }, __slots)?
+                card(CardProps::props().gap(10.0).build(), __slots)?
             };
             __children.push(box_item(__node_9));
-            let __node_11 = code_line(CodeLineProps { code: "accordion title:'Shipping details' open:$open  >  …body…" })?;
+            let __node_11 = code_line(CodeLineProps::props().code("accordion title:'Shipping details' open:$open  >  …body…").build())?;
             __children.push(box_item(__node_11));
             __slots.extend_default(__children);
-            example(ExampleProps { title: "accordion — a collapsible section, open bound to a signal" }, __slots)?
+            example(ExampleProps::props().title("accordion — a collapsible section, open bound to a signal").build(), __slots)?
         };
         let __node_12 = {
             let mut __slots = Slots::new();
             let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
             let __col_1 = {
-                let __node_13 = prop_row(PropRowProps { name: "items", values: "vec![..]", about: "tabs labels, one button each." })?;
-                let __node_14 = prop_row(PropRowProps { name: "selected", values: "signal", about: "tabs active index (u32), two-way." })?;
-                let __node_15 = prop_row(PropRowProps { name: "title", values: "text", about: "accordion header label." })?;
-                let __node_16 = prop_row(PropRowProps { name: "open", values: "signal", about: "accordion expanded bool, two-way." })?;
+                let __node_13 = prop_row(PropRowProps::props().name("items").values("vec![..]").about("tabs labels, one button each.").build())?;
+                let __node_14 = prop_row(PropRowProps::props().name("selected").values("signal").about("tabs active index (u32), two-way.").build())?;
+                let __node_15 = prop_row(PropRowProps::props().name("title").values("text").about("accordion header label.").build())?;
+                let __node_16 = prop_row(PropRowProps::props().name("open").values("signal").about("accordion expanded bool, two-way.").build())?;
                 Container::new(LayoutStyle::new().flex_column().gap(6.0), children![__node_13, __node_14, __node_15, __node_16])?
             };
             __children.push(box_item(__col_1));
             __slots.extend_default(__children);
-            example(ExampleProps { title: "Attributes" }, __slots)?
+            example(ExampleProps::props().title("Attributes").build(), __slots)?
         };
         Container::new(LayoutStyle::new().flex_column().gap(20.0), children![__node_0, __node_1, __node_8, __node_12])?
     };

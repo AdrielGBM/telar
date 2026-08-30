@@ -1,45 +1,44 @@
 use geometry_core::Transform;
 use layout_core::{LayoutError, LayoutStyle};
+use reactive_core::Reactive;
 use renderer_core::{BorderRadius, Color, RectStyle, ShapeStyle};
+use telar_macros::Props;
 use ui_core::{LayoutItem, StyledContainer, box_item};
 
 use crate::shared;
-use crate::shared::props_default;
 
 /// A determinate 0.0..=1.0 progress bar: a rounded track with an accent fill scaled by `value`. Sibling of
 /// `slider` minus the drag/thumb — the fill reuses the same "absolute_fill child, scaled from the left edge"
 /// technique (see `slider`'s fill) since a progress bar is a slider whose value the app drives instead of the
 /// pointer. `value` is a closure so a reading derived from several services can drive it, and so an unbound
 /// bar reads a flat zero rather than owning a signal nobody can write.
+#[derive(Props)]
 pub struct ProgressProps {
     /// Progress, normalized to 0.0..=1.0 (out-of-range inputs are clamped on read, not here).
     ///
     /// A closure rather than a signal, like [`color`](Self::color) beside it: a bar *reports* a reading, it
     /// never writes one, and a caller whose reading is derived from two services has no signal to hand over.
     /// Insisting on one is what makes a shell reimplement this widget next to the catalogue.
-    pub value: Box<dyn Fn() -> f32>,
+    #[props(into, default)]
+    pub value: Reactive<f32>,
     /// Fill accent. `Color::TRANSPARENT` (the default) means "unset": fall back to the theme accent.
-    pub color: Box<dyn Fn() -> Color>,
+    #[props(into, default = Reactive::of(|| Color::TRANSPARENT))]
+    pub color: Reactive<Color>,
     /// Track (rail) colour; `Color::TRANSPARENT` (the default) means "unset": fall back to the theme's muted token.
-    pub track_color: Box<dyn Fn() -> Color>,
+    #[props(into, default = Reactive::of(|| Color::TRANSPARENT))]
+    pub track_color: Reactive<Color>,
     /// Track width in px. `0.0` (the default) means "unset" — the bar uses `220.0`. Ignored under
     /// [`stretch`](Self::stretch).
+    #[props(default)]
     pub width: f32,
     /// Fill the parent's width instead of taking a fixed one — what a bar inside a card wants, where a px
     /// track is either short of the card or past its edge.
+    #[props(default)]
     pub stretch: bool,
     /// Track height in px. `0.0` (the default) means "unset" — the bar uses `8.0`.
+    #[props(default)]
     pub height: f32,
 }
-
-props_default!(ProgressProps {
-    value: reading,
-    color: color,
-    track_color: color,
-    width: zero,
-    stretch: zero,
-    height: zero,
-});
 
 pub fn progress(props: ProgressProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let ProgressProps {
@@ -51,8 +50,7 @@ pub fn progress(props: ProgressProps) -> Result<Box<dyn LayoutItem>, LayoutError
         height,
     } = props;
     // Shared by the fill's style closure and its transform, which both need the reading.
-    let value: std::rc::Rc<dyn Fn() -> f32> = std::rc::Rc::from(value);
-    let scale_value = std::rc::Rc::clone(&value);
+    let scale_value = value.clone();
     let width = if width > 0.0 { width } else { 220.0 };
     let height = if height > 0.0 { height } else { 8.0 };
     // Unlike `slider`, `color` is only needed by this one style closure, so it moves in directly — no `Rc`
@@ -66,7 +64,7 @@ pub fn progress(props: ProgressProps) -> Result<Box<dyn LayoutItem>, LayoutError
     let fill = StyledContainer::new(
         LayoutStyle::new().absolute_fill(),
         move |_r| {
-            let fill = shared::resolve(color.as_ref(), || shared::accent());
+            let fill = shared::resolve(&color, shared::accent);
             RectStyle::default()
                 .with_fill(fill)
                 .with_radius(BorderRadius::all(height / 2.0))
@@ -74,7 +72,7 @@ pub fn progress(props: ProgressProps) -> Result<Box<dyn LayoutItem>, LayoutError
         vec![],
     )?
     .with_transform(move |r| {
-        let v = scale_value().clamp(0.0, 1.0);
+        let v = scale_value.get().clamp(0.0, 1.0);
         Some(Transform::scale_around(v, 1.0, r.x, r.y + r.height / 2.0).to_array())
     });
 
@@ -89,7 +87,7 @@ pub fn progress(props: ProgressProps) -> Result<Box<dyn LayoutItem>, LayoutError
             })
             .height(height),
         move |_r| {
-            let fill = shared::resolve(track_color.as_ref(), shared::muted);
+            let fill = shared::resolve(&track_color, shared::muted);
             RectStyle::default()
                 .with_fill(fill)
                 .with_radius(BorderRadius::all(height / 2.0))
@@ -116,7 +114,7 @@ mod tests {
     #[test]
     fn uncontrolled_progress_builds_with_default_value() {
         crate::test_support::fresh_layout_runtime();
-        let result = progress(ProgressProps::default());
+        let result = progress(ProgressProps::props().build());
         assert!(result.is_ok());
     }
 
@@ -125,15 +123,13 @@ mod tests {
     fn controlled_progress_builds_and_layouts() {
         crate::test_support::fresh_layout_runtime();
         let value = signal(0.3f32);
-        let widget = progress(ProgressProps {
-            value: {
-                let v = value;
-                Box::new(move || v.get())
-            },
-            width: 200.0,
-            height: 10.0,
-            ..Default::default()
-        })
+        let widget = progress(
+            ProgressProps::props()
+                .value(value)
+                .width(200.0)
+                .height(10.0)
+                .build(),
+        )
         .unwrap();
         lay_out(widget.layout_node());
         assert_eq!(value.get(), 0.3);
@@ -145,14 +141,7 @@ mod tests {
     fn setting_value_after_build_does_not_panic() {
         crate::test_support::fresh_layout_runtime();
         let value = signal(0.0f32);
-        let widget = progress(ProgressProps {
-            value: {
-                let v = value;
-                Box::new(move || v.get())
-            },
-            ..Default::default()
-        })
-        .unwrap();
+        let widget = progress(ProgressProps::props().value(value).build()).unwrap();
         lay_out(widget.layout_node());
         value.set(0.75);
         value.set(1.5);
@@ -167,12 +156,8 @@ mod tests {
         let used = signal(3.0f32);
         let total = signal(4.0f32);
         let fraction = reactive_core::derive_pair(used, total, |u, t| u / t);
-        let read = fraction;
-        let bar = progress(ProgressProps {
-            value: Box::new(move || read.get()),
-            stretch: true,
-            ..Default::default()
-        });
+        let _read = fraction;
+        let bar = progress(ProgressProps::props().value(fraction).stretch(true).build());
         assert!(bar.is_ok(), "a derivation drives it");
         used.set(1.0);
         assert_eq!(fraction.get(), 0.25, "and keeps following its sources");

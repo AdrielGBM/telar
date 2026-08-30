@@ -3,10 +3,13 @@
 #[allow(unused_imports)] use telar::*;
 #[allow(unused_imports)] use super::*;
 
-#[derive(Default)]
+#[derive(::telar::Props)]
 pub struct SharedComponentsDocHeaderProps {
+    #[props(default)]
     pub kicker: &'static str,
+    #[props(default)]
     pub title: &'static str,
+    #[props(default)]
     pub desc: &'static str,
 }
 
@@ -44,7 +47,7 @@ pub fn shared_components_doc_header(props: SharedComponentsDocHeaderProps) -> Re
 #[allow(dead_code, unused_variables, unused_mut)]
 pub fn shared_components_doc_header_preview_0() -> Result<Box<dyn LayoutItem>, LayoutError> {
     #[allow(unused_imports)] use telar::use_theme;
-    let __node_0 = doc_header(DocHeaderProps { kicker: "FOUNDATIONS", title: "Layout", desc: "Flexbox rows and columns with gaps, padding, alignment and growth." })?;
+    let __node_0 = doc_header(DocHeaderProps::props().kicker("FOUNDATIONS").title("Layout").desc("Flexbox rows and columns with gaps, padding, alignment and growth.").build())?;
     Ok(Box::new(__node_0))
 }
 

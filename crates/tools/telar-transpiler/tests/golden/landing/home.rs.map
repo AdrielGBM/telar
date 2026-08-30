@@ -536,8 +536,8 @@
 535	.
 
 # verbatim expression spans: rsx[start..end] -> gen[start] `source text`
-2166..2178	7288	`gradient_img`
-4619..4631	17907	`gradient_img`
-4804..4815	19000	`checker_img`
-4985..4995	20089	`radial_img`
-5250..5261	21714	`checker_img`
+2166..2178	7178	`gradient_img`
+4619..4631	17841	`gradient_img`
+4804..4815	18934	`checker_img`
+4985..4995	20023	`radial_img`
+5250..5261	21648	`checker_img`

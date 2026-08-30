@@ -13,14 +13,14 @@ pub fn features_forms() -> Result<Box<dyn LayoutItem>, LayoutError> {
     let choice = signal(0u32);
 
     let __col_0 = {
-        let __node_0 = doc_header(DocHeaderProps { kicker: "INTERACTION", title: "Form controls", desc: "checkbox, toggle, and radio are components (from the components feature, not base tags). Each binds a signal two-way: the widget renders from it and a tap writes it back. A radio group is several radios sharing one signal, each with its own value." })?;
+        let __node_0 = doc_header(DocHeaderProps::props().kicker("INTERACTION").title("Form controls").desc("checkbox, toggle, and radio are components (from the components feature, not base tags). Each binds a signal two-way: the widget renders from it and a tap writes it back. A radio group is several radios sharing one signal, each with its own value.").build())?;
         let __node_1 = {
             let mut __slots = Slots::new();
             let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
             let __node_2 = {
                 let mut __slots = Slots::new();
                 let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-                let __node_3 = checkbox(CheckboxProps { checked: Some(agree.clone()), label: Box::new(move || "I agree to the terms".to_string()), ..Default::default() })?;
+                let __node_3 = checkbox(CheckboxProps::props().checked(agree.clone()).label("I agree to the terms").build())?;
                 __children.push(box_item(__node_3));
                 let __text_0 = {
                     let agree = agree.clone();
@@ -32,13 +32,13 @@ pub fn features_forms() -> Result<Box<dyn LayoutItem>, LayoutError> {
                 };
                 __children.push(box_item(__text_0));
                 __slots.extend_default(__children);
-                card(CardProps { gap: 10.0, ..Default::default() }, __slots)?
+                card(CardProps::props().gap(10.0).build(), __slots)?
             };
             __children.push(box_item(__node_2));
-            let __node_4 = code_line(CodeLineProps { code: "checkbox checked:$agree label:'I agree to the terms'" })?;
+            let __node_4 = code_line(CodeLineProps::props().code("checkbox checked:$agree label:'I agree to the terms'").build())?;
             __children.push(box_item(__node_4));
             __slots.extend_default(__children);
-            example(ExampleProps { title: "checkbox — a bound bool; tap the box or its label to toggle" }, __slots)?
+            example(ExampleProps::props().title("checkbox — a bound bool; tap the box or its label to toggle").build(), __slots)?
         };
         let __node_5 = {
             let mut __slots = Slots::new();
@@ -46,7 +46,7 @@ pub fn features_forms() -> Result<Box<dyn LayoutItem>, LayoutError> {
             let __node_6 = {
                 let mut __slots = Slots::new();
                 let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-                let __node_7 = toggle(ToggleProps { checked: Some(notify.clone()), label: Box::new(move || "Email notifications".to_string()), ..Default::default() })?;
+                let __node_7 = toggle(ToggleProps::props().checked(notify.clone()).label("Email notifications").build())?;
                 __children.push(box_item(__node_7));
                 let __text_1 = {
                     let notify = notify.clone();
@@ -58,13 +58,13 @@ pub fn features_forms() -> Result<Box<dyn LayoutItem>, LayoutError> {
                 };
                 __children.push(box_item(__text_1));
                 __slots.extend_default(__children);
-                card(CardProps { gap: 10.0, ..Default::default() }, __slots)?
+                card(CardProps::props().gap(10.0).build(), __slots)?
             };
             __children.push(box_item(__node_6));
-            let __node_8 = code_line(CodeLineProps { code: "toggle checked:$notify label:'Email notifications'" })?;
+            let __node_8 = code_line(CodeLineProps::props().code("toggle checked:$notify label:'Email notifications'").build())?;
             __children.push(box_item(__node_8));
             __slots.extend_default(__children);
-            example(ExampleProps { title: "toggle — a switch over the same kind of bool signal" }, __slots)?
+            example(ExampleProps::props().title("toggle — a switch over the same kind of bool signal").build(), __slots)?
         };
         let __node_9 = {
             let mut __slots = Slots::new();
@@ -72,11 +72,11 @@ pub fn features_forms() -> Result<Box<dyn LayoutItem>, LayoutError> {
             let __node_10 = {
                 let mut __slots = Slots::new();
                 let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-                let __node_11 = radio(RadioProps { selected: Some(choice.clone()), value: 0u32, label: Box::new(move || "Small".to_string()), ..Default::default() })?;
+                let __node_11 = radio(RadioProps::props().selected(choice.clone()).value(0u32).label("Small").build())?;
                 __children.push(box_item(__node_11));
-                let __node_12 = radio(RadioProps { selected: Some(choice.clone()), value: 1u32, label: Box::new(move || "Medium".to_string()), ..Default::default() })?;
+                let __node_12 = radio(RadioProps::props().selected(choice.clone()).value(1u32).label("Medium").build())?;
                 __children.push(box_item(__node_12));
-                let __node_13 = radio(RadioProps { selected: Some(choice.clone()), value: 2u32, label: Box::new(move || "Large".to_string()), ..Default::default() })?;
+                let __node_13 = radio(RadioProps::props().selected(choice.clone()).value(2u32).label("Large").build())?;
                 __children.push(box_item(__node_13));
                 let __text_2 = {
                     let choice = choice.clone();
@@ -88,27 +88,27 @@ pub fn features_forms() -> Result<Box<dyn LayoutItem>, LayoutError> {
                 };
                 __children.push(box_item(__text_2));
                 __slots.extend_default(__children);
-                card(CardProps { gap: 10.0, ..Default::default() }, __slots)?
+                card(CardProps::props().gap(10.0).build(), __slots)?
             };
             __children.push(box_item(__node_10));
-            let __node_14 = code_line(CodeLineProps { code: "radio selected:$choice value:0u32 label:'Small'      (a group shares one signal)" })?;
+            let __node_14 = code_line(CodeLineProps::props().code("radio selected:$choice value:0u32 label:'Small'      (a group shares one signal)").build())?;
             __children.push(box_item(__node_14));
             __slots.extend_default(__children);
-            example(ExampleProps { title: "radio — several buttons share one signal; each carries a distinct value" }, __slots)?
+            example(ExampleProps::props().title("radio — several buttons share one signal; each carries a distinct value").build(), __slots)?
         };
         let __node_15 = {
             let mut __slots = Slots::new();
             let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
             let __col_1 = {
-                let __node_16 = prop_row(PropRowProps { name: "checked", values: "signal", about: "Bound bool for checkbox/toggle; the tap writes it back." })?;
-                let __node_17 = prop_row(PropRowProps { name: "selected", values: "signal", about: "Bound u32 shared by a radio group; a tap sets it to this button's value." })?;
-                let __node_18 = prop_row(PropRowProps { name: "value", values: "u32", about: "The value a radio selects when tapped (which button is on)." })?;
-                let __node_19 = prop_row(PropRowProps { name: "on_toggle / on_select", values: "closure", about: "Fires with the new state when it changes." })?;
+                let __node_16 = prop_row(PropRowProps::props().name("checked").values("signal").about("Bound bool for checkbox/toggle; the tap writes it back.").build())?;
+                let __node_17 = prop_row(PropRowProps::props().name("selected").values("signal").about("Bound u32 shared by a radio group; a tap sets it to this button's value.").build())?;
+                let __node_18 = prop_row(PropRowProps::props().name("value").values("u32").about("The value a radio selects when tapped (which button is on).").build())?;
+                let __node_19 = prop_row(PropRowProps::props().name("on_toggle / on_select").values("closure").about("Fires with the new state when it changes.").build())?;
                 Container::new(LayoutStyle::new().flex_column().gap(6.0), children![__node_16, __node_17, __node_18, __node_19])?
             };
             __children.push(box_item(__col_1));
             __slots.extend_default(__children);
-            example(ExampleProps { title: "Attributes" }, __slots)?
+            example(ExampleProps::props().title("Attributes").build(), __slots)?
         };
         Container::new(LayoutStyle::new().flex_column().gap(20.0), children![__node_0, __node_1, __node_5, __node_9, __node_15])?
     };

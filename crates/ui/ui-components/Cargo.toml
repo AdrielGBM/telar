@@ -17,6 +17,7 @@ motion-core = { workspace = true }
 platform-core = { workspace = true }
 reactive-core = { workspace = true }
 renderer-core = { workspace = true }
+telar-macros = { workspace = true }
 theme-core = { workspace = true }
 ui-core = { workspace = true }
 

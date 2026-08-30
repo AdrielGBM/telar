@@ -1,8 +1,8 @@
-use std::rc::Rc;
+use telar_macros::Props;
 
 use layout_core::{AlignItems, JustifyContent, LayoutError, LayoutStyle, NodeId};
 use platform_core::Event;
-use reactive_core::{Effect, RwSignal, effect, signal};
+use reactive_core::{Effect, Reactive, RwSignal, effect, signal};
 use renderer_core::{Color, RectStyle};
 use ui_core::focus::Role;
 use ui_core::{
@@ -11,7 +11,6 @@ use ui_core::{
 };
 
 use crate::shared;
-use crate::shared::props_default;
 
 fn pad_x() -> f32 {
     shared::spacing() * 1.75
@@ -43,20 +42,18 @@ fn header_box() -> LayoutStyle {
 /// — the same mechanism the sandbox uses to switch doc sections — instead of a `ReactiveList` rebuild.
 /// Unlike `modal`/`drawer`'s `Overlay`, this stays IN FLOW: collapsing the body's node to a zero rect pushes
 /// following siblings back up, and expanding it pushes them down again.
+#[derive(Props)]
 pub struct AccordionProps {
     /// Header label.
-    pub title: Box<dyn Fn() -> String>,
+    #[props(into, default)]
+    pub title: Reactive<String>,
     /// Bound open/closed state. `None` (the default) is uncontrolled — the widget owns its own `signal(false)`.
+    #[props(some, into, default)]
     pub open: Option<RwSignal<bool>>,
     /// Accent (the caret). `Color::TRANSPARENT` (the default) means "unset": falls back to the theme accent.
-    pub color: Box<dyn Fn() -> Color>,
+    #[props(into, default = Reactive::of(|| Color::TRANSPARENT))]
+    pub color: Reactive<Color>,
 }
-
-props_default!(AccordionProps {
-    title: text,
-    open: none,
-    color: color,
-});
 
 pub fn accordion(
     props: AccordionProps,
@@ -65,7 +62,6 @@ pub fn accordion(
     let AccordionProps { title, open, color } = props;
     // Uncontrolled: own the state so the section still expands/collapses when the caller binds no signal.
     let open = open.unwrap_or_else(|| signal(false));
-    let color: shared::ReactiveColor = Rc::from(color);
     let body_children = slots.take_default();
 
     // Caret flips glyph with `open`; its colour is the same reactive accent as the rest of the catalogue.
@@ -82,13 +78,13 @@ pub fn accordion(
         },
         LayoutStyle::new(),
         move |t| {
-            let accent = shared::resolve(caret_color.as_ref(), || shared::accent());
+            let accent = shared::resolve(&caret_color, shared::accent);
             shared::control_text(t, CARET_RATIO).with_color(accent)
         },
     )?;
 
     let title_widget = Text::declaring(
-        move || title(),
+        move || title.get(),
         LayoutStyle::new(),
         |t| shared::control_text(t, 1.0),
     )?;
@@ -182,11 +178,7 @@ mod tests {
         crate::test_support::fresh_layout_runtime();
         let open = signal(false);
         let mut item = accordion(
-            AccordionProps {
-                title: Box::new(|| "Details".to_string()),
-                open: Some(open),
-                ..Default::default()
-            },
+            AccordionProps::props().title("Details").open(open).build(),
             slot_with_body("Body"),
         )
         .unwrap();
@@ -221,11 +213,7 @@ mod tests {
         crate::test_support::fresh_layout_runtime();
         let open = signal(false);
         let item = accordion(
-            AccordionProps {
-                title: Box::new(|| "Details".to_string()),
-                open: Some(open),
-                ..Default::default()
-            },
+            AccordionProps::props().title("Details").open(open).build(),
             slot_with_body("Body"),
         )
         .unwrap();
@@ -265,10 +253,7 @@ mod tests {
     fn uncontrolled_accordion_builds_and_starts_closed() {
         crate::test_support::fresh_layout_runtime();
         let item = accordion(
-            AccordionProps {
-                title: Box::new(|| "Details".to_string()),
-                ..Default::default()
-            },
+            AccordionProps::props().title("Details").build(),
             slot_with_body("Body"),
         )
         .unwrap();

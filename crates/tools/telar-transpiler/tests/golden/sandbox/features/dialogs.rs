@@ -8,7 +8,7 @@ pub fn features_dialogs() -> Result<Box<dyn LayoutItem>, LayoutError> {
     let __owner = telar::owner_scope();
     #[allow(unused_imports)] use telar::use_theme;
     let __col_0 = {
-        let __node_0 = doc_header(DocHeaderProps { kicker: "OVERLAYS", title: "Dialogs", desc: "Modal, drawer and tooltip — high-level widgets built on the overlay primitive (a top-layer portal that escapes clipping and blocks the page). Each renders its content only while open, so a closed overlay costs nothing and never eats a background click." })?;
+        let __node_0 = doc_header(DocHeaderProps::props().kicker("OVERLAYS").title("Dialogs").desc("Modal, drawer and tooltip — high-level widgets built on the overlay primitive (a top-layer portal that escapes clipping and blocks the page). Each renders its content only while open, so a closed overlay costs nothing and never eats a background click.").build())?;
         let __node_1 = {
             let mut __slots = Slots::new();
             let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
@@ -23,7 +23,7 @@ pub fn features_dialogs() -> Result<Box<dyn LayoutItem>, LayoutError> {
                     )?
                 };
                 __children.push(box_item(__text_0));
-                let __node_3 = button(ButtonProps { label: Box::new(move || "Open modal".to_string()), fill: Box::new(move || use_theme::<core::theme::SandboxTheme>().primary()), on_press: Box::new(move || open_overlay("confirm")), ..Default::default() })?;
+                let __node_3 = button(ButtonProps::props().label("Open modal").fill(Reactive::of(move || use_theme::<core::theme::SandboxTheme>().primary())).on_press(Box::new(move || open_overlay("confirm"))).build())?;
                 __children.push(box_item(__node_3));
                 let __node_4 = {
                     let mut __slots = Slots::new();
@@ -37,17 +37,17 @@ pub fn features_dialogs() -> Result<Box<dyn LayoutItem>, LayoutError> {
                     };
                     __children.push(box_item(__text_1));
                     __slots.extend_default(__children);
-                    modal(ModalProps { id: "confirm", title: Box::new(move || "Confirm".to_string()), ..Default::default() }, __slots)?
+                    modal(ModalProps::props().id("confirm").title("Confirm").build(), __slots)?
                 };
                 __children.push(box_item(__node_4));
                 __slots.extend_default(__children);
-                card(CardProps { gap: 10.0, ..Default::default() }, __slots)?
+                card(CardProps::props().gap(10.0).build(), __slots)?
             };
             __children.push(box_item(__node_2));
-            let __node_5 = code_line(CodeLineProps { code: "modal id:\"confirm\"  >  …      open_overlay(\"confirm\")  from anywhere" })?;
+            let __node_5 = code_line(CodeLineProps::props().code("modal id:\"confirm\"  >  …      open_overlay(\"confirm\")  from anywhere").build())?;
             __children.push(box_item(__node_5));
             __slots.extend_default(__children);
-            example(ExampleProps { title: "Modal — an opaque dialog centred over a dimming scrim; the scrim or Close dismisses" }, __slots)?
+            example(ExampleProps::props().title("Modal — an opaque dialog centred over a dimming scrim; the scrim or Close dismisses").build(), __slots)?
         };
         let __node_6 = {
             let mut __slots = Slots::new();
@@ -55,7 +55,7 @@ pub fn features_dialogs() -> Result<Box<dyn LayoutItem>, LayoutError> {
             let __node_7 = {
                 let mut __slots = Slots::new();
                 let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-                let __node_8 = button(ButtonProps { label: Box::new(move || "Open drawer".to_string()), fill: Box::new(move || use_theme::<core::theme::SandboxTheme>().primary()), on_press: Box::new(move || open_overlay("nav")), ..Default::default() })?;
+                let __node_8 = button(ButtonProps::props().label("Open drawer").fill(Reactive::of(move || use_theme::<core::theme::SandboxTheme>().primary())).on_press(Box::new(move || open_overlay("nav"))).build())?;
                 __children.push(box_item(__node_8));
                 let __node_9 = {
                     let mut __slots = Slots::new();
@@ -69,17 +69,17 @@ pub fn features_dialogs() -> Result<Box<dyn LayoutItem>, LayoutError> {
                     };
                     __children.push(box_item(__text_2));
                     __slots.extend_default(__children);
-                    drawer(DrawerProps { id: "nav", side: "right", ..Default::default() }, __slots)?
+                    drawer(DrawerProps::props().id("nav").side("right").build(), __slots)?
                 };
                 __children.push(box_item(__node_9));
                 __slots.extend_default(__children);
-                card(CardProps { gap: 10.0, ..Default::default() }, __slots)?
+                card(CardProps::props().gap(10.0).build(), __slots)?
             };
             __children.push(box_item(__node_7));
-            let __node_10 = code_line(CodeLineProps { code: "drawer id:\"nav\" side:\"right\"  >  text \"Drawer content\"" })?;
+            let __node_10 = code_line(CodeLineProps::props().code("drawer id:\"nav\" side:\"right\"  >  text \"Drawer content\"").build())?;
             __children.push(box_item(__node_10));
             __slots.extend_default(__children);
-            example(ExampleProps { title: "Drawer — a full-height side panel pinned to an edge, over the same scrim" }, __slots)?
+            example(ExampleProps::props().title("Drawer — a full-height side panel pinned to an edge, over the same scrim").build(), __slots)?
         };
         let __node_11 = {
             let mut __slots = Slots::new();
@@ -90,20 +90,20 @@ pub fn features_dialogs() -> Result<Box<dyn LayoutItem>, LayoutError> {
                 let __node_13 = {
                     let mut __slots = Slots::new();
                     let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-                    let __node_14 = button(ButtonProps { label: Box::new(move || "Hover me".to_string()), ..Default::default() })?;
+                    let __node_14 = button(ButtonProps::props().label("Hover me").build())?;
                     __children.push(box_item(__node_14));
                     __slots.extend_default(__children);
-                    tooltip(TooltipProps { text: Box::new(move || "Helpful hint".to_string()), ..Default::default() }, __slots)?
+                    tooltip(TooltipProps::props().text("Helpful hint").build(), __slots)?
                 };
                 __children.push(box_item(__node_13));
                 __slots.extend_default(__children);
-                card(CardProps { gap: 10.0, ..Default::default() }, __slots)?
+                card(CardProps::props().gap(10.0).build(), __slots)?
             };
             __children.push(box_item(__node_12));
-            let __node_15 = code_line(CodeLineProps { code: "tooltip text:\"Helpful hint\"  >  button label:\"Hover me\"" })?;
+            let __node_15 = code_line(CodeLineProps::props().code("tooltip text:\"Helpful hint\"  >  button label:\"Hover me\"").build())?;
             __children.push(box_item(__node_15));
             __slots.extend_default(__children);
-            example(ExampleProps { title: "Tooltip — a hover popup anchored just below its trigger" }, __slots)?
+            example(ExampleProps::props().title("Tooltip — a hover popup anchored just below its trigger").build(), __slots)?
         };
         Container::new(LayoutStyle::new().flex_column().gap(20.0), children![__node_0, __node_1, __node_6, __node_11])?
     };

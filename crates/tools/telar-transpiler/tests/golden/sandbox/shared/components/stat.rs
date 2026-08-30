@@ -3,9 +3,11 @@
 #[allow(unused_imports)] use telar::*;
 #[allow(unused_imports)] use super::*;
 
-#[derive(Default)]
+#[derive(::telar::Props)]
 pub struct SharedComponentsStatProps {
+    #[props(default)]
     pub value: &'static str,
+    #[props(default)]
     pub label: &'static str,
 }
 
@@ -36,7 +38,7 @@ pub fn shared_components_stat(props: SharedComponentsStatProps) -> Result<Box<dy
 #[allow(dead_code, unused_variables, unused_mut)]
 pub fn shared_components_stat_preview_0() -> Result<Box<dyn LayoutItem>, LayoutError> {
     #[allow(unused_imports)] use telar::use_theme;
-    let __node_0 = stat(StatProps { value: "60 fps", label: "software + wgpu" })?;
+    let __node_0 = stat(StatProps::props().value("60 fps").label("software + wgpu").build())?;
     Ok(Box::new(__node_0))
 }
 

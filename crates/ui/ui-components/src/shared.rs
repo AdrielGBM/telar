@@ -5,17 +5,11 @@
 use std::rc::Rc;
 
 use layout_core::{AlignItems, LayoutError, LayoutStyle};
-use reactive_core::RwSignal;
+use reactive_core::{Reactive, RwSignal};
 use renderer_core::{Color, RectStyle, TextStyle};
 use theme_core::use_theme_tokens;
 use ui_core::focus::Role;
 use ui_core::{Container, LayoutItem, StyledContainer, Text, box_item, style_follows};
-
-/// A reactive colour prop re-erased to a shareable handle: a `Box<dyn Fn>` isn't `Clone`, but widgets must hand the same colour closure to several style closures, so they re-erase to this `Rc`.
-pub(crate) type ReactiveColor = Rc<dyn Fn() -> Color>;
-
-/// A reactive human-text prop re-erased to a shareable handle: a `Box<dyn Fn>` isn't `Clone`, but a widget that reuses the same label/title in several places (or rebuilds it on each mount) re-erases to this `Rc`.
-pub(crate) type ReactiveText = Rc<dyn Fn() -> String>;
 
 /// An amendment to the paint a component worked out for its **principal surface** — the one a caller means
 /// when they point at the control: a button's box, a menu's trigger, a tooltip's bubble.
@@ -170,8 +164,8 @@ pub(crate) fn icon_size() -> f32 {
 
 /// Resolve a reactive colour: `color()` unless it is `Color::TRANSPARENT` (the "unset" sentinel), else `fallback()`.
 /// `color()` is evaluated once. Collapses the per-widget accent/track/surface/bubble resolvers into one shape.
-pub(crate) fn resolve(color: &dyn Fn() -> Color, fallback: impl FnOnce() -> Color) -> Color {
-    let c = color();
+pub(crate) fn resolve(color: &Reactive<Color>, fallback: impl FnOnce() -> Color) -> Color {
+    let c = color.get();
     if c == Color::TRANSPARENT {
         fallback()
     } else {
@@ -193,36 +187,6 @@ pub(crate) fn resolve_open(
 
 /// A control (checkbox box / radio ring / toggle pill) plus an optional label, laid out as one gap-10 row that
 /// is itself the tap target: a tap runs `on_press`. Shared by checkbox, radio and toggle.
-/// Writes an `impl Default` for a `Props` struct from a field list, naming each field's *kind* instead of
-/// repeating its value.
-///
-/// The catalogue's 22 `Default` impls were 226 lines in which the same four expressions appeared 41 times
-/// between them — `Box::new(String::new)` nineteen times, `Box::new(|| Color::TRANSPARENT)` twenty-one. They
-/// cannot be `#[derive(Default)]`: a `Box<dyn Fn() -> String>` has no `Default`, and the field types stay
-/// exactly as they are because `scan_props_struct` detects them by their literal type text, so a newtype would
-/// move the `.rsx` authoring surface.
-///
-/// Kinds: `text` (an empty reactive string), `color` (unset — `TRANSPARENT`, the catalogue's "fall back to the
-/// theme" sentinel), `flag` (a reactive `false`), `action` (a no-op callback), and `= <expr>` for a field whose
-/// default carries information. A struct where most fields are the last kind is better written by hand.
-macro_rules! props_default {
-    ($ty:ident { $($field:ident : $kind:tt),* $(,)? }) => {
-        impl Default for $ty {
-            fn default() -> Self {
-                Self { $($field: props_default!(@value $kind)),* }
-            }
-        }
-    };
-    (@value text) => { Box::new(String::new) };
-    (@value color) => { Box::new(|| renderer_core::Color::TRANSPARENT) };
-    (@value flag) => { Box::new(|| false) };
-    (@value action) => { Box::new(|| {}) };
-    (@value none) => { None };
-    (@value zero) => { Default::default() };
-    (@value reading) => { Box::new(|| 0.0) };
-    (@value ($e:expr)) => { $e };
-}
-pub(crate) use props_default;
 
 /// The shared title text style, re-read every frame so it tracks the active theme. Three consumers: `heading`,
 /// `section` and `modal`'s title.
@@ -250,14 +214,14 @@ fn caption_column(width: f32) -> LayoutStyle {
 /// empty. The counterpart of [`labelled_control`], which puts the label *beside* the control instead.
 pub(crate) fn captioned(
     control: Box<dyn LayoutItem>,
-    label: impl Fn() -> String + 'static,
+    label: Reactive<String>,
     width: f32,
 ) -> Result<Box<dyn LayoutItem>, LayoutError> {
-    if label().is_empty() {
+    if label.get().is_empty() {
         return Ok(box_item(control));
     }
     let caption = Text::declaring(
-        move || label(),
+        move || label.get(),
         LayoutStyle::new(),
         |t| control_text(t, CAPTION_RATIO).with_color(muted()),
     )?;
@@ -276,15 +240,15 @@ pub(crate) fn captioned(
 
 pub(crate) fn labelled_control(
     control: Box<dyn LayoutItem>,
-    label: impl Fn() -> String + 'static,
+    label: Reactive<String>,
     role: Role,
     toggled: impl Fn() -> bool + 'static,
     on_press: impl Fn() + 'static,
 ) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let mut children: Vec<Box<dyn LayoutItem>> = vec![box_item(control)];
-    if !label().is_empty() {
+    if !label.get().is_empty() {
         let text = Text::declaring(
-            move || label(),
+            move || label.get(),
             LayoutStyle::new(),
             |t| control_text(t, 1.0),
         )?;

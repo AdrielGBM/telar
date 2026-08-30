@@ -8,7 +8,7 @@ pub fn features_typography() -> Result<Box<dyn LayoutItem>, LayoutError> {
     let __owner = telar::owner_scope();
     #[allow(unused_imports)] use telar::use_theme;
     let __col_0 = {
-        let __node_0 = doc_header(DocHeaderProps { kicker: "FOUNDATIONS", title: "Typography", desc: "Text takes a size and a color token, measures its own height, and wraps to the available width automatically." })?;
+        let __node_0 = doc_header(DocHeaderProps::props().kicker("FOUNDATIONS").title("Typography").desc("Text takes a size and a color token, measures its own height, and wraps to the available width automatically.").build())?;
         let __node_1 = {
             let mut __slots = Slots::new();
             let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
@@ -56,13 +56,13 @@ pub fn features_typography() -> Result<Box<dyn LayoutItem>, LayoutError> {
                 };
                 __children.push(box_item(__text_4));
                 __slots.extend_default(__children);
-                card(CardProps { gap: 6.0, ..Default::default() }, __slots)?
+                card(CardProps::props().gap(6.0).build(), __slots)?
             };
             __children.push(box_item(__node_2));
-            let __node_3 = code_line(CodeLineProps { code: "text 'Heading' font_size:18 color:theme.ink" })?;
+            let __node_3 = code_line(CodeLineProps::props().code("text 'Heading' font_size:18 color:theme.ink").build())?;
             __children.push(box_item(__node_3));
             __slots.extend_default(__children);
-            example(ExampleProps { title: "Size scale" }, __slots)?
+            example(ExampleProps::props().title("Size scale").build(), __slots)?
         };
         let __node_4 = {
             let mut __slots = Slots::new();
@@ -103,13 +103,13 @@ pub fn features_typography() -> Result<Box<dyn LayoutItem>, LayoutError> {
                 };
                 __children.push(box_item(__text_8));
                 __slots.extend_default(__children);
-                card(CardProps { gap: 4.0, ..Default::default() }, __slots)?
+                card(CardProps::props().gap(4.0).build(), __slots)?
             };
             __children.push(box_item(__node_5));
-            let __node_6 = code_line(CodeLineProps { code: "text 'muted' color:theme.muted" })?;
+            let __node_6 = code_line(CodeLineProps::props().code("text 'muted' color:theme.muted").build())?;
             __children.push(box_item(__node_6));
             __slots.extend_default(__children);
-            example(ExampleProps { title: "Color tokens applied to text" }, __slots)?
+            example(ExampleProps::props().title("Color tokens applied to text").build(), __slots)?
         };
         let __node_7 = {
             let mut __slots = Slots::new();
@@ -174,13 +174,13 @@ pub fn features_typography() -> Result<Box<dyn LayoutItem>, LayoutError> {
                 };
                 __children.push(box_item(__text_15));
                 __slots.extend_default(__children);
-                card(CardProps { gap: 6.0, ..Default::default() }, __slots)?
+                card(CardProps::props().gap(6.0).build(), __slots)?
             };
             __children.push(box_item(__node_8));
-            let __node_9 = code_line(CodeLineProps { code: "text 'Bold' font_weight:bold   ·   'Note' font_style:italic   ·   '…' text_align:center" })?;
+            let __node_9 = code_line(CodeLineProps::props().code("text 'Bold' font_weight:bold   ·   'Note' font_style:italic   ·   '…' text_align:center").build())?;
             __children.push(box_item(__node_9));
             __slots.extend_default(__children);
-            example(ExampleProps { title: "Weight, italic & alignment" }, __slots)?
+            example(ExampleProps::props().title("Weight, italic & alignment").build(), __slots)?
         };
         let __node_10 = {
             let mut __slots = Slots::new();
@@ -213,13 +213,13 @@ pub fn features_typography() -> Result<Box<dyn LayoutItem>, LayoutError> {
                 };
                 __children.push(box_item(__text_18));
                 __slots.extend_default(__children);
-                card(CardProps { gap: 8.0, ..Default::default() }, __slots)?
+                card(CardProps::props().gap(8.0).build(), __slots)?
             };
             __children.push(box_item(__node_11));
-            let __node_12 = code_line(CodeLineProps { code: "text '…' lines:2 ellipsis   ·   'label' lines:1 ellipsis" })?;
+            let __node_12 = code_line(CodeLineProps::props().code("text '…' lines:2 ellipsis   ·   'label' lines:1 ellipsis").build())?;
             __children.push(box_item(__node_12));
             __slots.extend_default(__children);
-            example(ExampleProps { title: "Line clamp & ellipsis" }, __slots)?
+            example(ExampleProps::props().title("Line clamp & ellipsis").build(), __slots)?
         };
         let __node_13 = {
             let mut __slots = Slots::new();
@@ -236,13 +236,13 @@ pub fn features_typography() -> Result<Box<dyn LayoutItem>, LayoutError> {
                 };
                 __children.push(box_item(__text_19));
                 __slots.extend_default(__children);
-                card(CardProps { ..Default::default() }, __slots)?
+                card(CardProps::props().build(), __slots)?
             };
             __children.push(box_item(__node_14));
-            let __node_15 = code_line(CodeLineProps { code: "text '…long copy…' color:theme.muted max_width:520" })?;
+            let __node_15 = code_line(CodeLineProps::props().code("text '…long copy…' color:theme.muted max_width:520").build())?;
             __children.push(box_item(__node_15));
             __slots.extend_default(__children);
-            example(ExampleProps { title: "Wrapping — a paragraph measures its own height at any width" }, __slots)?
+            example(ExampleProps::props().title("Wrapping — a paragraph measures its own height at any width").build(), __slots)?
         };
         let __node_16 = {
             let mut __slots = Slots::new();
@@ -259,13 +259,13 @@ pub fn features_typography() -> Result<Box<dyn LayoutItem>, LayoutError> {
                 };
                 __children.push(box_item(__text_20));
                 __slots.extend_default(__children);
-                card(CardProps { ..Default::default() }, __slots)?
+                card(CardProps::props().build(), __slots)?
             };
             __children.push(box_item(__node_17));
-            let __node_18 = code_line(CodeLineProps { code: "text 'Count: {$count}'      text '{props.title}'" })?;
+            let __node_18 = code_line(CodeLineProps::props().code("text 'Count: {$count}'      text '{props.title}'").build())?;
             __children.push(box_item(__node_18));
             __slots.extend_default(__children);
-            example(ExampleProps { title: "Interpolation — embed values with { } (see the Reactivity section)" }, __slots)?
+            example(ExampleProps::props().title("Interpolation — embed values with { } (see the Reactivity section)").build(), __slots)?
         };
         let __node_19 = {
             let mut __slots = Slots::new();
@@ -273,7 +273,7 @@ pub fn features_typography() -> Result<Box<dyn LayoutItem>, LayoutError> {
             let __node_20 = {
                 let mut __slots = Slots::new();
                 let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-                let __node_21 = heading(HeadingProps { text: Box::new(move || "A heading is a real title".to_string()) })?;
+                let __node_21 = heading(HeadingProps::props().text("A heading is a real title").build())?;
                 __children.push(box_item(__node_21));
                 let __node_22 = {
                     let mut __slots = Slots::new();
@@ -295,36 +295,36 @@ pub fn features_typography() -> Result<Box<dyn LayoutItem>, LayoutError> {
                     };
                     __children.push(box_item(__text_22));
                     __slots.extend_default(__children);
-                    section(SectionProps { title: Box::new(move || "A section wraps a heading above its own content".to_string()) }, __slots)?
+                    section(SectionProps::props().title("A section wraps a heading above its own content").build(), __slots)?
                 };
                 __children.push(box_item(__node_22));
                 __slots.extend_default(__children);
-                card(CardProps { gap: 12.0, ..Default::default() }, __slots)?
+                card(CardProps::props().gap(12.0).build(), __slots)?
             };
             __children.push(box_item(__node_20));
-            let __node_23 = code_line(CodeLineProps { code: "heading 'Title'      section 'Title' > …children…" })?;
+            let __node_23 = code_line(CodeLineProps::props().code("heading 'Title'      section 'Title' > …children…").build())?;
             __children.push(box_item(__node_23));
             __slots.extend_default(__children);
-            example(ExampleProps { title: "heading and section — an accent title, alone or above its content" }, __slots)?
+            example(ExampleProps::props().title("heading and section — an accent title, alone or above its content").build(), __slots)?
         };
         let __node_24 = {
             let mut __slots = Slots::new();
             let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
             let __col_1 = {
-                let __node_25 = prop_row(PropRowProps { name: "font_size", values: "number", about: "Font size in px (default 14)." })?;
-                let __node_26 = prop_row(PropRowProps { name: "color", values: "token · #hex · $signal", about: "Text color (default ink via a token)." })?;
-                let __node_27 = prop_row(PropRowProps { name: "font_weight", values: "thin…black · 100–900", about: "Font weight, keyword or number (default 400)." })?;
-                let __node_28 = prop_row(PropRowProps { name: "font_style", values: "normal·italic·oblique", about: "Slant the text." })?;
-                let __node_29 = prop_row(PropRowProps { name: "text_align", values: "left·center·right·justify", about: "Horizontal alignment within the box." })?;
-                let __node_30 = prop_row(PropRowProps { name: "lines", values: "number", about: "Clamp to at most N lines (extra dropped)." })?;
-                let __node_31 = prop_row(PropRowProps { name: "ellipsis", values: "flag", about: "Replace the clamped tail with a … ." })?;
-                let __node_32 = prop_row(PropRowProps { name: "max_width", values: "number", about: "Wrap boundary for long copy." })?;
-                let __node_33 = prop_row(PropRowProps { name: "height", values: "number", about: "Pin the box instead of auto-measuring." })?;
+                let __node_25 = prop_row(PropRowProps::props().name("font_size").values("number").about("Font size in px (default 14).").build())?;
+                let __node_26 = prop_row(PropRowProps::props().name("color").values("token · #hex · $signal").about("Text color (default ink via a token).").build())?;
+                let __node_27 = prop_row(PropRowProps::props().name("font_weight").values("thin…black · 100–900").about("Font weight, keyword or number (default 400).").build())?;
+                let __node_28 = prop_row(PropRowProps::props().name("font_style").values("normal·italic·oblique").about("Slant the text.").build())?;
+                let __node_29 = prop_row(PropRowProps::props().name("text_align").values("left·center·right·justify").about("Horizontal alignment within the box.").build())?;
+                let __node_30 = prop_row(PropRowProps::props().name("lines").values("number").about("Clamp to at most N lines (extra dropped).").build())?;
+                let __node_31 = prop_row(PropRowProps::props().name("ellipsis").values("flag").about("Replace the clamped tail with a … .").build())?;
+                let __node_32 = prop_row(PropRowProps::props().name("max_width").values("number").about("Wrap boundary for long copy.").build())?;
+                let __node_33 = prop_row(PropRowProps::props().name("height").values("number").about("Pin the box instead of auto-measuring.").build())?;
                 Container::new(LayoutStyle::new().flex_column().gap(6.0), children![__node_25, __node_26, __node_27, __node_28, __node_29, __node_30, __node_31, __node_32, __node_33])?
             };
             __children.push(box_item(__col_1));
             __slots.extend_default(__children);
-            example(ExampleProps { title: "Attributes" }, __slots)?
+            example(ExampleProps::props().title("Attributes").build(), __slots)?
         };
         Container::new(LayoutStyle::new().flex_column().gap(20.0), children![__node_0, __node_1, __node_4, __node_7, __node_10, __node_13, __node_16, __node_19, __node_24])?
     };

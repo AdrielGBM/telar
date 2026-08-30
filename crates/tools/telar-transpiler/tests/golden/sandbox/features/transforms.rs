@@ -127,7 +127,7 @@ pub fn features_transforms() -> Result<Box<dyn LayoutItem>, LayoutError> {
     })?;
 
     let __col_0 = {
-        let __node_0 = doc_header(DocHeaderProps { kicker: "MEDIA", title: "Transforms", desc: "Wrap any render node in an affine matrix to scale, rotate, or translate it. Transforms compose with .then(), so you can rotate and then scale around the same point." })?;
+        let __node_0 = doc_header(DocHeaderProps::props().kicker("MEDIA").title("Transforms").desc("Wrap any render node in an affine matrix to scale, rotate, or translate it. Transforms compose with .then(), so you can rotate and then scale around the same point.").build())?;
         let __node_1 = {
             let mut __slots = Slots::new();
             let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
@@ -137,13 +137,13 @@ pub fn features_transforms() -> Result<Box<dyn LayoutItem>, LayoutError> {
 
                 __children.push(box_item(result));
                 __slots.extend_default(__children);
-                card(CardProps { ..Default::default() }, __slots)?
+                card(CardProps::props().build(), __slots)?
             };
             __children.push(box_item(__node_2));
-            let __node_3 = code_line(CodeLineProps { code: "Transform::rotate_around(a, cx, cy).then(Transform::scale_around(s, s, cx, cy))" })?;
+            let __node_3 = code_line(CodeLineProps::props().code("Transform::rotate_around(a, cx, cy).then(Transform::scale_around(s, s, cx, cy))").build())?;
             __children.push(box_item(__node_3));
             __slots.extend_default(__children);
-            example(ExampleProps { title: "Scale, rotate, and a composed rotate-then-scale" }, __slots)?
+            example(ExampleProps::props().title("Scale, rotate, and a composed rotate-then-scale").build(), __slots)?
         };
         let __node_4 = {
             let mut __slots = Slots::new();
@@ -171,27 +171,27 @@ pub fn features_transforms() -> Result<Box<dyn LayoutItem>, LayoutError> {
                 };
                 __children.push(box_item(__row_0));
                 __slots.extend_default(__children);
-                card(CardProps { ..Default::default() }, __slots)?
+                card(CardProps::props().build(), __slots)?
             };
             __children.push(box_item(__node_5));
-            let __node_6 = code_line(CodeLineProps { code: "box fill:theme.success rotate:20      box fill:theme.danger rotate:15 scale:0.85" })?;
+            let __node_6 = code_line(CodeLineProps::props().code("box fill:theme.success rotate:20      box fill:theme.danger rotate:15 scale:0.85").build())?;
             __children.push(box_item(__node_6));
             __slots.extend_default(__children);
-            example(ExampleProps { title: "Declarative — rotate / scale / translate as box attributes (no Canvas, no Rust)" }, __slots)?
+            example(ExampleProps::props().title("Declarative — rotate / scale / translate as box attributes (no Canvas, no Rust)").build(), __slots)?
         };
         let __node_7 = {
             let mut __slots = Slots::new();
             let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
             let __col_1 = {
-                let __node_8 = prop_row(PropRowProps { name: "scale_around", values: "sx, sy, cx, cy", about: "Scale about a pivot point." })?;
-                let __node_9 = prop_row(PropRowProps { name: "rotate_around", values: "deg, cx, cy", about: "Rotate about a pivot point." })?;
-                let __node_10 = prop_row(PropRowProps { name: ".then(other)", values: "Transform", about: "Compose two transforms into one matrix." })?;
-                let __node_11 = prop_row(PropRowProps { name: "transform_with", values: "matrix, [nodes]", about: "Apply a matrix to child render nodes." })?;
+                let __node_8 = prop_row(PropRowProps::props().name("scale_around").values("sx, sy, cx, cy").about("Scale about a pivot point.").build())?;
+                let __node_9 = prop_row(PropRowProps::props().name("rotate_around").values("deg, cx, cy").about("Rotate about a pivot point.").build())?;
+                let __node_10 = prop_row(PropRowProps::props().name(".then(other)").values("Transform").about("Compose two transforms into one matrix.").build())?;
+                let __node_11 = prop_row(PropRowProps::props().name("transform_with").values("matrix, [nodes]").about("Apply a matrix to child render nodes.").build())?;
                 Container::new(LayoutStyle::new().flex_column().gap(6.0), children![__node_8, __node_9, __node_10, __node_11])?
             };
             __children.push(box_item(__col_1));
             __slots.extend_default(__children);
-            example(ExampleProps { title: "The Transform API" }, __slots)?
+            example(ExampleProps::props().title("The Transform API").build(), __slots)?
         };
         Container::new(LayoutStyle::new().flex_column().gap(20.0), children![__node_0, __node_1, __node_4, __node_7])?
     };

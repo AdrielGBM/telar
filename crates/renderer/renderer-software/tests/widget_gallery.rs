@@ -28,53 +28,60 @@ fn form_widgets_render() {
     reset_layout_runtime();
 
     // Each widget in a clearly-visible state so the PNG shows selected/checked/filled looks.
-    let cb = checkbox(CheckboxProps {
-        checked: Some(signal(true)),
-        label: Box::new(|| "I agree to the terms".to_string()),
-        ..Default::default()
-    })
+    let cb = checkbox(
+        CheckboxProps::props()
+            .checked(signal(true))
+            .label("I agree to the terms")
+            .build(),
+    )
     .unwrap();
-    let tg = toggle(ToggleProps {
-        checked: Some(signal(true)),
-        label: Box::new(|| "Notifications on".to_string()),
-        ..Default::default()
-    })
+    let tg = toggle(
+        ToggleProps::props()
+            .checked(signal(true))
+            .label("Notifications on")
+            .build(),
+    )
     .unwrap();
     let choice = signal(1u32);
-    let r0 = radio(RadioProps {
-        selected: Some(choice),
-        value: 0,
-        label: Box::new(|| "Small".to_string()),
-        ..Default::default()
-    })
+    let r0 = radio(
+        RadioProps::props()
+            .selected(choice)
+            .value(0)
+            .label("Small")
+            .build(),
+    )
     .unwrap();
-    let r1 = radio(RadioProps {
-        selected: Some(choice),
-        value: 1,
-        label: Box::new(|| "Medium (selected)".to_string()),
-        ..Default::default()
-    })
+    let r1 = radio(
+        RadioProps::props()
+            .selected(choice)
+            .value(1)
+            .label("Medium (selected)")
+            .build(),
+    )
     .unwrap();
-    let sl = slider(SliderProps {
-        value: Some(signal(0.62)),
-        width: 260.0,
-        ..Default::default()
-    })
+    let sl = slider(
+        SliderProps::props()
+            .value(signal(0.62))
+            .width(260.0)
+            .build(),
+    )
     .unwrap();
-    let tf = text_field(TextFieldProps {
-        value: Some(signal("Ada".to_string())),
-        label: Box::new(|| "Name".to_string()),
-        width: 260.0,
-        ..Default::default()
-    })
+    let tf = text_field(
+        TextFieldProps::props()
+            .value(signal("Ada".to_string()))
+            .label("Name")
+            .width(260.0)
+            .build(),
+    )
     .unwrap();
     // A SECOND field (like the demo's two): placeholder-only, its own signal. Both must render.
-    let tf2 = text_field(TextFieldProps {
-        value: Some(signal(String::new())),
-        placeholder: Box::new(|| "Search…".to_string()),
-        width: 260.0,
-        ..Default::default()
-    })
+    let tf2 = text_field(
+        TextFieldProps::props()
+            .value(signal(String::new()))
+            .placeholder("Search…")
+            .width(260.0)
+            .build(),
+    )
     .unwrap();
 
     let col = Container::new(
@@ -138,11 +145,10 @@ fn modal_renders_over_a_page() {
     let mut slots = Slots::new();
     slots.push(None, box_item(body));
     let dialog = modal(
-        ModalProps {
-            open: Some(open),
-            title: Box::new(|| "Confirm action".to_string()),
-            ..Default::default()
-        },
+        ModalProps::props()
+            .open(open)
+            .title("Confirm action")
+            .build(),
         slots,
     )
     .unwrap();
@@ -196,20 +202,14 @@ fn select_open_renders() {
     reset_layout_runtime();
     let picked = signal(1u32);
     let sel = select(
-        SelectProps {
-            selected: Some(picked),
-            ..Default::default()
-        },
+        SelectProps::props().selected(picked).build(),
         Children::new(|| {
             let mut slots = Slots::new();
             for label in ["Small", "Medium", "Large"] {
                 slots.push(
                     None,
                     item(
-                        ItemProps {
-                            label: Box::new(move || label.to_string()),
-                            ..Default::default()
-                        },
+                        ItemProps::props().label(label.to_string()).build(),
                         Slots::new(),
                     )?,
                 );

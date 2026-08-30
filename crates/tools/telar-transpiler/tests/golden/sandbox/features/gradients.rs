@@ -15,7 +15,7 @@ pub fn features_gradients() -> Result<Box<dyn LayoutItem>, LayoutError> {
     let __owner = telar::owner_scope();
     #[allow(unused_imports)] use telar::use_theme;
     let __col_0 = {
-        let __node_0 = doc_header(DocHeaderProps { kicker: "SURFACES", title: "Gradients", desc: "Fill a box with a linear or radial gradient: name the stops in order, and where any of them sits." })?;
+        let __node_0 = doc_header(DocHeaderProps::props().kicker("SURFACES").title("Gradients").desc("Fill a box with a linear or radial gradient: name the stops in order, and where any of them sits.").build())?;
         let __node_1 = {
             let mut __slots = Slots::new();
             let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
@@ -66,13 +66,13 @@ pub fn features_gradients() -> Result<Box<dyn LayoutItem>, LayoutError> {
                 };
                 __children.push(box_item(__node_3));
                 __slots.extend_default(__children);
-                card(CardProps { ..Default::default() }, __slots)?
+                card(CardProps::props().build(), __slots)?
             };
             __children.push(box_item(__node_2));
-            let __node_4 = code_line(CodeLineProps { code: "box fill:linear(horizontal, theme.danger, theme.primary)" })?;
+            let __node_4 = code_line(CodeLineProps::props().code("box fill:linear(horizontal, theme.danger, theme.primary)").build())?;
             __children.push(box_item(__node_4));
             __slots.extend_default(__children);
-            example(ExampleProps { title: "Linear — the direction leads, or the run goes top to bottom" }, __slots)?
+            example(ExampleProps::props().title("Linear — the direction leads, or the run goes top to bottom").build(), __slots)?
         };
         let __node_5 = {
             let mut __slots = Slots::new();
@@ -85,13 +85,13 @@ pub fn features_gradients() -> Result<Box<dyn LayoutItem>, LayoutError> {
                 };
                 __children.push(box_item(__sbox_3));
                 __slots.extend_default(__children);
-                card(CardProps { ..Default::default() }, __slots)?
+                card(CardProps::props().build(), __slots)?
             };
             __children.push(box_item(__node_6));
-            let __node_7 = code_line(CodeLineProps { code: "box fill:linear(horizontal, theme.primary, theme.purple, theme.danger)" })?;
+            let __node_7 = code_line(CodeLineProps::props().code("box fill:linear(horizontal, theme.primary, theme.purple, theme.danger)").build())?;
             __children.push(box_item(__node_7));
             __slots.extend_default(__children);
-            example(ExampleProps { title: "Three stops — a stop with no position of its own takes an even share" }, __slots)?
+            example(ExampleProps::props().title("Three stops — a stop with no position of its own takes an even share").build(), __slots)?
         };
         let __node_8 = {
             let mut __slots = Slots::new();
@@ -143,26 +143,26 @@ pub fn features_gradients() -> Result<Box<dyn LayoutItem>, LayoutError> {
                 };
                 __children.push(box_item(__node_10));
                 __slots.extend_default(__children);
-                card(CardProps { ..Default::default() }, __slots)?
+                card(CardProps::props().build(), __slots)?
             };
             __children.push(box_item(__node_9));
-            let __node_11 = code_line(CodeLineProps { code: "box fill:radial(70, theme.cyan, theme.primary)" })?;
+            let __node_11 = code_line(CodeLineProps::props().code("box fill:radial(70, theme.cyan, theme.primary)").build())?;
             __children.push(box_item(__node_11));
             __slots.extend_default(__children);
-            example(ExampleProps { title: "Radial — a burst from the center; a leading number sets the radius" }, __slots)?
+            example(ExampleProps::props().title("Radial — a burst from the center; a leading number sets the radius").build(), __slots)?
         };
         let __node_12 = {
             let mut __slots = Slots::new();
             let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
             let __col_7 = {
-                let __node_13 = prop_row(PropRowProps { name: "linear(…)", values: "[horizontal·vertical·diagonal,] stop, stop…", about: "A run between two or more stops. Vertical unless the axis leads." })?;
-                let __node_14 = prop_row(PropRowProps { name: "radial(…)", values: "[radius,] stop, stop…", about: "A burst from the center. Half the shorter side unless a radius leads." })?;
-                let __node_15 = prop_row(PropRowProps { name: "stop", values: "color [position]", about: "A color, and where it sits from 0 to 1. Unpositioned stops spread evenly." })?;
+                let __node_13 = prop_row(PropRowProps::props().name("linear(…)").values("[horizontal·vertical·diagonal,] stop, stop…").about("A run between two or more stops. Vertical unless the axis leads.").build())?;
+                let __node_14 = prop_row(PropRowProps::props().name("radial(…)").values("[radius,] stop, stop…").about("A burst from the center. Half the shorter side unless a radius leads.").build())?;
+                let __node_15 = prop_row(PropRowProps::props().name("stop").values("color [position]").about("A color, and where it sits from 0 to 1. Unpositioned stops spread evenly.").build())?;
                 Container::new(LayoutStyle::new().flex_column().gap(6.0), children![__node_13, __node_14, __node_15])?
             };
             __children.push(box_item(__col_7));
             __slots.extend_default(__children);
-            example(ExampleProps { title: "Attributes" }, __slots)?
+            example(ExampleProps::props().title("Attributes").build(), __slots)?
         };
         Container::new(LayoutStyle::new().flex_column().gap(20.0), children![__node_0, __node_1, __node_5, __node_8, __node_12])?
     };

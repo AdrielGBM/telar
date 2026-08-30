@@ -144,7 +144,7 @@ mod tests {
             out.rust_code
         );
         assert!(
-            out.rust_code.contains("size: size"),
+            out.rust_code.contains(".size(size)"),
             "a bound number reaches a prop that is not a colour at all:\n{}",
             out.rust_code
         );
@@ -229,8 +229,7 @@ mod tests {
         )
         .unwrap();
         assert!(
-            out.rust_code
-                .contains("label: Box::new(move || telar::i18n::translate"),
+            out.rust_code.contains(".label(telar::i18n::translate"),
             "{}",
             out.rust_code
         );
@@ -238,9 +237,7 @@ mod tests {
         let plain =
             transpile_source("[view]\nbutton label:\"Save\"\n", "demo", None, None, None).unwrap();
         assert!(
-            plain
-                .rust_code
-                .contains("label: Box::new(move || \"Save\".to_string())"),
+            plain.rust_code.contains(".label(\"Save\")"),
             "{}",
             plain.rust_code
         );
@@ -381,10 +378,10 @@ col @card
         assert!(code.contains("fn style_card() -> LayoutStyle"));
         assert!(code.contains("move || format!(\"Count: {}\", { count.get() })"));
         // `button` is now a widget component call, not the removed `Button::new` builtin.
-        assert!(code.contains("button(ButtonProps {"));
-        assert!(code.contains("label: Box::new(move || \"Increment\".to_string())"));
+        assert!(code.contains("button(ButtonProps::props()"));
+        assert!(code.contains(".label(\"Increment\")"));
         // Its `fill` is a reactive colour closure; with no theme it reads the [style] const.
-        assert!(code.contains("fill: Box::new(move || COLOR_PRIMARY)"));
+        assert!(code.contains(".fill(Reactive::of(move || COLOR_PRIMARY))"));
         assert!(code.contains("count.update(|n| *n += 1)"));
         assert!(code.contains("Container::new(style_card(), children!["));
         assert!(code.contains("Ok(Box::new(__col_0))"));
@@ -572,7 +569,7 @@ col @card
         .unwrap();
         assert!(
             with.rust_code
-                .contains("CheckboxProps { checked: Some(flag.clone()), ..Default::default() }"),
+                .contains("CheckboxProps::props().checked(flag.clone()).build()"),
             "optional signal prop should be Some-wrapped and other fields defaulted:\n{}",
             with.rust_code
         );
@@ -589,7 +586,7 @@ col @card
         assert!(
             without
                 .rust_code
-                .contains("CheckboxProps { label: \"Agree\", ..Default::default() }"),
+                .contains("CheckboxProps::props().label(\"Agree\").build()"),
             "an omitted optional prop should rely on Default (None):\n{}",
             without.rust_code
         );
@@ -638,16 +635,12 @@ col @card
         );
         // `section` is a slotted component call carrying its title...
         assert!(
-            code.contains(
-                "section(SectionProps { title: Box::new(move || \"Cards\".to_string()) }"
-            ),
+            code.contains("section(SectionProps::props().title(\"Cards\").build()"),
             "expected section component call in:\n{code}"
         );
         // ...and `heading` a plain component call carrying its text.
         assert!(
-            code.contains(
-                "heading(HeadingProps { text: Box::new(move || \"Subtitle\".to_string()) })"
-            ),
+            code.contains("heading(HeadingProps::props().text(\"Subtitle\").build())"),
             "expected heading component call in:\n{code}"
         );
     }
@@ -828,15 +821,15 @@ col @card
         let out = transpile_source(src, "demo", None, None, None).unwrap();
         let code = &out.rust_code;
         assert!(
-            code.contains("my_widget(MyWidgetProps {"),
+            code.contains("my_widget(MyWidgetProps::props()"),
             "should call component fn with Props"
         );
         // `my_widget` is unregistered (no sig), so its `label` is not a known text prop and stays a literal.
         assert!(
-            code.contains("label: \"hello\""),
+            code.contains(".label(\"hello\")"),
             "an unknown component's quoted attr stays a string literal"
         );
-        assert!(code.contains("size: 16.0"), "numeric attr must become f32");
+        assert!(code.contains(".size(16.0)"), "numeric attr must become f32");
     }
 
     #[test]
@@ -1807,7 +1800,7 @@ col @card
             "the children are a closure returning the slots:\n{code}"
         );
         assert!(
-            code.contains("menu(MenuProps { label: Box::new(move || \"Edit\".to_string()), ..Default::default() }, __deferred)"),
+            code.contains("menu(MenuProps::props().label(\"Edit\").build(), __deferred)"),
             "and the recipe is what the callee is handed:\n{code}"
         );
     }
@@ -1878,7 +1871,7 @@ col @card
             "the recipe owns its own handle:\n{code}"
         );
         assert!(
-            code.contains("disabled: Box::new({ let busy = busy.clone(); move || busy.get() })"),
+            code.contains(".disabled(busy.clone())"),
             "and a reactive predicate reaches the row as a closure, not a resolved bool:\n{code}"
         );
     }
@@ -2361,7 +2354,7 @@ col @card
         .unwrap()
         .rust_code;
         assert!(
-            code.contains("name: \"Box select\".to_string()"),
+            code.contains(".name(\"Box select\")"),
             "the literal is converted at the call site:\n{code}"
         );
     }
@@ -2464,7 +2457,7 @@ col @card
             !code.contains("save.clone()"),
             "a single non-reactive call site takes the binding by value:\n{code}"
         );
-        assert!(code.contains("on_press: save"), "{code}");
+        assert!(code.contains(".on_press(save)"), "{code}");
     }
 
     /// Inside one it must still be cloned: the builder closure runs again on every re-render and cannot

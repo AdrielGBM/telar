@@ -114,7 +114,7 @@ pub fn home() -> Result<Box<dyn LayoutItem>, LayoutError> {
                             move |__inherited: TextStyle| __inherited.with_font_size(14.0).with_color(use_theme::<theme::LandingTheme>().muted()),
                         )?
                     };
-                    let __node_0 = button(ButtonProps { label: Box::new(move || "Get started".to_string()), fill: Box::new(move || COLOR_PRIMARY), on_press: Box::new({ let signups = signups.clone(); move || signups.update(|n| *n += 1) }), ..Default::default() })?;
+                    let __node_0 = button(ButtonProps::props().label("Get started").fill(Reactive::of(move || COLOR_PRIMARY)).on_press(Box::new({ let signups = signups.clone(); move || signups.update(|n| *n += 1) })).build())?;
                     Container::new(LayoutStyle::new().flex_row().gap(24.0).align_items(AlignItems::CENTER), children![__text_1, __text_2, __text_3, __node_0])?
                 };
                 Container::new(style_navwrap(), children![__text_0, __row_1])?
@@ -140,8 +140,8 @@ pub fn home() -> Result<Box<dyn LayoutItem>, LayoutError> {
                             )?
                         };
                         let __row_3 = {
-                            let __node_1 = button(ButtonProps { label: Box::new(move || "Get started".to_string()), fill: Box::new(move || COLOR_PRIMARY), on_press: Box::new({ let signups = signups.clone(); move || signups.update(|n| *n += 1) }), ..Default::default() })?;
-                            let __node_2 = button(ButtonProps { label: Box::new(move || "Read the docs".to_string()), outline: Box::new(move || COLOR_PRIMARY), ..Default::default() })?;
+                            let __node_1 = button(ButtonProps::props().label("Get started").fill(Reactive::of(move || COLOR_PRIMARY)).on_press(Box::new({ let signups = signups.clone(); move || signups.update(|n| *n += 1) })).build())?;
+                            let __node_2 = button(ButtonProps::props().label("Read the docs").outline(Reactive::of(move || COLOR_PRIMARY)).build())?;
                             Container::new(LayoutStyle::new().flex_row().gap(12.0).flex_wrap(), children![__node_1, __node_2])?
                         };
                         let __text_6 = {
@@ -276,10 +276,10 @@ pub fn home() -> Result<Box<dyn LayoutItem>, LayoutError> {
                     Container::new(LayoutStyle::new().flex_column().gap(8.0), children![__text_16, __text_17])?
                 };
                 let __row_5 = {
-                    let __node_3 = feature_card(FeatureCardProps { icon: "⚡", title: "Fast", body: "Software and wgpu renderers with dirty-tracking and scroll-blit detection." })?;
-                    let __node_4 = feature_card(FeatureCardProps { icon: "🧩", title: "Composable", body: "Signals, memos and reusable .rsx components compose right inside the markup." })?;
-                    let __node_5 = feature_card(FeatureCardProps { icon: "🎨", title: "Themeable", body: "Semantic color tokens resolve reactively, so dark mode is a single swap." })?;
-                    let __node_6 = feature_card(FeatureCardProps { icon: "📱", title: "Cross-platform", body: "One codebase targets desktop and Android with native event loops." })?;
+                    let __node_3 = feature_card(FeatureCardProps::props().icon("⚡").title("Fast").body("Software and wgpu renderers with dirty-tracking and scroll-blit detection.").build())?;
+                    let __node_4 = feature_card(FeatureCardProps::props().icon("🧩").title("Composable").body("Signals, memos and reusable .rsx components compose right inside the markup.").build())?;
+                    let __node_5 = feature_card(FeatureCardProps::props().icon("🎨").title("Themeable").body("Semantic color tokens resolve reactively, so dark mode is a single swap.").build())?;
+                    let __node_6 = feature_card(FeatureCardProps::props().icon("📱").title("Cross-platform").body("One codebase targets desktop and Android with native event loops.").build())?;
                     Container::new(LayoutStyle::new().flex_row().gap(24.0).flex_wrap(), children![__node_3, __node_4, __node_5, __node_6])?
                 };
                 Container::new(style_wrap().gap(28.0), children![__col_6, __row_5])?
@@ -432,7 +432,7 @@ pub fn home() -> Result<Box<dyn LayoutItem>, LayoutError> {
                     )?
                 };
                 let __row_8 = {
-                    let __node_7 = button(ButtonProps { label: Box::new(move || "Reserve a seat".to_string()), fill: Box::new(move || use_theme::<theme::LandingTheme>().accent), on_press: Box::new({ let signups = signups.clone(); move || signups.update(|n| *n += 1) }), ..Default::default() })?;
+                    let __node_7 = button(ButtonProps::props().label("Reserve a seat").fill(Reactive::of(move || use_theme::<theme::LandingTheme>().accent)).on_press(Box::new({ let signups = signups.clone(); move || signups.update(|n| *n += 1) })).build())?;
                     let __text_28 = {
                         let signups = signups.clone();
                         Text::declaring(

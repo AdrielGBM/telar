@@ -5763,6 +5763,7 @@ version = "0.1.7"
 dependencies = [
  "telar-geometry-core",
  "telar-layout-core",
+ "telar-macros",
  "telar-motion-core",
  "telar-platform-core",
  "telar-reactive-core",

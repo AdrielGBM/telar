@@ -64,7 +64,7 @@ pub fn features_reactivity() -> Result<Box<dyn LayoutItem>, LayoutError> {
     let pct = memo(move || (slider_rsx_mv.get() * 100.0) as i32);
 
     let __col_0 = {
-        let __node_0 = doc_header(DocHeaderProps { kicker: "INTERACTION", title: "Reactivity", desc: "A signal is reactive state; a memo derives from it. Read one with {$signal} and only the widgets that touch it recompute — no virtual DOM, no diffing." })?;
+        let __node_0 = doc_header(DocHeaderProps::props().kicker("INTERACTION").title("Reactivity").desc("A signal is reactive state; a memo derives from it. Read one with {$signal} and only the widgets that touch it recompute — no virtual DOM, no diffing.").build())?;
         let __node_1 = {
             let mut __slots = Slots::new();
             let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
@@ -99,20 +99,20 @@ pub fn features_reactivity() -> Result<Box<dyn LayoutItem>, LayoutError> {
                 };
                 __children.push(box_item(__text_2));
                 let __row_0 = {
-                    let __node_3 = button(ButtonProps { label: Box::new(move || "−".to_string()), outline: Box::new(move || use_theme::<core::theme::SandboxTheme>().primary()), on_press: Box::new({ let count = count.clone(); move || count.update(|n| *n = (*n - 1).max(0)) }), ..Default::default() })?;
-                    let __node_4 = button(ButtonProps { label: Box::new(move || "+".to_string()), fill: Box::new(move || use_theme::<core::theme::SandboxTheme>().primary()), on_press: Box::new({ let count = count.clone(); move || count.update(|n| *n = (*n + 1).min(10)) }), ..Default::default() })?;
-                    let __node_5 = button(ButtonProps { label: Box::new(move || "Reset".to_string()), ghost: true, on_press: Box::new({ let count = count.clone(); move || count.set(0) }), ..Default::default() })?;
+                    let __node_3 = button(ButtonProps::props().label("−").outline(Reactive::of(move || use_theme::<core::theme::SandboxTheme>().primary())).on_press(Box::new({ let count = count.clone(); move || count.update(|n| *n = (*n - 1).max(0)) })).build())?;
+                    let __node_4 = button(ButtonProps::props().label("+").fill(Reactive::of(move || use_theme::<core::theme::SandboxTheme>().primary())).on_press(Box::new({ let count = count.clone(); move || count.update(|n| *n = (*n + 1).min(10)) })).build())?;
+                    let __node_5 = button(ButtonProps::props().label("Reset").ghost(true).on_press(Box::new({ let count = count.clone(); move || count.set(0) })).build())?;
                     Container::new(LayoutStyle::new().flex_row().gap(10.0), children![__node_3, __node_4, __node_5])?
                 };
                 __children.push(box_item(__row_0));
                 __slots.extend_default(__children);
-                card(CardProps { gap: 8.0, ..Default::default() }, __slots)?
+                card(CardProps::props().gap(8.0).build(), __slots)?
             };
             __children.push(box_item(__node_2));
-            let __node_6 = code_line(CodeLineProps { code: "let count = signal(0);   let doubled = memo(move || count.get() * 2);" })?;
+            let __node_6 = code_line(CodeLineProps::props().code("let count = signal(0);   let doubled = memo(move || count.get() * 2);").build())?;
             __children.push(box_item(__node_6));
             __slots.extend_default(__children);
-            example(ExampleProps { title: "One signal, several derived readers" }, __slots)?
+            example(ExampleProps::props().title("One signal, several derived readers").build(), __slots)?
         };
         let __node_7 = {
             let mut __slots = Slots::new();
@@ -140,13 +140,13 @@ pub fn features_reactivity() -> Result<Box<dyn LayoutItem>, LayoutError> {
                 };
                 __children.push(box_item(__text_4));
                 __slots.extend_default(__children);
-                card(CardProps { gap: 8.0, ..Default::default() }, __slots)?
+                card(CardProps::props().gap(8.0).build(), __slots)?
             };
             __children.push(box_item(__node_8));
-            let __node_9 = code_line(CodeLineProps { code: "box fill:theme.primary opacity:$level      (level is a memo of count/10)" })?;
+            let __node_9 = code_line(CodeLineProps::props().code("box fill:theme.primary opacity:$level      (level is a memo of count/10)").build())?;
             __children.push(box_item(__node_9));
             __slots.extend_default(__children);
-            example(ExampleProps { title: "A reactive property — the bar's opacity tracks the same signal" }, __slots)?
+            example(ExampleProps::props().title("A reactive property — the bar's opacity tracks the same signal").build(), __slots)?
         };
         let __node_10 = {
             let mut __slots = Slots::new();
@@ -155,9 +155,9 @@ pub fn features_reactivity() -> Result<Box<dyn LayoutItem>, LayoutError> {
                 let mut __slots = Slots::new();
                 let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
                 let __row_1 = {
-                    let __node_12 = button(ButtonProps { label: Box::new(move || "Add".to_string()), fill: Box::new(move || use_theme::<core::theme::SandboxTheme>().primary()), on_press: Box::new({ let todos = todos.clone(); move || todos.update(|v| { let id = v.iter().map(|t| t.id).max().unwrap_or(0) + 1; v.push(Todo { id, label: "New task" }); }) }), ..Default::default() })?;
-                    let __node_13 = button(ButtonProps { label: Box::new(move || "Reverse".to_string()), outline: Box::new(move || use_theme::<core::theme::SandboxTheme>().primary()), on_press: Box::new({ let todos = todos.clone(); move || todos.update(|v| v.reverse()) }), ..Default::default() })?;
-                    let __node_14 = button(ButtonProps { label: Box::new(move || "Remove first".to_string()), ghost: true, on_press: Box::new({ let todos = todos.clone(); move || todos.update(|v| { if !v.is_empty() { v.remove(0); } }) }), ..Default::default() })?;
+                    let __node_12 = button(ButtonProps::props().label("Add").fill(Reactive::of(move || use_theme::<core::theme::SandboxTheme>().primary())).on_press(Box::new({ let todos = todos.clone(); move || todos.update(|v| { let id = v.iter().map(|t| t.id).max().unwrap_or(0) + 1; v.push(Todo { id, label: "New task" }); }) })).build())?;
+                    let __node_13 = button(ButtonProps::props().label("Reverse").outline(Reactive::of(move || use_theme::<core::theme::SandboxTheme>().primary())).on_press(Box::new({ let todos = todos.clone(); move || todos.update(|v| v.reverse()) })).build())?;
+                    let __node_14 = button(ButtonProps::props().label("Remove first").ghost(true).on_press(Box::new({ let todos = todos.clone(); move || todos.update(|v| { if !v.is_empty() { v.remove(0); } }) })).build())?;
                     Container::new(LayoutStyle::new().flex_row().gap(8.0), children![__node_12, __node_13, __node_14])?
                 };
                 __children.push(box_item(__row_1));
@@ -185,13 +185,13 @@ pub fn features_reactivity() -> Result<Box<dyn LayoutItem>, LayoutError> {
                 )?;
                 __children.push(box_item(__node_15));
                 __slots.extend_default(__children);
-                card(CardProps { gap: 10.0, ..Default::default() }, __slots)?
+                card(CardProps::props().gap(10.0).build(), __slots)?
             };
             __children.push(box_item(__node_11));
-            let __node_16 = code_line(CodeLineProps { code: "for todo in $todos key todo.id   >   row …   (reused/moved/dropped by key)" })?;
+            let __node_16 = code_line(CodeLineProps::props().code("for todo in $todos key todo.id   >   row …   (reused/moved/dropped by key)").build())?;
             __children.push(box_item(__node_16));
             __slots.extend_default(__children);
-            example(ExampleProps { title: "Reactive list — for over a signal, keyed and reconciled (not rebuilt)" }, __slots)?
+            example(ExampleProps::props().title("Reactive list — for over a signal, keyed and reconciled (not rebuilt)").build(), __slots)?
         };
         let __node_17 = {
             let mut __slots = Slots::new();
@@ -199,7 +199,7 @@ pub fn features_reactivity() -> Result<Box<dyn LayoutItem>, LayoutError> {
             let __node_18 = {
                 let mut __slots = Slots::new();
                 let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-                let __node_19 = button(ButtonProps { label: Box::new(move || "Toggle".to_string()), fill: Box::new(move || use_theme::<core::theme::SandboxTheme>().primary()), on_press: Box::new({ let show = show.clone(); move || show.toggle() }), ..Default::default() })?;
+                let __node_19 = button(ButtonProps::props().label("Toggle").fill(Reactive::of(move || use_theme::<core::theme::SandboxTheme>().primary())).on_press(Box::new({ let show = show.clone(); move || show.toggle() })).build())?;
                 __children.push(box_item(__node_19));
                 let __node_20 = ReactiveList::new(
                     { let show = show.clone(); move || vec![show.get()] },
@@ -239,13 +239,13 @@ pub fn features_reactivity() -> Result<Box<dyn LayoutItem>, LayoutError> {
                 )?;
                 __children.push(box_item(__node_20));
                 __slots.extend_default(__children);
-                card(CardProps { gap: 10.0, ..Default::default() }, __slots)?
+                card(CardProps::props().gap(10.0).build(), __slots)?
             };
             __children.push(box_item(__node_18));
-            let __node_21 = code_line(CodeLineProps { code: "if $show  >  …  else  …   (branch swaps; old nodes disposed, new built)" })?;
+            let __node_21 = code_line(CodeLineProps::props().code("if $show  >  …  else  …   (branch swaps; old nodes disposed, new built)").build())?;
             __children.push(box_item(__node_21));
             __slots.extend_default(__children);
-            example(ExampleProps { title: "Reactive if/else — the shown branch swaps on a signal" }, __slots)?
+            example(ExampleProps::props().title("Reactive if/else — the shown branch swaps on a signal").build(), __slots)?
         };
         let __node_22 = {
             let mut __slots = Slots::new();
@@ -261,7 +261,7 @@ pub fn features_reactivity() -> Result<Box<dyn LayoutItem>, LayoutError> {
                     )?
                 };
                 __children.push(box_item(__text_8));
-                let __node_24 = button(ButtonProps { label: Box::new(move || "Toggle panel".to_string()), fill: Box::new(move || use_theme::<core::theme::SandboxTheme>().primary()), on_press: Box::new({ let show_panel = show_panel.clone(); move || show_panel.toggle() }), ..Default::default() })?;
+                let __node_24 = button(ButtonProps::props().label("Toggle panel").fill(Reactive::of(move || use_theme::<core::theme::SandboxTheme>().primary())).on_press(Box::new({ let show_panel = show_panel.clone(); move || show_panel.toggle() })).build())?;
                 __children.push(box_item(__node_24));
                 let __lazy_0 = {
                     Lazy::new(
@@ -296,13 +296,13 @@ pub fn features_reactivity() -> Result<Box<dyn LayoutItem>, LayoutError> {
                 };
                 __children.push(box_item(__lazy_0));
                 __slots.extend_default(__children);
-                card(CardProps { gap: 10.0, ..Default::default() }, __slots)?
+                card(CardProps::props().gap(10.0).build(), __slots)?
             };
             __children.push(box_item(__node_23));
-            let __node_25 = code_line(CodeLineProps { code: "lazy when:$open  >  …   (deferred until first shown, then kept)" })?;
+            let __node_25 = code_line(CodeLineProps::props().code("lazy when:$open  >  …   (deferred until first shown, then kept)").build())?;
             __children.push(box_item(__node_25));
             __slots.extend_default(__children);
-            example(ExampleProps { title: "lazy — a subtree built on its first display, then only shown and hidden" }, __slots)?
+            example(ExampleProps::props().title("lazy — a subtree built on its first display, then only shown and hidden").build(), __slots)?
         };
         let __node_26 = {
             let mut __slots = Slots::new();
@@ -331,13 +331,13 @@ pub fn features_reactivity() -> Result<Box<dyn LayoutItem>, LayoutError> {
                 };
                 __children.push(box_item(__text_10));
                 __slots.extend_default(__children);
-                card(CardProps { gap: 10.0, ..Default::default() }, __slots)?
+                card(CardProps::props().gap(10.0).build(), __slots)?
             };
             __children.push(box_item(__node_27));
-            let __node_28 = code_line(CodeLineProps { code: "input value:$name      (tap or Tab to focus · type · ← → Home End ⌫ · Esc blurs)" })?;
+            let __node_28 = code_line(CodeLineProps::props().code("input value:$name      (tap or Tab to focus · type · ← → Home End ⌫ · Esc blurs)").build())?;
             __children.push(box_item(__node_28));
             __slots.extend_default(__children);
-            example(ExampleProps { title: "input + focus — two editable fields; Tab moves focus, each binds a signal (wrap a box for the look)" }, __slots)?
+            example(ExampleProps::props().title("input + focus — two editable fields; Tab moves focus, each binds a signal (wrap a box for the look)").build(), __slots)?
         };
         let __node_29 = {
             let mut __slots = Slots::new();
@@ -358,13 +358,13 @@ pub fn features_reactivity() -> Result<Box<dyn LayoutItem>, LayoutError> {
                 };
                 __children.push(box_item(__sbox_6));
                 __slots.extend_default(__children);
-                card(CardProps { gap: 10.0, ..Default::default() }, __slots)?
+                card(CardProps::props().gap(10.0).build(), __slots)?
             };
             __children.push(box_item(__node_30));
-            let __node_31 = code_line(CodeLineProps { code: "box on_focus(|f| $box_focused.set(f))      (Tab-focusable; drive a focus ring)" })?;
+            let __node_31 = code_line(CodeLineProps::props().code("box on_focus(|f| $box_focused.set(f))      (Tab-focusable; drive a focus ring)").build())?;
             __children.push(box_item(__node_31));
             __slots.extend_default(__children);
-            example(ExampleProps { title: "on_focus — any box can be focusable: it joins the Tab order and observes its own focus" }, __slots)?
+            example(ExampleProps::props().title("on_focus — any box can be focusable: it joins the Tab order and observes its own focus").build(), __slots)?
         };
         let __node_32 = {
             let mut __slots = Slots::new();
@@ -389,13 +389,13 @@ pub fn features_reactivity() -> Result<Box<dyn LayoutItem>, LayoutError> {
                 };
                 __children.push(box_item(__text_12));
                 __slots.extend_default(__children);
-                card(CardProps { gap: 10.0, ..Default::default() }, __slots)?
+                card(CardProps::props().gap(10.0).build(), __slots)?
             };
             __children.push(box_item(__node_33));
-            let __node_34 = code_line(CodeLineProps { code: "box on_drag(|px, _| $slider.set(px / 280))      (keeps tracking even off the track)" })?;
+            let __node_34 = code_line(CodeLineProps::props().code("box on_drag(|px, _| $slider.set(px / 280))      (keeps tracking even off the track)").build())?;
             __children.push(box_item(__node_34));
             __slots.extend_default(__children);
-            example(ExampleProps { title: "on_drag — the drag base primitive: press-and-move reports the pointer, mapped to a value" }, __slots)?
+            example(ExampleProps::props().title("on_drag — the drag base primitive: press-and-move reports the pointer, mapped to a value").build(), __slots)?
         };
         let __node_35 = {
             let mut __slots = Slots::new();
@@ -403,10 +403,10 @@ pub fn features_reactivity() -> Result<Box<dyn LayoutItem>, LayoutError> {
             let __node_36 = {
                 let mut __slots = Slots::new();
                 let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-                let __node_37 = button(ButtonProps { label: Box::new(move || "Open modal".to_string()), fill: Box::new(move || use_theme::<core::theme::SandboxTheme>().primary()), on_press: Box::new({ let show_modal = show_modal.clone(); move || show_modal.set(true) }), ..Default::default() })?;
+                let __node_37 = button(ButtonProps::props().label("Open modal").fill(Reactive::of(move || use_theme::<core::theme::SandboxTheme>().primary())).on_press(Box::new({ let show_modal = show_modal.clone(); move || show_modal.set(true) })).build())?;
                 __children.push(box_item(__node_37));
                 __slots.extend_default(__children);
-                card(CardProps { gap: 10.0, ..Default::default() }, __slots)?
+                card(CardProps::props().gap(10.0).build(), __slots)?
             };
             __children.push(box_item(__node_36));
             let __node_38 = ReactiveList::new(
@@ -433,7 +433,7 @@ pub fn features_reactivity() -> Result<Box<dyn LayoutItem>, LayoutError> {
                                             move |__inherited: TextStyle| __inherited.with_font_size(13.0).with_color(use_theme::<core::theme::SandboxTheme>().muted()),
                                         )?
                                     };
-                                    let __node_39 = button(ButtonProps { label: Box::new(move || "Close".to_string()), outline: Box::new(move || use_theme::<core::theme::SandboxTheme>().primary()), on_press: Box::new({ let show_modal = show_modal.clone(); move || show_modal.set(false) }), ..Default::default() })?;
+                                    let __node_39 = button(ButtonProps::props().label("Close").outline(Reactive::of(move || use_theme::<core::theme::SandboxTheme>().primary())).on_press(Box::new({ let show_modal = show_modal.clone(); move || show_modal.set(false) })).build())?;
                                     StyledContainer::new(LayoutStyle::new().flex_column().padding_all(24.0).gap(12.0), move |_| RectStyle { fill: Some(Paint::Solid(use_theme::<core::theme::SandboxTheme>().surface())), border: Some(Border { paint: Paint::Solid(use_theme::<core::theme::SandboxTheme>().border()), widths: [1.0; 4] }), shadow: None, radius: BorderRadius::all(12.0) }, children![__text_13, __text_14, __node_39])?.on_press(move || ())
                                 };
                                 StyledContainer::new(LayoutStyle::new().flex_column().flex_grow(1.0).align_items(AlignItems::CENTER).justify_content(JustifyContent::CENTER), move |_| RectStyle::default().with_fill(Color::rgba(0.0 / 255.0, 0.0 / 255.0, 0.0 / 255.0, 128.0 / 255.0)).with_radius(BorderRadius::zero()), children![__sbox_10])?.on_press({ let show_modal = show_modal.clone(); move || show_modal.set(false) })
@@ -449,24 +449,24 @@ pub fn features_reactivity() -> Result<Box<dyn LayoutItem>, LayoutError> {
                 0.0,
             )?;
             __children.push(box_item(__node_38));
-            let __node_40 = code_line(CodeLineProps { code: "if $open  >  overlay  >  box (scrim, on_press dismiss)  >  box (dialog)" })?;
+            let __node_40 = code_line(CodeLineProps::props().code("if $open  >  overlay  >  box (scrim, on_press dismiss)  >  box (dialog)").build())?;
             __children.push(box_item(__node_40));
             __slots.extend_default(__children);
-            example(ExampleProps { title: "overlay — a top-layer portal (modal/dropdown/toast): draws above everything, escapes clipping" }, __slots)?
+            example(ExampleProps::props().title("overlay — a top-layer portal (modal/dropdown/toast): draws above everything, escapes clipping").build(), __slots)?
         };
         let __node_41 = {
             let mut __slots = Slots::new();
             let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
             let __col_2 = {
-                let __node_42 = prop_row(PropRowProps { name: "signal(v)", values: "RwSignal<T>", about: "Reactive state. .get() .set() .update() .peek()." })?;
-                let __node_43 = prop_row(PropRowProps { name: "memo(f)", values: "Memo<T>", about: "Cached value that recomputes when its deps change." })?;
-                let __node_44 = prop_row(PropRowProps { name: "{$name}", values: "interpolation", about: "Read a signal or memo inside a string." })?;
-                let __node_45 = prop_row(PropRowProps { name: "$name", values: "in closures", about: "The handle itself, for .set / .update." })?;
+                let __node_42 = prop_row(PropRowProps::props().name("signal(v)").values("RwSignal<T>").about("Reactive state. .get() .set() .update() .peek().").build())?;
+                let __node_43 = prop_row(PropRowProps::props().name("memo(f)").values("Memo<T>").about("Cached value that recomputes when its deps change.").build())?;
+                let __node_44 = prop_row(PropRowProps::props().name("{$name}").values("interpolation").about("Read a signal or memo inside a string.").build())?;
+                let __node_45 = prop_row(PropRowProps::props().name("$name").values("in closures").about("The handle itself, for .set / .update.").build())?;
                 Container::new(LayoutStyle::new().flex_column().gap(6.0), children![__node_42, __node_43, __node_44, __node_45])?
             };
             __children.push(box_item(__col_2));
             __slots.extend_default(__children);
-            example(ExampleProps { title: "Primitives" }, __slots)?
+            example(ExampleProps::props().title("Primitives").build(), __slots)?
         };
         Container::new(LayoutStyle::new().flex_column().gap(20.0), children![__node_0, __node_1, __node_7, __node_10, __node_17, __node_22, __node_26, __node_29, __node_32, __node_35, __node_41])?
     };

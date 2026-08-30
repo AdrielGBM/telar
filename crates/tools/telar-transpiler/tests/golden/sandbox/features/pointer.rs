@@ -23,7 +23,7 @@ pub fn features_pointer() -> Result<Box<dyn LayoutItem>, LayoutError> {
     let alt = signal("no alt-click yet".to_string());
 
     let __col_0 = {
-        let __node_0 = doc_header(DocHeaderProps { kicker: "INTERACTION", title: "Pointer & drag", desc: "The pointer attributes a box can carry: which cursor it claims, which buttons start a drag, and the callbacks for moving, finishing, scrolling and alt-clicking. track_rect mirrors a laid-out rect back into a signal, which is how one box follows another." })?;
+        let __node_0 = doc_header(DocHeaderProps::props().kicker("INTERACTION").title("Pointer & drag").desc("The pointer attributes a box can carry: which cursor it claims, which buttons start a drag, and the callbacks for moving, finishing, scrolling and alt-clicking. track_rect mirrors a laid-out rect back into a signal, which is how one box follows another.").build())?;
         let __node_1 = {
             let mut __slots = Slots::new();
             let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
@@ -85,13 +85,13 @@ pub fn features_pointer() -> Result<Box<dyn LayoutItem>, LayoutError> {
                 };
                 __children.push(box_item(__row_0));
                 __slots.extend_default(__children);
-                card(CardProps { gap: 12.0, ..Default::default() }, __slots)?
+                card(CardProps::props().gap(12.0).build(), __slots)?
             };
             __children.push(box_item(__node_2));
-            let __node_3 = code_line(CodeLineProps { code: "box cursor:pointer   ·   crosshair · grab · grabbing · col_resize · row_resize · text · wait · not_allowed" })?;
+            let __node_3 = code_line(CodeLineProps::props().code("box cursor:pointer   ·   crosshair · grab · grabbing · col_resize · row_resize · text · wait · not_allowed").build())?;
             __children.push(box_item(__node_3));
             __slots.extend_default(__children);
-            example(ExampleProps { title: "cursor — what the pointer becomes over this box" }, __slots)?
+            example(ExampleProps::props().title("cursor — what the pointer becomes over this box").build(), __slots)?
         };
         let __node_4 = {
             let mut __slots = Slots::new();
@@ -145,13 +145,13 @@ pub fn features_pointer() -> Result<Box<dyn LayoutItem>, LayoutError> {
                 };
                 __children.push(box_item(__text_7));
                 __slots.extend_default(__children);
-                card(CardProps { gap: 12.0, ..Default::default() }, __slots)?
+                card(CardProps::props().gap(12.0).build(), __slots)?
             };
             __children.push(box_item(__node_5));
-            let __node_6 = code_line(CodeLineProps { code: "box track_rect:$handle …      then      box absolute inset_start:$x width:$w" })?;
+            let __node_6 = code_line(CodeLineProps::props().code("box track_rect:$handle …      then      box absolute inset_start:$x width:$w").build())?;
             __children.push(box_item(__node_6));
             __slots.extend_default(__children);
-            example(ExampleProps { title: "track_rect — mirror a laid-out rect into a signal, and position a sibling from it" }, __slots)?
+            example(ExampleProps::props().title("track_rect — mirror a laid-out rect into a signal, and position a sibling from it").build(), __slots)?
         };
         let __node_7 = {
             let mut __slots = Slots::new();
@@ -174,13 +174,13 @@ pub fn features_pointer() -> Result<Box<dyn LayoutItem>, LayoutError> {
                 };
                 __children.push(box_item(__text_8));
                 __slots.extend_default(__children);
-                card(CardProps { gap: 10.0, ..Default::default() }, __slots)?
+                card(CardProps::props().gap(10.0).build(), __slots)?
             };
             __children.push(box_item(__node_8));
-            let __node_9 = code_line(CodeLineProps { code: "box on_pointer_move:|x, y| { $at_x.set(x); $at_y.set(y) }" })?;
+            let __node_9 = code_line(CodeLineProps::props().code("box on_pointer_move:|x, y| { $at_x.set(x); $at_y.set(y) }").build())?;
             __children.push(box_item(__node_9));
             __slots.extend_default(__children);
-            example(ExampleProps { title: "on_pointer_move — every move over the box, in its own coordinates" }, __slots)?
+            example(ExampleProps::props().title("on_pointer_move — every move over the box, in its own coordinates").build(), __slots)?
         };
         let __node_10 = {
             let mut __slots = Slots::new();
@@ -202,13 +202,13 @@ pub fn features_pointer() -> Result<Box<dyn LayoutItem>, LayoutError> {
                 };
                 __children.push(box_item(__text_9));
                 __slots.extend_default(__children);
-                card(CardProps { gap: 10.0, ..Default::default() }, __slots)?
+                card(CardProps::props().gap(10.0).build(), __slots)?
             };
             __children.push(box_item(__node_11));
-            let __node_12 = code_line(CodeLineProps { code: "box on_drag:|x, _| …  on_drag_end:|x, y| …    ·   active_style(fill:…) while the press is held" })?;
+            let __node_12 = code_line(CodeLineProps::props().code("box on_drag:|x, _| …  on_drag_end:|x, y| …    ·   active_style(fill:…) while the press is held").build())?;
             __children.push(box_item(__node_12));
             __slots.extend_default(__children);
-            example(ExampleProps { title: "on_drag_end — the gesture is over, and this is where it stopped" }, __slots)?
+            example(ExampleProps::props().title("on_drag_end — the gesture is over, and this is where it stopped").build(), __slots)?
         };
         let __node_13 = {
             let mut __slots = Slots::new();
@@ -228,13 +228,13 @@ pub fn features_pointer() -> Result<Box<dyn LayoutItem>, LayoutError> {
                 };
                 __children.push(box_item(__sbox_11));
                 __slots.extend_default(__children);
-                card(CardProps { gap: 10.0, ..Default::default() }, __slots)?
+                card(CardProps::props().gap(10.0).build(), __slots)?
             };
             __children.push(box_item(__node_14));
-            let __node_15 = code_line(CodeLineProps { code: "box drag_button:secondary,auxiliary     (the primary button is always armed)" })?;
+            let __node_15 = code_line(CodeLineProps::props().code("box drag_button:secondary,auxiliary     (the primary button is always armed)").build())?;
             __children.push(box_item(__node_15));
             __slots.extend_default(__children);
-            example(ExampleProps { title: "drag_button — arm a drag on buttons other than the primary one" }, __slots)?
+            example(ExampleProps::props().title("drag_button — arm a drag on buttons other than the primary one").build(), __slots)?
         };
         let __node_16 = {
             let mut __slots = Slots::new();
@@ -274,31 +274,31 @@ pub fn features_pointer() -> Result<Box<dyn LayoutItem>, LayoutError> {
                 };
                 __children.push(box_item(__row_2));
                 __slots.extend_default(__children);
-                card(CardProps { gap: 10.0, ..Default::default() }, __slots)?
+                card(CardProps::props().gap(10.0).build(), __slots)?
             };
             __children.push(box_item(__node_17));
-            let __node_18 = code_line(CodeLineProps { code: "box on_scroll:|dx, dy| …    ·    on_alt_press:|button| …" })?;
+            let __node_18 = code_line(CodeLineProps::props().code("box on_scroll:|dx, dy| …    ·    on_alt_press:|button| …").build())?;
             __children.push(box_item(__node_18));
             __slots.extend_default(__children);
-            example(ExampleProps { title: "on_scroll and on_alt_press — the wheel, and a non-primary click" }, __slots)?
+            example(ExampleProps::props().title("on_scroll and on_alt_press — the wheel, and a non-primary click").build(), __slots)?
         };
         let __node_19 = {
             let mut __slots = Slots::new();
             let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
             let __col_2 = {
-                let __node_20 = prop_row(PropRowProps { name: "cursor", values: "pointer · crosshair · grab · …", about: "What the pointer becomes while it is over this box." })?;
-                let __node_21 = prop_row(PropRowProps { name: "track_rect", values: "$signal", about: "Mirrors this box's laid-out rect into the signal, every layout pass." })?;
-                let __node_22 = prop_row(PropRowProps { name: "drag_button", values: "secondary · auxiliary", about: "Extra buttons that may start this box's drag." })?;
-                let __node_23 = prop_row(PropRowProps { name: "on_drag / on_drag_end", values: "closure (x, y)", about: "The pointer during the gesture, and where it finished." })?;
-                let __node_24 = prop_row(PropRowProps { name: "on_pointer_move", values: "closure (x, y)", about: "Every move over the box, whether or not a button is down." })?;
-                let __node_25 = prop_row(PropRowProps { name: "on_scroll", values: "closure (dx, dy)", about: "Wheel or trackpad deltas over the box." })?;
-                let __node_26 = prop_row(PropRowProps { name: "on_alt_press", values: "closure (button)", about: "A press from a non-primary button." })?;
-                let __node_27 = prop_row(PropRowProps { name: "active_style", values: "fill: · stroke: · radius:", about: "Paint applied while the box is held down, like hover_style for hover." })?;
+                let __node_20 = prop_row(PropRowProps::props().name("cursor").values("pointer · crosshair · grab · …").about("What the pointer becomes while it is over this box.").build())?;
+                let __node_21 = prop_row(PropRowProps::props().name("track_rect").values("$signal").about("Mirrors this box's laid-out rect into the signal, every layout pass.").build())?;
+                let __node_22 = prop_row(PropRowProps::props().name("drag_button").values("secondary · auxiliary").about("Extra buttons that may start this box's drag.").build())?;
+                let __node_23 = prop_row(PropRowProps::props().name("on_drag / on_drag_end").values("closure (x, y)").about("The pointer during the gesture, and where it finished.").build())?;
+                let __node_24 = prop_row(PropRowProps::props().name("on_pointer_move").values("closure (x, y)").about("Every move over the box, whether or not a button is down.").build())?;
+                let __node_25 = prop_row(PropRowProps::props().name("on_scroll").values("closure (dx, dy)").about("Wheel or trackpad deltas over the box.").build())?;
+                let __node_26 = prop_row(PropRowProps::props().name("on_alt_press").values("closure (button)").about("A press from a non-primary button.").build())?;
+                let __node_27 = prop_row(PropRowProps::props().name("active_style").values("fill: · stroke: · radius:").about("Paint applied while the box is held down, like hover_style for hover.").build())?;
                 Container::new(LayoutStyle::new().flex_column().gap(6.0), children![__node_20, __node_21, __node_22, __node_23, __node_24, __node_25, __node_26, __node_27])?
             };
             __children.push(box_item(__col_2));
             __slots.extend_default(__children);
-            example(ExampleProps { title: "Attributes" }, __slots)?
+            example(ExampleProps::props().title("Attributes").build(), __slots)?
         };
         Container::new(LayoutStyle::new().flex_column().gap(20.0), children![__node_0, __node_1, __node_4, __node_7, __node_10, __node_13, __node_16, __node_19])?
     };

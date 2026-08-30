@@ -1,8 +1,9 @@
 use std::rc::Rc;
+use telar_macros::Props;
 
 use geometry_core::Transform;
 use layout_core::{LayoutError, LayoutStyle};
-use reactive_core::{RwSignal, signal};
+use reactive_core::{Reactive, RwSignal, signal};
 use renderer_core::{Border, BorderRadius, Color, RectStyle, ShapeStyle};
 use ui_core::focus::Role;
 use ui_core::{LayoutItem, StyledContainer, box_item, box_transform};
@@ -31,44 +32,38 @@ fn track_box(width: f32) -> LayoutStyle {
 /// hand. High-level sugar over the primitives; lives in `ui-components`, not the kernel, so an app can drop it.
 /// `value` is `Option` so `Props` can derive `Default`: `None` is uncontrolled (the widget owns its own
 /// signal), `Some` is caller-bound.
+#[derive(Props)]
 pub struct SliderProps {
     /// Bound value, reported in `min..=max` (out-of-range inputs are clamped on every drag report, not here).
     /// `None` (the default) is uncontrolled — the widget makes its own `signal(min)`.
+    #[props(some, into, default)]
     pub value: Option<RwSignal<f32>>,
     /// Fill/thumb accent. `Color::TRANSPARENT` (the default) means "unset": fall back to the theme accent.
-    pub color: Box<dyn Fn() -> Color>,
+    #[props(into, default = Reactive::of(|| Color::TRANSPARENT))]
+    pub color: Reactive<Color>,
     /// Track (rail) colour; `Color::TRANSPARENT` (the default) means "unset": fall back to the theme's muted token.
-    pub track_color: Box<dyn Fn() -> Color>,
+    #[props(into, default = Reactive::of(|| Color::TRANSPARENT))]
+    pub track_color: Reactive<Color>,
     /// Track width in px. `0.0` (the default) means "unset" — the slider uses `220.0`.
+    #[props(default)]
     pub width: f32,
     /// Lower bound of the reported value. Default `0.0`.
+    #[props(default)]
     pub min: f32,
     /// Upper bound of the reported value. Default `1.0`. If `max <= min` (the degenerate/unset state), the
     /// slider falls back to `min=0.0, max=1.0` rather than dividing by zero.
+    #[props(default)]
     pub max: f32,
     /// Quantization step applied to the reported value. `0.0` (the default) means "unset" — continuous, no
     /// snapping, following the same `0.0 == unset` sentinel convention as `width`.
+    #[props(default)]
     pub step: f32,
     /// A small caption stacked above the track; omitted entirely (no extra row) when empty.
-    pub label: Box<dyn Fn() -> String>,
+    #[props(into, default)]
+    pub label: Reactive<String>,
     /// Fires with the new `min..=max` value on every drag report (the press and each subsequent move).
+    #[props(some, default)]
     pub on_change: Option<Box<dyn Fn(f32)>>,
-}
-
-impl Default for SliderProps {
-    fn default() -> Self {
-        Self {
-            value: None,
-            color: Box::new(|| Color::TRANSPARENT),
-            track_color: Box::new(|| Color::TRANSPARENT),
-            width: 0.0,
-            min: 0.0,
-            max: 1.0,
-            step: 0.0,
-            label: Box::new(String::new),
-            on_change: None,
-        }
-    }
 }
 
 pub fn slider(props: SliderProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
@@ -89,7 +84,6 @@ pub fn slider(props: SliderProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let value = value.unwrap_or_else(|| signal(min));
     let width = if width > 0.0 { width } else { 220.0 };
     // Shared across the fill and thumb style closures (a `Box<dyn Fn>` is not `Clone`, an `Rc` handle is).
-    let color: shared::ReactiveColor = Rc::from(color);
     // The drag and the arrow keys are two ways into one commit, so the callback has to reach both.
     let on_change: Option<Rc<dyn Fn(f32)>> = on_change.map(|f| -> Rc<dyn Fn(f32)> { Rc::from(f) });
     let key_on_change = on_change.clone();
@@ -103,7 +97,7 @@ pub fn slider(props: SliderProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let fill = StyledContainer::new(
         LayoutStyle::new().absolute_fill(),
         move |_r| {
-            let fill = shared::resolve(fill_color.as_ref(), || shared::accent());
+            let fill = shared::resolve(&fill_color, shared::accent);
             RectStyle::default()
                 .with_fill(fill)
                 .with_radius(BorderRadius::all(track_height() / 2.0))
@@ -125,7 +119,7 @@ pub fn slider(props: SliderProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let thumb = StyledContainer::new(
         thumb_box(),
         move |_r| {
-            let fill = shared::resolve(thumb_color.as_ref(), || shared::accent());
+            let fill = shared::resolve(&thumb_color, shared::accent);
             RectStyle::default()
                 .with_fill(fill)
                 .with_border(Border::uniform(Color::WHITE, 2.0))
@@ -144,7 +138,7 @@ pub fn slider(props: SliderProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let track = StyledContainer::new(
         track_box(width),
         move |_r| {
-            let fill = shared::resolve(track_color.as_ref(), shared::muted);
+            let fill = shared::resolve(&track_color, shared::muted);
             RectStyle::default()
                 .with_fill(fill)
                 .with_radius(BorderRadius::all(track_height() / 2.0))
@@ -224,12 +218,7 @@ mod tests {
     fn drag_to_midpoint_sets_value_half() {
         crate::test_support::fresh_layout_runtime();
         let value = signal(0.0f32);
-        let mut widget = slider(SliderProps {
-            value: Some(value),
-            width: 200.0,
-            ..Default::default()
-        })
-        .unwrap();
+        let mut widget = slider(SliderProps::props().value(value).width(200.0).build()).unwrap();
         let rect = lay_out(widget.layout_node());
 
         widget.on_event(&press((rect.x + 100.0) as f64, (rect.y + 4.0) as f64));
@@ -252,7 +241,7 @@ mod tests {
     #[test]
     fn uncontrolled_slider_builds_with_default_value() {
         crate::test_support::fresh_layout_runtime();
-        let result = slider(SliderProps::default());
+        let result = slider(SliderProps::props().build());
         assert!(result.is_ok());
     }
 
@@ -262,11 +251,12 @@ mod tests {
         let seen: Rc<Cell<f32>> = Rc::new(Cell::new(-1.0));
         let sink = seen.clone();
         crate::test_support::fresh_layout_runtime();
-        let mut widget = slider(SliderProps {
-            width: 100.0,
-            on_change: Some(Box::new(move |v| sink.set(v))),
-            ..Default::default()
-        })
+        let mut widget = slider(
+            SliderProps::props()
+                .width(100.0)
+                .on_change(Box::new(move |v| sink.set(v)))
+                .build(),
+        )
         .unwrap();
         let rect = lay_out(widget.layout_node());
 
@@ -283,13 +273,14 @@ mod tests {
     fn custom_range_maps_midpoint_to_range_midpoint() {
         crate::test_support::fresh_layout_runtime();
         let value = signal(0.0f32);
-        let mut widget = slider(SliderProps {
-            value: Some(value),
-            width: 200.0,
-            min: 0.0,
-            max: 100.0,
-            ..Default::default()
-        })
+        let mut widget = slider(
+            SliderProps::props()
+                .value(value)
+                .width(200.0)
+                .min(0.0)
+                .max(100.0)
+                .build(),
+        )
         .unwrap();
         let rect = lay_out(widget.layout_node());
 
@@ -306,14 +297,15 @@ mod tests {
     fn step_snaps_value_to_nearest_step() {
         crate::test_support::fresh_layout_runtime();
         let value = signal(0.0f32);
-        let mut widget = slider(SliderProps {
-            value: Some(value),
-            width: 100.0,
-            min: 0.0,
-            max: 100.0,
-            step: 10.0,
-            ..Default::default()
-        })
+        let mut widget = slider(
+            SliderProps::props()
+                .value(value)
+                .width(100.0)
+                .min(0.0)
+                .max(100.0)
+                .step(10.0)
+                .build(),
+        )
         .unwrap();
         let rect = lay_out(widget.layout_node());
 
@@ -330,10 +322,7 @@ mod tests {
     #[test]
     fn label_builds_without_panicking() {
         crate::test_support::fresh_layout_runtime();
-        let result = slider(SliderProps {
-            label: Box::new(|| "Volume".to_string()),
-            ..Default::default()
-        });
+        let result = slider(SliderProps::props().label("Volume").build());
         assert!(result.is_ok());
     }
 }

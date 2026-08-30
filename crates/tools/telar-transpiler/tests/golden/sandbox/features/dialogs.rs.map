@@ -112,5 +112,5 @@
 111	.
 
 # verbatim expression spans: rsx[start..end] -> gen[start] `source text`
-754..780	1828	`|| open_overlay("confirm")`
-1181..1203	3894	`|| open_overlay("nav")`
+754..780	1817	`|| open_overlay("confirm")`
+1181..1203	3823	`|| open_overlay("nav")`

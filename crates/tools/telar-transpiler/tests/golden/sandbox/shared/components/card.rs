@@ -7,17 +7,12 @@
 // radius:12 pad:16) lives here once instead of inline at every call site. `gap` spaces the stacked
 // body children (pass 0 for a single child). `pad` overrides the 16px inset via the `= 16.0` inline
 // default, so an omitted `pad` is 16 while `pad:0` genuinely means zero. An optional "header" slot renders above the body.
+#[derive(::telar::Props)]
 pub struct SharedComponentsCardProps {
+    #[props(default)]
     pub gap: f32,
+    #[props(default = 16.0)]
     pub pad: f32,
-}
-impl Default for SharedComponentsCardProps {
-    fn default() -> Self {
-        Self {
-            gap: Default::default(),
-            pad: 16.0,
-        }
-    }
 }
 
 #[allow(dead_code, unused_variables, unused_mut)]
@@ -64,7 +59,7 @@ pub fn shared_components_card_preview_0() -> Result<Box<dyn LayoutItem>, LayoutE
         };
         __children.push(box_item(__text_2));
         __slots.extend_default(__children);
-        card(CardProps { gap: 8.0, ..Default::default() }, __slots)?
+        card(CardProps::props().gap(8.0).build(), __slots)?
     };
     Ok(Box::new(__node_0))
 }

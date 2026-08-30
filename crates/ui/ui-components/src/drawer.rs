@@ -1,6 +1,7 @@
 use layout_core::{AlignItems, JustifyContent, LayoutError, LayoutStyle};
-use reactive_core::RwSignal;
+use reactive_core::{Reactive, RwSignal};
 use renderer_core::{Border, Color, RectStyle, ShapeStyle};
+use telar_macros::Props;
 use ui_core::{LayoutItem, Slots, StyledContainer, box_item};
 
 use crate::scrim;
@@ -23,34 +24,28 @@ fn panel_gap() -> f32 {
 /// The panel snaps in (no slide animation): the overlay is built only while open, so there is no off-screen
 /// frame to animate from. A slide-in (a `motion_core::Animated<f32>` x-offset kept mounted across the close
 /// transition) is a follow-up.
+#[derive(Props)]
 pub struct DrawerProps {
     /// Bound open/close state. `None` (the default) never opens; `Some` drives the drawer.
+    #[props(some, into, default)]
     pub open: Option<RwSignal<bool>>,
     /// Names this drawer, so anything can open it with `open_overlay(id)` without holding its signal. `""`
     /// (the default) leaves it unnamed. Ignored when `open` is bound.
+    #[props(default = "")]
     pub id: &'static str,
     /// Which edge the panel is pinned to: `"left"` (the default) or `"right"`.
+    #[props(default = "left")]
     pub side: &'static str,
     /// Panel width in logical px. `0.0` (the default) means "unset" -> `DEFAULT_WIDTH`.
+    #[props(default)]
     pub width: f32,
     /// Runs after the drawer sets `open = false`, so a caller can react to dismissal.
+    #[props(some, default)]
     pub on_close: Option<Box<dyn Fn()>>,
     /// Panel surface colour. `Color::TRANSPARENT` (the default) means "unset" -> the theme's `surface`. A closure
     /// (re-read every frame) so a theme token or `$signal` colour re-colours live.
-    pub color: Box<dyn Fn() -> Color>,
-}
-
-impl Default for DrawerProps {
-    fn default() -> Self {
-        Self {
-            open: None,
-            id: "",
-            side: "left",
-            width: 0.0,
-            on_close: None,
-            color: Box::new(|| Color::TRANSPARENT),
-        }
-    }
+    #[props(into, default = Reactive::of(|| Color::TRANSPARENT))]
+    pub color: Reactive<Color>,
 }
 
 pub fn drawer(props: DrawerProps, mut slots: Slots) -> Result<Box<dyn LayoutItem>, LayoutError> {
@@ -83,7 +78,7 @@ fn build_open_drawer(
     width: f32,
     justify: JustifyContent,
     body: Vec<Box<dyn LayoutItem>>,
-    color: Box<dyn Fn() -> Color>,
+    color: Reactive<Color>,
     dismiss: scrim::DismissFn,
 ) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let sheet = move || {
@@ -97,7 +92,7 @@ fn build_open_drawer(
         sheet(),
         move |_r| {
             RectStyle::default()
-                .with_fill(shared::resolve(color.as_ref(), shared::surface))
+                .with_fill(shared::resolve(&color, shared::surface))
                 .with_border(Border::uniform(shared::border(), 1.0))
         },
         body,
@@ -153,15 +148,7 @@ mod tests {
         crate::test_support::fresh_layout_runtime();
         let open = signal(false);
         let slots = slot_with_body("Drawer body");
-        let drawer = drawer(
-            DrawerProps {
-                open: Some(open),
-                side: "right",
-                ..Default::default()
-            },
-            slots,
-        )
-        .unwrap();
+        let drawer = drawer(DrawerProps::props().open(open).side("right").build(), slots).unwrap();
 
         let root = new_container(
             LayoutStyle::new().flex_column().width(400.0).height(400.0),
@@ -198,7 +185,7 @@ mod tests {
     fn unbound_drawer_renders_nothing() {
         crate::test_support::fresh_layout_runtime();
         let slots = slot_with_body("Drawer body");
-        let drawer = drawer(DrawerProps::default(), slots).unwrap();
+        let drawer = drawer(DrawerProps::props().build(), slots).unwrap();
         let tree = ComponentList::new(drawer);
         assert!(!find_text(&tree.commands(), "Drawer body"));
     }

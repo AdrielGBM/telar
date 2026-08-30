@@ -15,15 +15,15 @@ use renderer_core::TextWrap;
 use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 use std::time::{Duration, Instant};
+use telar_macros::Props;
 
 use layout_core::{AlignItems, JustifyContent, LayoutError, LayoutStyle, Margin};
-use reactive_core::RwSignal;
-use renderer_core::{RectStyle, ShapeStyle};
+use reactive_core::{Reactive, RwSignal};
+use renderer_core::{Color, RectStyle, ShapeStyle};
 use ui_core::focus::Role;
 use ui_core::{Container, LayoutItem, Slots, StyledContainer, Text, box_item, use_context};
 
 use crate::shared;
-use crate::shared::props_default;
 
 /// A row's hint and a group's heading, as shares of the label they sit with, at the alpha that makes them
 /// read as secondary without becoming a second colour a theme has to answer for.
@@ -44,7 +44,7 @@ struct ListState {
     highlighted: RwSignal<Option<u32>>,
     /// The bound choice, for a list that has one (`select`) rather than one-shot actions (`menu`).
     selected: Option<RwSignal<u32>>,
-    color: shared::ReactiveColor,
+    color: Reactive<Color>,
     rows: RefCell<Vec<Row>>,
     /// A cursor asked for before there was anything to put it on. Opening with the down arrow happens in a
     /// key handler, and the rows are built on the flush after it returns, so the request has to wait for them.
@@ -58,11 +58,11 @@ struct ListState {
 struct Row {
     /// Whether the keyboard cursor may land here — a closure, not a flag, so a row that becomes disabled
     /// while the panel is open stops being a stop straight away instead of at the next rebuild.
-    reachable: Rc<dyn Fn() -> bool>,
+    reachable: Reactive<bool>,
     /// What type-ahead matches against, for the same reason a closure: a row whose label tracks a signal is
     /// findable by what it says now. Empty for a piece that is not a destination, and for a row written with
     /// markup children instead of a label — there is no text to match, so nothing claims to match it.
-    label: Rc<dyn Fn() -> String>,
+    label: Reactive<String>,
 }
 
 /// How long a pause ends a type-ahead query. Past it the next character starts a fresh search rather than
@@ -81,7 +81,7 @@ impl ListContext {
         pick: Rc<dyn Fn(u32)>,
         highlighted: RwSignal<Option<u32>>,
         selected: Option<RwSignal<u32>>,
-        color: shared::ReactiveColor,
+        color: Reactive<Color>,
     ) -> Self {
         Self(Rc::new(ListState {
             pick,
@@ -124,7 +124,7 @@ impl ListContext {
         // Cloned out of the borrow before it is called: a label may read a signal, and reading one can flush
         // effects that come back through the registry.
         let label = self.0.rows.borrow().get(index as usize)?.label.clone();
-        Some(label())
+        Some(label.get())
     }
 
     /// Puts the cursor on the first row that can take it, as soon as such a row exists. See [`ListState::seed`].
@@ -143,7 +143,7 @@ impl ListContext {
 
     /// Registers a row and hands it the index it will commit. Called by each piece as it builds itself, so
     /// the order is the order they are written in.
-    fn claim(&self, reachable: Rc<dyn Fn() -> bool>, label: Rc<dyn Fn() -> String>) -> u32 {
+    fn claim(&self, reachable: Reactive<bool>, label: Reactive<String>) -> u32 {
         let index = {
             let mut rows = self.0.rows.borrow_mut();
             rows.push(Row {
@@ -153,7 +153,7 @@ impl ListContext {
             rows.len() as u32 - 1
         };
         // Outside the borrow: `set` flushes, and an effect that reads the cursor would re-enter the registry.
-        if self.0.seed.get() && reachable() {
+        if self.0.seed.get() && reachable.get() {
             self.0.seed.set(false);
             self.0.highlighted.set(Some(index));
         }
@@ -163,7 +163,7 @@ impl ListContext {
     /// Registers a piece that holds a position without being one — a rule, a heading. It takes an index so the
     /// rows around it keep the ones they commit with, and the keyboard passes straight over it.
     fn claim_unreachable(&self) {
-        self.claim(Rc::new(|| false), Rc::new(String::new));
+        self.claim(Reactive::of(|| false), Reactive::default());
     }
 
     pub(crate) fn len(&self) -> u32 {
@@ -191,7 +191,7 @@ impl ListContext {
         // At most one lap: a list whose every row is unreachable must not spin.
         (1..=n).find_map(|k| {
             let i = (start + delta.signum() * k).rem_euclid(n);
-            (rows[i as usize].reachable)().then_some(i as u32)
+            rows[i as usize].reachable.get().then_some(i as u32)
         })
     }
 
@@ -248,7 +248,7 @@ impl ListContext {
                 return None;
             }
             let row = &rows[i];
-            ((row.reachable)() && (row.label)().to_lowercase().starts_with(needle))
+            (row.reachable.get() && row.label.get().to_lowercase().starts_with(needle))
                 .then_some(i as u32)
         })
     }
@@ -274,30 +274,28 @@ impl ListContext {
 /// Outside any list it still builds, as a plain row that fires its own `on_press`. That is deliberate: the
 /// mistake of writing an item somewhere it has no parent is made in markup, and a component that panicked on
 /// it would report a markup error as a crash in Rust nobody wrote.
+#[derive(Props)]
 pub struct ItemProps {
-    pub label: Box<dyn Fn() -> String>,
+    #[props(into, default)]
+    pub label: Reactive<String>,
     /// Greys the row, takes it out of the keyboard's path, and stops it committing anything.
-    pub disabled: Box<dyn Fn() -> bool>,
+    #[props(into, default)]
+    pub disabled: Reactive<bool>,
     /// Draws a tick on the row — for a menu of toggles, where the row is a *state* rather than an action.
     ///
     /// `Option` rather than a closure defaulting to `false`, so the row can tell "no tick here" from "a tick
     /// that is currently off". It reserves the column either way once it is written, because a tick column
     /// that appeared with the first tick would shift every label beside it.
-    pub checked: Option<Box<dyn Fn() -> bool>>,
+    #[props(some, into, default)]
+    pub checked: Option<Reactive<bool>>,
     /// Trailing text, quiet: a keyboard shortcut, a count, a units suffix. `Option` for the same reason as
     /// [`checked`](Self::checked).
-    pub hint: Option<Box<dyn Fn() -> String>>,
+    #[props(some, into, default)]
+    pub hint: Option<Reactive<String>>,
     /// Fired when the row is committed, on top of whatever the enclosing list does with the index.
+    #[props(some, default)]
     pub on_press: Option<Box<dyn Fn()>>,
 }
-
-props_default!(ItemProps {
-    label: text,
-    disabled: flag,
-    checked: none,
-    hint: none,
-    on_press: none,
-});
 
 pub fn item(props: ItemProps, children: Slots) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let ItemProps {
@@ -307,12 +305,10 @@ pub fn item(props: ItemProps, children: Slots) -> Result<Box<dyn LayoutItem>, La
         hint,
         on_press,
     } = props;
-    let disabled: Rc<dyn Fn() -> bool> = Rc::from(disabled);
-    let label: Rc<dyn Fn() -> String> = Rc::from(label);
     let list = use_context::<ListContext>();
     let index = list.as_ref().map(|ctx| {
         let disabled = disabled.clone();
-        ctx.claim(Rc::new(move || !disabled()), label.clone())
+        ctx.claim(Reactive::of(move || !disabled.get()), label.clone())
     });
     if let Some(bare) = declared_placeholder(&list) {
         return bare;
@@ -322,7 +318,7 @@ pub fn item(props: ItemProps, children: Slots) -> Result<Box<dyn LayoutItem>, La
     if let Some(checked) = checked {
         content.push(box_item(Text::declaring(
             move || {
-                if checked() {
+                if checked.get() {
                     "✓".into()
                 } else {
                     String::new()
@@ -338,7 +334,7 @@ pub fn item(props: ItemProps, children: Slots) -> Result<Box<dyn LayoutItem>, La
     let supplied = given.take_default();
     if supplied.is_empty() {
         content.push(box_item(Text::declaring(
-            move || label(),
+            move || label.get(),
             LayoutStyle::new(),
             |t| shared::control_text(t, 1.0).with_text_wrap(TextWrap::NoWrap),
         )?));
@@ -346,9 +342,11 @@ pub fn item(props: ItemProps, children: Slots) -> Result<Box<dyn LayoutItem>, La
         content.extend(supplied);
     }
     if let Some(hint) = hint {
-        content.push(box_item(Text::declaring(hint, LayoutStyle::new(), |t| {
-            shared::quiet(t, HINT_RATIO).with_text_wrap(TextWrap::NoWrap)
-        })?));
+        content.push(box_item(Text::declaring(
+            move || hint.get(),
+            LayoutStyle::new(),
+            |t| shared::quiet(t, HINT_RATIO).with_text_wrap(TextWrap::NoWrap),
+        )?));
     }
 
     let row_style = {
@@ -379,7 +377,7 @@ pub fn item(props: ItemProps, children: Slots) -> Result<Box<dyn LayoutItem>, La
 
     let row = StyledContainer::new(row_layout(), row_style, content)?
         .hover_style(hover_style)
-        .disabled(move || disabled())
+        .disabled(move || disabled.get())
         .on_press(commit);
     // Announced without becoming a Tab stop: the list is driven by arrows and type-ahead from the trigger, so
     // a reader has to be able to describe the open panel while Tab keeps treating it as one control.
@@ -414,16 +412,10 @@ pub fn separator() -> Result<Box<dyn LayoutItem>, LayoutError> {
 }
 
 /// A heading over the rows beneath it. Also unreachable: it names a group, it is not one of its members.
+#[derive(Props)]
 pub struct GroupProps {
-    pub label: Box<dyn Fn() -> String>,
-}
-
-impl Default for GroupProps {
-    fn default() -> Self {
-        Self {
-            label: Box::new(String::new),
-        }
-    }
+    #[props(into, default)]
+    pub label: Reactive<String>,
 }
 
 pub fn group(props: GroupProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
@@ -434,9 +426,11 @@ pub fn group(props: GroupProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
     if let Some(bare) = declared_placeholder(&list) {
         return bare;
     }
-    let text = Text::declaring(props.label, LayoutStyle::new(), |t| {
-        shared::quiet(t, HEADING_RATIO).with_text_wrap(TextWrap::NoWrap)
-    })?;
+    let text = Text::declaring(
+        move || props.label.get(),
+        LayoutStyle::new(),
+        |t| shared::quiet(t, HEADING_RATIO).with_text_wrap(TextWrap::NoWrap),
+    )?;
     let heading = StyledContainer::new(
         LayoutStyle::new()
             .flex_row()
@@ -476,11 +470,11 @@ impl ListContext {
             return self.hover_style();
         }
         let is_selected = self.0.selected.as_ref().is_some_and(|s| s.get() == index);
-        crate::dropdown::option_row_style(is_selected, self.0.color.as_ref())
+        crate::dropdown::option_row_style(is_selected, &self.0.color)
     }
 
     fn hover_style(&self) -> RectStyle {
-        crate::dropdown::option_row_hover_style(self.0.color.as_ref())
+        crate::dropdown::option_row_hover_style(&self.0.color)
     }
 }
 
@@ -499,11 +493,10 @@ mod tests {
     fn a_hint_fades_the_ink_of_the_row_it_trails() {
         crate::test_support::fresh_layout_runtime();
         let row = item(
-            ItemProps {
-                label: Box::new(|| "Move".to_string()),
-                hint: Some(Box::new(|| "⌘G".to_string())),
-                ..Default::default()
-            },
+            ItemProps::props()
+                .label("Move")
+                .hint(Reactive::from("⌘G"))
+                .build(),
             Slots::new(),
         )
         .unwrap();

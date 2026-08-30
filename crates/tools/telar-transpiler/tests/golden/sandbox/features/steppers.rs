@@ -13,7 +13,7 @@ pub fn features_steppers() -> Result<Box<dyn LayoutItem>, LayoutError> {
     let last_change = signal("no change yet".to_string());
 
     let __col_0 = {
-        let __node_0 = doc_header(DocHeaderProps { kicker: "INTERACTION", title: "Stepper", desc: "stepper is a numeric input with − / + buttons that step a bound value within min/max. A component built on the button primitive; the value reads back in your own range, no memo needed." })?;
+        let __node_0 = doc_header(DocHeaderProps::props().kicker("INTERACTION").title("Stepper").desc("stepper is a numeric input with − / + buttons that step a bound value within min/max. A component built on the button primitive; the value reads back in your own range, no memo needed.").build())?;
         let __node_1 = {
             let mut __slots = Slots::new();
             let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
@@ -21,7 +21,7 @@ pub fn features_steppers() -> Result<Box<dyn LayoutItem>, LayoutError> {
                 let mut __slots = Slots::new();
                 let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
                 let __row_0 = {
-                    let __node_3 = stepper(StepperProps { value: Some(qty.clone()), min: 0.0, max: 10.0, step: 1.0, ..Default::default() })?;
+                    let __node_3 = stepper(StepperProps::props().value(qty.clone()).min(0.0).max(10.0).step(1.0).build())?;
                     let __text_0 = {
                         let qty = qty.clone();
                         Text::declaring(
@@ -34,13 +34,13 @@ pub fn features_steppers() -> Result<Box<dyn LayoutItem>, LayoutError> {
                 };
                 __children.push(box_item(__row_0));
                 __slots.extend_default(__children);
-                card(CardProps { gap: 10.0, ..Default::default() }, __slots)?
+                card(CardProps::props().gap(10.0).build(), __slots)?
             };
             __children.push(box_item(__node_2));
-            let __node_4 = code_line(CodeLineProps { code: "stepper value:$qty min:0 max:10 step:1" })?;
+            let __node_4 = code_line(CodeLineProps::props().code("stepper value:$qty min:0 max:10 step:1").build())?;
             __children.push(box_item(__node_4));
             __slots.extend_default(__children);
-            example(ExampleProps { title: "stepper — bound value, clamped to min/max, stepped by step" }, __slots)?
+            example(ExampleProps::props().title("stepper — bound value, clamped to min/max, stepped by step").build(), __slots)?
         };
         let __node_5 = {
             let mut __slots = Slots::new();
@@ -49,7 +49,7 @@ pub fn features_steppers() -> Result<Box<dyn LayoutItem>, LayoutError> {
                 let mut __slots = Slots::new();
                 let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
                 let __row_1 = {
-                    let __node_7 = stepper(StepperProps { value: Some(seats.clone()), min: 1.0, max: 8.0, step: 1.0, on_change: Some(Box::new({ let last_change = last_change.clone(); move |v| last_change.set(format!("stepped to {v:.0}")) })), ..Default::default() })?;
+                    let __node_7 = stepper(StepperProps::props().value(seats.clone()).min(1.0).max(8.0).step(1.0).on_change(Box::new({ let last_change = last_change.clone(); move |v| last_change.set(format!("stepped to {v:.0}")) })).build())?;
                     let __text_1 = {
                         let last_change = last_change.clone();
                         Text::declaring(
@@ -62,27 +62,27 @@ pub fn features_steppers() -> Result<Box<dyn LayoutItem>, LayoutError> {
                 };
                 __children.push(box_item(__row_1));
                 __slots.extend_default(__children);
-                card(CardProps { gap: 10.0, ..Default::default() }, __slots)?
+                card(CardProps::props().gap(10.0).build(), __slots)?
             };
             __children.push(box_item(__node_6));
-            let __node_8 = code_line(CodeLineProps { code: "stepper value:$seats on_change:|v| $last_change.set(…)   (the binding still updates on its own)" })?;
+            let __node_8 = code_line(CodeLineProps::props().code("stepper value:$seats on_change:|v| $last_change.set(…)   (the binding still updates on its own)").build())?;
             __children.push(box_item(__node_8));
             __slots.extend_default(__children);
-            example(ExampleProps { title: "on_change — a callback beside the binding, for the work a tap has to trigger" }, __slots)?
+            example(ExampleProps::props().title("on_change — a callback beside the binding, for the work a tap has to trigger").build(), __slots)?
         };
         let __node_9 = {
             let mut __slots = Slots::new();
             let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
             let __col_1 = {
-                let __node_10 = prop_row(PropRowProps { name: "value", values: "signal", about: "the bound number, reactive." })?;
-                let __node_11 = prop_row(PropRowProps { name: "min / max", values: "number", about: "clamp range; an unset max is unbounded." })?;
-                let __node_12 = prop_row(PropRowProps { name: "step", values: "number", about: "increment per − / + tap (default 1)." })?;
-                let __node_13 = prop_row(PropRowProps { name: "on_change", values: "closure", about: "fires with the new value on each tap." })?;
+                let __node_10 = prop_row(PropRowProps::props().name("value").values("signal").about("the bound number, reactive.").build())?;
+                let __node_11 = prop_row(PropRowProps::props().name("min / max").values("number").about("clamp range; an unset max is unbounded.").build())?;
+                let __node_12 = prop_row(PropRowProps::props().name("step").values("number").about("increment per − / + tap (default 1).").build())?;
+                let __node_13 = prop_row(PropRowProps::props().name("on_change").values("closure").about("fires with the new value on each tap.").build())?;
                 Container::new(LayoutStyle::new().flex_column().gap(6.0), children![__node_10, __node_11, __node_12, __node_13])?
             };
             __children.push(box_item(__col_1));
             __slots.extend_default(__children);
-            example(ExampleProps { title: "Attributes" }, __slots)?
+            example(ExampleProps::props().title("Attributes").build(), __slots)?
         };
         Container::new(LayoutStyle::new().flex_column().gap(20.0), children![__node_0, __node_1, __node_5, __node_9])?
     };

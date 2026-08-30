@@ -62,7 +62,7 @@ pub fn features_background() -> Result<Box<dyn LayoutItem>, LayoutError> {
     let beat = motion::Animated::<f32>::new(1.0, motion::spring(170.0, 12.0));
 
     let __col_0 = {
-        let __node_0 = doc_header(DocHeaderProps { kicker: "CONCURRENCY", title: "Background work", desc: "Signals are !Send, so a worker thread can never write one. spawn_task and spawn_stream are the bridge: the work and its values cross the thread boundary, the callback stays here and runs on the UI thread." })?;
+        let __node_0 = doc_header(DocHeaderProps::props().kicker("CONCURRENCY").title("Background work").desc("Signals are !Send, so a worker thread can never write one. spawn_task and spawn_stream are the bridge: the work and its values cross the thread boundary, the callback stays here and runs on the UI thread.").build())?;
         let __node_1 = {
             let mut __slots = Slots::new();
             let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
@@ -85,7 +85,7 @@ pub fn features_background() -> Result<Box<dyn LayoutItem>, LayoutError> {
                         |__cond: &bool| *__cond,
                         move |__cond: bool| -> Result<Box<dyn LayoutItem>, LayoutError> {
                             if __cond {
-                                let __node_4 = spinner(SpinnerProps { size: 20.0, ..Default::default() })?;
+                                let __node_4 = spinner(SpinnerProps::props().size(20.0).build())?;
                                 Ok(box_item(__node_4))
                             } else {
                                 Ok(box_item(Container::column(children![])?))
@@ -98,8 +98,8 @@ pub fn features_background() -> Result<Box<dyn LayoutItem>, LayoutError> {
                 };
                 __children.push(box_item(__row_0));
                 let __row_1 = {
-                    let __node_5 = button(ButtonProps { label: Box::new(move || "Compute".to_string()), fill: Box::new(move || use_theme::<core::theme::SandboxTheme>().primary()), on_press: Box::new({ let busy = busy.clone(); let total = total.clone(); move || { busy.set(true); total.set(String::from("…")); spawn_task(|| slow_sum(2_000_000), on_computed(total.clone(), busy.clone())); } }), ..Default::default() })?;
-                    let __node_6 = button(ButtonProps { label: Box::new(move || "Bounce".to_string()), outline: Box::new(move || use_theme::<core::theme::SandboxTheme>().primary()), on_press: Box::new({ let beat = beat.clone(); move || { beat.retarget(if beat.get() > 1.0 { 1.0 } else { 1.4 }) } }), ..Default::default() })?;
+                    let __node_5 = button(ButtonProps::props().label("Compute").fill(Reactive::of(move || use_theme::<core::theme::SandboxTheme>().primary())).on_press(Box::new({ let busy = busy.clone(); let total = total.clone(); move || { busy.set(true); total.set(String::from("…")); spawn_task(|| slow_sum(2_000_000), on_computed(total.clone(), busy.clone())); } })).build())?;
+                    let __node_6 = button(ButtonProps::props().label("Bounce").outline(Reactive::of(move || use_theme::<core::theme::SandboxTheme>().primary())).on_press(Box::new({ let beat = beat.clone(); move || { beat.retarget(if beat.get() > 1.0 { 1.0 } else { 1.4 }) } })).build())?;
                     Container::new(LayoutStyle::new().flex_row().gap(10.0), children![__node_5, __node_6])?
                 };
                 __children.push(box_item(__row_1));
@@ -118,13 +118,13 @@ pub fn features_background() -> Result<Box<dyn LayoutItem>, LayoutError> {
                 };
                 __children.push(box_item(__row_2));
                 __slots.extend_default(__children);
-                card(CardProps { gap: 12.0, ..Default::default() }, __slots)?
+                card(CardProps::props().gap(12.0).build(), __slots)?
             };
             __children.push(box_item(__node_2));
-            let __node_7 = code_line(CodeLineProps { code: "spawn_task(|| slow_sum(n), move |sum| total.set(sum.to_string()))" })?;
+            let __node_7 = code_line(CodeLineProps::props().code("spawn_task(|| slow_sum(n), move |sum| total.set(sum.to_string()))").build())?;
             __children.push(box_item(__node_7));
             __slots.extend_default(__children);
-            example(ExampleProps { title: "spawn_task — one result, delivered on the UI thread" }, __slots)?
+            example(ExampleProps::props().title("spawn_task — one result, delivered on the UI thread").build(), __slots)?
         };
         let __node_8 = {
             let mut __slots = Slots::new();
@@ -134,16 +134,16 @@ pub fn features_background() -> Result<Box<dyn LayoutItem>, LayoutError> {
                 let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
                 let __row_3 = {
                     let mut __slots: Vec<ChildSlot> = Vec::new();
-                    let __node_10 = button(ButtonProps { label: Box::new(move || "Scan".to_string()), fill: Box::new(move || use_theme::<core::theme::SandboxTheme>().primary()), on_press: Box::new({ let found = found.clone(); let scanning = scanning.clone(); let scan = scan.clone(); move || { found.set(Vec::new()); scanning.set(true); *scan.borrow_mut() = Some(spawn_stream(walk_project, on_found(found.clone()), on_scan_end(scanning.clone()))); } }), ..Default::default() })?;
+                    let __node_10 = button(ButtonProps::props().label("Scan").fill(Reactive::of(move || use_theme::<core::theme::SandboxTheme>().primary())).on_press(Box::new({ let found = found.clone(); let scanning = scanning.clone(); let scan = scan.clone(); move || { found.set(Vec::new()); scanning.set(true); *scan.borrow_mut() = Some(spawn_stream(walk_project, on_found(found.clone()), on_scan_end(scanning.clone()))); } })).build())?;
                     __slots.push(ChildSlot::stat(box_item(__node_10)));
-                    let __node_11 = button(ButtonProps { label: Box::new(move || "Cancel".to_string()), outline: Box::new(move || use_theme::<core::theme::SandboxTheme>().danger), on_press: Box::new({ let scan = scan.clone(); let scanning = scanning.clone(); move || { if let Some(task) = scan.borrow_mut().take() { task.cancel(); } scanning.set(false); } }), ..Default::default() })?;
+                    let __node_11 = button(ButtonProps::props().label("Cancel").outline(Reactive::of(move || use_theme::<core::theme::SandboxTheme>().danger)).on_press(Box::new({ let scan = scan.clone(); let scanning = scanning.clone(); move || { if let Some(task) = scan.borrow_mut().take() { task.cancel(); } scanning.set(false); } })).build())?;
                     __slots.push(ChildSlot::stat(box_item(__node_11)));
                     let __node_12 = fragment(
                         { let scanning = scanning.clone(); move || vec![scanning.get()] },
                         |__cond: &bool| *__cond,
                         move |__cond: bool| -> Result<Box<dyn LayoutItem>, LayoutError> {
                             if __cond {
-                                let __node_13 = spinner(SpinnerProps { size: 20.0, ..Default::default() })?;
+                                let __node_13 = spinner(SpinnerProps::props().size(20.0).build())?;
                                 Ok(box_item(__node_13))
                             } else {
                                 Ok(box_item(Container::column(children![])?))
@@ -188,27 +188,27 @@ pub fn features_background() -> Result<Box<dyn LayoutItem>, LayoutError> {
                 )?;
                 __children.push(box_item(__node_14));
                 __slots.extend_default(__children);
-                card(CardProps { gap: 12.0, ..Default::default() }, __slots)?
+                card(CardProps::props().gap(12.0).build(), __slots)?
             };
             __children.push(box_item(__node_9));
-            let __node_15 = code_line(CodeLineProps { code: "spawn_stream(walk_project, move |name| found.update(|v| v.push(name)))" })?;
+            let __node_15 = code_line(CodeLineProps::props().code("spawn_stream(walk_project, move |name| found.update(|v| v.push(name)))").build())?;
             __children.push(box_item(__node_15));
             __slots.extend_default(__children);
-            example(ExampleProps { title: "spawn_stream — many values, in order, one frame after the other" }, __slots)?
+            example(ExampleProps::props().title("spawn_stream — many values, in order, one frame after the other").build(), __slots)?
         };
         let __node_16 = {
             let mut __slots = Slots::new();
             let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
             let __col_1 = {
-                let __node_17 = prop_row(PropRowProps { name: "work", values: "Send + 'static", about: "Runs on a pooled thread. It may block freely — the pool grows rather than starve." })?;
-                let __node_18 = prop_row(PropRowProps { name: "callback", values: "stays here", about: "Runs on the UI thread during a later frame, so it may write signals and hold Rc." })?;
-                let __node_19 = prop_row(PropRowProps { name: "Emitter", values: "Send, cloneable", about: "A stream's worker handle. Poll is_cancelled() in any loop that runs for a while." })?;
-                let __node_20 = prop_row(PropRowProps { name: "Task", values: "!Send", about: "Keep it to cancel(); dropping it detaches and the callback still fires." })?;
+                let __node_17 = prop_row(PropRowProps::props().name("work").values("Send + 'static").about("Runs on a pooled thread. It may block freely — the pool grows rather than starve.").build())?;
+                let __node_18 = prop_row(PropRowProps::props().name("callback").values("stays here").about("Runs on the UI thread during a later frame, so it may write signals and hold Rc.").build())?;
+                let __node_19 = prop_row(PropRowProps::props().name("Emitter").values("Send, cloneable").about("A stream's worker handle. Poll is_cancelled() in any loop that runs for a while.").build())?;
+                let __node_20 = prop_row(PropRowProps::props().name("Task").values("!Send").about("Keep it to cancel(); dropping it detaches and the callback still fires.").build())?;
                 Container::new(LayoutStyle::new().flex_column().gap(6.0), children![__node_17, __node_18, __node_19, __node_20])?
             };
             __children.push(box_item(__col_1));
             __slots.extend_default(__children);
-            example(ExampleProps { title: "The rules" }, __slots)?
+            example(ExampleProps::props().title("The rules").build(), __slots)?
         };
         Container::new(LayoutStyle::new().flex_column().gap(20.0), children![__node_0, __node_1, __node_8, __node_16])?
     };

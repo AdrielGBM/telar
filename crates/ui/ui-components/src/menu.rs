@@ -1,5 +1,7 @@
 use layout_core::LayoutError;
+use reactive_core::Reactive;
 use renderer_core::Color;
+use telar_macros::Props;
 use ui_core::{Children, LayoutItem};
 
 use crate::dropdown;
@@ -13,42 +15,36 @@ use ui_core::{Slots, track_layout};
 /// item fires `on_select` with its index and closes. Unlike `select`, a menu holds no bound selection state —
 /// its items are one-shot actions. High-level sugar built on the overlay anchor + click-through primitives;
 /// lives in `ui-components`, not the kernel.
+#[derive(Props)]
 pub struct MenuProps {
     /// The trigger button's label.
-    pub label: Box<dyn Fn() -> String>,
+    #[props(into, default)]
+    pub label: Reactive<String>,
     /// Fired with the index of the chosen item when it is picked.
+    #[props(some, default)]
     pub on_select: Option<Box<dyn Fn(u32)>>,
     /// Accent colour (trigger border, hover highlight). `Color::TRANSPARENT` (the default) means "unset" and
     /// falls back to the theme accent. A closure so a theme token re-reads on every render.
-    pub color: Box<dyn Fn() -> Color>,
+    #[props(into, default = Reactive::of(|| Color::TRANSPARENT))]
+    pub color: Reactive<Color>,
     /// Take the width the row offers instead of the fixed trigger width — see [`crate::SelectProps::stretch`].
+    #[props(default)]
     pub stretch: bool,
     /// Draw the trigger as a field, with the border a `select` carries. Off by default, because a menu is a
     /// *button* that happens to open a list, and a button wears no frame until it is pressed.
     ///
     /// A prop and not a decision settled inside the component, because both readings are legitimate: a menu
     /// standing alone in a header wants no frame, and one sitting in a row of fields wants to match them.
+    #[props(default)]
     pub bordered: bool,
     /// Show the caret that says the trigger opens something. On by default.
+    #[props(default = true)]
     pub caret: bool,
     /// Amends the paint of the trigger — this component's **principal surface**, the thing a caller means
     /// when they point at a menu. See `shared::SurfaceStyle` for why it takes the finished style rather than
     /// naming one property, and for when a theme token is the right instrument instead.
+    #[props(some, default)]
     pub style: Option<Box<dyn Fn(renderer_core::RectStyle) -> renderer_core::RectStyle>>,
-}
-
-impl Default for MenuProps {
-    fn default() -> Self {
-        Self {
-            label: Box::new(String::new),
-            on_select: None,
-            color: Box::new(|| Color::TRANSPARENT),
-            stretch: false,
-            bordered: false,
-            caret: true,
-            style: None,
-        }
-    }
 }
 
 // A menu carries no bound selection (`selected: None`), so its rows are one-shot actions: no index is written
@@ -77,10 +73,9 @@ fn rows(labels: &'static [&'static str]) -> Children {
             slots.push(
                 None,
                 crate::list::item(
-                    crate::list::ItemProps {
-                        label: Box::new(move || label.to_string()),
-                        ..Default::default()
-                    },
+                    crate::list::ItemProps::props()
+                        .label(Reactive::of(move || label.to_string()))
+                        .build(),
                     Slots::new(),
                 )?,
             );
@@ -104,12 +99,11 @@ fn a_menu_can_be_asked_for_a_field_and_for_no_caret() {
     let strokes = |bordered: bool, caret: bool| {
         crate::test_support::fresh_layout_runtime();
         let item = menu(
-            MenuProps {
-                label: Box::new(|| "File".to_string()),
-                bordered,
-                caret,
-                ..Default::default()
-            },
+            MenuProps::props()
+                .label("File")
+                .bordered(bordered)
+                .caret(caret)
+                .build(),
             rows(&["New"]),
         )
         .unwrap();
@@ -168,15 +162,14 @@ fn a_caller_can_amend_the_paint_the_trigger_worked_out_for_itself() {
 
     crate::test_support::fresh_layout_runtime();
     let item = menu(
-        MenuProps {
-            label: Box::new(|| "File".to_string()),
-            bordered: true,
-            style: Some(Box::new(|s| {
+        MenuProps::props()
+            .label("File")
+            .bordered(true)
+            .style(Box::new(|s| {
                 s.with_radius(BorderRadius::all(0.0))
                     .with_fill(Color::rgba(1.0, 0.0, 0.0, 1.0))
-            })),
-            ..Default::default()
-        },
+            }))
+            .build(),
         rows(&["New"]),
     )
     .unwrap();
@@ -241,11 +234,7 @@ mod tests {
     fn a_narrow_filled_trigger_still_opens_a_readable_panel() {
         crate::test_support::fresh_layout_runtime();
         let item = menu(
-            MenuProps {
-                label: Box::new(|| "File".to_string()),
-                stretch: true,
-                ..Default::default()
-            },
+            MenuProps::props().label("File").stretch(true).build(),
             rows(&["New", "Open…", "Save", "Import STEP…"]),
         )
         .unwrap();
@@ -292,10 +281,7 @@ mod tests {
     fn builds_and_lays_out() {
         crate::test_support::fresh_layout_runtime();
         let item = menu(
-            MenuProps {
-                label: Box::new(|| "Actions".to_string()),
-                ..Default::default()
-            },
+            MenuProps::props().label("Actions").build(),
             rows(&["Rename", "Duplicate", "Delete"]),
         )
         .unwrap();
@@ -336,11 +322,10 @@ mod tests {
         let seen: Rc<Cell<Option<u32>>> = Rc::new(Cell::new(None));
         let sink = seen.clone();
         let item = menu(
-            MenuProps {
-                label: Box::new(|| "Actions".to_string()),
-                on_select: Some(Box::new(move |i| sink.set(Some(i)))),
-                ..Default::default()
-            },
+            MenuProps::props()
+                .label("Actions")
+                .on_select(Box::new(move |i| sink.set(Some(i))))
+                .build(),
             rows(&["Rename", "Duplicate", "Delete"]),
         )
         .unwrap();
@@ -380,11 +365,10 @@ mod tests {
         let seen: Rc<Cell<Option<u32>>> = Rc::new(Cell::new(None));
         let sink = seen.clone();
         let item = menu(
-            MenuProps {
-                label: Box::new(|| "Actions".to_string()),
-                on_select: Some(Box::new(move |i| sink.set(Some(i)))),
-                ..Default::default()
-            },
+            MenuProps::props()
+                .label("Actions")
+                .on_select(Box::new(move |i| sink.set(Some(i))))
+                .build(),
             rows(&["Rename", "Duplicate"]),
         )
         .unwrap();
@@ -415,11 +399,10 @@ mod tests {
         let seen: Rc<Cell<Option<u32>>> = Rc::new(Cell::new(None));
         let sink = seen.clone();
         let item = menu(
-            MenuProps {
-                label: Box::new(|| "Actions".to_string()),
-                on_select: Some(Box::new(move |i| sink.set(Some(i)))),
-                ..Default::default()
-            },
+            MenuProps::props()
+                .label("Actions")
+                .on_select(Box::new(move |i| sink.set(Some(i))))
+                .build(),
             rows(&["Rename", "Duplicate", "Delete"]),
         )
         .unwrap();
@@ -478,11 +461,10 @@ mod tests {
             let mut slots = Slots::new();
             let row = |label: &'static str, disabled: bool| {
                 crate::list::item(
-                    crate::list::ItemProps {
-                        label: Box::new(move || label.to_string()),
-                        disabled: Box::new(move || disabled),
-                        ..Default::default()
-                    },
+                    crate::list::ItemProps::props()
+                        .label(Reactive::of(move || label.to_string()))
+                        .disabled(Reactive::of(move || disabled))
+                        .build(),
                     Slots::new(),
                 )
             };
@@ -491,19 +473,16 @@ mod tests {
             slots.push(None, crate::list::separator()?);
             slots.push(
                 None,
-                crate::list::group(crate::list::GroupProps {
-                    label: Box::new(|| "Danger".to_string()),
-                })?,
+                crate::list::group(crate::list::GroupProps::props().label("Danger").build())?,
             );
             slots.push(None, row("Delete", false)?);
             Ok(slots)
         });
         let item = menu(
-            MenuProps {
-                label: Box::new(|| "Actions".to_string()),
-                on_select: Some(Box::new(move |i| sink.set(Some(i)))),
-                ..Default::default()
-            },
+            MenuProps::props()
+                .label("Actions")
+                .on_select(Box::new(move |i| sink.set(Some(i))))
+                .build(),
             structured,
         )
         .unwrap();
@@ -541,11 +520,10 @@ mod tests {
                 slots.push(
                     None,
                     crate::list::item(
-                        crate::list::ItemProps {
-                            label: Box::new(move || label.to_string()),
-                            disabled: Box::new(move || disabled),
-                            ..Default::default()
-                        },
+                        crate::list::ItemProps::props()
+                            .label(Reactive::of(move || label.to_string()))
+                            .disabled(Reactive::of(move || disabled))
+                            .build(),
                         Slots::new(),
                     )?,
                 );
@@ -553,11 +531,10 @@ mod tests {
             Ok(slots)
         });
         let item = menu(
-            MenuProps {
-                label: Box::new(|| "Actions".to_string()),
-                on_select: Some(Box::new(move |i| sink.set(Some(i)))),
-                ..Default::default()
-            },
+            MenuProps::props()
+                .label("Actions")
+                .on_select(Box::new(move |i| sink.set(Some(i))))
+                .build(),
             structured,
         )
         .unwrap();
@@ -604,11 +581,10 @@ mod tests {
                 slots.push(
                     None,
                     crate::list::item(
-                        crate::list::ItemProps {
-                            label: Box::new(move || label.to_string()),
-                            disabled: Box::new(move || disabled),
-                            ..Default::default()
-                        },
+                        crate::list::ItemProps::props()
+                            .label(Reactive::of(move || label.to_string()))
+                            .disabled(Reactive::of(move || disabled))
+                            .build(),
                         Slots::new(),
                     )?,
                 );
@@ -616,11 +592,10 @@ mod tests {
             Ok(slots)
         });
         let item = menu(
-            MenuProps {
-                label: Box::new(|| "Actions".to_string()),
-                on_select: Some(Box::new(move |i| sink.set(Some(i)))),
-                ..Default::default()
-            },
+            MenuProps::props()
+                .label("Actions")
+                .on_select(Box::new(move |i| sink.set(Some(i))))
+                .build(),
             structured,
         )
         .unwrap();

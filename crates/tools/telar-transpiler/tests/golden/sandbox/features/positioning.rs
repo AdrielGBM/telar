@@ -26,7 +26,7 @@ pub fn features_positioning() -> Result<Box<dyn LayoutItem>, LayoutError> {
     let caption: Option<&'static str> = Some("read from a plain Option, decided once");
 
     let __col_0 = {
-        let __node_0 = doc_header(DocHeaderProps { kicker: "FOUNDATIONS", title: "Positioning", desc: "absolute takes a child out of the flex flow and pins it by the insets it names. Insets and margins are logical — start and end follow the reading direction, so a layout mirrors under RTL without a second rule." })?;
+        let __node_0 = doc_header(DocHeaderProps::props().kicker("FOUNDATIONS").title("Positioning").desc("absolute takes a child out of the flex flow and pins it by the insets it names. Insets and margins are logical — start and end follow the reading direction, so a layout mirrors under RTL without a second rule.").build())?;
         let __node_1 = {
             let mut __slots = Slots::new();
             let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
@@ -51,13 +51,13 @@ pub fn features_positioning() -> Result<Box<dyn LayoutItem>, LayoutError> {
                 };
                 __children.push(box_item(__sbox_0));
                 __slots.extend_default(__children);
-                card(CardProps { gap: 12.0, ..Default::default() }, __slots)?
+                card(CardProps::props().gap(12.0).build(), __slots)?
             };
             __children.push(box_item(__node_2));
-            let __node_3 = code_line(CodeLineProps { code: "box absolute inset_top:12 inset_end:12     ·   inset_bottom · inset_start" })?;
+            let __node_3 = code_line(CodeLineProps::props().code("box absolute inset_top:12 inset_end:12     ·   inset_bottom · inset_start").build())?;
             __children.push(box_item(__node_3));
             __slots.extend_default(__children);
-            example(ExampleProps { title: "absolute — a child out of flow, pinned by the edges it names" }, __slots)?
+            example(ExampleProps::props().title("absolute — a child out of flow, pinned by the edges it names").build(), __slots)?
         };
         let __node_4 = {
             let mut __slots = Slots::new();
@@ -80,13 +80,13 @@ pub fn features_positioning() -> Result<Box<dyn LayoutItem>, LayoutError> {
                 };
                 __children.push(box_item(__sbox_3));
                 __slots.extend_default(__children);
-                card(CardProps { gap: 12.0, ..Default::default() }, __slots)?
+                card(CardProps::props().gap(12.0).build(), __slots)?
             };
             __children.push(box_item(__node_5));
-            let __node_6 = code_line(CodeLineProps { code: "box absolute:fill      (what overlay uses; name three edges instead for a floating panel)" })?;
+            let __node_6 = code_line(CodeLineProps::props().code("box absolute:fill      (what overlay uses; name three edges instead for a floating panel)").build())?;
             __children.push(box_item(__node_6));
             __slots.extend_default(__children);
-            example(ExampleProps { title: "absolute:fill — the all-four-edges-at-zero shorthand" }, __slots)?
+            example(ExampleProps::props().title("absolute:fill — the all-four-edges-at-zero shorthand").build(), __slots)?
         };
         let __node_7 = {
             let mut __slots = Slots::new();
@@ -102,18 +102,18 @@ pub fn features_positioning() -> Result<Box<dyn LayoutItem>, LayoutError> {
                 };
                 __children.push(box_item(__sbox_5));
                 let __row_0 = {
-                    let __node_9 = button(ButtonProps { label: Box::new(move || "Move the badge".to_string()), ghost: true, on_press: Box::new({ let corner = corner.clone(); move || corner.set((corner.get() + 1) % 4) }), ..Default::default() })?;
+                    let __node_9 = button(ButtonProps::props().label("Move the badge").ghost(true).on_press(Box::new({ let corner = corner.clone(); move || corner.set((corner.get() + 1) % 4) })).build())?;
                     Container::new(LayoutStyle::new().flex_row().gap(10.0), children![__node_9])?
                 };
                 __children.push(box_item(__row_0));
                 __slots.extend_default(__children);
-                card(CardProps { gap: 12.0, ..Default::default() }, __slots)?
+                card(CardProps::props().gap(12.0).build(), __slots)?
             };
             __children.push(box_item(__node_8));
-            let __node_10 = code_line(CodeLineProps { code: "box absolute inset_top:$top inset_start:$start     (the node keeps an effect and re-styles)" })?;
+            let __node_10 = code_line(CodeLineProps::props().code("box absolute inset_top:$top inset_start:$start     (the node keeps an effect and re-styles)").build())?;
             __children.push(box_item(__node_10));
             __slots.extend_default(__children);
-            example(ExampleProps { title: "An inset is an ordinary layout value, so it can be reactive" }, __slots)?
+            example(ExampleProps::props().title("An inset is an ordinary layout value, so it can be reactive").build(), __slots)?
         };
         let __node_11 = {
             let mut __slots = Slots::new();
@@ -143,13 +143,13 @@ pub fn features_positioning() -> Result<Box<dyn LayoutItem>, LayoutError> {
                 };
                 __children.push(box_item(__text_2));
                 __slots.extend_default(__children);
-                card(CardProps { gap: 10.0, ..Default::default() }, __slots)?
+                card(CardProps::props().gap(10.0).build(), __slots)?
             };
             __children.push(box_item(__node_12));
-            let __node_13 = code_line(CodeLineProps { code: "box margin_start:40      (left under LTR, right under RTL — switch the locale to see it)" })?;
+            let __node_13 = code_line(CodeLineProps::props().code("box margin_start:40      (left under LTR, right under RTL — switch the locale to see it)").build())?;
             __children.push(box_item(__node_13));
             __slots.extend_default(__children);
-            example(ExampleProps { title: "margin_start / margin_end — logical margins that mirror with the reading direction" }, __slots)?
+            example(ExampleProps::props().title("margin_start / margin_end — logical margins that mirror with the reading direction").build(), __slots)?
         };
         let __node_14 = {
             let mut __slots = Slots::new();
@@ -182,13 +182,13 @@ pub fn features_positioning() -> Result<Box<dyn LayoutItem>, LayoutError> {
                 };
                 __children.push(box_item(__row_1));
                 __slots.extend_default(__children);
-                card(CardProps { gap: 10.0, ..Default::default() }, __slots)?
+                card(CardProps::props().gap(10.0).build(), __slots)?
             };
             __children.push(box_item(__node_15));
-            let __node_16 = code_line(CodeLineProps { code: "box min_height:72        ·   min_width · max_width · max_height" })?;
+            let __node_16 = code_line(CodeLineProps::props().code("box min_height:72        ·   min_width · max_width · max_height").build())?;
             __children.push(box_item(__node_16));
             __slots.extend_default(__children);
-            example(ExampleProps { title: "min_height — a floor a box never collapses below" }, __slots)?
+            example(ExampleProps::props().title("min_height — a floor a box never collapses below").build(), __slots)?
         };
         let __node_17 = {
             let mut __slots = Slots::new();
@@ -219,13 +219,13 @@ pub fn features_positioning() -> Result<Box<dyn LayoutItem>, LayoutError> {
                 };
                 __children.push(box_item(__col_2));
                 __slots.extend_default(__children);
-                card(CardProps { gap: 10.0, ..Default::default() }, __slots)?
+                card(CardProps::props().gap(10.0).build(), __slots)?
             };
             __children.push(box_item(__node_18));
-            let __node_20 = code_line(CodeLineProps { code: "text text_wrap:nowrap    ·   wrap (the default)" })?;
+            let __node_20 = code_line(CodeLineProps::props().code("text text_wrap:nowrap    ·   wrap (the default)").build())?;
             __children.push(box_item(__node_20));
             __slots.extend_default(__children);
-            example(ExampleProps { title: "text_wrap — refuse the line break and let the box clip instead" }, __slots)?
+            example(ExampleProps::props().title("text_wrap — refuse the line break and let the box clip instead").build(), __slots)?
         };
         let __node_21 = {
             let mut __slots = Slots::new();
@@ -292,37 +292,37 @@ pub fn features_positioning() -> Result<Box<dyn LayoutItem>, LayoutError> {
                 )?;
                 __children.push(box_item(__node_23));
                 let __row_2 = {
-                    let __node_24 = button(ButtonProps { label: Box::new(move || "Fill".to_string()), fill: Box::new(move || use_theme::<core::theme::SandboxTheme>().primary()), on_press: Box::new({ let slot = slot.clone(); move || slot.set(Slot::Filled(7)) }), ..Default::default() })?;
-                    let __node_25 = button(ButtonProps { label: Box::new(move || "Clear".to_string()), ghost: true, on_press: Box::new({ let slot = slot.clone(); move || slot.set(Slot::Empty) }), ..Default::default() })?;
+                    let __node_24 = button(ButtonProps::props().label("Fill").fill(Reactive::of(move || use_theme::<core::theme::SandboxTheme>().primary())).on_press(Box::new({ let slot = slot.clone(); move || slot.set(Slot::Filled(7)) })).build())?;
+                    let __node_25 = button(ButtonProps::props().label("Clear").ghost(true).on_press(Box::new({ let slot = slot.clone(); move || slot.set(Slot::Empty) })).build())?;
                     Container::new(LayoutStyle::new().flex_row().gap(10.0), children![__node_24, __node_25])?
                 };
                 __children.push(box_item(__row_2));
                 __slots.extend_default(__children);
-                card(CardProps { gap: 12.0, ..Default::default() }, __slots)?
+                card(CardProps::props().gap(12.0).build(), __slots)?
             };
             __children.push(box_item(__node_22));
-            let __node_26 = code_line(CodeLineProps { code: "match caption > Some(note) > text …            (no $ — the arm is chosen once)" })?;
+            let __node_26 = code_line(CodeLineProps::props().code("match caption > Some(note) > text …            (no $ — the arm is chosen once)").build())?;
             __children.push(box_item(__node_26));
-            let __node_27 = code_line(CodeLineProps { code: "match $slot as s key *s > Slot::Empty > box …  (reactive; the key decides when an arm rebuilds)" })?;
+            let __node_27 = code_line(CodeLineProps::props().code("match $slot as s key *s > Slot::Empty > box …  (reactive; the key decides when an arm rebuilds)").build())?;
             __children.push(box_item(__node_27));
             __slots.extend_default(__children);
-            example(ExampleProps { title: "match — choose a subtree by variant, once or on every change" }, __slots)?
+            example(ExampleProps::props().title("match — choose a subtree by variant, once or on every change").build(), __slots)?
         };
         let __node_28 = {
             let mut __slots = Slots::new();
             let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
             let __col_3 = {
-                let __node_29 = prop_row(PropRowProps { name: "absolute", values: "flag · fill", about: "Out of flow. Bare pins only the edges you name; fill pins all four at zero." })?;
-                let __node_30 = prop_row(PropRowProps { name: "inset_start / _end", values: "number · %", about: "Distance from the leading and trailing edge — mirrors under RTL." })?;
-                let __node_31 = prop_row(PropRowProps { name: "inset_top / _bottom", values: "number · %", about: "Distance from the top and bottom edge." })?;
-                let __node_32 = prop_row(PropRowProps { name: "margin_start / _end", values: "number · %", about: "Logical outer spacing, in the flow rather than out of it." })?;
-                let __node_33 = prop_row(PropRowProps { name: "min_height", values: "number · %", about: "A floor the box keeps even when its content is smaller." })?;
-                let __node_34 = prop_row(PropRowProps { name: "text_wrap", values: "wrap · nowrap", about: "Whether a line may break at the box edge." })?;
+                let __node_29 = prop_row(PropRowProps::props().name("absolute").values("flag · fill").about("Out of flow. Bare pins only the edges you name; fill pins all four at zero.").build())?;
+                let __node_30 = prop_row(PropRowProps::props().name("inset_start / _end").values("number · %").about("Distance from the leading and trailing edge — mirrors under RTL.").build())?;
+                let __node_31 = prop_row(PropRowProps::props().name("inset_top / _bottom").values("number · %").about("Distance from the top and bottom edge.").build())?;
+                let __node_32 = prop_row(PropRowProps::props().name("margin_start / _end").values("number · %").about("Logical outer spacing, in the flow rather than out of it.").build())?;
+                let __node_33 = prop_row(PropRowProps::props().name("min_height").values("number · %").about("A floor the box keeps even when its content is smaller.").build())?;
+                let __node_34 = prop_row(PropRowProps::props().name("text_wrap").values("wrap · nowrap").about("Whether a line may break at the box edge.").build())?;
                 Container::new(LayoutStyle::new().flex_column().gap(6.0), children![__node_29, __node_30, __node_31, __node_32, __node_33, __node_34])?
             };
             __children.push(box_item(__col_3));
             __slots.extend_default(__children);
-            example(ExampleProps { title: "Attributes" }, __slots)?
+            example(ExampleProps::props().title("Attributes").build(), __slots)?
         };
         Container::new(LayoutStyle::new().flex_column().gap(20.0), children![__node_0, __node_1, __node_4, __node_7, __node_11, __node_14, __node_17, __node_21, __node_28])?
     };

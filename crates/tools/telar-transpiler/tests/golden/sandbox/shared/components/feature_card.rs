@@ -3,10 +3,13 @@
 #[allow(unused_imports)] use telar::*;
 #[allow(unused_imports)] use super::*;
 
-#[derive(Default)]
+#[derive(::telar::Props)]
 pub struct SharedComponentsFeatureCardProps {
+    #[props(default)]
     pub icon: &'static str,
+    #[props(default)]
     pub title: &'static str,
+    #[props(default)]
     pub body: &'static str,
 }
 
@@ -44,7 +47,7 @@ pub fn shared_components_feature_card(props: SharedComponentsFeatureCardProps) -
 #[allow(dead_code, unused_variables, unused_mut)]
 pub fn shared_components_feature_card_preview_0() -> Result<Box<dyn LayoutItem>, LayoutError> {
     #[allow(unused_imports)] use telar::use_theme;
-    let __node_0 = feature_card(FeatureCardProps { icon: "⚡", title: "Fast", body: "Software and wgpu renderers with dirty-tracking and scroll-blit detection." })?;
+    let __node_0 = feature_card(FeatureCardProps::props().icon("⚡").title("Fast").body("Software and wgpu renderers with dirty-tracking and scroll-blit detection.").build())?;
     Ok(Box::new(__node_0))
 }
 

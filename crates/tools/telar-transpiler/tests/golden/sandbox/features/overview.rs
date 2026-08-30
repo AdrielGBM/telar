@@ -26,17 +26,17 @@ pub fn features_overview() -> Result<Box<dyn LayoutItem>, LayoutError> {
             Container::new(LayoutStyle::new().flex_column().gap(10.0), children![__text_0, __text_1])?
         };
         let __node_0 = {
-            let __node_1 = stat(StatProps { value: "25+", label: "modular crates" })?;
-            let __node_2 = stat(StatProps { value: "2", label: "render backends" })?;
-            let __node_3 = stat(StatProps { value: "60 fps", label: "software + wgpu" })?;
-            let __node_4 = stat(StatProps { value: "0", label: "GC pauses" })?;
+            let __node_1 = stat(StatProps::props().value("25+").label("modular crates").build())?;
+            let __node_2 = stat(StatProps::props().value("2").label("render backends").build())?;
+            let __node_3 = stat(StatProps::props().value("60 fps").label("software + wgpu").build())?;
+            let __node_4 = stat(StatProps::props().value("0").label("GC pauses").build())?;
             Container::new(LayoutStyle::new().display_grid().grid_template_columns(vec![TemplateTrack::fit(TemplateTrack::minmax(TemplateTrack::px(150.0), TemplateTrack::fr(1.0)))]).gap(16.0), children![__node_1, __node_2, __node_3, __node_4])?
         };
         let __node_5 = {
-            let __node_6 = feature_card(FeatureCardProps { icon: "🧩", title: "Declarative", body: "Rows, columns, boxes and text compose by indentation — no builder soup." })?;
-            let __node_7 = feature_card(FeatureCardProps { icon: "🎨", title: "Themeable", body: "Semantic color tokens resolve reactively. Switch the theme in the sidebar." })?;
-            let __node_8 = feature_card(FeatureCardProps { icon: "⚡", title: "Reactive", body: "Fine-grained signals update only the widgets that depend on them." })?;
-            let __node_9 = feature_card(FeatureCardProps { icon: "📐", title: "Flex + grid", body: "A full flexbox and CSS-grid engine with wrapping and responsive tracks." })?;
+            let __node_6 = feature_card(FeatureCardProps::props().icon("🧩").title("Declarative").body("Rows, columns, boxes and text compose by indentation — no builder soup.").build())?;
+            let __node_7 = feature_card(FeatureCardProps::props().icon("🎨").title("Themeable").body("Semantic color tokens resolve reactively. Switch the theme in the sidebar.").build())?;
+            let __node_8 = feature_card(FeatureCardProps::props().icon("⚡").title("Reactive").body("Fine-grained signals update only the widgets that depend on them.").build())?;
+            let __node_9 = feature_card(FeatureCardProps::props().icon("📐").title("Flex + grid").body("A full flexbox and CSS-grid engine with wrapping and responsive tracks.").build())?;
             Container::new(LayoutStyle::new().display_grid().grid_template_columns(vec![TemplateTrack::fit(TemplateTrack::minmax(TemplateTrack::px(200.0), TemplateTrack::fr(1.0)))]).gap(16.0), children![__node_6, __node_7, __node_8, __node_9])?
         };
         Container::new(LayoutStyle::new().flex_column().gap(24.0), children![__col_1, __node_0, __node_5])?

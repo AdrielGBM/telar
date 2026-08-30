@@ -11,14 +11,14 @@ pub fn features_sliders() -> Result<Box<dyn LayoutItem>, LayoutError> {
     let temp = signal(65.0f32);
 
     let __col_0 = {
-        let __node_0 = doc_header(DocHeaderProps { kicker: "INTERACTION", title: "Slider", desc: "A drag-driven control built on the on_drag primitive — track, fill, and thumb are wired up for you. Set min/max to read the value back in your own range (no memo needed), step to quantize it, and label to caption it." })?;
+        let __node_0 = doc_header(DocHeaderProps::props().kicker("INTERACTION").title("Slider").desc("A drag-driven control built on the on_drag primitive — track, fill, and thumb are wired up for you. Set min/max to read the value back in your own range (no memo needed), step to quantize it, and label to caption it.").build())?;
         let __node_1 = {
             let mut __slots = Slots::new();
             let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
             let __node_2 = {
                 let mut __slots = Slots::new();
                 let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-                let __node_3 = slider(SliderProps { value: Some(volume.clone()), min: 0.0, max: 100.0, step: 1.0, width: 260.0, ..Default::default() })?;
+                let __node_3 = slider(SliderProps::props().value(volume.clone()).min(0.0).max(100.0).step(1.0).width(260.0).build())?;
                 __children.push(box_item(__node_3));
                 let __text_0 = {
                     let volume = volume.clone();
@@ -30,13 +30,13 @@ pub fn features_sliders() -> Result<Box<dyn LayoutItem>, LayoutError> {
                 };
                 __children.push(box_item(__text_0));
                 __slots.extend_default(__children);
-                card(CardProps { gap: 8.0, ..Default::default() }, __slots)?
+                card(CardProps::props().gap(8.0).build(), __slots)?
             };
             __children.push(box_item(__node_2));
-            let __node_4 = code_line(CodeLineProps { code: "slider value:$volume min:0 max:100 step:1 width:260" })?;
+            let __node_4 = code_line(CodeLineProps::props().code("slider value:$volume min:0 max:100 step:1 width:260").build())?;
             __children.push(box_item(__node_4));
             __slots.extend_default(__children);
-            example(ExampleProps { title: "min / max — the value reads back in your range, not 0..1" }, __slots)?
+            example(ExampleProps::props().title("min / max — the value reads back in your range, not 0..1").build(), __slots)?
         };
         let __node_5 = {
             let mut __slots = Slots::new();
@@ -44,7 +44,7 @@ pub fn features_sliders() -> Result<Box<dyn LayoutItem>, LayoutError> {
             let __node_6 = {
                 let mut __slots = Slots::new();
                 let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-                let __node_7 = slider(SliderProps { value: Some(temp.clone()), min: 60.0, max: 80.0, step: 5.0, label: Box::new(move || "Temperature".to_string()), width: 260.0, ..Default::default() })?;
+                let __node_7 = slider(SliderProps::props().value(temp.clone()).min(60.0).max(80.0).step(5.0).label("Temperature").width(260.0).build())?;
                 __children.push(box_item(__node_7));
                 let __text_1 = {
                     let temp = temp.clone();
@@ -56,27 +56,27 @@ pub fn features_sliders() -> Result<Box<dyn LayoutItem>, LayoutError> {
                 };
                 __children.push(box_item(__text_1));
                 __slots.extend_default(__children);
-                card(CardProps { gap: 8.0, ..Default::default() }, __slots)?
+                card(CardProps::props().gap(8.0).build(), __slots)?
             };
             __children.push(box_item(__node_6));
-            let __node_8 = code_line(CodeLineProps { code: "slider value:$temp min:60 max:80 step:5 label:'Temperature'" })?;
+            let __node_8 = code_line(CodeLineProps::props().code("slider value:$temp min:60 max:80 step:5 label:'Temperature'").build())?;
             __children.push(box_item(__node_8));
             __slots.extend_default(__children);
-            example(ExampleProps { title: "label + step — a captioned, quantized range" }, __slots)?
+            example(ExampleProps::props().title("label + step — a captioned, quantized range").build(), __slots)?
         };
         let __node_9 = {
             let mut __slots = Slots::new();
             let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
             let __col_1 = {
-                let __node_10 = prop_row(PropRowProps { name: "value", values: "signal", about: "bound number; reads back in [min,max]." })?;
-                let __node_11 = prop_row(PropRowProps { name: "min / max", values: "number", about: "reported range (default 0..1)." })?;
-                let __node_12 = prop_row(PropRowProps { name: "step", values: "number", about: "quantize to multiples (0 = continuous)." })?;
-                let __node_13 = prop_row(PropRowProps { name: "label", values: "text", about: "optional caption stacked above the track." })?;
+                let __node_10 = prop_row(PropRowProps::props().name("value").values("signal").about("bound number; reads back in [min,max].").build())?;
+                let __node_11 = prop_row(PropRowProps::props().name("min / max").values("number").about("reported range (default 0..1).").build())?;
+                let __node_12 = prop_row(PropRowProps::props().name("step").values("number").about("quantize to multiples (0 = continuous).").build())?;
+                let __node_13 = prop_row(PropRowProps::props().name("label").values("text").about("optional caption stacked above the track.").build())?;
                 Container::new(LayoutStyle::new().flex_column().gap(6.0), children![__node_10, __node_11, __node_12, __node_13])?
             };
             __children.push(box_item(__col_1));
             __slots.extend_default(__children);
-            example(ExampleProps { title: "Attributes" }, __slots)?
+            example(ExampleProps::props().title("Attributes").build(), __slots)?
         };
         Container::new(LayoutStyle::new().flex_column().gap(20.0), children![__node_0, __node_1, __node_5, __node_9])?
     };

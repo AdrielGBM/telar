@@ -1,8 +1,8 @@
 use crate::shared;
-use crate::shared::props_default;
 use layout_core::{LayoutError, LayoutStyle};
-use reactive_core::{RwSignal, signal};
+use reactive_core::{Reactive, RwSignal, signal};
 use renderer_core::{Border, BorderRadius, Color, RectStyle, ShapeStyle};
+use telar_macros::Props;
 use ui_core::{Input, LayoutItem, StyledContainer, box_item, style_follows};
 
 fn box_radius() -> f32 {
@@ -31,33 +31,31 @@ fn field_box(width: f32) -> LayoutStyle {
 /// box (see the raw `box fill:surface_alt stroke:border radius:8 pad_x:12 pad_y:10 > input` pattern in
 /// `apps/sandbox/src/features/reactivity.rsx`), with an optional caption label stacked above it. High-level
 /// sugar; lives in `ui-components`, not the kernel, so an app can drop it or ship its own.
+#[derive(Props)]
 pub struct TextFieldProps {
     /// `None` (the default) makes the field uncontrolled: it owns an internal `signal(String::new())`.
     /// `Some` binds it to a caller-owned signal (a controlled field), like `button`'s reactive props.
+    #[props(some, into, default)]
     pub value: Option<RwSignal<String>>,
     /// Muted text shown in the box in place of the `Input` while `value` is empty — see the module's
     /// `text_field` doc for the swap's focus limitation.
-    pub placeholder: Box<dyn Fn() -> String>,
+    #[props(into, default)]
+    pub placeholder: Reactive<String>,
     /// A small caption stacked above the box; omitted entirely (no extra row) when empty.
-    pub label: Box<dyn Fn() -> String>,
+    #[props(into, default)]
+    pub label: Reactive<String>,
     /// Box width in logical px. `0.0` (the default) means "unset" and resolves to `DEFAULT_WIDTH`.
+    #[props(default)]
     pub width: f32,
     /// The entered text's colour. `Color::TRANSPARENT` (the default) means "unset", and leaves the field in
     /// whatever the region around it is written in. A closure (re-read every frame) so a theme token or
     /// `$signal` colour re-colours live, like `button`'s `fill`/`outline`.
-    pub color: Box<dyn Fn() -> Color>,
+    #[props(into, default = Reactive::of(|| Color::TRANSPARENT))]
+    pub color: Reactive<Color>,
     /// Runs when Enter is pressed while the field is focused.
+    #[props(some, default)]
     pub on_submit: Option<Box<dyn Fn()>>,
 }
-
-props_default!(TextFieldProps {
-    value: none,
-    placeholder: text,
-    label: text,
-    width: zero,
-    color: color,
-    on_submit: none,
-});
 
 /// Builds a `text_field`: a bordered/padded box around `ui_core::Input`, swapping in a muted placeholder
 /// muted hint via the `Input`'s own `placeholder` while the value is empty — the field stays a live,
@@ -80,14 +78,14 @@ pub fn text_field(props: TextFieldProps) -> Result<Box<dyn LayoutItem>, LayoutEr
     // clicked to begin typing.
     let mut input = Input::declaring(value, LayoutStyle::new(), move |t| {
         let t = shared::control_text(t, 1.0);
-        match color() {
+        match color.get() {
             c if c == Color::TRANSPARENT => t,
             c => t.with_color(c),
         }
     })?
-    .placeholder(placeholder());
+    .placeholder(placeholder.get());
     if let Some(cb) = on_submit {
-        input = input.on_submit(move || cb());
+        input = input.on_submit(cb);
     }
     // The input is a leaf, so its node's style is followed from the box that outlives it.
     let line_node = input.layout_node();
@@ -155,11 +153,7 @@ mod tests {
     fn a_field_takes_the_size_the_region_around_it_declared() {
         let value = signal("hi".to_string());
         crate::test_support::fresh_layout_runtime();
-        let field = text_field(TextFieldProps {
-            value: Some(value),
-            ..Default::default()
-        })
-        .unwrap();
+        let field = text_field(TextFieldProps::props().value(value).build()).unwrap();
         let box_node = field.layout_node();
         let root = new_container(
             LayoutStyle::new().flex_column().width(400.0).height(200.0),
@@ -202,10 +196,7 @@ mod tests {
     #[test]
     fn controlled_value_renders_as_input_text() {
         let value = signal("hi".to_string());
-        let (field, _) = laid_out_field(TextFieldProps {
-            value: Some(value),
-            ..Default::default()
-        });
+        let (field, _) = laid_out_field(TextFieldProps::props().value(value).build());
         let tree = ComponentList::new(field);
         assert!(find_text(&tree.commands(), "hi"));
     }
@@ -214,10 +205,7 @@ mod tests {
     // (see `text_field`'s doc comment): it is inert here, not a focusable Input.
     #[test]
     fn empty_value_renders_placeholder() {
-        let (field, _) = laid_out_field(TextFieldProps {
-            placeholder: Box::new(|| "Search…".to_string()),
-            ..Default::default()
-        });
+        let (field, _) = laid_out_field(TextFieldProps::props().placeholder("Search…").build());
         let tree = ComponentList::new(field);
         assert!(find_text(&tree.commands(), "Search…"));
     }
@@ -227,10 +215,7 @@ mod tests {
     #[test]
     fn typing_into_a_focused_field_edits_the_bound_signal() {
         let value = signal("a".to_string());
-        let (field, rect) = laid_out_field(TextFieldProps {
-            value: Some(value),
-            ..Default::default()
-        });
+        let (field, rect) = laid_out_field(TextFieldProps::props().value(value).build());
         let mut tree = ComponentList::new(field);
         let _ = tree.commands(); // build the initial segments before dispatching events
 
@@ -253,11 +238,12 @@ mod tests {
         let value = signal("a".to_string());
         let fired = Rc::new(Cell::new(false));
         let sink = fired.clone();
-        let (field, rect) = laid_out_field(TextFieldProps {
-            value: Some(value),
-            on_submit: Some(Box::new(move || sink.set(true))),
-            ..Default::default()
-        });
+        let (field, rect) = laid_out_field(
+            TextFieldProps::props()
+                .value(value)
+                .on_submit(Box::new(move || sink.set(true)) as Box<dyn Fn()>)
+                .build(),
+        );
         let mut tree = ComponentList::new(field);
         let _ = tree.commands();
 
@@ -275,11 +261,12 @@ mod tests {
     // A `label` stacks a caption above the box instead of the box being the field's only node.
     #[test]
     fn label_adds_a_caption_row_above_the_box() {
-        let (field, _) = laid_out_field(TextFieldProps {
-            label: Box::new(|| "Name".to_string()),
-            placeholder: Box::new(|| "Type your name".to_string()),
-            ..Default::default()
-        });
+        let (field, _) = laid_out_field(
+            TextFieldProps::props()
+                .label("Name")
+                .placeholder("Type your name")
+                .build(),
+        );
         let tree = ComponentList::new(field);
         assert!(find_text(&tree.commands(), "Name"));
         assert!(find_text(&tree.commands(), "Type your name"));

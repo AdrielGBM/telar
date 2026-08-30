@@ -516,6 +516,8 @@ struct ParsedField {
     ty: String,
     optional: bool,
     default: Option<String>,
+    /// Attribute lines the author wrote above the field, carried through verbatim.
+    attrs: String,
 }
 
 /// Finds the byte index of the top-level `=` that separates a field type from an inline default
@@ -607,9 +609,17 @@ fn hoisted_use_lines(logic: &str) -> Vec<usize> {
 
 /// Extracts a `Props` field from a `[pub] name: Type[ = default]` chunk, skipping comment lines.
 fn parse_field(chunk: &str) -> Option<ParsedField> {
+    let attrs: String = chunk
+        .lines()
+        .filter(|l| l.trim_start().starts_with("#["))
+        .map(|l| format!("    {}\n", l.trim()))
+        .collect();
     let cleaned = chunk
         .lines()
-        .filter(|l| !l.trim_start().starts_with("//"))
+        .filter(|l| {
+            let t = l.trim_start();
+            !t.starts_with("//") && !t.starts_with("#[")
+        })
         .collect::<Vec<_>>()
         .join(" ");
     let t = cleaned.trim();
@@ -630,6 +640,7 @@ fn parse_field(chunk: &str) -> Option<ParsedField> {
         ty: ty.to_string(),
         optional,
         default,
+        attrs,
     })
 }
 
@@ -707,7 +718,7 @@ fn transpile(input: TranspileInput<'_>) -> Result<TranspiledSource, TranspileErr
         ));
     }
 
-    let (props_struct, props_default_impl, props_span) =
+    let (props_struct, props_origins, props_span) =
         extract_props_struct(&doc.logic.source, &fn_name);
     let (context_struct, context_span) = extract_context_struct(&doc.logic.source, &fn_name);
     let has_props = props_struct.is_some();
@@ -833,16 +844,20 @@ fn transpile(input: TranspileInput<'_>) -> Result<TranspiledSource, TranspileErr
     if let Some(struct_code) = &props_struct {
         let struct_start = props_span.map(|(s, _)| s).unwrap_or(0);
         for (k, line) in struct_code.lines().enumerate() {
-            let src = Some(logic_start0 + (struct_start + k) as u32);
+            // The struct is rebuilt rather than copied — the inline `= default` sugar comes off and the
+            // builder's attributes go on — so its lines no longer sit `k` apart from the author's. The
+            // rebuild says where each one came from; an attribute it injected came from nowhere, and
+            // claiming a line for it would point a diagnostic at whatever the author wrote there.
+            let src = match &props_origins {
+                Some(origins) => origins
+                    .get(k)
+                    .copied()
+                    .flatten()
+                    .map(|line| logic_start0 + line as u32),
+                None => Some(logic_start0 + (struct_start + k) as u32),
+            };
             code.push(line, src);
             code.push("\n", src);
-        }
-        // Synthesized from inline `field: Type = expr` defaults (no source span — it maps to no `.rsx` line).
-        if let Some(impl_code) = &props_default_impl {
-            for line in impl_code.lines() {
-                code.push(line, None);
-                code.push("\n", None);
-            }
         }
         code.push("\n", None);
     }
@@ -1215,7 +1230,13 @@ fn slot_context_expr(nodes: &[ViewNode]) -> Option<String> {
 /// `default_impl` is `Some` only when the struct uses inline `field: Type = expr` defaults (a synthesized
 /// `Default` impl); it is emitted after the struct with no source mapping. `span` is the struct's
 /// `[start, end]` (inclusive) line span within `logic`, so the caller can map the struct back to source.
-type ExtractedProps = (Option<String>, Option<String>, Option<(usize, usize)>);
+/// The emitted struct, the `.rsx` line each of its lines came from (`None` for a line the transpiler
+/// injected), and the span of the declaration lifted out of `[logic]`.
+type ExtractedProps = (
+    Option<String>,
+    Option<Vec<Option<usize>>>,
+    Option<(usize, usize)>,
+);
 
 /// Whether `line` declares `struct <name>`. The boundary test matters: without it `struct Context` would also
 /// claim a `struct ContextMenu`, and `struct Props` a `struct PropsBag`.
@@ -1306,9 +1327,6 @@ fn extract_props_struct(logic: &str, fn_name: &str) -> ExtractedProps {
     let renamed = struct_code.replace("struct Props", &format!("struct {props_type}"));
     let span = Some((start, end));
 
-    // Inline `name: Type = expr` defaults: strip them from the emitted struct (Rust fields can't carry
-    // a default) and synthesize a `Default` impl instead. Absent any inline default, the struct is
-    // emitted verbatim (renamed) — byte-identical to the pre-sugar behaviour.
     let (open_rel, close_rel) = match (renamed.find('{'), renamed.rfind('}')) {
         (Some(o), Some(c)) if o < c => (o, c),
         _ => return (Some(renamed), None, span),
@@ -1318,42 +1336,62 @@ fn extract_props_struct(logic: &str, fn_name: &str) -> ExtractedProps {
         .iter()
         .filter_map(|c| parse_field(c))
         .collect();
-    if !parsed.iter().any(|f| f.default.is_some()) {
-        return (Some(renamed), None, span);
-    }
 
-    // Rebuild the struct with defaults stripped, dropping `Default` from any `#[derive(...)]` (it would
-    // collide with the synthesized impl). Field-level comments are dropped in the generated output only.
+    // A struct that derived `Default` meant "every prop may be omitted", which is what `#[props(default)]`
+    // says per field. The derive is dropped along with it: nothing constructs these by `Default::default()`
+    // any more, and keeping it would demand a `Default` of every field type the builder does not need.
     let header = &renamed[..open_rel];
+    let derived_default = header.contains("Default");
+    // Per emitted line, the `.rsx` line it came from. An injected attribute has none — claiming one would
+    // point a diagnostic at whatever the author happened to write there.
+    let mut origins: Vec<Option<usize>> = Vec::new();
+    let kept: Vec<(usize, String)> = header
+        .lines()
+        .enumerate()
+        .filter_map(|(k, line)| strip_default_from_derive(line).map(|line| (start + k, line)))
+        .collect();
     let mut struct_out = String::new();
-    for line in header.lines() {
-        if let Some(kept) = strip_default_from_derive(line) {
-            struct_out.push_str(&kept);
-            struct_out.push('\n');
-        }
+    // Everything but the declaration itself, so the injected derive sits against `pub struct` rather than
+    // above the doc comment the author wrote for it.
+    for (origin, line) in kept.iter().take(kept.len().saturating_sub(1)) {
+        struct_out.push_str(line);
+        struct_out.push('\n');
+        origins.push(Some(*origin));
     }
-    let brace_line = struct_out.trim_end().to_string();
-    struct_out.clear();
-    struct_out.push_str(&brace_line);
+    struct_out.push_str("#[derive(::telar::Props)]\n");
+    origins.push(None);
+    if let Some((origin, line)) = kept.last() {
+        struct_out.push_str(line.trim_end());
+        origins.push(Some(*origin));
+    }
     struct_out.push_str(" {\n");
     for f in &parsed {
+        // Whatever the author wrote wins: `[logic]` is their Rust, and a `#[props(into)]` they put on a
+        // reactive prop is the one thing this cannot work out for them.
+        match (&f.default, derived_default, f.attrs.contains("#[props(")) {
+            (_, _, true) => {}
+            (Some(expr), _, _) => {
+                struct_out.push_str(&format!("    #[props(default = {expr})]\n"));
+                origins.push(None);
+            }
+            (None, true, _) => {
+                struct_out.push_str("    #[props(default)]\n");
+                origins.push(None);
+            }
+            (None, false, _) => {}
+        }
+        for line in f.attrs.lines() {
+            struct_out.push_str(line);
+            struct_out.push('\n');
+            origins.push(None);
+        }
         struct_out.push_str(&format!("    pub {}: {},\n", f.name, f.ty));
+        origins.push(field_line(&lines[start..=end], &f.name).map(|k| start + k));
     }
     struct_out.push('}');
+    origins.push(Some(end));
 
-    let mut impl_body = String::new();
-    for f in &parsed {
-        let val = f
-            .default
-            .clone()
-            .unwrap_or_else(|| "Default::default()".to_string());
-        impl_body.push_str(&format!("            {}: {},\n", f.name, val));
-    }
-    let impl_code = format!(
-        "impl Default for {props_type} {{\n    fn default() -> Self {{\n        Self {{\n{impl_body}        }}\n    }}\n}}"
-    );
-
-    (Some(struct_out), Some(impl_code), span)
+    (Some(struct_out), Some(origins), span)
 }
 
 /// Removes `Default` from a `#[derive(...)]` attribute line (returning `None` if the derive becomes
@@ -1374,4 +1412,15 @@ fn strip_default_from_derive(line: &str) -> Option<String> {
         return None;
     }
     Some(format!("#[derive({})]", items.join(", ")))
+}
+
+/// The line within a struct declaration that declares `name`, so a rebuilt field still points at the one the
+/// author wrote rather than at wherever it happened to land in the rebuild.
+fn field_line(lines: &[&str], name: &str) -> Option<usize> {
+    let wanted = format!("{name}:");
+    lines.iter().position(|l| {
+        l.trim_start()
+            .trim_start_matches("pub ")
+            .starts_with(&wanted)
+    })
 }

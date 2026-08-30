@@ -5,8 +5,9 @@
 
 // A one-line `.rsx` code snippet in a dark pill. Snippets use single quotes for string
 // literals (real `.rsx` uses double quotes) because a `"` would close the markup string early.
-#[derive(Default)]
+#[derive(::telar::Props)]
 pub struct SharedComponentsCodeLineProps {
+    #[props(default)]
     pub code: &'static str,
 }
 
@@ -30,7 +31,7 @@ pub fn shared_components_code_line(props: SharedComponentsCodeLineProps) -> Resu
 #[allow(dead_code, unused_variables, unused_mut)]
 pub fn shared_components_code_line_preview_0() -> Result<Box<dyn LayoutItem>, LayoutError> {
     #[allow(unused_imports)] use telar::use_theme;
-    let __node_0 = code_line(CodeLineProps { code: "box fill:primary radius:8 width:120 height:80" })?;
+    let __node_0 = code_line(CodeLineProps::props().code("box fill:primary radius:8 width:120 height:80").build())?;
     Ok(Box::new(__node_0))
 }
 

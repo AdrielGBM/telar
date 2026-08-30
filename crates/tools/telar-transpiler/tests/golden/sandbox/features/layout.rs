@@ -8,7 +8,7 @@ pub fn features_layout() -> Result<Box<dyn LayoutItem>, LayoutError> {
     let __owner = telar::owner_scope();
     #[allow(unused_imports)] use telar::use_theme;
     let __col_0 = {
-        let __node_0 = doc_header(DocHeaderProps { kicker: "FOUNDATIONS", title: "Layout", desc: "Everything is a flex row or column. Nest them freely, space children with gap, pad the edges, and align on either axis." })?;
+        let __node_0 = doc_header(DocHeaderProps::props().kicker("FOUNDATIONS").title("Layout").desc("Everything is a flex row or column. Nest them freely, space children with gap, pad the edges, and align on either axis.").build())?;
         let __node_1 = {
             let mut __slots = Slots::new();
             let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
@@ -39,15 +39,15 @@ pub fn features_layout() -> Result<Box<dyn LayoutItem>, LayoutError> {
                 };
                 __children.push(box_item(__col_1));
                 __slots.extend_default(__children);
-                card(CardProps { gap: 16.0, ..Default::default() }, __slots)?
+                card(CardProps::props().gap(16.0).build(), __slots)?
             };
             __children.push(box_item(__node_2));
-            let __node_3 = code_line(CodeLineProps { code: "row gap:10" })?;
+            let __node_3 = code_line(CodeLineProps::props().code("row gap:10").build())?;
             __children.push(box_item(__node_3));
-            let __node_4 = code_line(CodeLineProps { code: "col gap:8" })?;
+            let __node_4 = code_line(CodeLineProps::props().code("col gap:8").build())?;
             __children.push(box_item(__node_4));
             __slots.extend_default(__children);
-            example(ExampleProps { title: "Row and column" }, __slots)?
+            example(ExampleProps::props().title("Row and column").build(), __slots)?
         };
         let __node_5 = {
             let mut __slots = Slots::new();
@@ -79,13 +79,13 @@ pub fn features_layout() -> Result<Box<dyn LayoutItem>, LayoutError> {
                 };
                 __children.push(box_item(__row_2));
                 __slots.extend_default(__children);
-                card(CardProps { gap: 10.0, ..Default::default() }, __slots)?
+                card(CardProps::props().gap(10.0).build(), __slots)?
             };
             __children.push(box_item(__node_6));
-            let __node_7 = code_line(CodeLineProps { code: "row justify:between   ·   center · end · around · evenly" })?;
+            let __node_7 = code_line(CodeLineProps::props().code("row justify:between   ·   center · end · around · evenly").build())?;
             __children.push(box_item(__node_7));
             __slots.extend_default(__children);
-            example(ExampleProps { title: "justify — distribute along the main axis" }, __slots)?
+            example(ExampleProps::props().title("justify — distribute along the main axis").build(), __slots)?
         };
         let __node_8 = {
             let mut __slots = Slots::new();
@@ -107,13 +107,13 @@ pub fn features_layout() -> Result<Box<dyn LayoutItem>, LayoutError> {
                 };
                 __children.push(box_item(__row_3));
                 __slots.extend_default(__children);
-                card(CardProps { gap: 12.0, ..Default::default() }, __slots)?
+                card(CardProps::props().gap(12.0).build(), __slots)?
             };
             __children.push(box_item(__node_9));
-            let __node_10 = code_line(CodeLineProps { code: "row align:center   ·   start · end · stretch" })?;
+            let __node_10 = code_line(CodeLineProps::props().code("row align:center   ·   start · end · stretch").build())?;
             __children.push(box_item(__node_10));
             __slots.extend_default(__children);
-            example(ExampleProps { title: "align — cross-axis alignment of mixed-height children" }, __slots)?
+            example(ExampleProps::props().title("align — cross-axis alignment of mixed-height children").build(), __slots)?
         };
         let __node_11 = {
             let mut __slots = Slots::new();
@@ -135,13 +135,13 @@ pub fn features_layout() -> Result<Box<dyn LayoutItem>, LayoutError> {
                 };
                 __children.push(box_item(__row_4));
                 __slots.extend_default(__children);
-                card(CardProps { ..Default::default() }, __slots)?
+                card(CardProps::props().build(), __slots)?
             };
             __children.push(box_item(__node_12));
-            let __node_13 = code_line(CodeLineProps { code: "box grow:2   (takes twice the free space of grow:1)" })?;
+            let __node_13 = code_line(CodeLineProps::props().code("box grow:2   (takes twice the free space of grow:1)").build())?;
             __children.push(box_item(__node_13));
             __slots.extend_default(__children);
-            example(ExampleProps { title: "grow — children share leftover space by weight" }, __slots)?
+            example(ExampleProps::props().title("grow — children share leftover space by weight").build(), __slots)?
         };
         let __node_14 = {
             let mut __slots = Slots::new();
@@ -161,13 +161,13 @@ pub fn features_layout() -> Result<Box<dyn LayoutItem>, LayoutError> {
                 };
                 __children.push(box_item(__row_5));
                 __slots.extend_default(__children);
-                card(CardProps { ..Default::default() }, __slots)?
+                card(CardProps::props().build(), __slots)?
             };
             __children.push(box_item(__node_15));
-            let __node_16 = code_line(CodeLineProps { code: "row gap:10 wrap   >   for _ in 0..5   >   box …" })?;
+            let __node_16 = code_line(CodeLineProps::props().code("row gap:10 wrap   >   for _ in 0..5   >   box …").build())?;
             __children.push(box_item(__node_16));
             __slots.extend_default(__children);
-            example(ExampleProps { title: "wrap — children flow onto new lines when they run out of room" }, __slots)?
+            example(ExampleProps::props().title("wrap — children flow onto new lines when they run out of room").build(), __slots)?
         };
         let __node_17 = {
             let mut __slots = Slots::new();
@@ -207,13 +207,13 @@ pub fn features_layout() -> Result<Box<dyn LayoutItem>, LayoutError> {
                 };
                 __children.push(box_item(__sbox_17));
                 __slots.extend_default(__children);
-                card(CardProps { ..Default::default() }, __slots)?
+                card(CardProps::props().build(), __slots)?
             };
             __children.push(box_item(__node_18));
-            let __node_19 = code_line(CodeLineProps { code: "box pad:14 gap:8   >   row justify:between   >   text …" })?;
+            let __node_19 = code_line(CodeLineProps::props().code("box pad:14 gap:8   >   row justify:between   >   text …").build())?;
             __children.push(box_item(__node_19));
             __slots.extend_default(__children);
-            example(ExampleProps { title: "Nesting — a small card is just rows inside a column" }, __slots)?
+            example(ExampleProps::props().title("Nesting — a small card is just rows inside a column").build(), __slots)?
         };
         let __node_20 = {
             let mut __slots = Slots::new();
@@ -245,30 +245,30 @@ pub fn features_layout() -> Result<Box<dyn LayoutItem>, LayoutError> {
                 };
                 __children.push(box_item(__node_22));
                 __slots.extend_default(__children);
-                card(CardProps { ..Default::default() }, __slots)?
+                card(CardProps::props().build(), __slots)?
             };
             __children.push(box_item(__node_21));
-            let __node_23 = code_line(CodeLineProps { code: "scroll height:160   >   col …   >   for i in 0..12   >   box …" })?;
+            let __node_23 = code_line(CodeLineProps::props().code("scroll height:160   >   col …   >   for i in 0..12   >   box …").build())?;
             __children.push(box_item(__node_23));
             __slots.extend_default(__children);
-            example(ExampleProps { title: "scroll — a bounded viewport that scrolls its overflowing content" }, __slots)?
+            example(ExampleProps::props().title("scroll — a bounded viewport that scrolls its overflowing content").build(), __slots)?
         };
         let __node_24 = {
             let mut __slots = Slots::new();
             let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
             let __col_3 = {
-                let __node_25 = prop_row(PropRowProps { name: "direction", values: "row · col", about: "Main axis. row/col/box set a sensible default." })?;
-                let __node_26 = prop_row(PropRowProps { name: "gap", values: "number", about: "Space between children (also gap_x / gap_y)." })?;
-                let __node_27 = prop_row(PropRowProps { name: "pad", values: "number", about: "Padding on all sides (also pad_x / pad_y)." })?;
-                let __node_28 = prop_row(PropRowProps { name: "align", values: "start·center·end·stretch", about: "Cross-axis alignment of children." })?;
-                let __node_29 = prop_row(PropRowProps { name: "justify", values: "start·center·between·around·evenly", about: "Main-axis distribution." })?;
-                let __node_30 = prop_row(PropRowProps { name: "grow / shrink", values: "number", about: "How a child expands or contracts to fit." })?;
-                let __node_31 = prop_row(PropRowProps { name: "wrap", values: "flag", about: "Let children flow onto multiple lines." })?;
+                let __node_25 = prop_row(PropRowProps::props().name("direction").values("row · col").about("Main axis. row/col/box set a sensible default.").build())?;
+                let __node_26 = prop_row(PropRowProps::props().name("gap").values("number").about("Space between children (also gap_x / gap_y).").build())?;
+                let __node_27 = prop_row(PropRowProps::props().name("pad").values("number").about("Padding on all sides (also pad_x / pad_y).").build())?;
+                let __node_28 = prop_row(PropRowProps::props().name("align").values("start·center·end·stretch").about("Cross-axis alignment of children.").build())?;
+                let __node_29 = prop_row(PropRowProps::props().name("justify").values("start·center·between·around·evenly").about("Main-axis distribution.").build())?;
+                let __node_30 = prop_row(PropRowProps::props().name("grow / shrink").values("number").about("How a child expands or contracts to fit.").build())?;
+                let __node_31 = prop_row(PropRowProps::props().name("wrap").values("flag").about("Let children flow onto multiple lines.").build())?;
                 Container::new(LayoutStyle::new().flex_column().gap(6.0), children![__node_25, __node_26, __node_27, __node_28, __node_29, __node_30, __node_31])?
             };
             __children.push(box_item(__col_3));
             __slots.extend_default(__children);
-            example(ExampleProps { title: "Attributes" }, __slots)?
+            example(ExampleProps::props().title("Attributes").build(), __slots)?
         };
         Container::new(LayoutStyle::new().flex_column().gap(20.0), children![__node_0, __node_1, __node_5, __node_8, __node_11, __node_14, __node_17, __node_20, __node_24])?
     };

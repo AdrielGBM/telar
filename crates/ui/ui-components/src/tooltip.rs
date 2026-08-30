@@ -1,7 +1,8 @@
 use std::rc::Rc;
+use telar_macros::Props;
 
 use layout_core::{AlignItems, JustifyContent, LayoutError, LayoutStyle};
-use reactive_core::signal;
+use reactive_core::{Reactive, signal};
 use renderer_core::{BorderRadius, Color, RectStyle, ShapeStyle, TextStyle, TextWrap};
 use ui_core::{
     Container, LayoutItem, Overlay, Placement, ReactiveList, Slots, StyledContainer, Text,
@@ -9,7 +10,6 @@ use ui_core::{
 };
 
 use crate::shared;
-use crate::shared::props_default;
 
 /// Fallback bubble surface when `color` is unset — an opaque dark chip.
 const DEFAULT_BUBBLE: Color = Color::rgba(0.12, 0.12, 0.16, 0.96);
@@ -44,44 +44,42 @@ const DESCRIPTION_RATIO: f32 = BUBBLE_RATIO * 0.92;
 /// bubble anchored just below the trigger. Built on the `overlay` primitive's anchored variant (the bubble is
 /// portalled to the top layer and translated to the trigger's rect, so it escapes clipping and only itself
 /// blocks). High-level sugar; lives in `ui-components`, not the kernel.
+#[derive(Props)]
 pub struct TooltipProps {
-    pub text: Box<dyn Fn() -> String>,
+    #[props(into, default)]
+    pub text: Reactive<String>,
     /// The binding that does the same thing, pushed to the far side of the first line. Empty means none.
     ///
     /// A hint that names its own shortcut is how a keyboard gets learned — the pointer finds the control, and
     /// the bubble says which key would have got there first. Separate from `text` because it is *placed*, not
     /// worded: folded into the sentence it wraps with it and stops lining up down a toolbar.
-    pub shortcut: Box<dyn Fn() -> String>,
+    #[props(into, default)]
+    pub shortcut: Reactive<String>,
     /// A sentence under the name, saying what the control does rather than what it is called. Empty means
     /// none, which is the right shape for a control whose name already says everything.
-    pub description: Box<dyn Fn() -> String>,
+    #[props(into, default)]
+    pub description: Reactive<String>,
     /// Which side of the trigger the bubble takes: `"bottom"` (the default), `"top"`, `"start"`/`"left"` or
     /// `"end"`/`"right"`. It still flips when that side has no room.
+    #[props(default = "")]
     pub side: &'static str,
     /// Bubble surface colour. `Color::TRANSPARENT` (the default) means "unset" -> `DEFAULT_BUBBLE`. A closure
     /// (re-read every frame) so a theme token or `$signal` colour re-colours live.
-    pub color: Box<dyn Fn() -> Color>,
+    #[props(into, default = Reactive::of(|| Color::TRANSPARENT))]
+    pub color: Reactive<Color>,
     /// Amends the paint of the bubble — this component's **principal surface**, the thing a caller means when
     /// they point at a tooltip. See [`shared::SurfaceStyle`] for why it takes the finished style rather than
     /// naming one property, and for when a theme token is the right instrument instead.
+    #[props(some, default)]
     pub style: Option<Box<dyn Fn(RectStyle) -> RectStyle>>,
     /// Let the trigger take the space its parent offers instead of hugging its content.
     ///
     /// The wrapper the tooltip puts around the trigger is a real node in the parent's flow, so without this
     /// a tooltipped child cannot be a `flex-1` cell: wrapping it collapses the row it was sharing. Set on a
     /// tab, a toolbar segment, or anything else whose whole point is to divide the space evenly.
+    #[props(default = false)]
     pub stretch: bool,
 }
-
-props_default!(TooltipProps {
-    text: text,
-    shortcut: text,
-    description: text,
-    side: (""),
-    color: color,
-    style: none,
-    stretch: (false),
-});
 
 fn placement_of(side: &str) -> Placement {
     match side {
@@ -122,10 +120,6 @@ pub fn tooltip(props: TooltipProps, mut slots: Slots) -> Result<Box<dyn LayoutIt
     // The bubble is a fresh `text` each hover (rebuildable — no slot children to preserve), so no take-once
     // cell here; keying on `hovered` mounts/disposes the anchored overlay like a reactive `if`. Both `text`
     // and `color` are re-erased to `Rc` so each remount can clone them into a fresh bubble.
-    let text: shared::ReactiveText = Rc::from(text);
-    let shortcut: shared::ReactiveText = Rc::from(shortcut);
-    let description: shared::ReactiveText = Rc::from(description);
-    let color: shared::ReactiveColor = Rc::from(color);
     let style: shared::SurfaceStyle =
         style.map(|f| -> Rc<dyn Fn(RectStyle) -> RectStyle> { Rc::from(f) });
     let key_hovered = hovered;
@@ -172,7 +166,7 @@ pub fn tooltip(props: TooltipProps, mut slots: Slots) -> Result<Box<dyn LayoutIt
 /// sub-root) inside a NON-blocking overlay (a tooltip must not eat clicks on the page).
 fn build_bubble(
     content: Content,
-    color: shared::ReactiveColor,
+    color: Reactive<Color>,
     style: shared::SurfaceStyle,
     placement: Placement,
     trigger_node: ui_core::NodeId,
@@ -196,7 +190,7 @@ fn build_bubble(
         move |_r| {
             shared::amend(
                 RectStyle::default()
-                    .with_fill(shared::resolve(color.as_ref(), || DEFAULT_BUBBLE))
+                    .with_fill(shared::resolve(&color, || DEFAULT_BUBBLE))
                     .with_radius(BorderRadius::all(bubble_radius())),
                 &style,
             )
@@ -219,9 +213,9 @@ fn build_bubble(
 
 /// What the bubble says, in the one shape every hint in an application takes.
 struct Content {
-    text: shared::ReactiveText,
-    shortcut: shared::ReactiveText,
-    description: shared::ReactiveText,
+    text: Reactive<String>,
+    shortcut: Reactive<String>,
+    description: Reactive<String>,
 }
 
 impl Content {
@@ -237,7 +231,7 @@ impl Content {
             description,
         } = self;
         let name = Text::declaring(
-            move || text(),
+            move || text.get(),
             LayoutStyle::new(),
             |t| bubble_text(t, BUBBLE_RATIO, 1.0).with_text_wrap(TextWrap::NoWrap),
         )?;
@@ -267,12 +261,12 @@ impl Content {
 /// A line that is there only while its text is non-empty. Zero-sized otherwise, so the bubble keeps the
 /// height of what it actually says.
 fn optional_line(
-    text: shared::ReactiveText,
+    text: Reactive<String>,
     style: impl Fn(TextStyle) -> TextStyle + Clone + 'static,
 ) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let present = text.clone();
     Ok(box_item(ReactiveList::new(
-        move || vec![!present().is_empty()],
+        move || vec![!present.get().is_empty()],
         |shown: &bool| *shown,
         move |shown| -> Result<Box<dyn LayoutItem>, LayoutError> {
             if !shown {
@@ -283,7 +277,7 @@ fn optional_line(
             }
             let text = text.clone();
             Ok(box_item(Text::declaring(
-                move || text(),
+                move || text.get(),
                 LayoutStyle::new(),
                 style.clone(),
             )?))
@@ -331,10 +325,7 @@ mod tests {
     fn a_bubble_takes_the_size_the_region_around_it_declared() {
         crate::test_support::fresh_layout_runtime();
         let tooltip = tooltip(
-            TooltipProps {
-                text: Box::new(|| "Move".to_string()),
-                ..Default::default()
-            },
+            TooltipProps::props().text("Move").build(),
             slot_with_trigger(),
         )
         .unwrap();
@@ -378,14 +369,7 @@ mod tests {
     fn hover_shows_bubble_and_leave_hides_it() {
         crate::test_support::fresh_layout_runtime();
         let slots = slot_with_trigger();
-        let tooltip = tooltip(
-            TooltipProps {
-                text: Box::new(|| "Helpful hint".to_string()),
-                ..Default::default()
-            },
-            slots,
-        )
-        .unwrap();
+        let tooltip = tooltip(TooltipProps::props().text("Helpful hint").build(), slots).unwrap();
 
         // A parent-less root computed against the window registers the overlay host the bubble anchors into.
         let root = new_container(
@@ -428,12 +412,11 @@ mod tests {
     fn a_hint_shows_its_name_its_shortcut_and_its_description() {
         crate::test_support::fresh_layout_runtime();
         let tooltip = tooltip(
-            TooltipProps {
-                text: Box::new(|| "Move".to_string()),
-                shortcut: Box::new(|| "G".to_string()),
-                description: Box::new(|| "Drag the selection along the ground".to_string()),
-                ..Default::default()
-            },
+            TooltipProps::props()
+                .text("Move")
+                .shortcut("G")
+                .description("Drag the selection along the ground")
+                .build(),
             slot_with_trigger(),
         )
         .unwrap();
@@ -471,11 +454,10 @@ mod tests {
     fn the_description_line_is_set_with_room_to_wrap_into() {
         crate::test_support::fresh_layout_runtime();
         let tooltip = tooltip(
-            TooltipProps {
-                text: Box::new(|| "Setup".to_string()),
-                description: Box::new(|| "Name regions and say what it is made of".to_string()),
-                ..Default::default()
-            },
+            TooltipProps::props()
+                .text("Setup")
+                .description("Name regions and say what it is made of")
+                .build(),
             slot_with_trigger(),
         )
         .unwrap();
@@ -525,12 +507,11 @@ mod tests {
     fn a_bubble_is_as_wide_as_what_it_says() {
         crate::test_support::fresh_layout_runtime();
         let tooltip = tooltip(
-            TooltipProps {
-                text: Box::new(|| "Object".to_string()),
-                shortcut: Box::new(|| "1".to_string()),
-                description: Box::new(|| "Pick whole bodies".to_string()),
-                ..Default::default()
-            },
+            TooltipProps::props()
+                .text("Object")
+                .shortcut("1")
+                .description("Pick whole bodies")
+                .build(),
             slot_with_trigger(),
         )
         .unwrap();
@@ -592,16 +573,14 @@ mod tests {
                 })
                 .sum::<f32>()
         };
-        let bare = height_of(TooltipProps {
-            text: Box::new(|| "Move".to_string()),
-            ..Default::default()
-        });
+        let bare = height_of(TooltipProps::props().text("Move").build());
         crate::test_support::fresh_layout_runtime();
-        let full = height_of(TooltipProps {
-            text: Box::new(|| "Move".to_string()),
-            description: Box::new(|| "Drag the selection".to_string()),
-            ..Default::default()
-        });
+        let full = height_of(
+            TooltipProps::props()
+                .text("Move")
+                .description("Drag the selection")
+                .build(),
+        );
         assert!(bare > 0.0, "the name is drawn either way");
         assert!(
             full > bare,
@@ -614,7 +593,7 @@ mod tests {
     fn builds_without_hover() {
         crate::test_support::fresh_layout_runtime();
         let slots = slot_with_trigger();
-        let tooltip = tooltip(TooltipProps::default(), slots).unwrap();
+        let tooltip = tooltip(TooltipProps::props().build(), slots).unwrap();
         let tree = ComponentList::new(tooltip);
         assert!(!find_text(&tree.commands(), "Helpful hint"));
     }

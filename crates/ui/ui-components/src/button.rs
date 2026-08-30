@@ -1,13 +1,12 @@
-use std::rc::Rc;
+use telar_macros::Props;
 
 use layout_core::{AlignItems, JustifyContent, LayoutError, LayoutStyle};
-use reactive_core::signal;
+use reactive_core::{Reactive, signal};
 use renderer_core::{Border, BorderRadius, Color, RectStyle, ShapeStyle};
 use ui_core::focus::Role;
 use ui_core::{LayoutItem, StyledContainer, Text, box_item};
 
 use crate::shared;
-use crate::shared::props_default;
 
 /// Padding a button reserves around its label, derived from the theme's spacing unit rather than fixed so one
 /// theme number moves it. `Text::new` measures the label at its full line box (taller than a bare
@@ -34,24 +33,22 @@ fn shell() -> LayoutStyle {
 /// `on_press` + `hover` + a centred `text`); it lives in `ui-components`, not the kernel, so an app can
 /// drop it or ship its own. `fill`/`outline` are reactive colour closures (re-read every frame) so a
 /// button styled from a theme token re-colours when the theme switches.
+#[derive(Props)]
 pub struct ButtonProps {
-    pub label: Box<dyn Fn() -> String>,
+    #[props(into, default)]
+    pub label: Reactive<String>,
     /// Filled variant colour. `Color::TRANSPARENT` (the default) means "unset" — the button keeps its
     /// theme-driven default fill. A closure so a theme token re-reads on every render.
-    pub fill: Box<dyn Fn() -> Color>,
+    #[props(into, default = Reactive::of(|| Color::TRANSPARENT))]
+    pub fill: Reactive<Color>,
     /// Outlined variant colour; `Color::TRANSPARENT` means unset. Takes precedence only when `fill` is unset.
-    pub outline: Box<dyn Fn() -> Color>,
+    #[props(into, default = Reactive::of(|| Color::TRANSPARENT))]
+    pub outline: Reactive<Color>,
+    #[props(default = false)]
     pub ghost: bool,
+    #[props(default = Box::new(|| {}))]
     pub on_press: Box<dyn Fn()>,
 }
-
-props_default!(ButtonProps {
-    label: text,
-    fill: color,
-    outline: color,
-    ghost: (false),
-    on_press: action,
-});
 
 pub fn button(props: ButtonProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let ButtonProps {
@@ -63,40 +60,33 @@ pub fn button(props: ButtonProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
     } = props;
     // The reactive colour closures feed three independent style closures (base rect, hover rect, label
     // colour), so share them via `Rc` rather than move them into a single one.
-    let fill: shared::ReactiveColor = Rc::from(fill);
-    let outline: shared::ReactiveColor = Rc::from(outline);
     // The container tracks its own hover for the rect swap; the label's colour lives on a separate leaf,
     // so mirror the hover into this signal and read it from the label style (the outline variant flips
     // its text to white on hover).
     let hovered = signal(false);
 
-    let (label_fill, label_outline, label_hover) = (Rc::clone(&fill), Rc::clone(&outline), hovered);
+    let (label_fill, label_outline, label_hover) = (fill.clone(), outline.clone(), hovered);
     let label_widget = Text::declaring(
-        move || label(),
+        move || label.get(),
         LayoutStyle::new(),
         move |t| {
             let text = shared::control_text(t, 1.0);
-            match label_color(
-                label_fill.as_ref(),
-                label_outline.as_ref(),
-                ghost,
-                label_hover.get(),
-            ) {
+            match label_color(&label_fill, &label_outline, ghost, label_hover.get()) {
                 Some(color) => text.with_color(color),
                 None => text,
             }
         },
     )?;
 
-    let (base_fill, base_outline) = (Rc::clone(&fill), Rc::clone(&outline));
-    let (hover_fill, hover_outline) = (Rc::clone(&fill), Rc::clone(&outline));
+    let (base_fill, base_outline) = (fill.clone(), outline.clone());
+    let (hover_fill, hover_outline) = (fill.clone(), outline.clone());
     let container = StyledContainer::new(
         shell(),
-        move |_r| variant_rect(base_fill.as_ref(), base_outline.as_ref(), ghost, false),
+        move |_r| variant_rect(&base_fill, &base_outline, ghost, false),
         vec![box_item(label_widget)],
     )?
     .styled_by(shell)
-    .hover_style(move |_r| variant_rect(hover_fill.as_ref(), hover_outline.as_ref(), ghost, true))
+    .hover_style(move |_r| variant_rect(&hover_fill, &hover_outline, ghost, true))
     .on_hover(move |h| hovered.set(h))
     .control(Role::Button)
     .on_press(on_press);
@@ -108,8 +98,8 @@ pub fn button(props: ButtonProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
 /// ghost is transparent, outline strokes then fills on hover, filled keeps its fill, and the no-variant
 /// default is the theme's primary (darkened on hover).
 fn variant_rect(
-    fill: &dyn Fn() -> Color,
-    outline: &dyn Fn() -> Color,
+    fill: &Reactive<Color>,
+    outline: &Reactive<Color>,
     ghost: bool,
     hovered: bool,
 ) -> RectStyle {
@@ -117,7 +107,7 @@ fn variant_rect(
     if ghost {
         return RectStyle::default().with_radius(radius);
     }
-    let outline_c = outline();
+    let outline_c = outline.get();
     if outline_c != Color::TRANSPARENT {
         return if hovered {
             RectStyle::default()
@@ -129,7 +119,7 @@ fn variant_rect(
                 .with_radius(radius)
         };
     }
-    let fill_c = fill();
+    let fill_c = fill.get();
     if fill_c != Color::TRANSPARENT {
         return RectStyle::default().with_fill(fill_c).with_radius(radius);
     }
@@ -149,15 +139,15 @@ fn variant_rect(
 /// own, so its label sits on the page beside ordinary text — naming the theme's `ink` here made it the one
 /// word in a region that had declared its colour that came out in the theme's.
 fn label_color(
-    fill: &dyn Fn() -> Color,
-    outline: &dyn Fn() -> Color,
+    fill: &Reactive<Color>,
+    outline: &Reactive<Color>,
     ghost: bool,
     hovered: bool,
 ) -> Option<Color> {
     if ghost {
         return None;
     }
-    let outline_c = outline();
+    let outline_c = outline.get();
     if outline_c != Color::TRANSPARENT {
         return Some(if hovered {
             shared::ink_on(outline_c)
@@ -165,7 +155,7 @@ fn label_color(
             outline_c
         });
     }
-    let fill_c = fill();
+    let fill_c = fill.get();
     if fill_c != Color::TRANSPARENT {
         return Some(shared::ink_on(fill_c));
     }
@@ -190,12 +180,7 @@ mod tests {
     #[test]
     fn a_ghost_label_keeps_the_ink_of_the_region_around_it() {
         crate::test_support::fresh_layout_runtime();
-        let btn = button(ButtonProps {
-            label: Box::new(|| "Undo".to_string()),
-            ghost: true,
-            ..Default::default()
-        })
-        .unwrap();
+        let btn = button(ButtonProps::props().label("Undo").ghost(true).build()).unwrap();
         let root = new_container(
             LayoutStyle::new().flex_column().width(200.0).height(80.0),
             &[btn.layout_node()],
@@ -233,12 +218,13 @@ mod tests {
         let flag = Rc::new(Cell::new(false));
         let sink = flag.clone();
         crate::test_support::fresh_layout_runtime();
-        let mut btn = button(ButtonProps {
-            label: Box::new(|| "OK".to_string()),
-            fill: Box::new(|| Color::rgba(0.2, 0.4, 0.9, 1.0)),
-            on_press: Box::new(move || sink.set(true)),
-            ..Default::default()
-        })
+        let mut btn = button(
+            ButtonProps::props()
+                .label("OK")
+                .fill(Reactive::of(|| Color::rgba(0.2, 0.4, 0.9, 1.0)))
+                .on_press(Box::new(move || sink.set(true)))
+                .build(),
+        )
         .unwrap();
         let node = btn.layout_node();
         let rect = track_layout(node).unwrap();
@@ -289,7 +275,7 @@ mod tests {
         set_theme(Spaced(8.0));
         // Measured with no label, so the width is the padding and nothing else — what a font system made of
         // the text is a different question from whether the box followed the theme.
-        let btn = button(ButtonProps::default()).unwrap();
+        let btn = button(ButtonProps::props().build()).unwrap();
         let node = btn.layout_node();
         let rect = track_layout(node).unwrap();
         compute_layout(node, AvailableSpace::MaxContent, AvailableSpace::MaxContent).unwrap();
@@ -328,7 +314,7 @@ mod tests {
         crate::test_support::fresh_layout_runtime();
         set_theme(Plain);
         set_control_size(ControlSize::Regular);
-        let btn = button(ButtonProps::default()).unwrap();
+        let btn = button(ButtonProps::props().build()).unwrap();
         let node = btn.layout_node();
         let rect = track_layout(node).unwrap();
         compute_layout(node, AvailableSpace::MaxContent, AvailableSpace::MaxContent).unwrap();

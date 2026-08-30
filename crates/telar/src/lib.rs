@@ -296,7 +296,7 @@ pub use runner::{SurfaceWindow, run_with_platform_and_renderer};
 #[cfg(all(feature = "runtime", feature = "desktop", not(target_os = "android")))]
 pub use runner::{open_window, run_app_windowed, run_app_with_name};
 
-pub use telar_macros::{ThemeTokens, app, rsx_modules, t};
+pub use telar_macros::{Props, ThemeTokens, app, rsx_modules, t};
 
 #[cfg(all(feature = "runtime", not(target_os = "android")))]
 pub use preview_runner::{dev_entry, try_run_test};
