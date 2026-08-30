@@ -15,6 +15,7 @@ pub struct FeaturesSlidersProps {}
 pub fn features_sliders(props: FeaturesSlidersProps, children: Children) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let __owner = telar::owner_scope();
     #[allow(unused_imports)] use telar::use_theme;
+    #[allow(unused_variables)] let theme = telar::Theme::<core::theme::SandboxTheme>::default();
     let volume = signal(40.0f32);
     let temp = signal(65.0f32);
 
@@ -24,16 +25,20 @@ pub fn features_sliders(props: FeaturesSlidersProps, children: Children) -> Resu
             let __deferred = Children::new(
                 {
                     let volume = volume.clone();
+                    let theme = theme.clone();
                 move || {
                     let volume = volume.clone();
+                    let theme = theme.clone();
                     let mut __slots = Slots::new();
                     let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
                     let __node_2 = {
                         let __deferred = Children::new(
                             {
                                 let volume = volume.clone();
+                                let theme = theme.clone();
                             move || {
                                 let volume = volume.clone();
+                                let theme = theme.clone();
                                 let mut __slots = Slots::new();
                                 let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
                                 let __node_3 = slider(SliderProps::props().value(volume.clone()).min(0.0).max(100.0).step(1.0).width(260.0).build(), Children::default())?;
@@ -43,7 +48,7 @@ pub fn features_sliders(props: FeaturesSlidersProps, children: Children) -> Resu
                                     Text::declaring(
                                         move || format!("Volume · {}%", { volume.get() }),
                                         LayoutStyle::new(),
-                                        move |__inherited: TextStyle| __inherited.with_font_size(14.0).with_color(use_theme::<core::theme::SandboxTheme>().muted()),
+                                        { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(14.0).with_color(theme.get().muted) },
                                     )?
                                 };
                                 __children.push(box_item(__text_0));
@@ -68,16 +73,20 @@ pub fn features_sliders(props: FeaturesSlidersProps, children: Children) -> Resu
             let __deferred = Children::new(
                 {
                     let temp = temp.clone();
+                    let theme = theme.clone();
                 move || {
                     let temp = temp.clone();
+                    let theme = theme.clone();
                     let mut __slots = Slots::new();
                     let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
                     let __node_6 = {
                         let __deferred = Children::new(
                             {
                                 let temp = temp.clone();
+                                let theme = theme.clone();
                             move || {
                                 let temp = temp.clone();
+                                let theme = theme.clone();
                                 let mut __slots = Slots::new();
                                 let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
                                 let __node_7 = slider(SliderProps::props().value(temp.clone()).min(60.0).max(80.0).step(5.0).label("Temperature").width(260.0).build(), Children::default())?;
@@ -87,7 +96,7 @@ pub fn features_sliders(props: FeaturesSlidersProps, children: Children) -> Resu
                                     Text::declaring(
                                         move || format!("{}°F", { temp.get() }),
                                         LayoutStyle::new(),
-                                        move |__inherited: TextStyle| __inherited.with_font_size(14.0).with_color(use_theme::<core::theme::SandboxTheme>().muted()),
+                                        { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(14.0).with_color(theme.get().muted) },
                                     )?
                                 };
                                 __children.push(box_item(__text_1));

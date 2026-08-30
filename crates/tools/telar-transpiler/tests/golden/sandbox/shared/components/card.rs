@@ -3,7 +3,7 @@
 #[allow(unused_imports)] use telar::*;
 #[allow(unused_imports)] use crate::*;
 
-// The standard surface panel used across the sandbox. The card recipe (fill:theme.surface stroke:theme.border
+// The standard surface panel used across the sandbox. The card recipe (fill:$theme.surface stroke:$theme.border
 // radius:12 pad:16) lives here once instead of inline at every call site. `gap` spaces the stacked
 // body children (pass 0 for a single child). `pad` overrides the 16px inset via the `= 16.0` inline
 // default, so an omitted `pad` is 16 while `pad:0` genuinely means zero. An optional "header" slot renders above the body.
@@ -19,12 +19,13 @@ pub struct SharedComponentsCardProps {
 pub fn shared_components_card(props: SharedComponentsCardProps, children: Children) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let __owner = telar::owner_scope();
     #[allow(unused_imports)] use telar::use_theme;
+    #[allow(unused_variables)] let theme = telar::Theme::<core::theme::SandboxTheme>::default();
     let mut __slots = children.build()?;
     let __sbox_0 = {
         let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
         __children.extend(__slots.take("header"));
         __children.extend(__slots.take_default());
-        StyledContainer::new(LayoutStyle::new().flex_column().padding_all(props.pad).gap(props.gap), move |_| RectStyle { fill: Some(Paint::Solid(use_theme::<core::theme::SandboxTheme>().surface())), border: Some(Border { paint: Paint::Solid(use_theme::<core::theme::SandboxTheme>().border()), widths: [1.0; 4] }), shadow: None, radius: BorderRadius::all(12.0) }, __children)?
+        StyledContainer::new(LayoutStyle::new().flex_column().padding_all(props.pad).gap(props.gap), { let theme = theme.clone(); move |_| RectStyle { fill: Some(Paint::Solid(theme.get().surface)), border: Some(Border { paint: Paint::Solid(theme.get().border), widths: [1.0; 4] }), shadow: None, radius: BorderRadius::all(12.0) } }, __children)?
     };
     Ok(Box::new(__sbox_0))
 }
@@ -32,16 +33,20 @@ pub fn shared_components_card(props: SharedComponentsCardProps, children: Childr
 #[allow(dead_code, unused_variables, unused_mut)]
 pub fn shared_components_card_preview_0() -> Result<Box<dyn LayoutItem>, LayoutError> {
     #[allow(unused_imports)] use telar::use_theme;
+    #[allow(unused_variables)] let theme = telar::Theme::<core::theme::SandboxTheme>::default();
     let __node_0 = {
         let __deferred = Children::new(
+            {
+                let theme = theme.clone();
             move || {
+                let theme = theme.clone();
                 let mut __slots = Slots::new();
                 let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
                 let __text_0 = {
                     Text::declaring(
                         || "Header".to_string(),
                         LayoutStyle::new(),
-                        move |__inherited: TextStyle| __inherited.with_font_size(16.0).with_color(use_theme::<core::theme::SandboxTheme>().ink()),
+                        { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(16.0).with_color(theme.get().ink) },
                     )?
                 };
                 __slots.push(Some("header"), box_item(__text_0));
@@ -49,7 +54,7 @@ pub fn shared_components_card_preview_0() -> Result<Box<dyn LayoutItem>, LayoutE
                     Text::declaring(
                         || "A card is the standard surface panel.".to_string(),
                         LayoutStyle::new(),
-                        move |__inherited: TextStyle| __inherited.with_font_size(13.0).with_color(use_theme::<core::theme::SandboxTheme>().muted()),
+                        { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(13.0).with_color(theme.get().muted) },
                     )?
                 };
                 __children.push(box_item(__text_1));
@@ -57,12 +62,13 @@ pub fn shared_components_card_preview_0() -> Result<Box<dyn LayoutItem>, LayoutE
                     Text::declaring(
                         || "Bare children stack with the gap you pass; slot:\"header\" pins a header on top.".to_string(),
                         LayoutStyle::new(),
-                        move |__inherited: TextStyle| __inherited.with_font_size(13.0).with_color(use_theme::<core::theme::SandboxTheme>().muted()),
+                        { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(13.0).with_color(theme.get().muted) },
                     )?
                 };
                 __children.push(box_item(__text_2));
                 __slots.extend_default(__children);
                 Ok(__slots)
+            }
             }
         );
         card(CardProps::props().gap(8.0).build(), __deferred)?

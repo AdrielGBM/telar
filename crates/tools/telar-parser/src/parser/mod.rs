@@ -1,6 +1,6 @@
 //! Recursive-descent parser for `.rsx` documents.
 //!
-//! Split by document section: [`style`] parses `[style]` constants/classes, [`view`] parses
+//! Split by document section: [`style`] parses `[style]` classes, [`view`] parses
 //! `[view]` element trees, [`preview`] parses trailing `[preview ...]` blocks. All three `impl
 //! Parser` blocks live in this file's descendant modules and can reach `Parser`'s private fields
 //! because Rust privacy is scoped to a module and its descendants.

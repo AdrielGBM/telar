@@ -17,6 +17,7 @@ pub struct SharedComponentsFeatureCardProps {
 pub fn shared_components_feature_card(props: SharedComponentsFeatureCardProps, children: Children) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let __owner = telar::owner_scope();
     #[allow(unused_imports)] use telar::use_theme;
+    #[allow(unused_variables)] let theme = telar::Theme::<core::theme::SandboxTheme>::default();
     let __sbox_0 = {
         let __text_0 = {
             Text::declaring(
@@ -29,17 +30,17 @@ pub fn shared_components_feature_card(props: SharedComponentsFeatureCardProps, c
             Text::declaring(
                 move || format!("{}", { props.title }),
                 LayoutStyle::new(),
-                move |__inherited: TextStyle| __inherited.with_font_size(16.0).with_color(use_theme::<core::theme::SandboxTheme>().ink()),
+                { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(16.0).with_color(theme.get().ink) },
             )?
         };
         let __text_2 = {
             Text::declaring(
                 move || format!("{}", { props.body }),
                 LayoutStyle::new(),
-                move |__inherited: TextStyle| __inherited.with_font_size(13.0).with_color(use_theme::<core::theme::SandboxTheme>().muted()),
+                { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(13.0).with_color(theme.get().muted) },
             )?
         };
-        StyledContainer::new(LayoutStyle::new().flex_column().flex_grow(1.0).min_width(170.0).padding_all(20.0).gap(8.0), move |_| RectStyle { fill: Some(Paint::Solid(use_theme::<core::theme::SandboxTheme>().surface())), border: Some(Border { paint: Paint::Solid(use_theme::<core::theme::SandboxTheme>().border()), widths: [1.0; 4] }), shadow: None, radius: BorderRadius::all(16.0) }, children![__text_0, __text_1, __text_2])?
+        StyledContainer::new(LayoutStyle::new().flex_column().flex_grow(1.0).min_width(170.0).padding_all(20.0).gap(8.0), { let theme = theme.clone(); move |_| RectStyle { fill: Some(Paint::Solid(theme.get().surface)), border: Some(Border { paint: Paint::Solid(theme.get().border), widths: [1.0; 4] }), shadow: None, radius: BorderRadius::all(16.0) } }, children![__text_0, __text_1, __text_2])?
     };
     Ok(Box::new(__sbox_0))
 }
@@ -47,6 +48,7 @@ pub fn shared_components_feature_card(props: SharedComponentsFeatureCardProps, c
 #[allow(dead_code, unused_variables, unused_mut)]
 pub fn shared_components_feature_card_preview_0() -> Result<Box<dyn LayoutItem>, LayoutError> {
     #[allow(unused_imports)] use telar::use_theme;
+    #[allow(unused_variables)] let theme = telar::Theme::<core::theme::SandboxTheme>::default();
     let __node_0 = feature_card(FeatureCardProps::props().icon("⚡").title("Fast").body("Software and wgpu renderers with dirty-tracking and scroll-blit detection.").build(), Children::default())?;
     Ok(Box::new(__node_0))
 }

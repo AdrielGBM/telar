@@ -15,6 +15,7 @@ pub struct FeaturesMenusProps {}
 pub fn features_menus(props: FeaturesMenusProps, children: Children) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let __owner = telar::owner_scope();
     #[allow(unused_imports)] use telar::use_theme;
+    #[allow(unused_variables)] let theme = telar::Theme::<core::theme::SandboxTheme>::default();
     // The select binds a signal (the chosen index); the menu is stateless — each item is a one-shot action.
     let picked = signal(0u32);
     let action = signal(0u32);
@@ -28,16 +29,20 @@ pub fn features_menus(props: FeaturesMenusProps, children: Children) -> Result<B
             let __deferred = Children::new(
                 {
                     let picked = picked.clone();
+                    let theme = theme.clone();
                 move || {
                     let picked = picked.clone();
+                    let theme = theme.clone();
                     let mut __slots = Slots::new();
                     let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
                     let __node_2 = {
                         let __deferred = Children::new(
                             {
                                 let picked = picked.clone();
+                                let theme = theme.clone();
                             move || {
                                 let picked = picked.clone();
+                                let theme = theme.clone();
                                 let mut __slots = Slots::new();
                                 let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
                                 let __node_3 = {
@@ -63,7 +68,7 @@ pub fn features_menus(props: FeaturesMenusProps, children: Children) -> Result<B
                                     Text::declaring(
                                         move || format!("Size · {}", { picked.get() }),
                                         LayoutStyle::new(),
-                                        move |__inherited: TextStyle| __inherited.with_font_size(14.0).with_color(use_theme::<core::theme::SandboxTheme>().muted()),
+                                        { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(14.0).with_color(theme.get().muted) },
                                     )?
                                 };
                                 __children.push(box_item(__text_0));
@@ -88,16 +93,20 @@ pub fn features_menus(props: FeaturesMenusProps, children: Children) -> Result<B
             let __deferred = Children::new(
                 {
                     let action = action.clone();
+                    let theme = theme.clone();
                 move || {
                     let action = action.clone();
+                    let theme = theme.clone();
                     let mut __slots = Slots::new();
                     let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
                     let __node_9 = {
                         let __deferred = Children::new(
                             {
                                 let action = action.clone();
+                                let theme = theme.clone();
                             move || {
                                 let action = action.clone();
+                                let theme = theme.clone();
                                 let mut __slots = Slots::new();
                                 let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
                                 let __node_10 = {
@@ -121,7 +130,7 @@ pub fn features_menus(props: FeaturesMenusProps, children: Children) -> Result<B
                                     Text::declaring(
                                         move || format!("Last action index · {}", { action.get() }),
                                         LayoutStyle::new(),
-                                        move |__inherited: TextStyle| __inherited.with_font_size(14.0).with_color(use_theme::<core::theme::SandboxTheme>().muted()),
+                                        { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(14.0).with_color(theme.get().muted) },
                                     )?
                                 };
                                 __children.push(box_item(__text_1));

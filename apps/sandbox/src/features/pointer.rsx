@@ -23,51 +23,51 @@ col gap:20
     example title:"cursor — what the pointer becomes over this box"
         card gap:12
             row gap:10 wrap
-                box fill:theme.surface_alt stroke:theme.border radius:8 pad_x:14 pad_y:10 cursor:pointer
-                    text "pointer" font_size:12 color:theme.ink
-                box fill:theme.surface_alt stroke:theme.border radius:8 pad_x:14 pad_y:10 cursor:crosshair
-                    text "crosshair" font_size:12 color:theme.ink
-                box fill:theme.surface_alt stroke:theme.border radius:8 pad_x:14 pad_y:10 cursor:grab
-                    text "grab" font_size:12 color:theme.ink
-                box fill:theme.surface_alt stroke:theme.border radius:8 pad_x:14 pad_y:10 cursor:col_resize
-                    text "col_resize" font_size:12 color:theme.ink
-                box fill:theme.surface_alt stroke:theme.border radius:8 pad_x:14 pad_y:10 cursor:not_allowed
-                    text "not_allowed" font_size:12 color:theme.ink
+                box fill:$theme.surface_alt stroke:$theme.border radius:8 pad_x:14 pad_y:10 cursor:pointer
+                    text "pointer" font_size:12 color:$theme.ink
+                box fill:$theme.surface_alt stroke:$theme.border radius:8 pad_x:14 pad_y:10 cursor:crosshair
+                    text "crosshair" font_size:12 color:$theme.ink
+                box fill:$theme.surface_alt stroke:$theme.border radius:8 pad_x:14 pad_y:10 cursor:grab
+                    text "grab" font_size:12 color:$theme.ink
+                box fill:$theme.surface_alt stroke:$theme.border radius:8 pad_x:14 pad_y:10 cursor:col_resize
+                    text "col_resize" font_size:12 color:$theme.ink
+                box fill:$theme.surface_alt stroke:$theme.border radius:8 pad_x:14 pad_y:10 cursor:not_allowed
+                    text "not_allowed" font_size:12 color:$theme.ink
         code_line code:"box cursor:pointer   ·   crosshair · grab · grabbing · col_resize · row_resize · text · wait · not_allowed"
     example title:"track_rect — mirror a laid-out rect into a signal, and position a sibling from it"
         card gap:12
             col gap:8 width:100%
                 row gap:8
-                    box fill:theme.surface_alt radius:8 pad_x:16 pad_y:8 cursor:pointer track_rect:$handle on_press:(|| $tab.set(0))
-                        text "Overview" font_size:12 color:theme.ink
-                    box fill:theme.surface_alt radius:8 pad_x:16 pad_y:8 cursor:pointer on_press:(|| $tab.set(1))
-                        text "Details" font_size:12 color:theme.ink
+                    box fill:$theme.surface_alt radius:8 pad_x:16 pad_y:8 cursor:pointer track_rect:$handle on_press:(|| $tab.set(0))
+                        text "Overview" font_size:12 color:$theme.ink
+                    box fill:$theme.surface_alt radius:8 pad_x:16 pad_y:8 cursor:pointer on_press:(|| $tab.set(1))
+                        text "Details" font_size:12 color:$theme.ink
                 box height:3 width:100%
-                    box fill:theme.primary radius:2 height:3 absolute inset_start:$marker_x width:$marker_w
-            text "The underline is sized and placed from the first tab's own rect — no measurement in [logic]." font_size:12 color:theme.muted
+                    box fill:$theme.primary radius:2 height:3 absolute inset_start:$marker_x width:$marker_w
+            text "The underline is sized and placed from the first tab's own rect — no measurement in [logic]." font_size:12 color:$theme.muted
         code_line code:"box track_rect:$handle …      then      box absolute inset_start:$x width:$w"
     example title:"on_pointer_move — every move over the box, in its own coordinates"
         card gap:10
-            box fill:theme.surface_alt stroke:theme.border radius:10 height:96 width:100% cursor:crosshair on_pointer_move:(|x, y| { $at_x.set(x); $at_y.set(y) })
-            text "x {$at_x.round()} · y {$at_y.round()}" font_size:13 color:theme.primary
+            box fill:$theme.surface_alt stroke:$theme.border radius:10 height:96 width:100% cursor:crosshair on_pointer_move:(|x, y| { $at_x.set(x); $at_y.set(y) })
+            text "x {$at_x.round()} · y {$at_y.round()}" font_size:13 color:$theme.primary
         code_line code:"box on_pointer_move:|x, y| { $at_x.set(x); $at_y.set(y) }"
     example title:"on_drag_end — the gesture is over, and this is where it stopped"
         card gap:10
-            box fill:theme.surface_alt stroke:theme.border radius:10 height:80 width:100% cursor:grab active_style(fill:theme.primary) on_drag:(|x, _y| $at_x.set(x)) on_drag_end:(|x, y| $settled.set(format!("{x:.0}, {y:.0}")))
-            text "settled at {$settled}" font_size:13 color:theme.muted
+            box fill:$theme.surface_alt stroke:$theme.border radius:10 height:80 width:100% cursor:grab active_style(fill:$theme.primary) on_drag:(|x, _y| $at_x.set(x)) on_drag_end:(|x, y| $settled.set(format!("{x:.0}, {y:.0}")))
+            text "settled at {$settled}" font_size:13 color:$theme.muted
         code_line code:"box on_drag:|x, _| …  on_drag_end:|x, y| …    ·   active_style(fill:…) while the press is held"
     example title:"drag_button — arm a drag on buttons other than the primary one"
         card gap:10
-            box fill:theme.surface_alt stroke:theme.border radius:10 height:72 width:100% cursor:grab drag_button:secondary,auxiliary on_drag:(|x, _y| $at_x.set(x))
-                text "drag me with the right or middle button too" font_size:12 color:theme.muted pad:12
+            box fill:$theme.surface_alt stroke:$theme.border radius:10 height:72 width:100% cursor:grab drag_button:secondary,auxiliary on_drag:(|x, _y| $at_x.set(x))
+                text "drag me with the right or middle button too" font_size:12 color:$theme.muted pad:12
         code_line code:"box drag_button:secondary,auxiliary     (the primary button is always armed)"
     example title:"on_scroll and on_alt_press — the wheel, and a non-primary click"
         card gap:10
-            box fill:theme.surface_alt stroke:theme.border radius:10 height:80 width:100% on_scroll:(|_dx, dy| $wheel.set($wheel.get() + dy)) on_alt_press:(|button| $alt.set(format!("{button:?}")))
-                text "scroll over me, or click with the right button" font_size:12 color:theme.muted pad:12
+            box fill:$theme.surface_alt stroke:$theme.border radius:10 height:80 width:100% on_scroll:(|_dx, dy| $wheel.set($wheel.get() + dy)) on_alt_press:(|button| $alt.set(format!("{button:?}")))
+                text "scroll over me, or click with the right button" font_size:12 color:$theme.muted pad:12
             row gap:16
-                text "wheel {$wheel.round()}" font_size:13 color:theme.primary
-                text "{$alt}" font_size:13 color:theme.muted
+                text "wheel {$wheel.round()}" font_size:13 color:$theme.primary
+                text "{$alt}" font_size:13 color:$theme.muted
         code_line code:"box on_scroll:|dx, dy| …    ·    on_alt_press:|button| …"
     example title:"Attributes"
         col gap:6

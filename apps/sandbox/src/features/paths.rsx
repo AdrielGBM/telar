@@ -4,7 +4,6 @@ use crate::shared::components::code_line::{code_line, CodeLineProps};
 use crate::shared::components::doc_header::{doc_header, DocHeaderProps};
 use crate::shared::components::example::{example, ExampleProps};
 use crate::shared::components::prop_row::{prop_row, PropRowProps};
-use crate::core::theme::theme;
 use std::sync::Arc;
 
 // Paths are drawn imperatively inside a Canvas — the escape hatch for vector art layout can't express.
@@ -12,7 +11,7 @@ use std::sync::Arc;
 const PATHS_DESIGN_W: f32 = 520.0;
 
 fn draw_paths(rect: Rect) -> RenderNode {
-    let t = theme();
+    let t = crate::core::theme::theme();
     let (primary, success, danger, warning, purple, ink, muted) = (
         t.primary, t.success, t.danger, t.warning, t.purple, t.ink, t.muted,
     );
@@ -207,10 +206,10 @@ col gap:20
     example title:"Declarative paths in [view]"
         card
             row gap:28 align:center
-                path d:"M0,0 L100,0 L50,80 Z" fill:theme.primary stroke:theme.ink stroke_width:2 width:100 height:80
-                path d:"M6,42 L34,70 L74,14" stroke:theme.success stroke_width:7 width:80 height:80
-                path d:"M40,2 L50,30 L80,30 L56,48 L64,78 L40,60 L16,78 L24,48 L0,30 L30,30 Z" fill:theme.warning stroke:theme.ink stroke_width:1 width:80 height:80
-        code_line code:"path d:\"M0,0 L100,0 L50,80 Z\" fill:theme.primary stroke:theme.ink stroke_width:2 width:100 height:80"
+                path d:"M0,0 L100,0 L50,80 Z" fill:$theme.primary stroke:$theme.ink stroke_width:2 width:100 height:80
+                path d:"M6,42 L34,70 L74,14" stroke:$theme.success stroke_width:7 width:80 height:80
+                path d:"M40,2 L50,30 L80,30 L56,48 L64,78 L40,60 L16,78 L24,48 L0,30 L30,30 Z" fill:$theme.warning stroke:$theme.ink stroke_width:1 width:80 height:80
+        code_line code:"path d:\"M0,0 L100,0 L50,80 Z\" fill:$theme.primary stroke:$theme.ink stroke_width:2 width:100 height:80"
     example title:"The PathData API"
         col gap:6
             prop_row name:"move_to / line_to" values:"Point" about:"Start a subpath, add a straight segment."

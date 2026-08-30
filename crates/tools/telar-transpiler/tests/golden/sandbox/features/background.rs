@@ -18,6 +18,7 @@ pub struct FeaturesBackgroundProps {}
 pub fn features_background(props: FeaturesBackgroundProps, children: Children) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let __owner = telar::owner_scope();
     #[allow(unused_imports)] use telar::use_theme;
+    #[allow(unused_variables)] let theme = telar::Theme::<core::theme::SandboxTheme>::default();
 
     // Everything below the line is what actually crosses to a pool thread: plain `Send` work, no signals.
     // The sleeps stand in for the blocking a real kernel does — a query, a file read, a network round trip.
@@ -75,10 +76,12 @@ pub fn features_background(props: FeaturesBackgroundProps, children: Children) -
             let __deferred = Children::new(
                 {
                     let total = total.clone();
+                    let theme = theme.clone();
                     let busy = busy.clone();
                     let beat = beat.clone();
                 move || {
                     let total = total.clone();
+                    let theme = theme.clone();
                     let busy = busy.clone();
                     let beat = beat.clone();
                     let mut __slots = Slots::new();
@@ -87,10 +90,12 @@ pub fn features_background(props: FeaturesBackgroundProps, children: Children) -
                         let __deferred = Children::new(
                             {
                                 let total = total.clone();
+                                let theme = theme.clone();
                                 let busy = busy.clone();
                                 let beat = beat.clone();
                             move || {
                                 let total = total.clone();
+                                let theme = theme.clone();
                                 let busy = busy.clone();
                                 let beat = beat.clone();
                                 let mut __slots = Slots::new();
@@ -102,7 +107,7 @@ pub fn features_background(props: FeaturesBackgroundProps, children: Children) -
                                         Text::declaring(
                                             move || format!("sum(1..2M) · {}", { total.get() }),
                                             LayoutStyle::new(),
-                                            move |__inherited: TextStyle| __inherited.with_font_size(16.0).with_color(use_theme::<core::theme::SandboxTheme>().ink()),
+                                            { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(16.0).with_color(theme.get().ink) },
                                         )?
                                     };
                                     __slots.push(ChildSlot::stat(box_item(__text_0)));
@@ -124,20 +129,20 @@ pub fn features_background(props: FeaturesBackgroundProps, children: Children) -
                                 };
                                 __children.push(box_item(__row_0));
                                 let __row_1 = {
-                                    let __node_5 = button(ButtonProps::props().label("Compute").fill(Reactive::of(move || use_theme::<core::theme::SandboxTheme>().primary())).on_press(Box::new({ let busy = busy.clone(); let total = total.clone(); move || { busy.set(true); total.set(String::from("…")); spawn_task(|| slow_sum(2_000_000), on_computed(total.clone(), busy.clone())); } })).build(), Children::default())?;
-                                    let __node_6 = button(ButtonProps::props().label("Bounce").outline(Reactive::of(move || use_theme::<core::theme::SandboxTheme>().primary())).on_press(Box::new({ let beat = beat.clone(); move || { beat.retarget(if beat.get() > 1.0 { 1.0 } else { 1.4 }) } })).build(), Children::default())?;
+                                    let __node_5 = button(ButtonProps::props().label("Compute").fill(Reactive::of({ let theme = theme.clone(); move || theme.get().primary })).on_press(Box::new({ let busy = busy.clone(); let total = total.clone(); move || { busy.set(true); total.set(String::from("…")); spawn_task(|| slow_sum(2_000_000), on_computed(total.clone(), busy.clone())); } })).build(), Children::default())?;
+                                    let __node_6 = button(ButtonProps::props().label("Bounce").outline(Reactive::of({ let theme = theme.clone(); move || theme.get().primary })).on_press(Box::new({ let beat = beat.clone(); move || { beat.retarget(if beat.get() > 1.0 { 1.0 } else { 1.4 }) } })).build(), Children::default())?;
                                     Container::new(LayoutStyle::new().flex_row().gap(10.0), children![__node_5, __node_6])?
                                 };
                                 __children.push(box_item(__row_1));
                                 let __row_2 = {
                                     let __sbox_0 = {
-                                        StyledContainer::new(LayoutStyle::new().flex_column().width(48.0).height(48.0), move |_| RectStyle::default().with_fill(use_theme::<core::theme::SandboxTheme>().primary()).with_radius(BorderRadius::all(12.0)), children![])?.with_transform({ let beat = beat.clone(); move |__r: Rect| box_transform(__r, (0) as f32, (beat.get()) as f32, (beat.get()) as f32, (0) as f32, (0) as f32) })
+                                        StyledContainer::new(LayoutStyle::new().flex_column().width(48.0).height(48.0), { let theme = theme.clone(); move |_| RectStyle::default().with_fill(theme.get().primary).with_radius(BorderRadius::all(12.0)) }, children![])?.with_transform({ let beat = beat.clone(); move |__r: Rect| box_transform(__r, (0) as f32, (beat.get()) as f32, (beat.get()) as f32, (0) as f32, (0) as f32) })
                                     };
                                     let __text_1 = {
                                         Text::declaring(
                                             || "Press Compute, then Bounce — the spring keeps settling while the worker blocks.".to_string(),
                                             LayoutStyle::new(),
-                                            move |__inherited: TextStyle| __inherited.with_font_size(12.0).with_color(use_theme::<core::theme::SandboxTheme>().muted()),
+                                            { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(12.0).with_color(theme.get().muted) },
                                         )?
                                     };
                                     Container::new(LayoutStyle::new().flex_row().gap(16.0).align_items(AlignItems::CENTER), children![__sbox_0, __text_1])?
@@ -163,10 +168,12 @@ pub fn features_background(props: FeaturesBackgroundProps, children: Children) -
         let __node_8 = {
             let __deferred = Children::new(
                 {
+                    let theme = theme.clone();
                     let found = found.clone();
                     let scanning = scanning.clone();
                     let scan = scan.clone();
                 move || {
+                    let theme = theme.clone();
                     let found = found.clone();
                     let scanning = scanning.clone();
                     let scan = scan.clone();
@@ -175,10 +182,12 @@ pub fn features_background(props: FeaturesBackgroundProps, children: Children) -
                     let __node_9 = {
                         let __deferred = Children::new(
                             {
+                                let theme = theme.clone();
                                 let found = found.clone();
                                 let scanning = scanning.clone();
                                 let scan = scan.clone();
                             move || {
+                                let theme = theme.clone();
                                 let found = found.clone();
                                 let scanning = scanning.clone();
                                 let scan = scan.clone();
@@ -186,9 +195,9 @@ pub fn features_background(props: FeaturesBackgroundProps, children: Children) -
                                 let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
                                 let __row_3 = {
                                     let mut __slots: Vec<ChildSlot> = Vec::new();
-                                    let __node_10 = button(ButtonProps::props().label("Scan").fill(Reactive::of(move || use_theme::<core::theme::SandboxTheme>().primary())).on_press(Box::new({ let found = found.clone(); let scanning = scanning.clone(); let scan = scan.clone(); move || { found.set(Vec::new()); scanning.set(true); *scan.borrow_mut() = Some(spawn_stream(walk_project, on_found(found.clone()), on_scan_end(scanning.clone()))); } })).build(), Children::default())?;
+                                    let __node_10 = button(ButtonProps::props().label("Scan").fill(Reactive::of({ let theme = theme.clone(); move || theme.get().primary })).on_press(Box::new({ let found = found.clone(); let scanning = scanning.clone(); let scan = scan.clone(); move || { found.set(Vec::new()); scanning.set(true); *scan.borrow_mut() = Some(spawn_stream(walk_project, on_found(found.clone()), on_scan_end(scanning.clone()))); } })).build(), Children::default())?;
                                     __slots.push(ChildSlot::stat(box_item(__node_10)));
-                                    let __node_11 = button(ButtonProps::props().label("Cancel").outline(Reactive::of(move || use_theme::<core::theme::SandboxTheme>().danger)).on_press(Box::new({ let scan = scan.clone(); let scanning = scanning.clone(); move || { if let Some(task) = scan.borrow_mut().take() { task.cancel(); } scanning.set(false); } })).build(), Children::default())?;
+                                    let __node_11 = button(ButtonProps::props().label("Cancel").outline(Reactive::of({ let theme = theme.clone(); move || theme.get().danger })).on_press(Box::new({ let scan = scan.clone(); let scanning = scanning.clone(); move || { if let Some(task) = scan.borrow_mut().take() { task.cancel(); } scanning.set(false); } })).build(), Children::default())?;
                                     __slots.push(ChildSlot::stat(box_item(__node_11)));
                                     let __node_12 = fragment(
                                         { let scanning = scanning.clone(); move || vec![scanning.get()] },
@@ -212,29 +221,32 @@ pub fn features_background(props: FeaturesBackgroundProps, children: Children) -
                                     Text::declaring(
                                         move || format!("{} crates", { found.get().len() }),
                                         LayoutStyle::new(),
-                                        move |__inherited: TextStyle| __inherited.with_font_size(14.0).with_color(use_theme::<core::theme::SandboxTheme>().muted()),
+                                        { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(14.0).with_color(theme.get().muted) },
                                     )?
                                 };
                                 __children.push(box_item(__text_2));
                                 let __node_14 = ReactiveList::new(
                                     { let found = found.clone(); move || found.get() },
                                     |name| name.clone(),
+                                    {
+                                        let theme = theme.clone();
                                     move |name| -> Result<Box<dyn LayoutItem>, LayoutError> {
                                         let __row_4 = {
                                             let __sbox_1 = {
-                                                StyledContainer::new(LayoutStyle::new().flex_column().width(6.0).height(6.0), move |_| RectStyle::default().with_fill(use_theme::<core::theme::SandboxTheme>().success()).with_radius(BorderRadius::all(4.0)), children![])?
+                                                StyledContainer::new(LayoutStyle::new().flex_column().width(6.0).height(6.0), { let theme = theme.clone(); move |_| RectStyle::default().with_fill(theme.get().success).with_radius(BorderRadius::all(4.0)) }, children![])?
                                             };
                                             let __text_3 = {
                                                 let name = name.clone();
                                                 Text::declaring(
                                                     move || format!("{}", name),
                                                     LayoutStyle::new(),
-                                                    move |__inherited: TextStyle| __inherited.with_font_size(13.0).with_color(use_theme::<core::theme::SandboxTheme>().ink()),
+                                                    { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(13.0).with_color(theme.get().ink) },
                                                 )?
                                             };
                                             Container::new(LayoutStyle::new().flex_row().gap(8.0).align_items(AlignItems::CENTER).padding_vertical(2.0), children![__sbox_1, __text_3])?
                                         };
                                         Ok(box_item(__row_4))
+                                    }
                                     },
                                     0.0,
                                 )?;

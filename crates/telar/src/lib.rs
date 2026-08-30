@@ -190,7 +190,7 @@ pub use surface::{
 };
 #[cfg(feature = "runtime")]
 pub use theme_core::{
-    ControlSize, ThemeTokens, active_mode, control_scale, follow_system, register_mode,
+    ControlSize, Theme, ThemeTokens, active_mode, control_scale, follow_system, register_mode,
     set_control_size, set_mode, set_system_dark, set_theme, use_control_size, use_theme,
     use_theme_tokens,
 };

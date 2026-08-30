@@ -14,17 +14,17 @@ col gap:20
         card gap:10
             tabs selected:$tab items:vec!["Overview","Pricing","Team"]
             if $tab == 0
-                text "Overview — what the product does." font_size:14 color:theme.ink
+                text "Overview — what the product does." font_size:14 color:$theme.ink
             if $tab == 1
-                text "Pricing — plans and limits." font_size:14 color:theme.ink
+                text "Pricing — plans and limits." font_size:14 color:$theme.ink
             if $tab == 2
-                text "Team — who is behind it." font_size:14 color:theme.ink
+                text "Team — who is behind it." font_size:14 color:$theme.ink
         code_line code:"tabs selected:$tab items:vec!['Overview','Pricing','Team']"
     example title:"accordion — a collapsible section, open bound to a signal"
         card gap:10
             accordion title:"Shipping details" open:$open
-                text "Ships in 2–3 business days. Free over $50." font_size:14 color:theme.muted
-            text "open · {$open}" font_size:13 color:theme.muted
+                text "Ships in 2–3 business days. Free over $50." font_size:14 color:$theme.muted
+            text "open · {$open}" font_size:13 color:$theme.muted
         code_line code:"accordion title:'Shipping details' open:$open  >  …body…"
     example title:"Attributes"
         col gap:6

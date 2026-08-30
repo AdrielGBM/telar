@@ -4,7 +4,6 @@ use crate::shared::components::code_line::{code_line, CodeLineProps};
 use crate::shared::components::doc_header::{doc_header, DocHeaderProps};
 use crate::shared::components::example::{example, ExampleProps};
 use crate::shared::components::prop_row::{prop_row, PropRowProps};
-use crate::core::theme::theme;
 use std::sync::Arc;
 
 fn arrow(cx: f32, cy: f32, size: f32) -> PathData {
@@ -26,7 +25,7 @@ fn arrow(cx: f32, cy: f32, size: f32) -> PathData {
 const TRANSFORMS_DESIGN_W: f32 = 640.0;
 
 fn draw_transforms(rect: Rect) -> RenderNode {
-    let t = theme();
+    let t = crate::core::theme::theme();
     let muted = t.muted;
     let palette = [t.primary, t.success, t.warning, t.danger, t.purple];
     let mut kids: Vec<RenderNode> = Vec::new();
@@ -133,12 +132,12 @@ col gap:20
     example title:"Declarative — rotate / scale / translate as box attributes (no Canvas, no Rust)"
         card
             row gap:24 justify:center pad_y:16
-                box fill:theme.primary radius:8 width:56 height:56
-                box fill:theme.success radius:8 width:56 height:56 rotate:20
-                box fill:theme.warning radius:8 width:56 height:56 scale:1.3
-                box fill:theme.danger radius:8 width:56 height:56 rotate:15 scale:0.85
-                box fill:theme.ink radius:8 width:56 height:56 rotate:-12 translate_y:-8
-        code_line code:"box fill:theme.success rotate:20      box fill:theme.danger rotate:15 scale:0.85"
+                box fill:$theme.primary radius:8 width:56 height:56
+                box fill:$theme.success radius:8 width:56 height:56 rotate:20
+                box fill:$theme.warning radius:8 width:56 height:56 scale:1.3
+                box fill:$theme.danger radius:8 width:56 height:56 rotate:15 scale:0.85
+                box fill:$theme.ink radius:8 width:56 height:56 rotate:-12 translate_y:-8
+        code_line code:"box fill:$theme.success rotate:20      box fill:$theme.danger rotate:15 scale:0.85"
     example title:"The Transform API"
         col gap:6
             prop_row name:"scale_around" values:"sx, sy, cx, cy" about:"Scale about a pivot point."

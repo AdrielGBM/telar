@@ -1,4 +1,4 @@
-//! `[style]` section: constants and classes.
+//! `[style]` section: the named property bundles a view reuses.
 
 use super::{Parser, split_once_colon};
 use crate::ast::*;
@@ -22,40 +22,19 @@ impl Parser {
                 let class = self.parse_style_class()?;
                 section.classes.push(class);
             } else {
-                let constant = self.parse_style_const()?;
-                section.constants.push(constant);
-                self.pos += 1;
+                // `[style]` is classes — named bundles of properties, which are reuse. A constant was a
+                // second evaluation model with a namespace of its own, and `[logic]` is already Rust.
+                let name = line.content.split(':').next().unwrap_or("").trim();
+                return Err(ParseError {
+                    message: format!(
+                        "`[style]` holds classes, not constants — move `{name}` to `[logic]` as a `const`"
+                    ),
+                    line: line.number,
+                });
             }
         }
 
         Ok(section)
-    }
-
-    fn parse_style_const(&self) -> Result<StyleConstant, ParseError> {
-        let line = &self.lines[self.pos];
-        let (name, value) = split_once_colon(&line.content).ok_or_else(|| ParseError {
-            message: format!(
-                "expected `name: value` in style constant, got `{}`",
-                line.content
-            ),
-            line: line.number,
-        })?;
-
-        let name = name.trim().to_string();
-        let value = value.trim();
-        if value.is_empty() {
-            return Err(ParseError {
-                message: format!("style constant `{name}` is missing a value after `:`"),
-                line: line.number,
-            });
-        }
-        check_hex_value(value, line.number)?;
-
-        Ok(StyleConstant {
-            name,
-            value: parse_style_value(value),
-            line: line.number,
-        })
     }
 
     /// Parses either an inline `@class: k:v k:v` or a multi-line `@class` with indented props.
@@ -154,17 +133,6 @@ fn check_style_prop_value(key: &str, value: &str, line: usize) -> Result<(), Par
         });
     }
     check_hex_value(value, line)
-}
-
-/// Classifies a style constant value.
-fn parse_style_value(raw: &str) -> StyleValue {
-    if let Some(hex) = raw.strip_prefix('#') {
-        return StyleValue::Hex(format!("#{hex}"));
-    }
-    if let Ok(n) = raw.parse::<f32>() {
-        return StyleValue::Number(n);
-    }
-    StyleValue::Raw(raw.to_string())
 }
 
 /// Parses inline class props: `padding_x:6  padding_y:2  radius:6`.

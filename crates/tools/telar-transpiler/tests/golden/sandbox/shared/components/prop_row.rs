@@ -18,26 +18,27 @@ pub struct SharedComponentsPropRowProps {
 pub fn shared_components_prop_row(props: SharedComponentsPropRowProps, children: Children) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let __owner = telar::owner_scope();
     #[allow(unused_imports)] use telar::use_theme;
+    #[allow(unused_variables)] let theme = telar::Theme::<core::theme::SandboxTheme>::default();
     let __row_0 = {
         let __text_0 = {
             Text::declaring(
                 move || format!("{}", { props.name }),
                 LayoutStyle::new().width(120.0),
-                move |__inherited: TextStyle| __inherited.with_font_size(13.0).with_color(use_theme::<core::theme::SandboxTheme>().ink()),
+                { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(13.0).with_color(theme.get().ink) },
             )?
         };
         let __text_1 = {
             Text::declaring(
                 move || format!("{}", { props.values }),
                 LayoutStyle::new().width(190.0),
-                move |__inherited: TextStyle| __inherited.with_font_size(13.0).with_color(use_theme::<core::theme::SandboxTheme>().primary()),
+                { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(13.0).with_color(theme.get().primary) },
             )?
         };
         let __text_2 = {
             Text::declaring(
                 move || format!("{}", { props.about }),
                 LayoutStyle::new().flex_grow(1.0),
-                move |__inherited: TextStyle| __inherited.with_font_size(13.0).with_color(use_theme::<core::theme::SandboxTheme>().muted()),
+                { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(13.0).with_color(theme.get().muted) },
             )?
         };
         Container::new(LayoutStyle::new().flex_row().gap(12.0).align_items(AlignItems::START), children![__text_0, __text_1, __text_2])?
@@ -48,6 +49,7 @@ pub fn shared_components_prop_row(props: SharedComponentsPropRowProps, children:
 #[allow(dead_code, unused_variables, unused_mut)]
 pub fn shared_components_prop_row_preview_0() -> Result<Box<dyn LayoutItem>, LayoutError> {
     #[allow(unused_imports)] use telar::use_theme;
+    #[allow(unused_variables)] let theme = telar::Theme::<core::theme::SandboxTheme>::default();
     let __node_0 = prop_row(PropRowProps::props().name("align").values("start · center · end · stretch").about("Cross-axis alignment of children.").build(), Children::default())?;
     Ok(Box::new(__node_0))
 }

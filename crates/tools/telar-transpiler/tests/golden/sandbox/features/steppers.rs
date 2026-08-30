@@ -15,6 +15,7 @@ pub struct FeaturesSteppersProps {}
 pub fn features_steppers(props: FeaturesSteppersProps, children: Children) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let __owner = telar::owner_scope();
     #[allow(unused_imports)] use telar::use_theme;
+    #[allow(unused_variables)] let theme = telar::Theme::<core::theme::SandboxTheme>::default();
     let qty = signal(1.0f32);
     let seats = signal(2.0f32);
     // Written by `on_change` rather than read from the bound signal, so the callback is what proves it fired.
@@ -26,16 +27,20 @@ pub fn features_steppers(props: FeaturesSteppersProps, children: Children) -> Re
             let __deferred = Children::new(
                 {
                     let qty = qty.clone();
+                    let theme = theme.clone();
                 move || {
                     let qty = qty.clone();
+                    let theme = theme.clone();
                     let mut __slots = Slots::new();
                     let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
                     let __node_2 = {
                         let __deferred = Children::new(
                             {
                                 let qty = qty.clone();
+                                let theme = theme.clone();
                             move || {
                                 let qty = qty.clone();
+                                let theme = theme.clone();
                                 let mut __slots = Slots::new();
                                 let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
                                 let __row_0 = {
@@ -45,7 +50,7 @@ pub fn features_steppers(props: FeaturesSteppersProps, children: Children) -> Re
                                         Text::declaring(
                                             move || format!("qty · {}", { qty.get() }),
                                             LayoutStyle::new(),
-                                            move |__inherited: TextStyle| __inherited.with_font_size(14.0).with_color(use_theme::<core::theme::SandboxTheme>().muted()),
+                                            { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(14.0).with_color(theme.get().muted) },
                                         )?
                                     };
                                     Container::new(LayoutStyle::new().flex_row().gap(16.0).align_items(AlignItems::CENTER), children![__node_3, __text_0])?
@@ -73,9 +78,11 @@ pub fn features_steppers(props: FeaturesSteppersProps, children: Children) -> Re
                 {
                     let seats = seats.clone();
                     let last_change = last_change.clone();
+                    let theme = theme.clone();
                 move || {
                     let seats = seats.clone();
                     let last_change = last_change.clone();
+                    let theme = theme.clone();
                     let mut __slots = Slots::new();
                     let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
                     let __node_6 = {
@@ -83,9 +90,11 @@ pub fn features_steppers(props: FeaturesSteppersProps, children: Children) -> Re
                             {
                                 let seats = seats.clone();
                                 let last_change = last_change.clone();
+                                let theme = theme.clone();
                             move || {
                                 let seats = seats.clone();
                                 let last_change = last_change.clone();
+                                let theme = theme.clone();
                                 let mut __slots = Slots::new();
                                 let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
                                 let __row_1 = {
@@ -95,7 +104,7 @@ pub fn features_steppers(props: FeaturesSteppersProps, children: Children) -> Re
                                         Text::declaring(
                                             move || format!("{}", { last_change.get() }),
                                             LayoutStyle::new(),
-                                            move |__inherited: TextStyle| __inherited.with_font_size(14.0).with_color(use_theme::<core::theme::SandboxTheme>().muted()),
+                                            { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(14.0).with_color(theme.get().muted) },
                                         )?
                                     };
                                     Container::new(LayoutStyle::new().flex_row().gap(16.0).align_items(AlignItems::CENTER), children![__node_7, __text_1])?

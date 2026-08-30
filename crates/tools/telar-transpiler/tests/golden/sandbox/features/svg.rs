@@ -7,7 +7,6 @@
 #[allow(unused_imports)] use crate::shared::components::doc_header::{doc_header, DocHeaderProps};
 #[allow(unused_imports)] use crate::shared::components::example::{example, ExampleProps};
 #[allow(unused_imports)] use crate::shared::components::prop_row::{prop_row, PropRowProps};
-#[allow(unused_imports)] use crate::core::theme::theme;
 #[allow(unused_imports)] use crate::shared::demo_svgs::{make_blurred, make_icon, make_logo};
 
 #[derive(::telar::Props)]
@@ -17,6 +16,7 @@ pub struct FeaturesSvgProps {}
 pub fn features_svg(props: FeaturesSvgProps, children: Children) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let __owner = telar::owner_scope();
     #[allow(unused_imports)] use telar::use_theme;
+    #[allow(unused_variables)] let theme = telar::Theme::<core::theme::SandboxTheme>::default();
 
     // Each returns an Arc<SvgData> parsed at runtime (the app enables the dynamic-svg feature).
     let icon = make_icon();
@@ -101,16 +101,20 @@ pub fn features_svg(props: FeaturesSvgProps, children: Children) -> Result<Box<d
         let __node_4 = {
             let __deferred = Children::new(
                 {
+                    let theme = theme.clone();
                     let icon = icon.clone();
                 move || {
+                    let theme = theme.clone();
                     let icon = icon.clone();
                     let mut __slots = Slots::new();
                     let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
                     let __node_5 = {
                         let __deferred = Children::new(
                             {
+                                let theme = theme.clone();
                                 let icon = icon.clone();
                             move || {
+                                let theme = theme.clone();
                                 let icon = icon.clone();
                                 let mut __slots = Slots::new();
                                 let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
@@ -120,7 +124,7 @@ pub fn features_svg(props: FeaturesSvgProps, children: Children) -> Result<Box<d
                                         Svg::new(
                                             LayoutStyle::new().width(48.0).height(48.0),
                                             move || __src.clone(),
-                                            move || Some(theme().primary),
+                                            { let theme = theme.clone(); move || Some(theme.get().primary) },
                                             move || ObjectFit::Contain,
                                         )?
                                     };
@@ -129,7 +133,7 @@ pub fn features_svg(props: FeaturesSvgProps, children: Children) -> Result<Box<d
                                         Svg::new(
                                             LayoutStyle::new().width(48.0).height(48.0),
                                             move || __src.clone(),
-                                            move || Some(theme().success),
+                                            { let theme = theme.clone(); move || Some(theme.get().success) },
                                             move || ObjectFit::Contain,
                                         )?
                                     };
@@ -138,7 +142,7 @@ pub fn features_svg(props: FeaturesSvgProps, children: Children) -> Result<Box<d
                                         Svg::new(
                                             LayoutStyle::new().width(48.0).height(48.0),
                                             move || __src.clone(),
-                                            move || Some(theme().danger),
+                                            { let theme = theme.clone(); move || Some(theme.get().danger) },
                                             move || ObjectFit::Contain,
                                         )?
                                     };
@@ -147,7 +151,7 @@ pub fn features_svg(props: FeaturesSvgProps, children: Children) -> Result<Box<d
                                         Svg::new(
                                             LayoutStyle::new().width(48.0).height(48.0),
                                             move || __src.clone(),
-                                            move || Some(theme().purple),
+                                            { let theme = theme.clone(); move || Some(theme.get().purple) },
                                             move || ObjectFit::Contain,
                                         )?
                                     };
@@ -162,7 +166,7 @@ pub fn features_svg(props: FeaturesSvgProps, children: Children) -> Result<Box<d
                         card(CardProps::props().build(), __deferred)?
                     };
                     __children.push(box_item(__node_5));
-                    let __node_6 = code_line(CodeLineProps::props().code("svg src:icon color:theme().primary").build(), Children::default())?;
+                    let __node_6 = code_line(CodeLineProps::props().code("svg src:icon color:$theme.primary").build(), Children::default())?;
                     __children.push(box_item(__node_6));
                     __slots.extend_default(__children);
                     Ok(__slots)
@@ -174,9 +178,11 @@ pub fn features_svg(props: FeaturesSvgProps, children: Children) -> Result<Box<d
         let __node_7 = {
             let __deferred = Children::new(
                 {
+                    let theme = theme.clone();
                     let logo = logo.clone();
                     let blurred = blurred.clone();
                 move || {
+                    let theme = theme.clone();
                     let logo = logo.clone();
                     let blurred = blurred.clone();
                     let mut __slots = Slots::new();
@@ -184,9 +190,11 @@ pub fn features_svg(props: FeaturesSvgProps, children: Children) -> Result<Box<d
                     let __node_8 = {
                         let __deferred = Children::new(
                             {
+                                let theme = theme.clone();
                                 let logo = logo.clone();
                                 let blurred = blurred.clone();
                             move || {
+                                let theme = theme.clone();
                                 let logo = logo.clone();
                                 let blurred = blurred.clone();
                                 let mut __slots = Slots::new();
@@ -206,7 +214,7 @@ pub fn features_svg(props: FeaturesSvgProps, children: Children) -> Result<Box<d
                                             Text::declaring(
                                                 || "gradient + shapes".to_string(),
                                                 LayoutStyle::new(),
-                                                move |__inherited: TextStyle| __inherited.with_font_size(12.0).with_color(use_theme::<core::theme::SandboxTheme>().muted()),
+                                                { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(12.0).with_color(theme.get().muted) },
                                             )?
                                         };
                                         Container::new(LayoutStyle::new().flex_column().gap(6.0).align_items(AlignItems::CENTER), children![__svg_8, __text_0])?
@@ -225,7 +233,7 @@ pub fn features_svg(props: FeaturesSvgProps, children: Children) -> Result<Box<d
                                             Text::declaring(
                                                 || "feGaussianBlur → raster".to_string(),
                                                 LayoutStyle::new(),
-                                                move |__inherited: TextStyle| __inherited.with_font_size(12.0).with_color(use_theme::<core::theme::SandboxTheme>().muted()),
+                                                { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(12.0).with_color(theme.get().muted) },
                                             )?
                                         };
                                         Container::new(LayoutStyle::new().flex_column().gap(6.0).align_items(AlignItems::CENTER), children![__svg_9, __text_1])?
@@ -313,7 +321,7 @@ pub fn features_svg(props: FeaturesSvgProps, children: Children) -> Result<Box<d
                     let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
                     let __col_3 = {
                         let __node_14 = prop_row(PropRowProps::props().name("src").values("Arc<SvgData> · 'path'").about("Runtime vector, or a baked file path.").build(), Children::default())?;
-                        let __node_15 = prop_row(PropRowProps::props().name("color").values("Color expr").about("Recolor a glyph, e.g. theme().primary.").build(), Children::default())?;
+                        let __node_15 = prop_row(PropRowProps::props().name("color").values("Color expr").about("Recolor a glyph, e.g. $theme.primary.").build(), Children::default())?;
                         let __node_16 = prop_row(PropRowProps::props().name("fit").values("contain · cover · fill").about("Aspect handling in the box.").build(), Children::default())?;
                         Container::new(LayoutStyle::new().flex_column().gap(6.0), children![__node_14, __node_15, __node_16])?
                     };

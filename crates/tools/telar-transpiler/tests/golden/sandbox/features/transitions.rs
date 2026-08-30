@@ -7,7 +7,6 @@
 #[allow(unused_imports)] use crate::shared::components::doc_header::{doc_header, DocHeaderProps};
 #[allow(unused_imports)] use crate::shared::components::example::{example, ExampleProps};
 #[allow(unused_imports)] use crate::shared::components::prop_row::{prop_row, PropRowProps};
-#[allow(unused_imports)] use crate::core::theme::theme;
 
 #[derive(::telar::Props)]
 pub struct FeaturesTransitionsProps {}
@@ -16,8 +15,9 @@ pub struct FeaturesTransitionsProps {}
 pub fn features_transitions(props: FeaturesTransitionsProps, children: Children) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let __owner = telar::owner_scope();
     #[allow(unused_imports)] use telar::use_theme;
+    #[allow(unused_variables)] let theme = telar::Theme::<core::theme::SandboxTheme>::default();
 
-    let accent = signal(theme().primary);
+    let accent = signal(theme.get().primary);
     let alt = signal(false);
     let fade = signal(1.0f32);
 
@@ -27,9 +27,11 @@ pub fn features_transitions(props: FeaturesTransitionsProps, children: Children)
             let __deferred = Children::new(
                 {
                     let accent = accent.clone();
+                    let theme = theme.clone();
                     let alt = alt.clone();
                 move || {
                     let accent = accent.clone();
+                    let theme = theme.clone();
                     let alt = alt.clone();
                     let mut __slots = Slots::new();
                     let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
@@ -37,9 +39,11 @@ pub fn features_transitions(props: FeaturesTransitionsProps, children: Children)
                         let __deferred = Children::new(
                             {
                                 let accent = accent.clone();
+                                let theme = theme.clone();
                                 let alt = alt.clone();
                             move || {
                                 let accent = accent.clone();
+                                let theme = theme.clone();
                                 let alt = alt.clone();
                                 let mut __slots = Slots::new();
                                 let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
@@ -53,7 +57,7 @@ pub fn features_transitions(props: FeaturesTransitionsProps, children: Children)
                                             Text::declaring(
                                                 || "250ms ease-out".to_string(),
                                                 LayoutStyle::new(),
-                                                move |__inherited: TextStyle| __inherited.with_font_size(11.0).with_color(use_theme::<core::theme::SandboxTheme>().muted()),
+                                                { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(11.0).with_color(theme.get().muted) },
                                             )?
                                         };
                                         Container::new(LayoutStyle::new().flex_column().gap(6.0).align_items(AlignItems::CENTER), children![__sbox_0, __text_0])?
@@ -67,12 +71,12 @@ pub fn features_transitions(props: FeaturesTransitionsProps, children: Children)
                                             Text::declaring(
                                                 || "spring(170, 16)".to_string(),
                                                 LayoutStyle::new(),
-                                                move |__inherited: TextStyle| __inherited.with_font_size(11.0).with_color(use_theme::<core::theme::SandboxTheme>().muted()),
+                                                { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(11.0).with_color(theme.get().muted) },
                                             )?
                                         };
                                         Container::new(LayoutStyle::new().flex_column().gap(6.0).align_items(AlignItems::CENTER), children![__sbox_1, __text_1])?
                                     };
-                                    let __node_3 = button(ButtonProps::props().label("Toggle").fill(Reactive::of(move || use_theme::<core::theme::SandboxTheme>().primary())).on_press(Box::new({ let alt = alt.clone(); let accent = accent.clone(); move || { alt.toggle(); accent.set(if alt.get() { theme().purple } else { theme().primary }) } })).build(), Children::default())?;
+                                    let __node_3 = button(ButtonProps::props().label("Toggle").fill(Reactive::of({ let theme = theme.clone(); move || theme.get().primary })).on_press(Box::new({ let alt = alt.clone(); let accent = accent.clone(); let theme = theme.clone(); move || { alt.toggle(); accent.set(if alt.get() { theme.get().purple } else { theme.get().primary }) } })).build(), Children::default())?;
                                     Container::new(LayoutStyle::new().flex_row().gap(14.0).align_items(AlignItems::CENTER).flex_wrap(), children![__col_1, __col_2, __node_3])?
                                 };
                                 __children.push(box_item(__row_0));
@@ -96,16 +100,20 @@ pub fn features_transitions(props: FeaturesTransitionsProps, children: Children)
         let __node_5 = {
             let __deferred = Children::new(
                 {
+                    let theme = theme.clone();
                     let fade = fade.clone();
                 move || {
+                    let theme = theme.clone();
                     let fade = fade.clone();
                     let mut __slots = Slots::new();
                     let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
                     let __node_6 = {
                         let __deferred = Children::new(
                             {
+                                let theme = theme.clone();
                                 let fade = fade.clone();
                             move || {
+                                let theme = theme.clone();
                                 let fade = fade.clone();
                                 let mut __slots = Slots::new();
                                 let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
@@ -115,13 +123,13 @@ pub fn features_transitions(props: FeaturesTransitionsProps, children: Children)
                                             Text::declaring(
                                                 || "fade".to_string(),
                                                 LayoutStyle::new(),
-                                                move |__inherited: TextStyle| __inherited.with_font_size(13.0).with_color(use_theme::<core::theme::SandboxTheme>().on_primary()),
+                                                { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(13.0).with_color(theme.get().on_primary) },
                                             )?
                                         };
                                         let __transition_2 = motion::Animated::new(fade.get(), motion::tween(std::time::Duration::from_millis(300), motion::Easing::EaseInOut));
-                                        StyledContainer::new(LayoutStyle::new().flex_column().width(130.0).height(64.0).align_items(AlignItems::CENTER).justify_content(JustifyContent::CENTER), { let fade = fade.clone(); move |_| RectStyle::default().with_fill(use_theme::<core::theme::SandboxTheme>().primary()).with_radius(BorderRadius::all(12.0)) }, children![__text_2])?.with_opacity({ let fade = fade.clone(); move || { __transition_2.retarget(fade.get()); __transition_2.get() } })
+                                        StyledContainer::new(LayoutStyle::new().flex_column().width(130.0).height(64.0).align_items(AlignItems::CENTER).justify_content(JustifyContent::CENTER), { let theme = theme.clone(); let fade = fade.clone(); move |_| RectStyle::default().with_fill(theme.get().primary).with_radius(BorderRadius::all(12.0)) }, children![__text_2])?.with_opacity({ let fade = fade.clone(); move || { __transition_2.retarget(fade.get()); __transition_2.get() } })
                                     };
-                                    let __node_7 = button(ButtonProps::props().label("Toggle").fill(Reactive::of(move || use_theme::<core::theme::SandboxTheme>().primary())).on_press(Box::new({ let fade = fade.clone(); move || { let v = fade.peek(); fade.set(if v > 0.5 { 0.15 } else { 1.0 }) } })).build(), Children::default())?;
+                                    let __node_7 = button(ButtonProps::props().label("Toggle").fill(Reactive::of({ let theme = theme.clone(); move || theme.get().primary })).on_press(Box::new({ let fade = fade.clone(); move || { let v = fade.peek(); fade.set(if v > 0.5 { 0.15 } else { 1.0 }) } })).build(), Children::default())?;
                                     Container::new(LayoutStyle::new().flex_row().gap(14.0).align_items(AlignItems::CENTER).flex_wrap(), children![__sbox_2, __node_7])?
                                 };
                                 __children.push(box_item(__row_1));

@@ -17,26 +17,27 @@ pub struct SharedComponentsDocHeaderProps {
 pub fn shared_components_doc_header(props: SharedComponentsDocHeaderProps, children: Children) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let __owner = telar::owner_scope();
     #[allow(unused_imports)] use telar::use_theme;
+    #[allow(unused_variables)] let theme = telar::Theme::<core::theme::SandboxTheme>::default();
     let __col_0 = {
         let __text_0 = {
             Text::declaring(
                 move || format!("{}", { props.kicker }),
                 LayoutStyle::new(),
-                move |__inherited: TextStyle| __inherited.with_font_size(12.0).with_color(use_theme::<core::theme::SandboxTheme>().primary()),
+                { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(12.0).with_color(theme.get().primary) },
             )?
         };
         let __text_1 = {
             Text::declaring(
                 move || format!("{}", { props.title }),
                 LayoutStyle::new(),
-                move |__inherited: TextStyle| __inherited.with_font_size(26.0).with_color(use_theme::<core::theme::SandboxTheme>().ink()),
+                { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(26.0).with_color(theme.get().ink) },
             )?
         };
         let __text_2 = {
             Text::declaring(
                 move || format!("{}", { props.desc }),
                 LayoutStyle::new().max_width(760.0),
-                move |__inherited: TextStyle| __inherited.with_font_size(14.0).with_color(use_theme::<core::theme::SandboxTheme>().muted()),
+                { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(14.0).with_color(theme.get().muted) },
             )?
         };
         Container::new(LayoutStyle::new().flex_column().gap(6.0), children![__text_0, __text_1, __text_2])?
@@ -47,6 +48,7 @@ pub fn shared_components_doc_header(props: SharedComponentsDocHeaderProps, child
 #[allow(dead_code, unused_variables, unused_mut)]
 pub fn shared_components_doc_header_preview_0() -> Result<Box<dyn LayoutItem>, LayoutError> {
     #[allow(unused_imports)] use telar::use_theme;
+    #[allow(unused_variables)] let theme = telar::Theme::<core::theme::SandboxTheme>::default();
     let __node_0 = doc_header(DocHeaderProps::props().kicker("FOUNDATIONS").title("Layout").desc("Flexbox rows and columns with gaps, padding, alignment and growth.").build(), Children::default())?;
     Ok(Box::new(__node_0))
 }

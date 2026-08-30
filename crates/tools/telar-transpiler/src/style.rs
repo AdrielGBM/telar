@@ -1,43 +1,22 @@
-//! Generates the `[style]` section: color/number constants and per-class `LayoutStyle` constructor functions.
+//! Generates the `[style]` section: one `LayoutStyle` constructor function per class.
 
 use std::fmt::Write;
 
-use telar_parser::{StyleClass, StyleConstant, StyleSection, StyleValue};
+use telar_parser::{StyleClass, StyleSection};
 
-use crate::naming::{constant_name, is_ident, is_path_expr, style_function_name, to_snake_case};
+use crate::naming::style_function_name;
 use crate::registry;
 
-/// The names a bare value may resolve against where it is written: the theme type in effect, this file's
-/// `[style]` constants, and the `[logic]` bindings in scope.
-///
-/// Carried rather than passed piecemeal because the answer differs by position and the difference matters: a
-/// `[style]` class function is emitted outside the component, so it can see the constants and no bindings,
-/// while an attribute in `[view]` can see both. Given that, the same resolution is correct in both places
-/// instead of approximately correct in one.
+/// The names a bare value may resolve against where it is written: the theme type in effect and the
+/// `[logic]` bindings in scope. A `[style]` class function is emitted outside the component and sees no
+/// bindings; an attribute in `[view]` sees them.
 #[derive(Clone, Copy, Default)]
 pub struct Scope<'a> {
     pub theme: Option<&'a str>,
-    pub constants: &'a [StyleConstant],
     pub locals: &'a [String],
 }
 
 impl<'a> Scope<'a> {
-    /// The scope of a `[style]` class function: this file's constants and the theme, with no bindings.
-    fn style_section(constants: &'a [StyleConstant], theme: Option<&'a str>) -> Self {
-        Self {
-            theme,
-            constants,
-            locals: &[],
-        }
-    }
-
-    fn constant(&self, name: &str) -> Option<&StyleValue> {
-        self.constants
-            .iter()
-            .find(|c| c.name == name)
-            .map(|c| &c.value)
-    }
-
     /// A number for a key [`crate::registry::value_kind`] describes, where a value the key cannot mean has
     /// already been reported on the attribute itself. What stands in its place only has to be *something*:
     /// the build stops before anything reads it.
@@ -65,44 +44,6 @@ pub enum PropCall {
     Invalid(String),
 }
 
-/// A `theme.field` reference resolved to a reactive theme read, or `None` when `value` is not one (or no
-/// theme is configured, in which case the reference is left alone for rustc to reject by name).
-///
-/// The dotted form is what lets a **non-color** token reach the theme. A bare ident already means "a `[style]`
-/// constant" everywhere except color attributes, so overloading it would silently change what existing
-/// `pad:card_gap` means; `theme.card_gap` is unambiguous and works in any attribute position.
-pub fn theme_field_expr(value: &str, theme: Option<&str>) -> Option<String> {
-    let rest = value.trim().strip_prefix("theme.")?;
-    let theme = theme?;
-    let head: String = rest
-        .chars()
-        .take_while(|c| c.is_alphanumeric() || *c == '_')
-        .collect();
-    if head.is_empty() || !is_ident(&head) {
-        return None;
-    }
-    // Whatever follows that first name is the author's own Rust — a call's arguments, a chain onto the value it
-    // returned — and is carried through untouched. A theme is a type the *application* declares, so its
-    // vocabulary is not something the DSL can enumerate: `font(FontRole::Body)` and `accent.darken(0.1)` are as
-    // much "read the theme" as a bare field is, and without them each one has to be hoisted into `[logic]` and
-    // referred to by a name the view invents for it.
-    let tail = &rest[head.len()..];
-    if !tail.is_empty() && !tail.starts_with('(') && !tail.starts_with('.') {
-        return None;
-    }
-    if !balanced(tail) {
-        return None;
-    }
-    let name = to_snake_case(&head);
-    // A name the token trait defines is read through the trait, not as a field, so a theme that answers it
-    // with an expression rather than a same-named field still answers it — and so the markup and the widget
-    // catalogue cannot mean two different colours by one word.
-    if tail.is_empty() && registry::THEME_COLOR_TOKENS.contains(&name.as_str()) {
-        return Some(format!("use_theme::<{theme}>().{name}()"));
-    }
-    Some(format!("use_theme::<{theme}>().{name}{tail}"))
-}
-
 /// Whether every bracket in `s` is closed, so a half-written call falls through to the arm that would have
 /// handled it instead of being emitted as a theme read that cannot compile.
 fn balanced(s: &str) -> bool {
@@ -120,27 +61,10 @@ fn balanced(s: &str) -> bool {
     depth == 0
 }
 
-/// Renders all constants and style functions for the document's style section.
-///
-/// Every constant is emitted, colours included. They used to be skipped whenever a theme was active, on the
-/// reasoning that a bare name reached the theme and the constant would be dead — which is exactly what made
-/// the `[style]` block silently dead instead: a file could declare `primary: #4361ee` and watch every
-/// `fill:primary` in it resolve to the theme's own primary.
+/// Renders one `LayoutStyle` constructor function per class in the document's style section.
 pub fn generate_style_section(section: &StyleSection, theme: Option<&str>) -> String {
     let mut out = String::new();
-
-    let mut emitted_const = false;
-    for c in &section.constants {
-        out.push_str(&generate_constant(c));
-        out.push('\n');
-        emitted_const = true;
-    }
-
-    if emitted_const && !section.classes.is_empty() {
-        out.push('\n');
-    }
-
-    let scope = Scope::style_section(&section.constants, theme);
+    let scope = Scope { theme, locals: &[] };
     for (i, class) in section.classes.iter().enumerate() {
         if i > 0 {
             out.push('\n');
@@ -148,23 +72,7 @@ pub fn generate_style_section(section: &StyleSection, theme: Option<&str>) -> St
         out.push_str(&generate_class_function(class, scope));
         out.push('\n');
     }
-
     out
-}
-
-/// A `[style]` constant, in the Rust type its value already is. All three kinds are emitted: a name declared
-/// and not yet referenced is the author's business, the way a class function nobody calls is.
-fn generate_constant(c: &StyleConstant) -> String {
-    let (name, ty, value) = match &c.value {
-        StyleValue::Hex(hex) => (
-            constant_name("COLOR_", &c.name),
-            "Color",
-            hex_to_color_expr(hex),
-        ),
-        StyleValue::Number(n) => (constant_name("SIZE_", &c.name), "f32", format_f32(*n)),
-        StyleValue::Raw(raw) => (constant_name("RAW_", &c.name), "&str", format!("{raw:?}")),
-    };
-    format!("#[allow(dead_code)]\nconst {name}: {ty} = {value};")
 }
 
 /// What a class may carry beyond the layout keys: what a box paints with, and what flows down to the text
@@ -207,6 +115,12 @@ fn generate_class_function(class: &StyleClass, scope: Scope<'_>) -> String {
         "fn {}() -> LayoutStyle {{",
         style_function_name(&class.name)
     );
+    if let Some(theme) = scope.theme {
+        let _ = writeln!(
+            out,
+            "    #[allow(unused_variables)] let theme = telar::Theme::<{theme}>::default();"
+        );
+    }
     out.push_str("    LayoutStyle::new()");
     for prop in &class.props {
         if let PropCall::Call(call) = layout_prop_call(&prop.key, &prop.value, scope) {
@@ -229,38 +143,38 @@ pub fn layout_prop_call(key: &str, value: &str, scope: Scope<'_>) -> PropCall {
 
 fn layout_call(key: &str, value: &str, scope: Scope<'_>) -> Result<Option<String>, String> {
     let call = match key {
-        "width" => format!(".width({})", dimension(value, scope)?),
-        "height" => format!(".height({})", dimension(value, scope)?),
-        "min_width" => format!(".min_width({})", dimension(value, scope)?),
-        "min_height" => format!(".min_height({})", dimension(value, scope)?),
-        "max_width" => format!(".max_width({})", dimension(value, scope)?),
-        "max_height" => format!(".max_height({})", dimension(value, scope)?),
-        "basis" | "flex_basis" => format!(".flex_basis({})", dimension(value, scope)?),
+        "width" => format!(".width({})", format_number(value, scope)?),
+        "height" => format!(".height({})", format_number(value, scope)?),
+        "min_width" => format!(".min_width({})", format_number(value, scope)?),
+        "min_height" => format!(".min_height({})", format_number(value, scope)?),
+        "max_width" => format!(".max_width({})", format_number(value, scope)?),
+        "max_height" => format!(".max_height({})", format_number(value, scope)?),
+        "basis" | "flex_basis" => format!(".flex_basis({})", format_number(value, scope)?),
         "aspect" | "aspect_ratio" => format!(".aspect_ratio({})", format_number(value, scope)?),
         "wrap" => format!(".{}()", keyword(key, value, registry::WRAP_VALUES)?),
         // Per-child cross-axis alignment override, e.g. `self:stretch` over a parent `align:center`, or
         // `self:center` to keep a fixed-size child centered instead of stretched.
         "self" => format!(".{}()", keyword(key, value, registry::SELF_VALUES)?),
-        "padding" | "pad" => format!(".padding_all({})", dimension(value, scope)?),
-        "padding_x" | "pad_x" => format!(".padding_horizontal({})", dimension(value, scope)?),
-        "padding_y" | "pad_y" => format!(".padding_vertical({})", dimension(value, scope)?),
+        "padding" | "pad" => format!(".padding_all({})", format_number(value, scope)?),
+        "padding_x" | "pad_x" => format!(".padding_horizontal({})", format_number(value, scope)?),
+        "padding_y" | "pad_y" => format!(".padding_vertical({})", format_number(value, scope)?),
         // Logical edges: resolved to left/right against the active writing direction at layout time, so one build serves LTR and RTL.
         "padding_start" | "pad_start" => {
-            format!(".padding_start({})", dimension(value, scope)?)
+            format!(".padding_start({})", format_number(value, scope)?)
         }
-        "padding_end" | "pad_end" => format!(".padding_end({})", dimension(value, scope)?),
-        "margin_start" => format!(".margin_inline_start({})", dimension(value, scope)?),
-        "margin_end" => format!(".margin_inline_end({})", dimension(value, scope)?),
-        "inset_start" => format!(".inset_start({})", dimension(value, scope)?),
-        "inset_end" => format!(".inset_end({})", dimension(value, scope)?),
-        "inset_top" => format!(".inset_top({})", dimension(value, scope)?),
-        "inset_bottom" => format!(".inset_bottom({})", dimension(value, scope)?),
+        "padding_end" | "pad_end" => format!(".padding_end({})", format_number(value, scope)?),
+        "margin_start" => format!(".margin_inline_start({})", format_number(value, scope)?),
+        "margin_end" => format!(".margin_inline_end({})", format_number(value, scope)?),
+        "inset_start" => format!(".inset_start({})", format_number(value, scope)?),
+        "inset_end" => format!(".inset_end({})", format_number(value, scope)?),
+        "inset_top" => format!(".inset_top({})", format_number(value, scope)?),
+        "inset_bottom" => format!(".inset_bottom({})", format_number(value, scope)?),
         // Out of flow, pinned only by the insets the author names. `absolute_fill` is the all-four-at-zero
         // shorthand `overlay` uses; a floating panel wants three edges and its own size on the fourth.
         "absolute" => format!(".{}()", keyword(key, value, registry::ABSOLUTE_VALUES)?),
-        "gap" => format!(".gap({})", dimension(value, scope)?),
-        "gap_x" => format!(".gap_x({})", dimension(value, scope)?),
-        "gap_y" => format!(".gap_y({})", dimension(value, scope)?),
+        "gap" => format!(".gap({})", format_number(value, scope)?),
+        "gap_x" => format!(".gap_x({})", format_number(value, scope)?),
+        "gap_y" => format!(".gap_y({})", format_number(value, scope)?),
         "grow" => format!(".flex_grow({})", format_number(value, scope)?),
         "shrink" => format!(".flex_shrink({})", format_number(value, scope)?),
         "span" => format!(".grid_column_span({})", track_count(key, value)?),
@@ -384,24 +298,11 @@ pub fn color(value: &str, scope: Scope<'_>) -> Result<(), String> {
             )),
         };
     }
-    let resolvable = v.starts_with('#')
-        || v.starts_with('$')
-        || v.contains('(')
-        || v.starts_with("Color::")
-        || v == "transparent"
-        || theme_field_expr(v, scope.theme).is_some()
-        || scope.constants.iter().any(|c| c.name == v)
-        || scope.locals.iter().any(|l| l == v)
-        // A qualified name is the author's own Rust and only rustc can judge it. A *bare* one is not: that
-        // is the spelling a `[style]` constant has, and letting an unknown one through is what made a typo
-        // a rustc error against generated code.
-        || ((v.contains("::") || v.contains('.')) && crate::naming::is_path_expr(v));
-    if resolvable {
-        return Ok(());
-    }
-    Err(format!(
-        "`{v}` is not a color: write a hex literal, `transparent`, `theme.{v}`, a `[style]` constant, or a `$signal`"
-    ))
+    // Everything else is a Rust expression and only rustc can judge it. There used to be a list here of the
+    // spellings the markup could resolve on its own, and a bare name outside it was rejected — because a
+    // bare name *was* a `[style]` constant, and letting an unknown one through made a typo a rustc error
+    // against generated code. A name is the author's own Rust now, so it fails on their line or not at all.
+    Ok(())
 }
 
 /// Resolves a numeric value to the Rust expression it stands for, or reports why it is not a number.
@@ -413,14 +314,20 @@ pub fn color(value: &str, scope: Scope<'_>) -> Result<(), String> {
 /// never wrote.
 pub fn format_number(value: &str, scope: Scope<'_>) -> Result<String, String> {
     let v = value.trim();
-    // A `$signal` sizes the node from reactive state. The read is emitted inline, which is correct in both
-    // places the style expression lands: once at construction, and again inside the `styled_by` effect the
-    // container grows when any of its layout props is reactive.
-    if let Some(read) = signal_read(v) {
-        return Ok(read);
+    // `50%` is a token shape, not a key's private grammar: it expands wherever it is written, and rustc
+    // rejects it under a key that is not a length. Resolving it per key made the same three characters mean
+    // a percentage under `width` and a verbatim splice under `grow`.
+    if let Some(pct) = v.strip_suffix('%') {
+        return match pct.trim().parse::<f32>() {
+            Ok(n) => Ok(format!("SizeDimension::Percent({})", format_f32(n / 100.0))),
+            Err(_) => Err(format!("`{v}` is not a percentage")),
+        };
     }
-    if let Some(expr) = theme_field_expr(v, scope.theme) {
-        return Ok(expr);
+    // A `$` read sizes the node from reactive state — a signal, or the `theme` handle the view binds. The
+    // read is emitted inline, which is correct in both places the style expression lands: once at
+    // construction, and again inside the `styled_by` effect the container grows when a layout prop reads.
+    if v.contains('$') {
+        return Ok(crate::view::substitute_reads(v));
     }
     if let Ok(n) = v.parse::<f32>() {
         return Ok(format_f32(n));
@@ -432,50 +339,10 @@ pub fn format_number(value: &str, scope: Scope<'_>) -> Result<String, String> {
     if scope.locals.iter().any(|local| local == v) {
         return Ok(v.to_string());
     }
-    match scope.constant(v) {
-        Some(StyleValue::Number(_)) => return Ok(constant_name("SIZE_", v)),
-        Some(StyleValue::Hex(_)) => {
-            return Err(format!(
-                "`{v}` is declared in `[style]` as a colour, not a number"
-            ));
-        }
-        Some(StyleValue::Raw(_)) => {
-            return Err(format!(
-                "`{v}` is declared in `[style]` as text, not a number"
-            ));
-        }
-        None => {}
-    }
-    if is_path_expr(v) {
-        return Ok(v.to_string());
-    }
-    Err(format!(
-        "`{v}` is not a number: write a literal, a `$signal`, a `theme.…` read, a `[style]` constant, or a parenthesised expression"
-    ))
-}
-
-/// `$name` -> `name.get()`, for a lone signal identifier. Anything more complex is left to the caller.
-pub fn signal_read(value: &str) -> Option<String> {
-    let ident = value.trim().strip_prefix('$')?;
-    let mut chars = ident.chars();
-    let head_ok = chars
-        .next()
-        .is_some_and(|c| c.is_ascii_alphabetic() || c == '_');
-    let tail_ok = chars.all(|c| c.is_ascii_alphanumeric() || c == '_');
-    (head_ok && tail_ok).then(|| format!("{ident}.get()"))
-}
-
-/// Renders a sizing value: `%` becomes `SizeDimension::Percent` (`100%` == `1.0`); everything else is a
-/// number, resolved by [`format_number`].
-pub fn dimension(value: &str, scope: Scope<'_>) -> Result<String, String> {
-    let v = value.trim();
-    if let Some(pct) = v.strip_suffix('%') {
-        return match pct.trim().parse::<f32>() {
-            Ok(n) => Ok(format!("SizeDimension::Percent({})", format_f32(n / 100.0))),
-            Err(_) => Err(format!("`{v}` is not a percentage")),
-        };
-    }
-    format_number(v, scope)
+    // Everything else is a Rust expression, spliced as written. The ladder that used to sit here — a
+    // `[style]` constant, then a name in scope, then a rejection — is what made a number's meaning depend on
+    // which of three namespaces answered to it first.
+    Ok(v.to_string())
 }
 
 /// Formats an f32 so it always carries a decimal point (`240` -> `240.0`).
@@ -500,17 +367,6 @@ pub fn hex_to_color_expr(hex: &str) -> String {
 mod tests {
     use super::*;
     use telar_parser::StyleProp;
-
-    fn constants(entries: &[(&str, StyleValue)]) -> Vec<StyleConstant> {
-        entries
-            .iter()
-            .map(|(name, value)| StyleConstant {
-                name: name.to_string(),
-                value: value.clone(),
-                line: 1,
-            })
-            .collect()
-    }
 
     fn call(key: &str, value: &str) -> Option<String> {
         match layout_prop_call(key, value, Scope::default()) {
@@ -572,59 +428,29 @@ mod tests {
         );
     }
 
+    /// The `theme` binding the view makes is read like any other reactive handle, in any numeric prop.
     #[test]
-    fn a_theme_path_resolves_in_any_numeric_prop() {
+    fn a_theme_read_resolves_in_any_numeric_prop() {
         for (key, expected) in [
-            ("pad", ".padding_all(use_theme::<Th>().gutter)"),
-            ("gap", ".gap(use_theme::<Th>().gutter)"),
-            ("width", ".width(use_theme::<Th>().gutter)"),
-            (
-                "margin_start",
-                ".margin_inline_start(use_theme::<Th>().gutter)",
-            ),
+            ("pad", ".padding_all(theme.get().gutter)"),
+            ("gap", ".gap(theme.get().gutter)"),
+            ("width", ".width(theme.get().gutter)"),
+            ("margin_start", ".margin_inline_start(theme.get().gutter)"),
         ] {
             assert_eq!(
-                themed(key, "theme.gutter", "Th").as_deref(),
+                themed(key, "$theme.gutter", "Th").as_deref(),
                 Some(expected),
                 "{key}"
             );
         }
     }
 
+    /// A bare name is the author's own, whatever the theme happens to call a field of its own.
     #[test]
-    fn a_bare_ident_still_means_a_style_constant_not_a_theme_field() {
-        // The whole reason the theme form is dotted: this must keep meaning what it always meant.
+    fn a_bare_ident_is_the_name_the_author_wrote() {
         assert_eq!(
             themed("pad", "card_gap", "Th").as_deref(),
             Some(".padding_all(card_gap)")
-        );
-    }
-
-    #[test]
-    fn a_theme_path_without_a_theme_is_left_for_rustc() {
-        assert_eq!(theme_field_expr("theme.gutter", None), None);
-        assert_eq!(theme_field_expr("gutter", Some("Th")), None);
-        assert_eq!(theme_field_expr("theme.", Some("Th")), None);
-        assert_eq!(theme_field_expr("theme.not an ident", Some("Th")), None);
-    }
-
-    /// A theme's vocabulary is the application's, not the DSL's: half of what a real theme answers is a method
-    /// with an argument, and until this every one of those had to be hoisted into `[logic]` and given a name
-    /// the view then used instead.
-    #[test]
-    fn a_theme_read_can_be_a_call_or_a_chain_not_only_a_field() {
-        assert_eq!(
-            theme_field_expr("theme.font(FontRole::Body)", Some("Th")).as_deref(),
-            Some("use_theme::<Th>().font(FontRole::Body)")
-        );
-        assert_eq!(
-            theme_field_expr("theme.accent.darken(0.1)", Some("Th")).as_deref(),
-            Some("use_theme::<Th>().accent.darken(0.1)")
-        );
-        // Half-written, so it is left for the arm that would have handled it rather than emitted as a read.
-        assert_eq!(
-            theme_field_expr("theme.font(FontRole::Body", Some("Th")),
-            None
         );
     }
 
@@ -645,72 +471,11 @@ mod tests {
         );
     }
 
-    /// The read half of `[style]` numeric constants, which was never written: `generate_constant` has always
-    /// emitted `const SIZE_*` and nothing has ever resolved a name to one, so every one of them was dead.
+    /// A value the transpiler cannot resolve is the author's own Rust and reaches rustc, which names it
+    /// against this `.rsx` line through the source map. There used to be a rejection here for anything that
+    /// was not name-shaped, which is a judgement about Rust made by something that does not parse Rust.
     #[test]
-    fn a_numeric_style_constant_resolves_to_the_const_it_generates() {
-        let declared = constants(&[("card_gap", StyleValue::Number(6.0))]);
-        let scope = Scope {
-            constants: &declared,
-            ..Scope::default()
-        };
-        assert_eq!(format_number("card_gap", scope).unwrap(), "SIZE_CARD_GAP");
-        assert!(matches!(
-            layout_prop_call("gap", "card_gap", scope),
-            PropCall::Call(ref c) if c == ".gap(SIZE_CARD_GAP)"
-        ));
-    }
-
-    /// A `[logic]` binding shadows a `[style]` constant of the same name, the way a local shadows in Rust —
-    /// and the way `color_expr` already resolves a colour.
-    #[test]
-    fn a_logic_binding_shadows_a_style_constant_of_the_same_name() {
-        let declared = constants(&[("gutter", StyleValue::Number(6.0))]);
-        let locals = vec!["gutter".to_string()];
-        let scope = Scope {
-            constants: &declared,
-            locals: &locals,
-            ..Scope::default()
-        };
-        assert_eq!(format_number("gutter", scope).as_deref(), Ok("gutter"));
-    }
-
-    /// A name the author did declare, under a key that cannot use it — which used to be a rustc error about
-    /// a `SIZE_*` symbol nobody wrote.
-    #[test]
-    fn a_constant_of_the_wrong_kind_says_which_kind_it_is() {
-        let declared = constants(&[
-            ("brand", StyleValue::Hex("#3d78fa".into())),
-            ("label", StyleValue::Raw("hello".into())),
-        ]);
-        let scope = Scope {
-            constants: &declared,
-            ..Scope::default()
-        };
-        assert!(
-            format_number("brand", scope)
-                .unwrap_err()
-                .contains("as a colour, not a number")
-        );
-        assert!(
-            format_number("label", scope)
-                .unwrap_err()
-                .contains("as text, not a number")
-        );
-    }
-
-    /// T6: a bare token under a numeric key used to be emitted as Rust verbatim, so `gap:1O` became `.gap(1O)`
-    /// and rustc complained about generated code. A name is still carried through — a `[logic]` binding, a
-    /// `const`, a props field are all names this crate cannot enumerate — but a value that is not a name at
-    /// all can only be a typo.
-    #[test]
-    fn a_value_that_is_not_a_name_is_rejected_instead_of_emitted_as_rust() {
-        for value in ["1O", "12px", "10 px", "6,"] {
-            assert!(
-                invalid("gap", value).is_some(),
-                "`gap:{value}` should not compile"
-            );
-        }
+    fn a_name_the_author_has_in_scope_is_carried_through() {
         for value in ["side", "props.pad", "crate::scale::md()", "TRACK_H"] {
             assert!(
                 call("gap", value).is_some(),
@@ -738,9 +503,16 @@ mod tests {
                 "`{key}:50%` should resolve"
             );
         }
-        // A ratio is not a length, and half of nothing is not a meaning either of these has.
-        assert!(invalid("grow", "50%").is_some());
-        assert!(invalid("aspect", "50%").is_some());
+        // A ratio is not a length, and `%` is a token shape rather than a key's private grammar: it expands
+        // under `grow` too, and rustc rejects the `SizeDimension` a ratio cannot be.
+        for key in ["grow", "aspect"] {
+            assert!(
+                call(key, "50%")
+                    .as_deref()
+                    .is_some_and(|c| c.contains("SizeDimension::Percent(0.5)")),
+                "`{key}:50%` expands and is rustc's to reject"
+            );
+        }
     }
 
     /// S3: a value outside a closed keyword set now says what the set is, on the attribute, instead of the
@@ -768,31 +540,11 @@ mod tests {
         assert!(message.contains("the bare flag"), "{message}");
     }
 
-    /// All three `[style]` value kinds are real items now. `Raw` used to be emitted as a comment saying it had
-    /// "no obvious Rust target type", which left one of the three declarable kinds inert.
-    #[test]
-    fn every_style_constant_kind_emits_a_typed_item() {
-        let section = StyleSection {
-            constants: constants(&[
-                ("primary", StyleValue::Hex("#3d78fa".into())),
-                ("radius", StyleValue::Number(6.0)),
-                ("label", StyleValue::Raw("hello".into())),
-            ]),
-            classes: Vec::new(),
-        };
-        let out = generate_style_section(&section, None);
-        assert!(out.contains("const COLOR_PRIMARY: Color = Color::rgba("));
-        assert!(out.contains("const SIZE_RADIUS: f32 = 6.0;"));
-        assert!(out.contains(r#"const RAW_LABEL: &str = "hello";"#));
-        assert!(!out.contains("unmapped"));
-    }
-
     /// A class property is written where no element is, so it has no attribute line — but it is the same
     /// misspelling, and it used to be dropped just as silently.
     #[test]
     fn a_class_property_reports_its_own_bad_value() {
         let section = StyleSection {
-            constants: Vec::new(),
             classes: vec![StyleClass {
                 name: "card".into(),
                 props: vec![StyleProp {
@@ -813,7 +565,6 @@ mod tests {
     #[test]
     fn a_class_property_with_an_unknown_key_is_rejected() {
         let section = StyleSection {
-            constants: Vec::new(),
             classes: vec![StyleClass {
                 name: "card".into(),
                 props: vec![StyleProp {
@@ -832,7 +583,6 @@ mod tests {
     #[test]
     fn a_paint_property_in_a_class_is_not_mistaken_for_an_unknown_key() {
         let section = StyleSection {
-            constants: Vec::new(),
             classes: vec![StyleClass {
                 name: "card".into(),
                 props: vec![StyleProp {

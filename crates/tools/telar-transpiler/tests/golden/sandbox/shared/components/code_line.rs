@@ -15,15 +15,16 @@ pub struct SharedComponentsCodeLineProps {
 pub fn shared_components_code_line(props: SharedComponentsCodeLineProps, children: Children) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let __owner = telar::owner_scope();
     #[allow(unused_imports)] use telar::use_theme;
+    #[allow(unused_variables)] let theme = telar::Theme::<core::theme::SandboxTheme>::default();
     let __sbox_0 = {
         let __text_0 = {
             Text::declaring(
                 move || format!("{}", { props.code }),
                 LayoutStyle::new(),
-                move |__inherited: TextStyle| __inherited.with_font_size(12.0).with_color(use_theme::<core::theme::SandboxTheme>().code_fg),
+                { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(12.0).with_color(theme.get().code_fg) },
             )?
         };
-        StyledContainer::new(LayoutStyle::new().flex_column().padding_horizontal(12.0).padding_vertical(8.0), move |_| RectStyle::default().with_fill(use_theme::<core::theme::SandboxTheme>().code_bg).with_radius(BorderRadius::all(8.0)), children![__text_0])?
+        StyledContainer::new(LayoutStyle::new().flex_column().padding_horizontal(12.0).padding_vertical(8.0), { let theme = theme.clone(); move |_| RectStyle::default().with_fill(theme.get().code_bg).with_radius(BorderRadius::all(8.0)) }, children![__text_0])?
     };
     Ok(Box::new(__sbox_0))
 }
@@ -31,6 +32,7 @@ pub fn shared_components_code_line(props: SharedComponentsCodeLineProps, childre
 #[allow(dead_code, unused_variables, unused_mut)]
 pub fn shared_components_code_line_preview_0() -> Result<Box<dyn LayoutItem>, LayoutError> {
     #[allow(unused_imports)] use telar::use_theme;
+    #[allow(unused_variables)] let theme = telar::Theme::<core::theme::SandboxTheme>::default();
     let __node_0 = code_line(CodeLineProps::props().code("box fill:primary radius:8 width:120 height:80").build(), Children::default())?;
     Ok(Box::new(__node_0))
 }

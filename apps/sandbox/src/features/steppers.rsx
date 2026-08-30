@@ -16,13 +16,13 @@ col gap:20
         card gap:10
             row gap:16 align:center
                 stepper value:$qty min:0 max:10 step:1
-                text "qty · {$qty}" font_size:14 color:theme.muted
+                text "qty · {$qty}" font_size:14 color:$theme.muted
         code_line code:"stepper value:$qty min:0 max:10 step:1"
     example title:"on_change — a callback beside the binding, for the work a tap has to trigger"
         card gap:10
             row gap:16 align:center
                 stepper value:$seats min:1 max:8 step:1 on_change:(|v| $last_change.set(format!("stepped to {v:.0}")))
-                text "{$last_change}" font_size:14 color:theme.muted
+                text "{$last_change}" font_size:14 color:$theme.muted
         code_line code:"stepper value:$seats on_change:|v| $last_change.set(…)   (the binding still updates on its own)"
     example title:"Attributes"
         col gap:6

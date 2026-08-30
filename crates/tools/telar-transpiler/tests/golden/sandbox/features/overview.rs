@@ -12,6 +12,7 @@ pub struct FeaturesOverviewProps {}
 pub fn features_overview(props: FeaturesOverviewProps, children: Children) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let __owner = telar::owner_scope();
     #[allow(unused_imports)] use telar::use_theme;
+    #[allow(unused_variables)] let theme = telar::Theme::<core::theme::SandboxTheme>::default();
 
     let __col_0 = {
         let __col_1 = {
@@ -19,14 +20,14 @@ pub fn features_overview(props: FeaturesOverviewProps, children: Children) -> Re
                 Text::declaring(
                     || "▲ rsx — native UI for Rust".to_string(),
                     LayoutStyle::new(),
-                    move |__inherited: TextStyle| __inherited.with_font_size(34.0).with_color(use_theme::<core::theme::SandboxTheme>().ink()),
+                    { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(34.0).with_color(theme.get().ink) },
                 )?
             };
             let __text_1 = {
                 Text::declaring(
                     || "A tour of every primitive the framework ships, from a single box to spring-driven motion. The whole interface is written in .rsx markup; only non-visual logic lives in Rust.".to_string(),
                     LayoutStyle::new().max_width(780.0),
-                    move |__inherited: TextStyle| __inherited.with_font_size(15.0).with_color(use_theme::<core::theme::SandboxTheme>().muted()),
+                    { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(15.0).with_color(theme.get().muted) },
                 )?
             };
             Container::new(LayoutStyle::new().flex_column().gap(10.0), children![__text_0, __text_1])?

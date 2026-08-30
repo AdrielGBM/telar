@@ -13,6 +13,7 @@ pub struct FeaturesButtonsProps {}
 
 #[allow(dead_code)]
 fn style_center() -> LayoutStyle {
+    #[allow(unused_variables)] let theme = telar::Theme::<core::theme::SandboxTheme>::default();
     LayoutStyle::new()
         .align_items(AlignItems::CENTER)
         .justify_content(JustifyContent::CENTER)
@@ -22,6 +23,7 @@ fn style_center() -> LayoutStyle {
 pub fn features_buttons(props: FeaturesButtonsProps, children: Children) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let __owner = telar::owner_scope();
     #[allow(unused_imports)] use telar::use_theme;
+    #[allow(unused_variables)] let theme = telar::Theme::<core::theme::SandboxTheme>::default();
     let clicks = signal(0i32);
     let hovering = signal(false);
     let keys = signal(0i32);
@@ -30,34 +32,42 @@ pub fn features_buttons(props: FeaturesButtonsProps, children: Children) -> Resu
         let __node_0 = doc_header(DocHeaderProps::props().kicker("INTERACTION").title("Buttons").desc("button is a component (from the components feature, not a base tag): it takes a label, a variant, and an on_press closure. The variant is the color token you pass to fill or outline; ghost is a bare flag.").build(), Children::default())?;
         let __node_1 = {
             let __deferred = Children::new(
+                {
+                    let theme = theme.clone();
                 move || {
+                    let theme = theme.clone();
                     let mut __slots = Slots::new();
                     let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
                     let __node_2 = {
                         let __deferred = Children::new(
+                            {
+                                let theme = theme.clone();
                             move || {
+                                let theme = theme.clone();
                                 let mut __slots = Slots::new();
                                 let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
                                 let __row_0 = {
-                                    let __node_3 = button(ButtonProps::props().label("Filled").fill(Reactive::of(move || use_theme::<core::theme::SandboxTheme>().primary())).build(), Children::default())?;
-                                    let __node_4 = button(ButtonProps::props().label("Outline").outline(Reactive::of(move || use_theme::<core::theme::SandboxTheme>().primary())).build(), Children::default())?;
+                                    let __node_3 = button(ButtonProps::props().label("Filled").fill(Reactive::of({ let theme = theme.clone(); move || theme.get().primary })).build(), Children::default())?;
+                                    let __node_4 = button(ButtonProps::props().label("Outline").outline(Reactive::of({ let theme = theme.clone(); move || theme.get().primary })).build(), Children::default())?;
                                     let __node_5 = button(ButtonProps::props().label("Ghost").ghost(true).build(), Children::default())?;
-                                    let __node_6 = button(ButtonProps::props().label("Danger").fill(Reactive::of(move || use_theme::<core::theme::SandboxTheme>().danger)).build(), Children::default())?;
-                                    let __node_7 = button(ButtonProps::props().label("Success").fill(Reactive::of(move || use_theme::<core::theme::SandboxTheme>().success())).build(), Children::default())?;
+                                    let __node_6 = button(ButtonProps::props().label("Danger").fill(Reactive::of({ let theme = theme.clone(); move || theme.get().danger })).build(), Children::default())?;
+                                    let __node_7 = button(ButtonProps::props().label("Success").fill(Reactive::of({ let theme = theme.clone(); move || theme.get().success })).build(), Children::default())?;
                                     Container::new(LayoutStyle::new().flex_row().gap(12.0).flex_wrap().align_items(AlignItems::CENTER), children![__node_3, __node_4, __node_5, __node_6, __node_7])?
                                 };
                                 __children.push(box_item(__row_0));
                                 __slots.extend_default(__children);
                                 Ok(__slots)
                             }
+                            }
                         );
                         card(CardProps::props().build(), __deferred)?
                     };
                     __children.push(box_item(__node_2));
-                    let __node_8 = code_line(CodeLineProps::props().code("button label:'Filled' fill:theme.primary   ·   outline:theme.primary   ·   ghost").build(), Children::default())?;
+                    let __node_8 = code_line(CodeLineProps::props().code("button label:'Filled' fill:$theme.primary   ·   outline:$theme.primary   ·   ghost").build(), Children::default())?;
                     __children.push(box_item(__node_8));
                     __slots.extend_default(__children);
                     Ok(__slots)
+                }
                 }
             );
             example(ExampleProps::props().title("Variants").build(), __deferred)?
@@ -66,16 +76,20 @@ pub fn features_buttons(props: FeaturesButtonsProps, children: Children) -> Resu
             let __deferred = Children::new(
                 {
                     let clicks = clicks.clone();
+                    let theme = theme.clone();
                 move || {
                     let clicks = clicks.clone();
+                    let theme = theme.clone();
                     let mut __slots = Slots::new();
                     let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
                     let __node_10 = {
                         let __deferred = Children::new(
                             {
                                 let clicks = clicks.clone();
+                                let theme = theme.clone();
                             move || {
                                 let clicks = clicks.clone();
+                                let theme = theme.clone();
                                 let mut __slots = Slots::new();
                                 let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
                                 let __text_0 = {
@@ -83,13 +97,13 @@ pub fn features_buttons(props: FeaturesButtonsProps, children: Children) -> Resu
                                     Text::declaring(
                                         move || format!("Clicks · {}", { clicks.get() }),
                                         LayoutStyle::new(),
-                                        move |__inherited: TextStyle| __inherited.with_font_size(18.0).with_color(use_theme::<core::theme::SandboxTheme>().ink()),
+                                        { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(18.0).with_color(theme.get().ink) },
                                     )?
                                 };
                                 __children.push(box_item(__text_0));
                                 let __row_1 = {
-                                    let __node_11 = button(ButtonProps::props().label("+1").fill(Reactive::of(move || use_theme::<core::theme::SandboxTheme>().primary())).on_press(Box::new({ let clicks = clicks.clone(); move || clicks.update(|__v| *__v += 1) })).build(), Children::default())?;
-                                    let __node_12 = button(ButtonProps::props().label("+10").fill(Reactive::of(move || use_theme::<core::theme::SandboxTheme>().primary())).on_press(Box::new({ let clicks = clicks.clone(); move || clicks.update(|__v| *__v += 10) })).build(), Children::default())?;
+                                    let __node_11 = button(ButtonProps::props().label("+1").fill(Reactive::of({ let theme = theme.clone(); move || theme.get().primary })).on_press(Box::new({ let clicks = clicks.clone(); move || clicks.update(|__v| *__v += 1) })).build(), Children::default())?;
+                                    let __node_12 = button(ButtonProps::props().label("+10").fill(Reactive::of({ let theme = theme.clone(); move || theme.get().primary })).on_press(Box::new({ let clicks = clicks.clone(); move || clicks.update(|__v| *__v += 10) })).build(), Children::default())?;
                                     let __node_13 = button(ButtonProps::props().label("Reset").ghost(true).on_press(Box::new({ let clicks = clicks.clone(); move || clicks.set(0) })).build(), Children::default())?;
                                     Container::new(LayoutStyle::new().flex_row().gap(10.0), children![__node_11, __node_12, __node_13])?
                                 };
@@ -102,7 +116,7 @@ pub fn features_buttons(props: FeaturesButtonsProps, children: Children) -> Resu
                         card(CardProps::props().gap(12.0).build(), __deferred)?
                     };
                     __children.push(box_item(__node_10));
-                    let __node_14 = code_line(CodeLineProps::props().code("button label:'+1' fill:theme.primary on_press:|| $clicks += 1      ($x += n desugars to .update)").build(), Children::default())?;
+                    let __node_14 = code_line(CodeLineProps::props().code("button label:'+1' fill:$theme.primary on_press:|| $clicks += 1      ($x += n desugars to .update)").build(), Children::default())?;
                     __children.push(box_item(__node_14));
                     __slots.extend_default(__children);
                     Ok(__slots)
@@ -114,16 +128,20 @@ pub fn features_buttons(props: FeaturesButtonsProps, children: Children) -> Resu
         let __node_15 = {
             let __deferred = Children::new(
                 {
+                    let theme = theme.clone();
                     let clicks = clicks.clone();
                 move || {
+                    let theme = theme.clone();
                     let clicks = clicks.clone();
                     let mut __slots = Slots::new();
                     let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
                     let __node_16 = {
                         let __deferred = Children::new(
                             {
+                                let theme = theme.clone();
                                 let clicks = clicks.clone();
                             move || {
+                                let theme = theme.clone();
                                 let clicks = clicks.clone();
                                 let mut __slots = Slots::new();
                                 let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
@@ -133,17 +151,17 @@ pub fn features_buttons(props: FeaturesButtonsProps, children: Children) -> Resu
                                         Text::declaring(
                                             move || format!("Tap anywhere in this card · {}", { clicks.get() }),
                                             LayoutStyle::new(),
-                                            move |__inherited: TextStyle| __inherited.with_font_size(14.0).with_color(use_theme::<core::theme::SandboxTheme>().ink()),
+                                            { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(14.0).with_color(theme.get().ink) },
                                         )?
                                     };
-                                    StyledContainer::new(style_center().flex_column().padding_all(20.0), move |_| RectStyle::default().with_fill(use_theme::<core::theme::SandboxTheme>().surface_alt()).with_radius(BorderRadius::all(10.0)), children![__text_1])?.on_press({ let clicks = clicks.clone(); move || clicks.update(|__v| *__v += 1) })
+                                    StyledContainer::new(style_center().flex_column().padding_all(20.0), { let theme = theme.clone(); move |_| RectStyle::default().with_fill(theme.get().surface_alt).with_radius(BorderRadius::all(10.0)) }, children![__text_1])?.on_press({ let clicks = clicks.clone(); move || clicks.update(|__v| *__v += 1) })
                                 };
                                 __children.push(box_item(__sbox_0));
                                 let __text_2 = {
                                     Text::declaring(
                                         || "The card itself takes on_press; a child button would still win its own taps.".to_string(),
                                         LayoutStyle::new(),
-                                        move |__inherited: TextStyle| __inherited.with_font_size(12.0).with_color(use_theme::<core::theme::SandboxTheme>().muted()),
+                                        { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(12.0).with_color(theme.get().muted) },
                                     )?
                                 };
                                 __children.push(box_item(__text_2));
@@ -166,12 +184,18 @@ pub fn features_buttons(props: FeaturesButtonsProps, children: Children) -> Resu
         };
         let __node_18 = {
             let __deferred = Children::new(
+                {
+                    let theme = theme.clone();
                 move || {
+                    let theme = theme.clone();
                     let mut __slots = Slots::new();
                     let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
                     let __node_19 = {
                         let __deferred = Children::new(
+                            {
+                                let theme = theme.clone();
                             move || {
+                                let theme = theme.clone();
                                 let mut __slots = Slots::new();
                                 let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
                                 let __row_2 = {
@@ -180,20 +204,20 @@ pub fn features_buttons(props: FeaturesButtonsProps, children: Children) -> Resu
                                             Text::declaring(
                                                 || "Fill on hover".to_string(),
                                                 LayoutStyle::new(),
-                                                move |__inherited: TextStyle| __inherited.with_font_size(13.0).with_color(use_theme::<core::theme::SandboxTheme>().ink()),
+                                                { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(13.0).with_color(theme.get().ink) },
                                             )?
                                         };
-                                        StyledContainer::new(style_center().flex_column().padding_all(16.0).width(150.0).height(64.0), move |_| RectStyle::default().with_fill(use_theme::<core::theme::SandboxTheme>().surface_alt()).with_radius(BorderRadius::all(10.0)), children![__text_3])?.hover_style(move |_| RectStyle::default().with_fill(use_theme::<core::theme::SandboxTheme>().primary()).with_radius(BorderRadius::all(10.0)))
+                                        StyledContainer::new(style_center().flex_column().padding_all(16.0).width(150.0).height(64.0), { let theme = theme.clone(); move |_| RectStyle::default().with_fill(theme.get().surface_alt).with_radius(BorderRadius::all(10.0)) }, children![__text_3])?.hover_style({ let theme = theme.clone(); move |_| RectStyle::default().with_fill(theme.get().primary).with_radius(BorderRadius::all(10.0)) })
                                     };
                                     let __sbox_2 = {
                                         let __text_4 = {
                                             Text::declaring(
                                                 || "Stroke + radius".to_string(),
                                                 LayoutStyle::new(),
-                                                move |__inherited: TextStyle| __inherited.with_font_size(13.0).with_color(use_theme::<core::theme::SandboxTheme>().ink()),
+                                                { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(13.0).with_color(theme.get().ink) },
                                             )?
                                         };
-                                        StyledContainer::new(style_center().flex_column().padding_all(16.0).width(150.0).height(64.0), move |_| RectStyle { fill: Some(Paint::Solid(use_theme::<core::theme::SandboxTheme>().surface_alt())), border: Some(Border { paint: Paint::Solid(use_theme::<core::theme::SandboxTheme>().border()), widths: [1.0; 4] }), shadow: None, radius: BorderRadius::all(10.0) }, children![__text_4])?.hover_style(move |_| RectStyle { fill: Some(Paint::Solid(use_theme::<core::theme::SandboxTheme>().surface_alt())), border: Some(Border { paint: Paint::Solid(use_theme::<core::theme::SandboxTheme>().primary()), widths: [1.0; 4] }), shadow: None, radius: BorderRadius::all(10.0) })
+                                        StyledContainer::new(style_center().flex_column().padding_all(16.0).width(150.0).height(64.0), { let theme = theme.clone(); move |_| RectStyle { fill: Some(Paint::Solid(theme.get().surface_alt)), border: Some(Border { paint: Paint::Solid(theme.get().border), widths: [1.0; 4] }), shadow: None, radius: BorderRadius::all(10.0) } }, children![__text_4])?.hover_style({ let theme = theme.clone(); move |_| RectStyle { fill: Some(Paint::Solid(theme.get().surface_alt)), border: Some(Border { paint: Paint::Solid(theme.get().primary), widths: [1.0; 4] }), shadow: None, radius: BorderRadius::all(10.0) } })
                                     };
                                     Container::new(LayoutStyle::new().flex_row().gap(10.0).flex_wrap(), children![__sbox_1, __sbox_2])?
                                 };
@@ -202,21 +226,23 @@ pub fn features_buttons(props: FeaturesButtonsProps, children: Children) -> Resu
                                     Text::declaring(
                                         || "Each box carries its own hover_style(...) — different hovers in one file, no signals.".to_string(),
                                         LayoutStyle::new(),
-                                        move |__inherited: TextStyle| __inherited.with_font_size(12.0).with_color(use_theme::<core::theme::SandboxTheme>().muted()),
+                                        { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(12.0).with_color(theme.get().muted) },
                                     )?
                                 };
                                 __children.push(box_item(__text_5));
                                 __slots.extend_default(__children);
                                 Ok(__slots)
                             }
+                            }
                         );
                         card(CardProps::props().gap(10.0).build(), __deferred)?
                     };
                     __children.push(box_item(__node_19));
-                    let __node_20 = code_line(CodeLineProps::props().code("box fill:theme.surface_alt hover_style(fill:theme.primary)      (swap style while hovered)").build(), Children::default())?;
+                    let __node_20 = code_line(CodeLineProps::props().code("box fill:$theme.surface_alt hover_style(fill:$theme.primary)      (swap style while hovered)").build(), Children::default())?;
                     __children.push(box_item(__node_20));
                     __slots.extend_default(__children);
                     Ok(__slots)
+                }
                 }
             );
             example(ExampleProps::props().title("hover — a container restyles while the pointer is over it (mouse only)").build(), __deferred)?
@@ -224,9 +250,11 @@ pub fn features_buttons(props: FeaturesButtonsProps, children: Children) -> Resu
         let __node_21 = {
             let __deferred = Children::new(
                 {
+                    let theme = theme.clone();
                     let hovering = hovering.clone();
                     let keys = keys.clone();
                 move || {
+                    let theme = theme.clone();
                     let hovering = hovering.clone();
                     let keys = keys.clone();
                     let mut __slots = Slots::new();
@@ -234,9 +262,11 @@ pub fn features_buttons(props: FeaturesButtonsProps, children: Children) -> Resu
                     let __node_22 = {
                         let __deferred = Children::new(
                             {
+                                let theme = theme.clone();
                                 let hovering = hovering.clone();
                                 let keys = keys.clone();
                             move || {
+                                let theme = theme.clone();
                                 let hovering = hovering.clone();
                                 let keys = keys.clone();
                                 let mut __slots = Slots::new();
@@ -247,10 +277,10 @@ pub fn features_buttons(props: FeaturesButtonsProps, children: Children) -> Resu
                                         Text::declaring(
                                             move || format!("hover me — hovering: {}", { hovering.get() }),
                                             LayoutStyle::new(),
-                                            move |__inherited: TextStyle| __inherited.with_font_size(14.0).with_color(use_theme::<core::theme::SandboxTheme>().ink()),
+                                            { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(14.0).with_color(theme.get().ink) },
                                         )?
                                     };
-                                    StyledContainer::new(LayoutStyle::new().flex_column().padding_all(16.0), move |_| RectStyle::default().with_fill(use_theme::<core::theme::SandboxTheme>().surface_alt()).with_radius(BorderRadius::all(10.0)), children![__text_6])?.on_hover({ let hovering = hovering.clone(); move |h| hovering.set(h) })
+                                    StyledContainer::new(LayoutStyle::new().flex_column().padding_all(16.0), { let theme = theme.clone(); move |_| RectStyle::default().with_fill(theme.get().surface_alt).with_radius(BorderRadius::all(10.0)) }, children![__text_6])?.on_hover({ let hovering = hovering.clone(); move |h| hovering.set(h) })
                                 };
                                 __children.push(box_item(__sbox_3));
                                 let __col_1 = {
@@ -259,7 +289,7 @@ pub fn features_buttons(props: FeaturesButtonsProps, children: Children) -> Resu
                                         Text::declaring(
                                             move || format!("keys pressed anywhere: {}", { keys.get() }),
                                             LayoutStyle::new(),
-                                            move |__inherited: TextStyle| __inherited.with_font_size(14.0).with_color(use_theme::<core::theme::SandboxTheme>().muted()),
+                                            { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(14.0).with_color(theme.get().muted) },
                                         )?
                                     };
                                     StyledContainer::new(LayoutStyle::new().flex_column(), move |_| RectStyle::default(), children![__text_7])?.on_key({ let keys = keys.clone(); move |_k| keys.update(|__v| *__v += 1) })
@@ -269,7 +299,7 @@ pub fn features_buttons(props: FeaturesButtonsProps, children: Children) -> Resu
                                     Text::declaring(
                                         || "on_hover fires with true/false; on_key has no per-widget focus, so it fires for every key.".to_string(),
                                         LayoutStyle::new(),
-                                        move |__inherited: TextStyle| __inherited.with_font_size(12.0).with_color(use_theme::<core::theme::SandboxTheme>().muted()),
+                                        { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(12.0).with_color(theme.get().muted) },
                                     )?
                                 };
                                 __children.push(box_item(__text_8));

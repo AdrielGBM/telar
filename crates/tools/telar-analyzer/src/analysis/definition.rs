@@ -15,7 +15,7 @@ pub fn goto_definition(
 ) -> Option<GotoDefinitionResponse> {
     match view_token_at(source, line, character)? {
         ViewToken::Class(class) => find_class(doc, class, uri),
-        ViewToken::ColorValue(value) => find_color(doc, value, uri, project),
+        ViewToken::ColorValue(value) => find_color(value, project),
         // A builtin tag is defined in the framework, not in a file this can open.
         ViewToken::Tag(tag) if !is_builtin_tag(tag) => find_component(tag, project, uri),
         ViewToken::Tag(_) => None,
@@ -30,18 +30,7 @@ fn find_class(doc: &RsxDocument, name: &str, uri: &Uri) -> Option<GotoDefinition
     }))
 }
 
-fn find_color(
-    doc: &RsxDocument,
-    value: &str,
-    uri: &Uri,
-    project: Option<&ProjectInfo>,
-) -> Option<GotoDefinitionResponse> {
-    if let Some(c) = doc.style.constants.iter().find(|c| c.name == value) {
-        return Some(GotoDefinitionResponse::Scalar(Location {
-            uri: uri.clone(),
-            range: parser_line_to_lsp_range(c.line),
-        }));
-    }
+fn find_color(value: &str, project: Option<&ProjectInfo>) -> Option<GotoDefinitionResponse> {
     if let Some(project) = project
         && let Some((path, line)) = project.find_theme_field_location(value)
     {

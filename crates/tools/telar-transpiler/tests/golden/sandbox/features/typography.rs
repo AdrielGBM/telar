@@ -15,24 +15,31 @@ pub struct FeaturesTypographyProps {}
 pub fn features_typography(props: FeaturesTypographyProps, children: Children) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let __owner = telar::owner_scope();
     #[allow(unused_imports)] use telar::use_theme;
+    #[allow(unused_variables)] let theme = telar::Theme::<core::theme::SandboxTheme>::default();
 
     let __col_0 = {
         let __node_0 = doc_header(DocHeaderProps::props().kicker("FOUNDATIONS").title("Typography").desc("Text takes a size and a color token, measures its own height, and wraps to the available width automatically.").build(), Children::default())?;
         let __node_1 = {
             let __deferred = Children::new(
+                {
+                    let theme = theme.clone();
                 move || {
+                    let theme = theme.clone();
                     let mut __slots = Slots::new();
                     let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
                     let __node_2 = {
                         let __deferred = Children::new(
+                            {
+                                let theme = theme.clone();
                             move || {
+                                let theme = theme.clone();
                                 let mut __slots = Slots::new();
                                 let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
                                 let __text_0 = {
                                     Text::declaring(
                                         || "Display · 32".to_string(),
                                         LayoutStyle::new(),
-                                        move |__inherited: TextStyle| __inherited.with_font_size(32.0).with_color(use_theme::<core::theme::SandboxTheme>().ink()),
+                                        { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(32.0).with_color(theme.get().ink) },
                                     )?
                                 };
                                 __children.push(box_item(__text_0));
@@ -40,7 +47,7 @@ pub fn features_typography(props: FeaturesTypographyProps, children: Children) -
                                     Text::declaring(
                                         || "Title · 24".to_string(),
                                         LayoutStyle::new(),
-                                        move |__inherited: TextStyle| __inherited.with_font_size(24.0).with_color(use_theme::<core::theme::SandboxTheme>().ink()),
+                                        { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(24.0).with_color(theme.get().ink) },
                                     )?
                                 };
                                 __children.push(box_item(__text_1));
@@ -48,7 +55,7 @@ pub fn features_typography(props: FeaturesTypographyProps, children: Children) -
                                     Text::declaring(
                                         || "Heading · 18".to_string(),
                                         LayoutStyle::new(),
-                                        move |__inherited: TextStyle| __inherited.with_font_size(18.0).with_color(use_theme::<core::theme::SandboxTheme>().ink()),
+                                        { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(18.0).with_color(theme.get().ink) },
                                     )?
                                 };
                                 __children.push(box_item(__text_2));
@@ -56,7 +63,7 @@ pub fn features_typography(props: FeaturesTypographyProps, children: Children) -
                                     Text::declaring(
                                         || "Body · 14 — the quick brown fox jumps over the lazy dog".to_string(),
                                         LayoutStyle::new(),
-                                        move |__inherited: TextStyle| __inherited.with_font_size(14.0).with_color(use_theme::<core::theme::SandboxTheme>().ink()),
+                                        { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(14.0).with_color(theme.get().ink) },
                                     )?
                                 };
                                 __children.push(box_item(__text_3));
@@ -64,40 +71,48 @@ pub fn features_typography(props: FeaturesTypographyProps, children: Children) -
                                     Text::declaring(
                                         || "Caption · 12".to_string(),
                                         LayoutStyle::new(),
-                                        move |__inherited: TextStyle| __inherited.with_font_size(12.0).with_color(use_theme::<core::theme::SandboxTheme>().muted()),
+                                        { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(12.0).with_color(theme.get().muted) },
                                     )?
                                 };
                                 __children.push(box_item(__text_4));
                                 __slots.extend_default(__children);
                                 Ok(__slots)
                             }
+                            }
                         );
                         card(CardProps::props().gap(6.0).build(), __deferred)?
                     };
                     __children.push(box_item(__node_2));
-                    let __node_3 = code_line(CodeLineProps::props().code("text 'Heading' font_size:18 color:theme.ink").build(), Children::default())?;
+                    let __node_3 = code_line(CodeLineProps::props().code("text 'Heading' font_size:18 color:$theme.ink").build(), Children::default())?;
                     __children.push(box_item(__node_3));
                     __slots.extend_default(__children);
                     Ok(__slots)
+                }
                 }
             );
             example(ExampleProps::props().title("Size scale").build(), __deferred)?
         };
         let __node_4 = {
             let __deferred = Children::new(
+                {
+                    let theme = theme.clone();
                 move || {
+                    let theme = theme.clone();
                     let mut __slots = Slots::new();
                     let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
                     let __node_5 = {
                         let __deferred = Children::new(
+                            {
+                                let theme = theme.clone();
                             move || {
+                                let theme = theme.clone();
                                 let mut __slots = Slots::new();
                                 let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
                                 let __text_5 = {
                                     Text::declaring(
                                         || "ink — primary reading color".to_string(),
                                         LayoutStyle::new(),
-                                        move |__inherited: TextStyle| __inherited.with_font_size(14.0).with_color(use_theme::<core::theme::SandboxTheme>().ink()),
+                                        { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(14.0).with_color(theme.get().ink) },
                                     )?
                                 };
                                 __children.push(box_item(__text_5));
@@ -105,7 +120,7 @@ pub fn features_typography(props: FeaturesTypographyProps, children: Children) -
                                     Text::declaring(
                                         || "muted — secondary and captions".to_string(),
                                         LayoutStyle::new(),
-                                        move |__inherited: TextStyle| __inherited.with_font_size(14.0).with_color(use_theme::<core::theme::SandboxTheme>().muted()),
+                                        { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(14.0).with_color(theme.get().muted) },
                                     )?
                                 };
                                 __children.push(box_item(__text_6));
@@ -113,7 +128,7 @@ pub fn features_typography(props: FeaturesTypographyProps, children: Children) -
                                     Text::declaring(
                                         || "primary — links and emphasis".to_string(),
                                         LayoutStyle::new(),
-                                        move |__inherited: TextStyle| __inherited.with_font_size(14.0).with_color(use_theme::<core::theme::SandboxTheme>().primary()),
+                                        { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(14.0).with_color(theme.get().primary) },
                                     )?
                                 };
                                 __children.push(box_item(__text_7));
@@ -121,40 +136,48 @@ pub fn features_typography(props: FeaturesTypographyProps, children: Children) -
                                     Text::declaring(
                                         || "success · danger · warning".to_string(),
                                         LayoutStyle::new(),
-                                        move |__inherited: TextStyle| __inherited.with_font_size(14.0).with_color(use_theme::<core::theme::SandboxTheme>().success()),
+                                        { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(14.0).with_color(theme.get().success) },
                                     )?
                                 };
                                 __children.push(box_item(__text_8));
                                 __slots.extend_default(__children);
                                 Ok(__slots)
                             }
+                            }
                         );
                         card(CardProps::props().gap(4.0).build(), __deferred)?
                     };
                     __children.push(box_item(__node_5));
-                    let __node_6 = code_line(CodeLineProps::props().code("text 'muted' color:theme.muted").build(), Children::default())?;
+                    let __node_6 = code_line(CodeLineProps::props().code("text 'muted' color:$theme.muted").build(), Children::default())?;
                     __children.push(box_item(__node_6));
                     __slots.extend_default(__children);
                     Ok(__slots)
+                }
                 }
             );
             example(ExampleProps::props().title("Color tokens applied to text").build(), __deferred)?
         };
         let __node_7 = {
             let __deferred = Children::new(
+                {
+                    let theme = theme.clone();
                 move || {
+                    let theme = theme.clone();
                     let mut __slots = Slots::new();
                     let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
                     let __node_8 = {
                         let __deferred = Children::new(
+                            {
+                                let theme = theme.clone();
                             move || {
+                                let theme = theme.clone();
                                 let mut __slots = Slots::new();
                                 let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
                                 let __text_9 = {
                                     Text::declaring(
                                         || "Light — weight:300".to_string(),
                                         LayoutStyle::new(),
-                                        move |__inherited: TextStyle| __inherited.with_font_size(16.0).with_color(use_theme::<core::theme::SandboxTheme>().ink()).with_font_weight(300),
+                                        { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(16.0).with_color(theme.get().ink).with_font_weight(300) },
                                     )?
                                 };
                                 __children.push(box_item(__text_9));
@@ -162,7 +185,7 @@ pub fn features_typography(props: FeaturesTypographyProps, children: Children) -
                                     Text::declaring(
                                         || "Semibold — weight:600".to_string(),
                                         LayoutStyle::new(),
-                                        move |__inherited: TextStyle| __inherited.with_font_size(16.0).with_color(use_theme::<core::theme::SandboxTheme>().ink()).with_font_weight(600),
+                                        { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(16.0).with_color(theme.get().ink).with_font_weight(600) },
                                     )?
                                 };
                                 __children.push(box_item(__text_10));
@@ -170,7 +193,7 @@ pub fn features_typography(props: FeaturesTypographyProps, children: Children) -
                                     Text::declaring(
                                         || "Bold — weight:bold".to_string(),
                                         LayoutStyle::new(),
-                                        move |__inherited: TextStyle| __inherited.with_font_size(16.0).with_color(use_theme::<core::theme::SandboxTheme>().ink()).with_font_weight(700),
+                                        { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(16.0).with_color(theme.get().ink).with_font_weight(700) },
                                     )?
                                 };
                                 __children.push(box_item(__text_11));
@@ -178,7 +201,7 @@ pub fn features_typography(props: FeaturesTypographyProps, children: Children) -
                                     Text::declaring(
                                         || "Italic emphasis".to_string(),
                                         LayoutStyle::new(),
-                                        move |__inherited: TextStyle| __inherited.with_font_size(16.0).with_color(use_theme::<core::theme::SandboxTheme>().ink()).with_font_style(FontStyle::Italic),
+                                        { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(16.0).with_color(theme.get().ink).with_font_style(FontStyle::Italic) },
                                     )?
                                 };
                                 __children.push(box_item(__text_12));
@@ -186,7 +209,7 @@ pub fn features_typography(props: FeaturesTypographyProps, children: Children) -
                                     Text::declaring(
                                         || "Bold italic".to_string(),
                                         LayoutStyle::new(),
-                                        move |__inherited: TextStyle| __inherited.with_font_size(16.0).with_color(use_theme::<core::theme::SandboxTheme>().ink()).with_font_weight(700).with_font_style(FontStyle::Italic),
+                                        { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(16.0).with_color(theme.get().ink).with_font_weight(700).with_font_style(FontStyle::Italic) },
                                     )?
                                 };
                                 __children.push(box_item(__text_13));
@@ -194,7 +217,7 @@ pub fn features_typography(props: FeaturesTypographyProps, children: Children) -
                                     Text::declaring(
                                         || "Centered in its box".to_string(),
                                         LayoutStyle::new(),
-                                        move |__inherited: TextStyle| __inherited.with_font_size(14.0).with_color(use_theme::<core::theme::SandboxTheme>().muted()).with_text_align(TextAlign::Center),
+                                        { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(14.0).with_color(theme.get().muted).with_text_align(TextAlign::Center) },
                                     )?
                                 };
                                 __children.push(box_item(__text_14));
@@ -202,12 +225,13 @@ pub fn features_typography(props: FeaturesTypographyProps, children: Children) -
                                     Text::declaring(
                                         || "Aligned to the end".to_string(),
                                         LayoutStyle::new(),
-                                        move |__inherited: TextStyle| __inherited.with_font_size(14.0).with_color(use_theme::<core::theme::SandboxTheme>().muted()).with_text_align(TextAlign::End),
+                                        { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(14.0).with_color(theme.get().muted).with_text_align(TextAlign::End) },
                                     )?
                                 };
                                 __children.push(box_item(__text_15));
                                 __slots.extend_default(__children);
                                 Ok(__slots)
+                            }
                             }
                         );
                         card(CardProps::props().gap(6.0).build(), __deferred)?
@@ -218,24 +242,31 @@ pub fn features_typography(props: FeaturesTypographyProps, children: Children) -
                     __slots.extend_default(__children);
                     Ok(__slots)
                 }
+                }
             );
             example(ExampleProps::props().title("Weight, italic & alignment").build(), __deferred)?
         };
         let __node_10 = {
             let __deferred = Children::new(
+                {
+                    let theme = theme.clone();
                 move || {
+                    let theme = theme.clone();
                     let mut __slots = Slots::new();
                     let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
                     let __node_11 = {
                         let __deferred = Children::new(
+                            {
+                                let theme = theme.clone();
                             move || {
+                                let theme = theme.clone();
                                 let mut __slots = Slots::new();
                                 let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
                                 let __text_16 = {
                                     Text::declaring(
                                         || "This paragraph is clamped to two lines with lines:2, so however long the copy gets the box never grows past two lines and the overflow is simply dropped.".to_string(),
                                         LayoutStyle::new(),
-                                        move |__inherited: TextStyle| __inherited.with_font_size(14.0).with_color(use_theme::<core::theme::SandboxTheme>().muted()).with_clamp(2, false),
+                                        { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(14.0).with_color(theme.get().muted).with_clamp(2, false) },
                                     )?
                                 };
                                 __children.push(box_item(__text_16));
@@ -243,7 +274,7 @@ pub fn features_typography(props: FeaturesTypographyProps, children: Children) -
                                     Text::declaring(
                                         || "With ellipsis the truncated tail is replaced by a … so it reads as intentionally cut rather than abruptly clipped at the boundary.".to_string(),
                                         LayoutStyle::new(),
-                                        move |__inherited: TextStyle| __inherited.with_font_size(14.0).with_color(use_theme::<core::theme::SandboxTheme>().ink()).with_clamp(2, true),
+                                        { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(14.0).with_color(theme.get().ink).with_clamp(2, true) },
                                     )?
                                 };
                                 __children.push(box_item(__text_17));
@@ -251,12 +282,13 @@ pub fn features_typography(props: FeaturesTypographyProps, children: Children) -
                                     Text::declaring(
                                         || "A single-line label that ellipsizes when it runs out of room in its box.".to_string(),
                                         LayoutStyle::new().max_width(300.0),
-                                        move |__inherited: TextStyle| __inherited.with_font_size(14.0).with_color(use_theme::<core::theme::SandboxTheme>().primary()).with_clamp(1, true),
+                                        { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(14.0).with_color(theme.get().primary).with_clamp(1, true) },
                                     )?
                                 };
                                 __children.push(box_item(__text_18));
                                 __slots.extend_default(__children);
                                 Ok(__slots)
+                            }
                             }
                         );
                         card(CardProps::props().gap(8.0).build(), __deferred)?
@@ -267,62 +299,78 @@ pub fn features_typography(props: FeaturesTypographyProps, children: Children) -
                     __slots.extend_default(__children);
                     Ok(__slots)
                 }
+                }
             );
             example(ExampleProps::props().title("Line clamp & ellipsis").build(), __deferred)?
         };
         let __node_13 = {
             let __deferred = Children::new(
+                {
+                    let theme = theme.clone();
                 move || {
+                    let theme = theme.clone();
                     let mut __slots = Slots::new();
                     let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
                     let __node_14 = {
                         let __deferred = Children::new(
+                            {
+                                let theme = theme.clone();
                             move || {
+                                let theme = theme.clone();
                                 let mut __slots = Slots::new();
                                 let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
                                 let __text_19 = {
                                     Text::declaring(
                                         || "Text nodes wrap to the width they are given and report the exact height the wrapped lines need, so the sibling below them is never overlapped — resize the window and watch this paragraph reflow while the box grows to fit it.".to_string(),
                                         LayoutStyle::new().max_width(520.0),
-                                        move |__inherited: TextStyle| __inherited.with_font_size(14.0).with_color(use_theme::<core::theme::SandboxTheme>().muted()),
+                                        { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(14.0).with_color(theme.get().muted) },
                                     )?
                                 };
                                 __children.push(box_item(__text_19));
                                 __slots.extend_default(__children);
                                 Ok(__slots)
                             }
+                            }
                         );
                         card(CardProps::props().build(), __deferred)?
                     };
                     __children.push(box_item(__node_14));
-                    let __node_15 = code_line(CodeLineProps::props().code("text '…long copy…' color:theme.muted max_width:520").build(), Children::default())?;
+                    let __node_15 = code_line(CodeLineProps::props().code("text '…long copy…' color:$theme.muted max_width:520").build(), Children::default())?;
                     __children.push(box_item(__node_15));
                     __slots.extend_default(__children);
                     Ok(__slots)
+                }
                 }
             );
             example(ExampleProps::props().title("Wrapping — a paragraph measures its own height at any width").build(), __deferred)?
         };
         let __node_16 = {
             let __deferred = Children::new(
+                {
+                    let theme = theme.clone();
                 move || {
+                    let theme = theme.clone();
                     let mut __slots = Slots::new();
                     let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
                     let __node_17 = {
                         let __deferred = Children::new(
+                            {
+                                let theme = theme.clone();
                             move || {
+                                let theme = theme.clone();
                                 let mut __slots = Slots::new();
                                 let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
                                 let __text_20 = {
                                     Text::declaring(
                                         || "Braces splice a signal or expression straight into the string.".to_string(),
                                         LayoutStyle::new(),
-                                        move |__inherited: TextStyle| __inherited.with_font_size(13.0).with_color(use_theme::<core::theme::SandboxTheme>().muted()),
+                                        { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(13.0).with_color(theme.get().muted) },
                                     )?
                                 };
                                 __children.push(box_item(__text_20));
                                 __slots.extend_default(__children);
                                 Ok(__slots)
+                            }
                             }
                         );
                         card(CardProps::props().build(), __deferred)?
@@ -333,31 +381,41 @@ pub fn features_typography(props: FeaturesTypographyProps, children: Children) -
                     __slots.extend_default(__children);
                     Ok(__slots)
                 }
+                }
             );
             example(ExampleProps::props().title("Interpolation — embed values with { } (see the Reactivity section)").build(), __deferred)?
         };
         let __node_19 = {
             let __deferred = Children::new(
+                {
+                    let theme = theme.clone();
                 move || {
+                    let theme = theme.clone();
                     let mut __slots = Slots::new();
                     let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
                     let __node_20 = {
                         let __deferred = Children::new(
+                            {
+                                let theme = theme.clone();
                             move || {
+                                let theme = theme.clone();
                                 let mut __slots = Slots::new();
                                 let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
                                 let __node_21 = heading(HeadingProps::props().text("A heading is a real title").build(), Children::default())?;
                                 __children.push(box_item(__node_21));
                                 let __node_22 = {
                                     let __deferred = Children::new(
+                                        {
+                                            let theme = theme.clone();
                                         move || {
+                                            let theme = theme.clone();
                                             let mut __slots = Slots::new();
                                             let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
                                             let __text_21 = {
                                                 Text::declaring(
                                                     || "The heading sits above these children in a small-gap column.".to_string(),
                                                     LayoutStyle::new(),
-                                                    move |__inherited: TextStyle| __inherited.with_font_size(13.0).with_color(use_theme::<core::theme::SandboxTheme>().muted()),
+                                                    { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(13.0).with_color(theme.get().muted) },
                                                 )?
                                             };
                                             __children.push(box_item(__text_21));
@@ -365,12 +423,13 @@ pub fn features_typography(props: FeaturesTypographyProps, children: Children) -
                                                 Text::declaring(
                                                     || "Use it to group a labelled block without hand-building the column.".to_string(),
                                                     LayoutStyle::new(),
-                                                    move |__inherited: TextStyle| __inherited.with_font_size(13.0).with_color(use_theme::<core::theme::SandboxTheme>().muted()),
+                                                    { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(13.0).with_color(theme.get().muted) },
                                                 )?
                                             };
                                             __children.push(box_item(__text_22));
                                             __slots.extend_default(__children);
                                             Ok(__slots)
+                                        }
                                         }
                                     );
                                     section(SectionProps::props().title("A section wraps a heading above its own content").build(), __deferred)?
@@ -378,6 +437,7 @@ pub fn features_typography(props: FeaturesTypographyProps, children: Children) -
                                 __children.push(box_item(__node_22));
                                 __slots.extend_default(__children);
                                 Ok(__slots)
+                            }
                             }
                         );
                         card(CardProps::props().gap(12.0).build(), __deferred)?
@@ -388,17 +448,24 @@ pub fn features_typography(props: FeaturesTypographyProps, children: Children) -
                     __slots.extend_default(__children);
                     Ok(__slots)
                 }
+                }
             );
             example(ExampleProps::props().title("heading and section — an accent title, alone or above its content").build(), __deferred)?
         };
         let __node_24 = {
             let __deferred = Children::new(
+                {
+                    let theme = theme.clone();
                 move || {
+                    let theme = theme.clone();
                     let mut __slots = Slots::new();
                     let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
                     let __node_25 = {
                         let __deferred = Children::new(
+                            {
+                                let theme = theme.clone();
                             move || {
+                                let theme = theme.clone();
                                 let mut __slots = Slots::new();
                                 let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
                                 let __row_0 = {
@@ -407,7 +474,7 @@ pub fn features_typography(props: FeaturesTypographyProps, children: Children) -
                                         Text::declaring(
                                             move || format!("{}", { t!("greeting", name = "Ada") }),
                                             LayoutStyle::new(),
-                                            move |__inherited: TextStyle| __inherited.with_font_size(13.0).with_color(use_theme::<core::theme::SandboxTheme>().muted()),
+                                            { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(13.0).with_color(theme.get().muted) },
                                         )?
                                     };
                                     Container::new(LayoutStyle::new().flex_row().gap(12.0).align_items(AlignItems::CENTER), children![__node_26, __text_23])?
@@ -417,12 +484,13 @@ pub fn features_typography(props: FeaturesTypographyProps, children: Children) -
                                     Text::declaring(
                                         || "The macro validates the key against locales/ at compile time and re-reads the locale, so a language switch re-renders both.".to_string(),
                                         LayoutStyle::new(),
-                                        move |__inherited: TextStyle| __inherited.with_font_size(12.0).with_color(use_theme::<core::theme::SandboxTheme>().muted()),
+                                        { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(12.0).with_color(theme.get().muted) },
                                     )?
                                 };
                                 __children.push(box_item(__text_24));
                                 __slots.extend_default(__children);
                                 Ok(__slots)
+                            }
                             }
                         );
                         card(CardProps::props().gap(10.0).build(), __deferred)?
@@ -432,6 +500,7 @@ pub fn features_typography(props: FeaturesTypographyProps, children: Children) -
                     __children.push(box_item(__node_27));
                     __slots.extend_default(__children);
                     Ok(__slots)
+                }
                 }
             );
             example(ExampleProps::props().title("t! — a catalogue lookup is Rust, so it goes where any value goes").build(), __deferred)?

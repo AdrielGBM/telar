@@ -31,19 +31,10 @@ pub struct LogicZone {
     pub start_line: usize,
 }
 
-/// The `[style]` section: a flat list of constants and style classes.
+/// The `[style]` section: the named property bundles a view reuses.
 #[derive(Debug, Clone, Default)]
 pub struct StyleSection {
-    pub constants: Vec<StyleConstant>,
     pub classes: Vec<StyleClass>,
-}
-
-/// A top-level named constant, e.g. `primary: #3d78fa` or `radius: 6`.
-#[derive(Debug, Clone)]
-pub struct StyleConstant {
-    pub name: String,
-    pub value: StyleValue,
-    pub line: usize,
 }
 
 #[derive(Debug, Clone, PartialEq)]

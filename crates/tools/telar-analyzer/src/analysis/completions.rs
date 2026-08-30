@@ -127,7 +127,7 @@ pub fn attribute_key_items(tag: &str) -> Vec<CompletionItem> {
     attribute_items(&tag_attr_keys(tag))
 }
 
-pub fn color_items(doc: &RsxDocument, project: Option<&ProjectInfo>) -> Vec<CompletionItem> {
+pub fn color_items(project: Option<&ProjectInfo>) -> Vec<CompletionItem> {
     let mut seen: HashSet<String> = HashSet::new();
     let mut items: Vec<CompletionItem> = Vec::new();
     let push = |label: String, items: &mut Vec<CompletionItem>, seen: &mut HashSet<String>| {
@@ -140,15 +140,12 @@ pub fn color_items(doc: &RsxDocument, project: Option<&ProjectInfo>) -> Vec<Comp
         }
     };
 
-    for constant in &doc.style.constants {
-        push(constant.name.clone(), &mut items, &mut seen);
-    }
     if let Some(proj) = project {
         for field in &proj.theme_fields {
             push(field.clone(), &mut items, &mut seen);
         }
     }
-    // Keyword colors (`white`/`black`/`transparent`), offered alongside `[style]` constants and theme fields.
+    // Keyword colors (`white`/`black`/`transparent`), offered alongside the theme fields.
     for keyword in color_keywords() {
         push(keyword.to_string(), &mut items, &mut seen);
     }

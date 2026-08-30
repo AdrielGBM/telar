@@ -13,6 +13,7 @@ pub struct FeaturesSizingProps {}
 
 #[allow(dead_code)]
 fn style_center() -> LayoutStyle {
+    #[allow(unused_variables)] let theme = telar::Theme::<core::theme::SandboxTheme>::default();
     LayoutStyle::new()
         .align_items(AlignItems::CENTER)
         .justify_content(JustifyContent::CENTER)
@@ -22,33 +23,41 @@ fn style_center() -> LayoutStyle {
 pub fn features_sizing(props: FeaturesSizingProps, children: Children) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let __owner = telar::owner_scope();
     #[allow(unused_imports)] use telar::use_theme;
+    #[allow(unused_variables)] let theme = telar::Theme::<core::theme::SandboxTheme>::default();
 
     let __col_0 = {
         let __node_0 = doc_header(DocHeaderProps::props().kicker("FOUNDATIONS").title("Sizing & grid").desc("Size in pixels or percentages, clamp with min/max, and reach for the grid when you need aligned columns or a responsive gallery.").build(), Children::default())?;
         let __node_1 = {
             let __deferred = Children::new(
+                {
+                    let theme = theme.clone();
                 move || {
+                    let theme = theme.clone();
                     let mut __slots = Slots::new();
                     let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
                     let __node_2 = {
                         let __deferred = Children::new(
+                            {
+                                let theme = theme.clone();
                             move || {
+                                let theme = theme.clone();
                                 let mut __slots = Slots::new();
                                 let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
                                 let __sbox_0 = {
-                                    StyledContainer::new(LayoutStyle::new().flex_column().width(120.0).height(26.0), move |_| RectStyle::default().with_fill(use_theme::<core::theme::SandboxTheme>().primary()).with_radius(BorderRadius::all(6.0)), children![])?
+                                    StyledContainer::new(LayoutStyle::new().flex_column().width(120.0).height(26.0), { let theme = theme.clone(); move |_| RectStyle::default().with_fill(theme.get().primary).with_radius(BorderRadius::all(6.0)) }, children![])?
                                 };
                                 __children.push(box_item(__sbox_0));
                                 let __sbox_1 = {
-                                    StyledContainer::new(LayoutStyle::new().flex_column().width(SizeDimension::Percent(0.5)).height(26.0), move |_| RectStyle::default().with_fill(use_theme::<core::theme::SandboxTheme>().primary()).with_radius(BorderRadius::all(6.0)), children![])?
+                                    StyledContainer::new(LayoutStyle::new().flex_column().width(SizeDimension::Percent(0.5)).height(26.0), { let theme = theme.clone(); move |_| RectStyle::default().with_fill(theme.get().primary).with_radius(BorderRadius::all(6.0)) }, children![])?
                                 };
                                 __children.push(box_item(__sbox_1));
                                 let __sbox_2 = {
-                                    StyledContainer::new(LayoutStyle::new().flex_column().width(SizeDimension::Percent(1.0)).height(26.0), move |_| RectStyle::default().with_fill(use_theme::<core::theme::SandboxTheme>().primary()).with_radius(BorderRadius::all(6.0)), children![])?
+                                    StyledContainer::new(LayoutStyle::new().flex_column().width(SizeDimension::Percent(1.0)).height(26.0), { let theme = theme.clone(); move |_| RectStyle::default().with_fill(theme.get().primary).with_radius(BorderRadius::all(6.0)) }, children![])?
                                 };
                                 __children.push(box_item(__sbox_2));
                                 __slots.extend_default(__children);
                                 Ok(__slots)
+                            }
                             }
                         );
                         card(CardProps::props().gap(10.0).build(), __deferred)?
@@ -59,34 +68,42 @@ pub fn features_sizing(props: FeaturesSizingProps, children: Children) -> Result
                     __slots.extend_default(__children);
                     Ok(__slots)
                 }
+                }
             );
             example(ExampleProps::props().title("Fixed vs percentage width").build(), __deferred)?
         };
         let __node_4 = {
             let __deferred = Children::new(
+                {
+                    let theme = theme.clone();
                 move || {
+                    let theme = theme.clone();
                     let mut __slots = Slots::new();
                     let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
                     let __node_5 = {
                         let __deferred = Children::new(
+                            {
+                                let theme = theme.clone();
                             move || {
+                                let theme = theme.clone();
                                 let mut __slots = Slots::new();
                                 let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
                                 let __row_0 = {
                                     let __sbox_3 = {
-                                        StyledContainer::new(LayoutStyle::new().flex_column().min_width(200.0).flex_grow(1.0).height(30.0), move |_| RectStyle::default().with_fill(use_theme::<core::theme::SandboxTheme>().purple).with_radius(BorderRadius::all(6.0)), children![])?
+                                        StyledContainer::new(LayoutStyle::new().flex_column().min_width(200.0).flex_grow(1.0).height(30.0), { let theme = theme.clone(); move |_| RectStyle::default().with_fill(theme.get().purple).with_radius(BorderRadius::all(6.0)) }, children![])?
                                     };
                                     let __sbox_4 = {
-                                        StyledContainer::new(LayoutStyle::new().flex_column().min_width(200.0).flex_grow(1.0).height(30.0), move |_| RectStyle::default().with_fill(use_theme::<core::theme::SandboxTheme>().purple).with_radius(BorderRadius::all(6.0)), children![])?
+                                        StyledContainer::new(LayoutStyle::new().flex_column().min_width(200.0).flex_grow(1.0).height(30.0), { let theme = theme.clone(); move |_| RectStyle::default().with_fill(theme.get().purple).with_radius(BorderRadius::all(6.0)) }, children![])?
                                     };
                                     let __sbox_5 = {
-                                        StyledContainer::new(LayoutStyle::new().flex_column().min_width(200.0).flex_grow(1.0).height(30.0), move |_| RectStyle::default().with_fill(use_theme::<core::theme::SandboxTheme>().purple).with_radius(BorderRadius::all(6.0)), children![])?
+                                        StyledContainer::new(LayoutStyle::new().flex_column().min_width(200.0).flex_grow(1.0).height(30.0), { let theme = theme.clone(); move |_| RectStyle::default().with_fill(theme.get().purple).with_radius(BorderRadius::all(6.0)) }, children![])?
                                     };
                                     Container::new(LayoutStyle::new().flex_row().gap(10.0).flex_wrap(), children![__sbox_3, __sbox_4, __sbox_5])?
                                 };
                                 __children.push(box_item(__row_0));
                                 __slots.extend_default(__children);
                                 Ok(__slots)
+                            }
                             }
                         );
                         card(CardProps::props().build(), __deferred)?
@@ -97,17 +114,24 @@ pub fn features_sizing(props: FeaturesSizingProps, children: Children) -> Result
                     __slots.extend_default(__children);
                     Ok(__slots)
                 }
+                }
             );
             example(ExampleProps::props().title("min_width — a box refuses to shrink below its floor, then wraps").build(), __deferred)?
         };
         let __node_7 = {
             let __deferred = Children::new(
+                {
+                    let theme = theme.clone();
                 move || {
+                    let theme = theme.clone();
                     let mut __slots = Slots::new();
                     let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
                     let __node_8 = {
                         let __deferred = Children::new(
+                            {
+                                let theme = theme.clone();
                             move || {
+                                let theme = theme.clone();
                                 let mut __slots = Slots::new();
                                 let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
                                 let __node_9 = {
@@ -119,7 +143,7 @@ pub fn features_sizing(props: FeaturesSizingProps, children: Children) -> Result
                                                 move |__inherited: TextStyle| __inherited,
                                             )?
                                         };
-                                        StyledContainer::new(style_center().flex_column().height(44.0), move |_| RectStyle::default().with_fill(use_theme::<core::theme::SandboxTheme>().cyan).with_radius(BorderRadius::all(6.0)), children![__text_0])?
+                                        StyledContainer::new(style_center().flex_column().height(44.0), { let theme = theme.clone(); move |_| RectStyle::default().with_fill(theme.get().cyan).with_radius(BorderRadius::all(6.0)) }, children![__text_0])?
                                     };
                                     let __sbox_7 = {
                                         let __text_1 = {
@@ -129,7 +153,7 @@ pub fn features_sizing(props: FeaturesSizingProps, children: Children) -> Result
                                                 move |__inherited: TextStyle| __inherited,
                                             )?
                                         };
-                                        StyledContainer::new(style_center().flex_column().height(44.0), move |_| RectStyle::default().with_fill(use_theme::<core::theme::SandboxTheme>().cyan).with_radius(BorderRadius::all(6.0)), children![__text_1])?
+                                        StyledContainer::new(style_center().flex_column().height(44.0), { let theme = theme.clone(); move |_| RectStyle::default().with_fill(theme.get().cyan).with_radius(BorderRadius::all(6.0)) }, children![__text_1])?
                                     };
                                     let __sbox_8 = {
                                         let __text_2 = {
@@ -139,7 +163,7 @@ pub fn features_sizing(props: FeaturesSizingProps, children: Children) -> Result
                                                 move |__inherited: TextStyle| __inherited,
                                             )?
                                         };
-                                        StyledContainer::new(style_center().flex_column().height(44.0), move |_| RectStyle::default().with_fill(use_theme::<core::theme::SandboxTheme>().cyan).with_radius(BorderRadius::all(6.0)), children![__text_2])?
+                                        StyledContainer::new(style_center().flex_column().height(44.0), { let theme = theme.clone(); move |_| RectStyle::default().with_fill(theme.get().cyan).with_radius(BorderRadius::all(6.0)) }, children![__text_2])?
                                     };
                                     let __sbox_9 = {
                                         let __text_3 = {
@@ -149,7 +173,7 @@ pub fn features_sizing(props: FeaturesSizingProps, children: Children) -> Result
                                                 move |__inherited: TextStyle| __inherited,
                                             )?
                                         };
-                                        StyledContainer::new(style_center().flex_column().height(44.0).grid_column_span(2), move |_| RectStyle::default().with_fill(use_theme::<core::theme::SandboxTheme>().cyan).with_radius(BorderRadius::all(6.0)), children![__text_3])?
+                                        StyledContainer::new(style_center().flex_column().height(44.0).grid_column_span(2), { let theme = theme.clone(); move |_| RectStyle::default().with_fill(theme.get().cyan).with_radius(BorderRadius::all(6.0)) }, children![__text_3])?
                                     };
                                     let __sbox_10 = {
                                         let __text_4 = {
@@ -159,13 +183,14 @@ pub fn features_sizing(props: FeaturesSizingProps, children: Children) -> Result
                                                 move |__inherited: TextStyle| __inherited,
                                             )?
                                         };
-                                        StyledContainer::new(style_center().flex_column().height(44.0), move |_| RectStyle::default().with_fill(use_theme::<core::theme::SandboxTheme>().cyan).with_radius(BorderRadius::all(6.0)), children![__text_4])?
+                                        StyledContainer::new(style_center().flex_column().height(44.0), { let theme = theme.clone(); move |_| RectStyle::default().with_fill(theme.get().cyan).with_radius(BorderRadius::all(6.0)) }, children![__text_4])?
                                     };
-                                    Container::new(LayoutStyle::new().display_grid().grid_template_columns(vec![TemplateTrack::repeat(3, TemplateTrack::fr(1.0))]).gap(10.0), children![__sbox_6, __sbox_7, __sbox_8, __sbox_9, __sbox_10])?.declaring(move || Declared::default().with_font_size(13.0).with_color(use_theme::<core::theme::SandboxTheme>().on_primary()))
+                                    Container::new(LayoutStyle::new().display_grid().grid_template_columns(vec![TemplateTrack::repeat(3, TemplateTrack::fr(1.0))]).gap(10.0), children![__sbox_6, __sbox_7, __sbox_8, __sbox_9, __sbox_10])?.declaring({ let theme = theme.clone(); move || Declared::default().with_font_size(13.0).with_color(theme.get().on_primary) })
                                 };
                                 __children.push(box_item(__node_9));
                                 __slots.extend_default(__children);
                                 Ok(__slots)
+                            }
                             }
                         );
                         card(CardProps::props().build(), __deferred)?
@@ -176,34 +201,42 @@ pub fn features_sizing(props: FeaturesSizingProps, children: Children) -> Result
                     __slots.extend_default(__children);
                     Ok(__slots)
                 }
+                }
             );
             example(ExampleProps::props().title("Grid — fixed column count with repeat(3, 1fr)").build(), __deferred)?
         };
         let __node_11 = {
             let __deferred = Children::new(
+                {
+                    let theme = theme.clone();
                 move || {
+                    let theme = theme.clone();
                     let mut __slots = Slots::new();
                     let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
                     let __node_12 = {
                         let __deferred = Children::new(
+                            {
+                                let theme = theme.clone();
                             move || {
+                                let theme = theme.clone();
                                 let mut __slots = Slots::new();
                                 let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
                                 let __node_13 = {
                                     let __sbox_11 = {
-                                        StyledContainer::new(LayoutStyle::new().flex_column().height(40.0), move |_| RectStyle::default().with_fill(use_theme::<core::theme::SandboxTheme>().success()).with_radius(BorderRadius::all(6.0)), children![])?
+                                        StyledContainer::new(LayoutStyle::new().flex_column().height(40.0), { let theme = theme.clone(); move |_| RectStyle::default().with_fill(theme.get().success).with_radius(BorderRadius::all(6.0)) }, children![])?
                                     };
                                     let __sbox_12 = {
-                                        StyledContainer::new(LayoutStyle::new().flex_column().height(40.0), move |_| RectStyle::default().with_fill(use_theme::<core::theme::SandboxTheme>().success()).with_radius(BorderRadius::all(6.0)), children![])?
+                                        StyledContainer::new(LayoutStyle::new().flex_column().height(40.0), { let theme = theme.clone(); move |_| RectStyle::default().with_fill(theme.get().success).with_radius(BorderRadius::all(6.0)) }, children![])?
                                     };
                                     let __sbox_13 = {
-                                        StyledContainer::new(LayoutStyle::new().flex_column().height(40.0), move |_| RectStyle::default().with_fill(use_theme::<core::theme::SandboxTheme>().success()).with_radius(BorderRadius::all(6.0)), children![])?
+                                        StyledContainer::new(LayoutStyle::new().flex_column().height(40.0), { let theme = theme.clone(); move |_| RectStyle::default().with_fill(theme.get().success).with_radius(BorderRadius::all(6.0)) }, children![])?
                                     };
                                     Container::new(LayoutStyle::new().display_grid().grid_template_columns(vec![TemplateTrack::fr(1.0), TemplateTrack::fr(2.0), TemplateTrack::fr(1.0)]).gap(10.0), children![__sbox_11, __sbox_12, __sbox_13])?
                                 };
                                 __children.push(box_item(__node_13));
                                 __slots.extend_default(__children);
                                 Ok(__slots)
+                            }
                             }
                         );
                         card(CardProps::props().build(), __deferred)?
@@ -214,40 +247,48 @@ pub fn features_sizing(props: FeaturesSizingProps, children: Children) -> Result
                     __slots.extend_default(__children);
                     Ok(__slots)
                 }
+                }
             );
             example(ExampleProps::props().title("Grid — explicit fractional tracks").build(), __deferred)?
         };
         let __node_15 = {
             let __deferred = Children::new(
+                {
+                    let theme = theme.clone();
                 move || {
+                    let theme = theme.clone();
                     let mut __slots = Slots::new();
                     let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
                     let __node_16 = {
                         let __deferred = Children::new(
+                            {
+                                let theme = theme.clone();
                             move || {
+                                let theme = theme.clone();
                                 let mut __slots = Slots::new();
                                 let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
                                 let __node_17 = {
                                     let __sbox_14 = {
-                                        StyledContainer::new(LayoutStyle::new().flex_column().height(40.0), move |_| RectStyle::default().with_fill(use_theme::<core::theme::SandboxTheme>().warning()).with_radius(BorderRadius::all(6.0)), children![])?
+                                        StyledContainer::new(LayoutStyle::new().flex_column().height(40.0), { let theme = theme.clone(); move |_| RectStyle::default().with_fill(theme.get().warning).with_radius(BorderRadius::all(6.0)) }, children![])?
                                     };
                                     let __sbox_15 = {
-                                        StyledContainer::new(LayoutStyle::new().flex_column().height(40.0), move |_| RectStyle::default().with_fill(use_theme::<core::theme::SandboxTheme>().warning()).with_radius(BorderRadius::all(6.0)), children![])?
+                                        StyledContainer::new(LayoutStyle::new().flex_column().height(40.0), { let theme = theme.clone(); move |_| RectStyle::default().with_fill(theme.get().warning).with_radius(BorderRadius::all(6.0)) }, children![])?
                                     };
                                     let __sbox_16 = {
-                                        StyledContainer::new(LayoutStyle::new().flex_column().height(40.0), move |_| RectStyle::default().with_fill(use_theme::<core::theme::SandboxTheme>().warning()).with_radius(BorderRadius::all(6.0)), children![])?
+                                        StyledContainer::new(LayoutStyle::new().flex_column().height(40.0), { let theme = theme.clone(); move |_| RectStyle::default().with_fill(theme.get().warning).with_radius(BorderRadius::all(6.0)) }, children![])?
                                     };
                                     let __sbox_17 = {
-                                        StyledContainer::new(LayoutStyle::new().flex_column().height(40.0), move |_| RectStyle::default().with_fill(use_theme::<core::theme::SandboxTheme>().warning()).with_radius(BorderRadius::all(6.0)), children![])?
+                                        StyledContainer::new(LayoutStyle::new().flex_column().height(40.0), { let theme = theme.clone(); move |_| RectStyle::default().with_fill(theme.get().warning).with_radius(BorderRadius::all(6.0)) }, children![])?
                                     };
                                     let __sbox_18 = {
-                                        StyledContainer::new(LayoutStyle::new().flex_column().height(40.0), move |_| RectStyle::default().with_fill(use_theme::<core::theme::SandboxTheme>().warning()).with_radius(BorderRadius::all(6.0)), children![])?
+                                        StyledContainer::new(LayoutStyle::new().flex_column().height(40.0), { let theme = theme.clone(); move |_| RectStyle::default().with_fill(theme.get().warning).with_radius(BorderRadius::all(6.0)) }, children![])?
                                     };
                                     Container::new(LayoutStyle::new().display_grid().grid_template_columns(vec![TemplateTrack::fit(TemplateTrack::minmax(TemplateTrack::px(160.0), TemplateTrack::fr(1.0)))]).gap(10.0), children![__sbox_14, __sbox_15, __sbox_16, __sbox_17, __sbox_18])?
                                 };
                                 __children.push(box_item(__node_17));
                                 __slots.extend_default(__children);
                                 Ok(__slots)
+                            }
                             }
                         );
                         card(CardProps::props().build(), __deferred)?
@@ -257,6 +298,7 @@ pub fn features_sizing(props: FeaturesSizingProps, children: Children) -> Result
                     __children.push(box_item(__node_18));
                     __slots.extend_default(__children);
                     Ok(__slots)
+                }
                 }
             );
             example(ExampleProps::props().title("Grid — responsive tracks that reflow like wrap but keep their height").build(), __deferred)?

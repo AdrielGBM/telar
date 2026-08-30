@@ -4,7 +4,6 @@ use crate::shared::components::code_line::{code_line, CodeLineProps};
 use crate::shared::components::doc_header::{doc_header, DocHeaderProps};
 use crate::shared::components::example::{example, ExampleProps};
 use crate::shared::components::prop_row::{prop_row, PropRowProps};
-use crate::core::theme::theme;
 use crate::shared::demo_svgs::{make_blurred, make_icon, make_logo};
 
 // Each returns an Arc<SvgData> parsed at runtime (the app enables the dynamic-svg feature).
@@ -26,20 +25,20 @@ col gap:20
     example title:"Tint — recolor a monochrome glyph (reads the active theme)"
         card
             row gap:20 align:center
-                svg src:icon color:theme().primary width:48 height:48
-                svg src:icon color:theme().success width:48 height:48
-                svg src:icon color:theme().danger width:48 height:48
-                svg src:icon color:theme().purple width:48 height:48
-        code_line code:"svg src:icon color:theme().primary"
+                svg src:icon color:$theme.primary width:48 height:48
+                svg src:icon color:$theme.success width:48 height:48
+                svg src:icon color:$theme.danger width:48 height:48
+                svg src:icon color:$theme.purple width:48 height:48
+        code_line code:"svg src:icon color:$theme.primary"
     example title:"Full-color vectors and a raster fallback for filters"
         card
             row gap:24 align:center
                 col gap:6 align:center
                     svg src:logo width:88 height:88
-                    text "gradient + shapes" font_size:12 color:theme.muted
+                    text "gradient + shapes" font_size:12 color:$theme.muted
                 col gap:6 align:center
                     svg src:blurred width:88 height:88
-                    text "feGaussianBlur → raster" font_size:12 color:theme.muted
+                    text "feGaussianBlur → raster" font_size:12 color:$theme.muted
         code_line code:"svg src:logo width:88 height:88"
     example title:"A vector baked from disk at build time (no runtime parser)"
         card
@@ -51,5 +50,5 @@ col gap:20
     example title:"Attributes"
         col gap:6
             prop_row name:"src" values:"Arc<SvgData> · 'path'" about:"Runtime vector, or a baked file path."
-            prop_row name:"color" values:"Color expr" about:"Recolor a glyph, e.g. theme().primary."
+            prop_row name:"color" values:"Color expr" about:"Recolor a glyph, e.g. $theme.primary."
             prop_row name:"fit" values:"contain · cover · fill" about:"Aspect handling in the box."

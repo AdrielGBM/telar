@@ -2,7 +2,7 @@
 //!
 //! A `.rsx` file has three sections:
 //! - a leading **logic** zone of verbatim Rust (a `pub struct Props` here declares the component's props),
-//! - a `[style]` section of constants and style classes,
+//! - a `[style]` section of style classes,
 //! - a `[view]` section describing an indentation-based node tree.
 //!
 //! [`parse`] turns the source into an [`RsxDocument`] AST consumed by the transpiler.
@@ -63,11 +63,6 @@ fn reset() { count.set(0); }
 
 [style]
 
-primary:  #3d78fa
-danger:   #eb4444
-dark:     #141424
-muted:    #808098
-
 @card
     width:    240
     padding:  20
@@ -105,15 +100,6 @@ col @card
         assert!(err.message.contains("parenthesise it"), "{}", err.message);
         // The parenthesized form is delimited, so a trailing attribute can follow it on the same line.
         assert!(parse("[view]\nbtn \"x\" on_press:(|| f()) foo:bar\n").is_ok());
-    }
-
-    #[test]
-    fn parses_style_constants() {
-        let doc = parse(SAMPLE).unwrap();
-        assert_eq!(doc.style.constants.len(), 4);
-        let primary = &doc.style.constants[0];
-        assert_eq!(primary.name, "primary");
-        assert_eq!(primary.value, StyleValue::Hex("#3d78fa".to_string()));
     }
 
     #[test]
@@ -465,21 +451,10 @@ col @card
     }
 
     #[test]
-    fn parses_number_style_constant() {
-        let src = "[logic]\n[style]\nradius: 6\nlabel: hello\n[view]\ncol\n";
-        let doc = parse(src).unwrap();
-        assert_eq!(doc.style.constants[0].value, StyleValue::Number(6.0));
-        assert_eq!(
-            doc.style.constants[1].value,
-            StyleValue::Raw("hello".into())
-        );
-    }
-
-    #[test]
     fn empty_document_is_valid() {
         let doc = parse("").unwrap();
         assert!(doc.logic.source.is_empty());
-        assert!(doc.style.constants.is_empty());
+        assert!(doc.style.classes.is_empty());
         assert!(doc.view.nodes.is_empty());
     }
 
@@ -513,13 +488,6 @@ col @card
     }
 
     #[test]
-    fn style_constant_without_value_errors() {
-        let err = parse("[style]\nprimary:\n[view]\ncol\n").unwrap_err();
-        assert_eq!(err.line, 2);
-        assert!(err.message.contains("missing a value"));
-    }
-
-    #[test]
     fn view_attribute_bad_hex_errors_but_valid_passes() {
         let err = parse("[view]\nbox fill:#zz\n").unwrap_err();
         assert_eq!(err.line, 2);
@@ -543,9 +511,9 @@ col @card
     }
 
     #[test]
-    fn invalid_hex_constant_errors_but_valid_hex_parses() {
+    fn invalid_hex_errors_but_valid_hex_parses() {
         for bad in ["#zzz", "#12", "#12345", "#1234567"] {
-            let src = format!("[style]\nc: {bad}\n[view]\ncol\n");
+            let src = format!("[style]\n@card\n    fill: {bad}\n[view]\ncol\n");
             let err = parse(&src).unwrap_err();
             assert!(
                 err.message.contains("invalid hex"),
@@ -555,7 +523,7 @@ col @card
         // `#abcd` is the four-digit form `Color::from_hex` has always accepted at runtime; rejecting it here
         // made a legal colour a parse error.
         for good in ["#abc", "#abcd", "#3d78fa", "#3d78fa80"] {
-            let src = format!("[style]\nc: {good}\n[view]\ncol\n");
+            let src = format!("[style]\n@card\n    fill: {good}\n[view]\ncol\n");
             assert!(parse(&src).is_ok(), "expected accept of {good}");
         }
     }

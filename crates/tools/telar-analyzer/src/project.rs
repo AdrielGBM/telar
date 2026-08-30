@@ -15,14 +15,6 @@ pub struct ProjectInfo {
 }
 
 impl ProjectInfo {
-    /// A filesystem-free borrow of the theme data for `telar_diagnostics::semantic_diagnostics`.
-    pub fn theme_view(&self) -> telar_diagnostics::ThemeView<'_> {
-        telar_diagnostics::ThemeView {
-            theme_type: self.theme_type.as_deref(),
-            theme_fields: &self.theme_fields,
-        }
-    }
-
     /// The same for the i18n catalog. `None` when the project has no translations at all, so a project that
     /// never opted into i18n gets no key diagnostics rather than one per `t"…"`.
     pub fn catalog_view(&self) -> Option<telar_diagnostics::CatalogView<'_>> {

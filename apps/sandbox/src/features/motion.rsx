@@ -3,7 +3,6 @@ use crate::shared::components::card::{card, CardProps};
 use crate::shared::components::code_line::{code_line, CodeLineProps};
 use crate::shared::components::doc_header::{doc_header, DocHeaderProps};
 use crate::shared::components::example::{example, ExampleProps};
-use crate::core::theme::theme;
 
 let big = signal(false);
 
@@ -25,7 +24,7 @@ let bars: Vec<motion::Keyframes<f32>> = (0..6u64)
     })
     .collect();
 let equalizer = move |rect: Rect| {
-    let t = theme();
+    let t = crate::core::theme::theme();
     let palette = [t.primary, t.success, t.warning, t.danger, t.purple, t.cyan];
     let (bar_w, gap) = (24.0f32, 8.0f32);
     let baseline = rect.y + rect.height;
@@ -58,7 +57,7 @@ let progress = motion::Keyframes::<f32>::new(0.0)
     .start(motion::Repeat::Once);
 let progress_canvas = progress.clone();
 let progress_bar = move |rect: Rect| {
-    let t = theme();
+    let t = crate::core::theme::theme();
     let pct = (progress_canvas.get() / 100.0).clamp(0.0, 1.0);
     RenderNode::group([
         RenderNode::rect(
@@ -84,9 +83,9 @@ col gap:20
         card gap:12
             row gap:20 align:center
                 box width:100 height:100 align:center justify:center
-                    box fill:theme.primary radius:12 width:60 height:60 scale:$scale
-                button label:"Bounce" fill:theme.primary on_press:(|| { $big.toggle(); $scale.retarget(if $big.get() { 1.3 } else { 0.6 }) })
-        code_line code:"box fill:theme.primary radius:12 width:60 height:60 scale:$scale   // scale.retarget(1.3)"
+                    box fill:$theme.primary radius:12 width:60 height:60 scale:$scale
+                button label:"Bounce" fill:$theme.primary on_press:(|| { $big.toggle(); $scale.retarget(if $big.get() { 1.3 } else { 0.6 }) })
+        code_line code:"box fill:$theme.primary radius:12 width:60 height:60 scale:$scale   // scale.retarget(1.3)"
     example title:"Staggered keyframes — six PingPong loops offset by hold()"
         card
             canvas paint:equalizer width:196 height:56
@@ -95,6 +94,6 @@ col gap:20
         card gap:12
             row gap:12 align:center
                 canvas paint:progress_bar width:240 height:14
-                text "{$progress.round()}%" font_size:12 color:theme.muted
-                button label:"Replay" fill:theme.primary on_press:(|| { $progress.restart() })
+                text "{$progress.round()}%" font_size:12 color:$theme.muted
+                button label:"Replay" fill:$theme.primary on_press:(|| { $progress.restart() })
         code_line code:"Keyframes::new(0.0).then(100.0, 1100ms, EaseInOut).start(Repeat::Once)"

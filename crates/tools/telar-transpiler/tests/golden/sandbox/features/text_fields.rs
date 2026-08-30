@@ -14,6 +14,7 @@ pub struct FeaturesTextFieldsProps {}
 pub fn features_text_fields(props: FeaturesTextFieldsProps, children: Children) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let __owner = telar::owner_scope();
     #[allow(unused_imports)] use telar::use_theme;
+    #[allow(unused_variables)] let theme = telar::Theme::<core::theme::SandboxTheme>::default();
     let name = signal(String::new());
     let query = signal(String::new());
 
@@ -24,9 +25,11 @@ pub fn features_text_fields(props: FeaturesTextFieldsProps, children: Children) 
                 {
                     let name = name.clone();
                     let query = query.clone();
+                    let theme = theme.clone();
                 move || {
                     let name = name.clone();
                     let query = query.clone();
+                    let theme = theme.clone();
                     let mut __slots = Slots::new();
                     let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
                     let __node_2 = {
@@ -34,9 +37,11 @@ pub fn features_text_fields(props: FeaturesTextFieldsProps, children: Children) 
                             {
                                 let name = name.clone();
                                 let query = query.clone();
+                                let theme = theme.clone();
                             move || {
                                 let name = name.clone();
                                 let query = query.clone();
+                                let theme = theme.clone();
                                 let mut __slots = Slots::new();
                                 let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
                                 let __node_3 = text_field(TextFieldProps::props().value(name.clone()).label("Name").placeholder("Type your name").build(), Children::default())?;
@@ -48,7 +53,7 @@ pub fn features_text_fields(props: FeaturesTextFieldsProps, children: Children) 
                                     Text::declaring(
                                         move || format!("Hello, {}", { name.get() }),
                                         LayoutStyle::new(),
-                                        move |__inherited: TextStyle| __inherited.with_font_size(14.0).with_color(use_theme::<core::theme::SandboxTheme>().muted()),
+                                        { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(14.0).with_color(theme.get().muted) },
                                     )?
                                 };
                                 __children.push(box_item(__text_0));

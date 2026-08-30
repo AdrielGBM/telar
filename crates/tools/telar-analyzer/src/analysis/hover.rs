@@ -2,33 +2,23 @@ use crate::analysis::color::{hex_string, parse_hex, rgba};
 use crate::analysis::util::{ViewToken, view_token_at};
 use crate::project::ProjectInfo;
 use lsp_types::{Hover, HoverContents, MarkupContent, MarkupKind};
-use telar_parser::{RsxDocument, StyleValue};
 use telar_transpiler::keyword_color_rgba;
 
 pub fn hover_info(
-    doc: &RsxDocument,
     source: &str,
     line: u32,
     character: u32,
     project: Option<&ProjectInfo>,
 ) -> Option<Hover> {
     match view_token_at(source, line, character)? {
-        ViewToken::ColorValue(value) => hover_color(doc, value, project),
+        ViewToken::ColorValue(value) => hover_color(value, project),
         ViewToken::Tag(tag) => hover_tag(tag),
         // A style class already shows its own definition through goto-definition; there is no tooltip for it.
         ViewToken::Class(_) => None,
     }
 }
 
-fn hover_color(doc: &RsxDocument, value: &str, project: Option<&ProjectInfo>) -> Option<Hover> {
-    if let Some(constant) = doc.style.constants.iter().find(|c| c.name == value) {
-        let text = match &constant.value {
-            StyleValue::Hex(hex) => format!("■ #{hex} — {value}"),
-            StyleValue::Raw(raw) => format!("{value}: {raw}"),
-            StyleValue::Number(n) => format!("{value}: {n}"),
-        };
-        return Some(make_hover(text));
-    }
+fn hover_color(value: &str, project: Option<&ProjectInfo>) -> Option<Hover> {
     if let Some(proj) = project
         && proj.theme_fields.contains(value)
     {
@@ -69,11 +59,9 @@ fn make_hover(text: String) -> Hover {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use telar_parser::parse;
 
     fn hover_text(src: &str, line: u32, character: u32) -> Option<String> {
-        let doc = parse(src).unwrap();
-        match hover_info(&doc, src, line, character, None)?.contents {
+        match hover_info(src, line, character, None)?.contents {
             HoverContents::Markup(markup) => Some(markup.value),
             _ => None,
         }

@@ -15,6 +15,7 @@ pub struct FeaturesFormsProps {}
 pub fn features_forms(props: FeaturesFormsProps, children: Children) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let __owner = telar::owner_scope();
     #[allow(unused_imports)] use telar::use_theme;
+    #[allow(unused_variables)] let theme = telar::Theme::<core::theme::SandboxTheme>::default();
     // A bound bool for the checkbox, another for the toggle, and a u32 for the radio group's selection.
     let agree = signal(false);
     let notify = signal(true);
@@ -26,16 +27,20 @@ pub fn features_forms(props: FeaturesFormsProps, children: Children) -> Result<B
             let __deferred = Children::new(
                 {
                     let agree = agree.clone();
+                    let theme = theme.clone();
                 move || {
                     let agree = agree.clone();
+                    let theme = theme.clone();
                     let mut __slots = Slots::new();
                     let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
                     let __node_2 = {
                         let __deferred = Children::new(
                             {
                                 let agree = agree.clone();
+                                let theme = theme.clone();
                             move || {
                                 let agree = agree.clone();
+                                let theme = theme.clone();
                                 let mut __slots = Slots::new();
                                 let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
                                 let __node_3 = checkbox(CheckboxProps::props().checked(agree.clone()).label("I agree to the terms").build(), Children::default())?;
@@ -45,7 +50,7 @@ pub fn features_forms(props: FeaturesFormsProps, children: Children) -> Result<B
                                     Text::declaring(
                                         move || format!("agree · {}", { agree.get() }),
                                         LayoutStyle::new(),
-                                        move |__inherited: TextStyle| __inherited.with_font_size(14.0).with_color(use_theme::<core::theme::SandboxTheme>().muted()),
+                                        { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(14.0).with_color(theme.get().muted) },
                                     )?
                                 };
                                 __children.push(box_item(__text_0));
@@ -70,16 +75,20 @@ pub fn features_forms(props: FeaturesFormsProps, children: Children) -> Result<B
             let __deferred = Children::new(
                 {
                     let notify = notify.clone();
+                    let theme = theme.clone();
                 move || {
                     let notify = notify.clone();
+                    let theme = theme.clone();
                     let mut __slots = Slots::new();
                     let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
                     let __node_6 = {
                         let __deferred = Children::new(
                             {
                                 let notify = notify.clone();
+                                let theme = theme.clone();
                             move || {
                                 let notify = notify.clone();
+                                let theme = theme.clone();
                                 let mut __slots = Slots::new();
                                 let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
                                 let __node_7 = toggle(ToggleProps::props().checked(notify.clone()).label("Email notifications").build(), Children::default())?;
@@ -89,7 +98,7 @@ pub fn features_forms(props: FeaturesFormsProps, children: Children) -> Result<B
                                     Text::declaring(
                                         move || format!("notify · {}", { notify.get() }),
                                         LayoutStyle::new(),
-                                        move |__inherited: TextStyle| __inherited.with_font_size(14.0).with_color(use_theme::<core::theme::SandboxTheme>().muted()),
+                                        { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(14.0).with_color(theme.get().muted) },
                                     )?
                                 };
                                 __children.push(box_item(__text_1));
@@ -114,16 +123,20 @@ pub fn features_forms(props: FeaturesFormsProps, children: Children) -> Result<B
             let __deferred = Children::new(
                 {
                     let choice = choice.clone();
+                    let theme = theme.clone();
                 move || {
                     let choice = choice.clone();
+                    let theme = theme.clone();
                     let mut __slots = Slots::new();
                     let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
                     let __node_10 = {
                         let __deferred = Children::new(
                             {
                                 let choice = choice.clone();
+                                let theme = theme.clone();
                             move || {
                                 let choice = choice.clone();
+                                let theme = theme.clone();
                                 let mut __slots = Slots::new();
                                 let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
                                 let __node_11 = radio(RadioProps::props().selected(choice.clone()).value(0u32).label("Small").build(), Children::default())?;
@@ -137,7 +150,7 @@ pub fn features_forms(props: FeaturesFormsProps, children: Children) -> Result<B
                                     Text::declaring(
                                         move || format!("choice · {}", { choice.get() }),
                                         LayoutStyle::new(),
-                                        move |__inherited: TextStyle| __inherited.with_font_size(14.0).with_color(use_theme::<core::theme::SandboxTheme>().muted()),
+                                        { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(14.0).with_color(theme.get().muted) },
                                     )?
                                 };
                                 __children.push(box_item(__text_2));

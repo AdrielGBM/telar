@@ -151,7 +151,7 @@ fn parse_field(chunk: &str) -> Option<ParsedField> {
 pub(crate) struct TranspileInput<'a> {
     pub document: &'a RsxDocument,
     pub component_name: &'a str,
-    /// Concrete theme type path (e.g. `SandboxTheme`). When set, `[style]` color references resolve through `use_theme::<Type>()` instead of `COLOR_*` consts.
+    /// Concrete theme type path (e.g. `SandboxTheme`). When set, the generated view binds `theme` as a `telar::Theme<Type>` handle, which `$theme.field` reads.
     pub theme_type: Option<&'a str>,
     /// Directory of the `.rsx` being transpiled, used to resolve static `svg`/`img` asset paths (`src:"path"`) for build-time baking. `None` when no filesystem anchor is available (e.g. some analyzer/test paths), in which case a static asset yields a `compile_error!`.
     pub base_dir: Option<&'a Path>,
@@ -248,14 +248,9 @@ fn transpile(input: TranspileInput<'_>) -> Result<TranspiledSource, TranspileErr
 
     let style_section = generate_style_section(&doc.style, input.theme_type.as_deref());
 
-    let mut view_gen = ViewGen::with_theme(
-        &doc.style.classes,
-        &doc.style.constants,
-        input.theme_type,
-        input.base_dir,
-    )
-    .with_locals(scan_locals(logic_source))
-    .with_signals(signals.iter().map(|s| s.name.clone()).collect());
+    let mut view_gen = ViewGen::with_theme(&doc.style.classes, input.theme_type, input.base_dir)
+        .with_locals(scan_locals(logic_source))
+        .with_signals(signals.iter().map(|s| s.name.clone()).collect());
     let view_body = view_gen.generate_root(&doc.view.nodes);
     let uses_theme = view_gen.uses_theme();
 
@@ -373,8 +368,19 @@ fn transpile(input: TranspileInput<'_>) -> Result<TranspiledSource, TranspileErr
     // One owner per component instance, which is what makes `provide` mean "for my subtree" rather than "for whoever built me": two siblings without one share their parent's scope, so the second is refused as a repeat and reads the first's value. The guard drops at the end of the build, popping the stack and leaving the owner in place for a handler to re-enter.
     code.push("    let __owner = telar::owner_scope();\n", None);
     // use_theme inside the fn so multiple include!-ed files don't conflict at crate scope.
+    //
+    // `theme` is a handle, not the theme value: a read has to happen inside whatever closure asks for it or
+    // it is the theme that was registered when the view was built, forever. So `$theme.primary` is the same
+    // `$` that reads a signal, and every rule the markup already has for a read covers a theme read too.
     if uses_theme {
         code.push("    #[allow(unused_imports)] use telar::use_theme;\n", None);
+        code.push(
+            &format!(
+                "    #[allow(unused_variables)] let theme = telar::Theme::<{}>::default();\n",
+                input.theme_type.unwrap_or_default()
+            ),
+            None,
+        );
     }
     // The lifted context type, back under the name the author wrote it as. Injected (no `.rsx` line of its
     // own), which is what keeps the body's own lines identical to the source they came from.
@@ -477,12 +483,8 @@ fn transpile(input: TranspileInput<'_>) -> Result<TranspiledSource, TranspileErr
         // Each preview is its own build fn — so a prop-taking component can be previewed via its markup body — plus a PreviewEntry the bundler collects. The body reuses the view codegen with no signals in scope (a preview has no `[logic]`).
         for (i, preview) in doc.previews.iter().enumerate() {
             let pfn = format!("{fn_name}_preview_{i}");
-            let mut pgen = ViewGen::with_theme(
-                &doc.style.classes,
-                &doc.style.constants,
-                input.theme_type,
-                input.base_dir,
-            );
+            let mut pgen =
+                ViewGen::with_theme(&doc.style.classes, input.theme_type, input.base_dir);
             let pbody = pgen.generate_root(&preview.body);
             code.push("\n", None);
             code.push("#[allow(dead_code, unused_variables, unused_mut)]\n", None);
@@ -492,6 +494,13 @@ fn transpile(input: TranspileInput<'_>) -> Result<TranspiledSource, TranspileErr
             );
             if pgen.uses_theme() {
                 code.push("    #[allow(unused_imports)] use telar::use_theme;\n", None);
+                code.push(
+                    &format!(
+                        "    #[allow(unused_variables)] let theme = telar::Theme::<{}>::default();\n",
+                        input.theme_type.unwrap_or_default()
+                    ),
+                    None,
+                );
             }
             // `[preview "Name" fixture:path::to::fn]` seeds whatever ambient state this component reads. A path rather than a name declared in `[logic]`, because the logic zone is emitted *inside* the component function while a preview is a sibling function that cannot see into it; the generated module's own `use super::*` resolves a bare name at the crate root. Per-preview only — the process-wide half (theme, locale, config) belongs in the `setup` closure `telar::dev_entry` runs once.
             if let Some(fixture) = preview_fixture(preview) {

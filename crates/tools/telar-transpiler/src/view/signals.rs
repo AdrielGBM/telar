@@ -188,11 +188,15 @@ fn rewrite_compound_assign(closure: &str) -> String {
 }
 
 /// Replaces every `$ident` in `s` with `ident.get()` — a reactive read, for `[view]` interpolation where a signal reference is a value read.
-pub(super) fn substitute_reads(s: &str) -> String {
+pub(crate) fn substitute_reads(s: &str) -> String {
     substitute_dollar(s, true)
 }
 
-/// Replaces every `$ident` in `s` with the bare `ident` (the signal handle), for closure bodies where `$count.update(…)` means the handle and `$` only marks it for cloning.
+/// Replaces every `$ident` in `s` with the bare `ident` (the signal handle), for closure bodies where
+/// `$count.update(…)` means the handle and `$` only marks it for cloning.
+///
+/// `$theme` is the exception, because a theme handle has no second use: reading it is the only thing anyone
+/// can do with one, so `$theme.primary` means the same read wherever it is written.
 pub(super) fn substitute_handles(s: &str) -> String {
     substitute_dollar(s, false)
 }
@@ -202,9 +206,10 @@ fn substitute_dollar(s: &str, read: bool) -> String {
     let mut out = String::with_capacity(s.len());
     let mut copied = 0;
     for (marker, end) in dollar_spans(s) {
+        let ident = &s[marker + 1..end];
         out.push_str(&s[copied..marker]);
-        out.push_str(&s[marker + 1..end]);
-        if read {
+        out.push_str(ident);
+        if read || ident == "theme" {
             out.push_str(".get()");
         }
         copied = end;

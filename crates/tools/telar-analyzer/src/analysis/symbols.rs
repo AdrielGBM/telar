@@ -1,6 +1,6 @@
 //! `textDocument/documentSymbol`: the `.rsx` outline / breadcrumbs.
 //!
-//! Surfaces the file's named, navigable symbols — `[style]` constants and classes, and `[preview]` sections — ordered by source line. The deep `[view]` element tree is intentionally omitted: it is mostly anonymous containers and would bury the useful entries.
+//! Surfaces the file's named, navigable symbols — `[style]` classes and `[preview]` sections — ordered by source line. The deep `[view]` element tree is intentionally omitted: it is mostly anonymous containers and would bury the useful entries.
 
 use lsp_types::{DocumentSymbol, Position, Range, SymbolKind};
 use telar_parser::RsxDocument;
@@ -8,12 +8,6 @@ use telar_parser::RsxDocument;
 pub fn document_symbols(doc: &RsxDocument, source: &str) -> Vec<DocumentSymbol> {
     let mut entries: Vec<(usize, DocumentSymbol)> = Vec::new();
 
-    for constant in &doc.style.constants {
-        entries.push((
-            constant.line,
-            symbol(&constant.name, SymbolKind::CONSTANT, constant.line, source),
-        ));
-    }
     for class in &doc.style.classes {
         entries.push((
             class.line,
@@ -82,18 +76,18 @@ mod tests {
     use telar_parser::parse;
 
     #[test]
-    fn outlines_constants_classes_and_previews_in_order() {
-        let src = "[style]\nprimary: #4361ee\n\n@card\n    width: 240\n\n[view]\ncol @card\n\n[preview \"Default\"]\ncard\n";
+    fn outlines_classes_and_previews_in_order() {
+        let src =
+            "[style]\n@card\n    width: 240\n\n[view]\ncol @card\n\n[preview \"Default\"]\ncard\n";
         let doc = parse(src).unwrap();
         let syms = document_symbols(&doc, src);
         let names: Vec<&str> = syms.iter().map(|s| s.name.as_str()).collect();
-        assert!(names.contains(&"primary"), "constant: {names:?}");
         assert!(names.contains(&"@card"), "class: {names:?}");
         assert!(
             names.iter().any(|n| n.contains("Default")),
             "preview: {names:?}"
         );
-        // Ordered by source line: primary (l2) < @card (l4) < preview (l10).
+        // Ordered by source line: @card before the preview.
         let lines: Vec<u32> = syms.iter().map(|s| s.range.start.line).collect();
         assert!(lines.windows(2).all(|w| w[0] <= w[1]), "sorted: {lines:?}");
 

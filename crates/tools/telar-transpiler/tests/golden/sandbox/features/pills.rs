@@ -15,18 +15,25 @@ pub struct FeaturesPillsProps {}
 pub fn features_pills(props: FeaturesPillsProps, children: Children) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let __owner = telar::owner_scope();
     #[allow(unused_imports)] use telar::use_theme;
+    #[allow(unused_variables)] let theme = telar::Theme::<core::theme::SandboxTheme>::default();
     let tags = signal(3u32);
 
     let __col_0 = {
         let __node_0 = doc_header(DocHeaderProps::props().kicker("PRESENTATION").title("Badges & chips").desc("badge is a small solid status tag; chip is a softer outlined pill, optionally removable via on_close. Both are components.").build(), Children::default())?;
         let __node_1 = {
             let __deferred = Children::new(
+                {
+                    let theme = theme.clone();
                 move || {
+                    let theme = theme.clone();
                     let mut __slots = Slots::new();
                     let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
                     let __node_2 = {
                         let __deferred = Children::new(
+                            {
+                                let theme = theme.clone();
                             move || {
+                                let theme = theme.clone();
                                 let mut __slots = Slots::new();
                                 let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
                                 let __row_0 = {
@@ -34,26 +41,28 @@ pub fn features_pills(props: FeaturesPillsProps, children: Children) -> Result<B
                                         Text::declaring(
                                             || "Inbox".to_string(),
                                             LayoutStyle::new(),
-                                            move |__inherited: TextStyle| __inherited.with_font_size(15.0).with_color(use_theme::<core::theme::SandboxTheme>().ink()),
+                                            { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(15.0).with_color(theme.get().ink) },
                                         )?
                                     };
                                     let __node_3 = badge(BadgeProps::props().label("12").build(), Children::default())?;
-                                    let __node_4 = badge(BadgeProps::props().label("NEW").color(Reactive::of(move || use_theme::<core::theme::SandboxTheme>().success())).build(), Children::default())?;
-                                    let __node_5 = badge(BadgeProps::props().label("BETA").color(Reactive::of(move || use_theme::<core::theme::SandboxTheme>().purple)).build(), Children::default())?;
+                                    let __node_4 = badge(BadgeProps::props().label("NEW").color(Reactive::of({ let theme = theme.clone(); move || theme.get().success })).build(), Children::default())?;
+                                    let __node_5 = badge(BadgeProps::props().label("BETA").color(Reactive::of({ let theme = theme.clone(); move || theme.get().purple })).build(), Children::default())?;
                                     Container::new(LayoutStyle::new().flex_row().gap(8.0).align_items(AlignItems::CENTER), children![__text_0, __node_3, __node_4, __node_5])?
                                 };
                                 __children.push(box_item(__row_0));
                                 __slots.extend_default(__children);
                                 Ok(__slots)
                             }
+                            }
                         );
                         card(CardProps::props().gap(10.0).build(), __deferred)?
                     };
                     __children.push(box_item(__node_2));
-                    let __node_6 = code_line(CodeLineProps::props().code("badge label:'NEW' color:theme.success").build(), Children::default())?;
+                    let __node_6 = code_line(CodeLineProps::props().code("badge label:'NEW' color:$theme.success").build(), Children::default())?;
                     __children.push(box_item(__node_6));
                     __slots.extend_default(__children);
                     Ok(__slots)
+                }
                 }
             );
             example(ExampleProps::props().title("badge — a small solid accent tag").build(), __deferred)?
@@ -62,16 +71,20 @@ pub fn features_pills(props: FeaturesPillsProps, children: Children) -> Result<B
             let __deferred = Children::new(
                 {
                     let tags = tags.clone();
+                    let theme = theme.clone();
                 move || {
                     let tags = tags.clone();
+                    let theme = theme.clone();
                     let mut __slots = Slots::new();
                     let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
                     let __node_8 = {
                         let __deferred = Children::new(
                             {
                                 let tags = tags.clone();
+                                let theme = theme.clone();
                             move || {
                                 let tags = tags.clone();
+                                let theme = theme.clone();
                                 let mut __slots = Slots::new();
                                 let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
                                 let __row_1 = {
@@ -86,7 +99,7 @@ pub fn features_pills(props: FeaturesPillsProps, children: Children) -> Result<B
                                     Text::declaring(
                                         move || format!("chips · {}", { tags.get() }),
                                         LayoutStyle::new(),
-                                        move |__inherited: TextStyle| __inherited.with_font_size(13.0).with_color(use_theme::<core::theme::SandboxTheme>().muted()),
+                                        { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(13.0).with_color(theme.get().muted) },
                                     )?
                                 };
                                 __children.push(box_item(__text_1));

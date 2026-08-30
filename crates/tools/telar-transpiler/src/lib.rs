@@ -115,16 +115,15 @@ mod tests {
         );
     }
 
-    /// A theme makes every bare lowercase name a candidate token, and that guess used to beat the file's own
-    /// bindings — so a `let` three lines above was unreachable from the view, and a binding named after a real
-    /// token read the theme instead of itself without any diagnostic. The binding wins now; a name the logic
-    /// zone never bound still reaches the theme.
+    /// A bare name is the author's own binding, whatever a theme happens to call a field of its own — a
+    /// theme used to make every bare lowercase name a candidate token, so a `let` three lines above was
+    /// unreachable from the view and a binding named after a real token read the theme instead of itself.
     #[test]
-    fn a_logic_binding_beats_a_theme_token_of_the_same_name() {
+    fn a_bare_name_is_the_binding_not_a_theme_token() {
         let logic = "let muted = telar::Color::WHITE;\nlet size = 16.0;\n";
         let out = transpile_source(
             &format!(
-                "[logic]\n{logic}\n[view]\nbox fill:muted\n    spinner color:theme.accent size:size\n"
+                "[logic]\n{logic}\n[view]\nbox fill:muted\n    spinner color:$theme.accent size:size\n"
             ),
             "demo",
             Some("crate::Theme"),
@@ -141,8 +140,8 @@ mod tests {
             out.rust_code
         );
         assert!(
-            out.rust_code.contains("use_theme::<crate::Theme>().accent"),
-            "a name the file never bound still resolves through the theme:\n{}",
+            out.rust_code.contains("theme.get().accent"),
+            "a theme read is a read wherever it is written:\n{}",
             out.rust_code
         );
     }
@@ -296,14 +295,10 @@ mod tests {
         assert_eq!(result.source_map[row_ctor], Some(3));
     }
 
-    // COUNTER declares [style] colors: with no theme they become local COLOR_* consts; with a theme_type they resolve through use_theme instead (see the theme tests below).
     const COUNTER: &str = r#"[logic]
 let count = signal(0i32);
 
 [style]
-primary: #3d78fa
-dark: #141424
-
 @card
     width: 240
     padding: 20
@@ -313,26 +308,8 @@ dark: #141424
 
 [view]
 col @card
-    text "Count: {$count}" font_size:14 color:dark
-    button label:"Increment" fill:primary on_press:(|| $count.update(|n| *n += 1))
-"#;
-
-    // COUNTER_THEMED has no [style] color declarations — colors flow through the live theme so they react to `set_theme(...)` calls at runtime.
-    const COUNTER_THEMED: &str = r#"[logic]
-let count = signal(0i32);
-
-[style]
-@card
-    width: 240
-    padding: 20
-    gap: 12
-    axis: col
-    align: center
-
-[view]
-col @card
-    text "Count: {$count}" font_size:14 color:theme.dark
-    button label:"Increment" fill:theme.primary on_press:(|| $count.update(|n| *n += 1))
+    text "Count: {$count}" font_size:14 color:$theme.dark
+    button label:"Increment" fill:$theme.primary on_press:(|| $count.update(|n| *n += 1))
 "#;
 
     #[test]
@@ -359,18 +336,21 @@ col @card
 
     #[test]
     fn generates_counter() {
-        let out = transpile_source(COUNTER, "counter", None, None).unwrap();
+        let out = transpile_source(COUNTER, "counter", Some("SandboxTheme"), None).unwrap();
         let code = out.rust_code;
         assert!(code.contains("pub fn counter(props: CounterProps, children: Children)"));
-        // [style]-declared colors become local constants.
-        assert!(code.contains("const COLOR_PRIMARY: Color = Color::rgba(61.0 / 255.0"));
         assert!(code.contains("fn style_card() -> LayoutStyle"));
         assert!(code.contains("move || format!(\"Count: {}\", { count.get() })"));
         // `button` is now a widget component call, not the removed `Button::new` builtin.
         assert!(code.contains("button(ButtonProps::props()"));
         assert!(code.contains(".label(\"Increment\")"));
-        // Its `fill` is a reactive colour closure; with no theme it reads the [style] const.
-        assert!(code.contains(".fill(Reactive::of(move || COLOR_PRIMARY))"));
+        // Its `fill` is a reactive colour closure, so a theme switch repaints it.
+        assert!(
+            code.contains(
+                ".fill(Reactive::of({ let theme = theme.clone(); move || theme.get().primary }))"
+            ),
+            "{code}"
+        );
         assert!(code.contains("count.update(|n| *n += 1)"));
         assert!(code.contains("Container::new(style_card(), children!["));
         assert!(code.contains("Ok(Box::new(__col_0))"));
@@ -509,37 +489,6 @@ col @card
                 "heading(HeadingProps::props().text(\"Subtitle\").build(), Children::default())"
             ),
             "expected heading component call in:\n{code}"
-        );
-    }
-
-    #[test]
-    fn theme_type_resolves_colors_via_use_theme() {
-        // Colors not declared in [style] resolve reactively through the theme.
-        let out = transpile_source(COUNTER_THEMED, "counter", Some("SandboxTheme"), None).unwrap();
-        let code = out.rust_code;
-        assert!(code.contains("use telar::use_theme;"));
-        assert!(code.contains("use_theme::<SandboxTheme>().dark"));
-        assert!(code.contains("use_theme::<SandboxTheme>().primary()"));
-        // No COLOR_* consts should be referenced inside the function body.
-        let fn_start = code.find("pub fn counter").unwrap();
-        assert!(!code[fn_start..].contains("COLOR_DARK"));
-        assert!(!code[fn_start..].contains("COLOR_PRIMARY"));
-    }
-
-    /// A `[style]` colour is what a bare name in that file means, theme or no theme. It used to be the other
-    /// way round — with a theme active the constant was skipped as dead and every use of the name resolved
-    /// to the theme's own token instead, so a file could declare `primary: #3d78fa` and never once paint it.
-    #[test]
-    fn a_style_declared_color_is_what_its_own_file_means_by_the_name() {
-        let out = transpile_source(COUNTER, "counter", Some("SandboxTheme"), None).unwrap();
-        let code = out.rust_code;
-        assert!(code.contains("const COLOR_PRIMARY"), "{code}");
-        assert!(code.contains("const COLOR_DARK"), "{code}");
-        let fn_start = code.find("pub fn counter").unwrap();
-        assert!(code[fn_start..].contains("COLOR_PRIMARY"), "{code}");
-        assert!(
-            !code.contains("use_theme::<SandboxTheme>().primary()"),
-            "the file's own name wins over the theme's:\n{code}"
         );
     }
 
@@ -1222,13 +1171,13 @@ col @card
         // `color:accent` must resolve the bare token through `use_theme` exactly like `color:`/`fill:`, so
         // an icon tints from a theme token without a verbose `use_theme::<T>()` expression — and re-reads
         // it each frame so a runtime theme switch recolors the glyph.
-        let src = "[view]\ncol\n    svg src:props.icon color:theme.accent width:18 height:18\n";
+        let src = "[view]\ncol\n    svg src:props.icon color:$theme.accent width:18 height:18\n";
         let code = transpile_source(src, "demo", Some("NordTheme"), None)
             .unwrap()
             .rust_code;
         assert!(
-            code.contains("move || Some(use_theme::<NordTheme>().accent),"),
-            "tint token should resolve through use_theme:\n{code}"
+            code.contains("move || Some(theme.get().accent) }"),
+            "a tint re-reads the theme each frame:\n{code}"
         );
     }
 
@@ -1280,16 +1229,18 @@ col @card
 
     #[test]
     fn transition_fill_with_theme_color_and_cubic_bezier() {
-        let src = "[view]\nbox fill:theme.primary transition(fill 150ms cubic-bezier(0.4,0,0.2,1))\n    text \"x\"\n";
+        let src = "[view]\nbox fill:$theme.primary transition(fill 150ms cubic-bezier(0.4,0,0.2,1))\n    text \"x\"\n";
         let code = transpile_source(src, "demo", Some("SandboxTheme"), None)
             .unwrap()
             .rust_code;
         assert!(
-            code.contains("let __transition_0 = motion::Animated::new(use_theme::<SandboxTheme>().primary(), motion::tween(std::time::Duration::from_millis(150), motion::Easing::CubicBezier(0.4, 0.0, 0.2, 1.0)));"),
+            code.contains("let __transition_0 = motion::Animated::new(theme.get().primary, motion::tween(std::time::Duration::from_millis(150), motion::Easing::CubicBezier(0.4, 0.0, 0.2, 1.0)));"),
             "missing cubic-bezier Animated:\n{code}"
         );
         assert!(
-            code.contains(".with_fill({ __transition_0.retarget(use_theme::<SandboxTheme>().primary()); __transition_0.get() })"),
+            code.contains(
+                ".with_fill({ __transition_0.retarget(theme.get().primary); __transition_0.get() })"
+            ),
             "missing fill retarget+get:\n{code}"
         );
     }
@@ -1586,16 +1537,16 @@ col @card
 
     #[test]
     fn transition_color_on_text_wraps_text_style() {
-        let src = "[view]\ntext \"hi\" color:theme.primary transition(color 120ms)\n";
+        let src = "[view]\ntext \"hi\" color:$theme.primary transition(color 120ms)\n";
         let code = transpile_source(src, "demo", Some("SandboxTheme"), None)
             .unwrap()
             .rust_code;
         assert!(
-            code.contains("let __transition_0 = motion::Animated::new(use_theme::<SandboxTheme>().primary(), motion::tween(std::time::Duration::from_millis(120), motion::Easing::EaseOut));"),
+            code.contains("let __transition_0 = motion::Animated::new(theme.get().primary, motion::tween(std::time::Duration::from_millis(120), motion::Easing::EaseOut));"),
             "missing hoisted color Animated:\n{code}"
         );
         assert!(
-            code.contains(".with_color({ __transition_0.retarget(use_theme::<SandboxTheme>().primary()); __transition_0.get() })"),
+            code.contains(".with_color({ __transition_0.retarget(theme.get().primary); __transition_0.get() })"),
             "text color should be wrapped in the transition block:\n{code}"
         );
     }
@@ -1743,7 +1694,7 @@ col @card
     fn hex_theme_and_keyword_colors_are_unaffected_by_signal_support() {
         // Regression guard: adding the `$ident` branch to `color_expr` must not touch the pre-existing hex/theme/keyword paths.
         let src =
-            "[view]\nbox fill:#3d78fa stroke:transparent\n    text \"x\" color:theme.primary\n";
+            "[view]\nbox fill:#3d78fa stroke:transparent\n    text \"x\" color:$theme.primary\n";
         let code = transpile_source(src, "demo", Some("SandboxTheme"), None)
             .unwrap()
             .rust_code;
@@ -1751,11 +1702,7 @@ col @card
             code.contains("Color::rgba(61.0 / 255.0, 120.0 / 255.0, 250.0 / 255.0, 255.0 / 255.0)")
         );
         assert!(code.contains("Color::TRANSPARENT"));
-        assert!(code.contains("use_theme::<SandboxTheme>().primary()"));
-        assert!(
-            !code.contains(".clone()"),
-            "no signal clone should appear for static/theme colors:\n{code}"
-        );
+        assert!(code.contains("theme.get().primary"));
     }
 
     #[test]

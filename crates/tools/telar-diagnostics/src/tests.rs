@@ -4,7 +4,7 @@ use telar_parser::{
     Attr, Element, ParseError, RsxDocument, StyleClass, StyleSection, Value, ViewNode, ViewSection,
 };
 
-use crate::{CatalogView, Diagnostic, Severity, ThemeView, semantic_diagnostics};
+use crate::{CatalogView, Diagnostic, Severity, semantic_diagnostics};
 
 fn element(classes: &[&str], attributes: Vec<Attr>, line: usize) -> Element {
     Element {
@@ -43,7 +43,6 @@ fn parse_error_becomes_error_diagnostic_on_its_line() {
 #[test]
 fn undefined_style_class_warns() {
     let style = StyleSection {
-        constants: Vec::new(),
         classes: vec![StyleClass {
             name: "card".into(),
             props: Vec::new(),
@@ -58,41 +57,14 @@ fn undefined_style_class_warns() {
             5,
         ))],
     );
-    let diags = semantic_diagnostics(&doc, None, None);
+    let diags = semantic_diagnostics(&doc, None);
     assert_eq!(diags.len(), 1);
     assert_eq!(diags[0].severity, Severity::Warning);
     assert_eq!(diags[0].span.line, 5);
     assert!(diags[0].message.contains("@missing"));
 }
 
-#[test]
-fn unknown_color_errors_only_when_theme_configured() {
-    let attr = Attr {
-        key: "color".into(),
-        value: Value::Bare("nope".into()),
-        value_start: 0,
-    };
-    let doc = document(
-        StyleSection::default(),
-        vec![ViewNode::Element(element(&[], vec![attr], 3))],
-    );
-
-    // No theme configured: the color check is skipped entirely.
-    assert!(semantic_diagnostics(&doc, None, None).is_empty());
-
-    // Theme configured but the color is neither a constant nor a theme field: error.
-    let fields = HashSet::new();
-    let theme = ThemeView {
-        theme_type: Some("Theme"),
-        theme_fields: &fields,
-    };
-    let diags = semantic_diagnostics(&doc, Some(&theme), None);
-    assert_eq!(diags.len(), 1);
-    assert_eq!(diags[0].severity, Severity::Error);
-    assert!(diags[0].message.contains("nope"));
-}
-
-// Builds a themed doc with one element carrying the given attributes, for the F49 color-value regression tests below.
+// Builds a themed doc with one element carrying the given attributes.
 fn themed_doc_with_attrs(attrs: Vec<(&str, &str)>) -> RsxDocument {
     let attributes = attrs
         .into_iter()
@@ -106,45 +78,6 @@ fn themed_doc_with_attrs(attrs: Vec<(&str, &str)>) -> RsxDocument {
         StyleSection::default(),
         vec![ViewNode::Element(element(&[], attributes, 3))],
     )
-}
-
-#[test]
-fn recognized_color_value_forms_produce_no_diagnostic_under_theme() {
-    // `brand`/`accent` are declared as theme fields so the `from:`/`to:` gradient-stop cases resolve.
-    let fields = HashSet::from(["brand".to_string(), "accent".to_string()]);
-    let theme = ThemeView {
-        theme_type: Some("Theme"),
-        theme_fields: &fields,
-    };
-
-    for (key, value) in [
-        ("fill", "transparent"),
-        ("stroke", "$accent"),
-        ("fill", "Color::RED"),
-        ("from", "brand"),
-        ("to", "accent"),
-    ] {
-        let doc = themed_doc_with_attrs(vec![(key, value)]);
-        let diags = semantic_diagnostics(&doc, Some(&theme), None);
-        assert!(
-            diags.is_empty(),
-            "expected no diagnostic for {key}:{value}, got {diags:?}"
-        );
-    }
-}
-
-#[test]
-fn genuinely_unknown_color_still_errors_under_theme() {
-    let fields = HashSet::new();
-    let theme = ThemeView {
-        theme_type: Some("Theme"),
-        theme_fields: &fields,
-    };
-    let doc = themed_doc_with_attrs(vec![("fill", "bogus")]);
-    let diags = semantic_diagnostics(&doc, Some(&theme), None);
-    assert_eq!(diags.len(), 1);
-    assert_eq!(diags[0].severity, Severity::Error);
-    assert!(diags[0].message.contains("bogus"));
 }
 
 #[test]
@@ -191,7 +124,7 @@ fn widget_ref_to_defined_binding_is_ok() {
         "let spring_box = Canvas::new(style, draw)?;",
         vec![ViewNode::Element(widget_element("spring_box", 4))],
     );
-    assert!(semantic_diagnostics(&doc, None, None).is_empty());
+    assert!(semantic_diagnostics(&doc, None).is_empty());
 }
 
 fn if_block(condition: &str, body: Vec<ViewNode>) -> ViewNode {
@@ -214,7 +147,7 @@ fn widget_inside_a_reactive_if_warns_before_the_build_does() {
             vec![ViewNode::Element(widget_element("icon", 4))],
         )],
     );
-    let diags = semantic_diagnostics(&doc, None, None);
+    let diags = semantic_diagnostics(&doc, None);
     assert_eq!(diags.len(), 1, "{diags:?}");
     assert_eq!(diags[0].severity, Severity::Warning);
     assert_eq!(
@@ -235,7 +168,7 @@ fn widget_inside_a_construction_time_if_is_fine() {
             vec![ViewNode::Element(widget_element("icon", 4))],
         )],
     );
-    assert!(semantic_diagnostics(&doc, None, None).is_empty());
+    assert!(semantic_diagnostics(&doc, None).is_empty());
 }
 
 #[test]
@@ -245,7 +178,7 @@ fn widget_ref_to_unknown_binding_warns() {
         "let spring_box = Canvas::new(style, draw)?;",
         vec![ViewNode::Element(widget_element("sprng_box", 4))],
     );
-    let diags = semantic_diagnostics(&doc, None, None);
+    let diags = semantic_diagnostics(&doc, None);
     assert_eq!(diags.len(), 1);
     assert_eq!(diags[0].severity, Severity::Warning);
     assert_eq!(diags[0].span.line, 4);
@@ -278,7 +211,7 @@ fn unknown_i18n_key_in_markup_warns() {
     );
     let keys = catalog_keys();
     let catalog = CatalogView { keys: &keys };
-    let diags = semantic_diagnostics(&doc, None, Some(&catalog));
+    let diags = semantic_diagnostics(&doc, Some(&catalog));
     assert_eq!(diags.len(), 1, "{diags:?}");
     assert_eq!(diags[0].severity, Severity::Warning);
     assert_eq!(diags[0].span.line, 6);
@@ -292,76 +225,5 @@ fn a_project_without_a_catalog_gets_no_key_diagnostics() {
         StyleSection::default(),
         vec![ViewNode::Element(i18n_element("anything.at.all", 2))],
     );
-    assert!(semantic_diagnostics(&doc, None, None).is_empty());
-}
-
-#[test]
-fn unknown_theme_path_errors_in_a_non_color_attribute() {
-    // `pad:` never reaches the colour check, so without this pass a typo'd token is silent until rustc.
-    let attr = Attr {
-        key: "pad".into(),
-        value: Value::Bare("theme.guttr".into()),
-        value_start: 0,
-    };
-    let fields = HashSet::from(["gutter".to_string()]);
-    let theme = ThemeView {
-        theme_type: Some("Theme"),
-        theme_fields: &fields,
-    };
-    let doc = document(
-        StyleSection::default(),
-        vec![ViewNode::Element(element(&[], vec![attr], 7))],
-    );
-    let diags = semantic_diagnostics(&doc, Some(&theme), None);
-    assert_eq!(diags.len(), 1, "{diags:?}");
-    assert_eq!(diags[0].severity, Severity::Error);
-    assert_eq!(diags[0].span.line, 7);
-    assert!(diags[0].message.contains("guttr"));
-    assert!(diags[0].message.contains("pad"), "it names the attribute");
-}
-
-#[test]
-fn known_theme_path_is_ok_and_a_bare_ident_is_not_treated_as_one() {
-    let fields = HashSet::from(["gutter".to_string()]);
-    let theme = ThemeView {
-        theme_type: Some("Theme"),
-        theme_fields: &fields,
-    };
-    for value in ["theme.gutter", "card_gap", "12"] {
-        let attr = Attr {
-            key: "pad".into(),
-            value: Value::Bare(value.into()),
-            value_start: 0,
-        };
-        let doc = document(
-            StyleSection::default(),
-            vec![ViewNode::Element(element(&[], vec![attr], 3))],
-        );
-        let diags = semantic_diagnostics(&doc, Some(&theme), None);
-        assert!(diags.is_empty(), "{value} should be fine, got {diags:?}");
-    }
-}
-
-#[test]
-fn a_theme_path_on_a_colour_attribute_is_checked_once_as_a_path() {
-    // Both passes see `fill:theme.x`; only the path one may speak, and a typo must still be caught exactly once.
-    let fields = HashSet::from(["primary".to_string()]);
-    let theme = ThemeView {
-        theme_type: Some("Theme"),
-        theme_fields: &fields,
-    };
-    let ok = themed_doc_with_attrs(vec![("fill", "theme.primary")]);
-    assert!(
-        semantic_diagnostics(&ok, Some(&theme), None).is_empty(),
-        "a valid theme path is not an unknown colour"
-    );
-
-    let bad = themed_doc_with_attrs(vec![("fill", "theme.primry")]);
-    let diags = semantic_diagnostics(&bad, Some(&theme), None);
-    assert_eq!(
-        diags.len(),
-        1,
-        "reported once, not by both passes: {diags:?}"
-    );
-    assert!(diags[0].message.contains("primry"));
+    assert!(semantic_diagnostics(&doc, None).is_empty());
 }

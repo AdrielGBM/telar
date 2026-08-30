@@ -19,48 +19,48 @@ col gap:20
     doc_header kicker:"FOUNDATIONS" title:"Color & theme" desc:"Colors are semantic tokens, not fixed values. Every token resolves through the active theme — switch it in the sidebar and the whole app recolors reactively."
     example title:"Accent tokens"
         card
-            grid cols:"fit 120" gap:12 font_size:12 color:theme.ink
+            grid cols:"fit 120" gap:12 font_size:12 color:$theme.ink
                 col @swatch
-                    box @chip fill:theme.primary
+                    box @chip fill:$theme.primary
                     text "primary"
                 col @swatch
-                    box @chip fill:theme.success
+                    box @chip fill:$theme.success
                     text "success"
                 col @swatch
-                    box @chip fill:theme.danger
+                    box @chip fill:$theme.danger
                     text "danger"
                 col @swatch
-                    box @chip fill:theme.warning
+                    box @chip fill:$theme.warning
                     text "warning"
                 col @swatch
-                    box @chip fill:theme.purple
+                    box @chip fill:$theme.purple
                     text "purple"
                 col @swatch
-                    box @chip fill:theme.cyan
+                    box @chip fill:$theme.cyan
                     text "cyan"
-        code_line code:"box fill:theme.primary   ·   fill:theme.success   ·   fill:theme.danger …"
+        code_line code:"box fill:$theme.primary   ·   fill:$theme.success   ·   fill:$theme.danger …"
     example title:"Neutrals & surfaces (outlined so light tones stay visible)"
         card
-            grid cols:"fit 120" gap:12 font_size:12 color:theme.ink
+            grid cols:"fit 120" gap:12 font_size:12 color:$theme.ink
                 col @swatch
-                    box @chip fill:theme.ink stroke:theme.border
+                    box @chip fill:$theme.ink stroke:$theme.border
                     text "ink"
                 col @swatch
-                    box @chip fill:theme.muted stroke:theme.border
+                    box @chip fill:$theme.muted stroke:$theme.border
                     text "muted"
                 col @swatch
-                    box @chip fill:theme.surface stroke:theme.border
+                    box @chip fill:$theme.surface stroke:$theme.border
                     text "surface"
                 col @swatch
-                    box @chip fill:theme.surface_alt stroke:theme.border
+                    box @chip fill:$theme.surface_alt stroke:$theme.border
                     text "surface_alt"
                 col @swatch
-                    box @chip fill:theme.border stroke:theme.border
+                    box @chip fill:$theme.border stroke:$theme.border
                     text "border"
                 col @swatch
-                    box @chip fill:theme.background stroke:theme.border
+                    box @chip fill:$theme.background stroke:$theme.border
                     text "background"
-        code_line code:"box fill:theme.surface stroke:theme.border   (card recipe)"
+        code_line code:"box fill:$theme.surface stroke:$theme.border   (card recipe)"
     example title:"One-off colors — inline hex when a token does not fit"
         card
             row gap:12
@@ -70,6 +70,6 @@ col gap:20
         code_line code:"box fill:#4ecdc4      (also #rgb and #rrggbbaa)"
     example title:"Reactive theming"
         card gap:8
-            text "Because color:theme.primary compiles to a theme lookup, swapping the theme struct at runtime updates every widget that reads it — no manual repaint." font_size:13 color:theme.muted
-            text "Try the Modern / Pastel / Midnight buttons in the sidebar." font_size:13 color:theme.primary
+            text "Because color:$theme.primary compiles to a theme lookup, swapping the theme struct at runtime updates every widget that reads it — no manual repaint." font_size:13 color:$theme.muted
+            text "Try the Modern / Pastel / Midnight buttons in the sidebar." font_size:13 color:$theme.primary
         code_line code:"on_press:|| set_mode(\"midnight\")"

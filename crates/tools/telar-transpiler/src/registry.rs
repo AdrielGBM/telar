@@ -102,7 +102,7 @@ pub fn color_keywords() -> &'static [&'static str] {
 /// It is kept because it says something no literal can: `#00000000` reads as opaque black at a glance.
 /// `white` and `black` went with the rest of a palette the language never had — there was no `red` — and in a
 /// themed toolkit a literal `white` is the mistake the theme exists to prevent: the value wanted is `surface`
-/// or `ink`. An application with a palette of its own writes it as `[style]` constants.
+/// or `ink`. An application with a palette of its own declares it on its theme type.
 pub fn keyword_color_rgba(name: &str) -> Option<[u8; 4]> {
     match name {
         "transparent" => Some([0, 0, 0, 0]),
@@ -186,33 +186,6 @@ const CONTAINER_PAINT: &[&str] = &[
     // The focus ring. Composed over whichever state won rather than replacing it, so it survives a hover.
     "focus_style",
     "transition",
-];
-
-/// The colour names `ThemeTokens` defines, which a bare `color:`/`fill:`/`stroke:`/`tint:` value resolves
-/// through the **trait method** rather than through a field of the same name.
-///
-/// Because the trait is the contract: `set_theme` requires it, and every catalogue component reads its
-/// colours from it. A theme shaped like shadcn's, for instance, calls its quiet *surface* `muted` and its
-/// quiet *ink* `muted-foreground`, and maps `ThemeTokens::muted()` to the latter — so a `.rsx` reading the field got a
-/// background where the catalogue beside it got an ink, and the text came out invisible with nothing to
-/// diagnose. A theme's own tokens (`card`, `accent`, `popover`) are not in the trait and stay field reads,
-/// and `theme.name` remains the escape hatch for a field this list shadows.
-pub const THEME_COLOR_TOKENS: &[&str] = &[
-    "primary",
-    "on_primary",
-    "muted",
-    "scrollbar",
-    "ink",
-    "surface",
-    "surface_alt",
-    "border",
-    "success",
-    "warning",
-    "error",
-    "info",
-    "highlight_low",
-    "highlight_med",
-    "highlight_high",
 ];
 
 /// `align:` on a container: where children sit across the axis they are not laid along.
@@ -355,14 +328,11 @@ pub enum ValueKind {
     /// A closed set of spellings *or* a plain number, for the one axis that is genuinely both: an OpenType
     /// weight *is* a number, and the names are the nine steps of it everyone actually writes.
     KeywordsOrNumber(&'static [(&'static str, &'static str)]),
-    /// A number: a literal, a `$signal`, a `theme.…` read, a `[style]` constant, or a binding in scope.
+    /// A number: a literal, a `50%`, or any Rust expression that yields one.
     Number,
-    /// A number that may also be a percentage of the containing block.
-    Dimension,
     /// One number per edge: a single value, or the CSS 2/3/4-value shorthand.
     Edges,
-    /// A colour: a hex literal, `transparent`, a `theme.…` read, a `[style]` constant, a `$signal`, or an
-    /// expression that yields one.
+    /// A colour: a hex literal, `transparent`, a `$signal`, or any Rust expression that yields one.
     Color,
 }
 
@@ -391,19 +361,13 @@ pub fn value_kind(tag: &str, key: &str) -> Option<ValueKind> {
         "wrap" => return Some(ValueKind::Keywords(WRAP_VALUES)),
         "fit" => return Some(ValueKind::Keywords(FIT_VALUES)),
         "raster" => return Some(ValueKind::Keywords(RASTER_VALUES)),
-        // Every length resolves against the containing block where CSS says it does: sizes, and now the
-        // edges and gaps too. `%` used to work on six size keys and nowhere else, so `padding:50%` was a
-        // fact about which helper the emitter happened to call.
         "width" | "height" | "min_width" | "min_height" | "max_width" | "max_height" | "basis"
         | "flex_basis" | "padding" | "pad" | "padding_x" | "pad_x" | "padding_y" | "pad_y"
         | "padding_start" | "pad_start" | "padding_end" | "pad_end" | "margin_start"
         | "margin_end" | "inset_start" | "inset_end" | "inset_top" | "inset_bottom" | "gap"
-        | "gap_x" | "gap_y" => {
-            return Some(ValueKind::Dimension);
+        | "gap_x" | "gap_y" | "aspect" | "aspect_ratio" | "grow" | "shrink" | "font_size" => {
+            return Some(ValueKind::Number);
         }
-        // Ratios, not lengths: half of nothing is not a meaning either of them has.
-        "aspect" | "aspect_ratio" | "grow" | "shrink" => return Some(ValueKind::Number),
-        "font_size" => return Some(ValueKind::Number),
         // A stroke *width* on an `svg`, where every other tag means a colour by the same name.
         "stroke" if tag == "svg" => return Some(ValueKind::Number),
         _ => {}

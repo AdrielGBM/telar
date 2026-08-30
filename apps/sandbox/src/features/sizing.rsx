@@ -15,46 +15,46 @@ col gap:20
     doc_header kicker:"FOUNDATIONS" title:"Sizing & grid" desc:"Size in pixels or percentages, clamp with min/max, and reach for the grid when you need aligned columns or a responsive gallery."
     example title:"Fixed vs percentage width"
         card gap:10
-            box fill:theme.primary radius:6 width:120 height:26
-            box fill:theme.primary radius:6 width:50% height:26
-            box fill:theme.primary radius:6 width:100% height:26
+            box fill:$theme.primary radius:6 width:120 height:26
+            box fill:$theme.primary radius:6 width:50% height:26
+            box fill:$theme.primary radius:6 width:100% height:26
         code_line code:"box width:120   ·   width:50%   ·   width:100%"
     example title:"min_width — a box refuses to shrink below its floor, then wraps"
         card
             row gap:10 wrap
-                box fill:theme.purple radius:6 min_width:200 grow:1 height:30
-                box fill:theme.purple radius:6 min_width:200 grow:1 height:30
-                box fill:theme.purple radius:6 min_width:200 grow:1 height:30
+                box fill:$theme.purple radius:6 min_width:200 grow:1 height:30
+                box fill:$theme.purple radius:6 min_width:200 grow:1 height:30
+                box fill:$theme.purple radius:6 min_width:200 grow:1 height:30
         code_line code:"box min_width:200 grow:1   (also max_width, min_height, max_height)"
     example title:"Grid — fixed column count with repeat(3, 1fr)"
         card
-            grid cols:3 gap:10 font_size:13 color:theme.on_primary
-                box @center fill:theme.cyan radius:6 height:44
+            grid cols:3 gap:10 font_size:13 color:$theme.on_primary
+                box @center fill:$theme.cyan radius:6 height:44
                     text "1"
-                box @center fill:theme.cyan radius:6 height:44
+                box @center fill:$theme.cyan radius:6 height:44
                     text "2"
-                box @center fill:theme.cyan radius:6 height:44
+                box @center fill:$theme.cyan radius:6 height:44
                     text "3"
-                box @center fill:theme.cyan radius:6 height:44 span:2
+                box @center fill:$theme.cyan radius:6 height:44 span:2
                     text "span 2"
-                box @center fill:theme.cyan radius:6 height:44
+                box @center fill:$theme.cyan radius:6 height:44
                     text "5"
         code_line code:"grid cols:3 gap:10      >      box span:2"
     example title:"Grid — explicit fractional tracks"
         card
             grid cols:"1fr 2fr 1fr" gap:10
-                box fill:theme.success radius:6 height:40
-                box fill:theme.success radius:6 height:40
-                box fill:theme.success radius:6 height:40
+                box fill:$theme.success radius:6 height:40
+                box fill:$theme.success radius:6 height:40
+                box fill:$theme.success radius:6 height:40
         code_line code:"grid cols:'1fr 2fr 1fr' gap:10"
     example title:"Grid — responsive tracks that reflow like wrap but keep their height"
         card
             grid cols:"fit 160" gap:10
-                box fill:theme.warning radius:6 height:40
-                box fill:theme.warning radius:6 height:40
-                box fill:theme.warning radius:6 height:40
-                box fill:theme.warning radius:6 height:40
-                box fill:theme.warning radius:6 height:40
+                box fill:$theme.warning radius:6 height:40
+                box fill:$theme.warning radius:6 height:40
+                box fill:$theme.warning radius:6 height:40
+                box fill:$theme.warning radius:6 height:40
+                box fill:$theme.warning radius:6 height:40
         code_line code:"grid cols:'fit 160'   (auto-fit, minmax(160px, 1fr))"
     example title:"Attributes"
         col gap:6

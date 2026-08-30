@@ -10,16 +10,15 @@
 pub struct HomeProps {}
 
 #[allow(dead_code)]
-const COLOR_PRIMARY: Color = Color::rgba(67.0 / 255.0, 97.0 / 255.0, 238.0 / 255.0, 255.0 / 255.0);
-
-#[allow(dead_code)]
 fn style_page() -> LayoutStyle {
+    #[allow(unused_variables)] let theme = telar::Theme::<theme::LandingTheme>::default();
     LayoutStyle::new()
         .flex_column()
 }
 
 #[allow(dead_code)]
 fn style_navband() -> LayoutStyle {
+    #[allow(unused_variables)] let theme = telar::Theme::<theme::LandingTheme>::default();
     LayoutStyle::new()
         .flex_column()
         .align_items(AlignItems::CENTER)
@@ -29,6 +28,7 @@ fn style_navband() -> LayoutStyle {
 
 #[allow(dead_code)]
 fn style_footband() -> LayoutStyle {
+    #[allow(unused_variables)] let theme = telar::Theme::<theme::LandingTheme>::default();
     LayoutStyle::new()
         .flex_column()
         .align_items(AlignItems::CENTER)
@@ -38,6 +38,7 @@ fn style_footband() -> LayoutStyle {
 
 #[allow(dead_code)]
 fn style_band() -> LayoutStyle {
+    #[allow(unused_variables)] let theme = telar::Theme::<theme::LandingTheme>::default();
     LayoutStyle::new()
         .flex_column()
         .align_items(AlignItems::CENTER)
@@ -47,6 +48,7 @@ fn style_band() -> LayoutStyle {
 
 #[allow(dead_code)]
 fn style_wrap() -> LayoutStyle {
+    #[allow(unused_variables)] let theme = telar::Theme::<theme::LandingTheme>::default();
     LayoutStyle::new()
         .flex_column()
         .width(SizeDimension::Percent(1.0))
@@ -56,6 +58,7 @@ fn style_wrap() -> LayoutStyle {
 
 #[allow(dead_code)]
 fn style_navwrap() -> LayoutStyle {
+    #[allow(unused_variables)] let theme = telar::Theme::<theme::LandingTheme>::default();
     LayoutStyle::new()
         .flex_row()
         .width(SizeDimension::Percent(1.0))
@@ -66,6 +69,7 @@ fn style_navwrap() -> LayoutStyle {
 
 #[allow(dead_code)]
 fn style_footwrap() -> LayoutStyle {
+    #[allow(unused_variables)] let theme = telar::Theme::<theme::LandingTheme>::default();
     LayoutStyle::new()
         .flex_row()
         .width(SizeDimension::Percent(1.0))
@@ -78,6 +82,7 @@ fn style_footwrap() -> LayoutStyle {
 pub fn home(props: HomeProps, children: Children) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let __owner = telar::owner_scope();
     #[allow(unused_imports)] use telar::use_theme;
+    #[allow(unused_variables)] let theme = telar::Theme::<theme::LandingTheme>::default();
 
     let signups = signal(0i32);
     let signups_rsx_mv = signups.clone();
@@ -86,6 +91,8 @@ pub fn home(props: HomeProps, children: Children) -> Result<Box<dyn LayoutItem>,
     let checker_img = Arc::new(make_checker(640, 400, 32));
     let radial_img = Arc::new(make_radial_alpha(640, 400));
 
+    const PRIMARY: Color = Color::rgba(0.263, 0.380, 0.933, 1.0);
+
     let __col_0 = {
         let __sbox_0 = {
             let __row_0 = {
@@ -93,7 +100,7 @@ pub fn home(props: HomeProps, children: Children) -> Result<Box<dyn LayoutItem>,
                     Text::declaring(
                         || "▲ rsx".to_string(),
                         LayoutStyle::new(),
-                        move |__inherited: TextStyle| __inherited.with_font_size(20.0).with_color(use_theme::<theme::LandingTheme>().dark),
+                        { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(20.0).with_color(theme.get().dark) },
                     )?
                 };
                 let __row_1 = {
@@ -101,29 +108,29 @@ pub fn home(props: HomeProps, children: Children) -> Result<Box<dyn LayoutItem>,
                         Text::declaring(
                             || "Features".to_string(),
                             LayoutStyle::new(),
-                            move |__inherited: TextStyle| __inherited.with_font_size(14.0).with_color(use_theme::<theme::LandingTheme>().muted()),
+                            { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(14.0).with_color(theme.get().muted) },
                         )?
                     };
                     let __text_2 = {
                         Text::declaring(
                             || "Gallery".to_string(),
                             LayoutStyle::new(),
-                            move |__inherited: TextStyle| __inherited.with_font_size(14.0).with_color(use_theme::<theme::LandingTheme>().muted()),
+                            { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(14.0).with_color(theme.get().muted) },
                         )?
                     };
                     let __text_3 = {
                         Text::declaring(
                             || "Pricing".to_string(),
                             LayoutStyle::new(),
-                            move |__inherited: TextStyle| __inherited.with_font_size(14.0).with_color(use_theme::<theme::LandingTheme>().muted()),
+                            { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(14.0).with_color(theme.get().muted) },
                         )?
                     };
-                    let __node_0 = button(ButtonProps::props().label("Get started").fill(Reactive::of(move || COLOR_PRIMARY)).on_press(Box::new({ let signups = signups.clone(); move || signups.update(|n| *n += 1) })).build(), Children::default())?;
+                    let __node_0 = button(ButtonProps::props().label("Get started").fill(PRIMARY).on_press(Box::new({ let signups = signups.clone(); move || signups.update(|n| *n += 1) })).build(), Children::default())?;
                     Container::new(LayoutStyle::new().flex_row().gap(24.0).align_items(AlignItems::CENTER), children![__text_1, __text_2, __text_3, __node_0])?
                 };
                 Container::new(style_navwrap(), children![__text_0, __row_1])?
             };
-            StyledContainer::new(style_navband(), move |_| RectStyle::default().with_fill(use_theme::<theme::LandingTheme>().surface()).with_radius(BorderRadius::zero()), children![__row_0])?
+            StyledContainer::new(style_navband(), { let theme = theme.clone(); move |_| RectStyle::default().with_fill(theme.get().surface).with_radius(BorderRadius::zero()) }, children![__row_0])?
         };
         let __sbox_1 = {
             let __col_1 = {
@@ -133,19 +140,19 @@ pub fn home(props: HomeProps, children: Children) -> Result<Box<dyn LayoutItem>,
                             Text::declaring(
                                 || "Native UIs in Rust, without the boilerplate".to_string(),
                                 LayoutStyle::new(),
-                                move |__inherited: TextStyle| __inherited.with_font_size(40.0).with_color(use_theme::<theme::LandingTheme>().dark),
+                                { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(40.0).with_color(theme.get().dark) },
                             )?
                         };
                         let __text_5 = {
                             Text::declaring(
                                 || "rsx compiles declarative .rsx markup to GPU-accelerated widgets — signals, layout and theming included, from desktop to Android.".to_string(),
                                 LayoutStyle::new(),
-                                move |__inherited: TextStyle| __inherited.with_font_size(18.0).with_color(use_theme::<theme::LandingTheme>().muted()),
+                                { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(18.0).with_color(theme.get().muted) },
                             )?
                         };
                         let __row_3 = {
-                            let __node_1 = button(ButtonProps::props().label("Get started").fill(Reactive::of(move || COLOR_PRIMARY)).on_press(Box::new({ let signups = signups.clone(); move || signups.update(|n| *n += 1) })).build(), Children::default())?;
-                            let __node_2 = button(ButtonProps::props().label("Read the docs").outline(Reactive::of(move || COLOR_PRIMARY)).build(), Children::default())?;
+                            let __node_1 = button(ButtonProps::props().label("Get started").fill(PRIMARY).on_press(Box::new({ let signups = signups.clone(); move || signups.update(|n| *n += 1) })).build(), Children::default())?;
+                            let __node_2 = button(ButtonProps::props().label("Read the docs").outline(PRIMARY).build(), Children::default())?;
                             Container::new(LayoutStyle::new().flex_row().gap(12.0).flex_wrap(), children![__node_1, __node_2])?
                         };
                         let __text_6 = {
@@ -153,7 +160,7 @@ pub fn home(props: HomeProps, children: Children) -> Result<Box<dyn LayoutItem>,
                             Text::declaring(
                                 move || format!("{} of 200 early-access seats left", { spots_left.get() }),
                                 LayoutStyle::new(),
-                                move |__inherited: TextStyle| __inherited.with_font_size(13.0).with_color(use_theme::<theme::LandingTheme>().accent),
+                                { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(13.0).with_color(theme.get().accent) },
                             )?
                         };
                         Container::new(LayoutStyle::new().flex_column().flex_grow(1.0).min_width(320.0).gap(20.0), children![__text_4, __text_5, __row_3, __text_6])?
@@ -174,7 +181,7 @@ pub fn home(props: HomeProps, children: Children) -> Result<Box<dyn LayoutItem>,
                 };
                 Container::new(style_wrap(), children![__row_2])?
             };
-            StyledContainer::new(style_band(), move |_| RectStyle::default().with_fill(use_theme::<theme::LandingTheme>().surface()).with_radius(BorderRadius::zero()), children![__col_1])?
+            StyledContainer::new(style_band(), { let theme = theme.clone(); move |_| RectStyle::default().with_fill(theme.get().surface).with_radius(BorderRadius::zero()) }, children![__col_1])?
         };
         let __sbox_2 = {
             let __col_4 = {
@@ -182,7 +189,7 @@ pub fn home(props: HomeProps, children: Children) -> Result<Box<dyn LayoutItem>,
                     Text::declaring(
                         || "Trusted primitives".to_string(),
                         LayoutStyle::new(),
-                        move |__inherited: TextStyle| __inherited.with_font_size(14.0).with_color(use_theme::<theme::LandingTheme>().muted()),
+                        { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(14.0).with_color(theme.get().muted) },
                     )?
                 };
                 let __row_4 = {
@@ -191,74 +198,74 @@ pub fn home(props: HomeProps, children: Children) -> Result<Box<dyn LayoutItem>,
                             Text::declaring(
                                 || "60 fps".to_string(),
                                 LayoutStyle::new(),
-                                move |__inherited: TextStyle| __inherited.with_font_size(30.0).with_color(COLOR_PRIMARY),
+                                move |__inherited: TextStyle| __inherited.with_font_size(30.0).with_color(PRIMARY),
                             )?
                         };
                         let __text_9 = {
                             Text::declaring(
                                 || "software + wgpu".to_string(),
                                 LayoutStyle::new(),
-                                move |__inherited: TextStyle| __inherited.with_font_size(13.0).with_color(use_theme::<theme::LandingTheme>().muted()),
+                                { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(13.0).with_color(theme.get().muted) },
                             )?
                         };
-                        StyledContainer::new(LayoutStyle::new().flex_column().flex_grow(1.0).min_width(170.0).padding_all(24.0).gap(6.0).flex_column().align_items(AlignItems::CENTER), move |_| RectStyle { fill: Some(Paint::Solid(use_theme::<theme::LandingTheme>().surface())), border: Some(Border { paint: Paint::Solid(use_theme::<theme::LandingTheme>().border()), widths: [1.0; 4] }), shadow: None, radius: BorderRadius::all(14.0) }, children![__text_8, __text_9])?
+                        StyledContainer::new(LayoutStyle::new().flex_column().flex_grow(1.0).min_width(170.0).padding_all(24.0).gap(6.0).flex_column().align_items(AlignItems::CENTER), { let theme = theme.clone(); move |_| RectStyle { fill: Some(Paint::Solid(theme.get().surface)), border: Some(Border { paint: Paint::Solid(theme.get().border), widths: [1.0; 4] }), shadow: None, radius: BorderRadius::all(14.0) } }, children![__text_8, __text_9])?
                     };
                     let __sbox_4 = {
                         let __text_10 = {
                             Text::declaring(
                                 || "25".to_string(),
                                 LayoutStyle::new(),
-                                move |__inherited: TextStyle| __inherited.with_font_size(30.0).with_color(COLOR_PRIMARY),
+                                move |__inherited: TextStyle| __inherited.with_font_size(30.0).with_color(PRIMARY),
                             )?
                         };
                         let __text_11 = {
                             Text::declaring(
                                 || "modular crates".to_string(),
                                 LayoutStyle::new(),
-                                move |__inherited: TextStyle| __inherited.with_font_size(13.0).with_color(use_theme::<theme::LandingTheme>().muted()),
+                                { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(13.0).with_color(theme.get().muted) },
                             )?
                         };
-                        StyledContainer::new(LayoutStyle::new().flex_column().flex_grow(1.0).min_width(170.0).padding_all(24.0).gap(6.0).flex_column().align_items(AlignItems::CENTER), move |_| RectStyle { fill: Some(Paint::Solid(use_theme::<theme::LandingTheme>().surface())), border: Some(Border { paint: Paint::Solid(use_theme::<theme::LandingTheme>().border()), widths: [1.0; 4] }), shadow: None, radius: BorderRadius::all(14.0) }, children![__text_10, __text_11])?
+                        StyledContainer::new(LayoutStyle::new().flex_column().flex_grow(1.0).min_width(170.0).padding_all(24.0).gap(6.0).flex_column().align_items(AlignItems::CENTER), { let theme = theme.clone(); move |_| RectStyle { fill: Some(Paint::Solid(theme.get().surface)), border: Some(Border { paint: Paint::Solid(theme.get().border), widths: [1.0; 4] }), shadow: None, radius: BorderRadius::all(14.0) } }, children![__text_10, __text_11])?
                     };
                     let __sbox_5 = {
                         let __text_12 = {
                             Text::declaring(
                                 || "2".to_string(),
                                 LayoutStyle::new(),
-                                move |__inherited: TextStyle| __inherited.with_font_size(30.0).with_color(COLOR_PRIMARY),
+                                move |__inherited: TextStyle| __inherited.with_font_size(30.0).with_color(PRIMARY),
                             )?
                         };
                         let __text_13 = {
                             Text::declaring(
                                 || "render backends".to_string(),
                                 LayoutStyle::new(),
-                                move |__inherited: TextStyle| __inherited.with_font_size(13.0).with_color(use_theme::<theme::LandingTheme>().muted()),
+                                { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(13.0).with_color(theme.get().muted) },
                             )?
                         };
-                        StyledContainer::new(LayoutStyle::new().flex_column().flex_grow(1.0).min_width(170.0).padding_all(24.0).gap(6.0).flex_column().align_items(AlignItems::CENTER), move |_| RectStyle { fill: Some(Paint::Solid(use_theme::<theme::LandingTheme>().surface())), border: Some(Border { paint: Paint::Solid(use_theme::<theme::LandingTheme>().border()), widths: [1.0; 4] }), shadow: None, radius: BorderRadius::all(14.0) }, children![__text_12, __text_13])?
+                        StyledContainer::new(LayoutStyle::new().flex_column().flex_grow(1.0).min_width(170.0).padding_all(24.0).gap(6.0).flex_column().align_items(AlignItems::CENTER), { let theme = theme.clone(); move |_| RectStyle { fill: Some(Paint::Solid(theme.get().surface)), border: Some(Border { paint: Paint::Solid(theme.get().border), widths: [1.0; 4] }), shadow: None, radius: BorderRadius::all(14.0) } }, children![__text_12, __text_13])?
                     };
                     let __sbox_6 = {
                         let __text_14 = {
                             Text::declaring(
                                 || "0".to_string(),
                                 LayoutStyle::new(),
-                                move |__inherited: TextStyle| __inherited.with_font_size(30.0).with_color(COLOR_PRIMARY),
+                                move |__inherited: TextStyle| __inherited.with_font_size(30.0).with_color(PRIMARY),
                             )?
                         };
                         let __text_15 = {
                             Text::declaring(
                                 || "runtime GC pauses".to_string(),
                                 LayoutStyle::new(),
-                                move |__inherited: TextStyle| __inherited.with_font_size(13.0).with_color(use_theme::<theme::LandingTheme>().muted()),
+                                { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(13.0).with_color(theme.get().muted) },
                             )?
                         };
-                        StyledContainer::new(LayoutStyle::new().flex_column().flex_grow(1.0).min_width(170.0).padding_all(24.0).gap(6.0).flex_column().align_items(AlignItems::CENTER), move |_| RectStyle { fill: Some(Paint::Solid(use_theme::<theme::LandingTheme>().surface())), border: Some(Border { paint: Paint::Solid(use_theme::<theme::LandingTheme>().border()), widths: [1.0; 4] }), shadow: None, radius: BorderRadius::all(14.0) }, children![__text_14, __text_15])?
+                        StyledContainer::new(LayoutStyle::new().flex_column().flex_grow(1.0).min_width(170.0).padding_all(24.0).gap(6.0).flex_column().align_items(AlignItems::CENTER), { let theme = theme.clone(); move |_| RectStyle { fill: Some(Paint::Solid(theme.get().surface)), border: Some(Border { paint: Paint::Solid(theme.get().border), widths: [1.0; 4] }), shadow: None, radius: BorderRadius::all(14.0) } }, children![__text_14, __text_15])?
                     };
                     Container::new(LayoutStyle::new().flex_row().gap(20.0).flex_wrap(), children![__sbox_3, __sbox_4, __sbox_5, __sbox_6])?
                 };
                 Container::new(style_wrap().gap(24.0), children![__text_7, __row_4])?
             };
-            StyledContainer::new(style_band(), move |_| RectStyle::default().with_fill(use_theme::<theme::LandingTheme>().surface_alt()).with_radius(BorderRadius::zero()), children![__col_4])?
+            StyledContainer::new(style_band(), { let theme = theme.clone(); move |_| RectStyle::default().with_fill(theme.get().surface_alt).with_radius(BorderRadius::zero()) }, children![__col_4])?
         };
         let __sbox_7 = {
             let __col_5 = {
@@ -267,14 +274,14 @@ pub fn home(props: HomeProps, children: Children) -> Result<Box<dyn LayoutItem>,
                         Text::declaring(
                             || "Everything you need".to_string(),
                             LayoutStyle::new(),
-                            move |__inherited: TextStyle| __inherited.with_font_size(28.0).with_color(use_theme::<theme::LandingTheme>().dark),
+                            { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(28.0).with_color(theme.get().dark) },
                         )?
                     };
                     let __text_17 = {
                         Text::declaring(
                             || "Composable building blocks that scale from a button to a full app.".to_string(),
                             LayoutStyle::new(),
-                            move |__inherited: TextStyle| __inherited.with_font_size(16.0).with_color(use_theme::<theme::LandingTheme>().muted()),
+                            { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(16.0).with_color(theme.get().muted) },
                         )?
                     };
                     Container::new(LayoutStyle::new().flex_column().gap(8.0), children![__text_16, __text_17])?
@@ -288,7 +295,7 @@ pub fn home(props: HomeProps, children: Children) -> Result<Box<dyn LayoutItem>,
                 };
                 Container::new(style_wrap().gap(28.0), children![__col_6, __row_5])?
             };
-            StyledContainer::new(style_band(), move |_| RectStyle::default().with_fill(use_theme::<theme::LandingTheme>().surface()).with_radius(BorderRadius::zero()), children![__col_5])?
+            StyledContainer::new(style_band(), { let theme = theme.clone(); move |_| RectStyle::default().with_fill(theme.get().surface).with_radius(BorderRadius::zero()) }, children![__col_5])?
         };
         let __sbox_8 = {
             let __col_7 = {
@@ -297,14 +304,14 @@ pub fn home(props: HomeProps, children: Children) -> Result<Box<dyn LayoutItem>,
                         Text::declaring(
                             || "Built-in rendering".to_string(),
                             LayoutStyle::new(),
-                            move |__inherited: TextStyle| __inherited.with_font_size(28.0).with_color(use_theme::<theme::LandingTheme>().dark),
+                            { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(28.0).with_color(theme.get().dark) },
                         )?
                     };
                     let __text_19 = {
                         Text::declaring(
                             || "Gradients, images, paths and shadows — all GPU-accelerated.".to_string(),
                             LayoutStyle::new(),
-                            move |__inherited: TextStyle| __inherited.with_font_size(16.0).with_color(use_theme::<theme::LandingTheme>().muted()),
+                            { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(16.0).with_color(theme.get().muted) },
                         )?
                     };
                     Container::new(LayoutStyle::new().flex_column().gap(8.0), children![__text_18, __text_19])?
@@ -324,7 +331,7 @@ pub fn home(props: HomeProps, children: Children) -> Result<Box<dyn LayoutItem>,
                             Text::declaring(
                                 || "Linear gradients".to_string(),
                                 LayoutStyle::new(),
-                                move |__inherited: TextStyle| __inherited.with_font_size(13.0).with_color(use_theme::<theme::LandingTheme>().muted()),
+                                { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(13.0).with_color(theme.get().muted) },
                             )?
                         };
                         Container::new(LayoutStyle::new().flex_column().flex_grow(1.0).min_width(280.0).gap(8.0), children![__img_1, __text_20])?
@@ -343,7 +350,7 @@ pub fn home(props: HomeProps, children: Children) -> Result<Box<dyn LayoutItem>,
                             Text::declaring(
                                 || "Bitmap images".to_string(),
                                 LayoutStyle::new(),
-                                move |__inherited: TextStyle| __inherited.with_font_size(13.0).with_color(use_theme::<theme::LandingTheme>().muted()),
+                                { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(13.0).with_color(theme.get().muted) },
                             )?
                         };
                         Container::new(LayoutStyle::new().flex_column().flex_grow(1.0).min_width(280.0).gap(8.0), children![__img_2, __text_21])?
@@ -362,7 +369,7 @@ pub fn home(props: HomeProps, children: Children) -> Result<Box<dyn LayoutItem>,
                             Text::declaring(
                                 || "Radial alpha".to_string(),
                                 LayoutStyle::new(),
-                                move |__inherited: TextStyle| __inherited.with_font_size(13.0).with_color(use_theme::<theme::LandingTheme>().muted()),
+                                { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(13.0).with_color(theme.get().muted) },
                             )?
                         };
                         Container::new(LayoutStyle::new().flex_column().flex_grow(1.0).min_width(280.0).gap(8.0), children![__img_3, __text_22])?
@@ -371,7 +378,7 @@ pub fn home(props: HomeProps, children: Children) -> Result<Box<dyn LayoutItem>,
                 };
                 Container::new(style_wrap().gap(28.0), children![__col_8, __row_6])?
             };
-            StyledContainer::new(style_band(), move |_| RectStyle::default().with_fill(use_theme::<theme::LandingTheme>().surface_alt()).with_radius(BorderRadius::zero()), children![__col_7])?
+            StyledContainer::new(style_band(), { let theme = theme.clone(); move |_| RectStyle::default().with_fill(theme.get().surface_alt).with_radius(BorderRadius::zero()) }, children![__col_7])?
         };
         let __sbox_9 = {
             let __col_12 = {
@@ -393,21 +400,21 @@ pub fn home(props: HomeProps, children: Children) -> Result<Box<dyn LayoutItem>,
                             Text::declaring(
                                 || "Reactivity that stays out of your way".to_string(),
                                 LayoutStyle::new(),
-                                move |__inherited: TextStyle| __inherited.with_font_size(26.0).with_color(use_theme::<theme::LandingTheme>().dark),
+                                { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(26.0).with_color(theme.get().dark) },
                             )?
                         };
                         let __text_24 = {
                             Text::declaring(
                                 || "Fine-grained signals update only the widgets that depend on them — no virtual DOM, no diffing, no re-render storms.".to_string(),
                                 LayoutStyle::new(),
-                                move |__inherited: TextStyle| __inherited.with_font_size(16.0).with_color(use_theme::<theme::LandingTheme>().muted()),
+                                { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(16.0).with_color(theme.get().muted) },
                             )?
                         };
                         let __text_25 = {
                             Text::declaring(
                                 || "→ signal, memo, effect".to_string(),
                                 LayoutStyle::new(),
-                                move |__inherited: TextStyle| __inherited.with_font_size(14.0).with_color(COLOR_PRIMARY),
+                                move |__inherited: TextStyle| __inherited.with_font_size(14.0).with_color(PRIMARY),
                             )?
                         };
                         Container::new(LayoutStyle::new().flex_column().flex_grow(1.0).min_width(300.0).gap(14.0), children![__text_23, __text_24, __text_25])?
@@ -416,7 +423,7 @@ pub fn home(props: HomeProps, children: Children) -> Result<Box<dyn LayoutItem>,
                 };
                 Container::new(style_wrap(), children![__row_7])?
             };
-            StyledContainer::new(style_band(), move |_| RectStyle::default().with_fill(use_theme::<theme::LandingTheme>().surface()).with_radius(BorderRadius::zero()), children![__col_12])?
+            StyledContainer::new(style_band(), { let theme = theme.clone(); move |_| RectStyle::default().with_fill(theme.get().surface).with_radius(BorderRadius::zero()) }, children![__col_12])?
         };
         let __sbox_10 = {
             let __col_15 = {
@@ -424,7 +431,7 @@ pub fn home(props: HomeProps, children: Children) -> Result<Box<dyn LayoutItem>,
                     Text::declaring(
                         || "Join the private beta".to_string(),
                         LayoutStyle::new(),
-                        move |__inherited: TextStyle| __inherited.with_font_size(30.0).with_color(use_theme::<theme::LandingTheme>().on_primary()),
+                        { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(30.0).with_color(theme.get().on_primary) },
                     )?
                 };
                 let __text_27 = {
@@ -432,24 +439,24 @@ pub fn home(props: HomeProps, children: Children) -> Result<Box<dyn LayoutItem>,
                     Text::declaring(
                         move || format!("{} of 200 seats remaining", { spots_left.get() }),
                         LayoutStyle::new(),
-                        move |__inherited: TextStyle| __inherited.with_font_size(16.0).with_color(use_theme::<theme::LandingTheme>().on_primary()),
+                        { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(16.0).with_color(theme.get().on_primary) },
                     )?
                 };
                 let __row_8 = {
-                    let __node_7 = button(ButtonProps::props().label("Reserve a seat").fill(Reactive::of(move || use_theme::<theme::LandingTheme>().accent)).on_press(Box::new({ let signups = signups.clone(); move || signups.update(|n| *n += 1) })).build(), Children::default())?;
+                    let __node_7 = button(ButtonProps::props().label("Reserve a seat").fill(Reactive::of({ let theme = theme.clone(); move || theme.get().accent })).on_press(Box::new({ let signups = signups.clone(); move || signups.update(|n| *n += 1) })).build(), Children::default())?;
                     let __text_28 = {
                         let signups = signups.clone();
                         Text::declaring(
                             move || format!("{} developers reserved", { signups.get() }),
                             LayoutStyle::new(),
-                            move |__inherited: TextStyle| __inherited.with_font_size(14.0).with_color(use_theme::<theme::LandingTheme>().on_primary()),
+                            { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(14.0).with_color(theme.get().on_primary) },
                         )?
                     };
                     Container::new(LayoutStyle::new().flex_row().gap(12.0).align_items(AlignItems::CENTER).flex_wrap(), children![__node_7, __text_28])?
                 };
                 Container::new(style_wrap().align_items(AlignItems::CENTER).gap(16.0), children![__text_26, __text_27, __row_8])?
             };
-            StyledContainer::new(style_band(), move |_| RectStyle::default().with_fill(COLOR_PRIMARY).with_radius(BorderRadius::zero()), children![__col_15])?
+            StyledContainer::new(style_band(), move |_| RectStyle::default().with_fill(PRIMARY).with_radius(BorderRadius::zero()), children![__col_15])?
         };
         let __sbox_11 = {
             let __row_9 = {
@@ -458,14 +465,14 @@ pub fn home(props: HomeProps, children: Children) -> Result<Box<dyn LayoutItem>,
                         Text::declaring(
                             || "▲ rsx".to_string(),
                             LayoutStyle::new(),
-                            move |__inherited: TextStyle| __inherited.with_font_size(18.0).with_color(use_theme::<theme::LandingTheme>().on_primary()),
+                            { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(18.0).with_color(theme.get().on_primary) },
                         )?
                     };
                     let __text_30 = {
                         Text::declaring(
                             || "Native UI framework for Rust.".to_string(),
                             LayoutStyle::new(),
-                            move |__inherited: TextStyle| __inherited.with_font_size(13.0).with_color(use_theme::<theme::LandingTheme>().on_dark),
+                            { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(13.0).with_color(theme.get().on_dark) },
                         )?
                     };
                     Container::new(LayoutStyle::new().flex_column().gap(8.0).flex_grow(1.0).min_width(200.0), children![__text_29, __text_30])?
@@ -475,21 +482,21 @@ pub fn home(props: HomeProps, children: Children) -> Result<Box<dyn LayoutItem>,
                         Text::declaring(
                             || "Product".to_string(),
                             LayoutStyle::new(),
-                            move |__inherited: TextStyle| __inherited.with_font_size(13.0).with_color(use_theme::<theme::LandingTheme>().on_primary()),
+                            { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(13.0).with_color(theme.get().on_primary) },
                         )?
                     };
                     let __text_32 = {
                         Text::declaring(
                             || "Features".to_string(),
                             LayoutStyle::new(),
-                            move |__inherited: TextStyle| __inherited.with_font_size(13.0).with_color(use_theme::<theme::LandingTheme>().on_dark),
+                            { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(13.0).with_color(theme.get().on_dark) },
                         )?
                     };
                     let __text_33 = {
                         Text::declaring(
                             || "Gallery".to_string(),
                             LayoutStyle::new(),
-                            move |__inherited: TextStyle| __inherited.with_font_size(13.0).with_color(use_theme::<theme::LandingTheme>().on_dark),
+                            { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(13.0).with_color(theme.get().on_dark) },
                         )?
                     };
                     Container::new(LayoutStyle::new().flex_column().gap(6.0).min_width(140.0), children![__text_31, __text_32, __text_33])?
@@ -499,28 +506,28 @@ pub fn home(props: HomeProps, children: Children) -> Result<Box<dyn LayoutItem>,
                         Text::declaring(
                             || "Developers".to_string(),
                             LayoutStyle::new(),
-                            move |__inherited: TextStyle| __inherited.with_font_size(13.0).with_color(use_theme::<theme::LandingTheme>().on_primary()),
+                            { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(13.0).with_color(theme.get().on_primary) },
                         )?
                     };
                     let __text_35 = {
                         Text::declaring(
                             || "Docs".to_string(),
                             LayoutStyle::new(),
-                            move |__inherited: TextStyle| __inherited.with_font_size(13.0).with_color(use_theme::<theme::LandingTheme>().on_dark),
+                            { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(13.0).with_color(theme.get().on_dark) },
                         )?
                     };
                     let __text_36 = {
                         Text::declaring(
                             || "Examples".to_string(),
                             LayoutStyle::new(),
-                            move |__inherited: TextStyle| __inherited.with_font_size(13.0).with_color(use_theme::<theme::LandingTheme>().on_dark),
+                            { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(13.0).with_color(theme.get().on_dark) },
                         )?
                     };
                     Container::new(LayoutStyle::new().flex_column().gap(6.0).min_width(140.0), children![__text_34, __text_35, __text_36])?
                 };
                 Container::new(style_footwrap(), children![__col_16, __col_17, __col_18])?
             };
-            StyledContainer::new(style_footband(), move |_| RectStyle::default().with_fill(use_theme::<theme::LandingTheme>().dark).with_radius(BorderRadius::zero()), children![__row_9])?
+            StyledContainer::new(style_footband(), { let theme = theme.clone(); move |_| RectStyle::default().with_fill(theme.get().dark).with_radius(BorderRadius::zero()) }, children![__row_9])?
         };
         Container::new(style_page(), children![__sbox_0, __sbox_1, __sbox_2, __sbox_7, __sbox_8, __sbox_9, __sbox_10, __sbox_11])?
     };
@@ -530,6 +537,7 @@ pub fn home(props: HomeProps, children: Children) -> Result<Box<dyn LayoutItem>,
 #[allow(dead_code, unused_variables, unused_mut)]
 pub fn home_preview_0() -> Result<Box<dyn LayoutItem>, LayoutError> {
     #[allow(unused_imports)] use telar::use_theme;
+    #[allow(unused_variables)] let theme = telar::Theme::<theme::LandingTheme>::default();
     let __node_0 = home(HomeProps::props().build(), Children::default())?;
     Ok(Box::new(__node_0))
 }

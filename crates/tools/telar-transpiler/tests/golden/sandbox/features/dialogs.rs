@@ -14,44 +14,55 @@ pub struct FeaturesDialogsProps {}
 pub fn features_dialogs(props: FeaturesDialogsProps, children: Children) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let __owner = telar::owner_scope();
     #[allow(unused_imports)] use telar::use_theme;
+    #[allow(unused_variables)] let theme = telar::Theme::<core::theme::SandboxTheme>::default();
 
     let __col_0 = {
         let __node_0 = doc_header(DocHeaderProps::props().kicker("OVERLAYS").title("Dialogs").desc("Modal, drawer and tooltip — high-level widgets built on the overlay primitive (a top-layer portal that escapes clipping and blocks the page). Each renders its content only while open, so a closed overlay costs nothing and never eats a background click.").build(), Children::default())?;
         let __node_1 = {
             let __deferred = Children::new(
+                {
+                    let theme = theme.clone();
                 move || {
+                    let theme = theme.clone();
                     let mut __slots = Slots::new();
                     let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
                     let __node_2 = {
                         let __deferred = Children::new(
+                            {
+                                let theme = theme.clone();
                             move || {
+                                let theme = theme.clone();
                                 let mut __slots = Slots::new();
                                 let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
                                 let __text_0 = {
                                     Text::declaring(
                                         || "Naming the dialog is what removes the signal(bool) per overlay: anything can open it by name — a menu item, a shortcut, a deep link — without the state being threaded down to it.".to_string(),
                                         LayoutStyle::new(),
-                                        move |__inherited: TextStyle| __inherited.with_font_size(13.0).with_color(use_theme::<core::theme::SandboxTheme>().muted()),
+                                        { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(13.0).with_color(theme.get().muted) },
                                     )?
                                 };
                                 __children.push(box_item(__text_0));
-                                let __node_3 = button(ButtonProps::props().label("Open modal").fill(Reactive::of(move || use_theme::<core::theme::SandboxTheme>().primary())).on_press(Box::new(move || open_overlay("confirm"))).build(), Children::default())?;
+                                let __node_3 = button(ButtonProps::props().label("Open modal").fill(Reactive::of({ let theme = theme.clone(); move || theme.get().primary })).on_press(Box::new(move || open_overlay("confirm"))).build(), Children::default())?;
                                 __children.push(box_item(__node_3));
                                 let __node_4 = {
                                     let __deferred = Children::new(
+                                        {
+                                            let theme = theme.clone();
                                         move || {
+                                            let theme = theme.clone();
                                             let mut __slots = Slots::new();
                                             let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
                                             let __text_1 = {
                                                 Text::declaring(
                                                     || "Body content here".to_string(),
                                                     LayoutStyle::new(),
-                                                    move |__inherited: TextStyle| __inherited.with_font_size(14.0).with_color(use_theme::<core::theme::SandboxTheme>().ink()),
+                                                    { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(14.0).with_color(theme.get().ink) },
                                                 )?
                                             };
                                             __children.push(box_item(__text_1));
                                             __slots.extend_default(__children);
                                             Ok(__slots)
+                                        }
                                         }
                                     );
                                     modal(ModalProps::props().id("confirm").title("Confirm").build(), __deferred)?
@@ -59,6 +70,7 @@ pub fn features_dialogs(props: FeaturesDialogsProps, children: Children) -> Resu
                                 __children.push(box_item(__node_4));
                                 __slots.extend_default(__children);
                                 Ok(__slots)
+                            }
                             }
                         );
                         card(CardProps::props().gap(10.0).build(), __deferred)?
@@ -69,36 +81,47 @@ pub fn features_dialogs(props: FeaturesDialogsProps, children: Children) -> Resu
                     __slots.extend_default(__children);
                     Ok(__slots)
                 }
+                }
             );
             example(ExampleProps::props().title("Modal — an opaque dialog centred over a dimming scrim; the scrim or Close dismisses").build(), __deferred)?
         };
         let __node_6 = {
             let __deferred = Children::new(
+                {
+                    let theme = theme.clone();
                 move || {
+                    let theme = theme.clone();
                     let mut __slots = Slots::new();
                     let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
                     let __node_7 = {
                         let __deferred = Children::new(
+                            {
+                                let theme = theme.clone();
                             move || {
+                                let theme = theme.clone();
                                 let mut __slots = Slots::new();
                                 let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-                                let __node_8 = button(ButtonProps::props().label("Open drawer").fill(Reactive::of(move || use_theme::<core::theme::SandboxTheme>().primary())).on_press(Box::new(move || open_overlay("nav"))).build(), Children::default())?;
+                                let __node_8 = button(ButtonProps::props().label("Open drawer").fill(Reactive::of({ let theme = theme.clone(); move || theme.get().primary })).on_press(Box::new(move || open_overlay("nav"))).build(), Children::default())?;
                                 __children.push(box_item(__node_8));
                                 let __node_9 = {
                                     let __deferred = Children::new(
+                                        {
+                                            let theme = theme.clone();
                                         move || {
+                                            let theme = theme.clone();
                                             let mut __slots = Slots::new();
                                             let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
                                             let __text_2 = {
                                                 Text::declaring(
                                                     || "Drawer content".to_string(),
                                                     LayoutStyle::new(),
-                                                    move |__inherited: TextStyle| __inherited.with_color(use_theme::<core::theme::SandboxTheme>().ink()),
+                                                    { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_color(theme.get().ink) },
                                                 )?
                                             };
                                             __children.push(box_item(__text_2));
                                             __slots.extend_default(__children);
                                             Ok(__slots)
+                                        }
                                         }
                                     );
                                     drawer(DrawerProps::props().id("nav").side("right").build(), __deferred)?
@@ -106,6 +129,7 @@ pub fn features_dialogs(props: FeaturesDialogsProps, children: Children) -> Resu
                                 __children.push(box_item(__node_9));
                                 __slots.extend_default(__children);
                                 Ok(__slots)
+                            }
                             }
                         );
                         card(CardProps::props().gap(10.0).build(), __deferred)?
@@ -115,6 +139,7 @@ pub fn features_dialogs(props: FeaturesDialogsProps, children: Children) -> Resu
                     __children.push(box_item(__node_10));
                     __slots.extend_default(__children);
                     Ok(__slots)
+                }
                 }
             );
             example(ExampleProps::props().title("Drawer — a full-height side panel pinned to an edge, over the same scrim").build(), __deferred)?

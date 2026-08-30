@@ -292,9 +292,7 @@ impl Backend {
                                 .or_else(|| file_path.as_deref().and_then(|p| p.parent())),
                         ),
                         CompletionKind::AttributeKey(tag) => attribute_key_items(&tag),
-                        CompletionKind::ColorValue => {
-                            color_items(&parsed.document, project.as_ref())
-                        }
+                        CompletionKind::ColorValue => color_items(project.as_ref()),
                         CompletionKind::StyleClass => style_class_items(&parsed.document),
                         CompletionKind::SignalRef => signal_items(&parsed.source),
                     },
@@ -467,13 +465,7 @@ impl Backend {
             let store = self.store.read().await;
             let parsed = store.get(uri)?;
             let project = file_path.as_deref().and_then(ProjectInfo::discover);
-            let native = hover_info(
-                &parsed.document,
-                &parsed.source,
-                pos.line,
-                pos.character,
-                project.as_ref(),
-            );
+            let native = hover_info(&parsed.source, pos.line, pos.character, project.as_ref());
             let theme = project.as_ref().and_then(|p| p.theme_type.clone());
             (parsed.source.clone(), native, theme)
         };
@@ -530,7 +522,7 @@ impl Backend {
         crate::analysis::color::color_presentations(params.color)
     }
 
-    /// `textDocument/documentSymbol`: the outline of `[style]` constants/classes and `[preview]`s.
+    /// `textDocument/documentSymbol`: the outline of `[style]` classes and `[preview]`s.
     pub async fn document_symbol(
         &self,
         params: DocumentSymbolParams,

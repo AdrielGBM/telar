@@ -1,6 +1,6 @@
 //! `textDocument/documentColor` + `colorPresentation`: inline swatches and a color picker for the `.rsx` styling DSL.
 //!
-//! v1 scope is **color literals** — hex (`#rgb`/`#rrggbb`/`#rrggbbaa`) and the one keyword colour (`transparent`) — at the two places they appear with position info: `[style]` constant values and `[view]` attribute values. These are unambiguously editable, so the picker can write a hex back without clobbering a theme binding. Theme-token references (`color:primary` where `primary` is a theme field) are intentionally skipped: resolving them to RGBA would require evaluating the theme's Rust, and rewriting them to a hex would drop the reactive binding.
+//! v1 scope is **color literals** — hex (`#rgb`/`#rrggbb`/`#rrggbbaa`) and the one keyword colour (`transparent`) — at the two places they appear with position info: `[style]` class property values and `[view]` attribute values. These are unambiguously editable, so the picker can write a hex back without clobbering a theme binding. Theme-token references (`color:primary` where `primary` is a theme field) are intentionally skipped: resolving them to RGBA would require evaluating the theme's Rust, and rewriting them to a hex would drop the reactive binding.
 
 use lsp_types::{Color, ColorInformation, ColorPresentation, Range};
 use telar_parser::{RsxDocument, ViewNode};
@@ -13,7 +13,7 @@ use crate::text::offset_to_position;
 pub fn document_colors(doc: &RsxDocument, source: &str) -> Vec<ColorInformation> {
     let mut out = Vec::new();
 
-    // `[style]`: both constants (`primary: #hex`) and class paint props (`fill: #hex`). Scanned from the source line-by-line because the AST carries no per-prop position.
+    // `[style]` class paint props (`fill: #hex`). Scanned from the source line-by-line because the AST carries no per-prop position.
     collect_style_colors(source, &mut out);
 
     // `[view]` (and `[preview]`) attribute literals.
@@ -25,7 +25,7 @@ pub fn document_colors(doc: &RsxDocument, source: &str) -> Vec<ColorInformation>
     out
 }
 
-/// Scans the `[style]` section for `key: <color>` lines (constant *or* class prop) and emits a swatch on the value when it is a color literal.
+/// Scans the `[style]` section for `key: <color>` lines and emits a swatch on the value when it is a color literal.
 fn collect_style_colors(source: &str, out: &mut Vec<ColorInformation>) {
     for (line_idx, line_text) in source.lines().enumerate() {
         if find_section_at(source, line_idx as u32) != Section::Style {
@@ -196,18 +196,6 @@ mod tests {
     }
 
     #[test]
-    fn style_constant_hex_gets_a_swatch() {
-        let src = "[style]\nprimary: #4361ee\n[view]\ncol\n";
-        let doc = parse(src).unwrap();
-        let infos = document_colors(&doc, src);
-        let color = color_at(&infos, src, "#4361ee").expect("swatch on the hex constant");
-        assert!((color.red - 67.0 / 255.0).abs() < 1e-6);
-        assert!((color.green - 97.0 / 255.0).abs() < 1e-6);
-        assert!((color.blue - 238.0 / 255.0).abs() < 1e-6);
-        assert_eq!(color.alpha, 1.0);
-    }
-
-    #[test]
     fn view_hex_and_keyword_attrs_get_swatches_but_quoted_and_tokens_do_not() {
         let src = "[view]\nbox fill:#ff0000 stroke:transparent color:primary\n    text label:\"#nothex\"\n";
         let doc = parse(src).unwrap();
@@ -256,7 +244,6 @@ mod tests {
 
     #[test]
     fn class_prop_hex_gets_a_swatch() {
-        // A paint prop inside a `@class` block (not a top-level constant) must still get a swatch.
         let src = "[style]\n@card\n    fill: #ff8800\n    radius: 8\n[view]\ncol @card\n";
         let doc = parse(src).unwrap();
         let infos = document_colors(&doc, src);
@@ -274,7 +261,7 @@ mod tests {
 
     #[test]
     fn short_hex_expands() {
-        let src = "[style]\naccent: #f0a\n[view]\ncol\n";
+        let src = "[style]\n@card\n    fill: #f0a\n[view]\ncol @card\n";
         let doc = parse(src).unwrap();
         let infos = document_colors(&doc, src);
         let color = color_at(&infos, src, "#f0a").expect("short hex swatch");

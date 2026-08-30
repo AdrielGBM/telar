@@ -15,6 +15,7 @@ pub struct FeaturesIndicatorsProps {}
 pub fn features_indicators(props: FeaturesIndicatorsProps, children: Children) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let __owner = telar::owner_scope();
     #[allow(unused_imports)] use telar::use_theme;
+    #[allow(unused_variables)] let theme = telar::Theme::<core::theme::SandboxTheme>::default();
     let p = signal(0.35f32);
     let p_rsx_mv = p.clone();
     let pct = memo(move || (p_rsx_mv.get() * 100.0) as i32);
@@ -26,9 +27,11 @@ pub fn features_indicators(props: FeaturesIndicatorsProps, children: Children) -
                 {
                     let p = p.clone();
                     let pct = pct.clone();
+                    let theme = theme.clone();
                 move || {
                     let p = p.clone();
                     let pct = pct.clone();
+                    let theme = theme.clone();
                     let mut __slots = Slots::new();
                     let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
                     let __node_2 = {
@@ -36,9 +39,11 @@ pub fn features_indicators(props: FeaturesIndicatorsProps, children: Children) -
                             {
                                 let p = p.clone();
                                 let pct = pct.clone();
+                                let theme = theme.clone();
                             move || {
                                 let p = p.clone();
                                 let pct = pct.clone();
+                                let theme = theme.clone();
                                 let mut __slots = Slots::new();
                                 let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
                                 let __node_3 = progress(ProgressProps::props().value(p.clone()).width(280.0).build(), Children::default())?;
@@ -49,10 +54,10 @@ pub fn features_indicators(props: FeaturesIndicatorsProps, children: Children) -
                                         Text::declaring(
                                             move || format!("Loading · {}%", { pct.get() }),
                                             LayoutStyle::new(),
-                                            move |__inherited: TextStyle| __inherited.with_font_size(14.0).with_color(use_theme::<core::theme::SandboxTheme>().muted()),
+                                            { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(14.0).with_color(theme.get().muted) },
                                         )?
                                     };
-                                    let __node_4 = button(ButtonProps::props().label("Advance").fill(Reactive::of(move || use_theme::<core::theme::SandboxTheme>().primary())).on_press(Box::new({ let p = p.clone(); move || { p.set((p.get() + 0.15).min(1.0)) } })).build(), Children::default())?;
+                                    let __node_4 = button(ButtonProps::props().label("Advance").fill(Reactive::of({ let theme = theme.clone(); move || theme.get().primary })).on_press(Box::new({ let p = p.clone(); move || { p.set((p.get() + 0.15).min(1.0)) } })).build(), Children::default())?;
                                     let __node_5 = button(ButtonProps::props().label("Reset").ghost(true).on_press(Box::new({ let p = p.clone(); move || { p.set(0.0) } })).build(), Children::default())?;
                                     Container::new(LayoutStyle::new().flex_row().gap(12.0).align_items(AlignItems::CENTER), children![__text_0, __node_4, __node_5])?
                                 };
@@ -76,22 +81,28 @@ pub fn features_indicators(props: FeaturesIndicatorsProps, children: Children) -
         };
         let __node_7 = {
             let __deferred = Children::new(
+                {
+                    let theme = theme.clone();
                 move || {
+                    let theme = theme.clone();
                     let mut __slots = Slots::new();
                     let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
                     let __node_8 = {
                         let __deferred = Children::new(
+                            {
+                                let theme = theme.clone();
                             move || {
+                                let theme = theme.clone();
                                 let mut __slots = Slots::new();
                                 let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
                                 let __row_1 = {
                                     let __node_9 = spinner(SpinnerProps::props().size(28.0).build(), Children::default())?;
-                                    let __node_10 = spinner(SpinnerProps::props().size(20.0).color(Reactive::of(move || use_theme::<core::theme::SandboxTheme>().success())).build(), Children::default())?;
+                                    let __node_10 = spinner(SpinnerProps::props().size(20.0).color(Reactive::of({ let theme = theme.clone(); move || theme.get().success })).build(), Children::default())?;
                                     let __text_1 = {
                                         Text::declaring(
                                             || "working…".to_string(),
                                             LayoutStyle::new(),
-                                            move |__inherited: TextStyle| __inherited.with_font_size(14.0).with_color(use_theme::<core::theme::SandboxTheme>().muted()),
+                                            { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(14.0).with_color(theme.get().muted) },
                                         )?
                                     };
                                     Container::new(LayoutStyle::new().flex_row().gap(16.0).align_items(AlignItems::CENTER), children![__node_9, __node_10, __text_1])?
@@ -99,6 +110,7 @@ pub fn features_indicators(props: FeaturesIndicatorsProps, children: Children) -
                                 __children.push(box_item(__row_1));
                                 __slots.extend_default(__children);
                                 Ok(__slots)
+                            }
                             }
                         );
                         card(CardProps::props().gap(10.0).build(), __deferred)?
@@ -108,6 +120,7 @@ pub fn features_indicators(props: FeaturesIndicatorsProps, children: Children) -
                     __children.push(box_item(__node_11));
                     __slots.extend_default(__children);
                     Ok(__slots)
+                }
                 }
             );
             example(ExampleProps::props().title("spinner — an indeterminate ring; it drives its own rotation").build(), __deferred)?

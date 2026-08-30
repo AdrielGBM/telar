@@ -12,18 +12,18 @@ col gap:20
     example title:"badge — a small solid accent tag"
         card gap:10
             row gap:8 align:center
-                text "Inbox" font_size:15 color:theme.ink
+                text "Inbox" font_size:15 color:$theme.ink
                 badge label:"12"
-                badge label:"NEW" color:theme.success
-                badge label:"BETA" color:theme.purple
-        code_line code:"badge label:'NEW' color:theme.success"
+                badge label:"NEW" color:$theme.success
+                badge label:"BETA" color:$theme.purple
+        code_line code:"badge label:'NEW' color:$theme.success"
     example title:"chip — a softer outlined pill; on_close makes it removable"
         card gap:10
             row gap:8 align:center
                 chip label:"design"
                 chip label:"rust"
                 chip label:"removable" on_close:(|| { $tags.update(|n| if *n > 0 { *n -= 1 }) })
-            text "chips · {$tags}" font_size:13 color:theme.muted
+            text "chips · {$tags}" font_size:13 color:$theme.muted
         code_line code:"chip label:'removable' on_close:|| remove()"
     example title:"Attributes"
         col gap:6

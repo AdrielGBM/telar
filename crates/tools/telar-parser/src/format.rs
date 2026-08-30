@@ -17,8 +17,8 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 
 use crate::{
-    Attr, Element, Preview, RsxDocument, Section, StyleClass, StyleConstant, StyleValue, Value,
-    ViewNode, header_section, parse,
+    Attr, Element, Preview, RsxDocument, Section, StyleClass, Value, ViewNode, header_section,
+    parse,
 };
 
 const INDENT: &str = "    ";
@@ -35,10 +35,7 @@ pub fn format_document(source: &str) -> Option<String> {
     if present.contains(&Section::Logic) || !doc.logic.source.trim().is_empty() {
         sections.push(format_logic_section(&doc.logic.source));
     }
-    if present.contains(&Section::Style)
-        || !doc.style.constants.is_empty()
-        || !doc.style.classes.is_empty()
-    {
+    if present.contains(&Section::Style) || !doc.style.classes.is_empty() {
         sections.push(format_style_section(&doc));
     }
     if present.contains(&Section::View) || !doc.view.nodes.is_empty() {
@@ -171,38 +168,28 @@ fn find_rustfmt() -> Option<PathBuf> {
 // === [style] ===============================================================
 
 enum StyleEntry<'a> {
-    Const(&'a StyleConstant),
     Class(&'a StyleClass),
 }
 
 fn format_style_section(doc: &RsxDocument) -> String {
-    // Constants and classes live in two AST vecs but interleave in the source; their `line` fields let us restore the original ordering.
-    let mut entries: Vec<(usize, StyleEntry)> = Vec::new();
-    for constant in &doc.style.constants {
-        entries.push((constant.line, StyleEntry::Const(constant)));
-    }
-    for class in &doc.style.classes {
-        entries.push((class.line, StyleEntry::Class(class)));
-    }
+    let mut entries: Vec<(usize, StyleEntry)> = doc
+        .style
+        .classes
+        .iter()
+        .map(|class| (class.line, StyleEntry::Class(class)))
+        .collect();
     entries.sort_by_key(|(line, _)| *line);
 
     let mut out = String::from("[style]");
     let mut prev_was_class = false;
     for (index, (_, entry)) in entries.iter().enumerate() {
         let is_class = matches!(entry, StyleEntry::Class(_));
-        // A blank line sets classes apart from each other and from the constants block.
+        // A blank line sets classes apart from each other.
         if index > 0 && (is_class || prev_was_class) {
             out.push('\n');
         }
         out.push('\n');
         match entry {
-            StyleEntry::Const(constant) => {
-                out.push_str(&format!(
-                    "{}: {}",
-                    constant.name,
-                    format_style_value(&constant.value)
-                ));
-            }
             StyleEntry::Class(class) => {
                 out.push_str(&format!("@{}", class.name));
                 for prop in &class.props {
@@ -215,15 +202,6 @@ fn format_style_section(doc: &RsxDocument) -> String {
         prev_was_class = is_class;
     }
     out
-}
-
-fn format_style_value(value: &StyleValue) -> String {
-    match value {
-        StyleValue::Hex(hex) => hex.clone(),
-        // Display gives the shortest round-trip form and drops a trailing `.0`.
-        StyleValue::Number(number) => format!("{number}"),
-        StyleValue::Raw(raw) => raw.clone(),
-    }
 }
 
 // === [view] ================================================================
@@ -483,16 +461,6 @@ mod tests {
     }
 
     #[test]
-    fn restores_interleaved_constants_and_classes_in_source_order() {
-        let src =
-            "[style]\nprimary: #3d78fa\nradius: 6\n@card\n    width: 240\n    direction: col\n";
-        let out = format_document(src).unwrap();
-        let expected =
-            "[style]\nprimary: #3d78fa\nradius: 6\n\n@card\n    width: 240\n    direction: col\n";
-        assert_eq!(out, expected);
-    }
-
-    #[test]
     fn inline_style_class_becomes_multiline() {
         let src = "[style]\n@badge: padding_x:6  padding_y:2  radius:6\n";
         let out = format_document(src).unwrap();
@@ -518,7 +486,7 @@ mod tests {
 
     #[test]
     fn is_idempotent_for_ast_sections() {
-        let src = "[style]\nprimary: #3d78fa\n\n@card\n    width: 240\n\n[view]\ncol @card\n    text \"Hi\" size:14 color:dark\n";
+        let src = "[style]\n@card\n    width: 240\n\n[view]\ncol @card\n    text \"Hi\" size:14 color:theme.dark\n";
         let once = format_document(src).unwrap();
         let twice = format_document(&once).unwrap();
         assert_eq!(once, twice);

@@ -17,6 +17,7 @@ pub struct FeatureCardProps {
 pub fn feature_card(props: FeatureCardProps, children: Children) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let __owner = telar::owner_scope();
     #[allow(unused_imports)] use telar::use_theme;
+    #[allow(unused_variables)] let theme = telar::Theme::<theme::LandingTheme>::default();
     let __sbox_0 = {
         let __text_0 = {
             Text::declaring(
@@ -29,17 +30,17 @@ pub fn feature_card(props: FeatureCardProps, children: Children) -> Result<Box<d
             Text::declaring(
                 move || format!("{}", { props.title }),
                 LayoutStyle::new(),
-                move |__inherited: TextStyle| __inherited.with_font_size(18.0).with_color(use_theme::<theme::LandingTheme>().dark),
+                { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(18.0).with_color(theme.get().dark) },
             )?
         };
         let __text_2 = {
             Text::declaring(
                 move || format!("{}", { props.body }),
                 LayoutStyle::new(),
-                move |__inherited: TextStyle| __inherited.with_font_size(14.0).with_color(use_theme::<theme::LandingTheme>().muted()),
+                { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(14.0).with_color(theme.get().muted) },
             )?
         };
-        StyledContainer::new(LayoutStyle::new().flex_column().width(300.0).min_width(260.0).flex_grow(1.0).padding_all(24.0).gap(10.0).flex_column(), move |_| RectStyle { fill: Some(Paint::Solid(use_theme::<theme::LandingTheme>().surface())), border: Some(Border { paint: Paint::Solid(use_theme::<theme::LandingTheme>().border()), widths: [1.0; 4] }), shadow: None, radius: BorderRadius::all(16.0) }, children![__text_0, __text_1, __text_2])?
+        StyledContainer::new(LayoutStyle::new().flex_column().width(300.0).min_width(260.0).flex_grow(1.0).padding_all(24.0).gap(10.0).flex_column(), { let theme = theme.clone(); move |_| RectStyle { fill: Some(Paint::Solid(theme.get().surface)), border: Some(Border { paint: Paint::Solid(theme.get().border), widths: [1.0; 4] }), shadow: None, radius: BorderRadius::all(16.0) } }, children![__text_0, __text_1, __text_2])?
     };
     Ok(Box::new(__sbox_0))
 }
@@ -47,6 +48,7 @@ pub fn feature_card(props: FeatureCardProps, children: Children) -> Result<Box<d
 #[allow(dead_code, unused_variables, unused_mut)]
 pub fn feature_card_preview_0() -> Result<Box<dyn LayoutItem>, LayoutError> {
     #[allow(unused_imports)] use telar::use_theme;
+    #[allow(unused_variables)] let theme = telar::Theme::<theme::LandingTheme>::default();
     let __node_0 = feature_card(FeatureCardProps::props().icon("⚡").title("Fast").body("Software and wgpu renderers with dirty-tracking and scroll-blit detection.").build(), Children::default())?;
     Ok(Box::new(__node_0))
 }
@@ -54,6 +56,7 @@ pub fn feature_card_preview_0() -> Result<Box<dyn LayoutItem>, LayoutError> {
 #[allow(dead_code, unused_variables, unused_mut)]
 pub fn feature_card_preview_1() -> Result<Box<dyn LayoutItem>, LayoutError> {
     #[allow(unused_imports)] use telar::use_theme;
+    #[allow(unused_variables)] let theme = telar::Theme::<theme::LandingTheme>::default();
     let __node_0 = feature_card(FeatureCardProps::props().icon("📱").title("Cross-platform").body("One codebase targets desktop and Android with native event loops, plus a longer body to test how the card wraps multi-line text.").build(), Children::default())?;
     Ok(Box::new(__node_0))
 }

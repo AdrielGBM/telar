@@ -29,23 +29,23 @@ col gap:20
             row gap:20 align:end wrap
                 col @swatch
                     img src:checker raster:linear width:120 height:120
-                    text "Linear" font_size:12 color:theme.muted
+                    text "Linear" font_size:12 color:$theme.muted
                 col @swatch
                     img src:checker raster:nearest width:120 height:120
-                    text "Nearest" font_size:12 color:theme.muted
+                    text "Nearest" font_size:12 color:$theme.muted
         code_line code:"img src:checker raster:nearest   (a 64px bitmap upscaled to 120)"
     example title:"object-fit — how the bitmap fills a non-square box"
         card
             row gap:20 wrap align:start
                 col @swatch
                     img src:gradient fit:contain width:150 height:80
-                    text "contain (default)" font_size:12 color:theme.muted
+                    text "contain (default)" font_size:12 color:$theme.muted
                 col @swatch
                     img src:gradient fit:cover width:150 height:80
-                    text "cover" font_size:12 color:theme.muted
+                    text "cover" font_size:12 color:$theme.muted
                 col @swatch
                     img src:gradient fit:fill width:150 height:80
-                    text "fill" font_size:12 color:theme.muted
+                    text "fill" font_size:12 color:$theme.muted
         code_line code:"img src:gradient fit:cover width:150 height:80"
     example title:"A PNG baked from disk at build time"
         card

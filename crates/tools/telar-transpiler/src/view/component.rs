@@ -4,7 +4,7 @@ use std::fmt::Write;
 
 use telar_parser::{Attr, Element, Value, ViewNode};
 
-use crate::naming::{is_ident, to_pascal_case, to_snake_case};
+use crate::naming::to_pascal_case;
 use crate::style::{format_f32, hex_to_color_expr};
 
 use super::signals::{rust_str, substitute_reads, wrap_signal_clones};
@@ -316,30 +316,6 @@ impl ViewGen<'_> {
         if let Ok(n) = v.parse::<f32>() {
             return format_f32(n);
         }
-        // `theme.…` reads the ambient theme whatever the prop's type: a component takes its sizes and radii from
-        // one as readily as its colours, and the verbatim arm below would emit a `theme` the view never bound.
-        if !v.contains('$')
-            && let Some(expr) = crate::style::theme_field_expr(v, self.theme_type.as_deref())
-        {
-            return reads_state(&expr);
-        }
-        let snake = to_snake_case(v);
-        let in_style = self
-            .constants
-            .iter()
-            .any(|c| to_snake_case(&c.name) == snake);
-        // A bare lowercase name is a theme token only when nothing nearer answers to it. This prop may not even
-        // be a colour — the guess reaches every field alike, so `size:size` compiles to a token lookup, and a
-        // binding named `radius` or `muted` would read the theme instead of itself without a word.
-        let looks_like_color_name = is_ident(v)
-            && !self.is_local(v)
-            && !self.loop_variables.iter().any(|l| l == v)
-            && v.chars()
-                .next()
-                .is_some_and(|c| c.is_ascii_lowercase() || c == '_');
-        if in_style || (self.theme_type.is_some() && looks_like_color_name) {
-            return reads_state(&self.color_expr(v));
-        }
         let lead = attr.value.text().len() - attr.value.text().trim_start().len();
         // A lone `[logic]` binding, cloned only where the clone is load-bearing: inside a reactive branch the
         // builder closure runs again and cannot consume its capture, so the binding has to survive the first
@@ -359,12 +335,14 @@ impl ViewGen<'_> {
                 format!("{marker}{v}")
             };
         }
-        // An expression with a `$` read in it is a *reading*, not a value: `disabled:$a && $b` has to be
-        // re-evaluated or it is the state it read at construction, forever. A lone `$sig` took the arm above
-        // and stays a handle, which is what a two-way binding needs.
+        // A `$` read is a *reading*, not a value: `disabled:$a && $b` and `fill:$theme.primary` have to be
+        // re-evaluated or they are the state they read at construction, forever. A lone `$sig` took the arm
+        // above and stays a handle, which is what a two-way binding needs.
         if v.contains('$') {
-            let read = wrap_signal_clones(&[v], format!("move || {}", substitute_reads(v)));
-            return format!("Reactive::of({read})");
+            return reads_state(&wrap_signal_clones(
+                &[v],
+                format!("move || {}", substitute_reads(v)),
+            ));
         }
         // Verbatim pass-through: tag the value with its source span so the analyzer can complete in it. The
         // delimiting parens are dropped here rather than at the call, so the span still covers the expression
@@ -379,16 +357,16 @@ impl ViewGen<'_> {
     }
 }
 
-/// Wraps a value that reads state in a closure, so the prop follows it instead of freezing at the value it
-/// happened to have when the tree was built.
+/// Wraps a closure that reads state, so the prop follows it instead of freezing at the value it happened to
+/// have when the tree was built.
 ///
 /// **The regression this exists to prevent.** A theme read is an `RwSignal` read
-/// (`theme-core/src/context.rs:166`), so `fill:theme.primary` handed over as a `Color` is the colour the
-/// theme had at construction and never moves again — `Reactive::Const` of a snapshot. The old emitter got
-/// this right by boxing every prop its `ComponentSig` table called reactive; without the table the rule has
-/// to come from the *value*, which is the honest place for it: an expression that reads is a reading.
-fn reads_state(expr: &str) -> String {
-    format!("Reactive::of(move || {expr})")
+/// (`theme-core/src/context.rs`), so `fill:$theme.primary` handed over as a `Color` is the colour the theme
+/// had at construction and never moves again — `Reactive::Const` of a snapshot. The old emitter got this
+/// right by boxing every prop its `ComponentSig` table called reactive; without the table the rule comes
+/// from the value, which is the honest place for it: a `$` is a read wherever it is written.
+fn reads_state(closure: &str) -> String {
+    format!("Reactive::of({closure})")
 }
 
 impl ViewGen<'_> {

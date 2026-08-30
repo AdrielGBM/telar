@@ -1,6 +1,6 @@
 //! Text interpolation and color resolution for the view emitters.
 
-use crate::naming::{constant_name, is_ident};
+use crate::naming::is_ident;
 use crate::style::hex_to_color_expr;
 
 use super::ViewGen;
@@ -90,15 +90,6 @@ impl ViewGen<'_> {
         {
             return format!("{ident}.get()");
         }
-        // The explicit `theme.…` form, so one spelling reaches the theme from any attribute; a numeric attribute
-        // has no bare-ident form, since there a bare ident is a `[style]` constant. Ahead of the computed arm
-        // because a theme read may itself be a call (`theme.font(FontRole::Body)`), which that arm would emit
-        // verbatim — leaving a `theme` binding the view never made.
-        if !v.contains('$')
-            && let Some(expr) = crate::style::theme_field_expr(v, self.theme_type.as_deref())
-        {
-            return expr;
-        }
         // A computed color expression (call / method chain / arithmetic) yielding a `Color`, with `$signal`
         // reads made reactive. Comes before the `Color::`/keyword arms so a state-driven paint like
         // `chip_fill($snapshot, id)` — or a verbatim `Color::from_rgb_u8(..)` — is emitted whole, not treated
@@ -115,11 +106,12 @@ impl ViewGen<'_> {
         if self.is_local(v) {
             return v.to_string();
         }
-        // A bare ident is a `[style]` constant and nothing else. It used to be three namespaces under one
-        // spelling — a constant, then a token, then *any* remaining name as a field on the theme — resolved
-        // by precedence, so `color:typo` compiled to `use_theme::<T>().typo` and failed in rustc rather than
-        // in the markup. The theme has an explicit spelling of its own, and `theme.x` is now the only one.
-        constant_name("COLOR_", v)
+        // Anything else is a Rust expression, spliced as written. There used to be a ladder here — a
+        // `[style]` constant, then a theme token, then *any* remaining name as a field on the theme — and
+        // its last rung meant `color:typo` compiled to `use_theme::<T>().typo` and failed in rustc against
+        // generated code. A name that resolves to nothing now fails on the author's own line, which is what
+        // a Rust expression does everywhere else.
+        v.to_string()
     }
 
     /// Whether codegen resolves any color through `use_theme`, requiring the import.

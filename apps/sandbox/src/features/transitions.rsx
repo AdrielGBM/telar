@@ -4,9 +4,8 @@ use crate::shared::components::code_line::{code_line, CodeLineProps};
 use crate::shared::components::doc_header::{doc_header, DocHeaderProps};
 use crate::shared::components::example::{example, ExampleProps};
 use crate::shared::components::prop_row::{prop_row, PropRowProps};
-use crate::core::theme::theme;
 
-let accent = signal(theme().primary);
+let accent = signal(theme.get().primary);
 let alt = signal(false);
 let fade = signal(1.0f32);
 
@@ -18,18 +17,18 @@ col gap:20
             row gap:14 align:center wrap
                 col gap:6 align:center
                     box width:72 height:72 fill:$accent radius:14 transition(fill 250ms ease-out)
-                    text "250ms ease-out" font_size:11 color:theme.muted
+                    text "250ms ease-out" font_size:11 color:$theme.muted
                 col gap:6 align:center
                     box width:72 height:72 fill:$accent radius:14 transition(fill spring(170, 16))
-                    text "spring(170, 16)" font_size:11 color:theme.muted
-                button label:"Toggle" fill:theme.primary on_press:(|| { $alt.toggle(); $accent.set(if $alt.get() { theme().purple } else { theme().primary }) })
+                    text "spring(170, 16)" font_size:11 color:$theme.muted
+                button label:"Toggle" fill:$theme.primary on_press:(|| { $alt.toggle(); $accent.set(if $alt.get() { $theme.purple } else { $theme.primary }) })
         code_line code:"box fill:$accent transition(fill 250ms ease-out)"
     example title:"Opacity — the same signal, animated"
         card
             row gap:14 align:center wrap
-                box width:130 height:64 fill:theme.primary radius:12 opacity:$fade align:center justify:center transition(opacity 300ms ease-in-out)
-                    text "fade" font_size:13 color:theme.on_primary
-                button label:"Toggle" fill:theme.primary on_press:(|| { let v = $fade.peek(); $fade.set(if v > 0.5 { 0.15 } else { 1.0 }) })
+                box width:130 height:64 fill:$theme.primary radius:12 opacity:$fade align:center justify:center transition(opacity 300ms ease-in-out)
+                    text "fade" font_size:13 color:$theme.on_primary
+                button label:"Toggle" fill:$theme.primary on_press:(|| { let v = $fade.peek(); $fade.set(if v > 0.5 { 0.15 } else { 1.0 }) })
         code_line code:"box opacity:$fade transition(opacity 300ms ease-in-out)"
     example title:"Notes"
         col gap:6

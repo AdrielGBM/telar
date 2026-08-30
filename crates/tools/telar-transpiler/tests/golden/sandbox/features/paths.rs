@@ -7,7 +7,6 @@
 #[allow(unused_imports)] use crate::shared::components::doc_header::{doc_header, DocHeaderProps};
 #[allow(unused_imports)] use crate::shared::components::example::{example, ExampleProps};
 #[allow(unused_imports)] use crate::shared::components::prop_row::{prop_row, PropRowProps};
-#[allow(unused_imports)] use crate::core::theme::theme;
 #[allow(unused_imports)] use std::sync::Arc;
 
 #[derive(::telar::Props)]
@@ -17,13 +16,14 @@ pub struct FeaturesPathsProps {}
 pub fn features_paths(props: FeaturesPathsProps, children: Children) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let __owner = telar::owner_scope();
     #[allow(unused_imports)] use telar::use_theme;
+    #[allow(unused_variables)] let theme = telar::Theme::<core::theme::SandboxTheme>::default();
 
     // Paths are drawn imperatively inside a Canvas — the escape hatch for vector art layout can't express.
     // Widest x reached by the fixed-coordinate art below; the drawing is scaled to fit narrower canvases.
     const PATHS_DESIGN_W: f32 = 520.0;
 
     fn draw_paths(rect: Rect) -> RenderNode {
-        let t = theme();
+        let t = crate::core::theme::theme();
         let (primary, success, danger, warning, purple, ink, muted) = (
             t.primary, t.success, t.danger, t.warning, t.purple, t.ink, t.muted,
         );
@@ -239,26 +239,32 @@ pub fn features_paths(props: FeaturesPathsProps, children: Children) -> Result<B
         };
         let __node_4 = {
             let __deferred = Children::new(
+                {
+                    let theme = theme.clone();
                 move || {
+                    let theme = theme.clone();
                     let mut __slots = Slots::new();
                     let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
                     let __node_5 = {
                         let __deferred = Children::new(
+                            {
+                                let theme = theme.clone();
                             move || {
+                                let theme = theme.clone();
                                 let mut __slots = Slots::new();
                                 let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
                                 let __row_0 = {
                                     let __path_0 = {
                                         let __path_data = std::sync::Arc::new(PathData::new().move_to(Point::new(0.0, 0.0)).line_to(Point::new(100.0, 0.0)).line_to(Point::new(50.0, 80.0)).close());
-                                        Path::static_data(LayoutStyle::new().width(100.0).height(80.0), __path_data, move || PathStyle { fill: Some(Paint::Solid(use_theme::<core::theme::SandboxTheme>().primary())), stroke: Some(Stroke::new(use_theme::<core::theme::SandboxTheme>().ink(), 2.0)), shadow: None, fill_rule: FillRule::Winding })?
+                                        Path::static_data(LayoutStyle::new().width(100.0).height(80.0), __path_data, { let theme = theme.clone(); move || PathStyle { fill: Some(Paint::Solid(theme.get().primary)), stroke: Some(Stroke::new(theme.get().ink, 2.0)), shadow: None, fill_rule: FillRule::Winding } })?
                                     };
                                     let __path_1 = {
                                         let __path_data = std::sync::Arc::new(PathData::new().move_to(Point::new(6.0, 42.0)).line_to(Point::new(34.0, 70.0)).line_to(Point::new(74.0, 14.0)));
-                                        Path::static_data(LayoutStyle::new().width(80.0).height(80.0), __path_data, move || PathStyle { fill: None, stroke: Some(Stroke::new(use_theme::<core::theme::SandboxTheme>().success(), 7.0)), shadow: None, fill_rule: FillRule::Winding })?
+                                        Path::static_data(LayoutStyle::new().width(80.0).height(80.0), __path_data, { let theme = theme.clone(); move || PathStyle { fill: None, stroke: Some(Stroke::new(theme.get().success, 7.0)), shadow: None, fill_rule: FillRule::Winding } })?
                                     };
                                     let __path_2 = {
                                         let __path_data = std::sync::Arc::new(PathData::new().move_to(Point::new(40.0, 2.0)).line_to(Point::new(50.0, 30.0)).line_to(Point::new(80.0, 30.0)).line_to(Point::new(56.0, 48.0)).line_to(Point::new(64.0, 78.0)).line_to(Point::new(40.0, 60.0)).line_to(Point::new(16.0, 78.0)).line_to(Point::new(24.0, 48.0)).line_to(Point::new(0.0, 30.0)).line_to(Point::new(30.0, 30.0)).close());
-                                        Path::static_data(LayoutStyle::new().width(80.0).height(80.0), __path_data, move || PathStyle { fill: Some(Paint::Solid(use_theme::<core::theme::SandboxTheme>().warning())), stroke: Some(Stroke::new(use_theme::<core::theme::SandboxTheme>().ink(), 1.0)), shadow: None, fill_rule: FillRule::Winding })?
+                                        Path::static_data(LayoutStyle::new().width(80.0).height(80.0), __path_data, { let theme = theme.clone(); move || PathStyle { fill: Some(Paint::Solid(theme.get().warning)), stroke: Some(Stroke::new(theme.get().ink, 1.0)), shadow: None, fill_rule: FillRule::Winding } })?
                                     };
                                     Container::new(LayoutStyle::new().flex_row().gap(28.0).align_items(AlignItems::CENTER), children![__path_0, __path_1, __path_2])?
                                 };
@@ -266,14 +272,16 @@ pub fn features_paths(props: FeaturesPathsProps, children: Children) -> Result<B
                                 __slots.extend_default(__children);
                                 Ok(__slots)
                             }
+                            }
                         );
                         card(CardProps::props().build(), __deferred)?
                     };
                     __children.push(box_item(__node_5));
-                    let __node_6 = code_line(CodeLineProps::props().code("path d:\"M0,0 L100,0 L50,80 Z\" fill:theme.primary stroke:theme.ink stroke_width:2 width:100 height:80").build(), Children::default())?;
+                    let __node_6 = code_line(CodeLineProps::props().code("path d:\"M0,0 L100,0 L50,80 Z\" fill:$theme.primary stroke:$theme.ink stroke_width:2 width:100 height:80").build(), Children::default())?;
                     __children.push(box_item(__node_6));
                     __slots.extend_default(__children);
                     Ok(__slots)
+                }
                 }
             );
             example(ExampleProps::props().title("Declarative paths in [view]").build(), __deferred)?

@@ -2,7 +2,6 @@
 #![allow(clippy::all)]
 #[allow(unused_imports)] use telar::*;
 #[allow(unused_imports)] use crate::*;
-#[allow(unused_imports)] use crate::core::theme::theme;
 
 #[derive(::telar::Props)]
 pub struct CoreSidebarProps {}
@@ -11,9 +10,9 @@ pub struct CoreSidebarProps {}
 pub fn core_sidebar(props: CoreSidebarProps, children: Children) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let __owner = telar::owner_scope();
     #[allow(unused_imports)] use telar::use_theme;
-
+    #[allow(unused_variables)] let theme = telar::Theme::<core::theme::SandboxTheme>::default();
     // Reads through use_theme, so switching the theme re-runs this memo and updates the "Active" label.
-    let theme_name = memo(move || theme().name.to_string());
+    let theme_name = memo(move || theme.get().name.to_string());
 
     let __col_0 = {
         let __col_1 = {
@@ -21,14 +20,14 @@ pub fn core_sidebar(props: CoreSidebarProps, children: Children) -> Result<Box<d
                 Text::declaring(
                     || "▲ rsx".to_string(),
                     LayoutStyle::new(),
-                    move |__inherited: TextStyle| __inherited.with_font_size(20.0).with_color(use_theme::<core::theme::SandboxTheme>().ink()),
+                    { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(20.0).with_color(theme.get().ink) },
                 )?
             };
             let __text_1 = {
                 Text::declaring(
                     || "Feature gallery".to_string(),
                     LayoutStyle::new(),
-                    move |__inherited: TextStyle| __inherited.with_font_size(12.0).with_color(use_theme::<core::theme::SandboxTheme>().muted()),
+                    { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(12.0).with_color(theme.get().muted) },
                 )?
             };
             Container::new(LayoutStyle::new().flex_column().gap(2.0), children![__text_0, __text_1])?
@@ -38,14 +37,14 @@ pub fn core_sidebar(props: CoreSidebarProps, children: Children) -> Result<Box<d
                 Text::declaring(
                     || "THEME".to_string(),
                     LayoutStyle::new(),
-                    move |__inherited: TextStyle| __inherited.with_font_size(11.0).with_color(use_theme::<core::theme::SandboxTheme>().muted()),
+                    { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(11.0).with_color(theme.get().muted) },
                 )?
             };
             let __col_3 = {
                 let __row_0 = {
-                    let __node_0 = button(ButtonProps::props().label("Modern").fill(Reactive::of(move || use_theme::<core::theme::SandboxTheme>().primary())).on_press(Box::new(move || set_mode("modern"))).build(), Children::default())?;
-                    let __node_1 = button(ButtonProps::props().label("Pastel").fill(Reactive::of(move || use_theme::<core::theme::SandboxTheme>().primary())).on_press(Box::new(move || set_mode("pastel"))).build(), Children::default())?;
-                    let __node_2 = button(ButtonProps::props().label("Midnight").fill(Reactive::of(move || use_theme::<core::theme::SandboxTheme>().primary())).on_press(Box::new(move || set_mode("midnight"))).build(), Children::default())?;
+                    let __node_0 = button(ButtonProps::props().label("Modern").fill(Reactive::of({ let theme = theme.clone(); move || theme.get().primary })).on_press(Box::new(move || set_mode("modern"))).build(), Children::default())?;
+                    let __node_1 = button(ButtonProps::props().label("Pastel").fill(Reactive::of({ let theme = theme.clone(); move || theme.get().primary })).on_press(Box::new(move || set_mode("pastel"))).build(), Children::default())?;
+                    let __node_2 = button(ButtonProps::props().label("Midnight").fill(Reactive::of({ let theme = theme.clone(); move || theme.get().primary })).on_press(Box::new(move || set_mode("midnight"))).build(), Children::default())?;
                     Container::new(LayoutStyle::new().flex_row().gap(6.0).flex_wrap(), children![__node_0, __node_1, __node_2])?
                 };
                 let __text_3 = {
@@ -53,7 +52,7 @@ pub fn core_sidebar(props: CoreSidebarProps, children: Children) -> Result<Box<d
                     Text::declaring(
                         move || format!("Active · {}", { theme_name.get() }),
                         LayoutStyle::new(),
-                        move |__inherited: TextStyle| __inherited.with_font_size(12.0).with_color(use_theme::<core::theme::SandboxTheme>().muted()),
+                        { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(12.0).with_color(theme.get().muted) },
                     )?
                 };
                 Container::new(LayoutStyle::new().flex_column().gap(6.0), children![__row_0, __text_3])?

@@ -13,6 +13,7 @@ pub struct FeaturesBoxesProps {}
 
 #[allow(dead_code)]
 fn style_center() -> LayoutStyle {
+    #[allow(unused_variables)] let theme = telar::Theme::<core::theme::SandboxTheme>::default();
     LayoutStyle::new()
         .align_items(AlignItems::CENTER)
         .justify_content(JustifyContent::CENTER)
@@ -20,6 +21,7 @@ fn style_center() -> LayoutStyle {
 
 #[allow(dead_code)]
 fn style_tile() -> LayoutStyle {
+    #[allow(unused_variables)] let theme = telar::Theme::<core::theme::SandboxTheme>::default();
     LayoutStyle::new()
 }
 
@@ -27,17 +29,24 @@ fn style_tile() -> LayoutStyle {
 pub fn features_boxes(props: FeaturesBoxesProps, children: Children) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let __owner = telar::owner_scope();
     #[allow(unused_imports)] use telar::use_theme;
+    #[allow(unused_variables)] let theme = telar::Theme::<core::theme::SandboxTheme>::default();
 
     let __col_0 = {
         let __node_0 = doc_header(DocHeaderProps::props().kicker("SURFACES").title("Boxes & borders").desc("A box is a styled container: give it a fill, a stroke, and a corner radius. Those same paint attributes work on any row or col too.").build(), Children::default())?;
         let __node_1 = {
             let __deferred = Children::new(
+                {
+                    let theme = theme.clone();
                 move || {
+                    let theme = theme.clone();
                     let mut __slots = Slots::new();
                     let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
                     let __node_2 = {
                         let __deferred = Children::new(
+                            {
+                                let theme = theme.clone();
                             move || {
+                                let theme = theme.clone();
                                 let mut __slots = Slots::new();
                                 let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
                                 let __row_0 = {
@@ -46,30 +55,30 @@ pub fn features_boxes(props: FeaturesBoxesProps, children: Children) -> Result<B
                                             Text::declaring(
                                                 || "fill".to_string(),
                                                 LayoutStyle::new(),
-                                                move |__inherited: TextStyle| __inherited.with_font_size(13.0).with_color(use_theme::<core::theme::SandboxTheme>().on_primary()).with_text_align(TextAlign::Center),
+                                                { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(13.0).with_color(theme.get().on_primary).with_text_align(TextAlign::Center) },
                                             )?
                                         };
-                                        StyledContainer::new(style_center().flex_column().width(150.0).height(70.0), move |_| RectStyle::default().with_fill(use_theme::<core::theme::SandboxTheme>().primary()).with_radius(BorderRadius::all(10.0)), children![__text_0])?
+                                        StyledContainer::new(style_center().flex_column().width(150.0).height(70.0), { let theme = theme.clone(); move |_| RectStyle::default().with_fill(theme.get().primary).with_radius(BorderRadius::all(10.0)) }, children![__text_0])?
                                     };
                                     let __sbox_1 = {
                                         let __text_1 = {
                                             Text::declaring(
                                                 || "stroke".to_string(),
                                                 LayoutStyle::new(),
-                                                move |__inherited: TextStyle| __inherited.with_font_size(13.0).with_color(use_theme::<core::theme::SandboxTheme>().primary()).with_text_align(TextAlign::Center),
+                                                { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(13.0).with_color(theme.get().primary).with_text_align(TextAlign::Center) },
                                             )?
                                         };
-                                        StyledContainer::new(style_center().flex_column().width(150.0).height(70.0), move |_| RectStyle { fill: None, border: Some(Border { paint: Paint::Solid(use_theme::<core::theme::SandboxTheme>().primary()), widths: [2.0; 4] }), shadow: None, radius: BorderRadius::all(10.0) }, children![__text_1])?
+                                        StyledContainer::new(style_center().flex_column().width(150.0).height(70.0), { let theme = theme.clone(); move |_| RectStyle { fill: None, border: Some(Border { paint: Paint::Solid(theme.get().primary), widths: [2.0; 4] }), shadow: None, radius: BorderRadius::all(10.0) } }, children![__text_1])?
                                     };
                                     let __sbox_2 = {
                                         let __text_2 = {
                                             Text::declaring(
                                                 || "fill + stroke".to_string(),
                                                 LayoutStyle::new(),
-                                                move |__inherited: TextStyle| __inherited.with_font_size(13.0).with_color(use_theme::<core::theme::SandboxTheme>().ink()).with_text_align(TextAlign::Center),
+                                                { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(13.0).with_color(theme.get().ink).with_text_align(TextAlign::Center) },
                                             )?
                                         };
-                                        StyledContainer::new(style_center().flex_column().width(150.0).height(70.0), move |_| RectStyle { fill: Some(Paint::Solid(use_theme::<core::theme::SandboxTheme>().surface_alt())), border: Some(Border { paint: Paint::Solid(use_theme::<core::theme::SandboxTheme>().primary()), widths: [2.0; 4] }), shadow: None, radius: BorderRadius::all(10.0) }, children![__text_2])?
+                                        StyledContainer::new(style_center().flex_column().width(150.0).height(70.0), { let theme = theme.clone(); move |_| RectStyle { fill: Some(Paint::Solid(theme.get().surface_alt)), border: Some(Border { paint: Paint::Solid(theme.get().primary), widths: [2.0; 4] }), shadow: None, radius: BorderRadius::all(10.0) } }, children![__text_2])?
                                     };
                                     Container::new(LayoutStyle::new().flex_row().gap(14.0).flex_wrap(), children![__sbox_0, __sbox_1, __sbox_2])?
                                 };
@@ -77,26 +86,34 @@ pub fn features_boxes(props: FeaturesBoxesProps, children: Children) -> Result<B
                                 __slots.extend_default(__children);
                                 Ok(__slots)
                             }
+                            }
                         );
                         card(CardProps::props().build(), __deferred)?
                     };
                     __children.push(box_item(__node_2));
-                    let __node_3 = code_line(CodeLineProps::props().code("box fill:theme.primary radius:10      box stroke:theme.primary stroke_width:2").build(), Children::default())?;
+                    let __node_3 = code_line(CodeLineProps::props().code("box fill:$theme.primary radius:10      box stroke:$theme.primary stroke_width:2").build(), Children::default())?;
                     __children.push(box_item(__node_3));
                     __slots.extend_default(__children);
                     Ok(__slots)
+                }
                 }
             );
             example(ExampleProps::props().title("Fill, stroke, and both").build(), __deferred)?
         };
         let __node_4 = {
             let __deferred = Children::new(
+                {
+                    let theme = theme.clone();
                 move || {
+                    let theme = theme.clone();
                     let mut __slots = Slots::new();
                     let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
                     let __node_5 = {
                         let __deferred = Children::new(
+                            {
+                                let theme = theme.clone();
                             move || {
+                                let theme = theme.clone();
                                 let mut __slots = Slots::new();
                                 let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
                                 let __row_1 = {
@@ -108,7 +125,7 @@ pub fn features_boxes(props: FeaturesBoxesProps, children: Children) -> Result<B
                                                 move |__inherited: TextStyle| __inherited,
                                             )?
                                         };
-                                        StyledContainer::new(style_center().flex_column().width(110.0).height(64.0), move |_| RectStyle::default().with_fill(use_theme::<core::theme::SandboxTheme>().purple).with_radius(BorderRadius::all(0.0)), children![__text_3])?
+                                        StyledContainer::new(style_center().flex_column().width(110.0).height(64.0), { let theme = theme.clone(); move |_| RectStyle::default().with_fill(theme.get().purple).with_radius(BorderRadius::all(0.0)) }, children![__text_3])?
                                     };
                                     let __sbox_4 = {
                                         let __text_4 = {
@@ -118,7 +135,7 @@ pub fn features_boxes(props: FeaturesBoxesProps, children: Children) -> Result<B
                                                 move |__inherited: TextStyle| __inherited,
                                             )?
                                         };
-                                        StyledContainer::new(style_center().flex_column().width(110.0).height(64.0), move |_| RectStyle::default().with_fill(use_theme::<core::theme::SandboxTheme>().purple).with_radius(BorderRadius::all(8.0)), children![__text_4])?
+                                        StyledContainer::new(style_center().flex_column().width(110.0).height(64.0), { let theme = theme.clone(); move |_| RectStyle::default().with_fill(theme.get().purple).with_radius(BorderRadius::all(8.0)) }, children![__text_4])?
                                     };
                                     let __sbox_5 = {
                                         let __text_5 = {
@@ -128,7 +145,7 @@ pub fn features_boxes(props: FeaturesBoxesProps, children: Children) -> Result<B
                                                 move |__inherited: TextStyle| __inherited,
                                             )?
                                         };
-                                        StyledContainer::new(style_center().flex_column().width(110.0).height(64.0), move |_| RectStyle::default().with_fill(use_theme::<core::theme::SandboxTheme>().purple).with_radius(BorderRadius::all(20.0)), children![__text_5])?
+                                        StyledContainer::new(style_center().flex_column().width(110.0).height(64.0), { let theme = theme.clone(); move |_| RectStyle::default().with_fill(theme.get().purple).with_radius(BorderRadius::all(20.0)) }, children![__text_5])?
                                     };
                                     let __sbox_6 = {
                                         let __text_6 = {
@@ -138,13 +155,14 @@ pub fn features_boxes(props: FeaturesBoxesProps, children: Children) -> Result<B
                                                 move |__inherited: TextStyle| __inherited,
                                             )?
                                         };
-                                        StyledContainer::new(style_center().flex_column().width(130.0).height(56.0), move |_| RectStyle::default().with_fill(use_theme::<core::theme::SandboxTheme>().purple).with_radius(BorderRadius::all(40.0)), children![__text_6])?
+                                        StyledContainer::new(style_center().flex_column().width(130.0).height(56.0), { let theme = theme.clone(); move |_| RectStyle::default().with_fill(theme.get().purple).with_radius(BorderRadius::all(40.0)) }, children![__text_6])?
                                     };
-                                    Container::new(LayoutStyle::new().flex_row().gap(14.0).flex_wrap().align_items(AlignItems::CENTER), children![__sbox_3, __sbox_4, __sbox_5, __sbox_6])?.declaring(move || Declared::default().with_font_size(13.0).with_color(use_theme::<core::theme::SandboxTheme>().on_primary()).with_text_align(TextAlign::Center))
+                                    Container::new(LayoutStyle::new().flex_row().gap(14.0).flex_wrap().align_items(AlignItems::CENTER), children![__sbox_3, __sbox_4, __sbox_5, __sbox_6])?.declaring({ let theme = theme.clone(); move || Declared::default().with_font_size(13.0).with_color(theme.get().on_primary).with_text_align(TextAlign::Center) })
                                 };
                                 __children.push(box_item(__row_1));
                                 __slots.extend_default(__children);
                                 Ok(__slots)
+                            }
                             }
                         );
                         card(CardProps::props().build(), __deferred)?
@@ -155,28 +173,35 @@ pub fn features_boxes(props: FeaturesBoxesProps, children: Children) -> Result<B
                     __slots.extend_default(__children);
                     Ok(__slots)
                 }
+                }
             );
             example(ExampleProps::props().title("Corner radius — from sharp to a full pill").build(), __deferred)?
         };
         let __node_7 = {
             let __deferred = Children::new(
+                {
+                    let theme = theme.clone();
                 move || {
+                    let theme = theme.clone();
                     let mut __slots = Slots::new();
                     let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
                     let __node_8 = {
                         let __deferred = Children::new(
+                            {
+                                let theme = theme.clone();
                             move || {
+                                let theme = theme.clone();
                                 let mut __slots = Slots::new();
                                 let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
                                 let __row_2 = {
                                     let __sbox_7 = {
-                                        StyledContainer::new(LayoutStyle::new().flex_column().width(120.0).height(56.0), move |_| RectStyle { fill: None, border: Some(Border { paint: Paint::Solid(use_theme::<core::theme::SandboxTheme>().success()), widths: [1.0; 4] }), shadow: None, radius: BorderRadius::all(8.0) }, children![])?
+                                        StyledContainer::new(LayoutStyle::new().flex_column().width(120.0).height(56.0), { let theme = theme.clone(); move |_| RectStyle { fill: None, border: Some(Border { paint: Paint::Solid(theme.get().success), widths: [1.0; 4] }), shadow: None, radius: BorderRadius::all(8.0) } }, children![])?
                                     };
                                     let __sbox_8 = {
-                                        StyledContainer::new(LayoutStyle::new().flex_column().width(120.0).height(56.0), move |_| RectStyle { fill: None, border: Some(Border { paint: Paint::Solid(use_theme::<core::theme::SandboxTheme>().success()), widths: [2.0; 4] }), shadow: None, radius: BorderRadius::all(8.0) }, children![])?
+                                        StyledContainer::new(LayoutStyle::new().flex_column().width(120.0).height(56.0), { let theme = theme.clone(); move |_| RectStyle { fill: None, border: Some(Border { paint: Paint::Solid(theme.get().success), widths: [2.0; 4] }), shadow: None, radius: BorderRadius::all(8.0) } }, children![])?
                                     };
                                     let __sbox_9 = {
-                                        StyledContainer::new(LayoutStyle::new().flex_column().width(120.0).height(56.0), move |_| RectStyle { fill: None, border: Some(Border { paint: Paint::Solid(use_theme::<core::theme::SandboxTheme>().success()), widths: [4.0; 4] }), shadow: None, radius: BorderRadius::all(8.0) }, children![])?
+                                        StyledContainer::new(LayoutStyle::new().flex_column().width(120.0).height(56.0), { let theme = theme.clone(); move |_| RectStyle { fill: None, border: Some(Border { paint: Paint::Solid(theme.get().success), widths: [4.0; 4] }), shadow: None, radius: BorderRadius::all(8.0) } }, children![])?
                                     };
                                     Container::new(LayoutStyle::new().flex_row().gap(14.0).flex_wrap().align_items(AlignItems::CENTER), children![__sbox_7, __sbox_8, __sbox_9])?
                                 };
@@ -184,26 +209,34 @@ pub fn features_boxes(props: FeaturesBoxesProps, children: Children) -> Result<B
                                 __slots.extend_default(__children);
                                 Ok(__slots)
                             }
+                            }
                         );
                         card(CardProps::props().build(), __deferred)?
                     };
                     __children.push(box_item(__node_8));
-                    let __node_9 = code_line(CodeLineProps::props().code("box stroke:theme.success stroke_width:4").build(), Children::default())?;
+                    let __node_9 = code_line(CodeLineProps::props().code("box stroke:$theme.success stroke_width:4").build(), Children::default())?;
                     __children.push(box_item(__node_9));
                     __slots.extend_default(__children);
                     Ok(__slots)
+                }
                 }
             );
             example(ExampleProps::props().title("Stroke width — a plain box makes a hairline or a heavy border").build(), __deferred)?
         };
         let __node_10 = {
             let __deferred = Children::new(
+                {
+                    let theme = theme.clone();
                 move || {
+                    let theme = theme.clone();
                     let mut __slots = Slots::new();
                     let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
                     let __node_11 = {
                         let __deferred = Children::new(
+                            {
+                                let theme = theme.clone();
                             move || {
+                                let theme = theme.clone();
                                 let mut __slots = Slots::new();
                                 let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
                                 let __row_3 = {
@@ -212,30 +245,30 @@ pub fn features_boxes(props: FeaturesBoxesProps, children: Children) -> Result<B
                                             Text::declaring(
                                                 || "bottom".to_string(),
                                                 LayoutStyle::new(),
-                                                move |__inherited: TextStyle| __inherited.with_font_size(13.0).with_color(use_theme::<core::theme::SandboxTheme>().ink()).with_text_align(TextAlign::Center),
+                                                { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(13.0).with_color(theme.get().ink).with_text_align(TextAlign::Center) },
                                             )?
                                         };
-                                        StyledContainer::new(style_center().flex_column().width(150.0).height(70.0), move |_| RectStyle { fill: Some(Paint::Solid(use_theme::<core::theme::SandboxTheme>().surface_alt())), border: Some(Border { paint: Paint::Solid(use_theme::<core::theme::SandboxTheme>().success()), widths: [0.0, 0.0, 2.0, 0.0] }), shadow: None, radius: BorderRadius::zero() }, children![__text_7])?
+                                        StyledContainer::new(style_center().flex_column().width(150.0).height(70.0), { let theme = theme.clone(); move |_| RectStyle { fill: Some(Paint::Solid(theme.get().surface_alt)), border: Some(Border { paint: Paint::Solid(theme.get().success), widths: [0.0, 0.0, 2.0, 0.0] }), shadow: None, radius: BorderRadius::zero() } }, children![__text_7])?
                                     };
                                     let __sbox_11 = {
                                         let __text_8 = {
                                             Text::declaring(
                                                 || "end".to_string(),
                                                 LayoutStyle::new(),
-                                                move |__inherited: TextStyle| __inherited.with_font_size(13.0).with_color(use_theme::<core::theme::SandboxTheme>().ink()).with_text_align(TextAlign::Center),
+                                                { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(13.0).with_color(theme.get().ink).with_text_align(TextAlign::Center) },
                                             )?
                                         };
-                                        StyledContainer::new(style_center().flex_column().width(150.0).height(70.0), move |_| RectStyle { fill: Some(Paint::Solid(use_theme::<core::theme::SandboxTheme>().surface_alt())), border: Some(Border { paint: Paint::Solid(use_theme::<core::theme::SandboxTheme>().success()), widths: logical_border_widths(0.0, 0.0, 0.0, 0.0, None, Some(2.0)) }), shadow: None, radius: BorderRadius::zero() }, children![__text_8])?
+                                        StyledContainer::new(style_center().flex_column().width(150.0).height(70.0), { let theme = theme.clone(); move |_| RectStyle { fill: Some(Paint::Solid(theme.get().surface_alt)), border: Some(Border { paint: Paint::Solid(theme.get().success), widths: logical_border_widths(0.0, 0.0, 0.0, 0.0, None, Some(2.0)) }), shadow: None, radius: BorderRadius::zero() } }, children![__text_8])?
                                     };
                                     let __sbox_12 = {
                                         let __text_9 = {
                                             Text::declaring(
                                                 || "3 top · 1 bottom".to_string(),
                                                 LayoutStyle::new(),
-                                                move |__inherited: TextStyle| __inherited.with_font_size(13.0).with_color(use_theme::<core::theme::SandboxTheme>().ink()).with_text_align(TextAlign::Center),
+                                                { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(13.0).with_color(theme.get().ink).with_text_align(TextAlign::Center) },
                                             )?
                                         };
-                                        StyledContainer::new(style_center().flex_column().width(150.0).height(70.0), move |_| RectStyle { fill: Some(Paint::Solid(use_theme::<core::theme::SandboxTheme>().surface_alt())), border: Some(Border { paint: Paint::Solid(use_theme::<core::theme::SandboxTheme>().success()), widths: [3.0, 0.0, 1.0, 0.0] }), shadow: None, radius: BorderRadius::zero() }, children![__text_9])?
+                                        StyledContainer::new(style_center().flex_column().width(150.0).height(70.0), { let theme = theme.clone(); move |_| RectStyle { fill: Some(Paint::Solid(theme.get().surface_alt)), border: Some(Border { paint: Paint::Solid(theme.get().success), widths: [3.0, 0.0, 1.0, 0.0] }), shadow: None, radius: BorderRadius::zero() } }, children![__text_9])?
                                     };
                                     Container::new(LayoutStyle::new().flex_row().gap(14.0).flex_wrap().align_items(AlignItems::CENTER), children![__sbox_10, __sbox_11, __sbox_12])?
                                 };
@@ -243,26 +276,34 @@ pub fn features_boxes(props: FeaturesBoxesProps, children: Children) -> Result<B
                                 __slots.extend_default(__children);
                                 Ok(__slots)
                             }
+                            }
                         );
                         card(CardProps::props().build(), __deferred)?
                     };
                     __children.push(box_item(__node_11));
-                    let __node_12 = code_line(CodeLineProps::props().code("box stroke:theme.success stroke_width:'0 0 2 0'   ·   stroke_end:2   (start/end follow RTL)").build(), Children::default())?;
+                    let __node_12 = code_line(CodeLineProps::props().code("box stroke:$theme.success stroke_width:'0 0 2 0'   ·   stroke_end:2   (start/end follow RTL)").build(), Children::default())?;
                     __children.push(box_item(__node_12));
                     __slots.extend_default(__children);
                     Ok(__slots)
+                }
                 }
             );
             example(ExampleProps::props().title("One side at a time — a rule, a divider, a seam").build(), __deferred)?
         };
         let __node_13 = {
             let __deferred = Children::new(
+                {
+                    let theme = theme.clone();
                 move || {
+                    let theme = theme.clone();
                     let mut __slots = Slots::new();
                     let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
                     let __node_14 = {
                         let __deferred = Children::new(
+                            {
+                                let theme = theme.clone();
                             move || {
+                                let theme = theme.clone();
                                 let mut __slots = Slots::new();
                                 let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
                                 let __row_4 = {
@@ -271,36 +312,37 @@ pub fn features_boxes(props: FeaturesBoxesProps, children: Children) -> Result<B
                                             Text::declaring(
                                                 || "top only".to_string(),
                                                 LayoutStyle::new(),
-                                                move |__inherited: TextStyle| __inherited.with_font_size(13.0).with_color(use_theme::<core::theme::SandboxTheme>().on_primary()).with_text_align(TextAlign::Center),
+                                                { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(13.0).with_color(theme.get().on_primary).with_text_align(TextAlign::Center) },
                                             )?
                                         };
-                                        StyledContainer::new(style_center().flex_column().width(130.0).height(64.0), move |_| RectStyle::default().with_fill(use_theme::<core::theme::SandboxTheme>().purple).with_radius(BorderRadius { top_left: 16.0, top_right: 16.0, bottom_right: 0.0, bottom_left: 0.0 }), children![__text_10])?
+                                        StyledContainer::new(style_center().flex_column().width(130.0).height(64.0), { let theme = theme.clone(); move |_| RectStyle::default().with_fill(theme.get().purple).with_radius(BorderRadius { top_left: 16.0, top_right: 16.0, bottom_right: 0.0, bottom_left: 0.0 }) }, children![__text_10])?
                                     };
                                     let __sbox_14 = {
                                         let __text_11 = {
                                             Text::declaring(
                                                 || "radius_bottom:0".to_string(),
                                                 LayoutStyle::new(),
-                                                move |__inherited: TextStyle| __inherited.with_font_size(13.0).with_color(use_theme::<core::theme::SandboxTheme>().on_primary()).with_text_align(TextAlign::Center),
+                                                { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(13.0).with_color(theme.get().on_primary).with_text_align(TextAlign::Center) },
                                             )?
                                         };
-                                        StyledContainer::new(style_center().flex_column().width(130.0).height(64.0), move |_| RectStyle::default().with_fill(use_theme::<core::theme::SandboxTheme>().purple).with_radius(BorderRadius { top_left: 16.0, top_right: 16.0, bottom_right: 0.0, bottom_left: 0.0 }), children![__text_11])?
+                                        StyledContainer::new(style_center().flex_column().width(130.0).height(64.0), { let theme = theme.clone(); move |_| RectStyle::default().with_fill(theme.get().purple).with_radius(BorderRadius { top_left: 16.0, top_right: 16.0, bottom_right: 0.0, bottom_left: 0.0 }) }, children![__text_11])?
                                     };
                                     let __sbox_15 = {
                                         let __text_12 = {
                                             Text::declaring(
                                                 || "start".to_string(),
                                                 LayoutStyle::new(),
-                                                move |__inherited: TextStyle| __inherited.with_font_size(13.0).with_color(use_theme::<core::theme::SandboxTheme>().on_primary()).with_text_align(TextAlign::Center),
+                                                { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(13.0).with_color(theme.get().on_primary).with_text_align(TextAlign::Center) },
                                             )?
                                         };
-                                        StyledContainer::new(style_center().flex_column().width(130.0).height(64.0), move |_| RectStyle::default().with_fill(use_theme::<core::theme::SandboxTheme>().purple).with_radius(logical_border_radius(0.0, 0.0, 0.0, 0.0, Some(20.0), None)), children![__text_12])?
+                                        StyledContainer::new(style_center().flex_column().width(130.0).height(64.0), { let theme = theme.clone(); move |_| RectStyle::default().with_fill(theme.get().purple).with_radius(logical_border_radius(0.0, 0.0, 0.0, 0.0, Some(20.0), None)) }, children![__text_12])?
                                     };
                                     Container::new(LayoutStyle::new().flex_row().gap(14.0).flex_wrap().align_items(AlignItems::CENTER), children![__sbox_13, __sbox_14, __sbox_15])?
                                 };
                                 __children.push(box_item(__row_4));
                                 __slots.extend_default(__children);
                                 Ok(__slots)
+                            }
                             }
                         );
                         card(CardProps::props().build(), __deferred)?
@@ -311,17 +353,24 @@ pub fn features_boxes(props: FeaturesBoxesProps, children: Children) -> Result<B
                     __slots.extend_default(__children);
                     Ok(__slots)
                 }
+                }
             );
             example(ExampleProps::props().title("Corners one at a time — a panel that meets an edge").build(), __deferred)?
         };
         let __node_16 = {
             let __deferred = Children::new(
+                {
+                    let theme = theme.clone();
                 move || {
+                    let theme = theme.clone();
                     let mut __slots = Slots::new();
                     let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
                     let __node_17 = {
                         let __deferred = Children::new(
+                            {
+                                let theme = theme.clone();
                             move || {
+                                let theme = theme.clone();
                                 let mut __slots = Slots::new();
                                 let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
                                 let __sbox_16 = {
@@ -329,14 +378,15 @@ pub fn features_boxes(props: FeaturesBoxesProps, children: Children) -> Result<B
                                         Text::declaring(
                                             || "align:center justify:center".to_string(),
                                             LayoutStyle::new(),
-                                            move |__inherited: TextStyle| __inherited.with_font_size(13.0).with_color(use_theme::<core::theme::SandboxTheme>().ink()).with_text_align(TextAlign::Center),
+                                            { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(13.0).with_color(theme.get().ink).with_text_align(TextAlign::Center) },
                                         )?
                                     };
-                                    StyledContainer::new(style_center().flex_column().width(SizeDimension::Percent(1.0)).height(96.0), move |_| RectStyle::default().with_fill(use_theme::<core::theme::SandboxTheme>().surface_alt()).with_radius(BorderRadius::all(10.0)), children![__text_13])?
+                                    StyledContainer::new(style_center().flex_column().width(SizeDimension::Percent(1.0)).height(96.0), { let theme = theme.clone(); move |_| RectStyle::default().with_fill(theme.get().surface_alt).with_radius(BorderRadius::all(10.0)) }, children![__text_13])?
                                 };
                                 __children.push(box_item(__sbox_16));
                                 __slots.extend_default(__children);
                                 Ok(__slots)
+                            }
                             }
                         );
                         card(CardProps::props().build(), __deferred)?
@@ -347,17 +397,24 @@ pub fn features_boxes(props: FeaturesBoxesProps, children: Children) -> Result<B
                     __slots.extend_default(__children);
                     Ok(__slots)
                 }
+                }
             );
             example(ExampleProps::props().title("Content alignment inside a box").build(), __deferred)?
         };
         let __node_19 = {
             let __deferred = Children::new(
+                {
+                    let theme = theme.clone();
                 move || {
+                    let theme = theme.clone();
                     let mut __slots = Slots::new();
                     let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
                     let __node_20 = {
                         let __deferred = Children::new(
+                            {
+                                let theme = theme.clone();
                             move || {
+                                let theme = theme.clone();
                                 let mut __slots = Slots::new();
                                 let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
                                 let __row_5 = {
@@ -366,16 +423,17 @@ pub fn features_boxes(props: FeaturesBoxesProps, children: Children) -> Result<B
                                             Text::declaring(
                                                 || "@center @tile".to_string(),
                                                 LayoutStyle::new(),
-                                                move |__inherited: TextStyle| __inherited.with_font_size(13.0).with_color(use_theme::<core::theme::SandboxTheme>().ink()).with_text_align(TextAlign::Center),
+                                                { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(13.0).with_color(theme.get().ink).with_text_align(TextAlign::Center) },
                                             )?
                                         };
-                                        StyledContainer::new(style_center().flex_column().width(150.0).height(70.0), move |_| RectStyle { fill: Some(Paint::Solid(use_theme::<core::theme::SandboxTheme>().surface_alt())), border: Some(Border { paint: Paint::Solid(use_theme::<core::theme::SandboxTheme>().border()), widths: [1.0; 4] }), shadow: None, radius: BorderRadius::all(10.0) }, children![__text_14])?
+                                        StyledContainer::new(style_center().flex_column().width(150.0).height(70.0), { let theme = theme.clone(); move |_| RectStyle { fill: Some(Paint::Solid(theme.get().surface_alt)), border: Some(Border { paint: Paint::Solid(theme.get().border), widths: [1.0; 4] }), shadow: None, radius: BorderRadius::all(10.0) } }, children![__text_14])?
                                     };
                                     Container::new(LayoutStyle::new().flex_row().gap(14.0).flex_wrap(), children![__sbox_17])?
                                 };
                                 __children.push(box_item(__row_5));
                                 __slots.extend_default(__children);
                                 Ok(__slots)
+                            }
                             }
                         );
                         card(CardProps::props().build(), __deferred)?
@@ -385,6 +443,7 @@ pub fn features_boxes(props: FeaturesBoxesProps, children: Children) -> Result<B
                     __children.push(box_item(__node_21));
                     __slots.extend_default(__children);
                     Ok(__slots)
+                }
                 }
             );
             example(ExampleProps::props().title("Class composition — a layout class and a paint recipe on one element").build(), __deferred)?

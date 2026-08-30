@@ -6,7 +6,7 @@
 #[allow(unused_imports)] use crate::shared::components::code_line::{code_line, CodeLineProps};
 
 // A documented example block: a small title above its demo and snippet. Replaces the repeated
-// `col gap:8 > text "…" font_size:13 color:theme.ink > …children…` scaffold used across every feature section,
+// `col gap:8 > text "…" font_size:13 color:$theme.ink > …children…` scaffold used across every feature section,
 // so a block is one `example title:"…"` line plus its content instead of two lines of boilerplate.
 #[derive(::telar::Props)]
 pub struct SharedComponentsExampleProps {
@@ -18,6 +18,7 @@ pub struct SharedComponentsExampleProps {
 pub fn shared_components_example(props: SharedComponentsExampleProps, children: Children) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let __owner = telar::owner_scope();
     #[allow(unused_imports)] use telar::use_theme;
+    #[allow(unused_variables)] let theme = telar::Theme::<core::theme::SandboxTheme>::default();
 
     let mut __slots = children.build()?;
     let __col_0 = {
@@ -26,7 +27,7 @@ pub fn shared_components_example(props: SharedComponentsExampleProps, children: 
             Text::declaring(
                 move || format!("{}", { props.title }),
                 LayoutStyle::new(),
-                move |__inherited: TextStyle| __inherited.with_font_size(13.0).with_color(use_theme::<core::theme::SandboxTheme>().ink()),
+                { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(13.0).with_color(theme.get().ink) },
             )?
         };
         __children.push(box_item(__text_0));
@@ -39,26 +40,34 @@ pub fn shared_components_example(props: SharedComponentsExampleProps, children: 
 #[allow(dead_code, unused_variables, unused_mut)]
 pub fn shared_components_example_preview_0() -> Result<Box<dyn LayoutItem>, LayoutError> {
     #[allow(unused_imports)] use telar::use_theme;
+    #[allow(unused_variables)] let theme = telar::Theme::<core::theme::SandboxTheme>::default();
     let __node_0 = {
         let __deferred = Children::new(
+            {
+                let theme = theme.clone();
             move || {
+                let theme = theme.clone();
                 let mut __slots = Slots::new();
                 let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
                 let __node_1 = {
                     let __deferred = Children::new(
+                        {
+                            let theme = theme.clone();
                         move || {
+                            let theme = theme.clone();
                             let mut __slots = Slots::new();
                             let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
                             let __text_0 = {
                                 Text::declaring(
                                     || "The demo and its code snippet stack here.".to_string(),
                                     LayoutStyle::new(),
-                                    move |__inherited: TextStyle| __inherited.with_font_size(13.0).with_color(use_theme::<core::theme::SandboxTheme>().muted()),
+                                    { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(13.0).with_color(theme.get().muted) },
                                 )?
                             };
                             __children.push(box_item(__text_0));
                             __slots.extend_default(__children);
                             Ok(__slots)
+                        }
                         }
                     );
                     card(CardProps::props().gap(10.0).build(), __deferred)?
@@ -68,6 +77,7 @@ pub fn shared_components_example_preview_0() -> Result<Box<dyn LayoutItem>, Layo
                 __children.push(box_item(__node_2));
                 __slots.extend_default(__children);
                 Ok(__slots)
+            }
             }
         );
         example(ExampleProps::props().title("justify — distribute along the main axis").build(), __deferred)?

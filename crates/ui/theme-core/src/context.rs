@@ -1,4 +1,5 @@
 use std::any::Any;
+use std::marker::PhantomData;
 use std::rc::Rc;
 
 use geometry_core::Color;
@@ -172,6 +173,36 @@ pub fn set_theme<T: ThemeTokens + Clone + 'static>(theme: T) {
     let theme = Rc::new(theme);
     THEME.with(|s| s.set(Some(theme.clone() as Rc<dyn Any>)));
     THEME_TOKENS.with(|s| s.set(Some(theme as Rc<dyn ThemeTokens>)));
+}
+
+/// A handle to the theme in force, read with `.get()` like any other reactive source.
+///
+/// `[view]` is where a theme is mostly read, and there a read has to happen inside whatever closure asks for
+/// it or it is the theme that was registered when the view was built, forever. A handle makes that the
+/// author's own spelling: `$theme.primary` is `theme.get().primary`, the same `$` that reads a signal, so
+/// the markup needs no rule of its own for what a theme read is — and the transpiler needs no branch for it.
+///
+/// Zero-sized and `Copy`, so it moves into any number of closures with nothing to clone.
+pub struct Theme<T>(PhantomData<T>);
+
+impl<T> Clone for Theme<T> {
+    fn clone(&self) -> Self {
+        *self
+    }
+}
+
+impl<T> Copy for Theme<T> {}
+
+impl<T> Default for Theme<T> {
+    fn default() -> Self {
+        Self(PhantomData)
+    }
+}
+
+impl<T: Clone + 'static> Theme<T> {
+    pub fn get(&self) -> T {
+        use_theme::<T>()
+    }
 }
 
 pub fn use_theme<T: Clone + 'static>() -> T {

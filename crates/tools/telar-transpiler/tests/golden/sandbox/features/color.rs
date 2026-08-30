@@ -12,6 +12,7 @@ pub struct FeaturesColorProps {}
 
 #[allow(dead_code)]
 fn style_swatch() -> LayoutStyle {
+    #[allow(unused_variables)] let theme = telar::Theme::<core::theme::SandboxTheme>::default();
     LayoutStyle::new()
         .gap(6.0)
         .align_items(AlignItems::CENTER)
@@ -19,6 +20,7 @@ fn style_swatch() -> LayoutStyle {
 
 #[allow(dead_code)]
 fn style_chip() -> LayoutStyle {
+    #[allow(unused_variables)] let theme = telar::Theme::<core::theme::SandboxTheme>::default();
     LayoutStyle::new()
         .width(SizeDimension::Percent(1.0))
         .height(52.0)
@@ -28,23 +30,30 @@ fn style_chip() -> LayoutStyle {
 pub fn features_color(props: FeaturesColorProps, children: Children) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let __owner = telar::owner_scope();
     #[allow(unused_imports)] use telar::use_theme;
+    #[allow(unused_variables)] let theme = telar::Theme::<core::theme::SandboxTheme>::default();
 
     let __col_0 = {
         let __node_0 = doc_header(DocHeaderProps::props().kicker("FOUNDATIONS").title("Color & theme").desc("Colors are semantic tokens, not fixed values. Every token resolves through the active theme — switch it in the sidebar and the whole app recolors reactively.").build(), Children::default())?;
         let __node_1 = {
             let __deferred = Children::new(
+                {
+                    let theme = theme.clone();
                 move || {
+                    let theme = theme.clone();
                     let mut __slots = Slots::new();
                     let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
                     let __node_2 = {
                         let __deferred = Children::new(
+                            {
+                                let theme = theme.clone();
                             move || {
+                                let theme = theme.clone();
                                 let mut __slots = Slots::new();
                                 let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
                                 let __node_3 = {
                                     let __col_1 = {
                                         let __sbox_0 = {
-                                            StyledContainer::new(style_chip().flex_column(), move |_| RectStyle::default().with_fill(use_theme::<core::theme::SandboxTheme>().primary()).with_radius(BorderRadius::all(10.0)), children![])?
+                                            StyledContainer::new(style_chip().flex_column(), { let theme = theme.clone(); move |_| RectStyle::default().with_fill(theme.get().primary).with_radius(BorderRadius::all(10.0)) }, children![])?
                                         };
                                         let __text_0 = {
                                             Text::declaring(
@@ -57,7 +66,7 @@ pub fn features_color(props: FeaturesColorProps, children: Children) -> Result<B
                                     };
                                     let __col_2 = {
                                         let __sbox_1 = {
-                                            StyledContainer::new(style_chip().flex_column(), move |_| RectStyle::default().with_fill(use_theme::<core::theme::SandboxTheme>().success()).with_radius(BorderRadius::all(10.0)), children![])?
+                                            StyledContainer::new(style_chip().flex_column(), { let theme = theme.clone(); move |_| RectStyle::default().with_fill(theme.get().success).with_radius(BorderRadius::all(10.0)) }, children![])?
                                         };
                                         let __text_1 = {
                                             Text::declaring(
@@ -70,7 +79,7 @@ pub fn features_color(props: FeaturesColorProps, children: Children) -> Result<B
                                     };
                                     let __col_3 = {
                                         let __sbox_2 = {
-                                            StyledContainer::new(style_chip().flex_column(), move |_| RectStyle::default().with_fill(use_theme::<core::theme::SandboxTheme>().danger).with_radius(BorderRadius::all(10.0)), children![])?
+                                            StyledContainer::new(style_chip().flex_column(), { let theme = theme.clone(); move |_| RectStyle::default().with_fill(theme.get().danger).with_radius(BorderRadius::all(10.0)) }, children![])?
                                         };
                                         let __text_2 = {
                                             Text::declaring(
@@ -83,7 +92,7 @@ pub fn features_color(props: FeaturesColorProps, children: Children) -> Result<B
                                     };
                                     let __col_4 = {
                                         let __sbox_3 = {
-                                            StyledContainer::new(style_chip().flex_column(), move |_| RectStyle::default().with_fill(use_theme::<core::theme::SandboxTheme>().warning()).with_radius(BorderRadius::all(10.0)), children![])?
+                                            StyledContainer::new(style_chip().flex_column(), { let theme = theme.clone(); move |_| RectStyle::default().with_fill(theme.get().warning).with_radius(BorderRadius::all(10.0)) }, children![])?
                                         };
                                         let __text_3 = {
                                             Text::declaring(
@@ -96,7 +105,7 @@ pub fn features_color(props: FeaturesColorProps, children: Children) -> Result<B
                                     };
                                     let __col_5 = {
                                         let __sbox_4 = {
-                                            StyledContainer::new(style_chip().flex_column(), move |_| RectStyle::default().with_fill(use_theme::<core::theme::SandboxTheme>().purple).with_radius(BorderRadius::all(10.0)), children![])?
+                                            StyledContainer::new(style_chip().flex_column(), { let theme = theme.clone(); move |_| RectStyle::default().with_fill(theme.get().purple).with_radius(BorderRadius::all(10.0)) }, children![])?
                                         };
                                         let __text_4 = {
                                             Text::declaring(
@@ -109,7 +118,7 @@ pub fn features_color(props: FeaturesColorProps, children: Children) -> Result<B
                                     };
                                     let __col_6 = {
                                         let __sbox_5 = {
-                                            StyledContainer::new(style_chip().flex_column(), move |_| RectStyle::default().with_fill(use_theme::<core::theme::SandboxTheme>().cyan).with_radius(BorderRadius::all(10.0)), children![])?
+                                            StyledContainer::new(style_chip().flex_column(), { let theme = theme.clone(); move |_| RectStyle::default().with_fill(theme.get().cyan).with_radius(BorderRadius::all(10.0)) }, children![])?
                                         };
                                         let __text_5 = {
                                             Text::declaring(
@@ -120,38 +129,46 @@ pub fn features_color(props: FeaturesColorProps, children: Children) -> Result<B
                                         };
                                         Container::new(style_swatch().flex_column(), children![__sbox_5, __text_5])?
                                     };
-                                    Container::new(LayoutStyle::new().display_grid().grid_template_columns(vec![TemplateTrack::fit(TemplateTrack::minmax(TemplateTrack::px(120.0), TemplateTrack::fr(1.0)))]).gap(12.0), children![__col_1, __col_2, __col_3, __col_4, __col_5, __col_6])?.declaring(move || Declared::default().with_font_size(12.0).with_color(use_theme::<core::theme::SandboxTheme>().ink()))
+                                    Container::new(LayoutStyle::new().display_grid().grid_template_columns(vec![TemplateTrack::fit(TemplateTrack::minmax(TemplateTrack::px(120.0), TemplateTrack::fr(1.0)))]).gap(12.0), children![__col_1, __col_2, __col_3, __col_4, __col_5, __col_6])?.declaring({ let theme = theme.clone(); move || Declared::default().with_font_size(12.0).with_color(theme.get().ink) })
                                 };
                                 __children.push(box_item(__node_3));
                                 __slots.extend_default(__children);
                                 Ok(__slots)
                             }
+                            }
                         );
                         card(CardProps::props().build(), __deferred)?
                     };
                     __children.push(box_item(__node_2));
-                    let __node_4 = code_line(CodeLineProps::props().code("box fill:theme.primary   ·   fill:theme.success   ·   fill:theme.danger …").build(), Children::default())?;
+                    let __node_4 = code_line(CodeLineProps::props().code("box fill:$theme.primary   ·   fill:$theme.success   ·   fill:$theme.danger …").build(), Children::default())?;
                     __children.push(box_item(__node_4));
                     __slots.extend_default(__children);
                     Ok(__slots)
+                }
                 }
             );
             example(ExampleProps::props().title("Accent tokens").build(), __deferred)?
         };
         let __node_5 = {
             let __deferred = Children::new(
+                {
+                    let theme = theme.clone();
                 move || {
+                    let theme = theme.clone();
                     let mut __slots = Slots::new();
                     let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
                     let __node_6 = {
                         let __deferred = Children::new(
+                            {
+                                let theme = theme.clone();
                             move || {
+                                let theme = theme.clone();
                                 let mut __slots = Slots::new();
                                 let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
                                 let __node_7 = {
                                     let __col_7 = {
                                         let __sbox_6 = {
-                                            StyledContainer::new(style_chip().flex_column(), move |_| RectStyle { fill: Some(Paint::Solid(use_theme::<core::theme::SandboxTheme>().ink())), border: Some(Border { paint: Paint::Solid(use_theme::<core::theme::SandboxTheme>().border()), widths: [1.0; 4] }), shadow: None, radius: BorderRadius::all(10.0) }, children![])?
+                                            StyledContainer::new(style_chip().flex_column(), { let theme = theme.clone(); move |_| RectStyle { fill: Some(Paint::Solid(theme.get().ink)), border: Some(Border { paint: Paint::Solid(theme.get().border), widths: [1.0; 4] }), shadow: None, radius: BorderRadius::all(10.0) } }, children![])?
                                         };
                                         let __text_6 = {
                                             Text::declaring(
@@ -164,7 +181,7 @@ pub fn features_color(props: FeaturesColorProps, children: Children) -> Result<B
                                     };
                                     let __col_8 = {
                                         let __sbox_7 = {
-                                            StyledContainer::new(style_chip().flex_column(), move |_| RectStyle { fill: Some(Paint::Solid(use_theme::<core::theme::SandboxTheme>().muted())), border: Some(Border { paint: Paint::Solid(use_theme::<core::theme::SandboxTheme>().border()), widths: [1.0; 4] }), shadow: None, radius: BorderRadius::all(10.0) }, children![])?
+                                            StyledContainer::new(style_chip().flex_column(), { let theme = theme.clone(); move |_| RectStyle { fill: Some(Paint::Solid(theme.get().muted)), border: Some(Border { paint: Paint::Solid(theme.get().border), widths: [1.0; 4] }), shadow: None, radius: BorderRadius::all(10.0) } }, children![])?
                                         };
                                         let __text_7 = {
                                             Text::declaring(
@@ -177,7 +194,7 @@ pub fn features_color(props: FeaturesColorProps, children: Children) -> Result<B
                                     };
                                     let __col_9 = {
                                         let __sbox_8 = {
-                                            StyledContainer::new(style_chip().flex_column(), move |_| RectStyle { fill: Some(Paint::Solid(use_theme::<core::theme::SandboxTheme>().surface())), border: Some(Border { paint: Paint::Solid(use_theme::<core::theme::SandboxTheme>().border()), widths: [1.0; 4] }), shadow: None, radius: BorderRadius::all(10.0) }, children![])?
+                                            StyledContainer::new(style_chip().flex_column(), { let theme = theme.clone(); move |_| RectStyle { fill: Some(Paint::Solid(theme.get().surface)), border: Some(Border { paint: Paint::Solid(theme.get().border), widths: [1.0; 4] }), shadow: None, radius: BorderRadius::all(10.0) } }, children![])?
                                         };
                                         let __text_8 = {
                                             Text::declaring(
@@ -190,7 +207,7 @@ pub fn features_color(props: FeaturesColorProps, children: Children) -> Result<B
                                     };
                                     let __col_10 = {
                                         let __sbox_9 = {
-                                            StyledContainer::new(style_chip().flex_column(), move |_| RectStyle { fill: Some(Paint::Solid(use_theme::<core::theme::SandboxTheme>().surface_alt())), border: Some(Border { paint: Paint::Solid(use_theme::<core::theme::SandboxTheme>().border()), widths: [1.0; 4] }), shadow: None, radius: BorderRadius::all(10.0) }, children![])?
+                                            StyledContainer::new(style_chip().flex_column(), { let theme = theme.clone(); move |_| RectStyle { fill: Some(Paint::Solid(theme.get().surface_alt)), border: Some(Border { paint: Paint::Solid(theme.get().border), widths: [1.0; 4] }), shadow: None, radius: BorderRadius::all(10.0) } }, children![])?
                                         };
                                         let __text_9 = {
                                             Text::declaring(
@@ -203,7 +220,7 @@ pub fn features_color(props: FeaturesColorProps, children: Children) -> Result<B
                                     };
                                     let __col_11 = {
                                         let __sbox_10 = {
-                                            StyledContainer::new(style_chip().flex_column(), move |_| RectStyle { fill: Some(Paint::Solid(use_theme::<core::theme::SandboxTheme>().border())), border: Some(Border { paint: Paint::Solid(use_theme::<core::theme::SandboxTheme>().border()), widths: [1.0; 4] }), shadow: None, radius: BorderRadius::all(10.0) }, children![])?
+                                            StyledContainer::new(style_chip().flex_column(), { let theme = theme.clone(); move |_| RectStyle { fill: Some(Paint::Solid(theme.get().border)), border: Some(Border { paint: Paint::Solid(theme.get().border), widths: [1.0; 4] }), shadow: None, radius: BorderRadius::all(10.0) } }, children![])?
                                         };
                                         let __text_10 = {
                                             Text::declaring(
@@ -216,7 +233,7 @@ pub fn features_color(props: FeaturesColorProps, children: Children) -> Result<B
                                     };
                                     let __col_12 = {
                                         let __sbox_11 = {
-                                            StyledContainer::new(style_chip().flex_column(), move |_| RectStyle { fill: Some(Paint::Solid(use_theme::<core::theme::SandboxTheme>().background)), border: Some(Border { paint: Paint::Solid(use_theme::<core::theme::SandboxTheme>().border()), widths: [1.0; 4] }), shadow: None, radius: BorderRadius::all(10.0) }, children![])?
+                                            StyledContainer::new(style_chip().flex_column(), { let theme = theme.clone(); move |_| RectStyle { fill: Some(Paint::Solid(theme.get().background)), border: Some(Border { paint: Paint::Solid(theme.get().border), widths: [1.0; 4] }), shadow: None, radius: BorderRadius::all(10.0) } }, children![])?
                                         };
                                         let __text_11 = {
                                             Text::declaring(
@@ -227,20 +244,22 @@ pub fn features_color(props: FeaturesColorProps, children: Children) -> Result<B
                                         };
                                         Container::new(style_swatch().flex_column(), children![__sbox_11, __text_11])?
                                     };
-                                    Container::new(LayoutStyle::new().display_grid().grid_template_columns(vec![TemplateTrack::fit(TemplateTrack::minmax(TemplateTrack::px(120.0), TemplateTrack::fr(1.0)))]).gap(12.0), children![__col_7, __col_8, __col_9, __col_10, __col_11, __col_12])?.declaring(move || Declared::default().with_font_size(12.0).with_color(use_theme::<core::theme::SandboxTheme>().ink()))
+                                    Container::new(LayoutStyle::new().display_grid().grid_template_columns(vec![TemplateTrack::fit(TemplateTrack::minmax(TemplateTrack::px(120.0), TemplateTrack::fr(1.0)))]).gap(12.0), children![__col_7, __col_8, __col_9, __col_10, __col_11, __col_12])?.declaring({ let theme = theme.clone(); move || Declared::default().with_font_size(12.0).with_color(theme.get().ink) })
                                 };
                                 __children.push(box_item(__node_7));
                                 __slots.extend_default(__children);
                                 Ok(__slots)
                             }
+                            }
                         );
                         card(CardProps::props().build(), __deferred)?
                     };
                     __children.push(box_item(__node_6));
-                    let __node_8 = code_line(CodeLineProps::props().code("box fill:theme.surface stroke:theme.border   (card recipe)").build(), Children::default())?;
+                    let __node_8 = code_line(CodeLineProps::props().code("box fill:$theme.surface stroke:$theme.border   (card recipe)").build(), Children::default())?;
                     __children.push(box_item(__node_8));
                     __slots.extend_default(__children);
                     Ok(__slots)
+                }
                 }
             );
             example(ExampleProps::props().title("Neutrals & surfaces (outlined so light tones stay visible)").build(), __deferred)?
@@ -285,19 +304,26 @@ pub fn features_color(props: FeaturesColorProps, children: Children) -> Result<B
         };
         let __node_12 = {
             let __deferred = Children::new(
+                {
+                    let theme = theme.clone();
                 move || {
+                    let theme = theme.clone();
                     let mut __slots = Slots::new();
                     let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
                     let __node_13 = {
                         let __deferred = Children::new(
+                            {
+                                let theme = theme.clone();
                             move || {
+                                let theme = theme.clone();
                                 let mut __slots = Slots::new();
                                 let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
                                 let __text_12 = {
+                                    let theme = theme.clone();
                                     Text::declaring(
-                                        || "Because color:theme.primary compiles to a theme lookup, swapping the theme struct at runtime updates every widget that reads it — no manual repaint.".to_string(),
+                                        || "Because color:$theme.primary compiles to a theme lookup, swapping the theme struct at runtime updates every widget that reads it — no manual repaint.".to_string(),
                                         LayoutStyle::new(),
-                                        move |__inherited: TextStyle| __inherited.with_font_size(13.0).with_color(use_theme::<core::theme::SandboxTheme>().muted()),
+                                        { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(13.0).with_color(theme.get().muted) },
                                     )?
                                 };
                                 __children.push(box_item(__text_12));
@@ -305,12 +331,13 @@ pub fn features_color(props: FeaturesColorProps, children: Children) -> Result<B
                                     Text::declaring(
                                         || "Try the Modern / Pastel / Midnight buttons in the sidebar.".to_string(),
                                         LayoutStyle::new(),
-                                        move |__inherited: TextStyle| __inherited.with_font_size(13.0).with_color(use_theme::<core::theme::SandboxTheme>().primary()),
+                                        { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(13.0).with_color(theme.get().primary) },
                                     )?
                                 };
                                 __children.push(box_item(__text_13));
                                 __slots.extend_default(__children);
                                 Ok(__slots)
+                            }
                             }
                         );
                         card(CardProps::props().gap(8.0).build(), __deferred)?
@@ -320,6 +347,7 @@ pub fn features_color(props: FeaturesColorProps, children: Children) -> Result<B
                     __children.push(box_item(__node_14));
                     __slots.extend_default(__children);
                     Ok(__slots)
+                }
                 }
             );
             example(ExampleProps::props().title("Reactive theming").build(), __deferred)?

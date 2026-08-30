@@ -15,6 +15,7 @@ pub struct FeaturesImagesProps {}
 
 #[allow(dead_code)]
 fn style_swatch() -> LayoutStyle {
+    #[allow(unused_variables)] let theme = telar::Theme::<core::theme::SandboxTheme>::default();
     LayoutStyle::new()
         .gap(6.0)
         .align_items(AlignItems::CENTER)
@@ -24,6 +25,7 @@ fn style_swatch() -> LayoutStyle {
 pub fn features_images(props: FeaturesImagesProps, children: Children) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let __owner = telar::owner_scope();
     #[allow(unused_imports)] use telar::use_theme;
+    #[allow(unused_variables)] let theme = telar::Theme::<core::theme::SandboxTheme>::default();
 
     // Bitmaps generated pixel-by-pixel at startup — see demo_images.rs. Any Arc<ImageData> works as a src.
     let gradient = Arc::new(make_gradient(128, 128));
@@ -78,16 +80,20 @@ pub fn features_images(props: FeaturesImagesProps, children: Children) -> Result
         let __node_4 = {
             let __deferred = Children::new(
                 {
+                    let theme = theme.clone();
                     let checker = checker.clone();
                 move || {
+                    let theme = theme.clone();
                     let checker = checker.clone();
                     let mut __slots = Slots::new();
                     let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
                     let __node_5 = {
                         let __deferred = Children::new(
                             {
+                                let theme = theme.clone();
                                 let checker = checker.clone();
                             move || {
+                                let theme = theme.clone();
                                 let checker = checker.clone();
                                 let mut __slots = Slots::new();
                                 let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
@@ -106,7 +112,7 @@ pub fn features_images(props: FeaturesImagesProps, children: Children) -> Result
                                             Text::declaring(
                                                 || "Linear".to_string(),
                                                 LayoutStyle::new(),
-                                                move |__inherited: TextStyle| __inherited.with_font_size(12.0).with_color(use_theme::<core::theme::SandboxTheme>().muted()),
+                                                { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(12.0).with_color(theme.get().muted) },
                                             )?
                                         };
                                         Container::new(style_swatch().flex_column(), children![__img_1, __text_0])?
@@ -125,7 +131,7 @@ pub fn features_images(props: FeaturesImagesProps, children: Children) -> Result
                                             Text::declaring(
                                                 || "Nearest".to_string(),
                                                 LayoutStyle::new(),
-                                                move |__inherited: TextStyle| __inherited.with_font_size(12.0).with_color(use_theme::<core::theme::SandboxTheme>().muted()),
+                                                { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(12.0).with_color(theme.get().muted) },
                                             )?
                                         };
                                         Container::new(style_swatch().flex_column(), children![__img_2, __text_1])?
@@ -153,16 +159,20 @@ pub fn features_images(props: FeaturesImagesProps, children: Children) -> Result
         let __node_7 = {
             let __deferred = Children::new(
                 {
+                    let theme = theme.clone();
                     let gradient = gradient.clone();
                 move || {
+                    let theme = theme.clone();
                     let gradient = gradient.clone();
                     let mut __slots = Slots::new();
                     let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
                     let __node_8 = {
                         let __deferred = Children::new(
                             {
+                                let theme = theme.clone();
                                 let gradient = gradient.clone();
                             move || {
+                                let theme = theme.clone();
                                 let gradient = gradient.clone();
                                 let mut __slots = Slots::new();
                                 let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
@@ -181,7 +191,7 @@ pub fn features_images(props: FeaturesImagesProps, children: Children) -> Result
                                             Text::declaring(
                                                 || "contain (default)".to_string(),
                                                 LayoutStyle::new(),
-                                                move |__inherited: TextStyle| __inherited.with_font_size(12.0).with_color(use_theme::<core::theme::SandboxTheme>().muted()),
+                                                { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(12.0).with_color(theme.get().muted) },
                                             )?
                                         };
                                         Container::new(style_swatch().flex_column(), children![__img_3, __text_2])?
@@ -200,7 +210,7 @@ pub fn features_images(props: FeaturesImagesProps, children: Children) -> Result
                                             Text::declaring(
                                                 || "cover".to_string(),
                                                 LayoutStyle::new(),
-                                                move |__inherited: TextStyle| __inherited.with_font_size(12.0).with_color(use_theme::<core::theme::SandboxTheme>().muted()),
+                                                { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(12.0).with_color(theme.get().muted) },
                                             )?
                                         };
                                         Container::new(style_swatch().flex_column(), children![__img_4, __text_3])?
@@ -219,7 +229,7 @@ pub fn features_images(props: FeaturesImagesProps, children: Children) -> Result
                                             Text::declaring(
                                                 || "fill".to_string(),
                                                 LayoutStyle::new(),
-                                                move |__inherited: TextStyle| __inherited.with_font_size(12.0).with_color(use_theme::<core::theme::SandboxTheme>().muted()),
+                                                { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(12.0).with_color(theme.get().muted) },
                                             )?
                                         };
                                         Container::new(style_swatch().flex_column(), children![__img_5, __text_4])?

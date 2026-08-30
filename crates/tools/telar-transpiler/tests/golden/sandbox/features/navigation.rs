@@ -15,6 +15,7 @@ pub struct FeaturesNavigationProps {}
 pub fn features_navigation(props: FeaturesNavigationProps, children: Children) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let __owner = telar::owner_scope();
     #[allow(unused_imports)] use telar::use_theme;
+    #[allow(unused_variables)] let theme = telar::Theme::<core::theme::SandboxTheme>::default();
     let tab = signal(0u32);
     let open = signal(true);
 
@@ -24,16 +25,20 @@ pub fn features_navigation(props: FeaturesNavigationProps, children: Children) -
             let __deferred = Children::new(
                 {
                     let tab = tab.clone();
+                    let theme = theme.clone();
                 move || {
                     let tab = tab.clone();
+                    let theme = theme.clone();
                     let mut __slots = Slots::new();
                     let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
                     let __node_2 = {
                         let __deferred = Children::new(
                             {
                                 let tab = tab.clone();
+                                let theme = theme.clone();
                             move || {
                                 let tab = tab.clone();
+                                let theme = theme.clone();
                                 let mut __slots = Slots::new();
                                 let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
                                 let __node_3 = tabs(TabsProps::props().selected(tab.clone()).items(vec!["Overview","Pricing","Team"]).build(), Children::default())?;
@@ -41,19 +46,22 @@ pub fn features_navigation(props: FeaturesNavigationProps, children: Children) -
                                 let __node_4 = ReactiveList::new(
                                     { let tab = tab.clone(); move || vec![tab.get() == 0] },
                                     |__cond: &bool| *__cond,
+                                    {
+                                        let theme = theme.clone();
                                     move |__cond: bool| -> Result<Box<dyn LayoutItem>, LayoutError> {
                                         if __cond {
                                             let __text_0 = {
                                                 Text::declaring(
                                                     || "Overview — what the product does.".to_string(),
                                                     LayoutStyle::new(),
-                                                    move |__inherited: TextStyle| __inherited.with_font_size(14.0).with_color(use_theme::<core::theme::SandboxTheme>().ink()),
+                                                    { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(14.0).with_color(theme.get().ink) },
                                                 )?
                                             };
                                             Ok(box_item(__text_0))
                                         } else {
                                             Ok(box_item(Container::column(children![])?))
                                         }
+                                    }
                                     },
                                     0.0,
                                 )?;
@@ -61,19 +69,22 @@ pub fn features_navigation(props: FeaturesNavigationProps, children: Children) -
                                 let __node_5 = ReactiveList::new(
                                     { let tab = tab.clone(); move || vec![tab.get() == 1] },
                                     |__cond: &bool| *__cond,
+                                    {
+                                        let theme = theme.clone();
                                     move |__cond: bool| -> Result<Box<dyn LayoutItem>, LayoutError> {
                                         if __cond {
                                             let __text_1 = {
                                                 Text::declaring(
                                                     || "Pricing — plans and limits.".to_string(),
                                                     LayoutStyle::new(),
-                                                    move |__inherited: TextStyle| __inherited.with_font_size(14.0).with_color(use_theme::<core::theme::SandboxTheme>().ink()),
+                                                    { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(14.0).with_color(theme.get().ink) },
                                                 )?
                                             };
                                             Ok(box_item(__text_1))
                                         } else {
                                             Ok(box_item(Container::column(children![])?))
                                         }
+                                    }
                                     },
                                     0.0,
                                 )?;
@@ -81,19 +92,22 @@ pub fn features_navigation(props: FeaturesNavigationProps, children: Children) -
                                 let __node_6 = ReactiveList::new(
                                     { let tab = tab.clone(); move || vec![tab.get() == 2] },
                                     |__cond: &bool| *__cond,
+                                    {
+                                        let theme = theme.clone();
                                     move |__cond: bool| -> Result<Box<dyn LayoutItem>, LayoutError> {
                                         if __cond {
                                             let __text_2 = {
                                                 Text::declaring(
                                                     || "Team — who is behind it.".to_string(),
                                                     LayoutStyle::new(),
-                                                    move |__inherited: TextStyle| __inherited.with_font_size(14.0).with_color(use_theme::<core::theme::SandboxTheme>().ink()),
+                                                    { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(14.0).with_color(theme.get().ink) },
                                                 )?
                                             };
                                             Ok(box_item(__text_2))
                                         } else {
                                             Ok(box_item(Container::column(children![])?))
                                         }
+                                    }
                                     },
                                     0.0,
                                 )?;
@@ -119,33 +133,41 @@ pub fn features_navigation(props: FeaturesNavigationProps, children: Children) -
             let __deferred = Children::new(
                 {
                     let open = open.clone();
+                    let theme = theme.clone();
                 move || {
                     let open = open.clone();
+                    let theme = theme.clone();
                     let mut __slots = Slots::new();
                     let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
                     let __node_9 = {
                         let __deferred = Children::new(
                             {
                                 let open = open.clone();
+                                let theme = theme.clone();
                             move || {
                                 let open = open.clone();
+                                let theme = theme.clone();
                                 let mut __slots = Slots::new();
                                 let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
                                 let __node_10 = {
                                     let __deferred = Children::new(
+                                        {
+                                            let theme = theme.clone();
                                         move || {
+                                            let theme = theme.clone();
                                             let mut __slots = Slots::new();
                                             let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
                                             let __text_3 = {
                                                 Text::declaring(
                                                     || "Ships in 2–3 business days. Free over $50.".to_string(),
                                                     LayoutStyle::new(),
-                                                    move |__inherited: TextStyle| __inherited.with_font_size(14.0).with_color(use_theme::<core::theme::SandboxTheme>().muted()),
+                                                    { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(14.0).with_color(theme.get().muted) },
                                                 )?
                                             };
                                             __children.push(box_item(__text_3));
                                             __slots.extend_default(__children);
                                             Ok(__slots)
+                                        }
                                         }
                                     );
                                     accordion(AccordionProps::props().title("Shipping details").open(open.clone()).build(), __deferred)?
@@ -156,7 +178,7 @@ pub fn features_navigation(props: FeaturesNavigationProps, children: Children) -
                                     Text::declaring(
                                         move || format!("open · {}", { open.get() }),
                                         LayoutStyle::new(),
-                                        move |__inherited: TextStyle| __inherited.with_font_size(13.0).with_color(use_theme::<core::theme::SandboxTheme>().muted()),
+                                        { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(13.0).with_color(theme.get().muted) },
                                     )?
                                 };
                                 __children.push(box_item(__text_4));

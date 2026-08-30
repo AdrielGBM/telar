@@ -15,22 +15,23 @@ pub struct SharedComponentsStatProps {
 pub fn shared_components_stat(props: SharedComponentsStatProps, children: Children) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let __owner = telar::owner_scope();
     #[allow(unused_imports)] use telar::use_theme;
+    #[allow(unused_variables)] let theme = telar::Theme::<core::theme::SandboxTheme>::default();
     let __sbox_0 = {
         let __text_0 = {
             Text::declaring(
                 move || format!("{}", { props.value }),
                 LayoutStyle::new(),
-                move |__inherited: TextStyle| __inherited.with_font_size(28.0).with_color(use_theme::<core::theme::SandboxTheme>().primary()),
+                { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(28.0).with_color(theme.get().primary) },
             )?
         };
         let __text_1 = {
             Text::declaring(
                 move || format!("{}", { props.label }),
                 LayoutStyle::new(),
-                move |__inherited: TextStyle| __inherited.with_font_size(12.0).with_color(use_theme::<core::theme::SandboxTheme>().muted()),
+                { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(12.0).with_color(theme.get().muted) },
             )?
         };
-        StyledContainer::new(LayoutStyle::new().flex_column().flex_grow(1.0).min_width(130.0).padding_all(18.0).gap(4.0).align_items(AlignItems::CENTER), move |_| RectStyle { fill: Some(Paint::Solid(use_theme::<core::theme::SandboxTheme>().surface())), border: Some(Border { paint: Paint::Solid(use_theme::<core::theme::SandboxTheme>().border()), widths: [1.0; 4] }), shadow: None, radius: BorderRadius::all(14.0) }, children![__text_0, __text_1])?
+        StyledContainer::new(LayoutStyle::new().flex_column().flex_grow(1.0).min_width(130.0).padding_all(18.0).gap(4.0).align_items(AlignItems::CENTER), { let theme = theme.clone(); move |_| RectStyle { fill: Some(Paint::Solid(theme.get().surface)), border: Some(Border { paint: Paint::Solid(theme.get().border), widths: [1.0; 4] }), shadow: None, radius: BorderRadius::all(14.0) } }, children![__text_0, __text_1])?
     };
     Ok(Box::new(__sbox_0))
 }
@@ -38,6 +39,7 @@ pub fn shared_components_stat(props: SharedComponentsStatProps, children: Childr
 #[allow(dead_code, unused_variables, unused_mut)]
 pub fn shared_components_stat_preview_0() -> Result<Box<dyn LayoutItem>, LayoutError> {
     #[allow(unused_imports)] use telar::use_theme;
+    #[allow(unused_variables)] let theme = telar::Theme::<core::theme::SandboxTheme>::default();
     let __node_0 = stat(StatProps::props().value("60 fps").label("software + wgpu").build(), Children::default())?;
     Ok(Box::new(__node_0))
 }

@@ -17,12 +17,12 @@ use std::collections::HashMap;
 use std::fmt::Write;
 use std::path::{Path, PathBuf};
 
-use telar_parser::{Attr, Element, IfBlock, StyleClass, StyleConstant, ViewNode};
+use telar_parser::{Attr, Element, IfBlock, StyleClass, ViewNode};
 
 use crate::naming::contains_ident;
 use crate::registry::ValueKind;
 use crate::style::Scope;
-pub(crate) use signals::{is_paint_key, rust_str};
+pub(crate) use signals::{is_paint_key, rust_str, substitute_reads};
 
 /// Sentinel comment lines that bracket each view node's generated code with the `.rsx` line it came from. They are emitted into the view body during generation and stripped by [`resolve_source_map`] in the transpiler, which turns them into the per-line origin map. The prefix is deliberately un-generatable by normal codegen so it can never collide with real output.
 const SRC_PUSH: &str = "//@RSX@PUSH:";
@@ -172,10 +172,9 @@ fn wrap_as_single_content(names: &[String]) -> String {
 pub struct ViewGen<'a> {
     /// Declared style classes, used to validate class references in elements.
     classes: &'a [StyleClass],
-    constants: &'a [StyleConstant],
     /// Per-widget-type variable counters, keyed by the descriptive prefix.
     counters: HashMap<String, usize>,
-    /// When set, `[style]` color references resolve to `use_theme::<Type>().field` instead of generated `COLOR_*` consts, so theme switching takes effect.
+    /// When set, the view binds `theme` and each `[style]` class function binds its own, so `$theme.field` is a read.
     theme_type: Option<String>,
     /// Identifiers the `[logic]` zone binds. A bare name in the view resolves to one of these before the theme
     /// is consulted, so a local shadows a same-named token rather than the other way round — see
@@ -218,13 +217,11 @@ pub struct ViewGen<'a> {
 impl<'a> ViewGen<'a> {
     pub fn with_theme(
         classes: &'a [StyleClass],
-        constants: &'a [StyleConstant],
         theme_type: Option<&str>,
         base_dir: Option<&Path>,
     ) -> Self {
         Self {
             classes,
-            constants,
             counters: HashMap::new(),
             theme_type: theme_type.map(str::to_string),
             locals: Vec::new(),
@@ -357,12 +354,11 @@ impl<'a> ViewGen<'a> {
         self.locals.iter().any(|local| local == name)
     }
 
-    /// What a bare value written in this view resolves against: the theme, the file's `[style]` constants,
+    /// What a bare value written in this view resolves against: the theme
     /// and the `[logic]` bindings — everything an attribute can name without spelling out Rust.
     pub(super) fn scope(&self) -> Scope<'_> {
         Scope {
             theme: self.theme_type.as_deref(),
-            constants: self.constants,
             locals: &self.locals,
         }
     }
@@ -642,7 +638,6 @@ impl<'a> ViewGen<'a> {
                 .then(|| crate::style::keyword(&attr.key, value, table).err())
                 .flatten(),
             ValueKind::Number => crate::style::format_number(value, self.scope()).err(),
-            ValueKind::Dimension => crate::style::dimension(value, self.scope()).err(),
             ValueKind::Edges => value
                 .split_whitespace()
                 .find_map(|token| crate::style::format_number(token, self.scope()).err()),
@@ -699,7 +694,7 @@ mod tests {
     use super::*;
 
     fn make_gen<'a>() -> ViewGen<'a> {
-        ViewGen::with_theme(&[], &[], None, None)
+        ViewGen::with_theme(&[], None, None)
     }
 
     #[test]
@@ -1217,7 +1212,7 @@ mod tests {
     // wires an optional `on_submit`.
     #[test]
     fn input_binds_value_style_and_submit() {
-        let src = "[logic]\nlet name = signal(String::new());\n[view]\ninput value:$name font_size:16 color:theme.primary width:200 on_submit:(|| $name.set(String::new()))\n";
+        let src = "[logic]\nlet name = signal(String::new());\n[view]\ninput value:$name font_size:16 color:$theme.primary width:200 on_submit:(|| $name.set(String::new()))\n";
         let code = crate::transpile_source(src, "demo", Some("SandboxTheme"), None)
             .unwrap()
             .rust_code;
@@ -1226,7 +1221,7 @@ mod tests {
             "binds the value signal (cloned):\n{code}"
         );
         assert!(
-            code.contains("TextStyle::new(16.0, use_theme::<SandboxTheme>().primary())"),
+            code.contains("TextStyle::new(16.0, theme.get().primary)"),
             "size + reactive colour style:\n{code}"
         );
         assert!(
@@ -1640,31 +1635,22 @@ mod tests {
         );
     }
 
-    // A bare color token (no `(`/`$`) must still resolve through the theme, not be swept into the expression
-    // arm — guards the computed-expression detection from misfiring on ordinary tokens.
+    /// A theme read is a `$` read: the view binds `theme` as a handle, so the same sugar that reads a signal
+    /// reads the theme, and it re-reads inside the paint closure instead of freezing at construction.
     #[test]
-    fn a_theme_read_is_the_one_spelling_that_reaches_the_theme() {
-        let src = "[view]\nbox fill:theme.primary\n    text \"x\"\n";
+    fn a_theme_read_is_a_dollar_read_like_any_other() {
+        let src = "[view]\nbox fill:$theme.primary\n    text \"x\"\n";
         let code = crate::transpile_source(src, "demo", Some("MyTheme"), None)
             .unwrap()
             .rust_code;
         assert!(
-            code.contains("use_theme::<MyTheme>().primary()"),
-            "a token name is read through the trait:\n{code}"
+            code.contains("let theme = telar::Theme::<MyTheme>::default();"),
+            "the view binds the handle:\n{code}"
         );
-
-        // A bare name is a `[style]` constant, so an undeclared one is a mistake on its own line rather than
-        // a field access on the theme that fails in rustc.
-        let bare = crate::transpile_source(
-            "[view]\nbox fill:primary\n    text \"x\"\n",
-            "demo",
-            Some("MyTheme"),
-            None,
-        )
-        .unwrap()
-        .rust_code;
-        assert!(bare.contains("`primary` is not a color"), "{bare}");
-        assert!(bare.contains("theme.primary"), "and says so:\n{bare}");
+        assert!(
+            code.contains("theme.get().primary"),
+            "and the read happens where it is written:\n{code}"
+        );
     }
 
     // Every name in `builtin_tags()` must have a real dispatch arm in `emit_element`; a tag missing one
@@ -1768,19 +1754,19 @@ mod tests {
         );
     }
 
-    /// A stop nobody can resolve is reported against the attribute, where inside `linear(…)` there is no
-    /// attribute of its own to point at.
+    /// A gradient's *shape* is the one thing about it this crate can judge — its stops are Rust expressions,
+    /// reported by rustc against the attribute's own line.
     #[test]
-    fn a_bad_stop_is_reported_on_the_fill_that_holds_it() {
+    fn a_gradient_that_is_not_one_is_reported_on_the_fill_that_holds_it() {
         let code = crate::transpile_source(
-            "[view]\nbox fill:linear(#ff0000, nonsuch)\n    text \"x\"\n",
+            "[view]\nbox fill:linear(#ff0000)\n    text \"x\"\n",
             "demo",
             None,
             None,
         )
         .unwrap()
         .rust_code;
-        assert!(code.contains("`nonsuch` is not a color"), "{code}");
+        assert!(code.contains("is not a gradient"), "{code}");
     }
 
     /// A synonym is cost with nothing bought, and every one of these had a shorter or plainer spelling that
@@ -1944,19 +1930,6 @@ mod tests {
         assert!(!out.rust_code.contains(".declaring("), "{}", out.rust_code);
     }
 
-    /// T6's victim: `gap:1O` used to be emitted as `.gap(1O)` and reported by rustc against generated code.
-    #[test]
-    fn a_mistyped_number_is_an_rsx_error_not_a_rustc_one() {
-        let src = "[view]\ncol gap:1O\n    text \"x\"\n";
-        let out = crate::transpile_source(src, "demo", None, None).unwrap();
-        assert!(
-            out.rust_code.contains("is not a number"),
-            "{}",
-            out.rust_code
-        );
-        assert!(!out.rust_code.contains(".gap(1O)"));
-    }
-
     /// The names the transpiler cannot enumerate — a `[logic]` binding, a `const`, a props field — still
     /// reach rustc, which names them against this `.rsx` line through the source map.
     #[test]
@@ -1971,20 +1944,6 @@ mod tests {
         );
         assert!(out.rust_code.contains(".gap(gutter)"));
         assert!(out.rust_code.contains(".padding_all(props.pad)"));
-    }
-
-    /// §6.3: `generate_constant` has always emitted `const SIZE_*` and nothing ever resolved a name to one,
-    /// so every numeric `[style]` constant was dead in the file that declared it.
-    #[test]
-    fn a_numeric_style_constant_reaches_the_attribute_that_names_it() {
-        let src = "[style]\ncard_gap: 6\n\n[view]\ncol gap:card_gap\n    text \"x\"\n";
-        let out = crate::transpile_source(src, "demo", None, None).unwrap();
-        assert!(out.rust_code.contains("const SIZE_CARD_GAP: f32 = 6.0;"));
-        assert!(
-            out.rust_code.contains(".gap(SIZE_CARD_GAP)"),
-            "{}",
-            out.rust_code
-        );
     }
 
     /// B1: the family was a process-wide global, so a `text` could not name one at all — the whole reason

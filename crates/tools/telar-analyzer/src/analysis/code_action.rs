@@ -27,16 +27,6 @@ pub fn code_actions(
                 diag,
             ));
         }
-        // Unknown color reference → declare it as a `[style]` constant.
-        else if let Some(color) = between(&diag.message, "Unknown color `", "`")
-            && let Some(edit) = insert_into_style(source, uri, &format!("{color}: #000000"))
-        {
-            actions.push(quick_fix(
-                format!("Add `{color}` as a [style] constant"),
-                edit,
-                diag,
-            ));
-        }
     }
     actions
 }
@@ -154,25 +144,6 @@ mod tests {
         assert!(edits[0].new_text.contains("@missing"));
         // Inserted after the last [style] content line (`    width: 240`, 0-based line 4).
         assert_eq!(edits[0].range.start.line, 4);
-    }
-
-    #[test]
-    fn add_color_constant_quick_fix() {
-        let src = "[style]\nprimary: #ffffff\n[view]\ntext color:brand\n";
-        let uri = Uri::from_str("file:///x.rsx").unwrap();
-        let actions = code_actions(
-            src,
-            &uri,
-            &[diag(
-                "Unknown color `brand` — not in [style] constants or theme fields",
-            )],
-        );
-        assert_eq!(actions.len(), 1);
-        let CodeActionOrCommand::CodeAction(a) = &actions[0] else {
-            panic!()
-        };
-        let edits = a.edit.as_ref().unwrap().changes.as_ref().unwrap()[&uri].clone();
-        assert!(edits[0].new_text.contains("brand: #000000"));
     }
 
     #[test]

@@ -12,6 +12,7 @@ pub struct FeaturesOpacityProps {}
 
 #[allow(dead_code)]
 fn style_center() -> LayoutStyle {
+    #[allow(unused_variables)] let theme = telar::Theme::<core::theme::SandboxTheme>::default();
     LayoutStyle::new()
         .align_items(AlignItems::CENTER)
         .justify_content(JustifyContent::CENTER)
@@ -21,17 +22,24 @@ fn style_center() -> LayoutStyle {
 pub fn features_opacity(props: FeaturesOpacityProps, children: Children) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let __owner = telar::owner_scope();
     #[allow(unused_imports)] use telar::use_theme;
+    #[allow(unused_variables)] let theme = telar::Theme::<core::theme::SandboxTheme>::default();
 
     let __col_0 = {
         let __node_0 = doc_header(DocHeaderProps::props().kicker("SURFACES").title("Opacity & layers").desc("opacity fades a box and everything inside it as a single layer, so nested transparencies multiply the way you would expect.").build(), Children::default())?;
         let __node_1 = {
             let __deferred = Children::new(
+                {
+                    let theme = theme.clone();
                 move || {
+                    let theme = theme.clone();
                     let mut __slots = Slots::new();
                     let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
                     let __node_2 = {
                         let __deferred = Children::new(
+                            {
+                                let theme = theme.clone();
                             move || {
+                                let theme = theme.clone();
                                 let mut __slots = Slots::new();
                                 let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
                                 let __row_0 = {
@@ -43,7 +51,7 @@ pub fn features_opacity(props: FeaturesOpacityProps, children: Children) -> Resu
                                                 move |__inherited: TextStyle| __inherited,
                                             )?
                                         };
-                                        StyledContainer::new(style_center().flex_column().width(120.0).height(72.0), move |_| RectStyle::default().with_fill(use_theme::<core::theme::SandboxTheme>().danger).with_radius(BorderRadius::all(10.0)), children![__text_0])?.with_opacity(|| 1.0)
+                                        StyledContainer::new(style_center().flex_column().width(120.0).height(72.0), { let theme = theme.clone(); move |_| RectStyle::default().with_fill(theme.get().danger).with_radius(BorderRadius::all(10.0)) }, children![__text_0])?.with_opacity(|| 1.0)
                                     };
                                     let __sbox_1 = {
                                         let __text_1 = {
@@ -53,7 +61,7 @@ pub fn features_opacity(props: FeaturesOpacityProps, children: Children) -> Resu
                                                 move |__inherited: TextStyle| __inherited,
                                             )?
                                         };
-                                        StyledContainer::new(style_center().flex_column().width(120.0).height(72.0), move |_| RectStyle::default().with_fill(use_theme::<core::theme::SandboxTheme>().danger).with_radius(BorderRadius::all(10.0)), children![__text_1])?.with_opacity(|| 0.6)
+                                        StyledContainer::new(style_center().flex_column().width(120.0).height(72.0), { let theme = theme.clone(); move |_| RectStyle::default().with_fill(theme.get().danger).with_radius(BorderRadius::all(10.0)) }, children![__text_1])?.with_opacity(|| 0.6)
                                     };
                                     let __sbox_2 = {
                                         let __text_2 = {
@@ -63,7 +71,7 @@ pub fn features_opacity(props: FeaturesOpacityProps, children: Children) -> Resu
                                                 move |__inherited: TextStyle| __inherited,
                                             )?
                                         };
-                                        StyledContainer::new(style_center().flex_column().width(120.0).height(72.0), move |_| RectStyle::default().with_fill(use_theme::<core::theme::SandboxTheme>().danger).with_radius(BorderRadius::all(10.0)), children![__text_2])?.with_opacity(|| 0.3)
+                                        StyledContainer::new(style_center().flex_column().width(120.0).height(72.0), { let theme = theme.clone(); move |_| RectStyle::default().with_fill(theme.get().danger).with_radius(BorderRadius::all(10.0)) }, children![__text_2])?.with_opacity(|| 0.3)
                                     };
                                     let __sbox_3 = {
                                         let __text_3 = {
@@ -73,34 +81,42 @@ pub fn features_opacity(props: FeaturesOpacityProps, children: Children) -> Resu
                                                 move |__inherited: TextStyle| __inherited,
                                             )?
                                         };
-                                        StyledContainer::new(style_center().flex_column().width(120.0).height(72.0), move |_| RectStyle::default().with_fill(use_theme::<core::theme::SandboxTheme>().danger).with_radius(BorderRadius::all(10.0)), children![__text_3])?.with_opacity(|| 0.1)
+                                        StyledContainer::new(style_center().flex_column().width(120.0).height(72.0), { let theme = theme.clone(); move |_| RectStyle::default().with_fill(theme.get().danger).with_radius(BorderRadius::all(10.0)) }, children![__text_3])?.with_opacity(|| 0.1)
                                     };
-                                    Container::new(LayoutStyle::new().flex_row().gap(14.0).flex_wrap(), children![__sbox_0, __sbox_1, __sbox_2, __sbox_3])?.declaring(move || Declared::default().with_font_size(16.0).with_color(use_theme::<core::theme::SandboxTheme>().on_primary()))
+                                    Container::new(LayoutStyle::new().flex_row().gap(14.0).flex_wrap(), children![__sbox_0, __sbox_1, __sbox_2, __sbox_3])?.declaring({ let theme = theme.clone(); move || Declared::default().with_font_size(16.0).with_color(theme.get().on_primary) })
                                 };
                                 __children.push(box_item(__row_0));
                                 __slots.extend_default(__children);
                                 Ok(__slots)
                             }
+                            }
                         );
                         card(CardProps::props().build(), __deferred)?
                     };
                     __children.push(box_item(__node_2));
-                    let __node_3 = code_line(CodeLineProps::props().code("box fill:theme.danger opacity:0.3").build(), Children::default())?;
+                    let __node_3 = code_line(CodeLineProps::props().code("box fill:$theme.danger opacity:0.3").build(), Children::default())?;
                     __children.push(box_item(__node_3));
                     __slots.extend_default(__children);
                     Ok(__slots)
+                }
                 }
             );
             example(ExampleProps::props().title("A single fill at descending opacity").build(), __deferred)?
         };
         let __node_4 = {
             let __deferred = Children::new(
+                {
+                    let theme = theme.clone();
                 move || {
+                    let theme = theme.clone();
                     let mut __slots = Slots::new();
                     let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
                     let __node_5 = {
                         let __deferred = Children::new(
+                            {
+                                let theme = theme.clone();
                             move || {
+                                let theme = theme.clone();
                                 let mut __slots = Slots::new();
                                 let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
                                 let __sbox_4 = {
@@ -108,35 +124,43 @@ pub fn features_opacity(props: FeaturesOpacityProps, children: Children) -> Resu
                                         Text::declaring(
                                             || "gradient at 0.75".to_string(),
                                             LayoutStyle::new(),
-                                            move |__inherited: TextStyle| __inherited.with_font_size(16.0).with_color(use_theme::<core::theme::SandboxTheme>().on_primary()),
+                                            { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(16.0).with_color(theme.get().on_primary) },
                                         )?
                                     };
-                                    StyledContainer::new(style_center().flex_column().height(80.0), move |r| RectStyle { fill: Some(Paint::Gradient(Gradient::linear(Point::new(r.x, r.y + r.height * 0.5), Point::new(r.x + r.width, r.y + r.height * 0.5), &[(0.0, use_theme::<core::theme::SandboxTheme>().primary()), (0.5, use_theme::<core::theme::SandboxTheme>().purple), (1.0, use_theme::<core::theme::SandboxTheme>().danger)]))), border: None, shadow: None, radius: BorderRadius::all(12.0) }, children![__text_4])?.with_opacity(|| 0.75)
+                                    StyledContainer::new(style_center().flex_column().height(80.0), { let theme = theme.clone(); move |r| RectStyle { fill: Some(Paint::Gradient(Gradient::linear(Point::new(r.x, r.y + r.height * 0.5), Point::new(r.x + r.width, r.y + r.height * 0.5), &[(0.0, theme.get().primary), (0.5, theme.get().purple), (1.0, theme.get().danger)]))), border: None, shadow: None, radius: BorderRadius::all(12.0) } }, children![__text_4])?.with_opacity(|| 0.75)
                                 };
                                 __children.push(box_item(__sbox_4));
                                 __slots.extend_default(__children);
                                 Ok(__slots)
                             }
+                            }
                         );
                         card(CardProps::props().build(), __deferred)?
                     };
                     __children.push(box_item(__node_5));
-                    let __node_6 = code_line(CodeLineProps::props().code("box fill:linear(horizontal, theme.primary, theme.danger) opacity:0.75").build(), Children::default())?;
+                    let __node_6 = code_line(CodeLineProps::props().code("box fill:linear(horizontal, $theme.primary, $theme.danger) opacity:0.75").build(), Children::default())?;
                     __children.push(box_item(__node_6));
                     __slots.extend_default(__children);
                     Ok(__slots)
+                }
                 }
             );
             example(ExampleProps::props().title("Layer opacity applies to a gradient and its label together").build(), __deferred)?
         };
         let __node_7 = {
             let __deferred = Children::new(
+                {
+                    let theme = theme.clone();
                 move || {
+                    let theme = theme.clone();
                     let mut __slots = Slots::new();
                     let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
                     let __node_8 = {
                         let __deferred = Children::new(
+                            {
+                                let theme = theme.clone();
                             move || {
+                                let theme = theme.clone();
                                 let mut __slots = Slots::new();
                                 let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
                                 let __sbox_5 = {
@@ -144,7 +168,7 @@ pub fn features_opacity(props: FeaturesOpacityProps, children: Children) -> Resu
                                         Text::declaring(
                                             || "outer · 0.6".to_string(),
                                             LayoutStyle::new(),
-                                            move |__inherited: TextStyle| __inherited.with_font_size(12.0).with_color(use_theme::<core::theme::SandboxTheme>().on_primary()),
+                                            { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(12.0).with_color(theme.get().on_primary) },
                                         )?
                                     };
                                     let __sbox_6 = {
@@ -152,16 +176,17 @@ pub fn features_opacity(props: FeaturesOpacityProps, children: Children) -> Resu
                                             Text::declaring(
                                                 || "inner · 0.6".to_string(),
                                                 LayoutStyle::new(),
-                                                move |__inherited: TextStyle| __inherited.with_font_size(14.0).with_color(use_theme::<core::theme::SandboxTheme>().on_primary()),
+                                                { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(14.0).with_color(theme.get().on_primary) },
                                             )?
                                         };
-                                        StyledContainer::new(style_center().flex_column().flex_grow(1.0), move |_| RectStyle::default().with_fill(use_theme::<core::theme::SandboxTheme>().danger).with_radius(BorderRadius::all(8.0)), children![__text_6])?.with_opacity(|| 0.6)
+                                        StyledContainer::new(style_center().flex_column().flex_grow(1.0), { let theme = theme.clone(); move |_| RectStyle::default().with_fill(theme.get().danger).with_radius(BorderRadius::all(8.0)) }, children![__text_6])?.with_opacity(|| 0.6)
                                     };
-                                    StyledContainer::new(LayoutStyle::new().flex_column().height(120.0).padding_all(14.0).gap(8.0), move |_| RectStyle::default().with_fill(use_theme::<core::theme::SandboxTheme>().primary()).with_radius(BorderRadius::all(10.0)), children![__text_5, __sbox_6])?.with_opacity(|| 0.6)
+                                    StyledContainer::new(LayoutStyle::new().flex_column().height(120.0).padding_all(14.0).gap(8.0), { let theme = theme.clone(); move |_| RectStyle::default().with_fill(theme.get().primary).with_radius(BorderRadius::all(10.0)) }, children![__text_5, __sbox_6])?.with_opacity(|| 0.6)
                                 };
                                 __children.push(box_item(__sbox_5));
                                 __slots.extend_default(__children);
                                 Ok(__slots)
+                            }
                             }
                         );
                         card(CardProps::props().build(), __deferred)?
@@ -171,6 +196,7 @@ pub fn features_opacity(props: FeaturesOpacityProps, children: Children) -> Resu
                     __children.push(box_item(__node_9));
                     __slots.extend_default(__children);
                     Ok(__slots)
+                }
                 }
             );
             example(ExampleProps::props().title("Nested — outer 0.6 × inner 0.6 combine to about 0.36").build(), __deferred)?

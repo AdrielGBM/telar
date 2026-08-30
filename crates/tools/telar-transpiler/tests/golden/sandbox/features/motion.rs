@@ -6,7 +6,6 @@
 #[allow(unused_imports)] use crate::shared::components::code_line::{code_line, CodeLineProps};
 #[allow(unused_imports)] use crate::shared::components::doc_header::{doc_header, DocHeaderProps};
 #[allow(unused_imports)] use crate::shared::components::example::{example, ExampleProps};
-#[allow(unused_imports)] use crate::core::theme::theme;
 
 #[derive(::telar::Props)]
 pub struct FeaturesMotionProps {}
@@ -15,6 +14,7 @@ pub struct FeaturesMotionProps {}
 pub fn features_motion(props: FeaturesMotionProps, children: Children) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let __owner = telar::owner_scope();
     #[allow(unused_imports)] use telar::use_theme;
+    #[allow(unused_variables)] let theme = telar::Theme::<core::theme::SandboxTheme>::default();
 
     let big = signal(false);
 
@@ -36,7 +36,7 @@ pub fn features_motion(props: FeaturesMotionProps, children: Children) -> Result
         })
         .collect();
     let equalizer = move |rect: Rect| {
-        let t = theme();
+        let t = crate::core::theme::theme();
         let palette = [t.primary, t.success, t.warning, t.danger, t.purple, t.cyan];
         let (bar_w, gap) = (24.0f32, 8.0f32);
         let baseline = rect.y + rect.height;
@@ -69,7 +69,7 @@ pub fn features_motion(props: FeaturesMotionProps, children: Children) -> Result
         .start(motion::Repeat::Once);
     let progress_canvas = progress.clone();
     let progress_bar = move |rect: Rect| {
-        let t = theme();
+        let t = crate::core::theme::theme();
         let pct = (progress_canvas.get() / 100.0).clamp(0.0, 1.0);
         RenderNode::group([
             RenderNode::rect(
@@ -93,9 +93,11 @@ pub fn features_motion(props: FeaturesMotionProps, children: Children) -> Result
         let __node_1 = {
             let __deferred = Children::new(
                 {
+                    let theme = theme.clone();
                     let scale = scale.clone();
                     let big = big.clone();
                 move || {
+                    let theme = theme.clone();
                     let scale = scale.clone();
                     let big = big.clone();
                     let mut __slots = Slots::new();
@@ -103,9 +105,11 @@ pub fn features_motion(props: FeaturesMotionProps, children: Children) -> Result
                     let __node_2 = {
                         let __deferred = Children::new(
                             {
+                                let theme = theme.clone();
                                 let scale = scale.clone();
                                 let big = big.clone();
                             move || {
+                                let theme = theme.clone();
                                 let scale = scale.clone();
                                 let big = big.clone();
                                 let mut __slots = Slots::new();
@@ -113,11 +117,11 @@ pub fn features_motion(props: FeaturesMotionProps, children: Children) -> Result
                                 let __row_0 = {
                                     let __sbox_0 = {
                                         let __sbox_1 = {
-                                            StyledContainer::new(LayoutStyle::new().flex_column().width(60.0).height(60.0), move |_| RectStyle::default().with_fill(use_theme::<core::theme::SandboxTheme>().primary()).with_radius(BorderRadius::all(12.0)), children![])?.with_transform({ let scale = scale.clone(); move |__r: Rect| box_transform(__r, (0) as f32, (scale.get()) as f32, (scale.get()) as f32, (0) as f32, (0) as f32) })
+                                            StyledContainer::new(LayoutStyle::new().flex_column().width(60.0).height(60.0), { let theme = theme.clone(); move |_| RectStyle::default().with_fill(theme.get().primary).with_radius(BorderRadius::all(12.0)) }, children![])?.with_transform({ let scale = scale.clone(); move |__r: Rect| box_transform(__r, (0) as f32, (scale.get()) as f32, (scale.get()) as f32, (0) as f32, (0) as f32) })
                                         };
                                         StyledContainer::new(LayoutStyle::new().flex_column().width(100.0).height(100.0).align_items(AlignItems::CENTER).justify_content(JustifyContent::CENTER), move |_| RectStyle::default(), children![__sbox_1])?
                                     };
-                                    let __node_3 = button(ButtonProps::props().label("Bounce").fill(Reactive::of(move || use_theme::<core::theme::SandboxTheme>().primary())).on_press(Box::new({ let big = big.clone(); let scale = scale.clone(); move || { big.toggle(); scale.retarget(if big.get() { 1.3 } else { 0.6 }) } })).build(), Children::default())?;
+                                    let __node_3 = button(ButtonProps::props().label("Bounce").fill(Reactive::of({ let theme = theme.clone(); move || theme.get().primary })).on_press(Box::new({ let big = big.clone(); let scale = scale.clone(); move || { big.toggle(); scale.retarget(if big.get() { 1.3 } else { 0.6 }) } })).build(), Children::default())?;
                                     Container::new(LayoutStyle::new().flex_row().gap(20.0).align_items(AlignItems::CENTER), children![__sbox_0, __node_3])?
                                 };
                                 __children.push(box_item(__row_0));
@@ -129,7 +133,7 @@ pub fn features_motion(props: FeaturesMotionProps, children: Children) -> Result
                         card(CardProps::props().gap(12.0).build(), __deferred)?
                     };
                     __children.push(box_item(__node_2));
-                    let __node_4 = code_line(CodeLineProps::props().code("box fill:theme.primary radius:12 width:60 height:60 scale:$scale   // scale.retarget(1.3)").build(), Children::default())?;
+                    let __node_4 = code_line(CodeLineProps::props().code("box fill:$theme.primary radius:12 width:60 height:60 scale:$scale   // scale.retarget(1.3)").build(), Children::default())?;
                     __children.push(box_item(__node_4));
                     __slots.extend_default(__children);
                     Ok(__slots)
@@ -177,9 +181,11 @@ pub fn features_motion(props: FeaturesMotionProps, children: Children) -> Result
             let __deferred = Children::new(
                 {
                     let progress = progress.clone();
+                    let theme = theme.clone();
                     let progress_bar = progress_bar.clone();
                 move || {
                     let progress = progress.clone();
+                    let theme = theme.clone();
                     let progress_bar = progress_bar.clone();
                     let mut __slots = Slots::new();
                     let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
@@ -187,9 +193,11 @@ pub fn features_motion(props: FeaturesMotionProps, children: Children) -> Result
                         let __deferred = Children::new(
                             {
                                 let progress = progress.clone();
+                                let theme = theme.clone();
                                 let progress_bar = progress_bar.clone();
                             move || {
                                 let progress = progress.clone();
+                                let theme = theme.clone();
                                 let progress_bar = progress_bar.clone();
                                 let mut __slots = Slots::new();
                                 let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
@@ -200,10 +208,10 @@ pub fn features_motion(props: FeaturesMotionProps, children: Children) -> Result
                                         Text::declaring(
                                             move || format!("{}%", { progress.get().round() }),
                                             LayoutStyle::new(),
-                                            move |__inherited: TextStyle| __inherited.with_font_size(12.0).with_color(use_theme::<core::theme::SandboxTheme>().muted()),
+                                            { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(12.0).with_color(theme.get().muted) },
                                         )?
                                     };
-                                    let __node_10 = button(ButtonProps::props().label("Replay").fill(Reactive::of(move || use_theme::<core::theme::SandboxTheme>().primary())).on_press(Box::new({ let progress = progress.clone(); move || { progress.restart() } })).build(), Children::default())?;
+                                    let __node_10 = button(ButtonProps::props().label("Replay").fill(Reactive::of({ let theme = theme.clone(); move || theme.get().primary })).on_press(Box::new({ let progress = progress.clone(); move || { progress.restart() } })).build(), Children::default())?;
                                     Container::new(LayoutStyle::new().flex_row().gap(12.0).align_items(AlignItems::CENTER), children![__canvas_1, __text_0, __node_10])?
                                 };
                                 __children.push(box_item(__row_1));

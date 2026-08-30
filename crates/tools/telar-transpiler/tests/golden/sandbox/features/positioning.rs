@@ -15,6 +15,7 @@ pub struct FeaturesPositioningProps {}
 pub fn features_positioning(props: FeaturesPositioningProps, children: Children) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let __owner = telar::owner_scope();
     #[allow(unused_imports)] use telar::use_theme;
+    #[allow(unused_variables)] let theme = telar::Theme::<core::theme::SandboxTheme>::default();
     // Which corner the pinned badge sits in. The badge never moves in the tree — only which insets name it does.
     let corner = signal(0i32);
     let corner_rsx_mv = corner.clone();
@@ -37,12 +38,18 @@ pub fn features_positioning(props: FeaturesPositioningProps, children: Children)
         let __node_0 = doc_header(DocHeaderProps::props().kicker("FOUNDATIONS").title("Positioning").desc("absolute takes a child out of the flex flow and pins it by the insets it names. Insets and margins are logical — start and end follow the reading direction, so a layout mirrors under RTL without a second rule.").build(), Children::default())?;
         let __node_1 = {
             let __deferred = Children::new(
+                {
+                    let theme = theme.clone();
                 move || {
+                    let theme = theme.clone();
                     let mut __slots = Slots::new();
                     let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
                     let __node_2 = {
                         let __deferred = Children::new(
+                            {
+                                let theme = theme.clone();
                             move || {
+                                let theme = theme.clone();
                                 let mut __slots = Slots::new();
                                 let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
                                 let __sbox_0 = {
@@ -50,20 +57,21 @@ pub fn features_positioning(props: FeaturesPositioningProps, children: Children)
                                         Text::declaring(
                                             || "still in the flow".to_string(),
                                             LayoutStyle::new(),
-                                            move |__inherited: TextStyle| __inherited.with_font_size(12.0).with_color(use_theme::<core::theme::SandboxTheme>().muted()),
+                                            { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(12.0).with_color(theme.get().muted) },
                                         )?
                                     };
                                     let __sbox_1 = {
-                                        StyledContainer::new(LayoutStyle::new().flex_column().width(60.0).height(24.0).absolute().inset_top(12.0).inset_end(12.0), move |_| RectStyle::default().with_fill(use_theme::<core::theme::SandboxTheme>().primary()).with_radius(BorderRadius::all(6.0)), children![])?
+                                        StyledContainer::new(LayoutStyle::new().flex_column().width(60.0).height(24.0).absolute().inset_top(12.0).inset_end(12.0), { let theme = theme.clone(); move |_| RectStyle::default().with_fill(theme.get().primary).with_radius(BorderRadius::all(6.0)) }, children![])?
                                     };
                                     let __sbox_2 = {
-                                        StyledContainer::new(LayoutStyle::new().flex_column().width(60.0).height(24.0).absolute().inset_bottom(12.0).inset_start(12.0), move |_| RectStyle::default().with_fill(use_theme::<core::theme::SandboxTheme>().purple).with_radius(BorderRadius::all(6.0)), children![])?
+                                        StyledContainer::new(LayoutStyle::new().flex_column().width(60.0).height(24.0).absolute().inset_bottom(12.0).inset_start(12.0), { let theme = theme.clone(); move |_| RectStyle::default().with_fill(theme.get().purple).with_radius(BorderRadius::all(6.0)) }, children![])?
                                     };
-                                    StyledContainer::new(LayoutStyle::new().flex_column().height(120.0).width(SizeDimension::Percent(1.0)).padding_all(14.0), move |_| RectStyle::default().with_fill(use_theme::<core::theme::SandboxTheme>().surface_alt()).with_radius(BorderRadius::all(10.0)), children![__text_0, __sbox_1, __sbox_2])?
+                                    StyledContainer::new(LayoutStyle::new().flex_column().height(120.0).width(SizeDimension::Percent(1.0)).padding_all(14.0), { let theme = theme.clone(); move |_| RectStyle::default().with_fill(theme.get().surface_alt).with_radius(BorderRadius::all(10.0)) }, children![__text_0, __sbox_1, __sbox_2])?
                                 };
                                 __children.push(box_item(__sbox_0));
                                 __slots.extend_default(__children);
                                 Ok(__slots)
+                            }
                             }
                         );
                         card(CardProps::props().gap(12.0).build(), __deferred)?
@@ -74,17 +82,24 @@ pub fn features_positioning(props: FeaturesPositioningProps, children: Children)
                     __slots.extend_default(__children);
                     Ok(__slots)
                 }
+                }
             );
             example(ExampleProps::props().title("absolute — a child out of flow, pinned by the edges it names").build(), __deferred)?
         };
         let __node_4 = {
             let __deferred = Children::new(
+                {
+                    let theme = theme.clone();
                 move || {
+                    let theme = theme.clone();
                     let mut __slots = Slots::new();
                     let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
                     let __node_5 = {
                         let __deferred = Children::new(
+                            {
+                                let theme = theme.clone();
                             move || {
+                                let theme = theme.clone();
                                 let mut __slots = Slots::new();
                                 let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
                                 let __sbox_3 = {
@@ -92,17 +107,18 @@ pub fn features_positioning(props: FeaturesPositioningProps, children: Children)
                                         Text::declaring(
                                             || "under the scrim".to_string(),
                                             LayoutStyle::new(),
-                                            move |__inherited: TextStyle| __inherited.with_font_size(13.0).with_color(use_theme::<core::theme::SandboxTheme>().ink()),
+                                            { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(13.0).with_color(theme.get().ink) },
                                         )?
                                     };
                                     let __sbox_4 = {
-                                        StyledContainer::new(LayoutStyle::new().flex_column().absolute_fill(), move |_| RectStyle::default().with_fill(use_theme::<core::theme::SandboxTheme>().primary()).with_radius(BorderRadius::all(10.0)), children![])?.with_opacity(|| 0.35)
+                                        StyledContainer::new(LayoutStyle::new().flex_column().absolute_fill(), { let theme = theme.clone(); move |_| RectStyle::default().with_fill(theme.get().primary).with_radius(BorderRadius::all(10.0)) }, children![])?.with_opacity(|| 0.35)
                                     };
-                                    StyledContainer::new(LayoutStyle::new().flex_column().height(96.0).width(SizeDimension::Percent(1.0)).padding_all(14.0), move |_| RectStyle::default().with_fill(use_theme::<core::theme::SandboxTheme>().surface_alt()).with_radius(BorderRadius::all(10.0)), children![__text_1, __sbox_4])?
+                                    StyledContainer::new(LayoutStyle::new().flex_column().height(96.0).width(SizeDimension::Percent(1.0)).padding_all(14.0), { let theme = theme.clone(); move |_| RectStyle::default().with_fill(theme.get().surface_alt).with_radius(BorderRadius::all(10.0)) }, children![__text_1, __sbox_4])?
                                 };
                                 __children.push(box_item(__sbox_3));
                                 __slots.extend_default(__children);
                                 Ok(__slots)
+                            }
                             }
                         );
                         card(CardProps::props().gap(12.0).build(), __deferred)?
@@ -113,16 +129,19 @@ pub fn features_positioning(props: FeaturesPositioningProps, children: Children)
                     __slots.extend_default(__children);
                     Ok(__slots)
                 }
+                }
             );
             example(ExampleProps::props().title("absolute:fill — the all-four-edges-at-zero shorthand").build(), __deferred)?
         };
         let __node_7 = {
             let __deferred = Children::new(
                 {
+                    let theme = theme.clone();
                     let badge_top = badge_top.clone();
                     let badge_start = badge_start.clone();
                     let corner = corner.clone();
                 move || {
+                    let theme = theme.clone();
                     let badge_top = badge_top.clone();
                     let badge_start = badge_start.clone();
                     let corner = corner.clone();
@@ -131,10 +150,12 @@ pub fn features_positioning(props: FeaturesPositioningProps, children: Children)
                     let __node_8 = {
                         let __deferred = Children::new(
                             {
+                                let theme = theme.clone();
                                 let badge_top = badge_top.clone();
                                 let badge_start = badge_start.clone();
                                 let corner = corner.clone();
                             move || {
+                                let theme = theme.clone();
                                 let badge_top = badge_top.clone();
                                 let badge_start = badge_start.clone();
                                 let corner = corner.clone();
@@ -142,9 +163,9 @@ pub fn features_positioning(props: FeaturesPositioningProps, children: Children)
                                 let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
                                 let __sbox_5 = {
                                     let __sbox_6 = {
-                                        StyledContainer::new(LayoutStyle::new().flex_column().width(60.0).height(24.0).absolute().inset_top(badge_top.get()).inset_start(badge_start.get()), move |_| RectStyle::default().with_fill(use_theme::<core::theme::SandboxTheme>().primary()).with_radius(BorderRadius::all(6.0)), children![])?.styled_by({ let badge_top = badge_top.clone(); let badge_start = badge_start.clone(); move || LayoutStyle::new().flex_column().width(60.0).height(24.0).absolute().inset_top(badge_top.get()).inset_start(badge_start.get()) })
+                                        StyledContainer::new(LayoutStyle::new().flex_column().width(60.0).height(24.0).absolute().inset_top(badge_top.get()).inset_start(badge_start.get()), { let theme = theme.clone(); move |_| RectStyle::default().with_fill(theme.get().primary).with_radius(BorderRadius::all(6.0)) }, children![])?.styled_by({ let badge_top = badge_top.clone(); let badge_start = badge_start.clone(); move || LayoutStyle::new().flex_column().width(60.0).height(24.0).absolute().inset_top(badge_top.get()).inset_start(badge_start.get()) })
                                     };
-                                    StyledContainer::new(LayoutStyle::new().flex_column().height(120.0).width(220.0), move |_| RectStyle::default().with_fill(use_theme::<core::theme::SandboxTheme>().surface_alt()).with_radius(BorderRadius::all(10.0)), children![__sbox_6])?
+                                    StyledContainer::new(LayoutStyle::new().flex_column().height(120.0).width(220.0), { let theme = theme.clone(); move |_| RectStyle::default().with_fill(theme.get().surface_alt).with_radius(BorderRadius::all(10.0)) }, children![__sbox_6])?
                                 };
                                 __children.push(box_item(__sbox_5));
                                 let __row_0 = {
@@ -171,23 +192,29 @@ pub fn features_positioning(props: FeaturesPositioningProps, children: Children)
         };
         let __node_11 = {
             let __deferred = Children::new(
+                {
+                    let theme = theme.clone();
                 move || {
+                    let theme = theme.clone();
                     let mut __slots = Slots::new();
                     let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
                     let __node_12 = {
                         let __deferred = Children::new(
+                            {
+                                let theme = theme.clone();
                             move || {
+                                let theme = theme.clone();
                                 let mut __slots = Slots::new();
                                 let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
                                 let __col_1 = {
                                     let __sbox_7 = {
-                                        StyledContainer::new(LayoutStyle::new().flex_column().height(22.0), move |_| RectStyle::default().with_fill(use_theme::<core::theme::SandboxTheme>().border()).with_radius(BorderRadius::all(6.0)), children![])?
+                                        StyledContainer::new(LayoutStyle::new().flex_column().height(22.0), { let theme = theme.clone(); move |_| RectStyle::default().with_fill(theme.get().border).with_radius(BorderRadius::all(6.0)) }, children![])?
                                     };
                                     let __sbox_8 = {
-                                        StyledContainer::new(LayoutStyle::new().flex_column().height(22.0).margin_inline_start(40.0), move |_| RectStyle::default().with_fill(use_theme::<core::theme::SandboxTheme>().cyan).with_radius(BorderRadius::all(6.0)), children![])?
+                                        StyledContainer::new(LayoutStyle::new().flex_column().height(22.0).margin_inline_start(40.0), { let theme = theme.clone(); move |_| RectStyle::default().with_fill(theme.get().cyan).with_radius(BorderRadius::all(6.0)) }, children![])?
                                     };
                                     let __sbox_9 = {
-                                        StyledContainer::new(LayoutStyle::new().flex_column().height(22.0).margin_inline_end(40.0), move |_| RectStyle::default().with_fill(use_theme::<core::theme::SandboxTheme>().cyan).with_radius(BorderRadius::all(6.0)), children![])?
+                                        StyledContainer::new(LayoutStyle::new().flex_column().height(22.0).margin_inline_end(40.0), { let theme = theme.clone(); move |_| RectStyle::default().with_fill(theme.get().cyan).with_radius(BorderRadius::all(6.0)) }, children![])?
                                     };
                                     Container::new(LayoutStyle::new().flex_column().gap(8.0).width(SizeDimension::Percent(1.0)), children![__sbox_7, __sbox_8, __sbox_9])?
                                 };
@@ -196,12 +223,13 @@ pub fn features_positioning(props: FeaturesPositioningProps, children: Children)
                                     Text::declaring(
                                         || "The first bar is the full width; the two below give up 40 at the start and at the end.".to_string(),
                                         LayoutStyle::new(),
-                                        move |__inherited: TextStyle| __inherited.with_font_size(12.0).with_color(use_theme::<core::theme::SandboxTheme>().muted()),
+                                        { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(12.0).with_color(theme.get().muted) },
                                     )?
                                 };
                                 __children.push(box_item(__text_2));
                                 __slots.extend_default(__children);
                                 Ok(__slots)
+                            }
                             }
                         );
                         card(CardProps::props().gap(10.0).build(), __deferred)?
@@ -212,17 +240,24 @@ pub fn features_positioning(props: FeaturesPositioningProps, children: Children)
                     __slots.extend_default(__children);
                     Ok(__slots)
                 }
+                }
             );
             example(ExampleProps::props().title("margin_start / margin_end — logical margins that mirror with the reading direction").build(), __deferred)?
         };
         let __node_14 = {
             let __deferred = Children::new(
+                {
+                    let theme = theme.clone();
                 move || {
+                    let theme = theme.clone();
                     let mut __slots = Slots::new();
                     let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
                     let __node_15 = {
                         let __deferred = Children::new(
+                            {
+                                let theme = theme.clone();
                             move || {
+                                let theme = theme.clone();
                                 let mut __slots = Slots::new();
                                 let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
                                 let __row_1 = {
@@ -231,26 +266,27 @@ pub fn features_positioning(props: FeaturesPositioningProps, children: Children)
                                             Text::declaring(
                                                 || "short".to_string(),
                                                 LayoutStyle::new(),
-                                                move |__inherited: TextStyle| __inherited.with_font_size(12.0).with_color(use_theme::<core::theme::SandboxTheme>().muted()),
+                                                { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(12.0).with_color(theme.get().muted) },
                                             )?
                                         };
-                                        StyledContainer::new(LayoutStyle::new().flex_column().min_height(72.0).width(130.0).padding_all(10.0), move |_| RectStyle { fill: Some(Paint::Solid(use_theme::<core::theme::SandboxTheme>().surface_alt())), border: Some(Border { paint: Paint::Solid(use_theme::<core::theme::SandboxTheme>().border()), widths: [1.0; 4] }), shadow: None, radius: BorderRadius::all(8.0) }, children![__text_3])?
+                                        StyledContainer::new(LayoutStyle::new().flex_column().min_height(72.0).width(130.0).padding_all(10.0), { let theme = theme.clone(); move |_| RectStyle { fill: Some(Paint::Solid(theme.get().surface_alt)), border: Some(Border { paint: Paint::Solid(theme.get().border), widths: [1.0; 4] }), shadow: None, radius: BorderRadius::all(8.0) } }, children![__text_3])?
                                     };
                                     let __sbox_11 = {
                                         let __text_4 = {
                                             Text::declaring(
                                                 || "long enough to push past the floor on its own".to_string(),
                                                 LayoutStyle::new(),
-                                                move |__inherited: TextStyle| __inherited.with_font_size(12.0).with_color(use_theme::<core::theme::SandboxTheme>().muted()),
+                                                { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(12.0).with_color(theme.get().muted) },
                                             )?
                                         };
-                                        StyledContainer::new(LayoutStyle::new().flex_column().min_height(72.0).width(130.0).padding_all(10.0), move |_| RectStyle { fill: Some(Paint::Solid(use_theme::<core::theme::SandboxTheme>().surface_alt())), border: Some(Border { paint: Paint::Solid(use_theme::<core::theme::SandboxTheme>().border()), widths: [1.0; 4] }), shadow: None, radius: BorderRadius::all(8.0) }, children![__text_4])?
+                                        StyledContainer::new(LayoutStyle::new().flex_column().min_height(72.0).width(130.0).padding_all(10.0), { let theme = theme.clone(); move |_| RectStyle { fill: Some(Paint::Solid(theme.get().surface_alt)), border: Some(Border { paint: Paint::Solid(theme.get().border), widths: [1.0; 4] }), shadow: None, radius: BorderRadius::all(8.0) } }, children![__text_4])?
                                     };
                                     Container::new(LayoutStyle::new().flex_row().gap(10.0).align_items(AlignItems::START), children![__sbox_10, __sbox_11])?
                                 };
                                 __children.push(box_item(__row_1));
                                 __slots.extend_default(__children);
                                 Ok(__slots)
+                            }
                             }
                         );
                         card(CardProps::props().gap(10.0).build(), __deferred)?
@@ -261,17 +297,24 @@ pub fn features_positioning(props: FeaturesPositioningProps, children: Children)
                     __slots.extend_default(__children);
                     Ok(__slots)
                 }
+                }
             );
             example(ExampleProps::props().title("min_height — a floor a box never collapses below").build(), __deferred)?
         };
         let __node_17 = {
             let __deferred = Children::new(
+                {
+                    let theme = theme.clone();
                 move || {
+                    let theme = theme.clone();
                     let mut __slots = Slots::new();
                     let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
                     let __node_18 = {
                         let __deferred = Children::new(
+                            {
+                                let theme = theme.clone();
                             move || {
+                                let theme = theme.clone();
                                 let mut __slots = Slots::new();
                                 let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
                                 let __col_2 = {
@@ -279,7 +322,7 @@ pub fn features_positioning(props: FeaturesPositioningProps, children: Children)
                                         Text::declaring(
                                             || "This sentence wraps at the column edge, which is the default.".to_string(),
                                             LayoutStyle::new(),
-                                            move |__inherited: TextStyle| __inherited.with_font_size(13.0).with_color(use_theme::<core::theme::SandboxTheme>().ink()),
+                                            { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(13.0).with_color(theme.get().ink) },
                                         )?
                                     };
                                     let __sbox_12 = {
@@ -287,10 +330,10 @@ pub fn features_positioning(props: FeaturesPositioningProps, children: Children)
                                             Text::declaring(
                                                 || "This one keeps going instead of wrapping.".to_string(),
                                                 LayoutStyle::new(),
-                                                move |__inherited: TextStyle| __inherited.with_font_size(13.0).with_color(use_theme::<core::theme::SandboxTheme>().ink()).with_text_wrap(TextWrap::NoWrap),
+                                                { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(13.0).with_color(theme.get().ink).with_text_wrap(TextWrap::NoWrap) },
                                             )?
                                         };
-                                        StyledContainer::new(LayoutStyle::new().flex_column().padding_all(8.0), move |_| RectStyle::default().with_fill(use_theme::<core::theme::SandboxTheme>().surface_alt()).with_radius(BorderRadius::all(8.0)), children![__text_6])?
+                                        StyledContainer::new(LayoutStyle::new().flex_column().padding_all(8.0), { let theme = theme.clone(); move |_| RectStyle::default().with_fill(theme.get().surface_alt).with_radius(BorderRadius::all(8.0)) }, children![__text_6])?
                                     };
                                     let __node_19 = ClippedItem::along(box_item(__sbox_12), ClipAxis::Both);
                                     Container::new(LayoutStyle::new().flex_column().gap(8.0).width(270.0), children![__text_5, __node_19])?
@@ -298,6 +341,7 @@ pub fn features_positioning(props: FeaturesPositioningProps, children: Children)
                                 __children.push(box_item(__col_2));
                                 __slots.extend_default(__children);
                                 Ok(__slots)
+                            }
                             }
                         );
                         card(CardProps::props().gap(10.0).build(), __deferred)?
@@ -308,15 +352,18 @@ pub fn features_positioning(props: FeaturesPositioningProps, children: Children)
                     __slots.extend_default(__children);
                     Ok(__slots)
                 }
+                }
             );
             example(ExampleProps::props().title("text_wrap — refuse the line break and let the box clip instead").build(), __deferred)?
         };
         let __node_21 = {
             let __deferred = Children::new(
                 {
+                    let theme = theme.clone();
                     let slot = slot.clone();
                     let caption = caption.clone();
                 move || {
+                    let theme = theme.clone();
                     let slot = slot.clone();
                     let caption = caption.clone();
                     let mut __slots = Slots::new();
@@ -324,9 +371,11 @@ pub fn features_positioning(props: FeaturesPositioningProps, children: Children)
                     let __node_22 = {
                         let __deferred = Children::new(
                             {
+                                let theme = theme.clone();
                                 let slot = slot.clone();
                                 let caption = caption.clone();
                             move || {
+                                let theme = theme.clone();
                                 let slot = slot.clone();
                                 let caption = caption.clone();
                                 let mut __slots = Slots::new();
@@ -337,7 +386,7 @@ pub fn features_positioning(props: FeaturesPositioningProps, children: Children)
                                             Text::declaring(
                                                 move || format!("{}", note),
                                                 LayoutStyle::new(),
-                                                move |__inherited: TextStyle| __inherited.with_font_size(12.0).with_color(use_theme::<core::theme::SandboxTheme>().muted()),
+                                                { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(12.0).with_color(theme.get().muted) },
                                             )?
                                         };
                                         __children.push(box_item(__text_7));
@@ -347,7 +396,7 @@ pub fn features_positioning(props: FeaturesPositioningProps, children: Children)
                                             Text::declaring(
                                                 || "no caption".to_string(),
                                                 LayoutStyle::new(),
-                                                move |__inherited: TextStyle| __inherited.with_font_size(12.0).with_color(use_theme::<core::theme::SandboxTheme>().muted()),
+                                                { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(12.0).with_color(theme.get().muted) },
                                             )?
                                         };
                                         __children.push(box_item(__text_8));
@@ -356,6 +405,8 @@ pub fn features_positioning(props: FeaturesPositioningProps, children: Children)
                                 let __node_23 = ReactiveList::new(
                                     { let slot = slot.clone(); move || vec![slot.get()] },
                                     |s: &_| *s,
+                                    {
+                                        let theme = theme.clone();
                                     move |__value| -> Result<Box<dyn LayoutItem>, LayoutError> {
                                         match __value {
                                             Slot::Empty => {
@@ -364,10 +415,10 @@ pub fn features_positioning(props: FeaturesPositioningProps, children: Children)
                                                         Text::declaring(
                                                             || "empty".to_string(),
                                                             LayoutStyle::new(),
-                                                            move |__inherited: TextStyle| __inherited.with_font_size(12.0).with_color(use_theme::<core::theme::SandboxTheme>().muted()),
+                                                            { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(12.0).with_color(theme.get().muted) },
                                                         )?
                                                     };
-                                                    StyledContainer::new(LayoutStyle::new().flex_column().width(150.0).height(44.0).align_items(AlignItems::CENTER).justify_content(JustifyContent::CENTER), move |_| RectStyle { fill: Some(Paint::Solid(use_theme::<core::theme::SandboxTheme>().surface_alt())), border: Some(Border { paint: Paint::Solid(use_theme::<core::theme::SandboxTheme>().border()), widths: [1.0; 4] }), shadow: None, radius: BorderRadius::all(8.0) }, children![__text_9])?
+                                                    StyledContainer::new(LayoutStyle::new().flex_column().width(150.0).height(44.0).align_items(AlignItems::CENTER).justify_content(JustifyContent::CENTER), { let theme = theme.clone(); move |_| RectStyle { fill: Some(Paint::Solid(theme.get().surface_alt)), border: Some(Border { paint: Paint::Solid(theme.get().border), widths: [1.0; 4] }), shadow: None, radius: BorderRadius::all(8.0) } }, children![__text_9])?
                                                 };
                                                 Ok(box_item(__sbox_13))
                                             }
@@ -377,20 +428,21 @@ pub fn features_positioning(props: FeaturesPositioningProps, children: Children)
                                                         Text::declaring(
                                                             move || format!("tile {}", n),
                                                             LayoutStyle::new(),
-                                                            move |__inherited: TextStyle| __inherited.with_font_size(12.0).with_color(use_theme::<core::theme::SandboxTheme>().on_primary()),
+                                                            { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(12.0).with_color(theme.get().on_primary) },
                                                         )?
                                                     };
-                                                    StyledContainer::new(LayoutStyle::new().flex_column().width(150.0).height(44.0).align_items(AlignItems::CENTER).justify_content(JustifyContent::CENTER), move |_| RectStyle::default().with_fill(use_theme::<core::theme::SandboxTheme>().success()).with_radius(BorderRadius::all(8.0)), children![__text_10])?
+                                                    StyledContainer::new(LayoutStyle::new().flex_column().width(150.0).height(44.0).align_items(AlignItems::CENTER).justify_content(JustifyContent::CENTER), { let theme = theme.clone(); move |_| RectStyle::default().with_fill(theme.get().success).with_radius(BorderRadius::all(8.0)) }, children![__text_10])?
                                                 };
                                                 Ok(box_item(__sbox_14))
                                             }
                                         }
+                                    }
                                     },
                                     0.0,
                                 )?;
                                 __children.push(box_item(__node_23));
                                 let __row_2 = {
-                                    let __node_24 = button(ButtonProps::props().label("Fill").fill(Reactive::of(move || use_theme::<core::theme::SandboxTheme>().primary())).on_press(Box::new({ let slot = slot.clone(); move || slot.set(Slot::Filled(7)) })).build(), Children::default())?;
+                                    let __node_24 = button(ButtonProps::props().label("Fill").fill(Reactive::of({ let theme = theme.clone(); move || theme.get().primary })).on_press(Box::new({ let slot = slot.clone(); move || slot.set(Slot::Filled(7)) })).build(), Children::default())?;
                                     let __node_25 = button(ButtonProps::props().label("Clear").ghost(true).on_press(Box::new({ let slot = slot.clone(); move || slot.set(Slot::Empty) })).build(), Children::default())?;
                                     Container::new(LayoutStyle::new().flex_row().gap(10.0), children![__node_24, __node_25])?
                                 };

@@ -1,17 +1,8 @@
 use std::collections::HashSet;
 
 use telar_parser::{Element, RsxDocument, ViewNode};
-use telar_transpiler::{color_attr_keys, color_keywords};
 
 use crate::{Diagnostic, Span};
-
-/// A filesystem-free view of the project's theme, used to validate color references against the
-/// declared theme fields. Producers (e.g. the analyzer's `ProjectInfo`) build this so the crate
-/// never has to touch disk.
-pub struct ThemeView<'a> {
-    pub theme_type: Option<&'a str>,
-    pub theme_fields: &'a HashSet<String>,
-}
 
 /// A filesystem-free view of the project's baked i18n catalog, used to validate `t"key"` markup against the
 /// keys the catalog actually defines. Built by the analyzer's `ProjectInfo` from `parse_catalog`, so this
@@ -24,37 +15,25 @@ pub struct CatalogView<'a> {
 /// check does not mean threading another positional argument through every recursion site.
 struct Ctx<'a> {
     defined_classes: HashSet<&'a str>,
-    local_constants: HashSet<&'a str>,
     /// Every identifier token that appears in `[logic]`. A `widget "x"` splices the in-scope binding `x`, so a
     /// name absent from this set is a typo or a renamed binding. Membership (not a `let`-binding parse) keeps
     /// it conservative: destructured/patterned bindings still appear here, so a real binding is never a false
     /// positive; at worst a stray match suppresses a diagnostic (safe).
     logic_idents: HashSet<&'a str>,
-    theme: Option<&'a ThemeView<'a>>,
-    theme_configured: bool,
     catalog: Option<&'a CatalogView<'a>>,
 }
 
-/// Runs the `.rsx` semantic checks (undefined style classes, unknown color references, `widget` misuse,
-/// unknown i18n keys) over a parsed document, returning neutral diagnostics. `theme` is `None` when the
-/// project has no theme configured, `catalog` when it has no translations.
-pub fn semantic_diagnostics(
-    doc: &RsxDocument,
-    theme: Option<&ThemeView>,
-    catalog: Option<&CatalogView>,
-) -> Vec<Diagnostic> {
+/// Runs the `.rsx` semantic checks (undefined style classes, `widget` misuse, unknown i18n keys) over a
+/// parsed document, returning neutral diagnostics. `catalog` is `None` when the project has no translations.
+///
+/// A *value* is not checked here at all: it is a Rust expression, and rustc judges it against the `.rsx`
+/// line the source map points at. The checks that remain are the ones about the markup's own vocabulary — a
+/// class nobody declared, a `widget` naming no binding, an i18n key the catalogue does not hold.
+pub fn semantic_diagnostics(doc: &RsxDocument, catalog: Option<&CatalogView>) -> Vec<Diagnostic> {
     let mut diagnostics = Vec::new();
     let ctx = Ctx {
         defined_classes: doc.style.classes.iter().map(|c| c.name.as_str()).collect(),
-        local_constants: doc
-            .style
-            .constants
-            .iter()
-            .map(|c| c.name.as_str())
-            .collect(),
         logic_idents: collect_idents(&doc.logic.source),
-        theme,
-        theme_configured: theme.map(|t| t.theme_type.is_some()).unwrap_or(false),
         catalog,
     };
 
@@ -161,63 +140,9 @@ fn check_element(el: &Element, ctx: &Ctx, reactive: bool, diagnostics: &mut Vec<
     }
 
     check_i18n_keys(el, ctx, &span, diagnostics);
-    check_theme_paths(el, ctx, &span, diagnostics);
-
-    if ctx.theme_configured {
-        let theme_fields = ctx.theme.map(|t| t.theme_fields);
-        for attr in &el.attributes {
-            if color_attr_keys().contains(&attr.key.as_str()) {
-                let val = attr.value.text();
-                if val.starts_with('{')
-                    || val.starts_with('#')
-                    || val.starts_with('$')
-                    || val.starts_with("Color::")
-                    // An explicit `theme.field` is validated by `check_theme_paths`, which knows the dotted form.
-                    || val.starts_with("theme.")
-                    || color_keywords().contains(&val)
-                {
-                    continue;
-                }
-                let known = ctx.local_constants.contains(val)
-                    || theme_fields.map(|f| f.contains(val)).unwrap_or(false);
-                if !known {
-                    diagnostics.push(Diagnostic::error(
-                        format!("Unknown color `{val}` — not in [style] constants or theme fields"),
-                        span.clone(),
-                    ));
-                }
-            }
-        }
-    }
 
     // Reactivity is inherited: a plain `row` nested inside a reactive branch is rebuilt with it.
     check_nodes(&el.children, ctx, reactive, diagnostics);
-}
-
-/// Flags an explicit `theme.field` reference — the spelling that reaches the theme from a non-color
-/// attribute (`pad:theme.gutter`) — whose field the theme type does not declare.
-///
-/// The bare-ident form on a color attribute is already covered by the color check; this one applies to any
-/// attribute, which is exactly why it needs its own pass.
-fn check_theme_paths(el: &Element, ctx: &Ctx, span: &Span, diagnostics: &mut Vec<Diagnostic>) {
-    let Some(theme) = ctx.theme.filter(|t| t.theme_type.is_some()) else {
-        return;
-    };
-    for attr in &el.attributes {
-        let Some(field) = attr.value.text().trim().strip_prefix("theme.") else {
-            continue;
-        };
-        if field.is_empty() || !is_ident(field) || theme.theme_fields.contains(field) {
-            continue;
-        }
-        diagnostics.push(Diagnostic::error(
-            format!(
-                "Unknown theme field `{field}` in `{}:theme.{field}`",
-                attr.key
-            ),
-            span.clone(),
-        ));
-    }
 }
 
 /// Flags a `t"key"` — as element content (`text t"nav.title"`) or as an attribute value

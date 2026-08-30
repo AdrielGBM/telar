@@ -5,8 +5,8 @@ use crate::shared::components::stat::{stat, StatProps};
 [view]
 col gap:24
     col gap:10
-        text "▲ rsx — native UI for Rust" font_size:34 color:theme.ink
-        text "A tour of every primitive the framework ships, from a single box to spring-driven motion. The whole interface is written in .rsx markup; only non-visual logic lives in Rust." font_size:15 color:theme.muted max_width:780
+        text "▲ rsx — native UI for Rust" font_size:34 color:$theme.ink
+        text "A tour of every primitive the framework ships, from a single box to spring-driven motion. The whole interface is written in .rsx markup; only non-visual logic lives in Rust." font_size:15 color:$theme.muted max_width:780
     grid cols:"fit 150" gap:16
         stat value:"25+" label:"modular crates"
         stat value:"2" label:"render backends"
