@@ -5,6 +5,7 @@
 
 mod effect;
 mod memo;
+mod reactive;
 pub use reactive_local::reentry;
 mod runtime;
 mod signal;
@@ -15,6 +16,7 @@ mod task;
 
 pub use effect::{Effect, effect};
 pub use memo::{Memo, memo};
+pub use reactive::Reactive;
 pub use reactive_local::{SurfaceSlot, detached, surface_local};
 pub use runtime::{
     FlushNotifyHandle, OwnerGuard, OwnerId, SurfaceEnterGuard, SurfaceHandle, batch, begin_batch,
