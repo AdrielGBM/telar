@@ -1,6 +1,7 @@
 //! File-discovery utilities: walking a source tree for `.rsx`/`.rs` files and deriving their output stems and mirrored `.rs` paths.
 
 use std::collections::HashSet;
+use std::fmt::Write;
 use std::path::{Path, PathBuf};
 
 /// Recursively collects files with `extension` under `dir`, descending into a subdirectory only when `keep_dir` returns true for its name. The result is sorted.
@@ -168,7 +169,16 @@ fn emit_children(
             if mod_rs.exists() {
                 // A directory with a `mod.rs` is a module the crate already declares unless it asked for
                 // discovery. Its `.rsx` children are that file's own business — it places them by invoking
-                // `rsx_modules!()` itself, which is the only place they *can* be declared from.
+                // `rsx_modules!()` itself, which is the only place they *can* be declared from: an outside
+                // module cannot add items to one, so this says so instead of leaving the caller with a
+                // "cannot find" about a file that is plainly there.
+                if dir_has_rsx(&path) && !mod_rs_places_its_own(&mod_rs) {
+                    let _ = write!(
+                        out,
+                        "compile_error!(\"{} holds `.rsx` files and a `mod.rs`, so only that file can place them: add `telar::rsx_modules!();` to it\");\n",
+                        path.display()
+                    );
+                }
                 if auto_modules {
                     out.push_str(&mod_decl(name, &mod_rs));
                 }
@@ -273,6 +283,13 @@ fn dir_has_rust_module(dir: &Path) -> bool {
         .iter()
         .any(|p| is_rust_module_file(p) || p.file_name().and_then(|n| n.to_str()) == Some("mod.rs"))
         || !collect_files_by_ext(dir, "rsx", &|_| true).is_empty()
+}
+
+/// Whether the `mod.rs` invokes the macro that places its own `.rsx` siblings.
+fn mod_rs_places_its_own(mod_rs: &Path) -> bool {
+    std::fs::read_to_string(mod_rs)
+        .map(|src| src.contains("rsx_modules!") || src.contains("app!"))
+        .unwrap_or(false)
 }
 
 /// Whether any `.rsx` sits under `dir`, which is what makes a directory with no `mod.rs` worth declaring
@@ -414,6 +431,30 @@ mod tests {
             out.contains("pub mod loose;"),
             "a directory with no `mod.rs` still has to be created to hold a `.rsx`: {out}"
         );
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    /// A `.rsx` beside a hand-written `mod.rs` can only be placed by that file, because an outside module
+    /// cannot add items to one. Saying so beats the "cannot find `drawer_panel` in `drawer`" a reader gets
+    /// about a file that is plainly there.
+    #[test]
+    fn a_module_that_must_place_its_own_rsx_is_told_to() {
+        let root = std::env::temp_dir().join(format!("rsx_owns_modules_{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(root.join("drawer")).unwrap();
+        std::fs::write(root.join("drawer/mod.rs"), "// no macro here\n").unwrap();
+        std::fs::write(root.join("drawer/panel.rsx"), "[view]\ncol\n").unwrap();
+
+        let modtree = root.join("__modules");
+        std::fs::create_dir_all(&modtree).unwrap();
+        let generated = root.join("build");
+        let (out, _) = discover_rust_modules(&root, &root, &modtree, &generated, true).unwrap();
+        assert!(out.contains("compile_error!"), "{out}");
+        assert!(out.contains("telar::rsx_modules!();"), "{out}");
+
+        std::fs::write(root.join("drawer/mod.rs"), "telar::rsx_modules!();\n").unwrap();
+        let (quiet, _) = discover_rust_modules(&root, &root, &modtree, &generated, true).unwrap();
+        assert!(!quiet.contains("compile_error!"), "{quiet}");
         let _ = std::fs::remove_dir_all(&root);
     }
 
