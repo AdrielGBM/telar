@@ -233,9 +233,32 @@ impl Parser {
     fn parse_element(&mut self, indent: usize) -> Result<ViewNode, ParseError> {
         let line = &self.lines[self.pos];
         let number = line.number;
-        let content = line.content.clone();
         let content_start = line.content_start;
+        let mut content = line.content.clone();
+        let mut end = content_start + content.len();
         self.pos += 1;
+
+        // An element header runs past its line whenever a value's delimiters are still open — a closure
+        // written where it is used, rather than bound in `[logic]` and referred to by name.
+        //
+        // The join reproduces the source byte for byte: the gap between one line's content and the next's
+        // becomes a newline and spaces of exactly the width it occupied. Every span the parser hands the
+        // transpiler therefore still points at the `.rsx` byte the author typed, which is what keeps a
+        // diagnostic on the right column when the expression it names started three lines up.
+        while unclosed_delimiters(&content) {
+            let Some(next) = self.lines.get(self.pos) else {
+                break;
+            };
+            if next.section != Section::View {
+                break;
+            }
+            let gap = next.content_start.saturating_sub(end);
+            content.push('\n');
+            content.push_str(&" ".repeat(gap.saturating_sub(1)));
+            content.push_str(&next.content);
+            end = next.content_start + next.content.len();
+            self.pos += 1;
+        }
 
         let mut element = parse_element_header(&content, number, content_start)?;
 
@@ -641,6 +664,30 @@ pub(super) fn read_string_value(chars: &[char], k: usize) -> Option<(String, usi
 /// Reads a balanced `( … )` group starting at `open` (which must be `(`). Returns the inner text with the
 /// outer parens stripped, plus the index past the closing `)`. Nested parens are balanced and parens inside
 /// a `"…"` string literal are ignored, so a closure body like `|| f(x)` is captured whole. `None` if unbalanced.
+/// Whether `content` leaves a bracket open, so the element header continues on the next line. String
+/// literals are skipped, since a bracket inside one is text rather than structure.
+fn unclosed_delimiters(content: &str) -> bool {
+    let (mut depth, mut in_str, mut escaped) = (0i32, false, false);
+    for c in content.chars() {
+        if in_str {
+            match (escaped, c) {
+                (true, _) => escaped = false,
+                (false, '\\') => escaped = true,
+                (false, '"') => in_str = false,
+                _ => {}
+            }
+            continue;
+        }
+        match c {
+            '"' => in_str = true,
+            '(' | '[' | '{' => depth += 1,
+            ')' | ']' | '}' => depth -= 1,
+            _ => {}
+        }
+    }
+    depth > 0
+}
+
 fn read_balanced_parens(chars: &[char], open: usize) -> Option<(String, usize)> {
     debug_assert_eq!(chars.get(open), Some(&'('));
     let mut depth = 0usize;

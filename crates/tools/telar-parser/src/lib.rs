@@ -619,4 +619,33 @@ col @card
         assert_eq!(b.tag, "box");
         assert_eq!(b.children.len(), 1);
     }
+    /// A value whose delimiters are still open at end of line continues onto the next, so a closure can be
+    /// written where it is used instead of being bound in `[logic]` and referred to by name. Without this a
+    /// `canvas` could never carry its own drawing, and the only way to place one was the `widget` escape.
+    #[test]
+    fn a_value_with_open_delimiters_continues_onto_the_next_line() {
+        let src = "[view]\ncol\n    canvas paint:(|rect| {\n        let a = 1;\n        draw(rect, a)\n    }) width:10\n";
+        let doc = parse(src).expect("multi-line value parses");
+        let ViewNode::Element(col) = &doc.view.nodes[0] else {
+            panic!("expected the column");
+        };
+        let ViewNode::Element(canvas) = &col.children[0] else {
+            panic!("expected the canvas");
+        };
+        let paint = canvas
+            .attributes
+            .iter()
+            .find(|a| a.key == "paint")
+            .expect("paint survived the join");
+        assert!(
+            paint.value.text().contains("let a = 1;")
+                && paint.value.text().contains("draw(rect, a)"),
+            "the whole closure is one value: {:?}",
+            paint.value.text()
+        );
+        assert!(
+            canvas.attributes.iter().any(|a| a.key == "width"),
+            "and an attribute after the closing paren is still an attribute"
+        );
+    }
 }
