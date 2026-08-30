@@ -9,6 +9,7 @@ mod config;
 mod diagnostics;
 mod doctor;
 mod fmt;
+mod migrate;
 mod package;
 mod watch;
 
@@ -21,6 +22,7 @@ use cli::{
 use config::load_config;
 use doctor::run_doctor_cmd;
 use fmt::run_fmt_cmd;
+use migrate::run_migrate_cmd;
 use package::{build_appimage, build_deb, build_desktop_dir, build_dmg, build_nsis};
 use watch::{HotLoopOpts, HotMode, run_hot_loop};
 
@@ -34,6 +36,7 @@ pub fn run(args: Vec<String>) {
         TelarCommand::Check(args) => run_check_cmd(args),
         TelarCommand::Doctor => run_doctor_cmd(),
         TelarCommand::Fmt(args) => run_fmt_cmd(args),
+        TelarCommand::Migrate(args) => run_migrate_cmd(args),
     }
 }
 

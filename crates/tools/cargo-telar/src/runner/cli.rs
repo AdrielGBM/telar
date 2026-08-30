@@ -29,6 +29,19 @@ pub(crate) enum TelarCommand {
     Doctor,
     /// Format every `.rsx` and `.rs` file in the project
     Fmt(FmtArgs),
+    /// Rewrite every `.rsx` file into the one value grammar
+    Migrate(MigrateArgs),
+}
+
+/// Idempotent by construction: a file already in the new grammar comes out byte-identical, so running it
+/// twice is safe and `--check` is how a CI says a project is migrated.
+#[derive(clap::Args)]
+pub(crate) struct MigrateArgs {
+    /// Report which files would change and exit non-zero, without writing
+    #[arg(long)]
+    pub(crate) check: bool,
+    /// Directories or files to rewrite; defaults to the current directory
+    pub(crate) paths: Vec<std::path::PathBuf>,
 }
 
 /// `cargo fmt` cannot do this job: it never sees a `.rsx` file, and the `.rs` modules an `auto_modules` crate
