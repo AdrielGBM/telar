@@ -100,6 +100,8 @@ const SECTIONS: &[SectionDef] = sections![
         crate::features_background,
         "background.rsx"
     ),
+    ("Positioning", crate::features_positioning, "positioning.rsx"),
+    ("Pointer & drag", crate::features_pointer, "pointer.rsx"),
 ];
 
 /// A restored hot-reload stack (or a deep link) can name a section that no longer exists; clamp rather than panic.
