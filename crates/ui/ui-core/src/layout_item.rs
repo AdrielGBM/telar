@@ -1,7 +1,7 @@
 use std::cell::RefCell;
 use std::rc::Rc;
 
-use geometry_core::Rect;
+use geometry_core::{BorderRadius, Rect};
 use layout_core::{LayoutError, LayoutStyle, NodeId};
 use platform_core::Event;
 use reactive_core::{OwnerId, RwSignal, current_owner, owner_scope};
@@ -136,13 +136,63 @@ pub trait LayoutItem: Component {
 pub struct ClippedItem {
     inner: Box<dyn LayoutItem>,
     rect: RwSignal<Rect>,
-    axis: ClipAxis,
+    clip: Clip,
 }
 
-/// Which of a [`ClippedItem`]'s own edges do the cutting.
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+/// The shape a [`ClippedItem`] cuts to: which edges do the cutting, how round the corners are, and how far in
+/// from the edge the cut sits.
+///
+/// One value rather than three arguments, and a *shape* rather than an axis, because the renderer's clip node
+/// has always taken a radius and the markup had no way to ask for one — so a rounded box with a clipped child
+/// cut its corners square, and the only remedy was to not clip.
+#[derive(Clone, Copy, PartialEq, Debug, Default)]
+pub struct Clip {
+    pub axis: ClipAxis,
+    pub radius: BorderRadius,
+    /// Pulled in from every cutting edge. What a stroked box wants: cut inside the border rather than under
+    /// it, so the border stays whole and the content stops at its inner edge.
+    pub inset: f32,
+}
+
+impl Clip {
+    /// The node's rect, both ways, square-cornered — a viewport.
+    pub fn both() -> Self {
+        Self::default()
+    }
+
+    /// Its left and right edges; whatever sits above or below is left alone.
+    pub fn x() -> Self {
+        Self {
+            axis: ClipAxis::Horizontal,
+            ..Self::default()
+        }
+    }
+
+    /// Its top and bottom edges; whatever sits left or right of it is left alone.
+    pub fn y() -> Self {
+        Self {
+            axis: ClipAxis::Vertical,
+            ..Self::default()
+        }
+    }
+
+    pub fn rounded(self, radius: impl Into<BorderRadius>) -> Self {
+        Self {
+            radius: radius.into(),
+            ..self
+        }
+    }
+
+    pub fn inset(self, inset: f32) -> Self {
+        Self { inset, ..self }
+    }
+}
+
+/// Which of a [`Clip`]'s own edges do the cutting.
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Default)]
 pub enum ClipAxis {
     /// The node's rect, both ways — a viewport.
+    #[default]
     Both,
     /// Its left and right edges; whatever sits above or below is left alone.
     Horizontal,
@@ -156,27 +206,40 @@ pub enum ClipAxis {
 const UNBOUNDED: f32 = 1.0e6;
 
 impl ClippedItem {
-    pub fn new(inner: Box<dyn LayoutItem>) -> Self {
-        Self::along(inner, ClipAxis::Both)
-    }
-
-    /// A clip that cuts along `axis` only, leaving the other free.
+    /// A clip cutting to `clip`.
     ///
-    /// What a strip of items wants when it has to stop at its ends but not across its thickness: a tab bar or a
-    /// toolbar cut where the room runs out, whose items still carry a focus ring, a badge or a shadow past the
-    /// strip's own edge. CSS cannot express this — one axis set to `hidden` forces the other out of `visible` —
-    /// so a row that only wanted its ends cut has to clip the overflow it meant to keep.
-    pub fn along(inner: Box<dyn LayoutItem>, axis: ClipAxis) -> Self {
+    /// A one-way clip is what a strip of items wants when it has to stop at its ends but not across its
+    /// thickness: a tab bar or a toolbar cut where the room runs out, whose items still carry a focus ring, a
+    /// badge or a shadow past the strip's own edge. CSS cannot express this — one axis set to `hidden` forces
+    /// the other out of `visible` — so a row that only wanted its ends cut has to clip the overflow it meant
+    /// to keep.
+    pub fn new(inner: Box<dyn LayoutItem>, clip: Clip) -> Self {
         let rect = track_layout(inner.layout_node()).expect("clipped item's node not registered");
-        Self { inner, rect, axis }
+        Self { inner, rect, clip }
     }
 
-    fn clip(&self) -> Rect {
+    fn cut(&self) -> Rect {
         let rect = self.rect.get();
-        match self.axis {
-            ClipAxis::Both => rect,
-            ClipAxis::Horizontal => Rect::new(rect.x, -UNBOUNDED, rect.width, UNBOUNDED * 2.0),
-            ClipAxis::Vertical => Rect::new(-UNBOUNDED, rect.y, UNBOUNDED * 2.0, rect.height),
+        let inset = self.clip.inset;
+        match self.clip.axis {
+            ClipAxis::Both => Rect::new(
+                rect.x + inset,
+                rect.y + inset,
+                (rect.width - inset * 2.0).max(0.0),
+                (rect.height - inset * 2.0).max(0.0),
+            ),
+            ClipAxis::Horizontal => Rect::new(
+                rect.x + inset,
+                -UNBOUNDED,
+                (rect.width - inset * 2.0).max(0.0),
+                UNBOUNDED * 2.0,
+            ),
+            ClipAxis::Vertical => Rect::new(
+                -UNBOUNDED,
+                rect.y + inset,
+                UNBOUNDED * 2.0,
+                (rect.height - inset * 2.0).max(0.0),
+            ),
         }
     }
 }
@@ -193,15 +256,11 @@ impl LayoutItem for ClippedItem {
 
 impl Component for ClippedItem {
     fn view(&self) -> RenderNode {
-        RenderNode::clip(
-            self.clip(),
-            renderer_core::BorderRadius::zero(),
-            [self.inner.view()],
-        )
+        RenderNode::clip(self.cut(), self.clip.radius, [self.inner.view()])
     }
 
     fn on_event(&mut self, event: &Event) -> EventResult {
-        let outside = |x: f64, y: f64| !self.clip().contains(x as f32, y as f32);
+        let outside = |x: f64, y: f64| !self.cut().contains(x as f32, y as f32);
         match event {
             Event::PointerPressed { x, y, .. } | Event::PointerMoved { x, y, .. }
                 if outside(*x, *y) =>
@@ -334,14 +393,17 @@ mod tests {
         .unwrap()
         .on_press(move || sink.set(true));
         // The clip is the child's own rect, so it is cut to a 40px window by laying it out in one.
-        let mut clipped = ClippedItem::new(Box::new(
-            StyledContainer::new(
-                LayoutStyle::new().flex_row().width(40.0).height(20.0),
-                |_r| RectStyle::default(),
-                vec![Box::new(inner)],
-            )
-            .unwrap(),
-        ));
+        let mut clipped = ClippedItem::new(
+            Box::new(
+                StyledContainer::new(
+                    LayoutStyle::new().flex_row().width(40.0).height(20.0),
+                    |_r| RectStyle::default(),
+                    vec![Box::new(inner)],
+                )
+                .unwrap(),
+            ),
+            Clip::both(),
+        );
         compute_layout(
             clipped.layout_node(),
             AvailableSpace::Definite(40.0),
@@ -362,5 +424,66 @@ mod tests {
             pressed.get(),
             "and a tap on the part that is actually drawn still has to land"
         );
+    }
+
+    /// A clip is a shape, not an axis: the renderer's clip node has always taken a radius, and an inset is
+    /// what a stroked box wants so the cut sits inside the border rather than under it.
+    #[test]
+    fn a_rounded_inset_clip_cuts_the_shape_it_names() {
+        reset_layout_runtime();
+        let clipped = ClippedItem::new(
+            Box::new(
+                StyledContainer::new(
+                    LayoutStyle::new().flex_row().width(40.0).height(20.0),
+                    |_r| RectStyle::default(),
+                    vec![],
+                )
+                .unwrap(),
+            ),
+            Clip::both().rounded(6.0).inset(2.0),
+        );
+        compute_layout(
+            clipped.layout_node(),
+            AvailableSpace::Definite(40.0),
+            AvailableSpace::Definite(20.0),
+        )
+        .unwrap();
+
+        let RenderNode::Clip { rect, radius, .. } = clipped.view() else {
+            panic!("a clipped item renders a clip node");
+        };
+        assert_eq!(rect, Rect::new(2.0, 2.0, 36.0, 16.0));
+        assert_eq!(radius, BorderRadius::all(6.0));
+    }
+
+    /// One axis cut, the other left free — the thing CSS cannot say. The inset applies to the cutting edges
+    /// only, since the free axis has no edge to pull in from.
+    #[test]
+    fn a_one_way_clip_leaves_the_other_axis_unbounded() {
+        reset_layout_runtime();
+        let clipped = ClippedItem::new(
+            Box::new(
+                StyledContainer::new(
+                    LayoutStyle::new().flex_row().width(40.0).height(20.0),
+                    |_r| RectStyle::default(),
+                    vec![],
+                )
+                .unwrap(),
+            ),
+            Clip::x().inset(2.0),
+        );
+        compute_layout(
+            clipped.layout_node(),
+            AvailableSpace::Definite(40.0),
+            AvailableSpace::Definite(20.0),
+        )
+        .unwrap();
+
+        let RenderNode::Clip { rect, .. } = clipped.view() else {
+            panic!("a clipped item renders a clip node");
+        };
+        assert_eq!(rect.x, 2.0);
+        assert_eq!(rect.width, 36.0);
+        assert!(rect.y < -1.0e5 && rect.height > 1.0e6);
     }
 }

@@ -335,7 +335,7 @@ pub fn features_positioning(props: FeaturesPositioningProps, children: Children)
                                         };
                                         StyledContainer::new(LayoutStyle::new().flex_column().padding_all(8.0), { let theme = theme.clone(); move |_| RectStyle::default().with_fill(theme.get().surface_alt).with_radius(BorderRadius::all(8.0)) }, children![__text_6])?
                                     };
-                                    let __node_19 = ClippedItem::along(box_item(__sbox_12), ClipAxis::Both);
+                                    let __node_19 = ClippedItem::new(box_item(__sbox_12), Clip::both());
                                     Container::new(LayoutStyle::new().flex_column().gap(8.0).width(270.0), children![__text_5, __node_19])?
                                 };
                                 __children.push(box_item(__col_2));

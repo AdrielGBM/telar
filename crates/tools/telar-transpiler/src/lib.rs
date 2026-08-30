@@ -2044,25 +2044,37 @@ col @card
         let src = "[view]\ncol\n    box width:100 height:100 clip\n";
         let code = transpile_source(src, "demo", None, None).unwrap().rust_code;
         assert!(
-            code.contains("ClippedItem::along(box_item(") && code.contains("ClipAxis::Both"),
+            code.contains("ClippedItem::new(box_item(") && code.contains("Clip::both())"),
             "{code}"
         );
     }
 
-    /// The one-way forms, which are what CSS cannot say: `overflow: hidden` on one axis forces the other out
-    /// of `visible`, so a row that only wanted its ends cut has to clip the overflow it meant to keep.
+    /// A clip is a shape, and the shape is a Rust value: the one-way cut CSS cannot say (`overflow: hidden`
+    /// on one axis forces the other out of `visible`), and the radius the renderer's clip node always took
+    /// while the markup had no word for it.
     #[test]
-    fn a_clip_can_cut_one_axis_and_leave_the_other() {
-        let src = "[view]\nrow width:100 clip:x\n    text \"a\"\n";
-        let code = transpile_source(src, "demo", None, None).unwrap().rust_code;
-        assert!(code.contains("ClipAxis::Horizontal"), "{code}");
+    fn a_clip_is_the_shape_its_value_names() {
+        let code = transpile_source(
+            "[view]\nrow width:100 clip:Clip::x()\n    text \"a\"\n",
+            "demo",
+            None,
+            None,
+        )
+        .unwrap()
+        .rust_code;
+        assert!(code.contains("Clip::x())"), "{code}");
 
-        let bad = transpile_source("[view]\nrow clip:sideways\n", "demo", None, None)
-            .unwrap()
-            .rust_code;
+        let rounded = transpile_source(
+            "[view]\nbox radius:8 clip:(Clip::both().rounded(8.0).inset(1.0))\n    text \"a\"\n",
+            "demo",
+            None,
+            None,
+        )
+        .unwrap()
+        .rust_code;
         assert!(
-            bad.contains("compile_error!") && bad.contains("is not an axis"),
-            "an axis it does not have is named rather than quietly clipping both:\n{bad}"
+            rounded.contains("Clip::both().rounded(8.0).inset(1.0))"),
+            "{rounded}"
         );
     }
 

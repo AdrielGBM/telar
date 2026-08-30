@@ -28,6 +28,13 @@ impl BorderRadius {
     }
 }
 
+/// One number is the same radius on every corner, which is what nearly every caller means.
+impl From<f32> for BorderRadius {
+    fn from(radius: f32) -> Self {
+        Self::all(radius)
+    }
+}
+
 impl Default for BorderRadius {
     fn default() -> Self {
         Self::zero()

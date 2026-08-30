@@ -523,39 +523,28 @@ impl<'a> ViewGen<'a> {
         }
     }
 
-    /// Wraps a node's widget in a [`ClippedItem`] when it carries `clip`, cutting its rendered output to its
-    /// own laid-out rect.
+    /// Wraps a node's widget in a [`ClippedItem`] when it carries `clip`, cutting its rendered output to the
+    /// shape the value names.
     ///
-    /// `clip` cuts both ways, `clip:x` only the left and right edges, `clip:y` only the top and bottom — the
-    /// one-way forms being the thing CSS cannot say, since `overflow: hidden` on one axis forces the other out
-    /// of `visible`. The primitive has always existed; what was missing was any way to ask for it from the
-    /// markup, which is why the one escape hatch in a 1069-line application was a `.rsx` dropping into Rust to
-    /// stop a canvas painting over the header.
+    /// `clip` on its own is `Clip::both()`; a value is a `Clip` expression, so `clip:Clip::x()` cuts the left
+    /// and right edges only — the thing CSS cannot say, since `overflow: hidden` on one axis forces the other
+    /// out of `visible` — and `clip:(Clip::both().rounded(8.0))` follows a rounded box's own corners. The
+    /// value used to be an axis keyword from a closed set of three, which is why a rounded box's clipped
+    /// child cut its corners square and the markup had no word for the radius the renderer already took.
     fn clip_tail(&mut self, el: &Element, emit: ChildEmit) -> ChildEmit {
         let Some(attr) = el.attributes.iter().find(|a| a.key == "clip") else {
             return emit;
         };
-        let axis = match attr.value.text().trim() {
-            "" | "both" => "Both",
-            "x" => "Horizontal",
-            "y" => "Vertical",
-            other => {
-                let pad = self.indent_str();
-                let code = format!(
-                    "{pad}compile_error!({});",
-                    rust_str(&format!(
-                        "`clip:{other}` is not an axis: write `clip` for both, `clip:x` for the left and right edges, or `clip:y` for the top and bottom"
-                    ))
-                );
-                return emit.map_code(|c| format!("{c}\n{code}"));
-            }
+        let shape = match attr.value.text().trim() {
+            "" => "Clip::both()".to_string(),
+            expr => redundant_parens(expr).unwrap_or(expr).to_string(),
         };
         match emit {
             ChildEmit::Simple { name, code } => {
                 let pad = self.indent_str();
                 let wrapped = self.next_variable_name("clipped");
                 let code = format!(
-                    "{code}\n{pad}let {wrapped} = ClippedItem::along(box_item({name}), ClipAxis::{axis});"
+                    "{code}\n{pad}let {wrapped} = ClippedItem::new(box_item({name}), {shape});"
                 );
                 ChildEmit::Simple {
                     name: wrapped,

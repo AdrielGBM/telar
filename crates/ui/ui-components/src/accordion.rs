@@ -8,7 +8,7 @@ use renderer_core::{Color, RectStyle};
 use ui_core::Slots;
 use ui_core::focus::Role;
 use ui_core::{
-    Children, ClippedItem, Component, Container, EventResult, LayoutItem, RenderNode,
+    Children, Clip, ClippedItem, Component, Container, EventResult, LayoutItem, RenderNode,
     StyledContainer, Text, box_item, mark_dirty, set_display,
 };
 
@@ -108,7 +108,7 @@ pub fn accordion(
     // draws nothing even if a child paints at fixed coordinates (mirrors `ClippedItem`'s own doc example).
     let body = Container::new(LayoutStyle::new().flex_column(), body_children)?;
     let body_node = body.layout_node();
-    let clipped_body = ClippedItem::new(box_item(body));
+    let clipped_body = ClippedItem::new(box_item(body), Clip::both());
 
     let root = Container::new(
         LayoutStyle::new().flex_column(),
