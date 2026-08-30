@@ -15,25 +15,19 @@ pub struct CatalogView<'a> {
 /// check does not mean threading another positional argument through every recursion site.
 struct Ctx<'a> {
     defined_classes: HashSet<&'a str>,
-    /// Every identifier token that appears in `[logic]`. A `widget "x"` splices the in-scope binding `x`, so a
-    /// name absent from this set is a typo or a renamed binding. Membership (not a `let`-binding parse) keeps
-    /// it conservative: destructured/patterned bindings still appear here, so a real binding is never a false
-    /// positive; at worst a stray match suppresses a diagnostic (safe).
-    logic_idents: HashSet<&'a str>,
     catalog: Option<&'a CatalogView<'a>>,
 }
 
-/// Runs the `.rsx` semantic checks (undefined style classes, `widget` misuse, unknown i18n keys) over a
+/// Runs the `.rsx` semantic checks (undefined style classes, unquoted captures, unknown i18n keys) over a
 /// parsed document, returning neutral diagnostics. `catalog` is `None` when the project has no translations.
 ///
 /// A *value* is not checked here at all: it is a Rust expression, and rustc judges it against the `.rsx`
 /// line the source map points at. The checks that remain are the ones about the markup's own vocabulary — a
-/// class nobody declared, a `widget` naming no binding, an i18n key the catalogue does not hold.
+/// class nobody declared, an i18n key the catalogue does not hold.
 pub fn semantic_diagnostics(doc: &RsxDocument, catalog: Option<&CatalogView>) -> Vec<Diagnostic> {
     let mut diagnostics = Vec::new();
     let ctx = Ctx {
         defined_classes: doc.style.classes.iter().map(|c| c.name.as_str()).collect(),
-        logic_idents: collect_idents(&doc.logic.source),
         catalog,
     };
 
@@ -41,32 +35,6 @@ pub fn semantic_diagnostics(doc: &RsxDocument, catalog: Option<&CatalogView>) ->
     diagnostics.extend(unsigiled_captures(doc));
 
     diagnostics
-}
-
-/// Collects every identifier-shaped token in `src` (start `_`/letter, rest `_`/alphanumeric).
-fn collect_idents(src: &str) -> HashSet<&str> {
-    let bytes = src.as_bytes();
-    let mut set = HashSet::new();
-    let mut i = 0;
-    while i < bytes.len() {
-        if bytes[i] == b'_' || bytes[i].is_ascii_alphabetic() {
-            let start = i;
-            while i < bytes.len() && (bytes[i] == b'_' || bytes[i].is_ascii_alphanumeric()) {
-                i += 1;
-            }
-            set.insert(&src[start..i]);
-        } else {
-            i += 1;
-        }
-    }
-    set
-}
-
-/// Whether `s` is a valid Rust identifier.
-fn is_ident(s: &str) -> bool {
-    let mut chars = s.chars();
-    matches!(chars.next(), Some(c) if c == '_' || c.is_ascii_alphabetic())
-        && chars.all(|c| c == '_' || c.is_ascii_alphanumeric())
 }
 
 fn check_nodes(nodes: &[ViewNode], ctx: &Ctx, reactive: bool, diagnostics: &mut Vec<Diagnostic>) {
@@ -106,37 +74,6 @@ fn check_element(el: &Element, ctx: &Ctx, reactive: bool, diagnostics: &mut Vec<
                 span.clone(),
             ));
         }
-    }
-
-    // `widget "x"` splices the in-scope `[logic]` binding `x`; flag a reference to a name that appears
-    // nowhere in [logic] (a typo or a binding renamed out from under it) at edit time, before rustc reports
-    // it against the generated code. Only for identifier-shaped names — a non-identifier is already a hard
-    // transpile error (`compile_error!`), so no diagnostic is needed here.
-    if el.tag == "widget"
-        && let Some(name) = el.content.as_deref().map(str::trim)
-        && !name.is_empty()
-        && is_ident(name)
-        && !ctx.logic_idents.contains(name)
-    {
-        diagnostics.push(Diagnostic::warning(
-            format!("`widget \"{name}\"` references `{name}`, which is not defined in [logic]"),
-            span.clone(),
-        ));
-    }
-
-    // The transpiler already turns this into a `compile_error!`; repeating it here is what puts the squiggle in the editor rather than at the next build.
-    if el.tag == "widget"
-        && reactive
-        && let Some(name) = el.content.as_deref().map(str::trim)
-        && !name.is_empty()
-    {
-        diagnostics.push(Diagnostic::warning(
-            format!(
-                "`widget \"{name}\"` cannot be used inside a reactive `if`/`for`, which rebuilds its \
-                 content. Use `build \"{name}()?\"` — an expression evaluated per build."
-            ),
-            span.clone(),
-        ));
     }
 
     check_i18n_keys(el, ctx, &span, diagnostics);

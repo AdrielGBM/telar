@@ -8,7 +8,7 @@ pub const TAG_SLOT_PLACEHOLDER: &str = "<slot placeholder>";
 
 /// Built-in RSX tags paired with the Rust constructor path they transpile to.
 ///
-/// Mirrors the tag dispatch in `ViewGen::emit_element`. Tags that share a constructor (e.g. `col`/`row`/`grid` -> `Container::new`) are listed once per spelling so lookups by tag name resolve every alias. A tag whose constructor is [`TAG_REFERENCES_VARIABLE`] emits no constructor: `widget` inlines the in-scope variable named by its content.
+/// Mirrors the tag dispatch in `ViewGen::emit_element`. Tags that share a constructor (e.g. `col`/`row`/`grid` -> `Container::new`) are listed once per spelling so lookups by tag name resolve every alias. Every tag here builds something; the one exception carries [`TAG_SLOT_PLACEHOLDER`] and says so.
 pub fn builtin_tags() -> &'static [(&'static str, &'static str)] {
     &[
         ("text", "Text::new"),
@@ -473,9 +473,9 @@ pub fn tag_attr_keys(tag: &str) -> Vec<&'static str> {
             "raster",
             "transition",
         ]),
-        // Both splice a whole widget in, so neither takes layout or paint keys: the expression owns its style.
-        // The `children` slot placeholder takes an optional `name:` for a named slot, and `in:` for the context
-        // a compound component builds them inside.
+        // The `children` slot placeholder splices whole widgets in, so it takes no layout or paint keys —
+        // each spliced child owns its own style. `name:` picks a named slot, `in:` the context a compound
+        // component builds them inside.
         "children" => vec!["name", "in"],
         // box/col/row/grid share one paint+behavior set (the codegen treats them identically); grid adds its track keys.
         "grid" => {

@@ -1,7 +1,7 @@
 use std::collections::HashSet;
 
 use telar_parser::{
-    Attr, Element, ParseError, RsxDocument, StyleClass, StyleSection, Value, ViewNode, ViewSection,
+    Attr, Element, ParseError, RsxDocument, StyleClass, StyleSection, ViewNode, ViewSection,
 };
 
 use crate::{CatalogView, Diagnostic, Severity, semantic_diagnostics};
@@ -64,22 +64,6 @@ fn undefined_style_class_warns() {
     assert!(diags[0].message.contains("@missing"));
 }
 
-// Builds a themed doc with one element carrying the given attributes.
-fn themed_doc_with_attrs(attrs: Vec<(&str, &str)>) -> RsxDocument {
-    let attributes = attrs
-        .into_iter()
-        .map(|(key, value)| Attr {
-            key: key.into(),
-            value: Value::Expr(value.into()),
-            value_start: 0,
-        })
-        .collect();
-    document(
-        StyleSection::default(),
-        vec![ViewNode::Element(element(&[], attributes, 3))],
-    )
-}
-
 #[test]
 fn lsp_conversion_maps_severity_and_zero_based_line() {
     use lsp_types::{Diagnostic as LspDiagnostic, DiagnosticSeverity};
@@ -91,98 +75,6 @@ fn lsp_conversion_maps_severity_and_zero_based_line() {
     assert_eq!(lsp.range.start.line, 0);
     assert_eq!(lsp.range.start.character, 0);
     assert_eq!(lsp.range.end.character, u32::MAX);
-}
-
-fn widget_element(name: &str, line: usize) -> Element {
-    Element {
-        tag: "widget".into(),
-        classes: Vec::new(),
-        attributes: Vec::new(),
-        content: Some(name.to_string()),
-        children: Vec::new(),
-        line,
-        content_start: 0,
-        content_i18n: false,
-    }
-}
-
-fn document_with_logic(logic_src: &str, nodes: Vec<ViewNode>) -> RsxDocument {
-    RsxDocument {
-        logic: telar_parser::LogicZone {
-            source: logic_src.to_string(),
-            ..Default::default()
-        },
-        style: StyleSection::default(),
-        view: ViewSection { nodes },
-        previews: Vec::new(),
-    }
-}
-
-#[test]
-fn widget_ref_to_defined_binding_is_ok() {
-    let doc = document_with_logic(
-        "let spring_box = Canvas::new(style, draw)?;",
-        vec![ViewNode::Element(widget_element("spring_box", 4))],
-    );
-    assert!(semantic_diagnostics(&doc, None).is_empty());
-}
-
-fn if_block(condition: &str, body: Vec<ViewNode>) -> ViewNode {
-    ViewNode::IfBlock(telar_parser::IfBlock {
-        condition: condition.to_string(),
-        then_branch: body,
-        else_branch: None,
-        line: 3,
-        condition_start: 0,
-    })
-}
-
-#[test]
-fn widget_inside_a_reactive_if_warns_before_the_build_does() {
-    // The same rule the transpiler enforces as an E0507-shaped `compile_error!`, reported against the `.rsx` line instead.
-    let doc = document_with_logic(
-        "let icon = make_icon()?;\nlet shown = memo(move || true);",
-        vec![if_block(
-            "$shown",
-            vec![ViewNode::Element(widget_element("icon", 4))],
-        )],
-    );
-    let diags = semantic_diagnostics(&doc, None);
-    assert_eq!(diags.len(), 1, "{diags:?}");
-    assert_eq!(diags[0].severity, Severity::Warning);
-    assert_eq!(
-        diags[0].span.line, 4,
-        "reported at the widget, not the `if`"
-    );
-    assert!(diags[0].message.contains("reactive"));
-    assert!(diags[0].message.contains("build"), "it names the fix");
-}
-
-#[test]
-fn widget_inside_a_construction_time_if_is_fine() {
-    // A plain condition picks its branch once, so splicing a binding there stays sound.
-    let doc = document_with_logic(
-        "let icon = make_icon()?;\nlet vertical = true;",
-        vec![if_block(
-            "vertical",
-            vec![ViewNode::Element(widget_element("icon", 4))],
-        )],
-    );
-    assert!(semantic_diagnostics(&doc, None).is_empty());
-}
-
-#[test]
-fn widget_ref_to_unknown_binding_warns() {
-    // The binding was renamed/typo'd, so the reference resolves to nothing in [logic].
-    let doc = document_with_logic(
-        "let spring_box = Canvas::new(style, draw)?;",
-        vec![ViewNode::Element(widget_element("sprng_box", 4))],
-    );
-    let diags = semantic_diagnostics(&doc, None);
-    assert_eq!(diags.len(), 1);
-    assert_eq!(diags[0].severity, Severity::Warning);
-    assert_eq!(diags[0].span.line, 4);
-    assert!(diags[0].message.contains("sprng_box"));
 }
 
 fn i18n_element(key: &str, line: usize) -> Element {
