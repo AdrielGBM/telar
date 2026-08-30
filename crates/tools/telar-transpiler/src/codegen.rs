@@ -294,10 +294,11 @@ fn transpile(input: TranspileInput<'_>) -> Result<TranspiledSource, TranspileErr
     // them back onto the `.rsx` source), so real mistakes in `[logic]`/`[view]` are unaffected.
     code.push("#![allow(clippy::all)]\n", None);
     code.push("#[allow(unused_imports)] use telar::*;\n", None);
-    // A `.rsx` is a module where its file sits, so `super` is its directory rather than the crate root.
-    // The glob is the crate root's own items — an app's `theme` module, its constants — which is what a
-    // `[logic]` line naming `core::theme::SandboxTheme` means. A *component* is not among them any more: it
-    // lives at its own path and the author imports it, which is the whole of the namespacing fix.
+    // The crate root's own items — an app's `theme` module, its constants — which is what a `[logic]` line
+    // naming `core::theme::SandboxTheme` means. Deliberately not `use super::*` as well: a `.rsx` named after
+    // anything in telar's prelude would make that name ambiguous in its own siblings, and a neighbour a file
+    // wants is a neighbour it can name. A *component* is reached the same way — it lives at its own path and
+    // the author imports it, which is the whole of the namespacing fix.
     code.push("#[allow(unused_imports)] use crate::*;\n", None);
 
     // The logic zone's own imports, lifted to module scope: `Props` and each `[preview]` are emitted as siblings

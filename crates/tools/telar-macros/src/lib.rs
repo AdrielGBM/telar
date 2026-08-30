@@ -388,6 +388,26 @@ struct TranspileOutput {
     preview_const_idents: Vec<TokenStream2>,
 }
 
+/// The `src`-relative directory the macro was written in.
+///
+/// `Span::local_file` gives the path the compiler knows, which is relative to the *working* directory — the
+/// workspace root under cargo, not the package. So the path is re-rooted by its own `src` component rather
+/// than trusted whole: rooting it at the wrong `src` silently placed nothing, which reads as a crate that
+/// simply has no `.rsx` in it.
+fn invocation_dir(file: &Path, src_dir: &Path) -> Option<PathBuf> {
+    let dir = file.parent()?;
+    if dir.starts_with(src_dir) {
+        return Some(dir.to_path_buf());
+    }
+    let segments: Vec<_> = dir.components().collect();
+    let at = segments
+        .iter()
+        .rposition(|c| c.as_os_str() == std::ffi::OsStr::new("src"))?;
+    let below: PathBuf = segments[at + 1..].iter().collect();
+    let resolved = src_dir.join(below);
+    resolved.is_dir().then_some(resolved)
+}
+
 // Transpiles every `.rsx` file under `src/` into `.telar/build/` (`.telar/build-hot/` for a hot-reload build), wiring each as a `#[path] mod` and aliasing
 // nested components to their basenames; also emits `include_str!` rerun triggers and (via `auto_modules`)
 // declares the hand-written `.rs` module tree. Shared by `app!` (which then adds the runner) and
@@ -534,8 +554,7 @@ fn transpile_project(theme_type_str: Option<&str>) -> Result<TranspileOutput, To
         // The compiler's own span, not proc-macro2's shim: only the real one carries a file.
         let invoked_in = proc_macro::Span::call_site()
             .local_file()
-            .and_then(|f| f.parent().map(Path::to_path_buf))
-            .filter(|dir| dir.starts_with(&src_dir))
+            .and_then(|file| invocation_dir(&file, &src_dir))
             .unwrap_or_else(|| src_dir.clone());
         // The discovered tree is split across real generated files (one per directory) so every module is a
         // file-based `#[path] mod`; see `discover_rust_modules` for why inline `mod` blocks break rust-analyzer.
