@@ -64,10 +64,13 @@ pub fn expand(input: DeriveInput) -> Result<TokenStream2, syn::Error> {
     // One marker per required prop, generated here rather than imported from a runtime crate: the deriving
     // crate would have to name that crate, and `ui-components` cannot name `telar` without a cycle. Per prop
     // rather than one shared marker because the name lands in the error — rustc reports the builder type it
-    // could not find `build` on, so `RowPropsBuilder<MissingLabel>` says which prop was forgotten.
+    // could not find `build` on, so `RowPropsBuilder<RowPropsMissingLabel>` says which prop was forgotten.
+    //
+    // Named after the struct as well, because two props structs in one module are ordinary — a Rust module
+    // that holds two components — and a marker named only after the prop made that a redefinition.
     let markers: Vec<Ident> = required
         .iter()
-        .map(|p| format_ident!("Missing{}", pascal(&p.name)))
+        .map(|p| format_ident!("{name}Missing{}", pascal(&p.name)))
         .collect();
     let marker_of = |prop: &Prop| {
         required
