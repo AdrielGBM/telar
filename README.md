@@ -23,16 +23,58 @@ pub struct Props {
 }
 
 [view]
-box fill:theme.surface stroke:theme.border radius:16 width:300 pad:24 gap:10 axis:col
+box fill:$theme.surface stroke:$theme.border radius:16 width:300 pad:24 gap:10 axis:col
     text "{props.icon}" font_size:32
-    text "{props.title}" font_size:18 color:theme.dark
-    text "{props.body}" font_size:14 color:theme.muted
+    text "{props.title}" font_size:18 color:$theme.dark
+    text "{props.body}" font_size:14 color:$theme.muted
 
 [preview "Fast"]
 feature_card icon:"⚡" title:"Fast" body:"Software and wgpu renderers with dirty tracking."
 ```
 
-A `.rsx` file has up to four sections: `[logic]` for verbatim Rust (a `pub struct Props` declares the component's props), `[style]` for constants and reusable style classes, `[view]` for the node tree, and `[preview]` blocks that the tooling can render in isolation.
+A `.rsx` file has up to four sections: `[logic]` for verbatim Rust (a `pub struct Props` declares the component's props), `[style]` for reusable style classes, `[view]` for the node tree, and `[preview]` blocks that the tooling can render in isolation.
+
+### One value grammar
+
+An attribute is `key` — a flag that asserts itself — or `key:<rust expression>`, read to the next space at
+delimiter depth 0. **Every value is Rust**, evaluated in the generated scope, so a call, a path, a method
+chain, a macro or a closure is itself and rustc judges it against the line you wrote:
+
+```rsx
+col gap:8 pad:(space::lg() * 2.0) align:center
+    btn "Save" on_press:(|| draft.save()) fill:$theme.primary
+    text "Hola {name}" font_size:14
+```
+
+Parenthesise an expression that holds a space — `(a + b)` *is* an expression, so nothing new is invented.
+Three sugars survive, because each is a token shape rather than a second language:
+
+| written | means |
+| --- | --- |
+| `50%` | `SizeDimension::Percent(0.5)` |
+| `#3d78fa` | `Color::rgba(…)` |
+| `$sig` | `sig.get()` — a read of anything reactive, including the `theme` handle the view binds |
+
+`key(…)` is reserved for the handful of **directives** that have a grammar of their own and are not Rust at
+all: `transition(fill 250ms ease-out)` is a clause list, `hover_style(fill:$theme.accent)` a nested
+attribute list. The spelling says which world you are in.
+
+**Reactivity is reading, not marking.** A layout value that is not a literal is re-resolved whenever what it
+reads changes — `pad:$theme.gutter` follows a theme switch, and so does `pad:gutter()`. The `$` is `.get()`
+sugar; it does not decide anything.
+
+### Components are Rust paths
+
+A `.rsx` file is a module, and its component is the `pub fn` named after the file. Import what you call:
+
+```rsx
+[logic]
+use crate::ui::card::{card, CardProps};
+
+[view]
+card pad:20
+    text "inside" font_size:14
+```
 
 ## Getting started
 
@@ -134,7 +176,7 @@ Targets desktop (Linux, macOS, Windows) and Android.
 
 ## Editor support
 
-The VS Code extension provides syntax highlighting, snippets, diagnostics, completion and component preview, backed by the `telar-analyzer` language server. The extension bundles a prebuilt server binary, so no extra install step is needed.
+The VS Code extension provides syntax highlighting, snippets, diagnostics, completion and component preview, backed by the `telar-analyzer` language server. A component's attribute keys are completed from its props struct — names, types and doc comments — through an embedded rust-analyzer, and a diagnostic about a value lands on the `.rsx` line and column you wrote it on. The extension bundles a prebuilt server binary, so no extra install step is needed.
 
 ## Crates
 
