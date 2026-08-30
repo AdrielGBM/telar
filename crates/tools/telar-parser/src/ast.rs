@@ -207,7 +207,9 @@ impl Value {
     /// methods (`.on_press` against `.maybe_on_press`), and used to ask it from two near-identical predicates
     /// of its own before the question had a value to sit on.
     pub fn is_closure(&self) -> bool {
-        let text = self.text().trim_start();
+        // The parens a closure needs to hold its spaces are the value's delimiters, not part of it, so a
+        // parenthesised closure is still a closure: `on_press:(|| f())` and `on_press:|| f()` say the same.
+        let text = undelimited(self.text().trim());
         !self.is_literal()
             && (text.starts_with('|')
                 || text
@@ -264,4 +266,24 @@ pub struct ForBlock {
     pub body: Vec<ViewNode>,
     /// 1-based `.rsx` line of the `for` header, used to map generated code back to source.
     pub line: usize,
+}
+
+/// `expr` with one wrapping paren pair removed, or unchanged when the pair is not a wrapper.
+///
+/// Deliberately no tuple check: the only caller asks whether the content is a closure, and `|x, y| …` has a
+/// top-level comma of its own. Stripping `(a, b)` here is harmless, since `a, b` is not a closure either.
+fn undelimited(expr: &str) -> &str {
+    let Some(inner) = expr.strip_prefix('(').and_then(|e| e.strip_suffix(')')) else {
+        return expr;
+    };
+    let mut depth = 0i32;
+    for c in inner.chars() {
+        match c {
+            '(' | '[' | '{' => depth += 1,
+            ')' if depth == 0 => return expr,
+            ')' | ']' | '}' => depth -= 1,
+            _ => {}
+        }
+    }
+    inner.trim()
 }

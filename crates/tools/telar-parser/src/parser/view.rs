@@ -445,8 +445,22 @@ fn parse_element_header(
                 colon_at = Some(j);
                 break;
             }
-            // `key(expr)`: the form for a value wanting a space, delimited by balanced parens so it does not run to end of line and attribute order stops mattering — `on_press(|| f())` and `transition(fill 250ms ease-out)` sit on one line in any order.
+            // `key(…)` is the *directive* form, and nothing else. A directive has a grammar of its own —
+            // `transition(fill 250ms ease-out)` is space-separated clauses, `hover_style(fill:theme.accent)`
+            // is a nested attribute list — so it is not Rust and cannot go through the colon. Every value
+            // does: `key:expr`, parenthesised when it holds a top-level space, and those parens are ordinary
+            // Rust rather than punctuation the DSL invented.
             if chars[j] == '(' {
+                let key: String = chars[token_start..j].iter().collect();
+                if !is_directive(key.trim()) {
+                    return Err(ParseError {
+                        message: format!(
+                            "`{0}(…)` is the directive form, and `{0}` is a value — write `{0}:(…)`",
+                            key.trim()
+                        ),
+                        line,
+                    });
+                }
                 paren_at = Some(j);
                 break;
             }
@@ -479,11 +493,12 @@ fn parse_element_header(
             let is_closure_value = chars.get(val_start) == Some(&'|');
 
             if is_closure_value {
-                // Closures take the parenthesized form only: `on_press(|| …)`, never `on_press:|| …`. The colon form ran to end of line and silently swallowed any attribute after it, so it is rejected — styles/values keep the colon form (`fill:red`), closures do not.
+                // A closure holds spaces at depth 0, so a bare one would run to end of line and swallow the
+                // attributes after it. Parenthesised, it is one value like any other.
                 let key = key.trim();
                 return Err(ParseError {
                     message: format!(
-                        "closure attribute `{key}` must use the parenthesized form `{key}(|…| …)`, not `{key}:|…| …` (the colon form runs to end of line and would swallow the attributes after it)"
+                        "`{key}:|…| …` runs to end of line and would swallow the attributes after it — parenthesise it: `{key}:(|…| …)`"
                     ),
                     line,
                 });
@@ -735,4 +750,24 @@ fn read_balanced_parens(chars: &[char], open: usize) -> Option<(String, usize)> 
         i += 1;
     }
     None
+}
+
+/// The keys whose `key(…)` form is a grammar of its own rather than a Rust value.
+///
+/// Three shapes, all of them space-separated and none of them Rust: `transition`'s clause list, the nested
+/// attribute lists of the state styles, and the track/edge/button lists (`cols(240 1fr auto)`,
+/// `stroke_width(0 0 1 0)`, `drag_button(secondary auxiliary)`). Everything else is a value and takes the
+/// colon — which is what makes the spelling say which world you are in.
+fn is_directive(key: &str) -> bool {
+    matches!(
+        key,
+        "transition"
+            | "hover_style"
+            | "active_style"
+            | "disabled_style"
+            | "focus_style"
+            | "cols"
+            | "stroke_width"
+            | "drag_button"
+    )
 }

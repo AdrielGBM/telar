@@ -21,7 +21,7 @@ col gap:20
     example title:"on_change — a callback beside the binding, for the work a tap has to trigger"
         card gap:10
             row gap:16 align:center
-                stepper value:$seats min:1 max:8 step:1 on_change(|v| $last_change.set(format!("stepped to {v:.0}")))
+                stepper value:$seats min:1 max:8 step:1 on_change:(|v| $last_change.set(format!("stepped to {v:.0}")))
                 text "{$last_change}" font_size:14 color:theme.muted
         code_line code:"stepper value:$seats on_change:|v| $last_change.set(…)   (the binding still updates on its own)"
     example title:"Attributes"

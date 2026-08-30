@@ -262,7 +262,7 @@ mod tests {
     fn source_map_points_generated_view_back_to_rsx() {
         // rsx lines (1-based): 1 [view], 2 col, 3 text, 4 row, 5 button (with closure).
         let src =
-            "[view]\ncol\n    text \"hi\"\n    row\n        button on_press(|| missing.set(1))\n";
+            "[view]\ncol\n    text \"hi\"\n    row\n        button on_press:(|| missing.set(1))\n";
         let result = transpile_source(src, "demo", None, None).unwrap();
         let lines: Vec<&str> = result.rust_code.lines().collect();
         assert_eq!(lines.len(), result.source_map.len());
@@ -310,7 +310,7 @@ dark: #141424
 [view]
 col @card
     text "Count: {$count}" font_size:14 color:dark
-    button label:"Increment" fill:primary on_press(|| $count.update(|n| *n += 1))
+    button label:"Increment" fill:primary on_press:(|| $count.update(|n| *n += 1))
 "#;
 
     // COUNTER_THEMED has no [style] color declarations — colors flow through the live theme so they react to `set_theme(...)` calls at runtime.
@@ -328,7 +328,7 @@ let count = signal(0i32);
 [view]
 col @card
     text "Count: {$count}" font_size:14 color:theme.dark
-    button label:"Increment" fill:theme.primary on_press(|| $count.update(|n| *n += 1))
+    button label:"Increment" fill:theme.primary on_press:(|| $count.update(|n| *n += 1))
 "#;
 
     #[test]
@@ -720,7 +720,7 @@ col @card
 
     #[test]
     fn dollar_marks_reactive_reads_and_clones_closure_captures() {
-        let src = "[logic]\nlet count = signal(0i32);\n[view]\ncol\n    text \"{$count}\"\n    button on_press(|| $count.update(|n| *n += 1))\n";
+        let src = "[logic]\nlet count = signal(0i32);\n[view]\ncol\n    text \"{$count}\"\n    button on_press:(|| $count.update(|n| *n += 1))\n";
         let out = transpile_source(src, "demo", None, None).unwrap();
         let code = &out.rust_code;
         // `$count` in interpolation is a read.
@@ -2033,7 +2033,7 @@ col @card
     /// closure is what lets the box re-read the flag instead of sampling it once at construction.
     #[test]
     fn a_reactive_disabled_flag_is_re_read_rather_than_sampled() {
-        let src = "[logic]\nlet ready = signal(false);\n\n[view]\nbox width:20 disabled:$ready on_press(|| ())\n";
+        let src = "[logic]\nlet ready = signal(false);\n\n[view]\nbox width:20 disabled:$ready on_press:(|| ())\n";
         let code = transpile_source(src, "demo", None, None).unwrap().rust_code;
         assert!(
             code.contains(".disabled(") && code.contains("ready.get()"),
@@ -2053,7 +2053,7 @@ col @card
     /// `click_through` already are.
     #[test]
     fn a_bare_disabled_flag_means_always() {
-        let src = "[view]\nbox width:20 disabled on_press(|| ())\n";
+        let src = "[view]\nbox width:20 disabled on_press:(|| ())\n";
         let code = transpile_source(src, "demo", None, None).unwrap().rust_code;
         assert!(code.contains(".disabled(|| true)"), "{code}");
     }
@@ -2061,7 +2061,7 @@ col @card
     /// `on_alt_press` was reachable from hand-written Rust but had no attribute key, so a `.rsx` author could not arm a right- or middle-click at all. The library was ahead of the grammar; the grammar caught up.
     #[test]
     fn an_rsx_box_can_arm_a_non_primary_press() {
-        let src = "[view]\nbox width:20 on_alt_press(|b| println!(\"{b:?}\"))\n";
+        let src = "[view]\nbox width:20 on_alt_press:(|b| println!(\"{b:?}\"))\n";
         let code = transpile_source(src, "demo", None, None).unwrap().rust_code;
         assert!(code.contains(".on_alt_press("), "{code}");
         assert!(

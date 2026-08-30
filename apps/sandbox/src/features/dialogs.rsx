@@ -10,13 +10,13 @@ col gap:20
     example title:"Modal — an opaque dialog centred over a dimming scrim; the scrim or Close dismisses"
         card gap:10
             text "Naming the dialog is what removes the signal(bool) per overlay: anything can open it by name — a menu item, a shortcut, a deep link — without the state being threaded down to it." font_size:13 color:theme.muted
-            button label:"Open modal" fill:theme.primary on_press(|| open_overlay("confirm"))
+            button label:"Open modal" fill:theme.primary on_press:(|| open_overlay("confirm"))
             modal id:"confirm" title:"Confirm"
                 text "Body content here" font_size:14 color:theme.ink
         code_line code:"modal id:\"confirm\"  >  …      open_overlay(\"confirm\")  from anywhere"
     example title:"Drawer — a full-height side panel pinned to an edge, over the same scrim"
         card gap:10
-            button label:"Open drawer" fill:theme.primary on_press(|| open_overlay("nav"))
+            button label:"Open drawer" fill:theme.primary on_press:(|| open_overlay("nav"))
             drawer id:"nav" side:"right"
                 text "Drawer content" color:theme.ink
         code_line code:"drawer id:\"nav\" side:\"right\"  >  text \"Drawer content\""

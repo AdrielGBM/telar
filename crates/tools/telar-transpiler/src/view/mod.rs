@@ -830,7 +830,7 @@ mod tests {
     #[test]
     fn container_on_press_emits_click_handler() {
         // A painted `box` (StyledContainer) and a plain `col` (Container) both wire `.on_press`.
-        let src = "[logic]\nlet n = signal(0i32);\n[view]\ncol\n    box fill:primary on_press(|| $n.update(|v| *v += 1))\n    col on_press(|| $n.set(0))\n        text \"x\"\n";
+        let src = "[logic]\nlet n = signal(0i32);\n[view]\ncol\n    box fill:primary on_press:(|| $n.update(|v| *v += 1))\n    col on_press:(|| $n.set(0))\n        text \"x\"\n";
         let out = crate::transpile_source(src, "demo", None, None).unwrap();
         let code = &out.rust_code;
         assert!(
@@ -852,7 +852,7 @@ mod tests {
     // A forwarded (non-closure) `on_press` wires `.maybe_on_press`, which only StyledContainer has, so an unpainted `row` forwarding it must upgrade.
     #[test]
     fn a_forwarded_on_press_on_a_plain_row_upgrades_to_styled_container() {
-        let src = "[logic]\npub struct Props {\n    pub on_press: Box<dyn Fn()>,\n}\n\n[view]\nrow on_press(props.on_press)\n    text \"x\"\n";
+        let src = "[logic]\npub struct Props {\n    pub on_press: Box<dyn Fn()>,\n}\n\n[view]\nrow on_press:(props.on_press)\n    text \"x\"\n";
         let code = crate::transpile_source(src, "demo", None, None)
             .unwrap()
             .rust_code;
@@ -883,7 +883,7 @@ mod tests {
 
     #[test]
     fn compound_assign_sugar_rewrites_to_update() {
-        let src = "[logic]\nlet count = signal(0i32);\n[view]\ncol\n    button on_press(|| $count += 1)\n    button on_press(|| $count -= 2)\n";
+        let src = "[logic]\nlet count = signal(0i32);\n[view]\ncol\n    button on_press:(|| $count += 1)\n    button on_press:(|| $count -= 2)\n";
         let out = crate::transpile_source(src, "demo", None, None).unwrap();
         let code = &out.rust_code;
         assert!(
@@ -899,7 +899,7 @@ mod tests {
     #[test]
     fn toggle_and_update_closures_pass_through() {
         // `.toggle()` (a real RwSignal<bool> method) and an explicit `.update(...)` are left untouched.
-        let src = "[logic]\nlet flag = signal(false);\nlet count = signal(0i32);\n[view]\ncol\n    button on_press(|| $flag.toggle())\n    button on_press(|| $count.update(|n| *n += 1))\n";
+        let src = "[logic]\nlet flag = signal(false);\nlet count = signal(0i32);\n[view]\ncol\n    button on_press:(|| $flag.toggle())\n    button on_press:(|| $count.update(|n| *n += 1))\n";
         let out = crate::transpile_source(src, "demo", None, None).unwrap();
         let code = &out.rust_code;
         assert!(
@@ -928,7 +928,7 @@ mod tests {
     fn paren_attr_form_captures_nested_and_coexists() {
         // `transition(...)` and `on_press(...)` are paren-delimited, so a box can be animated AND clickable
         // on one line in any order, and a closure with nested parens is captured whole.
-        let src = "[logic]\nlet count = signal(0i32);\n[view]\nbox fill:primary transition(fill 200ms ease-out) on_press(|| $count.update(|n| *n += 1))\n    text \"x\"\n";
+        let src = "[logic]\nlet count = signal(0i32);\n[view]\nbox fill:primary transition(fill 200ms ease-out) on_press:(|| $count.update(|n| *n += 1))\n    text \"x\"\n";
         let out = crate::transpile_source(src, "demo", None, None).unwrap();
         let code = &out.rust_code;
         assert!(
@@ -977,7 +977,7 @@ mod tests {
     // `on_drag` wires the drag gesture and (on a plain col) forces the StyledContainer upgrade.
     #[test]
     fn on_drag_wires_and_upgrades_container() {
-        let src = "[logic]\nlet x = signal(0.0f32);\n[view]\ncol on_drag(|px, _py| $x.set(px))\n    text \"t\"\n";
+        let src = "[logic]\nlet x = signal(0.0f32);\n[view]\ncol on_drag:(|px, _py| $x.set(px))\n    text \"t\"\n";
         let out = crate::transpile_source(src, "demo", None, None).unwrap();
         let code = &out.rust_code;
         assert!(
@@ -1122,7 +1122,7 @@ mod tests {
     // A closure prop is boxed, with its captured signal cloned and `$` sugar desugared.
     #[test]
     fn component_closure_prop_is_boxed() {
-        let src = "[logic]\nlet count = signal(0i32);\n[view]\ncard on_tap(|| $count += 1)\n    text \"x\"\n";
+        let src = "[logic]\nlet count = signal(0i32);\n[view]\ncard on_tap:(|| $count += 1)\n    text \"x\"\n";
         let out = crate::transpile_source(src, "demo", None, None).unwrap();
         let code = &out.rust_code;
         assert!(
@@ -1139,7 +1139,7 @@ mod tests {
     // works inside it, exactly like inside an element's `on_press`.
     #[test]
     fn component_free_closure_prop_carries_source_span() {
-        let src = "[view]\ncard on_tap(|| toggle())\n    text \"x\"\n";
+        let src = "[view]\ncard on_tap:(|| toggle())\n    text \"x\"\n";
         let out = crate::transpile_source(src, "demo", None, None).unwrap();
         assert!(!out.rust_code.contains("@RSX@"), "markers must be stripped");
         let span = out
@@ -1217,7 +1217,7 @@ mod tests {
     // wires an optional `on_submit`.
     #[test]
     fn input_binds_value_style_and_submit() {
-        let src = "[logic]\nlet name = signal(String::new());\n[view]\ninput value:$name font_size:16 color:theme.primary width:200 on_submit(|| $name.set(String::new()))\n";
+        let src = "[logic]\nlet name = signal(String::new());\n[view]\ninput value:$name font_size:16 color:theme.primary width:200 on_submit:(|| $name.set(String::new()))\n";
         let code = crate::transpile_source(src, "demo", Some("SandboxTheme"), None)
             .unwrap()
             .rust_code;
@@ -1498,7 +1498,7 @@ mod tests {
     #[test]
     fn event_callbacks_emit_on_hover_and_on_key() {
         // Paren form for both, since `key:value` consumes to end of line (only the last attr can use `:`).
-        let src = "[logic]\nlet hot = signal(false);\nlet n = signal(0i32);\n[view]\ncol\n    box fill:primary on_hover(|h| $hot.set(h)) on_key(|_k| $n += 1)\n        text \"x\"\n";
+        let src = "[logic]\nlet hot = signal(false);\nlet n = signal(0i32);\n[view]\ncol\n    box fill:primary on_hover:(|h| $hot.set(h)) on_key:(|_k| $n += 1)\n        text \"x\"\n";
         let code = crate::transpile_source(src, "demo", None, None)
             .unwrap()
             .rust_code;
@@ -1509,7 +1509,7 @@ mod tests {
     // `on_pointer_move` carries the pointer position, so a viewport can answer *where* rather than *whether*.
     #[test]
     fn on_pointer_move_emits_the_container_method() {
-        let src = "[logic]\nlet at = signal((0.0f32, 0.0f32));\n[view]\ncol\n    box on_pointer_move(|x, y| $at.set((x, y)))\n        text \"x\"\n";
+        let src = "[logic]\nlet at = signal((0.0f32, 0.0f32));\n[view]\ncol\n    box on_pointer_move:(|x, y| $at.set((x, y)))\n        text \"x\"\n";
         let code = crate::transpile_source(src, "demo", None, None)
             .unwrap()
             .rust_code;
@@ -1528,7 +1528,7 @@ mod tests {
     #[test]
     fn drag_threshold_emits_the_slop_distance() {
         let src =
-            "[view]\ncol\n    box drag_threshold:4 on_drag(|_x, _y| ())\n        text \"x\"\n";
+            "[view]\ncol\n    box drag_threshold:4 on_drag:(|_x, _y| ())\n        text \"x\"\n";
         let code = crate::transpile_source(src, "demo", None, None)
             .unwrap()
             .rust_code;
@@ -1541,7 +1541,7 @@ mod tests {
     // `drag_button` widens which buttons may start the box's drag; the primary one always can.
     #[test]
     fn drag_button_emits_the_extra_buttons() {
-        let src = "[view]\ncol\n    box drag_button:secondary,auxiliary on_drag(|_x, _y| ())\n        text \"x\"\n";
+        let src = "[view]\ncol\n    box drag_button:secondary,auxiliary on_drag:(|_x, _y| ())\n        text \"x\"\n";
         let code = crate::transpile_source(src, "demo", None, None)
             .unwrap()
             .rust_code;
@@ -1556,7 +1556,7 @@ mod tests {
     // An event callback upgrades a plain col/row to a StyledContainer (only it carries the callbacks).
     #[test]
     fn on_hover_promotes_plain_container() {
-        let src = "[view]\ncol\n    col on_hover(|_h| ())\n        text \"x\"\n";
+        let src = "[view]\ncol\n    col on_hover:(|_h| ())\n        text \"x\"\n";
         let code = crate::transpile_source(src, "demo", None, None)
             .unwrap()
             .rust_code;
@@ -1608,7 +1608,7 @@ mod tests {
     // and helper call are emitted verbatim. This is the state-driven paint a stateful chip/pill needs.
     #[test]
     fn box_fill_computed_expression_is_reactive() {
-        let src = "[logic]\nlet snap = signal(0i32);\nlet ids = signal(vec![1i32]);\n[view]\nrow\n    for id in $ids key id\n        box fill(chip_fill($snap, id)) radius:6\n            text \"x\"\n";
+        let src = "[logic]\nlet snap = signal(0i32);\nlet ids = signal(vec![1i32]);\n[view]\nrow\n    for id in $ids key id\n        box fill:(chip_fill($snap, id)) radius:6\n            text \"x\"\n";
         let code = crate::transpile_source(src, "demo", None, None)
             .unwrap()
             .rust_code;
@@ -1626,7 +1626,7 @@ mod tests {
     #[test]
     fn text_color_computed_expression_is_reactive() {
         let src =
-            "[logic]\nlet snap = signal(0i32);\n[view]\ntext \"hi\" color(text_color($snap))\n";
+            "[logic]\nlet snap = signal(0i32);\n[view]\ntext \"hi\" color:(text_color($snap))\n";
         let code = crate::transpile_source(src, "demo", None, None)
             .unwrap()
             .rust_code;
@@ -2046,4 +2046,26 @@ mod tests {
             .rust_code;
         assert!(code.contains("compile_error!"), "{code}");
     }
+}
+
+/// The expression inside a redundant paren pair, or `None` when the parens carry meaning.
+///
+/// `key(expr)` is how the markup delimits a value that would otherwise run to end of line, so the parens
+/// are punctuation rather than grammar and emitting them warns `unused_parens` in code the author cannot
+/// edit. A top-level comma makes them a tuple, which is grammar, and stays — except in a closure, whose
+/// parameter list has a comma of its own.
+pub(super) fn redundant_parens(expr: &str) -> Option<&str> {
+    let inner = expr.trim().strip_prefix('(')?.strip_suffix(')')?;
+    let is_closure = inner.starts_with('|') || inner.trim_start().starts_with("move |");
+    let mut depth = 0i32;
+    for c in inner.chars() {
+        match c {
+            '(' | '[' | '{' => depth += 1,
+            ')' if depth == 0 => return None,
+            ')' | ']' | '}' => depth -= 1,
+            ',' if depth == 0 && !is_closure => return None,
+            _ => {}
+        }
+    }
+    Some(inner)
 }

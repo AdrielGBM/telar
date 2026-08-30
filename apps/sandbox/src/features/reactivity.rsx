@@ -64,9 +64,9 @@ col gap:20
             text "doubled memo · {$doubled}" font_size:14 color:theme.muted
             text "{$remaining} left before 10" font_size:14 color:theme.primary
             row gap:10
-                button label:"−" outline:theme.primary on_press(|| $count.update(|n| *n = (*n - 1).max(0)))
-                button label:"+" fill:theme.primary on_press(|| $count.update(|n| *n = (*n + 1).min(10)))
-                button label:"Reset" ghost on_press(|| $count.set(0))
+                button label:"−" outline:theme.primary on_press:(|| $count.update(|n| *n = (*n - 1).max(0)))
+                button label:"+" fill:theme.primary on_press:(|| $count.update(|n| *n = (*n + 1).min(10)))
+                button label:"Reset" ghost on_press:(|| $count.set(0))
         code_line code:"let count = signal(0);   let doubled = memo(move || count.get() * 2);"
     example title:"A reactive property — the bar's opacity tracks the same signal"
         card gap:8
@@ -77,9 +77,9 @@ col gap:20
     example title:"Reactive list — for over a signal, keyed and reconciled (not rebuilt)"
         card gap:10
             row gap:8
-                button label:"Add" fill:theme.primary on_press(|| $todos.update(|v| { let id = v.iter().map(|t| t.id).max().unwrap_or(0) + 1; v.push(Todo { id, label: "New task" }); }))
-                button label:"Reverse" outline:theme.primary on_press(|| $todos.update(|v| v.reverse()))
-                button label:"Remove first" ghost on_press(|| $todos.update(|v| { if !v.is_empty() { v.remove(0); } }))
+                button label:"Add" fill:theme.primary on_press:(|| $todos.update(|v| { let id = v.iter().map(|t| t.id).max().unwrap_or(0) + 1; v.push(Todo { id, label: "New task" }); }))
+                button label:"Reverse" outline:theme.primary on_press:(|| $todos.update(|v| v.reverse()))
+                button label:"Remove first" ghost on_press:(|| $todos.update(|v| { if !v.is_empty() { v.remove(0); } }))
             for todo in $todos key todo.id
                 row gap:8 align:center pad_y:4
                     box fill:theme.primary radius:4 width:8 height:8
@@ -87,7 +87,7 @@ col gap:20
         code_line code:"for todo in $todos key todo.id   >   row …   (reused/moved/dropped by key)"
     example title:"Reactive if/else — the shown branch swaps on a signal"
         card gap:10
-            button label:"Toggle" fill:theme.primary on_press(|| $show.toggle())
+            button label:"Toggle" fill:theme.primary on_press:(|| $show.toggle())
             if $show
                 row gap:8 align:center pad_y:4
                     box fill:theme.primary radius:4 width:8 height:8
@@ -98,7 +98,7 @@ col gap:20
     example title:"lazy — a subtree built on its first display, then only shown and hidden"
         card gap:10
             text "This panel costs nothing until you open it the first time. Type into it, close it, open it again: the text is still there. An if would have disposed the whole branch and rebuilt it empty." font_size:13 color:theme.muted
-            button label:"Toggle panel" fill:theme.primary on_press(|| $show_panel.toggle())
+            button label:"Toggle panel" fill:theme.primary on_press:(|| $show_panel.toggle())
             lazy when:$show_panel
                 let _ = panel_builds.update(|n| *n += 1)
                 col gap:8
@@ -116,25 +116,25 @@ col gap:20
         code_line code:"input value:$name      (tap or Tab to focus · type · ← → Home End ⌫ · Esc blurs)"
     example title:"on_focus — any box can be focusable: it joins the Tab order and observes its own focus"
         card gap:10
-            box fill:theme.surface_alt radius:8 pad:16 on_focus(|f| $box_focused.set(f))
+            box fill:theme.surface_alt radius:8 pad:16 on_focus:(|f| $box_focused.set(f))
                 text "Tab to me — focused: {$box_focused}" font_size:14 color:theme.ink
         code_line code:"box on_focus(|f| $box_focused.set(f))      (Tab-focusable; drive a focus ring)"
     example title:"on_drag — the drag base primitive: press-and-move reports the pointer, mapped to a value"
         card gap:10
-            box fill:theme.surface_alt radius:7 height:14 width:280 on_drag(|px, _py| $slider.set((px / 280.0).clamp(0.0, 1.0)))
+            box fill:theme.surface_alt radius:7 height:14 width:280 on_drag:(|px, _py| $slider.set((px / 280.0).clamp(0.0, 1.0)))
                 box fill:theme.primary radius:7 width:14 height:14 translate_x:$thumb_x
             text "value · {$pct}%" font_size:14 color:theme.muted
         code_line code:"box on_drag(|px, _| $slider.set(px / 280))      (keeps tracking even off the track)"
     example title:"overlay — a top-layer portal (modal/dropdown/toast): draws above everything, escapes clipping"
         card gap:10
-            button label:"Open modal" fill:theme.primary on_press(|| $show_modal.set(true))
+            button label:"Open modal" fill:theme.primary on_press:(|| $show_modal.set(true))
         if $show_modal
             overlay
-                box fill:#00000080 grow:1 align:center justify:center on_press(|| $show_modal.set(false))
-                    box fill:theme.surface stroke:theme.border radius:12 pad:24 gap:12 on_press(|| ())
+                box fill:#00000080 grow:1 align:center justify:center on_press:(|| $show_modal.set(false))
+                    box fill:theme.surface stroke:theme.border radius:12 pad:24 gap:12 on_press:(|| ())
                         text "I'm rendered in an overlay" font_size:18 color:theme.ink
                         text "Above the page and outside any clip. Click the dim area to dismiss." font_size:13 color:theme.muted
-                        button label:"Close" outline:theme.primary on_press(|| $show_modal.set(false))
+                        button label:"Close" outline:theme.primary on_press:(|| $show_modal.set(false))
         code_line code:"if $open  >  overlay  >  box (scrim, on_press dismiss)  >  box (dialog)"
     example title:"Primitives"
         col gap:6

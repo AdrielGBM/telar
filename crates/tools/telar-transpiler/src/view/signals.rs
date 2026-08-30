@@ -111,17 +111,27 @@ pub(super) fn closure_marker(attr: Option<&Attr>) -> String {
     let Some(attr) = attr else {
         return String::new();
     };
-    let trimmed = attr.value.text().trim_start();
+    // The span covers the closure, not the parens the value needed to hold its spaces: a diagnostic should
+    // underline `|| toggle()`, not `(|| toggle())`.
+    let text = attr.value.text();
+    let trimmed = text.trim_start();
+    let (trimmed, delimiters) = match super::redundant_parens(trimmed) {
+        Some(inner) => (inner, 1),
+        None => (trimmed, 0),
+    };
     if !trimmed.starts_with('|') {
         return String::new();
     }
-    let lead = attr.value.text().len() - trimmed.len();
-    expr_marker(attr.value_start + lead, attr.value.text().trim().len())
+    let lead = text.len() - text.trim_start().len() + delimiters;
+    expr_marker(attr.value_start + lead, trimmed.trim().len())
 }
 
 /// The parser strips `on_press:` leaving `|| expr` or `|ev| expr`. Ensure the value is a closure; wrap bare expressions in a zero-arg closure. Then desugar a lone compound-assignment on a signal.
 pub(super) fn normalize_closure(value: &str) -> String {
+    // The parens a closure needs to hold its spaces are the value's delimiters, not part of the closure, so
+    // they come off first: `on_press:(|| f())` and a bare `|| f()` are the same thing.
     let v = value.trim();
+    let v = super::redundant_parens(v).unwrap_or(v);
     let closure = if v.starts_with('|') {
         v.to_string()
     } else {

@@ -68,8 +68,8 @@ col gap:20
                 if $busy
                     spinner size:20
             row gap:10
-                button label:"Compute" fill:theme.primary on_press(|| { $busy.set(true); $total.set(String::from("…")); spawn_task(|| slow_sum(2_000_000), on_computed($total.clone(), $busy.clone())); })
-                button label:"Bounce" outline:theme.primary on_press(|| { $beat.retarget(if $beat.get() > 1.0 { 1.0 } else { 1.4 }) })
+                button label:"Compute" fill:theme.primary on_press:(|| { $busy.set(true); $total.set(String::from("…")); spawn_task(|| slow_sum(2_000_000), on_computed($total.clone(), $busy.clone())); })
+                button label:"Bounce" outline:theme.primary on_press:(|| { $beat.retarget(if $beat.get() > 1.0 { 1.0 } else { 1.4 }) })
             row gap:16 align:center
                 box fill:theme.primary radius:12 width:48 height:48 scale:$beat
                 text "Press Compute, then Bounce — the spring keeps settling while the worker blocks." font_size:12 color:theme.muted
@@ -77,8 +77,8 @@ col gap:20
     example title:"spawn_stream — many values, in order, one frame after the other"
         card gap:12
             row gap:10
-                button label:"Scan" fill:theme.primary on_press(|| { $found.set(Vec::new()); $scanning.set(true); *$scan.borrow_mut() = Some(spawn_stream(walk_project, on_found($found.clone()), on_scan_end($scanning.clone()))); })
-                button label:"Cancel" outline:theme.danger on_press(|| { if let Some(task) = $scan.borrow_mut().take() { task.cancel(); } $scanning.set(false); })
+                button label:"Scan" fill:theme.primary on_press:(|| { $found.set(Vec::new()); $scanning.set(true); *$scan.borrow_mut() = Some(spawn_stream(walk_project, on_found($found.clone()), on_scan_end($scanning.clone()))); })
+                button label:"Cancel" outline:theme.danger on_press:(|| { if let Some(task) = $scan.borrow_mut().take() { task.cancel(); } $scanning.set(false); })
                 if $scanning
                     spinner size:20
             text "{$found.len()} crates" font_size:14 color:theme.muted

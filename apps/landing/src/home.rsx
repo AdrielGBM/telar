@@ -62,7 +62,7 @@ col @page
                 text "Features" font_size:14 color:theme.muted
                 text "Gallery" font_size:14 color:theme.muted
                 text "Pricing" font_size:14 color:theme.muted
-                button label:"Get started" fill:primary on_press(|| $signups.update(|n| *n += 1))
+                button label:"Get started" fill:primary on_press:(|| $signups.update(|n| *n += 1))
     box @band fill:theme.surface
         col @wrap
             row gap:48 wrap align:center
@@ -70,7 +70,7 @@ col @page
                     text "Native UIs in Rust, without the boilerplate" font_size:40 color:theme.dark
                     text "rsx compiles declarative .rsx markup to GPU-accelerated widgets — signals, layout and theming included, from desktop to Android." font_size:18 color:theme.muted
                     row gap:12 wrap
-                        button label:"Get started" fill:primary on_press(|| $signups.update(|n| *n += 1))
+                        button label:"Get started" fill:primary on_press:(|| $signups.update(|n| *n += 1))
                         button label:"Read the docs" outline:primary
                     text "{$spots_left} of 200 early-access seats left" font_size:13 color:theme.accent
                 col grow:1 min_width:320
@@ -130,7 +130,7 @@ col @page
             text "Join the private beta" font_size:30 color:theme.on_primary
             text "{$spots_left} of 200 seats remaining" font_size:16 color:theme.on_primary
             row gap:12 align:center wrap
-                button label:"Reserve a seat" fill:theme.accent on_press(|| $signups.update(|n| *n += 1))
+                button label:"Reserve a seat" fill:theme.accent on_press:(|| $signups.update(|n| *n += 1))
                 text "{$signups} developers reserved" font_size:14 color:theme.on_primary
     box @footband fill:theme.dark
         row @footwrap

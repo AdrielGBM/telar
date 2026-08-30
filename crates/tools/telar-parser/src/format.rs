@@ -428,9 +428,9 @@ mod tests {
 
     #[test]
     fn normalizes_view_indentation_and_token_order() {
-        let src = "[view]\ncol @card\n        text \"Hi\" size:14 color:dark\n        row gap:8\n                btn \"+\" fill:primary on_press(|| count.update(|n| *n += 1))\n";
+        let src = "[view]\ncol @card\n        text \"Hi\" size:14 color:dark\n        row gap:8\n                btn \"+\" fill:primary on_press:(|| count.update(|n| *n += 1))\n";
         let out = format_document(src).unwrap();
-        let expected = "[view]\ncol @card\n    text \"Hi\" size:14 color:dark\n    row gap:8\n        btn \"+\" fill:primary on_press(|| count.update(|n| *n += 1))\n";
+        let expected = "[view]\ncol @card\n    text \"Hi\" size:14 color:dark\n    row gap:8\n        btn \"+\" fill:primary on_press:(|| count.update(|n| *n += 1))\n";
         assert_eq!(out, expected);
     }
 
@@ -503,9 +503,9 @@ mod tests {
 
     #[test]
     fn preserves_quoted_and_flag_attrs() {
-        let src = "[view]\nbtn \"Reset\" ghost label:\"x\" on_press(|| reset())\n";
+        let src = "[view]\nbtn \"Reset\" ghost label:\"x\" on_press:(|| reset())\n";
         let out = format_document(src).unwrap();
-        let expected = "[view]\nbtn \"Reset\" ghost label:\"x\" on_press(|| reset())\n";
+        let expected = "[view]\nbtn \"Reset\" ghost label:\"x\" on_press:(|| reset())\n";
         assert_eq!(out, expected);
     }
 
@@ -561,11 +561,11 @@ mod tests {
     /// one with a colon does not merely reformat the file, it breaks the file it just formatted.
     #[test]
     fn a_move_closure_attribute_keeps_its_parens() {
-        let src = "[view]\nicon name(move || label()) tint(|| fg()) size:16\n";
+        let src = "[view]\nicon name:(move || label()) tint:(|| fg()) size:16\n";
         let out = format_document(src).unwrap();
         assert!(
-            out.contains("name(move || label())") && out.contains("tint(|| fg())"),
-            "both closure spellings keep the paren form:\n{out}"
+            out.contains("name:(move || label())") && out.contains("tint:(|| fg())"),
+            "a closure keeps the parens it needs to hold its spaces:\n{out}"
         );
         assert_eq!(format_document(&out).unwrap(), out, "and it is idempotent");
     }

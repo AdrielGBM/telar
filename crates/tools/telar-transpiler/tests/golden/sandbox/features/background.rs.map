@@ -282,4 +282,4 @@
 281	.
 
 # verbatim expression spans: rsx[start..end] -> gen[start] `source text`
-4844..4848	15639	`name`
+4848..4852	15639	`name`

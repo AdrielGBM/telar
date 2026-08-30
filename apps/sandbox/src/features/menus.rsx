@@ -24,7 +24,7 @@ col gap:20
         code_line code:"select selected:$picked / item label:'Small' / item label:'Medium'"
     example title:"menu — a click-triggered list of one-shot actions"
         card gap:10
-            menu label:"Actions" on_select(|i| $action.set(i))
+            menu label:"Actions" on_select:(|i| $action.set(i))
                 item label:"Rename"
                 item label:"Duplicate"
             text "Last action index · {$action}" font_size:14 color:theme.muted
@@ -37,7 +37,7 @@ col gap:20
                 separator
                 group label:"Clipboard"
                 item label:"Cut" hint:"⌘X"
-                item label:"Show ruler" checked:$ruler on_press(|| $ruler.set(!$ruler.get()))
+                item label:"Show ruler" checked:$ruler on_press:(|| $ruler.set(!$ruler.get()))
             row gap:10 align:center
                 toggle checked:$cant_redo label:"Disable Redo"
                 toggle checked:$ruler label:"Ruler"

@@ -442,10 +442,10 @@
 441	.
 
 # verbatim expression spans: rsx[start..end] -> gen[start] `source text`
-4686..4693	23208	`caption`
-4710..4720	23254	`Some(note)`
-4748..4752	23458	`note`
-4802..4806	23947	`None`
-4928..4939	25035	`Slot::Empty`
-5148..5163	26429	`Slot::Filled(n)`
-5300..5301	26746	`n`
+4687..4694	23208	`caption`
+4711..4721	23254	`Some(note)`
+4749..4753	23458	`note`
+4803..4807	23947	`None`
+4929..4940	25035	`Slot::Empty`
+5149..5164	26429	`Slot::Filled(n)`
+5301..5302	26746	`n`

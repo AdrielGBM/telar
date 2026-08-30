@@ -296,7 +296,12 @@ impl ViewGen<'_> {
         }
         // Closure prop: box a `move` closure — the same desugaring `on_press` gets, so a `$`-free closure
         // keeps its source span for LSP completion. The Props field is expected to be a `Box<dyn Fn(..)>`.
-        if v.starts_with('|') {
+        //
+        // The parens a closure needs to hold its spaces are the value's delimiters, not part of it, so they
+        // come off before the shape is read: `on_press:(|| f())` is the same closure as `on_press:|| f()`
+        // would be if that could be written at all.
+        let v = super::redundant_parens(v).unwrap_or(v);
+        if v.starts_with('|') || v.starts_with("move |") {
             return format!("Box::new({})", self.emit_closure_value(attr));
         }
         // A lone `$signal`: pass the cloned handle so the caller's binding stays usable elsewhere.
@@ -365,33 +370,13 @@ impl ViewGen<'_> {
         // Verbatim pass-through: tag the value with its source span so the analyzer can complete in it. The
         // delimiting parens are dropped here rather than at the call, so the span still covers the expression
         // itself and nothing wider.
-        match Self::redundant_parens(v) {
+        match super::redundant_parens(v) {
             Some(inner) => format!(
                 "{}{inner}",
                 expr_marker(attr.value_start + lead + 1, inner.len())
             ),
             None => format!("{}{v}", expr_marker(attr.value_start + lead, v.len())),
         }
-    }
-
-    /// The expression inside a redundant paren pair, or `None` when the parens carry meaning.
-    ///
-    /// `key:(expr)` is how the markup delimits a value that would otherwise run to end of line, so the parens
-    /// are punctuation rather than grammar and emitting them warns `unused_parens` in code the author cannot
-    /// edit. A top-level comma makes them a tuple, which is grammar, and stays.
-    fn redundant_parens(expr: &str) -> Option<&str> {
-        let inner = expr.trim().strip_prefix('(')?.strip_suffix(')')?;
-        let mut depth = 0i32;
-        for c in inner.chars() {
-            match c {
-                '(' | '[' | '{' => depth += 1,
-                ')' if depth == 0 => return None,
-                ')' | ']' | '}' => depth -= 1,
-                ',' if depth == 0 => return None,
-                _ => {}
-            }
-        }
-        Some(inner)
     }
 }
 

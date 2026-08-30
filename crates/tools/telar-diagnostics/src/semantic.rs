@@ -383,7 +383,7 @@ mod capture_tests {
     #[test]
     fn a_non_copy_binding_captured_twice_without_its_sigil_is_reported() {
         let found = warnings(
-            "[logic]\nlet held = Rc::new(RefCell::new(0));\n\n[view]\ncol\n    button label:\"a\" on_press(|| { held.take(); })\n    button label:\"b\" on_press(|| { held.take(); })\n",
+            "[logic]\nlet held = Rc::new(RefCell::new(0));\n\n[view]\ncol\n    button label:\"a\" on_press:(|| { held.take(); })\n    button label:\"b\" on_press:(|| { held.take(); })\n",
         );
         assert_eq!(found.len(), 1, "{found:?}");
         assert!(found[0].contains("`$held`"), "{}", found[0]);
@@ -393,7 +393,7 @@ mod capture_tests {
     #[test]
     fn the_sigil_settles_it() {
         let found = warnings(
-            "[logic]\nlet held = Rc::new(RefCell::new(0));\n\n[view]\ncol\n    button label:\"a\" on_press(|| { $held.take(); })\n    button label:\"b\" on_press(|| { $held.take(); })\n",
+            "[logic]\nlet held = Rc::new(RefCell::new(0));\n\n[view]\ncol\n    button label:\"a\" on_press:(|| { $held.take(); })\n    button label:\"b\" on_press:(|| { $held.take(); })\n",
         );
         assert!(found.is_empty(), "{found:?}");
     }
@@ -402,7 +402,7 @@ mod capture_tests {
     #[test]
     fn one_closure_may_take_it() {
         let found = warnings(
-            "[logic]\nlet held = Rc::new(RefCell::new(0));\n\n[view]\ncol\n    button label:\"a\" on_press(|| { held.take(); })\n",
+            "[logic]\nlet held = Rc::new(RefCell::new(0));\n\n[view]\ncol\n    button label:\"a\" on_press:(|| { held.take(); })\n",
         );
         assert!(found.is_empty(), "{found:?}");
     }
@@ -412,7 +412,7 @@ mod capture_tests {
     #[test]
     fn a_binding_that_might_be_copy_is_left_alone() {
         let found = warnings(
-            "[logic]\nlet count = compute();\n\n[view]\ncol\n    button label:\"a\" on_press(|| { use_it(count); })\n    button label:\"b\" on_press(|| { use_it(count); })\n",
+            "[logic]\nlet count = compute();\n\n[view]\ncol\n    button label:\"a\" on_press:(|| { use_it(count); })\n    button label:\"b\" on_press:(|| { use_it(count); })\n",
         );
         assert!(found.is_empty(), "{found:?}");
     }
