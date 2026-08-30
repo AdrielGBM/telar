@@ -71,9 +71,6 @@ pub fn chip(props: ChipProps, _children: Children) -> Result<Box<dyn LayoutItem>
         color,
         on_close,
     } = props;
-    // Erased to `Rc` so the same colour closure can feed both the dot's presence check (read once, below)
-    // and its per-frame fill style, like `button`'s `fill`/`outline`.
-
     let mut children: Vec<Box<dyn LayoutItem>> = Vec::with_capacity(3);
 
     // The dot's presence is decided once at build time (an unset colour means "no dot", not an invisible

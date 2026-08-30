@@ -10,7 +10,7 @@ use super::Backend;
 
 impl Backend {
     /// Renames a component (`<feature_card>` → `<new_name>`): the defining `.rsx` file, every markup usage (native cross-file scan), and every hand-written Rust reference to the generated `fn` / `Props` (via the embedded analyzer). Returns a `document_changes` edit so the file rename rides along with the text edits. `None` if the new name is not a valid identifier or no defining file is found.
-
+    ///
     /// Three kinds of occurrence, because a component name lives in three places: the tag in `[view]`, the
     /// module segment of the `use` line that imports it (both from the workspace `.rsx` index — the segment
     /// is a file name, which rust-analyzer never sees change), and the generated `fn`/`Props` in real Rust,

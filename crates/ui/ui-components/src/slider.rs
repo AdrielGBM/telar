@@ -85,7 +85,6 @@ pub fn slider(props: SliderProps, _children: Children) -> Result<Box<dyn LayoutI
     let width = if width > 0.0 { width } else { 220.0 };
     // Shared across the fill and thumb style closures (a `Rc<dyn Fn>` is not `Clone`, an `Rc` handle is).
     // The drag and the arrow keys are two ways into one commit, so the callback has to reach both.
-    let on_change: Option<Rc<dyn Fn(f32)>> = on_change.map(|f| -> Rc<dyn Fn(f32)> { Rc::from(f) });
     let key_on_change = on_change.clone();
     let announced_value = value;
     let commit_value = value;

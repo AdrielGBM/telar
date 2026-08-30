@@ -126,8 +126,7 @@ pub fn tooltip(
     // The bubble is a fresh `text` each hover (rebuildable — no slot children to preserve), so no take-once
     // cell here; keying on `hovered` mounts/disposes the anchored overlay like a reactive `if`. Both `text`
     // and `color` are re-erased to `Rc` so each remount can clone them into a fresh bubble.
-    let style: shared::SurfaceStyle =
-        style.map(|f| -> Rc<dyn Fn(RectStyle) -> RectStyle> { Rc::from(f) });
+    let style: shared::SurfaceStyle = style;
     let key_hovered = hovered;
     let bubble = ReactiveList::new(
         move || vec![key_hovered.get()],

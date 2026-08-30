@@ -81,11 +81,7 @@ pub(crate) fn dropdown(props: Dropdown) -> Result<Box<dyn LayoutItem>, LayoutErr
         caret: with_caret,
         style: surface,
     } = props;
-    let surface: shared::SurfaceStyle =
-        surface.map(|f| -> Rc<dyn Fn(RectStyle) -> RectStyle> { Rc::from(f) });
-    // Erased to `Rc` so the colour/callback can be cloned into the trigger, every option row, and the panel
-    // builder (which re-runs on each open) — a `Rc<dyn Fn>` can't be shared, but the widget needs to.
-    let on_pick: Option<Rc<dyn Fn(u32)>> = on_pick.map(|f| -> Rc<dyn Fn(u32)> { Rc::from(f) });
+    let surface: shared::SurfaceStyle = surface;
     let open = signal(false);
     let dismiss_open = open;
     // Not the same thing as what is selected: a bound `select` opens with its value under the cursor, and moving off it must not commit anything.

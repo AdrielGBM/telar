@@ -253,6 +253,27 @@ fn rsx_output(generated_dir: &Path, flat_prefix: &str, name: &str) -> PathBuf {
     out.join(format!("{name}.rs"))
 }
 
+/// The name the component in `path` is generated under: its file stem.
+///
+/// A `.rsx` is a module where its file sits, so two files may share a basename — they are different modules,
+/// which is what a path-flattened name existed to work around. One function rather than each caller taking
+/// the stem itself: the editor and the golden harness both have to agree with the macro on this exactly, and
+/// they silently drifted apart when the flattening went.
+pub fn component_name(path: &Path) -> String {
+    path.file_stem()
+        .map(|s| s.to_string_lossy().to_string())
+        .unwrap_or_default()
+}
+
+/// Derives the output `.rs` path (relative to the output root) for a `.rsx` file by mirroring its location under `src_dir`, so files in different directories never collide (e.g. `src/components/button.rsx` -> `components/button.rs`). Used for the transpiler's `.telar/build/` output. Returns `None` for files outside `src_dir`: those are never transpiled, so they have no place in the build tree — and flattening their absolute path would escape the output root entirely.
+pub fn relative_output_path(path: &Path, src_dir: &Path) -> Option<PathBuf> {
+    let rel = path.strip_prefix(src_dir).ok()?;
+    if rel.as_os_str().is_empty() {
+        return None;
+    }
+    Some(rel.with_extension("rs"))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -406,25 +427,4 @@ mod tests {
             "{out}"
         );
     }
-}
-
-/// The name the component in `path` is generated under: its file stem.
-///
-/// A `.rsx` is a module where its file sits, so two files may share a basename — they are different modules,
-/// which is what a path-flattened name existed to work around. One function rather than each caller taking
-/// the stem itself: the editor and the golden harness both have to agree with the macro on this exactly, and
-/// they silently drifted apart when the flattening went.
-pub fn component_name(path: &Path) -> String {
-    path.file_stem()
-        .map(|s| s.to_string_lossy().to_string())
-        .unwrap_or_default()
-}
-
-/// Derives the output `.rs` path (relative to the output root) for a `.rsx` file by mirroring its location under `src_dir`, so files in different directories never collide (e.g. `src/components/button.rsx` -> `components/button.rs`). Used for the transpiler's `.telar/build/` output. Returns `None` for files outside `src_dir`: those are never transpiled, so they have no place in the build tree — and flattening their absolute path would escape the output root entirely.
-pub fn relative_output_path(path: &Path, src_dir: &Path) -> Option<PathBuf> {
-    let rel = path.strip_prefix(src_dir).ok()?;
-    if rel.as_os_str().is_empty() {
-        return None;
-    }
-    Some(rel.with_extension("rs"))
 }

@@ -115,7 +115,6 @@ pub(crate) fn scrim_overlay(
         return collapsed();
     };
 
-    let on_close: Option<Rc<dyn Fn()>> = on_close.map(Rc::from);
     let dismiss: DismissFn = {
         let open = open;
         Rc::new(move || {

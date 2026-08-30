@@ -58,8 +58,6 @@ pub fn tabs(props: TabsProps, _children: Children) -> Result<Box<dyn LayoutItem>
     } = props;
     // Uncontrolled: own the index so the bar still tracks the active tab when the caller binds no signal.
     let selected = selected.unwrap_or_else(|| signal(0u32));
-    // Erased to `Rc` so the same colour closure feeds every tab's fill, hover and label style.
-
     let mut tab_items: Vec<Box<dyn LayoutItem>> = Vec::with_capacity(items.len());
     for (i, label) in items.into_iter().enumerate() {
         let idx = i as u32;

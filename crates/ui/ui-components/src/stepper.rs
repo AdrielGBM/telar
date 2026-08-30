@@ -79,7 +79,6 @@ pub fn stepper(
     let value = value.unwrap_or_else(|| signal(min));
     // Shared across the − and + buttons' fill closures (a `Rc<dyn Fn>` is not `Clone`, an `Rc` handle is).
     // Re-erased to `Rc` so both buttons' `on_press` closures can hold a copy (the field itself is a one-shot `Box`).
-    let on_change: Option<Rc<dyn Fn(f32)>> = on_change.map(Rc::from);
 
     let minus = stepper_button("−", color.clone(), {
         let value = value;

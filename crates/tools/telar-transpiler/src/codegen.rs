@@ -246,7 +246,7 @@ fn transpile(input: TranspileInput<'_>) -> Result<TranspiledSource, TranspileErr
 
     let signals = scan_signals(logic_source);
 
-    let style_section = generate_style_section(&doc.style, input.theme_type.as_deref());
+    let style_section = generate_style_section(&doc.style, input.theme_type);
 
     let mut view_gen = ViewGen::with_theme(&doc.style.classes, input.theme_type, input.base_dir)
         .with_locals(scan_locals(logic_source))

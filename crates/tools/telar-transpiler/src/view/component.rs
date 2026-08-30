@@ -179,12 +179,6 @@ impl ViewGen<'_> {
         Some(format!("std::rc::Rc::new({closure})"))
     }
 
-    /// A reactive string prop (e.g. a button's `label`): a `move ||` closure re-read every frame, so a
-    /// `t"key"` translation re-renders on a locale switch and a `$signal` string re-renders on state change.
-    /// Mirrors [`Self::component_color_attr_expr`]; the Props field is expected to be `Box<dyn Fn() -> String>`.
-    /// A `t"key"` value becomes a catalog lookup, a plain `"literal"` a static string, and a `$signal`/expr a
-    /// reactive read.
-
     /// Emits the markup children of a component call into a `Slots` value: a child written with
     /// `slot:"name"` goes to that named slot; every other child (including `if`/`for` control flow) goes
     /// to the default slot. Returns the expression naming the built value (`__slots`).
