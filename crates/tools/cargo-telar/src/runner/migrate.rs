@@ -91,9 +91,12 @@ fn migrate(
     // A file that binds `theme` itself is not talking about the view's handle: its own binding shadows it,
     // and `theme.base` is a field access on what it bound. Leaving it alone keeps exactly the behaviour the
     // file had — the author adopts `$theme` by dropping their `let`.
-    let binds_own_theme = zones(source)
-        .iter()
-        .any(|z| z.section == Section::Logic && z.body.contains("let theme ="));
+    let binds_own_theme = zones(source).iter().any(|z| {
+        z.section == Section::Logic
+            && z.body
+                .lines()
+                .any(|line| line.starts_with("let theme =") || line.starts_with("let theme:"))
+    });
     let read_theme = |body: &str| match binds_own_theme {
         true => body.to_string(),
         false => theme_reads(body),
@@ -552,6 +555,13 @@ fn rewrite_boxed_props(declaration: &str) -> (String, Vec<String>) {
                     reactive.push(name);
                 }
                 out.push_str(&format!("Reactive<{}>", yields.trim()));
+                // The inline `= Box::new(…)` default is a closure too, and the type it defaults no longer
+                // takes one.
+                if rest[close + 1..].starts_with(" = Box::new(") {
+                    out.push_str(" = Reactive::of(");
+                    rest = &rest[close + 1 + " = Box::new(".len()..];
+                    continue;
+                }
             }
             // Nothing returned: a handler, shared so the struct can be cloned.
             None => out.push_str(&format!("Rc<{inner}>")),
@@ -1012,6 +1022,32 @@ mod tests {
         assert!(
             out.contains("let held: Box<dyn Fn()> = Box::new(|| {});"),
             "a binding outside the declaration is left alone: {out}"
+        );
+    }
+
+    /// The inline `= Box::new(…)` default is a closure too, and the type it defaults no longer takes one.
+    #[test]
+    fn a_boxed_default_follows_the_type_it_defaults() {
+        let out = migrated(
+            "[logic]\npub struct Props {\n    pub text: Box<dyn Fn() -> String> = Box::new(String::new),\n}\n\n[view]\ncol\n",
+        );
+        assert!(
+            out.contains("pub text: Reactive<String> = Reactive::of(String::new),"),
+            "{out}"
+        );
+    }
+
+    /// The binding that shadows the view's handle is a top-level one. A `let theme = use_theme::<T>()`
+    /// inside a nested `fn` is that function's own and shadows nothing in the view.
+    #[test]
+    fn a_theme_bound_inside_a_fn_shadows_nothing() {
+        let out = migrated(
+            "[logic]\nfn tint() -> Color {\n    let theme = use_theme::<NordTheme>();\n    theme.muted\n}\n\n[view]\ntext \"x\" font_size:theme.body\n",
+        );
+        assert!(out.contains("font_size:$theme.body"), "{out}");
+        assert!(
+            out.contains("    let theme = use_theme::<NordTheme>();"),
+            "the nested binding is left alone: {out}"
         );
     }
 
