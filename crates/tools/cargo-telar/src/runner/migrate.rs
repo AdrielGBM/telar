@@ -428,11 +428,17 @@ fn shared_handlers(body: &str) -> String {
     let Some(end) = body[at..].find("\n}").map(|i| at + i) else {
         return body.to_string();
     };
-    let declaration = rewrite_boxed_props(&body[at..end]);
+    let (declaration, reactive) = rewrite_boxed_props(&body[at..end]);
     if declaration == body[at..end] {
         return body.to_string();
     }
-    let out = format!("{}{declaration}{}", &body[..at], &body[end..]);
+    // A prop that was a closure is read with `.get()` now, not called. Only the ones this pass just changed,
+    // by name, so a closure the author keeps for its own sake is left alone.
+    let mut rest = format!("{}{}", &declaration, &body[end..]);
+    for name in &reactive {
+        rest = rest.replace(&format!("(props.{name})()"), &format!("props.{name}.get()"));
+    }
+    let out = format!("{}{rest}", &body[..at]);
     match !out.contains("Rc<dyn Fn") || out.contains("use std::rc::Rc;") || out.contains("::rc::{")
     {
         true => out,
@@ -440,8 +446,9 @@ fn shared_handlers(body: &str) -> String {
     }
 }
 
-fn rewrite_boxed_props(declaration: &str) -> String {
+fn rewrite_boxed_props(declaration: &str) -> (String, Vec<String>) {
     let mut out = String::with_capacity(declaration.len());
+    let mut reactive = Vec::new();
     let mut rest = declaration;
     // `Rc` as well as `Box`, because what decides is whether the closure *returns* something — a prop
     // already moved to `Rc<dyn Fn() -> T>` by hand is still a value wearing a handler's shape.
@@ -460,13 +467,43 @@ fn rewrite_boxed_props(declaration: &str) -> String {
         let inner = &rest[at + head + 1..close];
         match inner.split_once("->") {
             // A value the prop reads, which is what `Reactive` is: `Const(T)` or a closure, one shape.
-            Some((_, yields)) => out.push_str(&format!("Reactive<{}>", yields.trim())),
+            Some((_, yields)) => {
+                if let Some(name) = field_name(&out) {
+                    reactive.push(name);
+                }
+                out.push_str(&format!("Reactive<{}>", yields.trim()));
+            }
             // Nothing returned: a handler, shared so the struct can be cloned.
             None => out.push_str(&format!("Rc<{inner}>")),
         }
         rest = &rest[close + 1..];
     }
     out.push_str(rest);
+    (permissive(&out, &reactive), reactive)
+}
+
+/// The name of the field whose type is about to be written at the end of `so_far`.
+fn field_name(so_far: &str) -> Option<String> {
+    let line = so_far.rsplit('\n').next()?;
+    let (name, _) = line.rsplit_once(':')?;
+    Some(name.trim().trim_start_matches("pub ").to_string())
+}
+
+/// `#[props(into)]` on every prop that became a `Reactive`, which is what lets a call site keep writing the
+/// literal or the signal it always wrote instead of naming the wrapper.
+fn permissive(declaration: &str, reactive: &[String]) -> String {
+    let mut out = String::with_capacity(declaration.len());
+    for line in declaration.split_inclusive('\n') {
+        let names = line
+            .split_once(':')
+            .map(|(name, _)| name.trim().trim_start_matches("pub ").to_string());
+        let wants = names.is_some_and(|name| reactive.contains(&name));
+        if wants && !out.trim_end().ends_with(']') {
+            let indent: String = line.chars().take_while(|c| c.is_whitespace()).collect();
+            out.push_str(&format!("{indent}#[props(into)]\n"));
+        }
+        out.push_str(line);
+    }
     out
 }
 
