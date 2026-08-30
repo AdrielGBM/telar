@@ -13,6 +13,9 @@ struct Prop {
     default: Option<Option<Expr>>,
     /// `#[props(into)]`: the setter takes `impl Into<T>` rather than `T`.
     into: bool,
+    /// `#[props(some)]`: the field is `Option<Inner>` and the setter takes the `Inner`, wrapping it. What
+    /// makes "this prop was given" the callee's business rather than the caller's.
+    some: bool,
 }
 
 impl Prop {
@@ -28,14 +31,27 @@ impl Prop {
     /// `u32: From<i32>`, which is an error already. Coercion is right for a prop whose type exists to accept
     /// several shapes, `Reactive<T>` above all; it is wrong for a plain number. Declaring it means forgetting
     /// it fails loudly on the author's line instead of quietly bending a literal.
+    /// **`some` and `into` are separate knobs because they answer separate questions.** `Option<Reactive<
+    /// String>>` wants both — the caller writes `hint:"⌘Z"` and means `Some(Reactive::from(…))`. But
+    /// `Option<Box<dyn Fn(u32)>>` wants only `some`: a boxed closure reaches its `dyn` type by unsizing,
+    /// which is a coercion at a known parameter type and not an `Into` a generic can find. Folding them into
+    /// one attribute makes one of those two cases impossible to express.
     fn setter_param(&self) -> (TokenStream2, TokenStream2) {
         let ty = &self.ty;
+        let inner = self.some.then(|| option_inner(ty)).flatten();
+        let (param_ty, value) = match &inner {
+            Some(inner) => (inner, quote! { ::core::option::Option::Some(value) }),
+            None => (ty, quote! { value }),
+        };
         match self.into {
             true => (
-                quote! { impl ::core::convert::Into<#ty> },
-                quote! { value.into() },
+                quote! { impl ::core::convert::Into<#param_ty> },
+                match inner.is_some() {
+                    true => quote! { ::core::option::Option::Some(value.into()) },
+                    false => quote! { value.into() },
+                },
             ),
-            false => (quote! { #ty }, quote! { value }),
+            false => (quote! { #param_ty }, value),
         }
     }
 }
@@ -221,12 +237,13 @@ fn collect(input: &DeriveInput) -> Result<Vec<Prop>, syn::Error> {
         .named
         .iter()
         .map(|field| {
-            let (default, into) = read_attrs(field)?;
+            let (default, into, some) = read_attrs(field)?;
             Ok(Prop {
                 name: field.ident.clone().expect("named fields have idents"),
                 ty: field.ty.clone(),
                 default,
                 into,
+                some,
             })
         })
         .collect()
@@ -234,20 +251,24 @@ fn collect(input: &DeriveInput) -> Result<Vec<Prop>, syn::Error> {
 
 /// Reads `#[props(…)]`: `default`, `default = expr`, `into`, in any combination. No attribute at all means a
 /// required prop whose setter takes its type exactly.
-type Attrs = (Option<Option<Expr>>, bool);
+type Attrs = (Option<Option<Expr>>, bool, bool);
 
 fn read_attrs(field: &syn::Field) -> Result<Attrs, syn::Error> {
     let Some(attr) = field.attrs.iter().find(|a| a.path().is_ident("props")) else {
-        return Ok((None, false));
+        return Ok((None, false, false));
     };
-    let (mut default, mut into) = (None, false);
+    let (mut default, mut into, mut some) = (None, false, false);
     attr.parse_nested_meta(|meta| {
         if meta.path.is_ident("into") {
             into = true;
             return Ok(());
         }
+        if meta.path.is_ident("some") {
+            some = true;
+            return Ok(());
+        }
         if !meta.path.is_ident("default") {
-            return Err(meta.error("the prop attributes are `default` and `into`"));
+            return Err(meta.error("the prop attributes are `default`, `into` and `some`"));
         }
         default = Some(match meta.input.peek(syn::Token![=]) {
             true => Some(meta.value()?.parse::<Expr>()?),
@@ -255,7 +276,7 @@ fn read_attrs(field: &syn::Field) -> Result<Attrs, syn::Error> {
         });
         Ok(())
     })?;
-    Ok((default, into))
+    Ok((default, into, some))
 }
 
 /// `on_press` -> `OnPress`, so a marker type reads as a type rather than as a field name.
@@ -267,4 +288,20 @@ fn pascal(name: &Ident) -> String {
             None => String::new(),
         })
         .collect()
+}
+
+/// The `T` of an `Option<T>`, or `None` when the type is not one.
+fn option_inner(ty: &Type) -> Option<Type> {
+    let Type::Path(path) = ty else { return None };
+    let last = path.path.segments.last()?;
+    if last.ident != "Option" {
+        return None;
+    }
+    let syn::PathArguments::AngleBracketed(args) = &last.arguments else {
+        return None;
+    };
+    args.args.iter().find_map(|arg| match arg {
+        syn::GenericArgument::Type(inner) => Some(inner.clone()),
+        _ => None,
+    })
 }
