@@ -43,4 +43,4 @@
 42	.
 
 # verbatim expression spans: rsx[start..end] -> gen[start] `source text`
-329..339	958	`props.code`
+329..339	908	`props.code`

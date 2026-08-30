@@ -4,7 +4,7 @@
 #[allow(unused_imports)] use crate::*;
 
 #[derive(::telar::Props)]
-pub struct SharedComponentsStatProps {
+pub struct StatProps {
     #[props(default)]
     pub value: &'static str,
     #[props(default)]
@@ -12,7 +12,7 @@ pub struct SharedComponentsStatProps {
 }
 
 #[allow(dead_code, unused_variables, unused_mut)]
-pub fn shared_components_stat(props: SharedComponentsStatProps, children: Children) -> Result<Box<dyn LayoutItem>, LayoutError> {
+pub fn stat(props: StatProps, children: Children) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let __owner = telar::owner_scope();
     #[allow(unused_imports)] use telar::use_theme;
     #[allow(unused_variables)] let theme = telar::Theme::<core::theme::SandboxTheme>::default();
@@ -37,13 +37,13 @@ pub fn shared_components_stat(props: SharedComponentsStatProps, children: Childr
 }
 
 #[allow(dead_code, unused_variables, unused_mut)]
-pub fn shared_components_stat_preview_0() -> Result<Box<dyn LayoutItem>, LayoutError> {
+pub fn stat_preview_0() -> Result<Box<dyn LayoutItem>, LayoutError> {
     #[allow(unused_imports)] use telar::use_theme;
     #[allow(unused_variables)] let theme = telar::Theme::<core::theme::SandboxTheme>::default();
     let __node_0 = stat(StatProps::props().value("60 fps").label("software + wgpu").build(), Children::default())?;
     Ok(Box::new(__node_0))
 }
 
-pub const SHARED_COMPONENTS_STAT_PREVIEW_ENTRIES: &[::telar::PreviewEntry] = &[
-    ::telar::PreviewEntry { component_name: "shared_components_stat", preview_name: "Stat", build: shared_components_stat_preview_0, surface: None },
+pub const STAT_PREVIEW_ENTRIES: &[::telar::PreviewEntry] = &[
+    ::telar::PreviewEntry { component_name: "stat", preview_name: "Stat", build: stat_preview_0, surface: None },
 ];

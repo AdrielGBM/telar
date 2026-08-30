@@ -9,13 +9,13 @@
 // `col gap:8 > text "…" font_size:13 color:$theme.ink > …children…` scaffold used across every feature section,
 // so a block is one `example title:"…"` line plus its content instead of two lines of boilerplate.
 #[derive(::telar::Props)]
-pub struct SharedComponentsExampleProps {
+pub struct ExampleProps {
     #[props(default)]
     pub title: &'static str,
 }
 
 #[allow(dead_code, unused_variables, unused_mut)]
-pub fn shared_components_example(props: SharedComponentsExampleProps, children: Children) -> Result<Box<dyn LayoutItem>, LayoutError> {
+pub fn example(props: ExampleProps, children: Children) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let __owner = telar::owner_scope();
     #[allow(unused_imports)] use telar::use_theme;
     #[allow(unused_variables)] let theme = telar::Theme::<core::theme::SandboxTheme>::default();
@@ -38,7 +38,7 @@ pub fn shared_components_example(props: SharedComponentsExampleProps, children: 
 }
 
 #[allow(dead_code, unused_variables, unused_mut)]
-pub fn shared_components_example_preview_0() -> Result<Box<dyn LayoutItem>, LayoutError> {
+pub fn example_preview_0() -> Result<Box<dyn LayoutItem>, LayoutError> {
     #[allow(unused_imports)] use telar::use_theme;
     #[allow(unused_variables)] let theme = telar::Theme::<core::theme::SandboxTheme>::default();
     let __node_0 = {
@@ -85,6 +85,6 @@ pub fn shared_components_example_preview_0() -> Result<Box<dyn LayoutItem>, Layo
     Ok(Box::new(__node_0))
 }
 
-pub const SHARED_COMPONENTS_EXAMPLE_PREVIEW_ENTRIES: &[::telar::PreviewEntry] = &[
-    ::telar::PreviewEntry { component_name: "shared_components_example", preview_name: "Example", build: shared_components_example_preview_0, surface: None },
+pub const EXAMPLE_PREVIEW_ENTRIES: &[::telar::PreviewEntry] = &[
+    ::telar::PreviewEntry { component_name: "example", preview_name: "Example", build: example_preview_0, surface: None },
 ];

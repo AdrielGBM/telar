@@ -4,10 +4,10 @@
 #[allow(unused_imports)] use crate::*;
 
 #[derive(::telar::Props)]
-pub struct CoreSidebarProps {}
+pub struct SidebarProps {}
 
 #[allow(dead_code, unused_variables, unused_mut)]
-pub fn core_sidebar(props: CoreSidebarProps, children: Children) -> Result<Box<dyn LayoutItem>, LayoutError> {
+pub fn sidebar(props: SidebarProps, children: Children) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let __owner = telar::owner_scope();
     #[allow(unused_imports)] use telar::use_theme;
     #[allow(unused_variables)] let theme = telar::Theme::<core::theme::SandboxTheme>::default();

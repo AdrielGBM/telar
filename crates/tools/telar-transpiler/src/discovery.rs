@@ -73,29 +73,6 @@ pub fn auto_modules_enabled(package_root: &Path) -> bool {
         .unwrap_or(false)
 }
 
-/// Directories of `.rsx` files this crate may *call* but does not compile: `[telar] components` in
-/// `telar.toml`, a list of paths relative to the package root (e.g. `components = ["../ui/src"]`).
-///
-/// A component call needs the callee's signature — its `Props` shape, its optional fields, whether it takes a
-/// slot — and that signature lives in the callee's file. Without this, the registry holds only what is under
-/// this crate's own `src/`, so a workspace that keeps its shared vocabulary in one crate and its screens in
-/// another cannot compose them at all: the call emits with the wrong arity and fails in generated code. The
-/// listed directories are scanned for signatures only; each is still compiled by the crate that owns it.
-///
-/// This settles the *call*, not the *symbol*. The borrowing crate must also re-export what it borrows at its
-/// root (`pub use ::ui::{ChipLabelProps, chip_label};`), because a generated file reaches its neighbours
-/// through its own `use super::*`. A `use` inside `[logic]` does not do it: that lands inside the component
-/// function, and a `[preview]` is a different function in the same file.
-pub fn component_paths(package_root: &Path) -> Vec<PathBuf> {
-    read_rsx_section(package_root)
-        .and_then(|section| section.get("components")?.as_array().cloned())
-        .unwrap_or_default()
-        .iter()
-        .filter_map(|entry| entry.as_str())
-        .map(|relative| package_root.join(relative))
-        .collect()
-}
-
 /// The directory that baked `src:"..."` asset paths resolve against: `[telar] assets` in `telar.toml`
 /// (default `"assets"`), joined onto the package root — so assets live in one place (e.g. `./assets`)
 /// regardless of which `.rsx` references them, instead of being tied to each `.rsx`'s own directory.
@@ -280,29 +257,6 @@ fn rsx_output(generated_dir: &Path, flat_prefix: &str, name: &str) -> PathBuf {
 mod tests {
     use super::*;
 
-    #[test]
-    fn borrowed_component_dirs_resolve_against_the_package_root() {
-        let root =
-            std::env::temp_dir().join(format!("telar_component_paths_{}", std::process::id()));
-        let _ = std::fs::remove_dir_all(&root);
-        std::fs::create_dir_all(&root).unwrap();
-
-        // No key at all: a crate that borrows nothing keeps the registry it always had.
-        std::fs::write(root.join("telar.toml"), "[telar]\nauto_modules = true\n").unwrap();
-        assert!(component_paths(&root).is_empty());
-
-        std::fs::write(
-            root.join("telar.toml"),
-            "[telar]\ncomponents = [\"../ui/src\", \"../shared/src\"]\n",
-        )
-        .unwrap();
-        assert_eq!(
-            component_paths(&root),
-            vec![root.join("../ui/src"), root.join("../shared/src")]
-        );
-        let _ = std::fs::remove_dir_all(&root);
-    }
-
     /// A workspace search must find every crate's `.rsx` and must not walk `target/` — the second half is what
     /// makes it usable on every keystroke, since a workspace's build directory dwarfs its sources.
     #[test]
@@ -454,15 +408,16 @@ mod tests {
     }
 }
 
-/// Derives a unique stem for a `.rsx` file from its path relative to `src_dir`, flattening subdirectories with `_` so files in different directories don't collide (e.g. `src/components/button.rsx` -> `components_button`).
-pub fn relative_stem(path: &Path, src_dir: &Path) -> String {
-    let rel = path.strip_prefix(src_dir).unwrap_or(path);
-    let without_ext = rel.with_extension("");
-    without_ext
-        .components()
-        .map(|c| c.as_os_str().to_string_lossy())
-        .collect::<Vec<_>>()
-        .join("_")
+/// The name the component in `path` is generated under: its file stem.
+///
+/// A `.rsx` is a module where its file sits, so two files may share a basename — they are different modules,
+/// which is what a path-flattened name existed to work around. One function rather than each caller taking
+/// the stem itself: the editor and the golden harness both have to agree with the macro on this exactly, and
+/// they silently drifted apart when the flattening went.
+pub fn component_name(path: &Path) -> String {
+    path.file_stem()
+        .map(|s| s.to_string_lossy().to_string())
+        .unwrap_or_default()
 }
 
 /// Derives the output `.rs` path (relative to the output root) for a `.rsx` file by mirroring its location under `src_dir`, so files in different directories never collide (e.g. `src/components/button.rsx` -> `components/button.rs`). Used for the transpiler's `.telar/build/` output. Returns `None` for files outside `src_dir`: those are never transpiled, so they have no place in the build tree — and flattening their absolute path would escape the output root entirely.

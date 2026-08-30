@@ -725,6 +725,6 @@
 724	.
 
 # verbatim expression spans: rsx[start..end] -> gen[start] `source text`
-4475..4485	15948	`todo.label`
-5733..5773	26527	`let _ = panel_builds.update(|n| *n += 1)`
-8310..8315	45429	`|| ()`
+4475..4485	15923	`todo.label`
+5733..5773	26502	`let _ = panel_builds.update(|n| *n += 1)`
+8310..8315	45404	`|| ()`

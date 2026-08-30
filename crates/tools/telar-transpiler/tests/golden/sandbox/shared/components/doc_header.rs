@@ -4,7 +4,7 @@
 #[allow(unused_imports)] use crate::*;
 
 #[derive(::telar::Props)]
-pub struct SharedComponentsDocHeaderProps {
+pub struct DocHeaderProps {
     #[props(default)]
     pub kicker: &'static str,
     #[props(default)]
@@ -14,7 +14,7 @@ pub struct SharedComponentsDocHeaderProps {
 }
 
 #[allow(dead_code, unused_variables, unused_mut)]
-pub fn shared_components_doc_header(props: SharedComponentsDocHeaderProps, children: Children) -> Result<Box<dyn LayoutItem>, LayoutError> {
+pub fn doc_header(props: DocHeaderProps, children: Children) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let __owner = telar::owner_scope();
     #[allow(unused_imports)] use telar::use_theme;
     #[allow(unused_variables)] let theme = telar::Theme::<core::theme::SandboxTheme>::default();
@@ -46,13 +46,13 @@ pub fn shared_components_doc_header(props: SharedComponentsDocHeaderProps, child
 }
 
 #[allow(dead_code, unused_variables, unused_mut)]
-pub fn shared_components_doc_header_preview_0() -> Result<Box<dyn LayoutItem>, LayoutError> {
+pub fn doc_header_preview_0() -> Result<Box<dyn LayoutItem>, LayoutError> {
     #[allow(unused_imports)] use telar::use_theme;
     #[allow(unused_variables)] let theme = telar::Theme::<core::theme::SandboxTheme>::default();
     let __node_0 = doc_header(DocHeaderProps::props().kicker("FOUNDATIONS").title("Layout").desc("Flexbox rows and columns with gaps, padding, alignment and growth.").build(), Children::default())?;
     Ok(Box::new(__node_0))
 }
 
-pub const SHARED_COMPONENTS_DOC_HEADER_PREVIEW_ENTRIES: &[::telar::PreviewEntry] = &[
-    ::telar::PreviewEntry { component_name: "shared_components_doc_header", preview_name: "Doc header", build: shared_components_doc_header_preview_0, surface: None },
+pub const DOC_HEADER_PREVIEW_ENTRIES: &[::telar::PreviewEntry] = &[
+    ::telar::PreviewEntry { component_name: "doc_header", preview_name: "Doc header", build: doc_header_preview_0, surface: None },
 ];

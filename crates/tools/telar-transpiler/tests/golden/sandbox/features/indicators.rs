@@ -9,10 +9,10 @@
 #[allow(unused_imports)] use crate::shared::components::prop_row::{prop_row, PropRowProps};
 
 #[derive(::telar::Props)]
-pub struct FeaturesIndicatorsProps {}
+pub struct IndicatorsProps {}
 
 #[allow(dead_code, unused_variables, unused_mut)]
-pub fn features_indicators(props: FeaturesIndicatorsProps, children: Children) -> Result<Box<dyn LayoutItem>, LayoutError> {
+pub fn indicators(props: IndicatorsProps, children: Children) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let __owner = telar::owner_scope();
     #[allow(unused_imports)] use telar::use_theme;
     #[allow(unused_variables)] let theme = telar::Theme::<core::theme::SandboxTheme>::default();

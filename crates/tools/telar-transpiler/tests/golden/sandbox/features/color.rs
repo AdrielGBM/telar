@@ -8,7 +8,7 @@
 #[allow(unused_imports)] use crate::shared::components::example::{example, ExampleProps};
 
 #[derive(::telar::Props)]
-pub struct FeaturesColorProps {}
+pub struct ColorProps {}
 
 #[allow(dead_code)]
 fn style_swatch() -> LayoutStyle {
@@ -27,7 +27,7 @@ fn style_chip() -> LayoutStyle {
 }
 
 #[allow(dead_code, unused_variables, unused_mut)]
-pub fn features_color(props: FeaturesColorProps, children: Children) -> Result<Box<dyn LayoutItem>, LayoutError> {
+pub fn color(props: ColorProps, children: Children) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let __owner = telar::owner_scope();
     #[allow(unused_imports)] use telar::use_theme;
     #[allow(unused_variables)] let theme = telar::Theme::<core::theme::SandboxTheme>::default();

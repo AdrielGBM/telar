@@ -8,10 +8,10 @@
 #[allow(unused_imports)] use crate::shared::components::example::{example, ExampleProps};
 
 #[derive(::telar::Props)]
-pub struct FeaturesTextFieldsProps {}
+pub struct TextFieldsProps {}
 
 #[allow(dead_code, unused_variables, unused_mut)]
-pub fn features_text_fields(props: FeaturesTextFieldsProps, children: Children) -> Result<Box<dyn LayoutItem>, LayoutError> {
+pub fn text_fields(props: TextFieldsProps, children: Children) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let __owner = telar::owner_scope();
     #[allow(unused_imports)] use telar::use_theme;
     #[allow(unused_variables)] let theme = telar::Theme::<core::theme::SandboxTheme>::default();

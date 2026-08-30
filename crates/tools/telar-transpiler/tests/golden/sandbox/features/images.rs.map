@@ -326,9 +326,9 @@
 325	.
 
 # verbatim expression spans: rsx[start..end] -> gen[start] `source text`
-1051..1059	2878	`gradient`
-1363..1370	5428	`checker`
-1528..1535	6746	`checker`
-1911..1919	10249	`gradient`
-2085..2093	11578	`gradient`
-2245..2253	12893	`gradient`
+1051..1059	2853	`gradient`
+1363..1370	5403	`checker`
+1528..1535	6721	`checker`
+1911..1919	10224	`gradient`
+2085..2093	11553	`gradient`
+2245..2253	12868	`gradient`

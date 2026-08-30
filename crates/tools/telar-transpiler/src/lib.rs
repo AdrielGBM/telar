@@ -18,9 +18,8 @@ mod view;
 
 pub use codegen::{TranspiledSource, transpile_source};
 pub use discovery::{
-    assets_root, auto_modules_enabled, collect_files_by_ext, component_paths,
-    discover_rust_modules, find_rsx_files, find_rsx_files_in_tree, prune_stale_generated,
-    relative_output_path, relative_stem,
+    assets_root, auto_modules_enabled, collect_files_by_ext, component_name, discover_rust_modules,
+    find_rsx_files, find_rsx_files_in_tree, prune_stale_generated, relative_output_path,
 };
 pub use error::TranspileError;
 pub use i18n::{

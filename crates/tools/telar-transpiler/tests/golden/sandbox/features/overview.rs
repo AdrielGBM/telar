@@ -6,10 +6,10 @@
 #[allow(unused_imports)] use crate::shared::components::stat::{stat, StatProps};
 
 #[derive(::telar::Props)]
-pub struct FeaturesOverviewProps {}
+pub struct OverviewProps {}
 
 #[allow(dead_code, unused_variables, unused_mut)]
-pub fn features_overview(props: FeaturesOverviewProps, children: Children) -> Result<Box<dyn LayoutItem>, LayoutError> {
+pub fn overview(props: OverviewProps, children: Children) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let __owner = telar::owner_scope();
     #[allow(unused_imports)] use telar::use_theme;
     #[allow(unused_variables)] let theme = telar::Theme::<core::theme::SandboxTheme>::default();

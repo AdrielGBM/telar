@@ -10,10 +10,10 @@
 #[allow(unused_imports)] use crate::shared::demo_svgs::{make_blurred, make_icon, make_logo};
 
 #[derive(::telar::Props)]
-pub struct FeaturesSvgProps {}
+pub struct SvgProps {}
 
 #[allow(dead_code, unused_variables, unused_mut)]
-pub fn features_svg(props: FeaturesSvgProps, children: Children) -> Result<Box<dyn LayoutItem>, LayoutError> {
+pub fn svg(props: SvgProps, children: Children) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let __owner = telar::owner_scope();
     #[allow(unused_imports)] use telar::use_theme;
     #[allow(unused_variables)] let theme = telar::Theme::<core::theme::SandboxTheme>::default();

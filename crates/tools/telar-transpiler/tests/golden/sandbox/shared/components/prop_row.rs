@@ -5,7 +5,7 @@
 
 // One documentation row for an attribute: its name, accepted values, and a short description.
 #[derive(::telar::Props)]
-pub struct SharedComponentsPropRowProps {
+pub struct PropRowProps {
     #[props(default)]
     pub name: &'static str,
     #[props(default)]
@@ -15,7 +15,7 @@ pub struct SharedComponentsPropRowProps {
 }
 
 #[allow(dead_code, unused_variables, unused_mut)]
-pub fn shared_components_prop_row(props: SharedComponentsPropRowProps, children: Children) -> Result<Box<dyn LayoutItem>, LayoutError> {
+pub fn prop_row(props: PropRowProps, children: Children) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let __owner = telar::owner_scope();
     #[allow(unused_imports)] use telar::use_theme;
     #[allow(unused_variables)] let theme = telar::Theme::<core::theme::SandboxTheme>::default();
@@ -47,13 +47,13 @@ pub fn shared_components_prop_row(props: SharedComponentsPropRowProps, children:
 }
 
 #[allow(dead_code, unused_variables, unused_mut)]
-pub fn shared_components_prop_row_preview_0() -> Result<Box<dyn LayoutItem>, LayoutError> {
+pub fn prop_row_preview_0() -> Result<Box<dyn LayoutItem>, LayoutError> {
     #[allow(unused_imports)] use telar::use_theme;
     #[allow(unused_variables)] let theme = telar::Theme::<core::theme::SandboxTheme>::default();
     let __node_0 = prop_row(PropRowProps::props().name("align").values("start · center · end · stretch").about("Cross-axis alignment of children.").build(), Children::default())?;
     Ok(Box::new(__node_0))
 }
 
-pub const SHARED_COMPONENTS_PROP_ROW_PREVIEW_ENTRIES: &[::telar::PreviewEntry] = &[
-    ::telar::PreviewEntry { component_name: "shared_components_prop_row", preview_name: "Prop row", build: shared_components_prop_row_preview_0, surface: None },
+pub const PROP_ROW_PREVIEW_ENTRIES: &[::telar::PreviewEntry] = &[
+    ::telar::PreviewEntry { component_name: "prop_row", preview_name: "Prop row", build: prop_row_preview_0, surface: None },
 ];

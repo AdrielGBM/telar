@@ -31,7 +31,7 @@
       "name": "comment.line.double-slash.rsx"
     },
     "section-header": {
-      "match": "^\\[(logic|style|view)\\]$",
+      "match": "^\\[(logic|style|view|preview)\\b",
       "name": "keyword.control.section.rsx"
     },
     "section-logic": {
@@ -131,6 +131,9 @@
           "include": "#view-class"
         },
         {
+          "include": "#view-directive"
+        },
+        {
           "include": "#view-attr"
         },
         {
@@ -138,6 +141,18 @@
         },
         {
           "include": "#view-interpolation"
+        },
+        {
+          "include": "#view-signal"
+        },
+        {
+          "include": "#view-color"
+        },
+        {
+          "include": "#view-number"
+        },
+        {
+          "include": "#view-path"
         }
       ]
     },
@@ -181,9 +196,43 @@
       "name": "meta.embedded.expression.rsx",
       "patterns": [
         {
-          "include": "source.rust"
+          "include": "#view-signal"
+        },
+        {
+          "include": "#view-number"
+        },
+        {
+          "include": "#view-path"
         }
       ]
+    },
+    "view-directive": {
+      "match": "\\b(transition|hover_style|active_style|disabled_style|focus_style|cols|stroke_width|drag_button)\\s*(?=\\()",
+      "captures": {
+        "1": {
+          "name": "keyword.other.directive.rsx"
+        }
+      }
+    },
+    "view-signal": {
+      "match": "\\$[A-Za-z_]\\w*",
+      "name": "variable.other.readwrite.rsx"
+    },
+    "view-color": {
+      "match": "#[0-9a-fA-F]{3,8}\\b",
+      "name": "constant.other.color.rgb-value.rsx"
+    },
+    "view-number": {
+      "match": "\\b\\d+(\\.\\d+)?%?",
+      "name": "constant.numeric.rsx"
+    },
+    "view-path": {
+      "match": "\\b([A-Z]\\w*)(?=::|\\s|$|\\)|,)",
+      "captures": {
+        "1": {
+          "name": "entity.name.type.rsx"
+        }
+      }
     }
   }
 }

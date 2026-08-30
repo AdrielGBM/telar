@@ -44,7 +44,7 @@ fn golden_dir() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/golden")
 }
 
-/// Transpiles one package exactly the way `app!` does: the same component name (the path-flattened stem),
+/// Transpiles one package exactly the way `app!` does: the same component name (the file stem),
 /// the same asset root. There is no pre-pass to match any more — a file transpiles knowing only itself.
 fn transpile_project(project: &Project) -> Vec<(PathBuf, TranspiledSource)> {
     let manifest = workspace_root().join(project.manifest);
@@ -63,7 +63,7 @@ fn transpile_project(project: &Project) -> Vec<(PathBuf, TranspiledSource)> {
         .map(|rsx| {
             let source = std::fs::read_to_string(&rsx)
                 .unwrap_or_else(|e| panic!("cannot read {}: {e}", rsx.display()));
-            let stem = telar_transpiler::relative_stem(&rsx, &src_dir);
+            let stem = telar_transpiler::component_name(&rsx);
             let out = telar_transpiler::transpile_source(
                 &source,
                 &stem,

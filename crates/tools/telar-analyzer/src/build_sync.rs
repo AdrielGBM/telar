@@ -38,7 +38,7 @@ pub fn generated_target(
     let root = crate_root(rsx_path)?;
     let src_dir = root.join("src");
     let rel = telar_transpiler::relative_output_path(rsx_path, &src_dir)?;
-    let stem = telar_transpiler::relative_stem(rsx_path, &src_dir);
+    let stem = telar_transpiler::component_name(rsx_path);
     // Match the macro: baked `src:"..."` paths resolve against the project asset root, not the `.rsx` dir.
     let assets_root = telar_transpiler::assets_root(&root);
     // No cross-file pre-pass: the editor mirrors the build exactly because neither one needs to know what

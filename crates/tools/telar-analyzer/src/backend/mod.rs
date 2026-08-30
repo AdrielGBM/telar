@@ -20,6 +20,7 @@ use crate::ra::EmbeddedAnalyzer;
 use crate::rpc::OutgoingSender;
 use crate::store::Store;
 use crate::text::{ident_at, name_range};
+use telar_transpiler::is_builtin_tag;
 
 use mapping::{full_document_range, leading_ws_utf16, map_definition_targets};
 use telar_transpiler::nth_line;
@@ -277,40 +278,56 @@ impl Backend {
         let pos = params.text_document_position.position;
         let file_path = crate::uri::to_path(uri);
 
-        let (source, native, theme) = {
+        let (source, native, theme, component_props) = {
             let store = self.store.read().await;
             let parsed = store.get(uri)?;
             let project = file_path.as_deref().and_then(ProjectInfo::discover);
-            let native =
-                completion_context(&parsed.source, pos.line, pos.character).map(
-                    |kind| match kind {
-                        // The whole workspace, not the file's own directory: a component lives wherever its crate is, and offering only its siblings is what keeps `.rsx` files from composing.
-                        CompletionKind::ElementName => element_name_items(
-                            project
-                                .as_ref()
-                                .map(|p| p.component_root.as_path())
-                                .or_else(|| file_path.as_deref().and_then(|p| p.parent())),
-                        ),
-                        CompletionKind::AttributeKey(tag) => attribute_key_items(&tag),
-                        CompletionKind::ColorValue => color_items(project.as_ref()),
-                        CompletionKind::StyleClass => style_class_items(&parsed.document),
-                        CompletionKind::SignalRef => signal_items(&parsed.source),
-                    },
-                );
+            let context = completion_context(&parsed.source, pos.line, pos.character);
+            // A component's props are the props struct's own business, so the key position there is a
+            // question for rust-analyzer — which answers with names, types *and* doc comments, from the
+            // definition. The registry can only answer for the tags it defines.
+            let component_props =
+                matches!(&context, Some(CompletionKind::AttributeKey(tag)) if !is_builtin_tag(tag));
+            let native = context.filter(|_| !component_props).map(|kind| match kind {
+                // The whole workspace, not the file's own directory: a component lives wherever its crate is, and offering only its siblings is what keeps `.rsx` files from composing.
+                CompletionKind::ElementName => element_name_items(
+                    project
+                        .as_ref()
+                        .map(|p| p.component_root.as_path())
+                        .or_else(|| file_path.as_deref().and_then(|p| p.parent())),
+                ),
+                CompletionKind::AttributeKey(tag) => attribute_key_items(&tag),
+                CompletionKind::ColorValue => color_items(project.as_ref()),
+                CompletionKind::StyleClass => style_class_items(&parsed.document),
+                CompletionKind::SignalRef => signal_items(&parsed.source),
+            });
             let theme = project.as_ref().and_then(|p| p.theme_type.clone());
-            (parsed.source.clone(), native, theme)
+            (parsed.source.clone(), native, theme, component_props)
         };
 
         if let Some(items) = native {
             return Some(CompletionResponse::Array(items));
         }
-        // Outside a native `.rsx` zone: delegate Rust completion to the embedded rust-analyzer over the generated module — line-mapped for `[logic]`, expression-span-mapped for `[view]`.
+        // Outside a native `.rsx` zone: delegate Rust completion to the embedded rust-analyzer over the generated module — line-mapped for `[logic]`, expression-span-mapped for `[view]`, and props-builder-mapped for a component's attribute keys.
         let rsx_path = file_path?;
+        let locate = match component_props {
+            true => query::props_builder_offset,
+            false => query::generated_offset,
+        };
         let items = self
-            .rust_query(rsx_path, source, theme, pos, |a, path, text, offset| {
-                Some(a.completions_at_offset(&path, text, offset))
-            })
+            .rust_query_at(
+                rsx_path,
+                source,
+                theme,
+                pos,
+                locate,
+                |a, path, text, offset| Some(a.completions_at_offset(&path, text, offset)),
+            )
             .await?;
+        let items = match component_props {
+            true => props_setter_items(items),
+            false => items,
+        };
         Some(CompletionResponse::Array(self.defer_completion_docs(items)))
     }
 
@@ -903,4 +920,21 @@ impl Backend {
             data,
         }))
     }
+}
+
+/// The props builder's setters, as attribute keys. `build` and `props` are the builder's own machinery, and
+/// an inherited method (`clone`, `into`) is not a prop — what the key position is asking for is the list the
+/// props struct declares.
+fn props_setter_items(items: Vec<CompletionItem>) -> Vec<CompletionItem> {
+    items
+        .into_iter()
+        .filter(|item| item.kind == Some(CompletionItemKind::METHOD))
+        .filter(|item| !matches!(item.label.as_str(), "build" | "props"))
+        .map(|item| CompletionItem {
+            insert_text: Some(format!("{}:", item.label)),
+            insert_text_format: None,
+            kind: Some(CompletionItemKind::PROPERTY),
+            ..item
+        })
+        .collect()
 }

@@ -4,7 +4,7 @@
 #[allow(unused_imports)] use crate::*;
 
 #[derive(::telar::Props)]
-pub struct SharedComponentsFeatureCardProps {
+pub struct FeatureCardProps {
     #[props(default)]
     pub icon: &'static str,
     #[props(default)]
@@ -14,7 +14,7 @@ pub struct SharedComponentsFeatureCardProps {
 }
 
 #[allow(dead_code, unused_variables, unused_mut)]
-pub fn shared_components_feature_card(props: SharedComponentsFeatureCardProps, children: Children) -> Result<Box<dyn LayoutItem>, LayoutError> {
+pub fn feature_card(props: FeatureCardProps, children: Children) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let __owner = telar::owner_scope();
     #[allow(unused_imports)] use telar::use_theme;
     #[allow(unused_variables)] let theme = telar::Theme::<core::theme::SandboxTheme>::default();
@@ -46,13 +46,13 @@ pub fn shared_components_feature_card(props: SharedComponentsFeatureCardProps, c
 }
 
 #[allow(dead_code, unused_variables, unused_mut)]
-pub fn shared_components_feature_card_preview_0() -> Result<Box<dyn LayoutItem>, LayoutError> {
+pub fn feature_card_preview_0() -> Result<Box<dyn LayoutItem>, LayoutError> {
     #[allow(unused_imports)] use telar::use_theme;
     #[allow(unused_variables)] let theme = telar::Theme::<core::theme::SandboxTheme>::default();
     let __node_0 = feature_card(FeatureCardProps::props().icon("⚡").title("Fast").body("Software and wgpu renderers with dirty-tracking and scroll-blit detection.").build(), Children::default())?;
     Ok(Box::new(__node_0))
 }
 
-pub const SHARED_COMPONENTS_FEATURE_CARD_PREVIEW_ENTRIES: &[::telar::PreviewEntry] = &[
-    ::telar::PreviewEntry { component_name: "shared_components_feature_card", preview_name: "Feature card", build: shared_components_feature_card_preview_0, surface: None },
+pub const FEATURE_CARD_PREVIEW_ENTRIES: &[::telar::PreviewEntry] = &[
+    ::telar::PreviewEntry { component_name: "feature_card", preview_name: "Feature card", build: feature_card_preview_0, surface: None },
 ];

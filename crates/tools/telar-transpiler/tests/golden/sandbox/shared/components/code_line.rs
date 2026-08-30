@@ -6,13 +6,13 @@
 // A one-line `.rsx` code snippet in a dark pill. Snippets use single quotes for string
 // literals (real `.rsx` uses double quotes) because a `"` would close the markup string early.
 #[derive(::telar::Props)]
-pub struct SharedComponentsCodeLineProps {
+pub struct CodeLineProps {
     #[props(default)]
     pub code: &'static str,
 }
 
 #[allow(dead_code, unused_variables, unused_mut)]
-pub fn shared_components_code_line(props: SharedComponentsCodeLineProps, children: Children) -> Result<Box<dyn LayoutItem>, LayoutError> {
+pub fn code_line(props: CodeLineProps, children: Children) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let __owner = telar::owner_scope();
     #[allow(unused_imports)] use telar::use_theme;
     #[allow(unused_variables)] let theme = telar::Theme::<core::theme::SandboxTheme>::default();
@@ -30,13 +30,13 @@ pub fn shared_components_code_line(props: SharedComponentsCodeLineProps, childre
 }
 
 #[allow(dead_code, unused_variables, unused_mut)]
-pub fn shared_components_code_line_preview_0() -> Result<Box<dyn LayoutItem>, LayoutError> {
+pub fn code_line_preview_0() -> Result<Box<dyn LayoutItem>, LayoutError> {
     #[allow(unused_imports)] use telar::use_theme;
     #[allow(unused_variables)] let theme = telar::Theme::<core::theme::SandboxTheme>::default();
     let __node_0 = code_line(CodeLineProps::props().code("box fill:primary radius:8 width:120 height:80").build(), Children::default())?;
     Ok(Box::new(__node_0))
 }
 
-pub const SHARED_COMPONENTS_CODE_LINE_PREVIEW_ENTRIES: &[::telar::PreviewEntry] = &[
-    ::telar::PreviewEntry { component_name: "shared_components_code_line", preview_name: "Code line", build: shared_components_code_line_preview_0, surface: None },
+pub const CODE_LINE_PREVIEW_ENTRIES: &[::telar::PreviewEntry] = &[
+    ::telar::PreviewEntry { component_name: "code_line", preview_name: "Code line", build: code_line_preview_0, surface: None },
 ];

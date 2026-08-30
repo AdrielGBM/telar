@@ -312,4 +312,4 @@
 311	.
 
 # verbatim expression spans: rsx[start..end] -> gen[start] `source text`
-6480..6490	8506	`draw_paths`
+6480..6490	8481	`draw_paths`

@@ -431,12 +431,7 @@ fn transpile_project(theme_type_str: Option<&str>) -> Result<TranspileOutput, To
             }
         };
 
-        // The component is named after its file, not after its path. Two files may share a basename now:
-        // they are different modules, which is what the flattened name existed to work around.
-        let stem = rsx_file
-            .file_stem()
-            .map(|s| s.to_string_lossy().to_string())
-            .unwrap_or_default();
+        let stem = telar_transpiler::component_name(&rsx_file);
 
         let result = match telar_transpiler::transpile_source(
             &source,

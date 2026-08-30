@@ -29,6 +29,11 @@ pub struct IndexedFile {
     pub classes: Vec<(String, u32)>,
     /// Every component `<tag>` usage in this file.
     pub tags: Vec<TagUse>,
+    /// The module segment of every `[logic]` `use` line that imports a component: `crate::ui::card::{card,
+    /// CardProps}` records `card` at the module position. A `.rsx` is a module named after its file, so a
+    /// rename has to move that segment too — the item names inside the braces are Rust and rust-analyzer's
+    /// own, but the segment comes from a file name it never sees change.
+    pub imports: Vec<TagUse>,
 }
 
 pub struct WorkspaceIndex {
@@ -121,7 +126,7 @@ impl WorkspaceIndex {
                     range: Range { start: at, end: at },
                 });
             }
-            for tag in &entry.tags {
+            for tag in entry.tags.iter().chain(&entry.imports) {
                 if tag.name == name {
                     out.push(Location {
                         uri: entry.uri.clone(),
@@ -155,7 +160,53 @@ fn index_source(path: &Path, source: &str) -> Option<IndexedFile> {
         container,
         classes,
         tags: scan_tags(source),
+        imports: scan_component_imports(source),
     })
+}
+
+/// The module segment of every `[logic]` `use` line that imports a component from its own module:
+/// `use crate::ui::card::{card, CardProps};` records `card` at the segment before the braces.
+///
+/// Matched only when the segment names something the tail also names, so `use std::rc::Rc` never looks like
+/// an import of a component called `rc`.
+fn scan_component_imports(source: &str) -> Vec<TagUse> {
+    let mut out = Vec::new();
+    let mut section = Section::Unknown;
+    for (i, line) in source.lines().enumerate() {
+        if let Some(s) = header_section(line.trim()) {
+            section = s;
+        }
+        if !matches!(section, Section::Logic) || !line.trim_start().starts_with("use ") {
+            continue;
+        }
+        let Some((segment, at)) = component_module_segment(line) else {
+            continue;
+        };
+        out.push(TagUse {
+            name: segment.to_string(),
+            range: name_range(i as u32, line, at, segment.len()),
+        });
+    }
+    out
+}
+
+/// `(segment, byte offset)` of the module a `use` line imports a same-named item out of.
+fn component_module_segment(line: &str) -> Option<(&str, usize)> {
+    let tail_start = line.rfind("::")? + 2;
+    let tail = &line[tail_start..];
+    let head = &line[..tail_start - 2];
+    let at = head.rfind("::").map(|i| i + 2)?;
+    let segment = head[at..].trim_end();
+    if segment.is_empty() || !segment.chars().all(|c| c.is_alphanumeric() || c == '_') {
+        return None;
+    }
+    let names_it = tail
+        .trim_end_matches([';', ' '])
+        .trim_start_matches('{')
+        .trim_end_matches('}')
+        .split(',')
+        .any(|name| name.trim() == segment);
+    names_it.then_some((segment, at))
 }
 
 /// Every component `<tag>` usage in `source` (mirrors `occurrences::component_at`): the leading token of a `[view]`/`[preview]` line when it is a plain identifier that is neither a built-in tag nor a control-flow keyword. Section tracking is inline so the whole scan is a single pass.
@@ -254,5 +305,36 @@ mod tests {
         // A query matches both the component module and is case-insensitive.
         let syms = idx.symbols("feature");
         assert!(syms.iter().any(|s| s.name == "feature_card"));
+    }
+
+    /// A `.rsx` is a module named after its file, so renaming the file moves the segment every importer
+    /// spells — the half of a component rename that rust-analyzer cannot see, because the name it changes
+    /// lives on disk rather than in the generated Rust.
+    #[test]
+    fn a_use_line_records_the_module_a_component_is_imported_from() {
+        let source =
+            "[logic]\nuse crate::ui::card::{card, CardProps};\nuse std::rc::Rc;\n\n[view]\ncard\n";
+        let imports = scan_component_imports(source);
+        assert_eq!(imports.len(), 1, "only the component import is one");
+        assert_eq!(imports[0].name, "card");
+        assert_eq!(imports[0].range.start.line, 1);
+
+        let line = "use crate::ui::card::{card, CardProps};";
+        let (segment, at) = component_module_segment(line).unwrap();
+        assert_eq!(&line[at..at + segment.len()], "card");
+    }
+
+    #[test]
+    fn a_use_line_that_imports_nothing_of_its_own_name_is_not_one() {
+        for line in [
+            "use std::rc::Rc;",
+            "use crate::theme::palette::{Palette};",
+            "use crate::ui::card::CardProps;",
+        ] {
+            assert!(
+                component_module_segment(line).is_none(),
+                "`{line}` is not a component import"
+            );
+        }
     }
 }

@@ -8,7 +8,7 @@
 // body children (pass 0 for a single child). `pad` overrides the 16px inset via the `= 16.0` inline
 // default, so an omitted `pad` is 16 while `pad:0` genuinely means zero. An optional "header" slot renders above the body.
 #[derive(::telar::Props)]
-pub struct SharedComponentsCardProps {
+pub struct CardProps {
     #[props(default)]
     pub gap: f32,
     #[props(default = 16.0)]
@@ -16,7 +16,7 @@ pub struct SharedComponentsCardProps {
 }
 
 #[allow(dead_code, unused_variables, unused_mut)]
-pub fn shared_components_card(props: SharedComponentsCardProps, children: Children) -> Result<Box<dyn LayoutItem>, LayoutError> {
+pub fn card(props: CardProps, children: Children) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let __owner = telar::owner_scope();
     #[allow(unused_imports)] use telar::use_theme;
     #[allow(unused_variables)] let theme = telar::Theme::<core::theme::SandboxTheme>::default();
@@ -31,7 +31,7 @@ pub fn shared_components_card(props: SharedComponentsCardProps, children: Childr
 }
 
 #[allow(dead_code, unused_variables, unused_mut)]
-pub fn shared_components_card_preview_0() -> Result<Box<dyn LayoutItem>, LayoutError> {
+pub fn card_preview_0() -> Result<Box<dyn LayoutItem>, LayoutError> {
     #[allow(unused_imports)] use telar::use_theme;
     #[allow(unused_variables)] let theme = telar::Theme::<core::theme::SandboxTheme>::default();
     let __node_0 = {
@@ -76,6 +76,6 @@ pub fn shared_components_card_preview_0() -> Result<Box<dyn LayoutItem>, LayoutE
     Ok(Box::new(__node_0))
 }
 
-pub const SHARED_COMPONENTS_CARD_PREVIEW_ENTRIES: &[::telar::PreviewEntry] = &[
-    ::telar::PreviewEntry { component_name: "shared_components_card", preview_name: "Card", build: shared_components_card_preview_0, surface: None },
+pub const CARD_PREVIEW_ENTRIES: &[::telar::PreviewEntry] = &[
+    ::telar::PreviewEntry { component_name: "card", preview_name: "Card", build: card_preview_0, surface: None },
 ];

@@ -12,10 +12,10 @@
 #[allow(unused_imports)] use std::time::Duration;
 
 #[derive(::telar::Props)]
-pub struct FeaturesBackgroundProps {}
+pub struct BackgroundProps {}
 
 #[allow(dead_code, unused_variables, unused_mut)]
-pub fn features_background(props: FeaturesBackgroundProps, children: Children) -> Result<Box<dyn LayoutItem>, LayoutError> {
+pub fn background(props: BackgroundProps, children: Children) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let __owner = telar::owner_scope();
     #[allow(unused_imports)] use telar::use_theme;
     #[allow(unused_variables)] let theme = telar::Theme::<core::theme::SandboxTheme>::default();
