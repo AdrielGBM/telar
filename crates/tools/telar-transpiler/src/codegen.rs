@@ -113,6 +113,26 @@ fn hoisted_use_lines(logic: &str) -> Vec<usize> {
 }
 
 /// Extracts a `Props` field from a `[pub] name: Type[ = default]` chunk, skipping comment lines.
+/// The author's `#[props(…)]` with their inline `= expr` folded in, since the derive reads one such
+/// attribute per field and a prop carrying both otherwise loses the default.
+fn merged_attrs(attrs: &str, default: Option<&str>) -> String {
+    let Some(expr) = default else {
+        return attrs.to_string();
+    };
+    attrs
+        .lines()
+        .map(
+            |line| match line.contains("#[props(") && !line.contains("default") {
+                true => format!(
+                    "{}\n",
+                    line.replacen("#[props(", &format!("#[props(default = {expr}, "), 1)
+                ),
+                false => format!("{line}\n"),
+            },
+        )
+        .collect()
+}
+
 fn parse_field(chunk: &str) -> Option<ParsedField> {
     let attrs: String = chunk
         .lines()
@@ -873,7 +893,10 @@ fn extract_props_struct(logic: &str, fn_name: &str) -> ExtractedProps {
     struct_out.push_str(" {\n");
     for f in &parsed {
         // Whatever the author wrote wins: `[logic]` is their Rust, and a `#[props(into)]` they put on a
-        // reactive prop is the one thing this cannot work out for them.
+        // reactive prop is the one thing this cannot work out for them. But `= expr` is theirs too, and it
+        // is *merged* rather than dropped — the derive reads one `#[props]` per field, so a prop that had
+        // both went out as required and stopped building at every call site that left it off.
+        let written = merged_attrs(&f.attrs, f.default.as_deref());
         match (&f.default, derived_default, f.attrs.contains("#[props(")) {
             (_, _, true) => {}
             (Some(expr), _, _) => {
@@ -886,7 +909,7 @@ fn extract_props_struct(logic: &str, fn_name: &str) -> ExtractedProps {
             }
             (None, false, _) => {}
         }
-        for line in f.attrs.lines() {
+        for line in written.lines() {
             struct_out.push_str(line);
             struct_out.push('\n');
             origins.push(None);

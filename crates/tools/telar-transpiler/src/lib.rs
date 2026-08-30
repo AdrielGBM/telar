@@ -340,6 +340,19 @@ col @card
         assert_eq!(relative_output_path(src, src), None);
     }
 
+    /// A prop that carries both `#[props(into)]` and an inline `= expr` keeps them both. The derive reads
+    /// one `#[props]` per field, so dropping the default made the prop required and every call site that
+    /// left it off stopped building — with an error naming the prop, but never the declaration that lost it.
+    #[test]
+    fn an_inline_default_survives_the_attribute_beside_it() {
+        let src = "[logic]\npub struct Props {\n    #[props(into)]\n    pub tint: Reactive<Color> = Reactive::of(|| Color::WHITE),\n}\n\n[view]\ncol\n";
+        let code = transpile_source(src, "demo", None, None).unwrap().rust_code;
+        assert!(
+            code.contains("#[props(default = Reactive::of(|| Color::WHITE), into)]"),
+            "{code}"
+        );
+    }
+
     #[test]
     fn generates_counter() {
         let out = transpile_source(COUNTER, "counter", Some("SandboxTheme"), None).unwrap();
