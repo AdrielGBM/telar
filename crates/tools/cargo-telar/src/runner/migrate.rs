@@ -412,11 +412,15 @@ fn replace_outside_strings(body: &str, f: impl Fn(&str) -> String) -> String {
     out
 }
 
-/// A handler prop becomes an `Rc<dyn Fn…>`: a props struct is `Clone` now, and a unique box has no second
-/// owner to give — which is what a value reaching a region that rebuilds needs.
+/// A boxed closure in a `Props` declaration becomes the shape that says what it is for.
 ///
-/// Only inside the `Props` declaration. A `Box<dyn Fn…>` elsewhere in `[logic]` is the author's own, and a
-/// props struct is the one place the framework has an opinion about.
+/// `Box<dyn Fn() -> T>` was how a prop said "a value that can change", and `Reactive<T>` is that now — an
+/// enum, so a literal costs no allocation and a signal converts straight into it. `Box<dyn Fn(…)>` with
+/// nothing returned is a *handler*, and becomes `Rc<dyn Fn(…)>`: a props struct is `Clone` now, and a unique
+/// box has no second owner to give.
+///
+/// Only inside the declaration. A `Box<dyn Fn…>` elsewhere in `[logic]` is the author's own, and a props
+/// struct is the one place the framework has an opinion about.
 fn shared_handlers(body: &str) -> String {
     let Some(at) = body.find("pub struct Props {") else {
         return body.to_string();
@@ -424,15 +428,59 @@ fn shared_handlers(body: &str) -> String {
     let Some(end) = body[at..].find("\n}").map(|i| at + i) else {
         return body.to_string();
     };
-    let declaration = body[at..end].replace("Box<dyn Fn", "Rc<dyn Fn");
+    let declaration = rewrite_boxed_props(&body[at..end]);
     if declaration == body[at..end] {
         return body.to_string();
     }
     let out = format!("{}{declaration}{}", &body[..at], &body[end..]);
-    match out.contains("use std::rc::Rc;") || out.contains("::rc::{") {
+    match !out.contains("Rc<dyn Fn") || out.contains("use std::rc::Rc;") || out.contains("::rc::{")
+    {
         true => out,
         false => format!("use std::rc::Rc;\n\n{out}"),
     }
+}
+
+fn rewrite_boxed_props(declaration: &str) -> String {
+    let mut out = String::with_capacity(declaration.len());
+    let mut rest = declaration;
+    while let Some(at) = rest.find("Box<dyn Fn") {
+        let Some(close) = closing_angle(rest, at + "Box".len()) else {
+            out.push_str(&rest[..at + 3]);
+            rest = &rest[at + 3..];
+            continue;
+        };
+        out.push_str(&rest[..at]);
+        let inner = &rest[at + "Box<".len()..close];
+        match inner.split_once("->") {
+            // A value the prop reads, which is what `Reactive` is: `Const(T)` or a closure, one shape.
+            Some((_, yields)) => out.push_str(&format!("Reactive<{}>", yields.trim())),
+            // Nothing returned: a handler, shared so the struct can be cloned.
+            None => out.push_str(&format!("Rc<{inner}>")),
+        }
+        rest = &rest[close + 1..];
+    }
+    out.push_str(rest);
+    out
+}
+
+/// The `>` closing the `<` at `open`, counting the ones between — and not the one in `->`, which is half an
+/// arrow and closes nothing.
+fn closing_angle(s: &str, open: usize) -> Option<usize> {
+    let bytes = s.as_bytes();
+    let mut depth = 0i32;
+    for (i, c) in s.char_indices().skip_while(|(i, _)| *i < open) {
+        match c {
+            '<' => depth += 1,
+            '>' if i == 0 || bytes[i - 1] != b'-' => {
+                depth -= 1;
+                if depth == 0 {
+                    return Some(i);
+                }
+            }
+            _ => {}
+        }
+    }
+    None
 }
 
 /// `clip:x` → `clip:Clip::x()`. A clip is a shape now, not an axis from a closed set of three.
@@ -815,10 +863,15 @@ mod tests {
     #[test]
     fn a_handler_prop_becomes_a_shared_one() {
         let out = migrated(
-            "[logic]\npub struct Props {\n    pub act: Box<dyn Fn()>,\n}\n\nlet held: Box<dyn Fn()> = Box::new(|| {});\n\n[view]\ncol\n",
+            "[logic]\npub struct Props {\n    pub act: Box<dyn Fn()>,\n    pub label: Box<dyn Fn() -> String>,\n    pub tint: Option<Box<dyn Fn() -> Color>>,\n}\n\nlet held: Box<dyn Fn()> = Box::new(|| {});\n\n[view]\ncol\n",
         );
         assert!(out.starts_with("[logic]\nuse std::rc::Rc;\n"), "{out}");
         assert!(out.contains("pub act: Rc<dyn Fn()>,"), "{out}");
+        assert!(
+            out.contains("pub label: Reactive<String>,"),
+            "a value, not a handler: {out}"
+        );
+        assert!(out.contains("pub tint: Option<Reactive<Color>>,"), "{out}");
         assert!(
             out.contains("let held: Box<dyn Fn()> = Box::new(|| {});"),
             "a binding outside the declaration is left alone: {out}"
