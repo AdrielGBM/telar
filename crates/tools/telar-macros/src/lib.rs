@@ -4,9 +4,51 @@ use quote::{ToTokens, quote};
 use std::path::PathBuf;
 
 mod app_input;
+mod props;
 mod t_macro;
 mod theme_tokens;
 use app_input::{AppInput, preview_const_ident};
+
+/// Generates a typed builder for a component's props: `Props::props()`, one setter per prop, `.build()`.
+///
+/// **What it removes.** A call site used to need a table describing the callee — which props exist, which are
+/// optional, which take a closure — kept by hand and able to drift from the struct it described. With a
+/// builder the call site spells the prop names it was given and rustc answers everything else.
+///
+/// A prop with no attribute is **required**: its setter must be called or `.build()` does not exist, so
+/// forgetting one is a compile error rather than a default that looks like a value at runtime.
+///
+/// - `#[props(default)]` — omitting it yields `Default::default()`.
+/// - `#[props(default = expr)]` — omitting it yields `expr`.
+///
+/// - `#[props(into)]` — the setter takes `impl Into<T>` instead of `T`, which is what lets a prop declared
+///   `Reactive<T>` accept a literal, a signal or a memo. Opt-in, because a generic parameter leaves a
+///   literal's type unconstrained: `.size(20.0)` would infer `f64` and ask for `f32: From<f64>`.
+///
+/// Forgetting a required prop is caught where it was forgotten:
+///
+/// ```compile_fail
+/// use telar_macros::Props;
+/// #[derive(Props)]
+/// struct RowProps {
+///     label: &'static str,
+///     #[props(default)]
+///     muted: bool,
+/// }
+/// // No `.label(…)`, so this builder still holds `RowPropsMissing` and has no `build`.
+/// let _ = RowProps::props().muted(true).build();
+/// ```
+#[proc_macro_derive(Props, attributes(props))]
+pub fn derive_props(input: TokenStream) -> TokenStream {
+    let parsed = match syn::parse::<syn::DeriveInput>(input) {
+        Ok(parsed) => parsed,
+        Err(e) => return e.to_compile_error().into(),
+    };
+    match props::expand(parsed) {
+        Ok(tokens) => tokens.into(),
+        Err(e) => e.to_compile_error().into(),
+    }
+}
 
 /// Implements [`ThemeTokens`](telar::ThemeTokens) for a theme struct, mapping each token to the field of the
 /// same name.
