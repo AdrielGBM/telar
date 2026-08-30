@@ -27,7 +27,7 @@ impl ViewGen<'_> {
             .attributes
             .iter()
             .find(|a| a.key == "font_size")
-            .map(|a| self.scope().number_or(a.value.text(), "14.0"))
+            .map(|a| crate::style::number_or(a.value.text(), "14.0"))
             .unwrap_or_else(|| "14.0".to_string());
         let color_attr = el.attributes.iter().find(|a| a.key == "color");
         let color = color_attr
@@ -60,7 +60,7 @@ impl ViewGen<'_> {
             ) {
                 continue;
             }
-            if let PropCall::Call(call) = layout_prop_call(&a.key, a.value.text(), self.scope()) {
+            if let PropCall::Call(call) = layout_prop_call(&a.key, a.value.text()) {
                 extra.push_str(&call);
             }
         }

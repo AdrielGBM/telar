@@ -367,9 +367,9 @@ fn escape_rsx_string(s: &str) -> String {
 fn format_attr(attr: &Attr) -> String {
     match &attr.value {
         Value::Flag => attr.key.clone(),
-        Value::Bare(text) => format!("{}:{text}", attr.key),
+        Value::Expr(text) => format!("{}:{text}", attr.key),
         Value::Quoted(text) => format!("{}:\"{}\"", attr.key, escape_rsx_string(text)),
-        Value::Spec(text) => format!("{}({text})", attr.key),
+        Value::Directive(text) => format!("{}({text})", attr.key),
     }
 }
 
@@ -490,6 +490,18 @@ mod tests {
         let once = format_document(src).unwrap();
         let twice = format_document(&once).unwrap();
         assert_eq!(once, twice);
+    }
+
+    /// A value is one token of the AST, so the formatter re-emits it byte for byte — it never reaches inside
+    /// an expression to wrap, re-space or re-order it, which would move the span a diagnostic points at.
+    #[test]
+    fn an_expression_survives_formatting_byte_for_byte() {
+        let src = concat!(
+            "[view]\n",
+            "col gap:(spacing() * 2.0) pad:$theme.gutter\n",
+            "    btn \"Save\" on_press:(|| save(&draft, /* keep */ true)) fill:linear(horizontal, $theme.primary, #3d78fa)\n",
+        );
+        assert_eq!(format_document(src).unwrap(), src);
     }
 
     #[test]

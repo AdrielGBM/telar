@@ -238,7 +238,7 @@ fn every_verbatim_span_locates_back_to_the_text_it_came_from() {
         }
     }
 
-    // 58 today, across 18 of the corpus's 39 files — the rest get no column precision at all, since a span is
+    // 66 today, across the corpus's 39 files — the rest get no column precision at all, since a span is
     // only emitted for text copied through byte-for-byte. A floor, not a target: it should climb as more of
     // the grammar passes values through verbatim, and this catches it collapsing instead.
     assert!(

@@ -72,7 +72,7 @@ fn collect_view_colors(nodes: &[ViewNode], source: &str, out: &mut Vec<ColorInfo
             ViewNode::Element(el) => {
                 for attr in &el.attributes {
                     // A value written as a string literal is text, never a color.
-                    if attr.value.is_literal() {
+                    if attr.value.is_quoted() {
                         continue;
                     }
                     if let Some(color) = literal_color(&attr.key, attr.value.text())

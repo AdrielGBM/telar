@@ -133,27 +133,29 @@ pub struct Element {
     pub content_i18n: bool,
 }
 
-/// The form an attribute value was written in — which of the five spellings the parser read, kept rather
-/// than flattened back into a string.
+/// The form an attribute value was written in, kept rather than flattened back into a string.
 ///
-/// This is syntax, not meaning: `12` is a [`Value::Bare`] whether it sits under `gap` or under `weight`,
+/// This is syntax, not meaning: `12` is a [`Value::Expr`] whether it sits under `gap` or under `weight`,
 /// because what a token means belongs to the key schema and the parser does not own that. What the form does
-/// settle is how the text reaches the output — a quoted value is data the author typed, a bare one is source
-/// to splice, an i18n key is a catalog lookup — and every consumer used to re-derive that from the text with
-/// its own `starts_with`/`contains` check.
+/// settle is how the text reaches the output — an expression is spliced, a quoted value expands to a
+/// `format!`, a directive goes to its own parser — and every consumer used to re-derive that from the text
+/// with its own `starts_with`/`contains` check.
 #[derive(Debug, Clone, PartialEq)]
 pub enum Value {
     /// A bare flag (`ghost`): the attribute asserts itself and carries no text.
     Flag,
-    /// An unquoted value (`12`, `#3d78fa`, `$sig`, `f(x)`), read to the next space at paren depth 0 — so a
-    /// call with arguments still reads whole.
-    Bare(String),
+    /// A Rust expression (`12`, `#3d78fa`, `$sig`, `f(x)`, `(a + b)`), read to the next space at delimiter
+    /// depth 0 — so a call with arguments, or a parenthesised expression holding spaces, still reads whole.
+    Expr(String),
     /// A string literal (`"Save"` or `r"…"`), de-quoted, with the escapes of the former already interpreted.
+    /// Its own kind because it is *interpolating* sugar: `"Hola {name}"` expands to a `format!`, so the text
+    /// is a template rather than an expression to splice.
     Quoted(String),
-    /// The text between the balanced parens of the `key(…)` form, the one spelling that admits spaces at
-    /// depth 0 — so it carries closures (`on_press(|| f())`) and space-separated specs
-    /// (`transition(fill 250ms ease-out)`) alike, in any position on the line.
-    Spec(String),
+    /// The text between the balanced parens of the `key(…)` form, which is not Rust at all: `transition(fill
+    /// 250ms ease-out)` is a clause list with its own parser and `hover_style(fill:$theme.accent)` is a
+    /// nested attribute list. Reserved for the keys the view parser calls directives; every value takes the
+    /// colon.
+    Directive(String),
 }
 
 impl Value {
@@ -162,7 +164,7 @@ impl Value {
     pub fn text(&self) -> &str {
         match self {
             Value::Flag => "",
-            Value::Bare(text) | Value::Quoted(text) | Value::Spec(text) => text,
+            Value::Expr(text) | Value::Quoted(text) | Value::Directive(text) => text,
         }
     }
 
@@ -172,16 +174,9 @@ impl Value {
         matches!(self, Value::Flag)
     }
 
-    /// Whether the text came from a plain `"…"` literal, so it is the author's data and never Rust to splice.
-    /// A `t"…"` key is not one: it is a lookup, and treating it as a literal is how a translation silently
-    /// becomes its own key.
+    /// Whether the text came from a `"…"` literal, so it is the author's data — a template the emitter
+    /// expands — and never source to read identifiers out of.
     pub fn is_quoted(&self) -> bool {
-        matches!(self, Value::Quoted(_))
-    }
-
-    /// Whether the value was written as a string literal in either spelling — `"…"` or `t"…"`. The question a
-    /// consumer asks when it wants to know that the text is *not* source it may read identifiers out of.
-    pub fn is_literal(&self) -> bool {
         matches!(self, Value::Quoted(_))
     }
 
@@ -193,7 +188,7 @@ impl Value {
         // The parens a closure needs to hold its spaces are the value's delimiters, not part of it, so a
         // parenthesised closure is still a closure: `on_press:(|| f())` and `on_press:|| f()` say the same.
         let text = undelimited(self.text().trim());
-        !self.is_literal()
+        !self.is_quoted()
             && (text.starts_with('|')
                 || text
                     .strip_prefix("move")

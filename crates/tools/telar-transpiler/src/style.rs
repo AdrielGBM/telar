@@ -7,30 +7,18 @@ use telar_parser::{StyleClass, StyleSection};
 use crate::naming::style_function_name;
 use crate::registry;
 
-/// The names a bare value may resolve against where it is written: the theme type in effect and the
-/// `[logic]` bindings in scope. A `[style]` class function is emitted outside the component and sees no
-/// bindings; an attribute in `[view]` sees them.
-#[derive(Clone, Copy, Default)]
-pub struct Scope<'a> {
-    pub theme: Option<&'a str>,
-    pub locals: &'a [String],
+/// A number for a key [`crate::registry::value_kind`] describes, where a value the key cannot mean has
+/// already been reported on the attribute itself. What stands in its place only has to be *something*: the
+/// build stops before anything reads it.
+pub fn number_or(value: &str, fallback: &str) -> String {
+    format_number(value).unwrap_or_else(|_| fallback.to_string())
 }
 
-impl<'a> Scope<'a> {
-    /// A number for a key [`crate::registry::value_kind`] describes, where a value the key cannot mean has
-    /// already been reported on the attribute itself. What stands in its place only has to be *something*:
-    /// the build stops before anything reads it.
-    pub fn number_or(self, value: &str, fallback: &str) -> String {
-        format_number(value, self).unwrap_or_else(|_| fallback.to_string())
-    }
-
-    /// A number in a position with no attribute of its own to carry a diagnostic — a nested
-    /// `hover_style(…)` property — where the error has to travel inside the expression or not at all.
-    pub fn number_or_error(self, value: &str) -> String {
-        format_number(value, self).unwrap_or_else(|message| {
-            format!("compile_error!({})", crate::view::rust_str(&message))
-        })
-    }
+/// A number in a position with no attribute of its own to carry a diagnostic — a nested `hover_style(…)`
+/// property — where the error has to travel inside the expression or not at all.
+pub fn number_or_error(value: &str) -> String {
+    format_number(value)
+        .unwrap_or_else(|message| format!("compile_error!({})", crate::view::rust_str(&message)))
 }
 
 /// What a `key:value` attribute contributes to a `LayoutStyle`.
@@ -44,32 +32,14 @@ pub enum PropCall {
     Invalid(String),
 }
 
-/// Whether every bracket in `s` is closed, so a half-written call falls through to the arm that would have
-/// handled it instead of being emitted as a theme read that cannot compile.
-fn balanced(s: &str) -> bool {
-    let mut depth = 0i32;
-    for c in s.chars() {
-        match c {
-            '(' | '[' => depth += 1,
-            ')' | ']' => depth -= 1,
-            _ => {}
-        }
-        if depth < 0 {
-            return false;
-        }
-    }
-    depth == 0
-}
-
 /// Renders one `LayoutStyle` constructor function per class in the document's style section.
 pub fn generate_style_section(section: &StyleSection, theme: Option<&str>) -> String {
     let mut out = String::new();
-    let scope = Scope { theme, locals: &[] };
     for (i, class) in section.classes.iter().enumerate() {
         if i > 0 {
             out.push('\n');
         }
-        out.push_str(&generate_class_function(class, scope));
+        out.push_str(&generate_class_function(class, theme));
         out.push('\n');
     }
     out
@@ -83,7 +53,7 @@ fn is_style_key(key: &str) -> bool {
         || matches!(key, "lines" | "ellipsis")
 }
 
-fn generate_class_function(class: &StyleClass, scope: Scope<'_>) -> String {
+fn generate_class_function(class: &StyleClass, theme: Option<&str>) -> String {
     let mut out = String::new();
     // A class property has no element and so no attribute line; naming the class is what locates it.
     //
@@ -91,7 +61,7 @@ fn generate_class_function(class: &StyleClass, scope: Scope<'_>) -> String {
     // `unknown_attr_errors` and a class never did: a class property nobody recognises is dropped on the
     // floor, so a renamed key goes on compiling and quietly stops laying the class out.
     for prop in &class.props {
-        let message = match layout_prop_call(&prop.key, &prop.value, scope) {
+        let message = match layout_prop_call(&prop.key, &prop.value) {
             PropCall::Invalid(message) => Some(message),
             PropCall::Other if !is_style_key(&prop.key) => {
                 Some(format!("`{}` is not a style property", prop.key))
@@ -115,7 +85,7 @@ fn generate_class_function(class: &StyleClass, scope: Scope<'_>) -> String {
         "fn {}() -> LayoutStyle {{",
         style_function_name(&class.name)
     );
-    if let Some(theme) = scope.theme {
+    if let Some(theme) = theme {
         let _ = writeln!(
             out,
             "    #[allow(unused_variables)] let theme = telar::Theme::<{theme}>::default();"
@@ -123,7 +93,7 @@ fn generate_class_function(class: &StyleClass, scope: Scope<'_>) -> String {
     }
     out.push_str("    LayoutStyle::new()");
     for prop in &class.props {
-        if let PropCall::Call(call) = layout_prop_call(&prop.key, &prop.value, scope) {
+        if let PropCall::Call(call) = layout_prop_call(&prop.key, &prop.value) {
             let _ = write!(out, "\n        {call}");
         }
     }
@@ -133,50 +103,50 @@ fn generate_class_function(class: &StyleClass, scope: Scope<'_>) -> String {
 
 /// Maps a style property to the `LayoutStyle` builder call it contributes — or reports the value as one this
 /// key cannot mean, which is what stops a misspelling from being a property that silently does nothing.
-pub fn layout_prop_call(key: &str, value: &str, scope: Scope<'_>) -> PropCall {
-    match layout_call(key, value.trim(), scope) {
+pub fn layout_prop_call(key: &str, value: &str) -> PropCall {
+    match layout_call(key, value.trim()) {
         Ok(Some(call)) => PropCall::Call(call),
         Ok(None) => PropCall::Other,
         Err(message) => PropCall::Invalid(message),
     }
 }
 
-fn layout_call(key: &str, value: &str, scope: Scope<'_>) -> Result<Option<String>, String> {
+fn layout_call(key: &str, value: &str) -> Result<Option<String>, String> {
     let call = match key {
-        "width" => format!(".width({})", format_number(value, scope)?),
-        "height" => format!(".height({})", format_number(value, scope)?),
-        "min_width" => format!(".min_width({})", format_number(value, scope)?),
-        "min_height" => format!(".min_height({})", format_number(value, scope)?),
-        "max_width" => format!(".max_width({})", format_number(value, scope)?),
-        "max_height" => format!(".max_height({})", format_number(value, scope)?),
-        "basis" | "flex_basis" => format!(".flex_basis({})", format_number(value, scope)?),
-        "aspect" | "aspect_ratio" => format!(".aspect_ratio({})", format_number(value, scope)?),
+        "width" => format!(".width({})", format_number(value)?),
+        "height" => format!(".height({})", format_number(value)?),
+        "min_width" => format!(".min_width({})", format_number(value)?),
+        "min_height" => format!(".min_height({})", format_number(value)?),
+        "max_width" => format!(".max_width({})", format_number(value)?),
+        "max_height" => format!(".max_height({})", format_number(value)?),
+        "basis" | "flex_basis" => format!(".flex_basis({})", format_number(value)?),
+        "aspect" | "aspect_ratio" => format!(".aspect_ratio({})", format_number(value)?),
         "wrap" => format!(".{}()", keyword(key, value, registry::WRAP_VALUES)?),
         // Per-child cross-axis alignment override, e.g. `self:stretch` over a parent `align:center`, or
         // `self:center` to keep a fixed-size child centered instead of stretched.
         "self" => format!(".{}()", keyword(key, value, registry::SELF_VALUES)?),
-        "padding" | "pad" => format!(".padding_all({})", format_number(value, scope)?),
-        "padding_x" | "pad_x" => format!(".padding_horizontal({})", format_number(value, scope)?),
-        "padding_y" | "pad_y" => format!(".padding_vertical({})", format_number(value, scope)?),
+        "padding" | "pad" => format!(".padding_all({})", format_number(value)?),
+        "padding_x" | "pad_x" => format!(".padding_horizontal({})", format_number(value)?),
+        "padding_y" | "pad_y" => format!(".padding_vertical({})", format_number(value)?),
         // Logical edges: resolved to left/right against the active writing direction at layout time, so one build serves LTR and RTL.
         "padding_start" | "pad_start" => {
-            format!(".padding_start({})", format_number(value, scope)?)
+            format!(".padding_start({})", format_number(value)?)
         }
-        "padding_end" | "pad_end" => format!(".padding_end({})", format_number(value, scope)?),
-        "margin_start" => format!(".margin_inline_start({})", format_number(value, scope)?),
-        "margin_end" => format!(".margin_inline_end({})", format_number(value, scope)?),
-        "inset_start" => format!(".inset_start({})", format_number(value, scope)?),
-        "inset_end" => format!(".inset_end({})", format_number(value, scope)?),
-        "inset_top" => format!(".inset_top({})", format_number(value, scope)?),
-        "inset_bottom" => format!(".inset_bottom({})", format_number(value, scope)?),
+        "padding_end" | "pad_end" => format!(".padding_end({})", format_number(value)?),
+        "margin_start" => format!(".margin_inline_start({})", format_number(value)?),
+        "margin_end" => format!(".margin_inline_end({})", format_number(value)?),
+        "inset_start" => format!(".inset_start({})", format_number(value)?),
+        "inset_end" => format!(".inset_end({})", format_number(value)?),
+        "inset_top" => format!(".inset_top({})", format_number(value)?),
+        "inset_bottom" => format!(".inset_bottom({})", format_number(value)?),
         // Out of flow, pinned only by the insets the author names. `absolute_fill` is the all-four-at-zero
         // shorthand `overlay` uses; a floating panel wants three edges and its own size on the fourth.
         "absolute" => format!(".{}()", keyword(key, value, registry::ABSOLUTE_VALUES)?),
-        "gap" => format!(".gap({})", format_number(value, scope)?),
-        "gap_x" => format!(".gap_x({})", format_number(value, scope)?),
-        "gap_y" => format!(".gap_y({})", format_number(value, scope)?),
-        "grow" => format!(".flex_grow({})", format_number(value, scope)?),
-        "shrink" => format!(".flex_shrink({})", format_number(value, scope)?),
+        "gap" => format!(".gap({})", format_number(value)?),
+        "gap_x" => format!(".gap_x({})", format_number(value)?),
+        "gap_y" => format!(".gap_y({})", format_number(value)?),
+        "grow" => format!(".flex_grow({})", format_number(value)?),
+        "shrink" => format!(".flex_shrink({})", format_number(value)?),
         "span" => format!(".grid_column_span({})", track_count(key, value)?),
         "row_span" => format!(".grid_row_span({})", track_count(key, value)?),
         "cols" => {
@@ -280,19 +250,16 @@ fn parse_track_token(s: &str) -> Option<String> {
 /// resolved by precedence — a constant, then a token of the theme trait, then *any* remaining name as a field
 /// on the theme — so a typo compiled to a field access and failed in rustc against code the author never
 /// wrote. `theme.x` is the theme's own spelling and now its only one.
-pub fn color(value: &str, scope: Scope<'_>) -> Result<(), String> {
+pub fn color(value: &str) -> Result<(), String> {
     let v = value.trim();
     if v.is_empty() {
-        return Err("`color` needs a value: a hex literal, `transparent`, a `theme.…` read, a `[style]` constant, or a `$signal`".to_string());
+        return Err("`color` needs a value: a hex literal, `transparent`, a `$` read, or any Rust expression that yields a `Color`".to_string());
     }
     // A gradient is a paint and not a colour, and the one place its stops can be checked is here — inside
     // `linear(…)` there is no attribute for a bad one to be reported against.
     if let Some((kind, args)) = crate::gradient::split_call(v) {
         return match crate::gradient::parse(kind, args) {
-            Some(gradient) => gradient
-                .stops
-                .iter()
-                .try_for_each(|(_, stop)| color(stop, scope)),
+            Some(gradient) => gradient.stops.iter().try_for_each(|(_, stop)| color(stop)),
             None => Err(format!(
                 "`{v}` is not a gradient: write `{kind}(…)` with two or more stops, each a colour, optionally followed by where it sits"
             )),
@@ -305,14 +272,12 @@ pub fn color(value: &str, scope: Scope<'_>) -> Result<(), String> {
     Ok(())
 }
 
-/// Resolves a numeric value to the Rust expression it stands for, or reports why it is not a number.
+/// Resolves a numeric value to the Rust expression it stands for.
 ///
-/// Everything the markup can resolve on its own resolves here — a literal, a `$signal`, a `theme.…` read, a
-/// `[style]` constant — and everything it cannot is either a name the author has in scope (carried through
-/// for rustc to look up, on this attribute's own line) or a typo, which is the case this returns an error
-/// for. Before, a typo was emitted as Rust verbatim and reported by rustc against generated code the author
-/// never wrote.
-pub fn format_number(value: &str, scope: Scope<'_>) -> Result<String, String> {
+/// Two token shapes resolve here — `50%` and a `$` read — and a plain literal is normalised so `12` reaches
+/// an `f32` parameter. Everything else is the author's own Rust, spliced as written for rustc to judge
+/// against this attribute's own line.
+pub fn format_number(value: &str) -> Result<String, String> {
     let v = value.trim();
     // `50%` is a token shape, not a key's private grammar: it expands wherever it is written, and rustc
     // rejects it under a key that is not a length. Resolving it per key made the same three characters mean
@@ -332,16 +297,9 @@ pub fn format_number(value: &str, scope: Scope<'_>) -> Result<String, String> {
     if let Ok(n) = v.parse::<f32>() {
         return Ok(format_f32(n));
     }
-    if v.contains('(') && balanced(v) {
-        return Ok(v.to_string());
-    }
-    // A binding shadows a `[style]` constant of the same name, as in Rust and as `color_expr` already does.
-    if scope.locals.iter().any(|local| local == v) {
-        return Ok(v.to_string());
-    }
     // Everything else is a Rust expression, spliced as written. The ladder that used to sit here — a
-    // `[style]` constant, then a name in scope, then a rejection — is what made a number's meaning depend on
-    // which of three namespaces answered to it first.
+    // `[style]` constant, then a theme field, then a name in scope, then a rejection — is what made a
+    // number's meaning depend on which of three namespaces answered to it first.
     Ok(v.to_string())
 }
 
@@ -369,26 +327,15 @@ mod tests {
     use telar_parser::StyleProp;
 
     fn call(key: &str, value: &str) -> Option<String> {
-        match layout_prop_call(key, value, Scope::default()) {
+        match layout_prop_call(key, value) {
             PropCall::Call(call) => Some(call),
             _ => None,
         }
     }
 
     fn invalid(key: &str, value: &str) -> Option<String> {
-        match layout_prop_call(key, value, Scope::default()) {
+        match layout_prop_call(key, value) {
             PropCall::Invalid(message) => Some(message),
-            _ => None,
-        }
-    }
-
-    fn themed(key: &str, value: &str, theme: &str) -> Option<String> {
-        let scope = Scope {
-            theme: Some(theme),
-            ..Scope::default()
-        };
-        match layout_prop_call(key, value, scope) {
-            PropCall::Call(call) => Some(call),
             _ => None,
         }
     }
@@ -438,7 +385,7 @@ mod tests {
             ("margin_start", ".margin_inline_start(theme.get().gutter)"),
         ] {
             assert_eq!(
-                themed(key, "$theme.gutter", "Th").as_deref(),
+                call(key, "$theme.gutter").as_deref(),
                 Some(expected),
                 "{key}"
             );
@@ -449,17 +396,14 @@ mod tests {
     #[test]
     fn a_bare_ident_is_the_name_the_author_wrote() {
         assert_eq!(
-            themed("pad", "card_gap", "Th").as_deref(),
+            call("pad", "card_gap").as_deref(),
             Some(".padding_all(card_gap)")
         );
     }
 
     #[test]
     fn radius_is_ignored() {
-        assert!(matches!(
-            layout_prop_call("radius", "6", Scope::default()),
-            PropCall::Other
-        ));
+        assert!(matches!(layout_prop_call("radius", "6"), PropCall::Other));
     }
 
     #[test]

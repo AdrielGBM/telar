@@ -70,7 +70,7 @@ fn themed_doc_with_attrs(attrs: Vec<(&str, &str)>) -> RsxDocument {
         .into_iter()
         .map(|(key, value)| Attr {
             key: key.into(),
-            value: Value::Bare(value.into()),
+            value: Value::Expr(value.into()),
             value_start: 0,
         })
         .collect();

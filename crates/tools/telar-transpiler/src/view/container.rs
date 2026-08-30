@@ -407,7 +407,7 @@ fn parse_inline_paint_attrs(value: &str) -> Vec<Attr> {
             let (key, val) = tok.split_once(':')?;
             Some(Attr {
                 key: key.to_string(),
-                value: Value::Bare(val.to_string()),
+                value: Value::Expr(val.to_string()),
                 value_start: 0,
             })
         })

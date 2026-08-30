@@ -54,7 +54,7 @@ impl ViewGen<'_> {
             ) {
                 continue;
             }
-            if let PropCall::Call(call) = layout_prop_call(&a.key, a.value.text(), self.scope()) {
+            if let PropCall::Call(call) = layout_prop_call(&a.key, a.value.text()) {
                 extra.push_str(&call);
             }
         }
@@ -62,12 +62,10 @@ impl ViewGen<'_> {
         let explicit_height = attrs
             .iter()
             .find(|a| a.key == "height")
-            .and_then(
-                |a| match layout_prop_call("height", a.value.text(), self.scope()) {
-                    PropCall::Call(call) => Some(call),
-                    _ => None,
-                },
-            )
+            .and_then(|a| match layout_prop_call("height", a.value.text()) {
+                PropCall::Call(call) => Some(call),
+                _ => None,
+            })
             .unwrap_or_default();
         let layout_style = format!("LayoutStyle::new(){explicit_height}{extra}");
 
@@ -233,7 +231,7 @@ impl ViewGen<'_> {
             let _ = write!(
                 modifiers,
                 ".with_font_size({})",
-                self.scope().number_or(size.value.text(), DEFAULT_SIZE)
+                crate::style::number_or(size.value.text(), DEFAULT_SIZE)
             );
         }
         let color_attr = attrs.iter().find(|a| a.key == "color");

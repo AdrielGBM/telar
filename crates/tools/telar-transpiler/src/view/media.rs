@@ -170,7 +170,7 @@ impl ViewGen<'_> {
         if v.is_empty() {
             return "|| None".to_string();
         }
-        let expr = substitute_reads(&self.scope().number_or(v, "1.0"));
+        let expr = substitute_reads(&crate::style::number_or(v, "1.0"));
         // `.into()` rather than `Some(…)`, so both a width and an already-optional one work: std gives
         // `From<T> for Option<T>` and the identity `From<T> for T`, and `with_stroke`'s parameter fixes the
         // target. A theme that carries "no override" as `None` can then be passed straight through.
@@ -189,7 +189,7 @@ impl ViewGen<'_> {
             Some((_, Value::Quoted(path))) if !path.trim().is_empty() => {
                 self.bake_asset_binding(path.trim(), kind, &pad)
             }
-            Some((a, Value::Bare(expr) | Value::Spec(expr))) if !expr.trim().is_empty() => {
+            Some((a, Value::Expr(expr) | Value::Directive(expr))) if !expr.trim().is_empty() => {
                 let v = expr.trim();
                 if v.contains('$') {
                     let data_fn =

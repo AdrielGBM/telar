@@ -165,7 +165,7 @@ impl ViewGen<'_> {
             let _ = write!(
                 chain,
                 ".with_radius(BorderRadius::all({}))",
-                self.scope().number_or_error(radius)
+                crate::style::number_or_error(radius)
             );
         }
         if chain.is_empty() {

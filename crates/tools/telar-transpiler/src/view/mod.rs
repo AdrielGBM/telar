@@ -21,7 +21,6 @@ use telar_parser::{Attr, Element, IfBlock, StyleClass, ViewNode};
 
 use crate::naming::contains_ident;
 use crate::registry::ValueKind;
-use crate::style::Scope;
 pub(crate) use signals::{is_paint_key, rust_str, substitute_reads};
 
 /// Sentinel comment lines that bracket each view node's generated code with the `.rsx` line it came from. They are emitted into the view body during generation and stripped by [`resolve_source_map`] in the transpiler, which turns them into the per-line origin map. The prefix is deliberately un-generatable by normal codegen so it can never collide with real output.
@@ -354,15 +353,6 @@ impl<'a> ViewGen<'a> {
         self.locals.iter().any(|local| local == name)
     }
 
-    /// What a bare value written in this view resolves against: the theme
-    /// and the `[logic]` bindings — everything an attribute can name without spelling out Rust.
-    pub(super) fn scope(&self) -> Scope<'_> {
-        Scope {
-            theme: self.theme_type.as_deref(),
-            locals: &self.locals,
-        }
-    }
-
     /// The first signal `code` mentions by name, skipping strings and comments.
     ///
     /// Names, not types: `[logic]` is spliced through verbatim and never type-checked here, so the only thing
@@ -625,7 +615,7 @@ impl<'a> ViewGen<'a> {
     fn attr_value_error(&self, tag: &str, attr: &Attr) -> Option<String> {
         let value = attr.value.text().trim();
         let Some(kind) = crate::registry::value_kind(tag, &attr.key) else {
-            return match crate::style::layout_prop_call(&attr.key, value, self.scope()) {
+            return match crate::style::layout_prop_call(&attr.key, value) {
                 crate::style::PropCall::Invalid(message) => Some(message),
                 _ => None,
             };
@@ -637,11 +627,11 @@ impl<'a> ViewGen<'a> {
             ValueKind::KeywordsOrNumber(table) => (value.parse::<f32>().is_err())
                 .then(|| crate::style::keyword(&attr.key, value, table).err())
                 .flatten(),
-            ValueKind::Number => crate::style::format_number(value, self.scope()).err(),
+            ValueKind::Number => crate::style::format_number(value).err(),
             ValueKind::Edges => value
                 .split_whitespace()
-                .find_map(|token| crate::style::format_number(token, self.scope()).err()),
-            ValueKind::Color => crate::style::color(value, self.scope()).err(),
+                .find_map(|token| crate::style::format_number(token).err()),
+            ValueKind::Color => crate::style::color(value).err(),
         }
     }
 

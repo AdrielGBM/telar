@@ -480,7 +480,7 @@ fn parse_element_header(
             }
             element.attributes.push(Attr {
                 key: key.trim().to_string(),
-                value: Value::Spec(value.trim().to_string()),
+                value: Value::Directive(value.trim().to_string()),
                 value_start: content_start + byte_at(&chars, vs),
             });
             i = next;
@@ -554,7 +554,7 @@ fn parse_element_header(
             check_hex_value(&value, line)?;
             element.attributes.push(Attr {
                 key: key.trim().to_string(),
-                value: Value::Bare(value),
+                value: Value::Expr(value),
                 value_start: content_start + byte_at(&chars, val_start),
             });
             i = k;

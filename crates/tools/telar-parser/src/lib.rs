@@ -185,7 +185,7 @@ col @card
             text0.attributes[0],
             Attr {
                 key: "font_size".into(),
-                value: Value::Bare("14".into()),
+                value: Value::Expr("14".into()),
                 value_start: 0
             }
         );
@@ -193,7 +193,7 @@ col @card
             text0.attributes[1],
             Attr {
                 key: "color".into(),
-                value: Value::Bare("dark".into()),
+                value: Value::Expr("dark".into()),
                 value_start: 0
             }
         );
@@ -206,7 +206,7 @@ col @card
             row.attributes[0],
             Attr {
                 key: "gap".into(),
-                value: Value::Bare("8".into()),
+                value: Value::Expr("8".into()),
                 value_start: 0
             }
         );
@@ -232,14 +232,14 @@ col @card
             inc.attributes[0],
             Attr {
                 key: "fill".into(),
-                value: Value::Bare("primary".into()),
+                value: Value::Expr("primary".into()),
                 value_start: 0
             }
         );
         let on_press = inc.attributes.iter().find(|a| a.key == "on_press").unwrap();
         assert_eq!(
             on_press.value,
-            Value::Bare("(|| count.update(|n| *n += 1))".into())
+            Value::Expr("(|| count.update(|n| *n += 1))".into())
         );
     }
 
@@ -254,14 +254,14 @@ col @card
             panic!("root should be an element");
         };
         let fill = b.attributes.iter().find(|a| a.key == "fill").unwrap();
-        assert_eq!(fill.value, Value::Bare("primary".into()));
+        assert_eq!(fill.value, Value::Expr("primary".into()));
         let transition = b.attributes.iter().find(|a| a.key == "transition").unwrap();
         assert_eq!(
             transition.value,
-            Value::Spec("opacity 200ms ease-out, fill 150ms linear".into())
+            Value::Directive("opacity 200ms ease-out, fill 150ms linear".into())
         );
         let radius = b.attributes.iter().find(|a| a.key == "radius").unwrap();
-        assert_eq!(radius.value, Value::Bare("6".into()));
+        assert_eq!(radius.value, Value::Expr("6".into()));
     }
 
     #[test]
@@ -276,20 +276,20 @@ col @card
             panic!("root should be an element");
         };
         let fill = b.attributes.iter().find(|a| a.key == "fill").unwrap();
-        assert_eq!(fill.value, Value::Bare("chip_fill($snap, id)".into()));
+        assert_eq!(fill.value, Value::Expr("chip_fill($snap, id)".into()));
         let radius = b.attributes.iter().find(|a| a.key == "radius").unwrap();
         assert_eq!(
             radius.value,
-            Value::Bare("6".into()),
+            Value::Expr("6".into()),
             "the trailing attribute still parses"
         );
         let ViewNode::Element(t) = &b.children[0] else {
             panic!("child should be a text element");
         };
         let color = t.attributes.iter().find(|a| a.key == "color").unwrap();
-        assert_eq!(color.value, Value::Bare("text_color($snap, id)".into()));
+        assert_eq!(color.value, Value::Expr("text_color($snap, id)".into()));
         let size = t.attributes.iter().find(|a| a.key == "font_size").unwrap();
-        assert_eq!(size.value, Value::Bare("13".into()));
+        assert_eq!(size.value, Value::Expr("13".into()));
     }
 
     /// `transition:` was the one key whose colon value ran to end of line, which is also why it needed a
@@ -302,9 +302,9 @@ col @card
             panic!();
         };
         let transition = b.attributes.iter().find(|a| a.key == "transition").unwrap();
-        assert_eq!(transition.value, Value::Bare("opacity".into()));
+        assert_eq!(transition.value, Value::Expr("opacity".into()));
         let align = b.attributes.iter().find(|a| a.key == "align").unwrap();
-        assert_eq!(align.value, Value::Bare("center".into()));
+        assert_eq!(align.value, Value::Expr("center".into()));
     }
 
     #[test]
@@ -331,7 +331,7 @@ col @card
             .iter()
             .find(|a| a.key == "on_press")
             .unwrap();
-        assert_eq!(on_press.value, Value::Bare("(|| reset())".into()));
+        assert_eq!(on_press.value, Value::Expr("(|| reset())".into()));
     }
 
     #[test]
@@ -447,7 +447,7 @@ col @card
             panic!();
         };
         let on_press = btn.attributes.iter().find(|a| a.key == "on_press").unwrap();
-        assert_eq!(on_press.value, Value::Bare("(|ev| handle(ev))".into()));
+        assert_eq!(on_press.value, Value::Expr("(|ev| handle(ev))".into()));
     }
 
     #[test]

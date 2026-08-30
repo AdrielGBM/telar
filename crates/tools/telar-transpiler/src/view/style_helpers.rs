@@ -28,7 +28,7 @@ impl ViewGen<'_> {
                 for prop in &class.props {
                     attrs.push(Attr {
                         key: prop.key.clone(),
-                        value: Value::Bare(prop.value.clone()),
+                        value: Value::Expr(prop.value.clone()),
                         value_start: 0,
                     });
                 }
@@ -140,13 +140,8 @@ impl ViewGen<'_> {
     /// `None` is not "no border": it is that one width on every side. Only a box that named an edge carries
     /// four of its own.
     pub(super) fn border_widths_expr(&self, pattrs: &[Attr]) -> Option<String> {
-        let edges = crate::edges::collect(
-            pattrs,
-            "stroke_width",
-            "stroke_",
-            crate::edges::side_target,
-            self.scope(),
-        );
+        let edges =
+            crate::edges::collect(pattrs, "stroke_width", "stroke_", crate::edges::side_target);
         if edges.uniform.is_some() || edges.is_empty() {
             return None;
         }
@@ -162,13 +157,7 @@ impl ViewGen<'_> {
     /// The `BorderRadius` for a box: the one-value form while that is all the author wrote, and the four
     /// corners `BorderRadius` has always had as soon as one of them is named on its own.
     pub(super) fn radius_expr(&self, pattrs: &[Attr]) -> String {
-        let edges = crate::edges::collect(
-            pattrs,
-            "radius",
-            "radius_",
-            crate::edges::corner_target,
-            self.scope(),
-        );
+        let edges = crate::edges::collect(pattrs, "radius", "radius_", crate::edges::corner_target);
         if let Some(all) = edges.uniform {
             return format!("BorderRadius::all({all})");
         }
@@ -292,9 +281,7 @@ impl ViewGen<'_> {
             for name in rest {
                 if let Some(class) = self.classes.iter().find(|c| &c.name == name) {
                     for prop in &class.props {
-                        if let PropCall::Call(call) =
-                            layout_prop_call(&prop.key, &prop.value, self.scope())
-                        {
+                        if let PropCall::Call(call) = layout_prop_call(&prop.key, &prop.value) {
                             base.push_str(&call);
                         }
                     }
@@ -336,9 +323,7 @@ impl ViewGen<'_> {
         // Inline attributes are applied on top of the base style and take precedence.
         // A value the key cannot mean is dropped here and reported by `value_errors` instead.
         for attr in attrs {
-            if let PropCall::Call(call) =
-                layout_prop_call(&attr.key, attr.value.text(), self.scope())
-            {
+            if let PropCall::Call(call) = layout_prop_call(&attr.key, attr.value.text()) {
                 expr.push_str(&call);
             }
         }
@@ -350,13 +335,8 @@ impl ViewGen<'_> {
     pub(super) fn reactive_layout_values(&self, attrs: &[Attr]) -> Vec<String> {
         attrs
             .iter()
-            .filter(|a| !a.value.is_literal() && a.value.text().contains('$'))
-            .filter(|a| {
-                matches!(
-                    layout_prop_call(&a.key, a.value.text(), self.scope()),
-                    PropCall::Call(_)
-                )
-            })
+            .filter(|a| !a.value.is_quoted() && a.value.text().contains('$'))
+            .filter(|a| matches!(layout_prop_call(&a.key, a.value.text()), PropCall::Call(_)))
             .map(|a| a.value.text().to_string())
             .collect()
     }
