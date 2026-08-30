@@ -33,8 +33,8 @@ pub use i18n::{
 };
 pub use paths::{find_ancestor_dir, find_telar_root, find_workspace_root};
 pub use registry::{
-    TAG_REFERENCES_VARIABLE, builtin_tags, color_attr_keys, color_keywords, is_builtin_tag,
-    is_control_flow_keyword, keyword_color_rgba, layout_attr_keys, tag_attr_keys,
+    builtin_tags, color_attr_keys, color_keywords, is_builtin_tag, is_control_flow_keyword,
+    keyword_color_rgba, layout_attr_keys, tag_attr_keys,
 };
 pub use signal_scan::{SignalInfo, scan_effects, scan_locals, scan_signals};
 pub use source_map::{ExprSpan, RsxSpan, SourceMap, nth_line};

@@ -14,7 +14,7 @@ pub fn features_paths() -> Result<Box<dyn LayoutItem>, LayoutError> {
     // Widest x reached by the fixed-coordinate art below; the drawing is scaled to fit narrower canvases.
     const PATHS_DESIGN_W: f32 = 520.0;
 
-    let result = Canvas::with_intrinsic_height(430.0, |rect| {
+    fn draw_paths(rect: Rect) -> RenderNode {
         let t = theme();
         let (primary, success, danger, warning, purple, ink, muted) = (
             t.primary, t.success, t.danger, t.warning, t.purple, t.ink, t.muted,
@@ -198,7 +198,7 @@ pub fn features_paths() -> Result<Box<dyn LayoutItem>, LayoutError> {
 
         let scale = (rect.width / PATHS_DESIGN_W).min(1.0);
         RenderNode::transform_with([scale, 0.0, 0.0, scale, 0.0, 0.0], kids)
-    })?;
+    }
 
     let __col_0 = {
         let __node_0 = doc_header(DocHeaderProps::props().kicker("MEDIA").title("Paths").desc("Build vector geometry with PathData — lines, quadratic and cubic Béziers, winding vs even-odd fills, stroke caps, and per-path shadows — then draw it in a Canvas.").build())?;
@@ -208,8 +208,8 @@ pub fn features_paths() -> Result<Box<dyn LayoutItem>, LayoutError> {
             let __node_2 = {
                 let mut __slots = Slots::new();
                 let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-
-                __children.push(box_item(result));
+                let __canvas_0 = Canvas::new(LayoutStyle::new().height(430.0), draw_paths)?;
+                __children.push(box_item(__canvas_0));
                 __slots.extend_default(__children);
                 card(CardProps::props().build(), __slots)?
             };

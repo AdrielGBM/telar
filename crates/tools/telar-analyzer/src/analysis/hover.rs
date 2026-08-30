@@ -53,11 +53,6 @@ fn hover_tag(tag: &str) -> Option<Hover> {
         .iter()
         .find(|(name, _)| *name == tag)
         .map(|(_, ctor)| *ctor)?;
-    if rust_type == telar_transpiler::TAG_REFERENCES_VARIABLE {
-        return Some(make_hover(format!(
-            "`{tag}` → references an in-scope variable"
-        )));
-    }
     Some(make_hover(format!("`{tag}` → `{rust_type}()`")))
 }
 

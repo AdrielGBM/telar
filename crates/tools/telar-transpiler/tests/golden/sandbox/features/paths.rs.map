@@ -271,3 +271,4 @@
 270	.
 
 # verbatim expression spans: rsx[start..end] -> gen[start] `source text`
+6160..6170	7627	`draw_paths`

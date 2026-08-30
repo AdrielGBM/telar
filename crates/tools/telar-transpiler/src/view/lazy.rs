@@ -5,7 +5,7 @@ use std::fmt::Write;
 use telar_parser::Element;
 
 use super::signals::{
-    captured_idents, clone_block_multiline, rust_str, substitute_reads, subtree_snippets,
+    captured_idents_with, clone_block_multiline, rust_str, substitute_reads, subtree_snippets,
     wrap_signal_clones,
 };
 use super::{ChildEmit, ChildMode, ViewGen, forces_child_vec};
@@ -60,7 +60,7 @@ impl ViewGen<'_> {
 
         let raw = subtree_snippets(&el.children);
         let raw_refs: Vec<&str> = raw.iter().map(String::as_str).collect();
-        let idents = captured_idents(&raw_refs, &self.loop_variables);
+        let idents = captured_idents_with(&raw_refs, &self.loop_variables, &self.locals);
         let build = clone_block_multiline(&idents, body, &format!("{pad}        "));
 
         let _ = writeln!(code, "{pad}    Lazy::new(");

@@ -82,12 +82,13 @@ impl ViewGen<'_> {
         self.indent -= 2;
 
         let closure = format!("{body}{inner_pad}Ok({slots_expr})");
-        let idents = super::signals::captured_idents(
+        let idents = super::signals::captured_idents_with(
             &super::signals::subtree_snippets(children)
                 .iter()
                 .map(String::as_str)
                 .collect::<Vec<_>>(),
             &self.loop_variables,
+            &self.locals,
         );
         let inner = format!("{pad}    move || {{\n{closure}\n{pad}    }}");
         let built = super::signals::clone_block_multiline(&idents, inner, &format!("{pad}    "));
@@ -475,37 +476,6 @@ impl ViewGen<'_> {
             code: String::new(),
         }
     }
-
-    /// `build "expr"`: splices a Rust *expression* rather than a binding, so it is evaluated afresh at every
-    /// construction point — which is what a reactive `if`/`for` needs, since it rebuilds its content each time
-    /// a branch or item comes back. Outside a reactive region it behaves exactly like `widget`.
-    ///
-    /// The expression is emitted verbatim, so a `?` inside it propagates through the enclosing builder (which
-    /// returns `Result`), and its identifiers are collected into the reactive closure's clone prelude like any
-    /// other snippet — so a signal it reads stays available to the rest of the view.
-    pub(super) fn emit_build_expr(&mut self, el: &Element) -> ChildEmit {
-        let expr = el.content.as_deref().unwrap_or("").trim().to_string();
-        if expr.is_empty() {
-            let msg = "`build` needs an expression, e.g. build \"icon_view(name)?\"";
-            return ChildEmit::Simple {
-                name: format!("compile_error!({})", rust_str(msg)),
-                code: String::new(),
-            };
-        }
-        // Not a Rust parser — just enough that a truncated expression names the tag instead of surfacing as a syntax error inside generated code.
-        if !delimiters_balanced(&expr) {
-            let msg = format!("build expression \"{expr}\" has unbalanced brackets");
-            return ChildEmit::Simple {
-                name: format!("compile_error!({})", rust_str(&msg)),
-                code: String::new(),
-            };
-        }
-        // Emitted bare: every site that splices a child already parenthesises it, so wrapping it again only earns an `unused_parens` warning against generated code.
-        ChildEmit::Simple {
-            name: expr,
-            code: String::new(),
-        }
-    }
 }
 
 /// Whether every `(`/`[`/`{` in `expr` is closed by its own kind, ignoring anything inside a string or char
@@ -580,12 +550,13 @@ impl ViewGen<'_> {
             .cloned()
             .collect();
         let style = self.make_layout_style(&el.tag, &el.classes, &layout);
-        // A closure written in place is desugared like any other; a name is already the drawing and passing
-        // it through a `move ||` would hand `Canvas` a closure returning one.
+        // A closure written in place is desugared like any other; a name is already the drawing, and it
+        // reaches `Canvas` verbatim. Deliberately not the prop ladder: that resolves a bare lowercase name
+        // against the theme, so a drawing called `draw_paths` came out as a colour constant.
         let text = paint.value.text().trim();
         let closure = match text.starts_with('|') || text.starts_with("move |") {
             true => self.emit_closure_value(paint),
-            false => self.component_attr_expr(paint),
+            false => format!("{}{text}", expr_marker(paint.value_start, text.len())),
         };
         let code = format!("{pad}let {var} = Canvas::new({style}, {closure})?;");
         ChildEmit::Simple { name: var, code }

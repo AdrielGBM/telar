@@ -2,12 +2,6 @@
 //!
 //! These tables are the single source of truth shared between the transpiler's codegen (`view.rs`, `style.rs`) and downstream tooling such as `telar-analyzer` (completions, hover, go-to-definition). Keep them in sync with the `match` arms in [`crate::view`] (`emit_element`) and [`crate::style`] (`layout_prop_call`).
 
-/// Sentinel constructor for tags that have no constructor because they reference an existing in-scope variable rather than building a widget (e.g. `widget`).
-pub const TAG_REFERENCES_VARIABLE: &str = "<in-scope variable>";
-
-/// Sentinel constructor for tags whose content is a Rust expression evaluated at each construction point rather than a widget built once (e.g. `build`).
-pub const TAG_BUILDS_EXPRESSION: &str = "<expression>";
-
 /// Sentinel constructor for the `children` slot placeholder, which builds no widget: it splices the
 /// caller-supplied children (from the component's `Slots` argument) into the enclosing container.
 pub const TAG_SLOT_PLACEHOLDER: &str = "<slot placeholder>";
@@ -31,8 +25,6 @@ pub fn builtin_tags() -> &'static [(&'static str, &'static str)] {
         ("scroll", "LayoutScrollArea::new"),
         ("overlay", "Overlay::new"),
         ("lazy", "Lazy::new"),
-        ("widget", TAG_REFERENCES_VARIABLE),
-        ("build", TAG_BUILDS_EXPRESSION),
         ("children", TAG_SLOT_PLACEHOLDER),
     ]
 }
@@ -518,7 +510,6 @@ pub fn tag_attr_keys(tag: &str) -> Vec<&'static str> {
             "transition",
         ]),
         // Both splice a whole widget in, so neither takes layout or paint keys: the expression owns its style.
-        "widget" | "build" => vec![],
         // The `children` slot placeholder takes an optional `name:` for a named slot, and `in:` for the context
         // a compound component builds them inside.
         "children" => vec!["name", "in"],

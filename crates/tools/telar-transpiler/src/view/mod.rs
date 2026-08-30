@@ -683,8 +683,6 @@ impl<'a> ViewGen<'a> {
             "path" => self.emit_path(el),
             "canvas" => self.emit_canvas(el),
             "scroll" => self.emit_scroll(el),
-            "widget" => self.emit_widget_ref(el),
-            "build" => self.emit_build_expr(el),
             "children" => self.emit_slot(el),
             other => self.emit_component_call(el, other),
         }
@@ -743,63 +741,6 @@ mod tests {
     }
 
     #[test]
-    fn widget_ref_passthrough() {
-        let src = "[logic]\nlet canvas = build_canvas()?;\n[view]\nwidget \"canvas\"\n";
-        let out = crate::transpile_source(src, "my_section", None, None, None).unwrap();
-        assert!(out.rust_code.contains("Ok(Box::new(canvas))"));
-    }
-
-    #[test]
-    fn build_splices_an_expression_evaluated_at_each_construction_point() {
-        // The point of `build`: inside a reactive region it re-runs, so nothing is moved twice.
-        let src = "[logic]\nlet items = memo(move || vec![1, 2]);\n[view]\nrow\n    for id in $items key *id\n        build \"icon_view(id)?\"\n";
-        let out = crate::transpile_source(src, "demo", None, None, None).unwrap();
-        let code = &out.rust_code;
-        assert!(
-            code.contains("Ok(box_item(icon_view(id)?))"),
-            "the expression is emitted inside the item closure:\n{code}"
-        );
-        assert!(
-            !code.contains("compile_error!"),
-            "and it is not an error:\n{code}"
-        );
-    }
-
-    #[test]
-    fn build_works_alongside_widget_in_a_static_view() {
-        let src = "[logic]\nlet icon = make_icon()?;\n[view]\nrow\n    widget \"icon\"\n    build \"other()?\"\n";
-        let out = crate::transpile_source(src, "demo", None, None, None).unwrap();
-        assert!(
-            out.rust_code.contains("children![icon, other()?]"),
-            "a spliced binding and a built expression are siblings:\n{}",
-            out.rust_code
-        );
-    }
-
-    #[test]
-    fn widget_inside_a_reactive_region_names_the_rule_and_the_fix() {
-        // Without this the author gets rustc's E0507 pointing into generated code they never wrote.
-        for src in [
-            "[logic]\nlet icon = make_icon()?;\nlet shown = memo(move || true);\n[view]\nrow\n    if $shown\n        widget \"icon\"\n",
-            "[logic]\nlet icon = make_icon()?;\nlet items = memo(move || vec![1]);\n[view]\nrow\n    for id in $items key *id\n        widget \"icon\"\n",
-            // Nested one level down: a plain container inside a reactive branch is rebuilt with it.
-            "[logic]\nlet icon = make_icon()?;\nlet shown = memo(move || true);\n[view]\nrow\n    if $shown\n        col\n            widget \"icon\"\n",
-        ] {
-            let out = crate::transpile_source(src, "demo", None, None, None).unwrap();
-            let code = &out.rust_code;
-            assert!(
-                code.contains("compile_error!")
-                    && code.contains("cannot be used inside a reactive"),
-                "a reactive `widget` must explain itself:\n{code}"
-            );
-            assert!(
-                code.contains("build"),
-                "and point at the alternative:\n{code}"
-            );
-        }
-    }
-
-    #[test]
     fn a_non_reactive_branch_still_takes_a_widget() {
         // A construction-time `if` picks its branch once, so the guard is about rebuilding, not about branching.
         let src = "[logic]\nlet icon = make_icon()?;\nlet vertical = true;\n[view]\nrow\n    if vertical\n        widget \"icon\"\n";
@@ -807,43 +748,6 @@ mod tests {
         assert!(
             !out.rust_code.contains("compile_error!"),
             "a one-shot `if` is not a reactive region:\n{}",
-            out.rust_code
-        );
-    }
-
-    #[test]
-    fn build_rejects_an_empty_or_truncated_expression() {
-        for (src, why) in [
-            ("[logic]\n[view]\nbuild \"\"\n", "empty"),
-            ("[logic]\n[view]\nbuild \"icon_view(name\"\n", "unbalanced"),
-        ] {
-            let out = crate::transpile_source(src, "demo", None, None, None).unwrap();
-            assert!(
-                out.rust_code.contains("compile_error!"),
-                "a {why} build expression should not reach rustc as broken syntax:\n{}",
-                out.rust_code
-            );
-        }
-        // A bracket inside a string literal is not an unbalanced bracket.
-        let ok = crate::transpile_source(
-            "[logic]\n[view]\nbuild \"label(\\\")\\\")?\"\n",
-            "demo",
-            None,
-            None,
-            None,
-        )
-        .unwrap();
-        assert!(!ok.rust_code.contains("compile_error!"), "{}", ok.rust_code);
-    }
-
-    #[test]
-    fn widget_ref_invalid_identifier_errors() {
-        // A non-identifier `widget` reference emits a `compile_error!` instead of splicing broken code.
-        let src = "[logic]\n[view]\nwidget \"not an ident\"\n";
-        let out = crate::transpile_source(src, "demo", None, None, None).unwrap();
-        assert!(
-            out.rust_code.contains("compile_error!"),
-            "invalid widget ref should emit compile_error!:\n{}",
             out.rust_code
         );
     }

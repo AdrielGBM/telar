@@ -28,7 +28,7 @@ pub fn features_transforms() -> Result<Box<dyn LayoutItem>, LayoutError> {
     // Widest x reached by the fixed-coordinate cells below; the drawing is scaled to fit narrower canvases.
     const TRANSFORMS_DESIGN_W: f32 = 640.0;
 
-    let result = Canvas::with_intrinsic_height(360.0, |rect| {
+    fn draw_transforms(rect: Rect) -> RenderNode {
         let t = theme();
         let muted = t.muted;
         let palette = [t.primary, t.success, t.warning, t.danger, t.purple];
@@ -124,7 +124,7 @@ pub fn features_transforms() -> Result<Box<dyn LayoutItem>, LayoutError> {
 
         let scale = (rect.width / TRANSFORMS_DESIGN_W).min(1.0);
         RenderNode::transform_with([scale, 0.0, 0.0, scale, 0.0, 0.0], kids)
-    })?;
+    }
 
     let __col_0 = {
         let __node_0 = doc_header(DocHeaderProps::props().kicker("MEDIA").title("Transforms").desc("Wrap any render node in an affine matrix to scale, rotate, or translate it. Transforms compose with .then(), so you can rotate and then scale around the same point.").build())?;
@@ -134,8 +134,8 @@ pub fn features_transforms() -> Result<Box<dyn LayoutItem>, LayoutError> {
             let __node_2 = {
                 let mut __slots = Slots::new();
                 let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-
-                __children.push(box_item(result));
+                let __canvas_0 = Canvas::new(LayoutStyle::new().height(360.0), draw_transforms)?;
+                __children.push(box_item(__canvas_0));
                 __slots.extend_default(__children);
                 card(CardProps::props().build(), __slots)?
             };

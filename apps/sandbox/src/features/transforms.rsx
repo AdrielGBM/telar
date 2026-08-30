@@ -20,7 +20,7 @@ fn arrow(cx: f32, cy: f32, size: f32) -> PathData {
 // Widest x reached by the fixed-coordinate cells below; the drawing is scaled to fit narrower canvases.
 const TRANSFORMS_DESIGN_W: f32 = 640.0;
 
-let result = Canvas::with_intrinsic_height(360.0, |rect| {
+fn draw_transforms(rect: Rect) -> RenderNode {
     let t = theme();
     let muted = t.muted;
     let palette = [t.primary, t.success, t.warning, t.danger, t.purple];
@@ -116,14 +116,14 @@ let result = Canvas::with_intrinsic_height(360.0, |rect| {
 
     let scale = (rect.width / TRANSFORMS_DESIGN_W).min(1.0);
     RenderNode::transform_with([scale, 0.0, 0.0, scale, 0.0, 0.0], kids)
-})?;
+}
 
 [view]
 col gap:20
     doc_header kicker:"MEDIA" title:"Transforms" desc:"Wrap any render node in an affine matrix to scale, rotate, or translate it. Transforms compose with .then(), so you can rotate and then scale around the same point."
     example title:"Scale, rotate, and a composed rotate-then-scale"
         card
-            widget "result"
+            canvas paint:draw_transforms height:360
         code_line code:"Transform::rotate_around(a, cx, cy).then(Transform::scale_around(s, s, cx, cy))"
     example title:"Declarative — rotate / scale / translate as box attributes (no Canvas, no Rust)"
         card

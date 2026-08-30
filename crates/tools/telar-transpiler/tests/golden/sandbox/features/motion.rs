@@ -28,7 +28,7 @@ pub fn features_motion() -> Result<Box<dyn LayoutItem>, LayoutError> {
                 .start(motion::Repeat::PingPong)
         })
         .collect();
-    let equalizer = Canvas::new(LayoutStyle::new().width(196.0).height(56.0), move |rect| {
+    let equalizer = move |rect: Rect| {
         let t = theme();
         let palette = [t.primary, t.success, t.warning, t.danger, t.purple, t.cyan];
         let (bar_w, gap) = (24.0f32, 8.0f32);
@@ -50,7 +50,7 @@ pub fn features_motion() -> Result<Box<dyn LayoutItem>, LayoutError> {
             })
             .collect();
         RenderNode::group(render)
-    })?;
+    };
 
     // A one-shot timeline; the button restarts this same handle.
     let progress = motion::Keyframes::<f32>::new(0.0)
@@ -61,7 +61,7 @@ pub fn features_motion() -> Result<Box<dyn LayoutItem>, LayoutError> {
         )
         .start(motion::Repeat::Once);
     let progress_canvas = progress.clone();
-    let progress_bar = Canvas::new(LayoutStyle::new().width(240.0).height(14.0), move |rect| {
+    let progress_bar = move |rect: Rect| {
         let t = theme();
         let pct = (progress_canvas.get() / 100.0).clamp(0.0, 1.0);
         RenderNode::group([
@@ -79,7 +79,7 @@ pub fn features_motion() -> Result<Box<dyn LayoutItem>, LayoutError> {
                 RectStyle::filled(t.primary, 7.0),
             ),
         ])
-    })?;
+    };
 
     let __col_0 = {
         let __node_0 = doc_header(DocHeaderProps::props().kicker("INTERACTION").title("Motion").desc("Beyond transitions, the motion kernel gives you springs and keyframe timelines driven from Rust — velocity-preserving bounces, staggered loops, and one-shot playback.").build())?;
@@ -115,8 +115,8 @@ pub fn features_motion() -> Result<Box<dyn LayoutItem>, LayoutError> {
             let __node_6 = {
                 let mut __slots = Slots::new();
                 let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-
-                __children.push(box_item(equalizer));
+                let __canvas_0 = Canvas::new(LayoutStyle::new().width(196.0).height(56.0), equalizer)?;
+                __children.push(box_item(__canvas_0));
                 __slots.extend_default(__children);
                 card(CardProps::props().build(), __slots)?
             };
@@ -133,7 +133,7 @@ pub fn features_motion() -> Result<Box<dyn LayoutItem>, LayoutError> {
                 let mut __slots = Slots::new();
                 let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
                 let __row_1 = {
-
+                    let __canvas_1 = Canvas::new(LayoutStyle::new().width(240.0).height(14.0), progress_bar)?;
                     let __text_0 = {
                         let progress = progress.clone();
                         Text::declaring(
@@ -143,7 +143,7 @@ pub fn features_motion() -> Result<Box<dyn LayoutItem>, LayoutError> {
                         )?
                     };
                     let __node_10 = button(ButtonProps::props().label("Replay").fill(Reactive::of(move || use_theme::<core::theme::SandboxTheme>().primary())).on_press(Box::new({ let progress = progress.clone(); move || { progress.restart() } })).build())?;
-                    Container::new(LayoutStyle::new().flex_row().gap(12.0).align_items(AlignItems::CENTER), children![progress_bar, __text_0, __node_10])?
+                    Container::new(LayoutStyle::new().flex_row().gap(12.0).align_items(AlignItems::CENTER), children![__canvas_1, __text_0, __node_10])?
                 };
                 __children.push(box_item(__row_1));
                 __slots.extend_default(__children);

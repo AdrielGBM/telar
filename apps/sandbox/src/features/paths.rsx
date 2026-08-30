@@ -6,7 +6,7 @@ use std::sync::Arc;
 // Widest x reached by the fixed-coordinate art below; the drawing is scaled to fit narrower canvases.
 const PATHS_DESIGN_W: f32 = 520.0;
 
-let result = Canvas::with_intrinsic_height(430.0, |rect| {
+fn draw_paths(rect: Rect) -> RenderNode {
     let t = theme();
     let (primary, success, danger, warning, purple, ink, muted) = (
         t.primary, t.success, t.danger, t.warning, t.purple, t.ink, t.muted,
@@ -190,14 +190,14 @@ let result = Canvas::with_intrinsic_height(430.0, |rect| {
 
     let scale = (rect.width / PATHS_DESIGN_W).min(1.0);
     RenderNode::transform_with([scale, 0.0, 0.0, scale, 0.0, 0.0], kids)
-})?;
+}
 
 [view]
 col gap:20
     doc_header kicker:"MEDIA" title:"Paths" desc:"Build vector geometry with PathData — lines, quadratic and cubic Béziers, winding vs even-odd fills, stroke caps, and per-path shadows — then draw it in a Canvas."
     example title:"Polygons, curves, fills and a path shadow"
         card
-            widget "result"
+            canvas paint:draw_paths height:430
         code_line code:"PathData::new().move_to(p).cubic_to(a, b, c)   >   RenderNode::path(d, style)"
     example title:"Declarative paths in [view]"
         card

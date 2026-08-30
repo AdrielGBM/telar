@@ -243,6 +243,25 @@ fn dollar_spans(s: &str) -> impl Iterator<Item = (usize, usize)> {
 /// the three clone emitters ([`wrap_signal_clones`], `clone_bindings`, `opacity_closure`) all format
 /// this list for their own context (block wrapper / standalone statements / inline prefix).
 pub(super) fn captured_idents(snippets: &[&str], loop_variables: &[String]) -> Vec<String> {
+    captured_idents_with(snippets, loop_variables, &[])
+}
+
+/// The same, plus the `[logic]` bindings the snippets name.
+///
+/// **A rebuilding closure needs every capture, not just the reactive ones.** Signals and loop variables were
+/// enough while a subtree was built once; a region that runs again cannot *move* anything it names, and a
+/// plain binding — an `Arc<ImageData>` behind `img src:gradient`, a drawing behind `canvas paint:…` — is
+/// exactly what a plain binding is. Cloning it is the same answer already given to a signal, applied to the
+/// rest of the scope.
+///
+/// A binding that is not `Clone` cannot survive a region that rebuilds, and saying so at the clone is the
+/// honest place: the alternative is a move-out-of-`Fn` error pointing at generated code the author never
+/// wrote.
+pub(super) fn captured_idents_with(
+    snippets: &[&str],
+    loop_variables: &[String],
+    locals: &[String],
+) -> Vec<String> {
     let mut idents: Vec<String> = Vec::new();
     for s in snippets {
         for id in signal_idents(s) {
@@ -251,7 +270,7 @@ pub(super) fn captured_idents(snippets: &[&str], loop_variables: &[String]) -> V
             }
         }
     }
-    for var in loop_variables {
+    for var in loop_variables.iter().chain(locals) {
         if snippets.iter().any(|s| contains_ident(s, var)) && !idents.contains(var) {
             idents.push(var.clone());
         }

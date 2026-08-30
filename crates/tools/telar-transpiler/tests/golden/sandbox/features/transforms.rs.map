@@ -200,3 +200,4 @@
 199	.
 
 # verbatim expression spans: rsx[start..end] -> gen[start] `source text`
+4270..4285	5448	`draw_transforms`

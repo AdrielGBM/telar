@@ -20,7 +20,7 @@ let bars: Vec<motion::Keyframes<f32>> = (0..6u64)
             .start(motion::Repeat::PingPong)
     })
     .collect();
-let equalizer = Canvas::new(LayoutStyle::new().width(196.0).height(56.0), move |rect| {
+let equalizer = move |rect: Rect| {
     let t = theme();
     let palette = [t.primary, t.success, t.warning, t.danger, t.purple, t.cyan];
     let (bar_w, gap) = (24.0f32, 8.0f32);
@@ -42,7 +42,7 @@ let equalizer = Canvas::new(LayoutStyle::new().width(196.0).height(56.0), move |
         })
         .collect();
     RenderNode::group(render)
-})?;
+};
 
 // A one-shot timeline; the button restarts this same handle.
 let progress = motion::Keyframes::<f32>::new(0.0)
@@ -53,7 +53,7 @@ let progress = motion::Keyframes::<f32>::new(0.0)
     )
     .start(motion::Repeat::Once);
 let progress_canvas = progress.clone();
-let progress_bar = Canvas::new(LayoutStyle::new().width(240.0).height(14.0), move |rect| {
+let progress_bar = move |rect: Rect| {
     let t = theme();
     let pct = (progress_canvas.get() / 100.0).clamp(0.0, 1.0);
     RenderNode::group([
@@ -71,7 +71,7 @@ let progress_bar = Canvas::new(LayoutStyle::new().width(240.0).height(14.0), mov
             RectStyle::filled(t.primary, 7.0),
         ),
     ])
-})?;
+};
 
 [view]
 col gap:20
@@ -85,12 +85,12 @@ col gap:20
         code_line code:"box fill:theme.primary radius:12 width:60 height:60 scale:$scale   // scale.retarget(1.3)"
     example title:"Staggered keyframes — six PingPong loops offset by hold()"
         card
-            widget "equalizer"
+            canvas paint:equalizer width:196 height:56
         code_line code:"Keyframes::new(8.0).hold(i·110ms).then(48.0, 300ms, EaseInOut).start(Repeat::PingPong)"
     example title:"One-shot timeline — Replay restarts the same handle"
         card gap:12
             row gap:12 align:center
-                widget "progress_bar"
+                canvas paint:progress_bar width:240 height:14
                 text "{$progress.round()}%" font_size:12 color:theme.muted
                 button label:"Replay" fill:theme.primary on_press(|| { $progress.restart() })
         code_line code:"Keyframes::new(0.0).then(100.0, 1100ms, EaseInOut).start(Repeat::Once)"
