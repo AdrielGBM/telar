@@ -15,7 +15,7 @@ pub struct SharedComponentsPropRowProps {
 }
 
 #[allow(dead_code, unused_variables, unused_mut)]
-pub fn shared_components_prop_row(props: SharedComponentsPropRowProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
+pub fn shared_components_prop_row(props: SharedComponentsPropRowProps, children: Children) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let __owner = telar::owner_scope();
     #[allow(unused_imports)] use telar::use_theme;
     let __row_0 = {
@@ -48,7 +48,7 @@ pub fn shared_components_prop_row(props: SharedComponentsPropRowProps) -> Result
 #[allow(dead_code, unused_variables, unused_mut)]
 pub fn shared_components_prop_row_preview_0() -> Result<Box<dyn LayoutItem>, LayoutError> {
     #[allow(unused_imports)] use telar::use_theme;
-    let __node_0 = prop_row(PropRowProps::props().name("align").values("start · center · end · stretch").about("Cross-axis alignment of children.").build())?;
+    let __node_0 = prop_row(PropRowProps::props().name("align").values("start · center · end · stretch").about("Cross-axis alignment of children.").build(), Children::default())?;
     Ok(Box::new(__node_0))
 }
 

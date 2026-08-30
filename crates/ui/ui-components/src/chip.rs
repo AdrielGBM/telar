@@ -4,7 +4,7 @@ use telar_macros::Props;
 use layout_core::{AlignItems, LayoutError, LayoutStyle};
 use renderer_core::{Border, BorderRadius, Color, RectStyle, ShapeStyle};
 use ui_core::focus::Role;
-use ui_core::{Container, LayoutItem, StyledContainer, Text, box_item};
+use ui_core::{Children, Container, LayoutItem, StyledContainer, Text, box_item};
 
 use crate::shared;
 
@@ -63,7 +63,7 @@ pub struct ChipProps {
     pub on_close: Option<Box<dyn Fn()>>,
 }
 
-pub fn chip(props: ChipProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
+pub fn chip(props: ChipProps, _children: Children) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let ChipProps {
         label,
         color,
@@ -149,7 +149,11 @@ mod tests {
     #[test]
     fn renders_label() {
         crate::test_support::fresh_layout_runtime();
-        let chip = chip(ChipProps::props().label("Draft").build()).unwrap();
+        let chip = chip(
+            ChipProps::props().label("Draft").build(),
+            Children::default(),
+        )
+        .unwrap();
         let root = new_container(
             LayoutStyle::new().flex_row().width(200.0).height(60.0),
             &[chip.layout_node()],
@@ -176,6 +180,7 @@ mod tests {
                 .label("Tag")
                 .on_close(Box::new(move || sink.set(true)) as Box<dyn Fn()>)
                 .build(),
+            Children::default(),
         )
         .unwrap();
         let node = chip.layout_node();
@@ -220,7 +225,7 @@ mod tests {
     #[test]
     fn empty_label_builds_without_panic() {
         crate::test_support::fresh_layout_runtime();
-        let chip = chip(ChipProps::props().build()).unwrap();
+        let chip = chip(ChipProps::props().build(), Children::default()).unwrap();
         let root = new_container(
             LayoutStyle::new().flex_row().width(200.0).height(60.0),
             &[chip.layout_node()],

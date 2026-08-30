@@ -4,7 +4,7 @@ use renderer_core::{BorderRadius, Color, RectStyle, ShapeStyle};
 use telar_macros::Props;
 use theme_core::use_theme_tokens;
 use ui_core::focus::Role;
-use ui_core::{LayoutItem, StyledContainer, box_item, box_transform};
+use ui_core::{Children, LayoutItem, StyledContainer, box_item, box_transform};
 
 use crate::shared;
 
@@ -37,7 +37,7 @@ pub struct ToggleProps {
     pub on_toggle: Option<Box<dyn Fn(bool)>>,
 }
 
-pub fn toggle(props: ToggleProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
+pub fn toggle(props: ToggleProps, _children: Children) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let ToggleProps {
         checked,
         label,
@@ -127,6 +127,7 @@ mod tests {
                 .checked(on)
                 .label("Notifications")
                 .build(),
+            Children::default(),
         )
         .unwrap();
         let (cx, cy) = lay_out(widget.layout_node());
@@ -149,6 +150,7 @@ mod tests {
             ToggleProps::props()
                 .on_toggle(Box::new(move |v| sink.set(Some(v))))
                 .build(),
+            Children::default(),
         )
         .unwrap();
         let (cx, cy) = lay_out(widget.layout_node());

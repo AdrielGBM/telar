@@ -19,7 +19,7 @@ use layout_core::{AlignItems, JustifyContent, LayoutError, LayoutStyle, SizeDime
 use platform_core::{Key, NamedKey, PointerButton};
 use reactive_core::{RwSignal, signal};
 use renderer_core::{Color, RectStyle, TextStyle};
-use ui_core::{LayoutItem, Overlay, StyledContainer, Text, box_item};
+use ui_core::{Children, LayoutItem, Overlay, StyledContainer, Text, box_item};
 
 /// One line of a menu.
 ///
@@ -150,7 +150,10 @@ pub struct ContextMenuProps {
 }
 
 /// A menu opened at a point: rows, submenus, the keyboard, and every way out.
-pub fn context_menu(props: ContextMenuProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
+pub fn context_menu(
+    props: ContextMenuProps,
+    _children: Children,
+) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let ContextMenuProps {
         at,
         entries,
@@ -619,6 +622,7 @@ mod tests {
                 .width(120.0)
                 .within(WINDOW)
                 .build(),
+            Children::default(),
         )
         .unwrap();
         lay_out(menu.layout_node(), WINDOW.width, WINDOW.height);

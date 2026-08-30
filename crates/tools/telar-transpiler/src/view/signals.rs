@@ -309,7 +309,13 @@ fn collect_snippets(nodes: &[ViewNode], out: &mut Vec<String>) {
                     out.push(content.clone());
                 }
                 for attr in &el.attributes {
-                    out.push(attr.value.text().to_string());
+                    // A quoted value is the author's data, never source: `component_attr_expr` hands it
+                    // through as a string literal with no `$` substitution, so a `$name` inside one is text.
+                    // Scanning it anyway made a documentation string mentioning `$x` clone a binding called
+                    // `x` that the file never had.
+                    if !attr.value.is_quoted() {
+                        out.push(attr.value.text().to_string());
+                    }
                 }
                 collect_snippets(&el.children, out);
             }

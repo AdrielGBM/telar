@@ -6,7 +6,8 @@ use geometry_core::Rect;
 use layout_core::{LayoutError, LayoutStyle};
 use reactive_core::{Reactive, RwSignal, signal};
 use ui_core::{
-    Axis, LayoutItem, ReactiveList, StyledContainer, box_item, insertion_index, track_layout,
+    Axis, Children, LayoutItem, ReactiveList, StyledContainer, box_item, insertion_index,
+    track_layout,
 };
 
 /// One item's widget, built on demand from its position in the caller's storage.
@@ -57,7 +58,10 @@ pub struct ReorderableProps {
     pub drag_threshold: f32,
 }
 
-pub fn reorderable(props: ReorderableProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
+pub fn reorderable(
+    props: ReorderableProps,
+    _children: Children,
+) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let ReorderableProps {
         count,
         item,
@@ -307,6 +311,7 @@ mod tests {
                 .gap(0.0)
                 .drag_threshold(0.0)
                 .build(),
+            Children::default(),
         )
         .unwrap();
         (widget, items, moves)

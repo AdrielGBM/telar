@@ -4,7 +4,7 @@ use layout_core::{AlignItems, JustifyContent, LayoutError, LayoutStyle};
 use reactive_core::{Reactive, signal};
 use renderer_core::{Border, BorderRadius, Color, RectStyle, ShapeStyle};
 use ui_core::focus::Role;
-use ui_core::{LayoutItem, StyledContainer, Text, box_item};
+use ui_core::{Children, LayoutItem, StyledContainer, Text, box_item};
 
 use crate::shared;
 
@@ -50,7 +50,7 @@ pub struct ButtonProps {
     pub on_press: Box<dyn Fn()>,
 }
 
-pub fn button(props: ButtonProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
+pub fn button(props: ButtonProps, _children: Children) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let ButtonProps {
         label,
         fill,
@@ -180,7 +180,11 @@ mod tests {
     #[test]
     fn a_ghost_label_keeps_the_ink_of_the_region_around_it() {
         crate::test_support::fresh_layout_runtime();
-        let btn = button(ButtonProps::props().label("Undo").ghost(true).build()).unwrap();
+        let btn = button(
+            ButtonProps::props().label("Undo").ghost(true).build(),
+            Children::default(),
+        )
+        .unwrap();
         let root = new_container(
             LayoutStyle::new().flex_column().width(200.0).height(80.0),
             &[btn.layout_node()],
@@ -224,6 +228,7 @@ mod tests {
                 .fill(Reactive::of(|| Color::rgba(0.2, 0.4, 0.9, 1.0)))
                 .on_press(Box::new(move || sink.set(true)))
                 .build(),
+            Children::default(),
         )
         .unwrap();
         let node = btn.layout_node();
@@ -275,7 +280,7 @@ mod tests {
         set_theme(Spaced(8.0));
         // Measured with no label, so the width is the padding and nothing else — what a font system made of
         // the text is a different question from whether the box followed the theme.
-        let btn = button(ButtonProps::props().build()).unwrap();
+        let btn = button(ButtonProps::props().build(), Children::default()).unwrap();
         let node = btn.layout_node();
         let rect = track_layout(node).unwrap();
         compute_layout(node, AvailableSpace::MaxContent, AvailableSpace::MaxContent).unwrap();
@@ -314,7 +319,7 @@ mod tests {
         crate::test_support::fresh_layout_runtime();
         set_theme(Plain);
         set_control_size(ControlSize::Regular);
-        let btn = button(ButtonProps::props().build()).unwrap();
+        let btn = button(ButtonProps::props().build(), Children::default()).unwrap();
         let node = btn.layout_node();
         let rect = track_layout(node).unwrap();
         compute_layout(node, AvailableSpace::MaxContent, AvailableSpace::MaxContent).unwrap();

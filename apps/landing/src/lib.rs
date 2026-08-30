@@ -19,7 +19,11 @@ mod layout_tests {
     fn page_rect_at(window_width: f32) -> (f32, f32) {
         telar::set_theme(crate::theme::LandingTheme::light());
         telar::reset_layout_runtime();
-        let page = crate::home().expect("home build");
+        let page = crate::home(
+            crate::HomeProps::props().build(),
+            telar::Children::default(),
+        )
+        .expect("home build");
         let node = page.layout_node();
         compute_layout(
             node,
@@ -103,7 +107,15 @@ mod layout_tests {
         let cards: Vec<Box<dyn LayoutItem>> = bodies
             .iter()
             .map(|(icon, title, body)| {
-                crate::feature_card(crate::FeatureCardProps { icon, title, body }).unwrap()
+                crate::feature_card(
+                    crate::FeatureCardProps::props()
+                        .icon(icon)
+                        .title(title)
+                        .body(body)
+                        .build(),
+                    telar::Children::default(),
+                )
+                .unwrap()
             })
             .collect();
         let card_nodes: Vec<_> = cards.iter().map(|c| c.layout_node()).collect();
@@ -170,7 +182,11 @@ mod layout_tests {
 
         telar::set_theme(crate::theme::LandingTheme::light());
         telar::reset_layout_runtime();
-        let page = crate::home().unwrap();
+        let page = crate::home(
+            crate::HomeProps::props().build(),
+            telar::Children::default(),
+        )
+        .unwrap();
         let node = page.layout_node();
         compute_layout(
             node,

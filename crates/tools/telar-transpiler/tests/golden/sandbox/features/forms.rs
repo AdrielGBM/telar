@@ -3,8 +3,11 @@
 #[allow(unused_imports)] use telar::*;
 #[allow(unused_imports)] use super::*;
 
+#[derive(::telar::Props)]
+pub struct FeaturesFormsProps {}
+
 #[allow(dead_code, unused_variables, unused_mut)]
-pub fn features_forms() -> Result<Box<dyn LayoutItem>, LayoutError> {
+pub fn features_forms(props: FeaturesFormsProps, children: Children) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let __owner = telar::owner_scope();
     #[allow(unused_imports)] use telar::use_theme;
     // A bound bool for the checkbox, another for the toggle, and a u32 for the radio group's selection.
@@ -13,102 +16,161 @@ pub fn features_forms() -> Result<Box<dyn LayoutItem>, LayoutError> {
     let choice = signal(0u32);
 
     let __col_0 = {
-        let __node_0 = doc_header(DocHeaderProps::props().kicker("INTERACTION").title("Form controls").desc("checkbox, toggle, and radio are components (from the components feature, not base tags). Each binds a signal two-way: the widget renders from it and a tap writes it back. A radio group is several radios sharing one signal, each with its own value.").build())?;
+        let __node_0 = doc_header(DocHeaderProps::props().kicker("INTERACTION").title("Form controls").desc("checkbox, toggle, and radio are components (from the components feature, not base tags). Each binds a signal two-way: the widget renders from it and a tap writes it back. A radio group is several radios sharing one signal, each with its own value.").build(), Children::default())?;
         let __node_1 = {
-            let mut __slots = Slots::new();
-            let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-            let __node_2 = {
-                let mut __slots = Slots::new();
-                let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-                let __node_3 = checkbox(CheckboxProps::props().checked(agree.clone()).label("I agree to the terms").build())?;
-                __children.push(box_item(__node_3));
-                let __text_0 = {
+            let __deferred = Children::new(
+                {
                     let agree = agree.clone();
-                    Text::declaring(
-                        move || format!("agree · {}", { agree.get() }),
-                        LayoutStyle::new(),
-                        move |__inherited: TextStyle| __inherited.with_font_size(14.0).with_color(use_theme::<core::theme::SandboxTheme>().muted()),
-                    )?
-                };
-                __children.push(box_item(__text_0));
-                __slots.extend_default(__children);
-                card(CardProps::props().gap(10.0).build(), __slots)?
-            };
-            __children.push(box_item(__node_2));
-            let __node_4 = code_line(CodeLineProps::props().code("checkbox checked:$agree label:'I agree to the terms'").build())?;
-            __children.push(box_item(__node_4));
-            __slots.extend_default(__children);
-            example(ExampleProps::props().title("checkbox — a bound bool; tap the box or its label to toggle").build(), __slots)?
+                move || {
+                    let agree = agree.clone();
+                    let mut __slots = Slots::new();
+                    let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
+                    let __node_2 = {
+                        let __deferred = Children::new(
+                            {
+                                let agree = agree.clone();
+                            move || {
+                                let agree = agree.clone();
+                                let mut __slots = Slots::new();
+                                let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
+                                let __node_3 = checkbox(CheckboxProps::props().checked(agree.clone()).label("I agree to the terms").build(), Children::default())?;
+                                __children.push(box_item(__node_3));
+                                let __text_0 = {
+                                    let agree = agree.clone();
+                                    Text::declaring(
+                                        move || format!("agree · {}", { agree.get() }),
+                                        LayoutStyle::new(),
+                                        move |__inherited: TextStyle| __inherited.with_font_size(14.0).with_color(use_theme::<core::theme::SandboxTheme>().muted()),
+                                    )?
+                                };
+                                __children.push(box_item(__text_0));
+                                __slots.extend_default(__children);
+                                Ok(__slots)
+                            }
+                            }
+                        );
+                        card(CardProps::props().gap(10.0).build(), __deferred)?
+                    };
+                    __children.push(box_item(__node_2));
+                    let __node_4 = code_line(CodeLineProps::props().code("checkbox checked:$agree label:'I agree to the terms'").build(), Children::default())?;
+                    __children.push(box_item(__node_4));
+                    __slots.extend_default(__children);
+                    Ok(__slots)
+                }
+                }
+            );
+            example(ExampleProps::props().title("checkbox — a bound bool; tap the box or its label to toggle").build(), __deferred)?
         };
         let __node_5 = {
-            let mut __slots = Slots::new();
-            let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-            let __node_6 = {
-                let mut __slots = Slots::new();
-                let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-                let __node_7 = toggle(ToggleProps::props().checked(notify.clone()).label("Email notifications").build())?;
-                __children.push(box_item(__node_7));
-                let __text_1 = {
+            let __deferred = Children::new(
+                {
                     let notify = notify.clone();
-                    Text::declaring(
-                        move || format!("notify · {}", { notify.get() }),
-                        LayoutStyle::new(),
-                        move |__inherited: TextStyle| __inherited.with_font_size(14.0).with_color(use_theme::<core::theme::SandboxTheme>().muted()),
-                    )?
-                };
-                __children.push(box_item(__text_1));
-                __slots.extend_default(__children);
-                card(CardProps::props().gap(10.0).build(), __slots)?
-            };
-            __children.push(box_item(__node_6));
-            let __node_8 = code_line(CodeLineProps::props().code("toggle checked:$notify label:'Email notifications'").build())?;
-            __children.push(box_item(__node_8));
-            __slots.extend_default(__children);
-            example(ExampleProps::props().title("toggle — a switch over the same kind of bool signal").build(), __slots)?
+                move || {
+                    let notify = notify.clone();
+                    let mut __slots = Slots::new();
+                    let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
+                    let __node_6 = {
+                        let __deferred = Children::new(
+                            {
+                                let notify = notify.clone();
+                            move || {
+                                let notify = notify.clone();
+                                let mut __slots = Slots::new();
+                                let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
+                                let __node_7 = toggle(ToggleProps::props().checked(notify.clone()).label("Email notifications").build(), Children::default())?;
+                                __children.push(box_item(__node_7));
+                                let __text_1 = {
+                                    let notify = notify.clone();
+                                    Text::declaring(
+                                        move || format!("notify · {}", { notify.get() }),
+                                        LayoutStyle::new(),
+                                        move |__inherited: TextStyle| __inherited.with_font_size(14.0).with_color(use_theme::<core::theme::SandboxTheme>().muted()),
+                                    )?
+                                };
+                                __children.push(box_item(__text_1));
+                                __slots.extend_default(__children);
+                                Ok(__slots)
+                            }
+                            }
+                        );
+                        card(CardProps::props().gap(10.0).build(), __deferred)?
+                    };
+                    __children.push(box_item(__node_6));
+                    let __node_8 = code_line(CodeLineProps::props().code("toggle checked:$notify label:'Email notifications'").build(), Children::default())?;
+                    __children.push(box_item(__node_8));
+                    __slots.extend_default(__children);
+                    Ok(__slots)
+                }
+                }
+            );
+            example(ExampleProps::props().title("toggle — a switch over the same kind of bool signal").build(), __deferred)?
         };
         let __node_9 = {
-            let mut __slots = Slots::new();
-            let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-            let __node_10 = {
-                let mut __slots = Slots::new();
-                let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-                let __node_11 = radio(RadioProps::props().selected(choice.clone()).value(0u32).label("Small").build())?;
-                __children.push(box_item(__node_11));
-                let __node_12 = radio(RadioProps::props().selected(choice.clone()).value(1u32).label("Medium").build())?;
-                __children.push(box_item(__node_12));
-                let __node_13 = radio(RadioProps::props().selected(choice.clone()).value(2u32).label("Large").build())?;
-                __children.push(box_item(__node_13));
-                let __text_2 = {
+            let __deferred = Children::new(
+                {
                     let choice = choice.clone();
-                    Text::declaring(
-                        move || format!("choice · {}", { choice.get() }),
-                        LayoutStyle::new(),
-                        move |__inherited: TextStyle| __inherited.with_font_size(14.0).with_color(use_theme::<core::theme::SandboxTheme>().muted()),
-                    )?
-                };
-                __children.push(box_item(__text_2));
-                __slots.extend_default(__children);
-                card(CardProps::props().gap(10.0).build(), __slots)?
-            };
-            __children.push(box_item(__node_10));
-            let __node_14 = code_line(CodeLineProps::props().code("radio selected:$choice value:0u32 label:'Small'      (a group shares one signal)").build())?;
-            __children.push(box_item(__node_14));
-            __slots.extend_default(__children);
-            example(ExampleProps::props().title("radio — several buttons share one signal; each carries a distinct value").build(), __slots)?
+                move || {
+                    let choice = choice.clone();
+                    let mut __slots = Slots::new();
+                    let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
+                    let __node_10 = {
+                        let __deferred = Children::new(
+                            {
+                                let choice = choice.clone();
+                            move || {
+                                let choice = choice.clone();
+                                let mut __slots = Slots::new();
+                                let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
+                                let __node_11 = radio(RadioProps::props().selected(choice.clone()).value(0u32).label("Small").build(), Children::default())?;
+                                __children.push(box_item(__node_11));
+                                let __node_12 = radio(RadioProps::props().selected(choice.clone()).value(1u32).label("Medium").build(), Children::default())?;
+                                __children.push(box_item(__node_12));
+                                let __node_13 = radio(RadioProps::props().selected(choice.clone()).value(2u32).label("Large").build(), Children::default())?;
+                                __children.push(box_item(__node_13));
+                                let __text_2 = {
+                                    let choice = choice.clone();
+                                    Text::declaring(
+                                        move || format!("choice · {}", { choice.get() }),
+                                        LayoutStyle::new(),
+                                        move |__inherited: TextStyle| __inherited.with_font_size(14.0).with_color(use_theme::<core::theme::SandboxTheme>().muted()),
+                                    )?
+                                };
+                                __children.push(box_item(__text_2));
+                                __slots.extend_default(__children);
+                                Ok(__slots)
+                            }
+                            }
+                        );
+                        card(CardProps::props().gap(10.0).build(), __deferred)?
+                    };
+                    __children.push(box_item(__node_10));
+                    let __node_14 = code_line(CodeLineProps::props().code("radio selected:$choice value:0u32 label:'Small'      (a group shares one signal)").build(), Children::default())?;
+                    __children.push(box_item(__node_14));
+                    __slots.extend_default(__children);
+                    Ok(__slots)
+                }
+                }
+            );
+            example(ExampleProps::props().title("radio — several buttons share one signal; each carries a distinct value").build(), __deferred)?
         };
         let __node_15 = {
-            let mut __slots = Slots::new();
-            let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-            let __col_1 = {
-                let __node_16 = prop_row(PropRowProps::props().name("checked").values("signal").about("Bound bool for checkbox/toggle; the tap writes it back.").build())?;
-                let __node_17 = prop_row(PropRowProps::props().name("selected").values("signal").about("Bound u32 shared by a radio group; a tap sets it to this button's value.").build())?;
-                let __node_18 = prop_row(PropRowProps::props().name("value").values("u32").about("The value a radio selects when tapped (which button is on).").build())?;
-                let __node_19 = prop_row(PropRowProps::props().name("on_toggle / on_select").values("closure").about("Fires with the new state when it changes.").build())?;
-                Container::new(LayoutStyle::new().flex_column().gap(6.0), children![__node_16, __node_17, __node_18, __node_19])?
-            };
-            __children.push(box_item(__col_1));
-            __slots.extend_default(__children);
-            example(ExampleProps::props().title("Attributes").build(), __slots)?
+            let __deferred = Children::new(
+                move || {
+                    let mut __slots = Slots::new();
+                    let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
+                    let __col_1 = {
+                        let __node_16 = prop_row(PropRowProps::props().name("checked").values("signal").about("Bound bool for checkbox/toggle; the tap writes it back.").build(), Children::default())?;
+                        let __node_17 = prop_row(PropRowProps::props().name("selected").values("signal").about("Bound u32 shared by a radio group; a tap sets it to this button's value.").build(), Children::default())?;
+                        let __node_18 = prop_row(PropRowProps::props().name("value").values("u32").about("The value a radio selects when tapped (which button is on).").build(), Children::default())?;
+                        let __node_19 = prop_row(PropRowProps::props().name("on_toggle / on_select").values("closure").about("Fires with the new state when it changes.").build(), Children::default())?;
+                        Container::new(LayoutStyle::new().flex_column().gap(6.0), children![__node_16, __node_17, __node_18, __node_19])?
+                    };
+                    __children.push(box_item(__col_1));
+                    __slots.extend_default(__children);
+                    Ok(__slots)
+                }
+            );
+            example(ExampleProps::props().title("Attributes").build(), __deferred)?
         };
         Container::new(LayoutStyle::new().flex_column().gap(20.0), children![__node_0, __node_1, __node_5, __node_9, __node_15])?
     };

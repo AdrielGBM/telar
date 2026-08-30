@@ -3,7 +3,7 @@ use layout_core::{LayoutError, LayoutStyle};
 use reactive_core::Reactive;
 use renderer_core::{BorderRadius, Color, RectStyle, ShapeStyle};
 use telar_macros::Props;
-use ui_core::{LayoutItem, StyledContainer, box_item};
+use ui_core::{Children, LayoutItem, StyledContainer, box_item};
 
 use crate::shared;
 
@@ -40,7 +40,10 @@ pub struct ProgressProps {
     pub height: f32,
 }
 
-pub fn progress(props: ProgressProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
+pub fn progress(
+    props: ProgressProps,
+    _children: Children,
+) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let ProgressProps {
         value,
         color,
@@ -114,7 +117,7 @@ mod tests {
     #[test]
     fn uncontrolled_progress_builds_with_default_value() {
         crate::test_support::fresh_layout_runtime();
-        let result = progress(ProgressProps::props().build());
+        let result = progress(ProgressProps::props().build(), Children::default());
         assert!(result.is_ok());
     }
 
@@ -129,6 +132,7 @@ mod tests {
                 .width(200.0)
                 .height(10.0)
                 .build(),
+            Children::default(),
         )
         .unwrap();
         lay_out(widget.layout_node());
@@ -141,7 +145,11 @@ mod tests {
     fn setting_value_after_build_does_not_panic() {
         crate::test_support::fresh_layout_runtime();
         let value = signal(0.0f32);
-        let widget = progress(ProgressProps::props().value(value).build()).unwrap();
+        let widget = progress(
+            ProgressProps::props().value(value).build(),
+            Children::default(),
+        )
+        .unwrap();
         lay_out(widget.layout_node());
         value.set(0.75);
         value.set(1.5);
@@ -157,7 +165,10 @@ mod tests {
         let total = signal(4.0f32);
         let fraction = reactive_core::derive_pair(used, total, |u, t| u / t);
         let _read = fraction;
-        let bar = progress(ProgressProps::props().value(fraction).stretch(true).build());
+        let bar = progress(
+            ProgressProps::props().value(fraction).stretch(true).build(),
+            Children::default(),
+        );
         assert!(bar.is_ok(), "a derivation drives it");
         used.set(1.0);
         assert_eq!(fraction.get(), 0.25, "and keeps following its sources");

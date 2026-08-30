@@ -237,10 +237,11 @@ pub use ui_components::{
     AccordionProps, BadgeProps, ButtonProps, CheckboxProps, ChipProps, ContextMenuProps,
     DrawerProps, GroupProps, HeadingProps, ItemProps, MIN_FRAME_SIZE, MenuEntry, MenuProps,
     MenuStyle, ModalProps, ProgressProps, RadioProps, ReorderableProps, SectionProps, SelectProps,
-    SliderProps, SpinnerProps, StepperProps, SurfaceFrameStyle, TabsProps, TextFieldProps,
-    ToggleProps, TooltipProps, WindowControls, accordion, badge, button, checkbox, chip,
-    context_menu, drawer, group, heading, item, menu, modal, progress, radio, reorderable, section,
-    select, separator, slider, spinner, stepper, tabs, text_field, toggle, tooltip, window_frame,
+    SeparatorProps, SliderProps, SpinnerProps, StepperProps, SurfaceFrameStyle, TabsProps,
+    TextFieldProps, ToggleProps, TooltipProps, WindowControls, accordion, badge, button, checkbox,
+    chip, context_menu, drawer, group, heading, item, menu, modal, progress, radio, reorderable,
+    section, select, separator, slider, spinner, stepper, tabs, text_field, toggle, tooltip,
+    window_frame,
 };
 
 #[cfg(feature = "runtime")]

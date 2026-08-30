@@ -3,42 +3,67 @@
 #[allow(unused_imports)] use telar::*;
 #[allow(unused_imports)] use super::*;
 
+#[derive(::telar::Props)]
+pub struct FeaturesTextFieldsProps {}
+
 #[allow(dead_code, unused_variables, unused_mut)]
-pub fn features_text_fields() -> Result<Box<dyn LayoutItem>, LayoutError> {
+pub fn features_text_fields(props: FeaturesTextFieldsProps, children: Children) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let __owner = telar::owner_scope();
     #[allow(unused_imports)] use telar::use_theme;
     let name = signal(String::new());
     let query = signal(String::new());
 
     let __col_0 = {
-        let __node_0 = doc_header(DocHeaderProps::props().kicker("INTERACTION").title("Text field").desc("text_field wraps the input primitive in a bordered, padded box (from the components catalogue, not a base tag): an optional label stacks above it, and a muted placeholder shows while the bound value is empty.").build())?;
+        let __node_0 = doc_header(DocHeaderProps::props().kicker("INTERACTION").title("Text field").desc("text_field wraps the input primitive in a bordered, padded box (from the components catalogue, not a base tag): an optional label stacks above it, and a muted placeholder shows while the bound value is empty.").build(), Children::default())?;
         let __node_1 = {
-            let mut __slots = Slots::new();
-            let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-            let __node_2 = {
-                let mut __slots = Slots::new();
-                let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-                let __node_3 = text_field(TextFieldProps::props().value(name.clone()).label("Name").placeholder("Type your name").build())?;
-                __children.push(box_item(__node_3));
-                let __node_4 = text_field(TextFieldProps::props().value(query.clone()).placeholder("Search…").build())?;
-                __children.push(box_item(__node_4));
-                let __text_0 = {
+            let __deferred = Children::new(
+                {
                     let name = name.clone();
-                    Text::declaring(
-                        move || format!("Hello, {}", { name.get() }),
-                        LayoutStyle::new(),
-                        move |__inherited: TextStyle| __inherited.with_font_size(14.0).with_color(use_theme::<core::theme::SandboxTheme>().muted()),
-                    )?
-                };
-                __children.push(box_item(__text_0));
-                __slots.extend_default(__children);
-                card(CardProps::props().gap(10.0).build(), __slots)?
-            };
-            __children.push(box_item(__node_2));
-            let __node_5 = code_line(CodeLineProps::props().code("text_field value:$name label:'Name' placeholder:'Type your name'   (bordered box + label + muted placeholder while empty)").build())?;
-            __children.push(box_item(__node_5));
-            __slots.extend_default(__children);
-            example(ExampleProps::props().title("A labelled field and a placeholder-only field, both bound to their own signal").build(), __slots)?
+                    let query = query.clone();
+                move || {
+                    let name = name.clone();
+                    let query = query.clone();
+                    let mut __slots = Slots::new();
+                    let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
+                    let __node_2 = {
+                        let __deferred = Children::new(
+                            {
+                                let name = name.clone();
+                                let query = query.clone();
+                            move || {
+                                let name = name.clone();
+                                let query = query.clone();
+                                let mut __slots = Slots::new();
+                                let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
+                                let __node_3 = text_field(TextFieldProps::props().value(name.clone()).label("Name").placeholder("Type your name").build(), Children::default())?;
+                                __children.push(box_item(__node_3));
+                                let __node_4 = text_field(TextFieldProps::props().value(query.clone()).placeholder("Search…").build(), Children::default())?;
+                                __children.push(box_item(__node_4));
+                                let __text_0 = {
+                                    let name = name.clone();
+                                    Text::declaring(
+                                        move || format!("Hello, {}", { name.get() }),
+                                        LayoutStyle::new(),
+                                        move |__inherited: TextStyle| __inherited.with_font_size(14.0).with_color(use_theme::<core::theme::SandboxTheme>().muted()),
+                                    )?
+                                };
+                                __children.push(box_item(__text_0));
+                                __slots.extend_default(__children);
+                                Ok(__slots)
+                            }
+                            }
+                        );
+                        card(CardProps::props().gap(10.0).build(), __deferred)?
+                    };
+                    __children.push(box_item(__node_2));
+                    let __node_5 = code_line(CodeLineProps::props().code("text_field value:$name label:'Name' placeholder:'Type your name'   (bordered box + label + muted placeholder while empty)").build(), Children::default())?;
+                    __children.push(box_item(__node_5));
+                    __slots.extend_default(__children);
+                    Ok(__slots)
+                }
+                }
+            );
+            example(ExampleProps::props().title("A labelled field and a placeholder-only field, both bound to their own signal").build(), __deferred)?
         };
         Container::new(LayoutStyle::new().flex_column().gap(20.0), children![__node_0, __node_1])?
     };

@@ -402,7 +402,11 @@ mod smoke {
         ] {
             telar::set_theme(make());
             telar::reset_layout_runtime();
-            let content = crate::features_color().expect("color section builds");
+            let content = crate::features_color(
+                crate::FeaturesColorProps::props().build(),
+                telar::Children::default(),
+            )
+            .expect("color section builds");
             let node = telar::LayoutItem::layout_node(content.as_ref());
             compute_layout(
                 node,

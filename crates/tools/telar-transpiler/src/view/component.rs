@@ -11,10 +11,14 @@ use super::signals::{rust_str, substitute_reads, wrap_signal_clones};
 use super::{ChildEmit, ChildMode, ViewGen, expr_marker};
 
 impl ViewGen<'_> {
-    /// Emits an unknown tag as a component function call. A no-attr, no-child tag generates `name()?`;
-    /// attrs add a `NameProps { … }` struct literal; markup children are gathered into a `Slots` value
-    /// (default + `slot:"name"` children) and passed as the trailing argument. The component's `.rsx`
-    /// must declare a matching `pub struct NameProps` and/or use a `children` slot placeholder.
+    /// Emits a non-primitive tag as a component call: its props builder, then its children as a `Children`
+    /// recipe. Always both, whatever the callee looks like.
+    ///
+    /// **The uniformity is the point.** The emitter used to ask a registry whether the callee took props,
+    /// whether it took children, and whether it wanted them built or deferred, then emit one of four call
+    /// shapes. Every component takes the same two arguments now, so there is nothing left to ask — and a
+    /// callee that wants its children built runs the recipe itself, which is the only place that decision
+    /// was ever the callee's to make.
     pub(super) fn emit_component_call(&mut self, el: &Element, tag: &str) -> ChildEmit {
         let var = self.next_variable_name("node");
         let pad = self.indent_str();
@@ -24,44 +28,22 @@ impl ViewGen<'_> {
         let props_attrs: Vec<&Attr> = el.attributes.iter().filter(|a| a.key != "slot").collect();
         let has_children = !el.children.is_empty();
 
-        // Consult the callee's signature (workspace registry, else the built-in component catalogue) so the
-        // call matches its arity, arg count, and optional/reactive-colour props. Owned (a clone), so passing
-        // `sig.as_ref()` into the `&self` prop builder never tangles with the later `&mut self` slot calls.
-        let sig = self.lookup_component_sig(tag);
-        // Pass a `Slots` arg when there are markup children, or when the callee declares a slot (so a
-        // childless call still matches its 3-arg signature). Unknown callee → the old "children ⇒ slots".
-        let pass_slots = has_children || sig.as_ref().is_some_and(|s| s.has_slot);
-        // A compound callee takes the *recipe* for its children rather than the children, so it can build
-        // them inside its own context. See `Children` in ui-core for why the order has to invert.
-        let defers = sig.as_ref().is_some_and(|s| s.defers_children);
+        let props_arg = self.component_props_arg(tag, &props_attrs, &el.classes);
 
-        let props_arg = self.component_props_arg(tag, &props_attrs, &el.classes, sig.as_ref());
-
-        // No children: flat call form. A childless slotted callee still gets an empty second argument.
+        // Childless: the recipe is empty, and the callee still takes one.
         if !has_children {
-            let empty = if defers {
-                "Children::default()"
-            } else {
-                "Slots::new()"
-            };
-            let args = Self::call_args(props_arg.as_deref(), pass_slots.then_some(empty));
-            let code = format!("{pad}let {var} = {tag}({args})?;");
+            let code = format!("{pad}let {var} = {tag}({props_arg}, Children::default())?;");
             return ChildEmit::Simple { name: var, code };
         }
 
-        // Children present: build a `Slots` value inside a block (so the temp names never collide with a
-        // parent's `__children`), then pass it as the trailing argument.
+        // Children present: the recipe is built inside a block, so its temp names never collide with a
+        // parent's `__children`.
         let mut code = String::new();
         let _ = writeln!(code, "{pad}let {var} = {{");
         self.indent += 1;
-        let slots_arg = if defers {
-            self.emit_deferred_children(&el.children, &mut code)
-        } else {
-            self.emit_slots(&el.children, &mut code)
-        };
+        let children_arg = self.emit_deferred_children(&el.children, &mut code);
         let inner_pad = self.indent_str();
-        let args = Self::call_args(props_arg.as_deref(), Some(&slots_arg));
-        let _ = writeln!(code, "{inner_pad}{tag}({args})?");
+        let _ = writeln!(code, "{inner_pad}{tag}({props_arg}, {children_arg})?");
         self.indent -= 1;
         let _ = write!(code, "{pad}}};");
         ChildEmit::Simple { name: var, code }
@@ -90,24 +72,22 @@ impl ViewGen<'_> {
             &self.loop_variables,
             &self.locals,
         );
-        let inner = format!("{pad}    move || {{\n{closure}\n{pad}    }}");
+        // Cloned twice on purpose. The outer clone gives the recipe its own handle, so the surrounding view
+        // keeps the binding for its other children. The inner one gives *each run* its own, because a body
+        // that hands a binding to a widget moves it — and a recipe that can only run once is not a recipe.
+        // A signal is `Copy` and neither clone costs anything; the ones that matter are an `Arc` behind an
+        // image and a drawing behind a `canvas`.
+        let per_run: String = idents
+            .iter()
+            .map(|name| format!("{pad}        let {name} = {name}.clone();\n"))
+            .collect();
+        let inner = format!("{pad}    move || {{\n{per_run}{closure}\n{pad}    }}");
         let built = super::signals::clone_block_multiline(&idents, inner, &format!("{pad}    "));
         let _ = writeln!(
             code,
             "{pad}let __deferred = Children::new(\n{built}\n{pad});"
         );
         "__deferred".to_string()
-    }
-
-    /// Assembles a component call's argument list: the optional `Props` literal, then the optional trailing
-    /// `Slots`. Both the flat and children paths route through here so the arg order stays identical; they
-    /// differ only in the slots value (`Slots::new()` when childless vs the built `__slots`).
-    fn call_args(props_arg: Option<&str>, slots_arg: Option<&str>) -> String {
-        [props_arg, slots_arg]
-            .into_iter()
-            .flatten()
-            .collect::<Vec<_>>()
-            .join(", ")
     }
 
     /// Builds a component call's props argument: `NameProps::props()`, one setter per attribute the author
@@ -124,29 +104,18 @@ impl ViewGen<'_> {
     /// field's own type decides whether a `$signal` means the handle or a reading, `Option` needs no
     /// `Some(…)` because `From<T> for Option<T>` is std's, and a prop nobody set keeps its declared default.
     /// The emitter spells names it read from the markup and knows nothing else.
-    fn component_props_arg(
-        &self,
-        tag: &str,
-        props_attrs: &[&Attr],
-        classes: &[String],
-        sig: Option<&crate::codegen::ComponentSig>,
-    ) -> Option<String> {
+    fn component_props_arg(&self, tag: &str, props_attrs: &[&Attr], classes: &[String]) -> String {
         let mut setters: String = props_attrs
             .iter()
             .map(|attr| format!(".{}({})", attr.key, self.component_attr_expr(attr)))
             .collect();
-        if let Some(amendment) = self.class_surface_style(classes, sig) {
+        if let Some(amendment) = self.class_surface_style(classes) {
             let _ = write!(setters, ".style({amendment})");
-        }
-        // A callee with no `Props` takes no argument at all; one that has them takes the builder even when
-        // the call names none, since every prop it declares either has a default or is required.
-        if setters.is_empty() && sig.map(|s| s.has_props) != Some(true) {
-            return None;
         }
         // Bare (not `crate::`) so the type resolves whether the component lives in this crate (via the
         // `use super::*` glob at crate root) or in a component library re-exported through `use telar::*`.
         let props_type = to_pascal_case(tag) + "Props";
-        Some(format!("{props_type}::props(){setters}.build()"))
+        format!("{props_type}::props(){setters}.build()")
     }
 
     /// A `@class` on a component call, compiled onto the callee's **principal surface**.
@@ -161,17 +130,11 @@ impl ViewGen<'_> {
     /// hover fill — rebuilding the whole `RectStyle` the way a `box` does would do exactly that, because a
     /// box's style has no author but the class.
     ///
-    /// Gated on the callee declaring a `style` prop. A component with no principal surface — a layout, a
-    /// fragment, a thing that paints three boxes and can't say which one you meant — has nothing a class
-    /// could honestly mean, so the class is still dropped there rather than guessed at.
-    fn class_surface_style(
-        &self,
-        classes: &[String],
-        sig: Option<&crate::codegen::ComponentSig>,
-    ) -> Option<String> {
-        if !sig.is_some_and(|s| s.prop_fields.iter().any(|f| f == "style")) {
-            return None;
-        }
+    /// A component with no principal surface — a layout, a fragment, a thing that paints three boxes and
+    /// can't say which one you meant — has nothing a class could honestly mean. It used to be dropped there,
+    /// silently, on the word of a table. Now the setter is emitted and rustc says there is no `style` prop,
+    /// on the author's line: the same answer, given out loud.
+    fn class_surface_style(&self, classes: &[String]) -> Option<String> {
         // Reverse order so a later class wins the `find`, matching how `paint_attrs` resolves a box's classes.
         let props: Vec<&telar_parser::StyleProp> = classes
             .iter()
@@ -217,19 +180,6 @@ impl ViewGen<'_> {
             .collect();
         let closure = wrap_signal_clones(&raw, format!("move |__s: RectStyle| __s{chain}"));
         Some(format!("Box::new({closure})"))
-    }
-
-    /// Looks up a callee's signature: the workspace registry first, then the built-in component catalogue
-    /// (`button`/`heading`/`section`) so a call resolves correctly even before the registry is seeded
-    /// (isolated transpiles, tests). Returns an owned clone so the borrow doesn't tangle with `&mut self`.
-    fn lookup_component_sig(&self, tag: &str) -> Option<crate::codegen::ComponentSig> {
-        if let Some(s) = self.registry.and_then(|r| r.get(tag)) {
-            return Some(s.clone());
-        }
-        crate::codegen::external_component_sigs()
-            .into_iter()
-            .find(|(name, _)| *name == tag)
-            .map(|(_, sig)| sig)
     }
 
     /// A reactive string prop (e.g. a button's `label`): a `move ||` closure re-read every frame, so a
@@ -446,72 +396,6 @@ impl ViewGen<'_> {
         }
         Some(inner)
     }
-
-    pub(super) fn emit_widget_ref(&mut self, el: &Element) -> ChildEmit {
-        let var = el.content.as_deref().unwrap_or("").trim().to_string();
-        // `widget "x"` splices `x` as a bare in-scope Rust binding; a non-identifier would emit
-        // syntactically broken code, so surface a clear compile error at this element instead. (Semantic
-        // "does the binding exist?" / go-to-def / rename remains a future analyzer follow-up — see TODO.)
-        if !is_ident(&var) {
-            let msg = format!("widget reference \"{var}\" is not a valid Rust identifier");
-            return ChildEmit::Simple {
-                name: format!("compile_error!({})", rust_str(&msg)),
-                code: String::new(),
-            };
-        }
-        // Splicing a binding into a rebuilding region moves the same non-`Clone` `Box<dyn LayoutItem>` twice; rustc catches it as an E0507 against generated code the author never wrote.
-        if self.in_reactive_region() {
-            let msg = format!(
-                "`widget \"{var}\"` cannot be used inside a reactive `if`/`for`: the region rebuilds its \
-                 content, and a widget binding can only be placed once. Use `build` with an expression that \
-                 constructs it, e.g. build \"{var}()?\"."
-            );
-            return ChildEmit::Simple {
-                name: format!("compile_error!({})", rust_str(&msg)),
-                code: String::new(),
-            };
-        }
-        ChildEmit::Simple {
-            name: var,
-            code: String::new(),
-        }
-    }
-}
-
-/// Whether every `(`/`[`/`{` in `expr` is closed by its own kind, ignoring anything inside a string or char
-/// literal — so `build "text(\")\")"` is not misread as unbalanced.
-fn delimiters_balanced(expr: &str) -> bool {
-    let mut stack = Vec::new();
-    let mut chars = expr.chars();
-    let mut quote: Option<char> = None;
-    while let Some(c) = chars.next() {
-        if let Some(open) = quote {
-            match c {
-                '\\' => {
-                    chars.next();
-                }
-                _ if c == open => quote = None,
-                _ => {}
-            }
-            continue;
-        }
-        match c {
-            '"' | '\'' => quote = Some(c),
-            '(' | '[' | '{' => stack.push(c),
-            ')' | ']' | '}' => {
-                let expected = match c {
-                    ')' => '(',
-                    ']' => '[',
-                    _ => '{',
-                };
-                if stack.pop() != Some(expected) {
-                    return false;
-                }
-            }
-            _ => {}
-        }
-    }
-    stack.is_empty() && quote.is_none()
 }
 
 /// Wraps a value that reads state in a closure, so the prop follows it instead of freezing at the value it

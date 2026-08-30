@@ -14,7 +14,7 @@ pub struct SharedComponentsFeatureCardProps {
 }
 
 #[allow(dead_code, unused_variables, unused_mut)]
-pub fn shared_components_feature_card(props: SharedComponentsFeatureCardProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
+pub fn shared_components_feature_card(props: SharedComponentsFeatureCardProps, children: Children) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let __owner = telar::owner_scope();
     #[allow(unused_imports)] use telar::use_theme;
     let __sbox_0 = {
@@ -47,7 +47,7 @@ pub fn shared_components_feature_card(props: SharedComponentsFeatureCardProps) -
 #[allow(dead_code, unused_variables, unused_mut)]
 pub fn shared_components_feature_card_preview_0() -> Result<Box<dyn LayoutItem>, LayoutError> {
     #[allow(unused_imports)] use telar::use_theme;
-    let __node_0 = feature_card(FeatureCardProps::props().icon("⚡").title("Fast").body("Software and wgpu renderers with dirty-tracking and scroll-blit detection.").build())?;
+    let __node_0 = feature_card(FeatureCardProps::props().icon("⚡").title("Fast").body("Software and wgpu renderers with dirty-tracking and scroll-blit detection.").build(), Children::default())?;
     Ok(Box::new(__node_0))
 }
 

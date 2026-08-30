@@ -13,9 +13,10 @@ pub struct SharedComponentsExampleProps {
 }
 
 #[allow(dead_code, unused_variables, unused_mut)]
-pub fn shared_components_example(props: SharedComponentsExampleProps, mut __slots: Slots) -> Result<Box<dyn LayoutItem>, LayoutError> {
+pub fn shared_components_example(props: SharedComponentsExampleProps, children: Children) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let __owner = telar::owner_scope();
     #[allow(unused_imports)] use telar::use_theme;
+    let mut __slots = children.build()?;
     let __col_0 = {
         let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
         let __text_0 = {
@@ -36,27 +37,37 @@ pub fn shared_components_example(props: SharedComponentsExampleProps, mut __slot
 pub fn shared_components_example_preview_0() -> Result<Box<dyn LayoutItem>, LayoutError> {
     #[allow(unused_imports)] use telar::use_theme;
     let __node_0 = {
-        let mut __slots = Slots::new();
-        let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-        let __node_1 = {
-            let mut __slots = Slots::new();
-            let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-            let __text_0 = {
-                Text::declaring(
-                    || "The demo and its code snippet stack here.".to_string(),
-                    LayoutStyle::new(),
-                    move |__inherited: TextStyle| __inherited.with_font_size(13.0).with_color(use_theme::<core::theme::SandboxTheme>().muted()),
-                )?
-            };
-            __children.push(box_item(__text_0));
-            __slots.extend_default(__children);
-            card(CardProps::props().gap(10.0).build(), __slots)?
-        };
-        __children.push(box_item(__node_1));
-        let __node_2 = code_line(CodeLineProps::props().code("row justify:between").build())?;
-        __children.push(box_item(__node_2));
-        __slots.extend_default(__children);
-        example(ExampleProps::props().title("justify — distribute along the main axis").build(), __slots)?
+        let __deferred = Children::new(
+            move || {
+                let mut __slots = Slots::new();
+                let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
+                let __node_1 = {
+                    let __deferred = Children::new(
+                        move || {
+                            let mut __slots = Slots::new();
+                            let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
+                            let __text_0 = {
+                                Text::declaring(
+                                    || "The demo and its code snippet stack here.".to_string(),
+                                    LayoutStyle::new(),
+                                    move |__inherited: TextStyle| __inherited.with_font_size(13.0).with_color(use_theme::<core::theme::SandboxTheme>().muted()),
+                                )?
+                            };
+                            __children.push(box_item(__text_0));
+                            __slots.extend_default(__children);
+                            Ok(__slots)
+                        }
+                    );
+                    card(CardProps::props().gap(10.0).build(), __deferred)?
+                };
+                __children.push(box_item(__node_1));
+                let __node_2 = code_line(CodeLineProps::props().code("row justify:between").build(), Children::default())?;
+                __children.push(box_item(__node_2));
+                __slots.extend_default(__children);
+                Ok(__slots)
+            }
+        );
+        example(ExampleProps::props().title("justify — distribute along the main axis").build(), __deferred)?
     };
     Ok(Box::new(__node_0))
 }

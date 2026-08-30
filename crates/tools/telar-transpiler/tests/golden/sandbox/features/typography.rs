@@ -3,328 +3,411 @@
 #[allow(unused_imports)] use telar::*;
 #[allow(unused_imports)] use super::*;
 
+#[derive(::telar::Props)]
+pub struct FeaturesTypographyProps {}
+
 #[allow(dead_code, unused_variables, unused_mut)]
-pub fn features_typography() -> Result<Box<dyn LayoutItem>, LayoutError> {
+pub fn features_typography(props: FeaturesTypographyProps, children: Children) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let __owner = telar::owner_scope();
     #[allow(unused_imports)] use telar::use_theme;
     let __col_0 = {
-        let __node_0 = doc_header(DocHeaderProps::props().kicker("FOUNDATIONS").title("Typography").desc("Text takes a size and a color token, measures its own height, and wraps to the available width automatically.").build())?;
+        let __node_0 = doc_header(DocHeaderProps::props().kicker("FOUNDATIONS").title("Typography").desc("Text takes a size and a color token, measures its own height, and wraps to the available width automatically.").build(), Children::default())?;
         let __node_1 = {
-            let mut __slots = Slots::new();
-            let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-            let __node_2 = {
-                let mut __slots = Slots::new();
-                let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-                let __text_0 = {
-                    Text::declaring(
-                        || "Display · 32".to_string(),
-                        LayoutStyle::new(),
-                        move |__inherited: TextStyle| __inherited.with_font_size(32.0).with_color(use_theme::<core::theme::SandboxTheme>().ink()),
-                    )?
-                };
-                __children.push(box_item(__text_0));
-                let __text_1 = {
-                    Text::declaring(
-                        || "Title · 24".to_string(),
-                        LayoutStyle::new(),
-                        move |__inherited: TextStyle| __inherited.with_font_size(24.0).with_color(use_theme::<core::theme::SandboxTheme>().ink()),
-                    )?
-                };
-                __children.push(box_item(__text_1));
-                let __text_2 = {
-                    Text::declaring(
-                        || "Heading · 18".to_string(),
-                        LayoutStyle::new(),
-                        move |__inherited: TextStyle| __inherited.with_font_size(18.0).with_color(use_theme::<core::theme::SandboxTheme>().ink()),
-                    )?
-                };
-                __children.push(box_item(__text_2));
-                let __text_3 = {
-                    Text::declaring(
-                        || "Body · 14 — the quick brown fox jumps over the lazy dog".to_string(),
-                        LayoutStyle::new(),
-                        move |__inherited: TextStyle| __inherited.with_font_size(14.0).with_color(use_theme::<core::theme::SandboxTheme>().ink()),
-                    )?
-                };
-                __children.push(box_item(__text_3));
-                let __text_4 = {
-                    Text::declaring(
-                        || "Caption · 12".to_string(),
-                        LayoutStyle::new(),
-                        move |__inherited: TextStyle| __inherited.with_font_size(12.0).with_color(use_theme::<core::theme::SandboxTheme>().muted()),
-                    )?
-                };
-                __children.push(box_item(__text_4));
-                __slots.extend_default(__children);
-                card(CardProps::props().gap(6.0).build(), __slots)?
-            };
-            __children.push(box_item(__node_2));
-            let __node_3 = code_line(CodeLineProps::props().code("text 'Heading' font_size:18 color:theme.ink").build())?;
-            __children.push(box_item(__node_3));
-            __slots.extend_default(__children);
-            example(ExampleProps::props().title("Size scale").build(), __slots)?
-        };
-        let __node_4 = {
-            let mut __slots = Slots::new();
-            let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-            let __node_5 = {
-                let mut __slots = Slots::new();
-                let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-                let __text_5 = {
-                    Text::declaring(
-                        || "ink — primary reading color".to_string(),
-                        LayoutStyle::new(),
-                        move |__inherited: TextStyle| __inherited.with_font_size(14.0).with_color(use_theme::<core::theme::SandboxTheme>().ink()),
-                    )?
-                };
-                __children.push(box_item(__text_5));
-                let __text_6 = {
-                    Text::declaring(
-                        || "muted — secondary and captions".to_string(),
-                        LayoutStyle::new(),
-                        move |__inherited: TextStyle| __inherited.with_font_size(14.0).with_color(use_theme::<core::theme::SandboxTheme>().muted()),
-                    )?
-                };
-                __children.push(box_item(__text_6));
-                let __text_7 = {
-                    Text::declaring(
-                        || "primary — links and emphasis".to_string(),
-                        LayoutStyle::new(),
-                        move |__inherited: TextStyle| __inherited.with_font_size(14.0).with_color(use_theme::<core::theme::SandboxTheme>().primary()),
-                    )?
-                };
-                __children.push(box_item(__text_7));
-                let __text_8 = {
-                    Text::declaring(
-                        || "success · danger · warning".to_string(),
-                        LayoutStyle::new(),
-                        move |__inherited: TextStyle| __inherited.with_font_size(14.0).with_color(use_theme::<core::theme::SandboxTheme>().success()),
-                    )?
-                };
-                __children.push(box_item(__text_8));
-                __slots.extend_default(__children);
-                card(CardProps::props().gap(4.0).build(), __slots)?
-            };
-            __children.push(box_item(__node_5));
-            let __node_6 = code_line(CodeLineProps::props().code("text 'muted' color:theme.muted").build())?;
-            __children.push(box_item(__node_6));
-            __slots.extend_default(__children);
-            example(ExampleProps::props().title("Color tokens applied to text").build(), __slots)?
-        };
-        let __node_7 = {
-            let mut __slots = Slots::new();
-            let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-            let __node_8 = {
-                let mut __slots = Slots::new();
-                let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-                let __text_9 = {
-                    Text::declaring(
-                        || "Light — weight:300".to_string(),
-                        LayoutStyle::new(),
-                        move |__inherited: TextStyle| __inherited.with_font_size(16.0).with_color(use_theme::<core::theme::SandboxTheme>().ink()).with_font_weight(300),
-                    )?
-                };
-                __children.push(box_item(__text_9));
-                let __text_10 = {
-                    Text::declaring(
-                        || "Semibold — weight:600".to_string(),
-                        LayoutStyle::new(),
-                        move |__inherited: TextStyle| __inherited.with_font_size(16.0).with_color(use_theme::<core::theme::SandboxTheme>().ink()).with_font_weight(600),
-                    )?
-                };
-                __children.push(box_item(__text_10));
-                let __text_11 = {
-                    Text::declaring(
-                        || "Bold — weight:bold".to_string(),
-                        LayoutStyle::new(),
-                        move |__inherited: TextStyle| __inherited.with_font_size(16.0).with_color(use_theme::<core::theme::SandboxTheme>().ink()).with_font_weight(700),
-                    )?
-                };
-                __children.push(box_item(__text_11));
-                let __text_12 = {
-                    Text::declaring(
-                        || "Italic emphasis".to_string(),
-                        LayoutStyle::new(),
-                        move |__inherited: TextStyle| __inherited.with_font_size(16.0).with_color(use_theme::<core::theme::SandboxTheme>().ink()).with_font_style(FontStyle::Italic),
-                    )?
-                };
-                __children.push(box_item(__text_12));
-                let __text_13 = {
-                    Text::declaring(
-                        || "Bold italic".to_string(),
-                        LayoutStyle::new(),
-                        move |__inherited: TextStyle| __inherited.with_font_size(16.0).with_color(use_theme::<core::theme::SandboxTheme>().ink()).with_font_weight(700).with_font_style(FontStyle::Italic),
-                    )?
-                };
-                __children.push(box_item(__text_13));
-                let __text_14 = {
-                    Text::declaring(
-                        || "Centered in its box".to_string(),
-                        LayoutStyle::new(),
-                        move |__inherited: TextStyle| __inherited.with_font_size(14.0).with_color(use_theme::<core::theme::SandboxTheme>().muted()).with_text_align(TextAlign::Center),
-                    )?
-                };
-                __children.push(box_item(__text_14));
-                let __text_15 = {
-                    Text::declaring(
-                        || "Aligned to the end".to_string(),
-                        LayoutStyle::new(),
-                        move |__inherited: TextStyle| __inherited.with_font_size(14.0).with_color(use_theme::<core::theme::SandboxTheme>().muted()).with_text_align(TextAlign::End),
-                    )?
-                };
-                __children.push(box_item(__text_15));
-                __slots.extend_default(__children);
-                card(CardProps::props().gap(6.0).build(), __slots)?
-            };
-            __children.push(box_item(__node_8));
-            let __node_9 = code_line(CodeLineProps::props().code("text 'Bold' font_weight:bold   ·   'Note' font_style:italic   ·   '…' text_align:center").build())?;
-            __children.push(box_item(__node_9));
-            __slots.extend_default(__children);
-            example(ExampleProps::props().title("Weight, italic & alignment").build(), __slots)?
-        };
-        let __node_10 = {
-            let mut __slots = Slots::new();
-            let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-            let __node_11 = {
-                let mut __slots = Slots::new();
-                let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-                let __text_16 = {
-                    Text::declaring(
-                        || "This paragraph is clamped to two lines with lines:2, so however long the copy gets the box never grows past two lines and the overflow is simply dropped.".to_string(),
-                        LayoutStyle::new(),
-                        move |__inherited: TextStyle| __inherited.with_font_size(14.0).with_color(use_theme::<core::theme::SandboxTheme>().muted()).with_clamp(2, false),
-                    )?
-                };
-                __children.push(box_item(__text_16));
-                let __text_17 = {
-                    Text::declaring(
-                        || "With ellipsis the truncated tail is replaced by a … so it reads as intentionally cut rather than abruptly clipped at the boundary.".to_string(),
-                        LayoutStyle::new(),
-                        move |__inherited: TextStyle| __inherited.with_font_size(14.0).with_color(use_theme::<core::theme::SandboxTheme>().ink()).with_clamp(2, true),
-                    )?
-                };
-                __children.push(box_item(__text_17));
-                let __text_18 = {
-                    Text::declaring(
-                        || "A single-line label that ellipsizes when it runs out of room in its box.".to_string(),
-                        LayoutStyle::new().max_width(300.0),
-                        move |__inherited: TextStyle| __inherited.with_font_size(14.0).with_color(use_theme::<core::theme::SandboxTheme>().primary()).with_clamp(1, true),
-                    )?
-                };
-                __children.push(box_item(__text_18));
-                __slots.extend_default(__children);
-                card(CardProps::props().gap(8.0).build(), __slots)?
-            };
-            __children.push(box_item(__node_11));
-            let __node_12 = code_line(CodeLineProps::props().code("text '…' lines:2 ellipsis   ·   'label' lines:1 ellipsis").build())?;
-            __children.push(box_item(__node_12));
-            __slots.extend_default(__children);
-            example(ExampleProps::props().title("Line clamp & ellipsis").build(), __slots)?
-        };
-        let __node_13 = {
-            let mut __slots = Slots::new();
-            let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-            let __node_14 = {
-                let mut __slots = Slots::new();
-                let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-                let __text_19 = {
-                    Text::declaring(
-                        || "Text nodes wrap to the width they are given and report the exact height the wrapped lines need, so the sibling below them is never overlapped — resize the window and watch this paragraph reflow while the box grows to fit it.".to_string(),
-                        LayoutStyle::new().max_width(520.0),
-                        move |__inherited: TextStyle| __inherited.with_font_size(14.0).with_color(use_theme::<core::theme::SandboxTheme>().muted()),
-                    )?
-                };
-                __children.push(box_item(__text_19));
-                __slots.extend_default(__children);
-                card(CardProps::props().build(), __slots)?
-            };
-            __children.push(box_item(__node_14));
-            let __node_15 = code_line(CodeLineProps::props().code("text '…long copy…' color:theme.muted max_width:520").build())?;
-            __children.push(box_item(__node_15));
-            __slots.extend_default(__children);
-            example(ExampleProps::props().title("Wrapping — a paragraph measures its own height at any width").build(), __slots)?
-        };
-        let __node_16 = {
-            let mut __slots = Slots::new();
-            let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-            let __node_17 = {
-                let mut __slots = Slots::new();
-                let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-                let __text_20 = {
-                    Text::declaring(
-                        || "Braces splice a signal or expression straight into the string.".to_string(),
-                        LayoutStyle::new(),
-                        move |__inherited: TextStyle| __inherited.with_font_size(13.0).with_color(use_theme::<core::theme::SandboxTheme>().muted()),
-                    )?
-                };
-                __children.push(box_item(__text_20));
-                __slots.extend_default(__children);
-                card(CardProps::props().build(), __slots)?
-            };
-            __children.push(box_item(__node_17));
-            let __node_18 = code_line(CodeLineProps::props().code("text 'Count: {$count}'      text '{props.title}'").build())?;
-            __children.push(box_item(__node_18));
-            __slots.extend_default(__children);
-            example(ExampleProps::props().title("Interpolation — embed values with { } (see the Reactivity section)").build(), __slots)?
-        };
-        let __node_19 = {
-            let mut __slots = Slots::new();
-            let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-            let __node_20 = {
-                let mut __slots = Slots::new();
-                let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-                let __node_21 = heading(HeadingProps::props().text("A heading is a real title").build())?;
-                __children.push(box_item(__node_21));
-                let __node_22 = {
+            let __deferred = Children::new(
+                move || {
                     let mut __slots = Slots::new();
                     let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-                    let __text_21 = {
-                        Text::declaring(
-                            || "The heading sits above these children in a small-gap column.".to_string(),
-                            LayoutStyle::new(),
-                            move |__inherited: TextStyle| __inherited.with_font_size(13.0).with_color(use_theme::<core::theme::SandboxTheme>().muted()),
-                        )?
+                    let __node_2 = {
+                        let __deferred = Children::new(
+                            move || {
+                                let mut __slots = Slots::new();
+                                let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
+                                let __text_0 = {
+                                    Text::declaring(
+                                        || "Display · 32".to_string(),
+                                        LayoutStyle::new(),
+                                        move |__inherited: TextStyle| __inherited.with_font_size(32.0).with_color(use_theme::<core::theme::SandboxTheme>().ink()),
+                                    )?
+                                };
+                                __children.push(box_item(__text_0));
+                                let __text_1 = {
+                                    Text::declaring(
+                                        || "Title · 24".to_string(),
+                                        LayoutStyle::new(),
+                                        move |__inherited: TextStyle| __inherited.with_font_size(24.0).with_color(use_theme::<core::theme::SandboxTheme>().ink()),
+                                    )?
+                                };
+                                __children.push(box_item(__text_1));
+                                let __text_2 = {
+                                    Text::declaring(
+                                        || "Heading · 18".to_string(),
+                                        LayoutStyle::new(),
+                                        move |__inherited: TextStyle| __inherited.with_font_size(18.0).with_color(use_theme::<core::theme::SandboxTheme>().ink()),
+                                    )?
+                                };
+                                __children.push(box_item(__text_2));
+                                let __text_3 = {
+                                    Text::declaring(
+                                        || "Body · 14 — the quick brown fox jumps over the lazy dog".to_string(),
+                                        LayoutStyle::new(),
+                                        move |__inherited: TextStyle| __inherited.with_font_size(14.0).with_color(use_theme::<core::theme::SandboxTheme>().ink()),
+                                    )?
+                                };
+                                __children.push(box_item(__text_3));
+                                let __text_4 = {
+                                    Text::declaring(
+                                        || "Caption · 12".to_string(),
+                                        LayoutStyle::new(),
+                                        move |__inherited: TextStyle| __inherited.with_font_size(12.0).with_color(use_theme::<core::theme::SandboxTheme>().muted()),
+                                    )?
+                                };
+                                __children.push(box_item(__text_4));
+                                __slots.extend_default(__children);
+                                Ok(__slots)
+                            }
+                        );
+                        card(CardProps::props().gap(6.0).build(), __deferred)?
                     };
-                    __children.push(box_item(__text_21));
-                    let __text_22 = {
-                        Text::declaring(
-                            || "Use it to group a labelled block without hand-building the column.".to_string(),
-                            LayoutStyle::new(),
-                            move |__inherited: TextStyle| __inherited.with_font_size(13.0).with_color(use_theme::<core::theme::SandboxTheme>().muted()),
-                        )?
-                    };
-                    __children.push(box_item(__text_22));
+                    __children.push(box_item(__node_2));
+                    let __node_3 = code_line(CodeLineProps::props().code("text 'Heading' font_size:18 color:theme.ink").build(), Children::default())?;
+                    __children.push(box_item(__node_3));
                     __slots.extend_default(__children);
-                    section(SectionProps::props().title("A section wraps a heading above its own content").build(), __slots)?
-                };
-                __children.push(box_item(__node_22));
-                __slots.extend_default(__children);
-                card(CardProps::props().gap(12.0).build(), __slots)?
-            };
-            __children.push(box_item(__node_20));
-            let __node_23 = code_line(CodeLineProps::props().code("heading 'Title'      section 'Title' > …children…").build())?;
-            __children.push(box_item(__node_23));
-            __slots.extend_default(__children);
-            example(ExampleProps::props().title("heading and section — an accent title, alone or above its content").build(), __slots)?
+                    Ok(__slots)
+                }
+            );
+            example(ExampleProps::props().title("Size scale").build(), __deferred)?
+        };
+        let __node_4 = {
+            let __deferred = Children::new(
+                move || {
+                    let mut __slots = Slots::new();
+                    let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
+                    let __node_5 = {
+                        let __deferred = Children::new(
+                            move || {
+                                let mut __slots = Slots::new();
+                                let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
+                                let __text_5 = {
+                                    Text::declaring(
+                                        || "ink — primary reading color".to_string(),
+                                        LayoutStyle::new(),
+                                        move |__inherited: TextStyle| __inherited.with_font_size(14.0).with_color(use_theme::<core::theme::SandboxTheme>().ink()),
+                                    )?
+                                };
+                                __children.push(box_item(__text_5));
+                                let __text_6 = {
+                                    Text::declaring(
+                                        || "muted — secondary and captions".to_string(),
+                                        LayoutStyle::new(),
+                                        move |__inherited: TextStyle| __inherited.with_font_size(14.0).with_color(use_theme::<core::theme::SandboxTheme>().muted()),
+                                    )?
+                                };
+                                __children.push(box_item(__text_6));
+                                let __text_7 = {
+                                    Text::declaring(
+                                        || "primary — links and emphasis".to_string(),
+                                        LayoutStyle::new(),
+                                        move |__inherited: TextStyle| __inherited.with_font_size(14.0).with_color(use_theme::<core::theme::SandboxTheme>().primary()),
+                                    )?
+                                };
+                                __children.push(box_item(__text_7));
+                                let __text_8 = {
+                                    Text::declaring(
+                                        || "success · danger · warning".to_string(),
+                                        LayoutStyle::new(),
+                                        move |__inherited: TextStyle| __inherited.with_font_size(14.0).with_color(use_theme::<core::theme::SandboxTheme>().success()),
+                                    )?
+                                };
+                                __children.push(box_item(__text_8));
+                                __slots.extend_default(__children);
+                                Ok(__slots)
+                            }
+                        );
+                        card(CardProps::props().gap(4.0).build(), __deferred)?
+                    };
+                    __children.push(box_item(__node_5));
+                    let __node_6 = code_line(CodeLineProps::props().code("text 'muted' color:theme.muted").build(), Children::default())?;
+                    __children.push(box_item(__node_6));
+                    __slots.extend_default(__children);
+                    Ok(__slots)
+                }
+            );
+            example(ExampleProps::props().title("Color tokens applied to text").build(), __deferred)?
+        };
+        let __node_7 = {
+            let __deferred = Children::new(
+                move || {
+                    let mut __slots = Slots::new();
+                    let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
+                    let __node_8 = {
+                        let __deferred = Children::new(
+                            move || {
+                                let mut __slots = Slots::new();
+                                let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
+                                let __text_9 = {
+                                    Text::declaring(
+                                        || "Light — weight:300".to_string(),
+                                        LayoutStyle::new(),
+                                        move |__inherited: TextStyle| __inherited.with_font_size(16.0).with_color(use_theme::<core::theme::SandboxTheme>().ink()).with_font_weight(300),
+                                    )?
+                                };
+                                __children.push(box_item(__text_9));
+                                let __text_10 = {
+                                    Text::declaring(
+                                        || "Semibold — weight:600".to_string(),
+                                        LayoutStyle::new(),
+                                        move |__inherited: TextStyle| __inherited.with_font_size(16.0).with_color(use_theme::<core::theme::SandboxTheme>().ink()).with_font_weight(600),
+                                    )?
+                                };
+                                __children.push(box_item(__text_10));
+                                let __text_11 = {
+                                    Text::declaring(
+                                        || "Bold — weight:bold".to_string(),
+                                        LayoutStyle::new(),
+                                        move |__inherited: TextStyle| __inherited.with_font_size(16.0).with_color(use_theme::<core::theme::SandboxTheme>().ink()).with_font_weight(700),
+                                    )?
+                                };
+                                __children.push(box_item(__text_11));
+                                let __text_12 = {
+                                    Text::declaring(
+                                        || "Italic emphasis".to_string(),
+                                        LayoutStyle::new(),
+                                        move |__inherited: TextStyle| __inherited.with_font_size(16.0).with_color(use_theme::<core::theme::SandboxTheme>().ink()).with_font_style(FontStyle::Italic),
+                                    )?
+                                };
+                                __children.push(box_item(__text_12));
+                                let __text_13 = {
+                                    Text::declaring(
+                                        || "Bold italic".to_string(),
+                                        LayoutStyle::new(),
+                                        move |__inherited: TextStyle| __inherited.with_font_size(16.0).with_color(use_theme::<core::theme::SandboxTheme>().ink()).with_font_weight(700).with_font_style(FontStyle::Italic),
+                                    )?
+                                };
+                                __children.push(box_item(__text_13));
+                                let __text_14 = {
+                                    Text::declaring(
+                                        || "Centered in its box".to_string(),
+                                        LayoutStyle::new(),
+                                        move |__inherited: TextStyle| __inherited.with_font_size(14.0).with_color(use_theme::<core::theme::SandboxTheme>().muted()).with_text_align(TextAlign::Center),
+                                    )?
+                                };
+                                __children.push(box_item(__text_14));
+                                let __text_15 = {
+                                    Text::declaring(
+                                        || "Aligned to the end".to_string(),
+                                        LayoutStyle::new(),
+                                        move |__inherited: TextStyle| __inherited.with_font_size(14.0).with_color(use_theme::<core::theme::SandboxTheme>().muted()).with_text_align(TextAlign::End),
+                                    )?
+                                };
+                                __children.push(box_item(__text_15));
+                                __slots.extend_default(__children);
+                                Ok(__slots)
+                            }
+                        );
+                        card(CardProps::props().gap(6.0).build(), __deferred)?
+                    };
+                    __children.push(box_item(__node_8));
+                    let __node_9 = code_line(CodeLineProps::props().code("text 'Bold' font_weight:bold   ·   'Note' font_style:italic   ·   '…' text_align:center").build(), Children::default())?;
+                    __children.push(box_item(__node_9));
+                    __slots.extend_default(__children);
+                    Ok(__slots)
+                }
+            );
+            example(ExampleProps::props().title("Weight, italic & alignment").build(), __deferred)?
+        };
+        let __node_10 = {
+            let __deferred = Children::new(
+                move || {
+                    let mut __slots = Slots::new();
+                    let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
+                    let __node_11 = {
+                        let __deferred = Children::new(
+                            move || {
+                                let mut __slots = Slots::new();
+                                let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
+                                let __text_16 = {
+                                    Text::declaring(
+                                        || "This paragraph is clamped to two lines with lines:2, so however long the copy gets the box never grows past two lines and the overflow is simply dropped.".to_string(),
+                                        LayoutStyle::new(),
+                                        move |__inherited: TextStyle| __inherited.with_font_size(14.0).with_color(use_theme::<core::theme::SandboxTheme>().muted()).with_clamp(2, false),
+                                    )?
+                                };
+                                __children.push(box_item(__text_16));
+                                let __text_17 = {
+                                    Text::declaring(
+                                        || "With ellipsis the truncated tail is replaced by a … so it reads as intentionally cut rather than abruptly clipped at the boundary.".to_string(),
+                                        LayoutStyle::new(),
+                                        move |__inherited: TextStyle| __inherited.with_font_size(14.0).with_color(use_theme::<core::theme::SandboxTheme>().ink()).with_clamp(2, true),
+                                    )?
+                                };
+                                __children.push(box_item(__text_17));
+                                let __text_18 = {
+                                    Text::declaring(
+                                        || "A single-line label that ellipsizes when it runs out of room in its box.".to_string(),
+                                        LayoutStyle::new().max_width(300.0),
+                                        move |__inherited: TextStyle| __inherited.with_font_size(14.0).with_color(use_theme::<core::theme::SandboxTheme>().primary()).with_clamp(1, true),
+                                    )?
+                                };
+                                __children.push(box_item(__text_18));
+                                __slots.extend_default(__children);
+                                Ok(__slots)
+                            }
+                        );
+                        card(CardProps::props().gap(8.0).build(), __deferred)?
+                    };
+                    __children.push(box_item(__node_11));
+                    let __node_12 = code_line(CodeLineProps::props().code("text '…' lines:2 ellipsis   ·   'label' lines:1 ellipsis").build(), Children::default())?;
+                    __children.push(box_item(__node_12));
+                    __slots.extend_default(__children);
+                    Ok(__slots)
+                }
+            );
+            example(ExampleProps::props().title("Line clamp & ellipsis").build(), __deferred)?
+        };
+        let __node_13 = {
+            let __deferred = Children::new(
+                move || {
+                    let mut __slots = Slots::new();
+                    let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
+                    let __node_14 = {
+                        let __deferred = Children::new(
+                            move || {
+                                let mut __slots = Slots::new();
+                                let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
+                                let __text_19 = {
+                                    Text::declaring(
+                                        || "Text nodes wrap to the width they are given and report the exact height the wrapped lines need, so the sibling below them is never overlapped — resize the window and watch this paragraph reflow while the box grows to fit it.".to_string(),
+                                        LayoutStyle::new().max_width(520.0),
+                                        move |__inherited: TextStyle| __inherited.with_font_size(14.0).with_color(use_theme::<core::theme::SandboxTheme>().muted()),
+                                    )?
+                                };
+                                __children.push(box_item(__text_19));
+                                __slots.extend_default(__children);
+                                Ok(__slots)
+                            }
+                        );
+                        card(CardProps::props().build(), __deferred)?
+                    };
+                    __children.push(box_item(__node_14));
+                    let __node_15 = code_line(CodeLineProps::props().code("text '…long copy…' color:theme.muted max_width:520").build(), Children::default())?;
+                    __children.push(box_item(__node_15));
+                    __slots.extend_default(__children);
+                    Ok(__slots)
+                }
+            );
+            example(ExampleProps::props().title("Wrapping — a paragraph measures its own height at any width").build(), __deferred)?
+        };
+        let __node_16 = {
+            let __deferred = Children::new(
+                move || {
+                    let mut __slots = Slots::new();
+                    let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
+                    let __node_17 = {
+                        let __deferred = Children::new(
+                            move || {
+                                let mut __slots = Slots::new();
+                                let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
+                                let __text_20 = {
+                                    Text::declaring(
+                                        || "Braces splice a signal or expression straight into the string.".to_string(),
+                                        LayoutStyle::new(),
+                                        move |__inherited: TextStyle| __inherited.with_font_size(13.0).with_color(use_theme::<core::theme::SandboxTheme>().muted()),
+                                    )?
+                                };
+                                __children.push(box_item(__text_20));
+                                __slots.extend_default(__children);
+                                Ok(__slots)
+                            }
+                        );
+                        card(CardProps::props().build(), __deferred)?
+                    };
+                    __children.push(box_item(__node_17));
+                    let __node_18 = code_line(CodeLineProps::props().code("text 'Count: {$count}'      text '{props.title}'").build(), Children::default())?;
+                    __children.push(box_item(__node_18));
+                    __slots.extend_default(__children);
+                    Ok(__slots)
+                }
+            );
+            example(ExampleProps::props().title("Interpolation — embed values with { } (see the Reactivity section)").build(), __deferred)?
+        };
+        let __node_19 = {
+            let __deferred = Children::new(
+                move || {
+                    let mut __slots = Slots::new();
+                    let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
+                    let __node_20 = {
+                        let __deferred = Children::new(
+                            move || {
+                                let mut __slots = Slots::new();
+                                let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
+                                let __node_21 = heading(HeadingProps::props().text("A heading is a real title").build(), Children::default())?;
+                                __children.push(box_item(__node_21));
+                                let __node_22 = {
+                                    let __deferred = Children::new(
+                                        move || {
+                                            let mut __slots = Slots::new();
+                                            let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
+                                            let __text_21 = {
+                                                Text::declaring(
+                                                    || "The heading sits above these children in a small-gap column.".to_string(),
+                                                    LayoutStyle::new(),
+                                                    move |__inherited: TextStyle| __inherited.with_font_size(13.0).with_color(use_theme::<core::theme::SandboxTheme>().muted()),
+                                                )?
+                                            };
+                                            __children.push(box_item(__text_21));
+                                            let __text_22 = {
+                                                Text::declaring(
+                                                    || "Use it to group a labelled block without hand-building the column.".to_string(),
+                                                    LayoutStyle::new(),
+                                                    move |__inherited: TextStyle| __inherited.with_font_size(13.0).with_color(use_theme::<core::theme::SandboxTheme>().muted()),
+                                                )?
+                                            };
+                                            __children.push(box_item(__text_22));
+                                            __slots.extend_default(__children);
+                                            Ok(__slots)
+                                        }
+                                    );
+                                    section(SectionProps::props().title("A section wraps a heading above its own content").build(), __deferred)?
+                                };
+                                __children.push(box_item(__node_22));
+                                __slots.extend_default(__children);
+                                Ok(__slots)
+                            }
+                        );
+                        card(CardProps::props().gap(12.0).build(), __deferred)?
+                    };
+                    __children.push(box_item(__node_20));
+                    let __node_23 = code_line(CodeLineProps::props().code("heading 'Title'      section 'Title' > …children…").build(), Children::default())?;
+                    __children.push(box_item(__node_23));
+                    __slots.extend_default(__children);
+                    Ok(__slots)
+                }
+            );
+            example(ExampleProps::props().title("heading and section — an accent title, alone or above its content").build(), __deferred)?
         };
         let __node_24 = {
-            let mut __slots = Slots::new();
-            let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-            let __col_1 = {
-                let __node_25 = prop_row(PropRowProps::props().name("font_size").values("number").about("Font size in px (default 14).").build())?;
-                let __node_26 = prop_row(PropRowProps::props().name("color").values("token · #hex · $signal").about("Text color (default ink via a token).").build())?;
-                let __node_27 = prop_row(PropRowProps::props().name("font_weight").values("thin…black · 100–900").about("Font weight, keyword or number (default 400).").build())?;
-                let __node_28 = prop_row(PropRowProps::props().name("font_style").values("normal·italic·oblique").about("Slant the text.").build())?;
-                let __node_29 = prop_row(PropRowProps::props().name("text_align").values("left·center·right·justify").about("Horizontal alignment within the box.").build())?;
-                let __node_30 = prop_row(PropRowProps::props().name("lines").values("number").about("Clamp to at most N lines (extra dropped).").build())?;
-                let __node_31 = prop_row(PropRowProps::props().name("ellipsis").values("flag").about("Replace the clamped tail with a … .").build())?;
-                let __node_32 = prop_row(PropRowProps::props().name("max_width").values("number").about("Wrap boundary for long copy.").build())?;
-                let __node_33 = prop_row(PropRowProps::props().name("height").values("number").about("Pin the box instead of auto-measuring.").build())?;
-                Container::new(LayoutStyle::new().flex_column().gap(6.0), children![__node_25, __node_26, __node_27, __node_28, __node_29, __node_30, __node_31, __node_32, __node_33])?
-            };
-            __children.push(box_item(__col_1));
-            __slots.extend_default(__children);
-            example(ExampleProps::props().title("Attributes").build(), __slots)?
+            let __deferred = Children::new(
+                move || {
+                    let mut __slots = Slots::new();
+                    let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
+                    let __col_1 = {
+                        let __node_25 = prop_row(PropRowProps::props().name("font_size").values("number").about("Font size in px (default 14).").build(), Children::default())?;
+                        let __node_26 = prop_row(PropRowProps::props().name("color").values("token · #hex · $signal").about("Text color (default ink via a token).").build(), Children::default())?;
+                        let __node_27 = prop_row(PropRowProps::props().name("font_weight").values("thin…black · 100–900").about("Font weight, keyword or number (default 400).").build(), Children::default())?;
+                        let __node_28 = prop_row(PropRowProps::props().name("font_style").values("normal·italic·oblique").about("Slant the text.").build(), Children::default())?;
+                        let __node_29 = prop_row(PropRowProps::props().name("text_align").values("left·center·right·justify").about("Horizontal alignment within the box.").build(), Children::default())?;
+                        let __node_30 = prop_row(PropRowProps::props().name("lines").values("number").about("Clamp to at most N lines (extra dropped).").build(), Children::default())?;
+                        let __node_31 = prop_row(PropRowProps::props().name("ellipsis").values("flag").about("Replace the clamped tail with a … .").build(), Children::default())?;
+                        let __node_32 = prop_row(PropRowProps::props().name("max_width").values("number").about("Wrap boundary for long copy.").build(), Children::default())?;
+                        let __node_33 = prop_row(PropRowProps::props().name("height").values("number").about("Pin the box instead of auto-measuring.").build(), Children::default())?;
+                        Container::new(LayoutStyle::new().flex_column().gap(6.0), children![__node_25, __node_26, __node_27, __node_28, __node_29, __node_30, __node_31, __node_32, __node_33])?
+                    };
+                    __children.push(box_item(__col_1));
+                    __slots.extend_default(__children);
+                    Ok(__slots)
+                }
+            );
+            example(ExampleProps::props().title("Attributes").build(), __deferred)?
         };
         Container::new(LayoutStyle::new().flex_column().gap(20.0), children![__node_0, __node_1, __node_4, __node_7, __node_10, __node_13, __node_16, __node_19, __node_24])?
     };

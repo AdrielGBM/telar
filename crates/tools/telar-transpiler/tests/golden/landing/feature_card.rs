@@ -14,7 +14,7 @@ pub struct FeatureCardProps {
 }
 
 #[allow(dead_code, unused_variables, unused_mut)]
-pub fn feature_card(props: FeatureCardProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
+pub fn feature_card(props: FeatureCardProps, children: Children) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let __owner = telar::owner_scope();
     #[allow(unused_imports)] use telar::use_theme;
     let __sbox_0 = {
@@ -47,14 +47,14 @@ pub fn feature_card(props: FeatureCardProps) -> Result<Box<dyn LayoutItem>, Layo
 #[allow(dead_code, unused_variables, unused_mut)]
 pub fn feature_card_preview_0() -> Result<Box<dyn LayoutItem>, LayoutError> {
     #[allow(unused_imports)] use telar::use_theme;
-    let __node_0 = feature_card(FeatureCardProps::props().icon("⚡").title("Fast").body("Software and wgpu renderers with dirty-tracking and scroll-blit detection.").build())?;
+    let __node_0 = feature_card(FeatureCardProps::props().icon("⚡").title("Fast").body("Software and wgpu renderers with dirty-tracking and scroll-blit detection.").build(), Children::default())?;
     Ok(Box::new(__node_0))
 }
 
 #[allow(dead_code, unused_variables, unused_mut)]
 pub fn feature_card_preview_1() -> Result<Box<dyn LayoutItem>, LayoutError> {
     #[allow(unused_imports)] use telar::use_theme;
-    let __node_0 = feature_card(FeatureCardProps::props().icon("📱").title("Cross-platform").body("One codebase targets desktop and Android with native event loops, plus a longer body to test how the card wraps multi-line text.").build())?;
+    let __node_0 = feature_card(FeatureCardProps::props().icon("📱").title("Cross-platform").body("One codebase targets desktop and Android with native event loops, plus a longer body to test how the card wraps multi-line text.").build(), Children::default())?;
     Ok(Box::new(__node_0))
 }
 

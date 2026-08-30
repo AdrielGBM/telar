@@ -3,7 +3,7 @@ use layout_core::{LayoutError, LayoutStyle};
 use reactive_core::{Reactive, RwSignal, signal};
 use renderer_core::{Border, BorderRadius, Color, RectStyle, ShapeStyle};
 use telar_macros::Props;
-use ui_core::{Input, LayoutItem, StyledContainer, box_item, style_follows};
+use ui_core::{Children, Input, LayoutItem, StyledContainer, box_item, style_follows};
 
 fn box_radius() -> f32 {
     shared::radius() * 2.0
@@ -61,7 +61,10 @@ pub struct TextFieldProps {
 /// muted hint via the `Input`'s own `placeholder` while the value is empty — the field stays a live,
 /// always-mounted `Input`, so it is tappable/typable from a cold start (no swapped-in `Text` that would
 /// refuse focus).
-pub fn text_field(props: TextFieldProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
+pub fn text_field(
+    props: TextFieldProps,
+    _children: Children,
+) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let TextFieldProps {
         value,
         placeholder,
@@ -126,7 +129,7 @@ mod tests {
     // wrapping column instead, offset above the box by the caption row).
     fn laid_out_field(props: TextFieldProps) -> (Box<dyn LayoutItem>, geometry_core::Rect) {
         crate::test_support::fresh_layout_runtime();
-        let field = text_field(props).unwrap();
+        let field = text_field(props, Children::default()).unwrap();
         let root = new_container(
             LayoutStyle::new().flex_column().width(400.0).height(200.0),
             &[field.layout_node()],
@@ -153,7 +156,11 @@ mod tests {
     fn a_field_takes_the_size_the_region_around_it_declared() {
         let value = signal("hi".to_string());
         crate::test_support::fresh_layout_runtime();
-        let field = text_field(TextFieldProps::props().value(value).build()).unwrap();
+        let field = text_field(
+            TextFieldProps::props().value(value).build(),
+            Children::default(),
+        )
+        .unwrap();
         let box_node = field.layout_node();
         let root = new_container(
             LayoutStyle::new().flex_column().width(400.0).height(200.0),

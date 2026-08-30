@@ -44,24 +44,12 @@ fn golden_dir() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/golden")
 }
 
-/// Transpiles one package exactly the way `app!` does: the same registry pre-pass, the same component name
-/// (the path-flattened stem), the same asset root. Anything else here would snapshot a fiction.
+/// Transpiles one package exactly the way `app!` does: the same component name (the path-flattened stem),
+/// the same asset root. There is no pre-pass to match any more — a file transpiles knowing only itself.
 fn transpile_project(project: &Project) -> Vec<(PathBuf, TranspiledSource)> {
     let manifest = workspace_root().join(project.manifest);
     let src_dir = manifest.join("src");
     let assets_root = telar_transpiler::assets_root(&manifest);
-    let components = telar_transpiler::build_component_registry(
-        &src_dir,
-        &telar_transpiler::component_paths(&manifest),
-        &[],
-    );
-    assert!(
-        components.collision.is_none(),
-        "{}: {}",
-        project.name,
-        components.collision.unwrap_or_default()
-    );
-
     let mut files = telar_transpiler::find_rsx_files(&src_dir);
     files.sort();
     assert!(
@@ -81,7 +69,6 @@ fn transpile_project(project: &Project) -> Vec<(PathBuf, TranspiledSource)> {
                 &stem,
                 Some(project.theme),
                 Some(assets_root.as_path()),
-                Some(&components.registry),
             )
             .unwrap_or_else(|e| panic!("{} failed to transpile: {e}", rsx.display()));
             let rel = telar_transpiler::relative_output_path(&rsx, &src_dir)

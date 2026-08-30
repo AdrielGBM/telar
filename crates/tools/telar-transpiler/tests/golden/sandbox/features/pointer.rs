@@ -3,8 +3,11 @@
 #[allow(unused_imports)] use telar::*;
 #[allow(unused_imports)] use super::*;
 
+#[derive(::telar::Props)]
+pub struct FeaturesPointerProps {}
+
 #[allow(dead_code, unused_variables, unused_mut)]
-pub fn features_pointer() -> Result<Box<dyn LayoutItem>, LayoutError> {
+pub fn features_pointer(props: FeaturesPointerProps, children: Children) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let __owner = telar::owner_scope();
     #[allow(unused_imports)] use telar::use_theme;
     // The marker is positioned from this, so neither box has to know the other's size — a sliding indicator.
@@ -23,282 +26,411 @@ pub fn features_pointer() -> Result<Box<dyn LayoutItem>, LayoutError> {
     let alt = signal("no alt-click yet".to_string());
 
     let __col_0 = {
-        let __node_0 = doc_header(DocHeaderProps::props().kicker("INTERACTION").title("Pointer & drag").desc("The pointer attributes a box can carry: which cursor it claims, which buttons start a drag, and the callbacks for moving, finishing, scrolling and alt-clicking. track_rect mirrors a laid-out rect back into a signal, which is how one box follows another.").build())?;
+        let __node_0 = doc_header(DocHeaderProps::props().kicker("INTERACTION").title("Pointer & drag").desc("The pointer attributes a box can carry: which cursor it claims, which buttons start a drag, and the callbacks for moving, finishing, scrolling and alt-clicking. track_rect mirrors a laid-out rect back into a signal, which is how one box follows another.").build(), Children::default())?;
         let __node_1 = {
-            let mut __slots = Slots::new();
-            let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-            let __node_2 = {
-                let mut __slots = Slots::new();
-                let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-                let __row_0 = {
-                    let __sbox_0 = {
-                        let __text_0 = {
-                            Text::declaring(
-                                || "pointer".to_string(),
-                                LayoutStyle::new(),
-                                move |__inherited: TextStyle| __inherited.with_font_size(12.0).with_color(use_theme::<core::theme::SandboxTheme>().ink()),
-                            )?
-                        };
-                        StyledContainer::new(LayoutStyle::new().flex_column().padding_horizontal(14.0).padding_vertical(10.0), move |_| RectStyle { fill: Some(Paint::Solid(use_theme::<core::theme::SandboxTheme>().surface_alt())), border: Some(Border { paint: Paint::Solid(use_theme::<core::theme::SandboxTheme>().border()), widths: [1.0; 4] }), shadow: None, radius: BorderRadius::all(8.0) }, children![__text_0])?.cursor(Cursor::Pointer)
+            let __deferred = Children::new(
+                move || {
+                    let mut __slots = Slots::new();
+                    let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
+                    let __node_2 = {
+                        let __deferred = Children::new(
+                            move || {
+                                let mut __slots = Slots::new();
+                                let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
+                                let __row_0 = {
+                                    let __sbox_0 = {
+                                        let __text_0 = {
+                                            Text::declaring(
+                                                || "pointer".to_string(),
+                                                LayoutStyle::new(),
+                                                move |__inherited: TextStyle| __inherited.with_font_size(12.0).with_color(use_theme::<core::theme::SandboxTheme>().ink()),
+                                            )?
+                                        };
+                                        StyledContainer::new(LayoutStyle::new().flex_column().padding_horizontal(14.0).padding_vertical(10.0), move |_| RectStyle { fill: Some(Paint::Solid(use_theme::<core::theme::SandboxTheme>().surface_alt())), border: Some(Border { paint: Paint::Solid(use_theme::<core::theme::SandboxTheme>().border()), widths: [1.0; 4] }), shadow: None, radius: BorderRadius::all(8.0) }, children![__text_0])?.cursor(Cursor::Pointer)
+                                    };
+                                    let __sbox_1 = {
+                                        let __text_1 = {
+                                            Text::declaring(
+                                                || "crosshair".to_string(),
+                                                LayoutStyle::new(),
+                                                move |__inherited: TextStyle| __inherited.with_font_size(12.0).with_color(use_theme::<core::theme::SandboxTheme>().ink()),
+                                            )?
+                                        };
+                                        StyledContainer::new(LayoutStyle::new().flex_column().padding_horizontal(14.0).padding_vertical(10.0), move |_| RectStyle { fill: Some(Paint::Solid(use_theme::<core::theme::SandboxTheme>().surface_alt())), border: Some(Border { paint: Paint::Solid(use_theme::<core::theme::SandboxTheme>().border()), widths: [1.0; 4] }), shadow: None, radius: BorderRadius::all(8.0) }, children![__text_1])?.cursor(Cursor::Crosshair)
+                                    };
+                                    let __sbox_2 = {
+                                        let __text_2 = {
+                                            Text::declaring(
+                                                || "grab".to_string(),
+                                                LayoutStyle::new(),
+                                                move |__inherited: TextStyle| __inherited.with_font_size(12.0).with_color(use_theme::<core::theme::SandboxTheme>().ink()),
+                                            )?
+                                        };
+                                        StyledContainer::new(LayoutStyle::new().flex_column().padding_horizontal(14.0).padding_vertical(10.0), move |_| RectStyle { fill: Some(Paint::Solid(use_theme::<core::theme::SandboxTheme>().surface_alt())), border: Some(Border { paint: Paint::Solid(use_theme::<core::theme::SandboxTheme>().border()), widths: [1.0; 4] }), shadow: None, radius: BorderRadius::all(8.0) }, children![__text_2])?.cursor(Cursor::Grab)
+                                    };
+                                    let __sbox_3 = {
+                                        let __text_3 = {
+                                            Text::declaring(
+                                                || "col_resize".to_string(),
+                                                LayoutStyle::new(),
+                                                move |__inherited: TextStyle| __inherited.with_font_size(12.0).with_color(use_theme::<core::theme::SandboxTheme>().ink()),
+                                            )?
+                                        };
+                                        StyledContainer::new(LayoutStyle::new().flex_column().padding_horizontal(14.0).padding_vertical(10.0), move |_| RectStyle { fill: Some(Paint::Solid(use_theme::<core::theme::SandboxTheme>().surface_alt())), border: Some(Border { paint: Paint::Solid(use_theme::<core::theme::SandboxTheme>().border()), widths: [1.0; 4] }), shadow: None, radius: BorderRadius::all(8.0) }, children![__text_3])?.cursor(Cursor::ColResize)
+                                    };
+                                    let __sbox_4 = {
+                                        let __text_4 = {
+                                            Text::declaring(
+                                                || "not_allowed".to_string(),
+                                                LayoutStyle::new(),
+                                                move |__inherited: TextStyle| __inherited.with_font_size(12.0).with_color(use_theme::<core::theme::SandboxTheme>().ink()),
+                                            )?
+                                        };
+                                        StyledContainer::new(LayoutStyle::new().flex_column().padding_horizontal(14.0).padding_vertical(10.0), move |_| RectStyle { fill: Some(Paint::Solid(use_theme::<core::theme::SandboxTheme>().surface_alt())), border: Some(Border { paint: Paint::Solid(use_theme::<core::theme::SandboxTheme>().border()), widths: [1.0; 4] }), shadow: None, radius: BorderRadius::all(8.0) }, children![__text_4])?.cursor(Cursor::NotAllowed)
+                                    };
+                                    Container::new(LayoutStyle::new().flex_row().gap(10.0).flex_wrap(), children![__sbox_0, __sbox_1, __sbox_2, __sbox_3, __sbox_4])?
+                                };
+                                __children.push(box_item(__row_0));
+                                __slots.extend_default(__children);
+                                Ok(__slots)
+                            }
+                        );
+                        card(CardProps::props().gap(12.0).build(), __deferred)?
                     };
-                    let __sbox_1 = {
-                        let __text_1 = {
-                            Text::declaring(
-                                || "crosshair".to_string(),
-                                LayoutStyle::new(),
-                                move |__inherited: TextStyle| __inherited.with_font_size(12.0).with_color(use_theme::<core::theme::SandboxTheme>().ink()),
-                            )?
-                        };
-                        StyledContainer::new(LayoutStyle::new().flex_column().padding_horizontal(14.0).padding_vertical(10.0), move |_| RectStyle { fill: Some(Paint::Solid(use_theme::<core::theme::SandboxTheme>().surface_alt())), border: Some(Border { paint: Paint::Solid(use_theme::<core::theme::SandboxTheme>().border()), widths: [1.0; 4] }), shadow: None, radius: BorderRadius::all(8.0) }, children![__text_1])?.cursor(Cursor::Crosshair)
-                    };
-                    let __sbox_2 = {
-                        let __text_2 = {
-                            Text::declaring(
-                                || "grab".to_string(),
-                                LayoutStyle::new(),
-                                move |__inherited: TextStyle| __inherited.with_font_size(12.0).with_color(use_theme::<core::theme::SandboxTheme>().ink()),
-                            )?
-                        };
-                        StyledContainer::new(LayoutStyle::new().flex_column().padding_horizontal(14.0).padding_vertical(10.0), move |_| RectStyle { fill: Some(Paint::Solid(use_theme::<core::theme::SandboxTheme>().surface_alt())), border: Some(Border { paint: Paint::Solid(use_theme::<core::theme::SandboxTheme>().border()), widths: [1.0; 4] }), shadow: None, radius: BorderRadius::all(8.0) }, children![__text_2])?.cursor(Cursor::Grab)
-                    };
-                    let __sbox_3 = {
-                        let __text_3 = {
-                            Text::declaring(
-                                || "col_resize".to_string(),
-                                LayoutStyle::new(),
-                                move |__inherited: TextStyle| __inherited.with_font_size(12.0).with_color(use_theme::<core::theme::SandboxTheme>().ink()),
-                            )?
-                        };
-                        StyledContainer::new(LayoutStyle::new().flex_column().padding_horizontal(14.0).padding_vertical(10.0), move |_| RectStyle { fill: Some(Paint::Solid(use_theme::<core::theme::SandboxTheme>().surface_alt())), border: Some(Border { paint: Paint::Solid(use_theme::<core::theme::SandboxTheme>().border()), widths: [1.0; 4] }), shadow: None, radius: BorderRadius::all(8.0) }, children![__text_3])?.cursor(Cursor::ColResize)
-                    };
-                    let __sbox_4 = {
-                        let __text_4 = {
-                            Text::declaring(
-                                || "not_allowed".to_string(),
-                                LayoutStyle::new(),
-                                move |__inherited: TextStyle| __inherited.with_font_size(12.0).with_color(use_theme::<core::theme::SandboxTheme>().ink()),
-                            )?
-                        };
-                        StyledContainer::new(LayoutStyle::new().flex_column().padding_horizontal(14.0).padding_vertical(10.0), move |_| RectStyle { fill: Some(Paint::Solid(use_theme::<core::theme::SandboxTheme>().surface_alt())), border: Some(Border { paint: Paint::Solid(use_theme::<core::theme::SandboxTheme>().border()), widths: [1.0; 4] }), shadow: None, radius: BorderRadius::all(8.0) }, children![__text_4])?.cursor(Cursor::NotAllowed)
-                    };
-                    Container::new(LayoutStyle::new().flex_row().gap(10.0).flex_wrap(), children![__sbox_0, __sbox_1, __sbox_2, __sbox_3, __sbox_4])?
-                };
-                __children.push(box_item(__row_0));
-                __slots.extend_default(__children);
-                card(CardProps::props().gap(12.0).build(), __slots)?
-            };
-            __children.push(box_item(__node_2));
-            let __node_3 = code_line(CodeLineProps::props().code("box cursor:pointer   ·   crosshair · grab · grabbing · col_resize · row_resize · text · wait · not_allowed").build())?;
-            __children.push(box_item(__node_3));
-            __slots.extend_default(__children);
-            example(ExampleProps::props().title("cursor — what the pointer becomes over this box").build(), __slots)?
+                    __children.push(box_item(__node_2));
+                    let __node_3 = code_line(CodeLineProps::props().code("box cursor:pointer   ·   crosshair · grab · grabbing · col_resize · row_resize · text · wait · not_allowed").build(), Children::default())?;
+                    __children.push(box_item(__node_3));
+                    __slots.extend_default(__children);
+                    Ok(__slots)
+                }
+            );
+            example(ExampleProps::props().title("cursor — what the pointer becomes over this box").build(), __deferred)?
         };
         let __node_4 = {
-            let mut __slots = Slots::new();
-            let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-            let __node_5 = {
-                let mut __slots = Slots::new();
-                let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-                let __col_1 = {
-                    let __row_1 = {
-                        let __sbox_5 = {
-                            let __text_5 = {
-                                Text::declaring(
-                                    || "Overview".to_string(),
-                                    LayoutStyle::new(),
-                                    move |__inherited: TextStyle| __inherited.with_font_size(12.0).with_color(use_theme::<core::theme::SandboxTheme>().ink()),
-                                )?
-                            };
-                            let __tracked = StyledContainer::new(LayoutStyle::new().flex_column().padding_horizontal(16.0).padding_vertical(8.0), move |_| RectStyle::default().with_fill(use_theme::<core::theme::SandboxTheme>().surface_alt()).with_radius(BorderRadius::all(8.0)), children![__text_5])?.on_press({ let tab = tab.clone(); move || tab.set(0) }).cursor(Cursor::Pointer);
-                            let __rect = track_layout(__tracked.layout_node()).expect("a container registers its rect");
-                            let handle = handle.clone();
-                            effect(move || handle.set(__rect.get()));
-                            __tracked
-                        };
-                        let __sbox_6 = {
-                            let __text_6 = {
-                                Text::declaring(
-                                    || "Details".to_string(),
-                                    LayoutStyle::new(),
-                                    move |__inherited: TextStyle| __inherited.with_font_size(12.0).with_color(use_theme::<core::theme::SandboxTheme>().ink()),
-                                )?
-                            };
-                            StyledContainer::new(LayoutStyle::new().flex_column().padding_horizontal(16.0).padding_vertical(8.0), move |_| RectStyle::default().with_fill(use_theme::<core::theme::SandboxTheme>().surface_alt()).with_radius(BorderRadius::all(8.0)), children![__text_6])?.on_press({ let tab = tab.clone(); move || tab.set(1) }).cursor(Cursor::Pointer)
-                        };
-                        Container::new(LayoutStyle::new().flex_row().gap(8.0), children![__sbox_5, __sbox_6])?
+            let __deferred = Children::new(
+                {
+                    let handle = handle.clone();
+                    let tab = tab.clone();
+                    let marker_x = marker_x.clone();
+                    let marker_w = marker_w.clone();
+                move || {
+                    let handle = handle.clone();
+                    let tab = tab.clone();
+                    let marker_x = marker_x.clone();
+                    let marker_w = marker_w.clone();
+                    let mut __slots = Slots::new();
+                    let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
+                    let __node_5 = {
+                        let __deferred = Children::new(
+                            {
+                                let handle = handle.clone();
+                                let tab = tab.clone();
+                                let marker_x = marker_x.clone();
+                                let marker_w = marker_w.clone();
+                            move || {
+                                let handle = handle.clone();
+                                let tab = tab.clone();
+                                let marker_x = marker_x.clone();
+                                let marker_w = marker_w.clone();
+                                let mut __slots = Slots::new();
+                                let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
+                                let __col_1 = {
+                                    let __row_1 = {
+                                        let __sbox_5 = {
+                                            let __text_5 = {
+                                                Text::declaring(
+                                                    || "Overview".to_string(),
+                                                    LayoutStyle::new(),
+                                                    move |__inherited: TextStyle| __inherited.with_font_size(12.0).with_color(use_theme::<core::theme::SandboxTheme>().ink()),
+                                                )?
+                                            };
+                                            let __tracked = StyledContainer::new(LayoutStyle::new().flex_column().padding_horizontal(16.0).padding_vertical(8.0), move |_| RectStyle::default().with_fill(use_theme::<core::theme::SandboxTheme>().surface_alt()).with_radius(BorderRadius::all(8.0)), children![__text_5])?.on_press({ let tab = tab.clone(); move || tab.set(0) }).cursor(Cursor::Pointer);
+                                            let __rect = track_layout(__tracked.layout_node()).expect("a container registers its rect");
+                                            let handle = handle.clone();
+                                            effect(move || handle.set(__rect.get()));
+                                            __tracked
+                                        };
+                                        let __sbox_6 = {
+                                            let __text_6 = {
+                                                Text::declaring(
+                                                    || "Details".to_string(),
+                                                    LayoutStyle::new(),
+                                                    move |__inherited: TextStyle| __inherited.with_font_size(12.0).with_color(use_theme::<core::theme::SandboxTheme>().ink()),
+                                                )?
+                                            };
+                                            StyledContainer::new(LayoutStyle::new().flex_column().padding_horizontal(16.0).padding_vertical(8.0), move |_| RectStyle::default().with_fill(use_theme::<core::theme::SandboxTheme>().surface_alt()).with_radius(BorderRadius::all(8.0)), children![__text_6])?.on_press({ let tab = tab.clone(); move || tab.set(1) }).cursor(Cursor::Pointer)
+                                        };
+                                        Container::new(LayoutStyle::new().flex_row().gap(8.0), children![__sbox_5, __sbox_6])?
+                                    };
+                                    let __sbox_7 = {
+                                        let __sbox_8 = {
+                                            StyledContainer::new(LayoutStyle::new().flex_column().height(3.0).absolute().inset_start(marker_x.get()).width(marker_w.get()), move |_| RectStyle::default().with_fill(use_theme::<core::theme::SandboxTheme>().primary()).with_radius(BorderRadius::all(2.0)), children![])?.styled_by({ let marker_x = marker_x.clone(); let marker_w = marker_w.clone(); move || LayoutStyle::new().flex_column().height(3.0).absolute().inset_start(marker_x.get()).width(marker_w.get()) })
+                                        };
+                                        StyledContainer::new(LayoutStyle::new().flex_column().height(3.0).width(SizeDimension::Percent(1.0)), move |_| RectStyle::default(), children![__sbox_8])?
+                                    };
+                                    Container::new(LayoutStyle::new().flex_column().gap(8.0).width(SizeDimension::Percent(1.0)), children![__row_1, __sbox_7])?
+                                };
+                                __children.push(box_item(__col_1));
+                                let __text_7 = {
+                                    Text::declaring(
+                                        || "The underline is sized and placed from the first tab's own rect — no measurement in [logic].".to_string(),
+                                        LayoutStyle::new(),
+                                        move |__inherited: TextStyle| __inherited.with_font_size(12.0).with_color(use_theme::<core::theme::SandboxTheme>().muted()),
+                                    )?
+                                };
+                                __children.push(box_item(__text_7));
+                                __slots.extend_default(__children);
+                                Ok(__slots)
+                            }
+                            }
+                        );
+                        card(CardProps::props().gap(12.0).build(), __deferred)?
                     };
-                    let __sbox_7 = {
-                        let __sbox_8 = {
-                            StyledContainer::new(LayoutStyle::new().flex_column().height(3.0).absolute().inset_start(marker_x.get()).width(marker_w.get()), move |_| RectStyle::default().with_fill(use_theme::<core::theme::SandboxTheme>().primary()).with_radius(BorderRadius::all(2.0)), children![])?.styled_by({ let marker_x = marker_x.clone(); let marker_w = marker_w.clone(); move || LayoutStyle::new().flex_column().height(3.0).absolute().inset_start(marker_x.get()).width(marker_w.get()) })
-                        };
-                        StyledContainer::new(LayoutStyle::new().flex_column().height(3.0).width(SizeDimension::Percent(1.0)), move |_| RectStyle::default(), children![__sbox_8])?
-                    };
-                    Container::new(LayoutStyle::new().flex_column().gap(8.0).width(SizeDimension::Percent(1.0)), children![__row_1, __sbox_7])?
-                };
-                __children.push(box_item(__col_1));
-                let __text_7 = {
-                    Text::declaring(
-                        || "The underline is sized and placed from the first tab's own rect — no measurement in [logic].".to_string(),
-                        LayoutStyle::new(),
-                        move |__inherited: TextStyle| __inherited.with_font_size(12.0).with_color(use_theme::<core::theme::SandboxTheme>().muted()),
-                    )?
-                };
-                __children.push(box_item(__text_7));
-                __slots.extend_default(__children);
-                card(CardProps::props().gap(12.0).build(), __slots)?
-            };
-            __children.push(box_item(__node_5));
-            let __node_6 = code_line(CodeLineProps::props().code("box track_rect:$handle …      then      box absolute inset_start:$x width:$w").build())?;
-            __children.push(box_item(__node_6));
-            __slots.extend_default(__children);
-            example(ExampleProps::props().title("track_rect — mirror a laid-out rect into a signal, and position a sibling from it").build(), __slots)?
+                    __children.push(box_item(__node_5));
+                    let __node_6 = code_line(CodeLineProps::props().code("box track_rect:$handle …      then      box absolute inset_start:$x width:$w").build(), Children::default())?;
+                    __children.push(box_item(__node_6));
+                    __slots.extend_default(__children);
+                    Ok(__slots)
+                }
+                }
+            );
+            example(ExampleProps::props().title("track_rect — mirror a laid-out rect into a signal, and position a sibling from it").build(), __deferred)?
         };
         let __node_7 = {
-            let mut __slots = Slots::new();
-            let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-            let __node_8 = {
-                let mut __slots = Slots::new();
-                let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-                let __sbox_9 = {
-                    StyledContainer::new(LayoutStyle::new().flex_column().height(96.0).width(SizeDimension::Percent(1.0)), move |_| RectStyle { fill: Some(Paint::Solid(use_theme::<core::theme::SandboxTheme>().surface_alt())), border: Some(Border { paint: Paint::Solid(use_theme::<core::theme::SandboxTheme>().border()), widths: [1.0; 4] }), shadow: None, radius: BorderRadius::all(10.0) }, children![])?.on_pointer_move({ let at_x = at_x.clone(); let at_y = at_y.clone(); move |x, y| { at_x.set(x); at_y.set(y) } }).cursor(Cursor::Crosshair)
-                };
-                __children.push(box_item(__sbox_9));
-                let __text_8 = {
+            let __deferred = Children::new(
+                {
                     let at_x = at_x.clone();
                     let at_y = at_y.clone();
-                    Text::declaring(
-                        move || format!("x {} · y {}", { at_x.get().round() }, { at_y.get().round() }),
-                        LayoutStyle::new(),
-                        move |__inherited: TextStyle| __inherited.with_font_size(13.0).with_color(use_theme::<core::theme::SandboxTheme>().primary()),
-                    )?
-                };
-                __children.push(box_item(__text_8));
-                __slots.extend_default(__children);
-                card(CardProps::props().gap(10.0).build(), __slots)?
-            };
-            __children.push(box_item(__node_8));
-            let __node_9 = code_line(CodeLineProps::props().code("box on_pointer_move:|x, y| { $at_x.set(x); $at_y.set(y) }").build())?;
-            __children.push(box_item(__node_9));
-            __slots.extend_default(__children);
-            example(ExampleProps::props().title("on_pointer_move — every move over the box, in its own coordinates").build(), __slots)?
+                move || {
+                    let at_x = at_x.clone();
+                    let at_y = at_y.clone();
+                    let mut __slots = Slots::new();
+                    let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
+                    let __node_8 = {
+                        let __deferred = Children::new(
+                            {
+                                let at_x = at_x.clone();
+                                let at_y = at_y.clone();
+                            move || {
+                                let at_x = at_x.clone();
+                                let at_y = at_y.clone();
+                                let mut __slots = Slots::new();
+                                let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
+                                let __sbox_9 = {
+                                    StyledContainer::new(LayoutStyle::new().flex_column().height(96.0).width(SizeDimension::Percent(1.0)), move |_| RectStyle { fill: Some(Paint::Solid(use_theme::<core::theme::SandboxTheme>().surface_alt())), border: Some(Border { paint: Paint::Solid(use_theme::<core::theme::SandboxTheme>().border()), widths: [1.0; 4] }), shadow: None, radius: BorderRadius::all(10.0) }, children![])?.on_pointer_move({ let at_x = at_x.clone(); let at_y = at_y.clone(); move |x, y| { at_x.set(x); at_y.set(y) } }).cursor(Cursor::Crosshair)
+                                };
+                                __children.push(box_item(__sbox_9));
+                                let __text_8 = {
+                                    let at_x = at_x.clone();
+                                    let at_y = at_y.clone();
+                                    Text::declaring(
+                                        move || format!("x {} · y {}", { at_x.get().round() }, { at_y.get().round() }),
+                                        LayoutStyle::new(),
+                                        move |__inherited: TextStyle| __inherited.with_font_size(13.0).with_color(use_theme::<core::theme::SandboxTheme>().primary()),
+                                    )?
+                                };
+                                __children.push(box_item(__text_8));
+                                __slots.extend_default(__children);
+                                Ok(__slots)
+                            }
+                            }
+                        );
+                        card(CardProps::props().gap(10.0).build(), __deferred)?
+                    };
+                    __children.push(box_item(__node_8));
+                    let __node_9 = code_line(CodeLineProps::props().code("box on_pointer_move:|x, y| { $at_x.set(x); $at_y.set(y) }").build(), Children::default())?;
+                    __children.push(box_item(__node_9));
+                    __slots.extend_default(__children);
+                    Ok(__slots)
+                }
+                }
+            );
+            example(ExampleProps::props().title("on_pointer_move — every move over the box, in its own coordinates").build(), __deferred)?
         };
         let __node_10 = {
-            let mut __slots = Slots::new();
-            let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-            let __node_11 = {
-                let mut __slots = Slots::new();
-                let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-                let __sbox_10 = {
-                    StyledContainer::new(LayoutStyle::new().flex_column().height(80.0).width(SizeDimension::Percent(1.0)), move |_| RectStyle { fill: Some(Paint::Solid(use_theme::<core::theme::SandboxTheme>().surface_alt())), border: Some(Border { paint: Paint::Solid(use_theme::<core::theme::SandboxTheme>().border()), widths: [1.0; 4] }), shadow: None, radius: BorderRadius::all(10.0) }, children![])?.active_style(move |_| RectStyle { fill: Some(Paint::Solid(use_theme::<core::theme::SandboxTheme>().primary())), border: Some(Border { paint: Paint::Solid(use_theme::<core::theme::SandboxTheme>().border()), widths: [1.0; 4] }), shadow: None, radius: BorderRadius::all(10.0) }).on_drag({ let at_x = at_x.clone(); move |x, _y| at_x.set(x) }).on_drag_end({ let settled = settled.clone(); move |x, y| settled.set(format!("{x:.0}, {y:.0}")) }).cursor(Cursor::Grab)
-                };
-                __children.push(box_item(__sbox_10));
-                let __text_9 = {
+            let __deferred = Children::new(
+                {
+                    let at_x = at_x.clone();
                     let settled = settled.clone();
-                    Text::declaring(
-                        move || format!("settled at {}", { settled.get() }),
-                        LayoutStyle::new(),
-                        move |__inherited: TextStyle| __inherited.with_font_size(13.0).with_color(use_theme::<core::theme::SandboxTheme>().muted()),
-                    )?
-                };
-                __children.push(box_item(__text_9));
-                __slots.extend_default(__children);
-                card(CardProps::props().gap(10.0).build(), __slots)?
-            };
-            __children.push(box_item(__node_11));
-            let __node_12 = code_line(CodeLineProps::props().code("box on_drag:|x, _| …  on_drag_end:|x, y| …    ·   active_style(fill:…) while the press is held").build())?;
-            __children.push(box_item(__node_12));
-            __slots.extend_default(__children);
-            example(ExampleProps::props().title("on_drag_end — the gesture is over, and this is where it stopped").build(), __slots)?
+                move || {
+                    let at_x = at_x.clone();
+                    let settled = settled.clone();
+                    let mut __slots = Slots::new();
+                    let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
+                    let __node_11 = {
+                        let __deferred = Children::new(
+                            {
+                                let at_x = at_x.clone();
+                                let settled = settled.clone();
+                            move || {
+                                let at_x = at_x.clone();
+                                let settled = settled.clone();
+                                let mut __slots = Slots::new();
+                                let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
+                                let __sbox_10 = {
+                                    StyledContainer::new(LayoutStyle::new().flex_column().height(80.0).width(SizeDimension::Percent(1.0)), move |_| RectStyle { fill: Some(Paint::Solid(use_theme::<core::theme::SandboxTheme>().surface_alt())), border: Some(Border { paint: Paint::Solid(use_theme::<core::theme::SandboxTheme>().border()), widths: [1.0; 4] }), shadow: None, radius: BorderRadius::all(10.0) }, children![])?.active_style(move |_| RectStyle { fill: Some(Paint::Solid(use_theme::<core::theme::SandboxTheme>().primary())), border: Some(Border { paint: Paint::Solid(use_theme::<core::theme::SandboxTheme>().border()), widths: [1.0; 4] }), shadow: None, radius: BorderRadius::all(10.0) }).on_drag({ let at_x = at_x.clone(); move |x, _y| at_x.set(x) }).on_drag_end({ let settled = settled.clone(); move |x, y| settled.set(format!("{x:.0}, {y:.0}")) }).cursor(Cursor::Grab)
+                                };
+                                __children.push(box_item(__sbox_10));
+                                let __text_9 = {
+                                    let settled = settled.clone();
+                                    Text::declaring(
+                                        move || format!("settled at {}", { settled.get() }),
+                                        LayoutStyle::new(),
+                                        move |__inherited: TextStyle| __inherited.with_font_size(13.0).with_color(use_theme::<core::theme::SandboxTheme>().muted()),
+                                    )?
+                                };
+                                __children.push(box_item(__text_9));
+                                __slots.extend_default(__children);
+                                Ok(__slots)
+                            }
+                            }
+                        );
+                        card(CardProps::props().gap(10.0).build(), __deferred)?
+                    };
+                    __children.push(box_item(__node_11));
+                    let __node_12 = code_line(CodeLineProps::props().code("box on_drag:|x, _| …  on_drag_end:|x, y| …    ·   active_style(fill:…) while the press is held").build(), Children::default())?;
+                    __children.push(box_item(__node_12));
+                    __slots.extend_default(__children);
+                    Ok(__slots)
+                }
+                }
+            );
+            example(ExampleProps::props().title("on_drag_end — the gesture is over, and this is where it stopped").build(), __deferred)?
         };
         let __node_13 = {
-            let mut __slots = Slots::new();
-            let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-            let __node_14 = {
-                let mut __slots = Slots::new();
-                let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-                let __sbox_11 = {
-                    let __text_10 = {
-                        Text::declaring(
-                            || "drag me with the right or middle button too".to_string(),
-                            LayoutStyle::new().padding_all(12.0),
-                            move |__inherited: TextStyle| __inherited.with_font_size(12.0).with_color(use_theme::<core::theme::SandboxTheme>().muted()),
-                        )?
+            let __deferred = Children::new(
+                {
+                    let at_x = at_x.clone();
+                move || {
+                    let at_x = at_x.clone();
+                    let mut __slots = Slots::new();
+                    let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
+                    let __node_14 = {
+                        let __deferred = Children::new(
+                            {
+                                let at_x = at_x.clone();
+                            move || {
+                                let at_x = at_x.clone();
+                                let mut __slots = Slots::new();
+                                let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
+                                let __sbox_11 = {
+                                    let __text_10 = {
+                                        Text::declaring(
+                                            || "drag me with the right or middle button too".to_string(),
+                                            LayoutStyle::new().padding_all(12.0),
+                                            move |__inherited: TextStyle| __inherited.with_font_size(12.0).with_color(use_theme::<core::theme::SandboxTheme>().muted()),
+                                        )?
+                                    };
+                                    StyledContainer::new(LayoutStyle::new().flex_column().height(72.0).width(SizeDimension::Percent(1.0)), move |_| RectStyle { fill: Some(Paint::Solid(use_theme::<core::theme::SandboxTheme>().surface_alt())), border: Some(Border { paint: Paint::Solid(use_theme::<core::theme::SandboxTheme>().border()), widths: [1.0; 4] }), shadow: None, radius: BorderRadius::all(10.0) }, children![__text_10])?.on_drag({ let at_x = at_x.clone(); move |x, _y| at_x.set(x) }).cursor(Cursor::Grab).drag_button(PointerButton::Secondary).drag_button(PointerButton::Auxiliary)
+                                };
+                                __children.push(box_item(__sbox_11));
+                                __slots.extend_default(__children);
+                                Ok(__slots)
+                            }
+                            }
+                        );
+                        card(CardProps::props().gap(10.0).build(), __deferred)?
                     };
-                    StyledContainer::new(LayoutStyle::new().flex_column().height(72.0).width(SizeDimension::Percent(1.0)), move |_| RectStyle { fill: Some(Paint::Solid(use_theme::<core::theme::SandboxTheme>().surface_alt())), border: Some(Border { paint: Paint::Solid(use_theme::<core::theme::SandboxTheme>().border()), widths: [1.0; 4] }), shadow: None, radius: BorderRadius::all(10.0) }, children![__text_10])?.on_drag({ let at_x = at_x.clone(); move |x, _y| at_x.set(x) }).cursor(Cursor::Grab).drag_button(PointerButton::Secondary).drag_button(PointerButton::Auxiliary)
-                };
-                __children.push(box_item(__sbox_11));
-                __slots.extend_default(__children);
-                card(CardProps::props().gap(10.0).build(), __slots)?
-            };
-            __children.push(box_item(__node_14));
-            let __node_15 = code_line(CodeLineProps::props().code("box drag_button:secondary,auxiliary     (the primary button is always armed)").build())?;
-            __children.push(box_item(__node_15));
-            __slots.extend_default(__children);
-            example(ExampleProps::props().title("drag_button — arm a drag on buttons other than the primary one").build(), __slots)?
+                    __children.push(box_item(__node_14));
+                    let __node_15 = code_line(CodeLineProps::props().code("box drag_button:secondary,auxiliary     (the primary button is always armed)").build(), Children::default())?;
+                    __children.push(box_item(__node_15));
+                    __slots.extend_default(__children);
+                    Ok(__slots)
+                }
+                }
+            );
+            example(ExampleProps::props().title("drag_button — arm a drag on buttons other than the primary one").build(), __deferred)?
         };
         let __node_16 = {
-            let mut __slots = Slots::new();
-            let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-            let __node_17 = {
-                let mut __slots = Slots::new();
-                let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-                let __sbox_12 = {
-                    let __text_11 = {
-                        Text::declaring(
-                            || "scroll over me, or click with the right button".to_string(),
-                            LayoutStyle::new().padding_all(12.0),
-                            move |__inherited: TextStyle| __inherited.with_font_size(12.0).with_color(use_theme::<core::theme::SandboxTheme>().muted()),
-                        )?
+            let __deferred = Children::new(
+                {
+                    let wheel = wheel.clone();
+                    let alt = alt.clone();
+                move || {
+                    let wheel = wheel.clone();
+                    let alt = alt.clone();
+                    let mut __slots = Slots::new();
+                    let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
+                    let __node_17 = {
+                        let __deferred = Children::new(
+                            {
+                                let wheel = wheel.clone();
+                                let alt = alt.clone();
+                            move || {
+                                let wheel = wheel.clone();
+                                let alt = alt.clone();
+                                let mut __slots = Slots::new();
+                                let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
+                                let __sbox_12 = {
+                                    let __text_11 = {
+                                        Text::declaring(
+                                            || "scroll over me, or click with the right button".to_string(),
+                                            LayoutStyle::new().padding_all(12.0),
+                                            move |__inherited: TextStyle| __inherited.with_font_size(12.0).with_color(use_theme::<core::theme::SandboxTheme>().muted()),
+                                        )?
+                                    };
+                                    StyledContainer::new(LayoutStyle::new().flex_column().height(80.0).width(SizeDimension::Percent(1.0)), move |_| RectStyle { fill: Some(Paint::Solid(use_theme::<core::theme::SandboxTheme>().surface_alt())), border: Some(Border { paint: Paint::Solid(use_theme::<core::theme::SandboxTheme>().border()), widths: [1.0; 4] }), shadow: None, radius: BorderRadius::all(10.0) }, children![__text_11])?.on_scroll({ let wheel = wheel.clone(); move |_dx, dy| wheel.set(wheel.get() + dy) }).on_alt_press({ let alt = alt.clone(); move |button| alt.set(format!("{button:?}")) })
+                                };
+                                __children.push(box_item(__sbox_12));
+                                let __row_2 = {
+                                    let __text_12 = {
+                                        let wheel = wheel.clone();
+                                        Text::declaring(
+                                            move || format!("wheel {}", { wheel.get().round() }),
+                                            LayoutStyle::new(),
+                                            move |__inherited: TextStyle| __inherited.with_font_size(13.0).with_color(use_theme::<core::theme::SandboxTheme>().primary()),
+                                        )?
+                                    };
+                                    let __text_13 = {
+                                        let alt = alt.clone();
+                                        Text::declaring(
+                                            move || format!("{}", { alt.get() }),
+                                            LayoutStyle::new(),
+                                            move |__inherited: TextStyle| __inherited.with_font_size(13.0).with_color(use_theme::<core::theme::SandboxTheme>().muted()),
+                                        )?
+                                    };
+                                    Container::new(LayoutStyle::new().flex_row().gap(16.0), children![__text_12, __text_13])?
+                                };
+                                __children.push(box_item(__row_2));
+                                __slots.extend_default(__children);
+                                Ok(__slots)
+                            }
+                            }
+                        );
+                        card(CardProps::props().gap(10.0).build(), __deferred)?
                     };
-                    StyledContainer::new(LayoutStyle::new().flex_column().height(80.0).width(SizeDimension::Percent(1.0)), move |_| RectStyle { fill: Some(Paint::Solid(use_theme::<core::theme::SandboxTheme>().surface_alt())), border: Some(Border { paint: Paint::Solid(use_theme::<core::theme::SandboxTheme>().border()), widths: [1.0; 4] }), shadow: None, radius: BorderRadius::all(10.0) }, children![__text_11])?.on_scroll({ let wheel = wheel.clone(); move |_dx, dy| wheel.set(wheel.get() + dy) }).on_alt_press({ let alt = alt.clone(); move |button| alt.set(format!("{button:?}")) })
-                };
-                __children.push(box_item(__sbox_12));
-                let __row_2 = {
-                    let __text_12 = {
-                        let wheel = wheel.clone();
-                        Text::declaring(
-                            move || format!("wheel {}", { wheel.get().round() }),
-                            LayoutStyle::new(),
-                            move |__inherited: TextStyle| __inherited.with_font_size(13.0).with_color(use_theme::<core::theme::SandboxTheme>().primary()),
-                        )?
-                    };
-                    let __text_13 = {
-                        let alt = alt.clone();
-                        Text::declaring(
-                            move || format!("{}", { alt.get() }),
-                            LayoutStyle::new(),
-                            move |__inherited: TextStyle| __inherited.with_font_size(13.0).with_color(use_theme::<core::theme::SandboxTheme>().muted()),
-                        )?
-                    };
-                    Container::new(LayoutStyle::new().flex_row().gap(16.0), children![__text_12, __text_13])?
-                };
-                __children.push(box_item(__row_2));
-                __slots.extend_default(__children);
-                card(CardProps::props().gap(10.0).build(), __slots)?
-            };
-            __children.push(box_item(__node_17));
-            let __node_18 = code_line(CodeLineProps::props().code("box on_scroll:|dx, dy| …    ·    on_alt_press:|button| …").build())?;
-            __children.push(box_item(__node_18));
-            __slots.extend_default(__children);
-            example(ExampleProps::props().title("on_scroll and on_alt_press — the wheel, and a non-primary click").build(), __slots)?
+                    __children.push(box_item(__node_17));
+                    let __node_18 = code_line(CodeLineProps::props().code("box on_scroll:|dx, dy| …    ·    on_alt_press:|button| …").build(), Children::default())?;
+                    __children.push(box_item(__node_18));
+                    __slots.extend_default(__children);
+                    Ok(__slots)
+                }
+                }
+            );
+            example(ExampleProps::props().title("on_scroll and on_alt_press — the wheel, and a non-primary click").build(), __deferred)?
         };
         let __node_19 = {
-            let mut __slots = Slots::new();
-            let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-            let __col_2 = {
-                let __node_20 = prop_row(PropRowProps::props().name("cursor").values("pointer · crosshair · grab · …").about("What the pointer becomes while it is over this box.").build())?;
-                let __node_21 = prop_row(PropRowProps::props().name("track_rect").values("$signal").about("Mirrors this box's laid-out rect into the signal, every layout pass.").build())?;
-                let __node_22 = prop_row(PropRowProps::props().name("drag_button").values("secondary · auxiliary").about("Extra buttons that may start this box's drag.").build())?;
-                let __node_23 = prop_row(PropRowProps::props().name("on_drag / on_drag_end").values("closure (x, y)").about("The pointer during the gesture, and where it finished.").build())?;
-                let __node_24 = prop_row(PropRowProps::props().name("on_pointer_move").values("closure (x, y)").about("Every move over the box, whether or not a button is down.").build())?;
-                let __node_25 = prop_row(PropRowProps::props().name("on_scroll").values("closure (dx, dy)").about("Wheel or trackpad deltas over the box.").build())?;
-                let __node_26 = prop_row(PropRowProps::props().name("on_alt_press").values("closure (button)").about("A press from a non-primary button.").build())?;
-                let __node_27 = prop_row(PropRowProps::props().name("active_style").values("fill: · stroke: · radius:").about("Paint applied while the box is held down, like hover_style for hover.").build())?;
-                Container::new(LayoutStyle::new().flex_column().gap(6.0), children![__node_20, __node_21, __node_22, __node_23, __node_24, __node_25, __node_26, __node_27])?
-            };
-            __children.push(box_item(__col_2));
-            __slots.extend_default(__children);
-            example(ExampleProps::props().title("Attributes").build(), __slots)?
+            let __deferred = Children::new(
+                move || {
+                    let mut __slots = Slots::new();
+                    let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
+                    let __col_2 = {
+                        let __node_20 = prop_row(PropRowProps::props().name("cursor").values("pointer · crosshair · grab · …").about("What the pointer becomes while it is over this box.").build(), Children::default())?;
+                        let __node_21 = prop_row(PropRowProps::props().name("track_rect").values("$signal").about("Mirrors this box's laid-out rect into the signal, every layout pass.").build(), Children::default())?;
+                        let __node_22 = prop_row(PropRowProps::props().name("drag_button").values("secondary · auxiliary").about("Extra buttons that may start this box's drag.").build(), Children::default())?;
+                        let __node_23 = prop_row(PropRowProps::props().name("on_drag / on_drag_end").values("closure (x, y)").about("The pointer during the gesture, and where it finished.").build(), Children::default())?;
+                        let __node_24 = prop_row(PropRowProps::props().name("on_pointer_move").values("closure (x, y)").about("Every move over the box, whether or not a button is down.").build(), Children::default())?;
+                        let __node_25 = prop_row(PropRowProps::props().name("on_scroll").values("closure (dx, dy)").about("Wheel or trackpad deltas over the box.").build(), Children::default())?;
+                        let __node_26 = prop_row(PropRowProps::props().name("on_alt_press").values("closure (button)").about("A press from a non-primary button.").build(), Children::default())?;
+                        let __node_27 = prop_row(PropRowProps::props().name("active_style").values("fill: · stroke: · radius:").about("Paint applied while the box is held down, like hover_style for hover.").build(), Children::default())?;
+                        Container::new(LayoutStyle::new().flex_column().gap(6.0), children![__node_20, __node_21, __node_22, __node_23, __node_24, __node_25, __node_26, __node_27])?
+                    };
+                    __children.push(box_item(__col_2));
+                    __slots.extend_default(__children);
+                    Ok(__slots)
+                }
+            );
+            example(ExampleProps::props().title("Attributes").build(), __deferred)?
         };
         Container::new(LayoutStyle::new().flex_column().gap(20.0), children![__node_0, __node_1, __node_4, __node_7, __node_10, __node_13, __node_16, __node_19])?
     };

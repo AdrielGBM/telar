@@ -4,7 +4,7 @@ use layout_core::{AlignItems, JustifyContent, LayoutError, LayoutStyle};
 use reactive_core::{Reactive, RwSignal, signal};
 use renderer_core::{Border, BorderRadius, Color, RectStyle, ShapeStyle};
 use ui_core::focus::Role;
-use ui_core::{LayoutItem, StyledContainer, box_item};
+use ui_core::{Children, LayoutItem, StyledContainer, box_item};
 
 use crate::shared;
 
@@ -28,7 +28,10 @@ pub struct CheckboxProps {
     pub on_toggle: Option<Box<dyn Fn(bool)>>,
 }
 
-pub fn checkbox(props: CheckboxProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
+pub fn checkbox(
+    props: CheckboxProps,
+    _children: Children,
+) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let CheckboxProps {
         checked,
         label,
@@ -124,6 +127,7 @@ mod tests {
                 .checked(checked)
                 .label("Agree")
                 .build(),
+            Children::default(),
         )
         .unwrap();
         let (cx, cy) = lay_out(widget.layout_node());
@@ -146,6 +150,7 @@ mod tests {
             CheckboxProps::props()
                 .on_toggle(Box::new(move |v| sink.set(Some(v))))
                 .build(),
+            Children::default(),
         )
         .unwrap();
         let (cx, cy) = lay_out(widget.layout_node());

@@ -5,8 +5,11 @@
 #[allow(unused_imports)] use crate::core::theme::theme;
 #[allow(unused_imports)] use std::sync::Arc;
 
+#[derive(::telar::Props)]
+pub struct FeaturesPathsProps {}
+
 #[allow(dead_code, unused_variables, unused_mut)]
-pub fn features_paths() -> Result<Box<dyn LayoutItem>, LayoutError> {
+pub fn features_paths(props: FeaturesPathsProps, children: Children) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let __owner = telar::owner_scope();
     #[allow(unused_imports)] use telar::use_theme;
 
@@ -201,68 +204,93 @@ pub fn features_paths() -> Result<Box<dyn LayoutItem>, LayoutError> {
     }
 
     let __col_0 = {
-        let __node_0 = doc_header(DocHeaderProps::props().kicker("MEDIA").title("Paths").desc("Build vector geometry with PathData — lines, quadratic and cubic Béziers, winding vs even-odd fills, stroke caps, and per-path shadows — then draw it in a Canvas.").build())?;
+        let __node_0 = doc_header(DocHeaderProps::props().kicker("MEDIA").title("Paths").desc("Build vector geometry with PathData — lines, quadratic and cubic Béziers, winding vs even-odd fills, stroke caps, and per-path shadows — then draw it in a Canvas.").build(), Children::default())?;
         let __node_1 = {
-            let mut __slots = Slots::new();
-            let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-            let __node_2 = {
-                let mut __slots = Slots::new();
-                let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-                let __canvas_0 = Canvas::new(LayoutStyle::new().height(430.0), draw_paths)?;
-                __children.push(box_item(__canvas_0));
-                __slots.extend_default(__children);
-                card(CardProps::props().build(), __slots)?
-            };
-            __children.push(box_item(__node_2));
-            let __node_3 = code_line(CodeLineProps::props().code("PathData::new().move_to(p).cubic_to(a, b, c)   >   RenderNode::path(d, style)").build())?;
-            __children.push(box_item(__node_3));
-            __slots.extend_default(__children);
-            example(ExampleProps::props().title("Polygons, curves, fills and a path shadow").build(), __slots)?
+            let __deferred = Children::new(
+                move || {
+                    let mut __slots = Slots::new();
+                    let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
+                    let __node_2 = {
+                        let __deferred = Children::new(
+                            move || {
+                                let mut __slots = Slots::new();
+                                let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
+                                let __canvas_0 = Canvas::new(LayoutStyle::new().height(430.0), draw_paths)?;
+                                __children.push(box_item(__canvas_0));
+                                __slots.extend_default(__children);
+                                Ok(__slots)
+                            }
+                        );
+                        card(CardProps::props().build(), __deferred)?
+                    };
+                    __children.push(box_item(__node_2));
+                    let __node_3 = code_line(CodeLineProps::props().code("PathData::new().move_to(p).cubic_to(a, b, c)   >   RenderNode::path(d, style)").build(), Children::default())?;
+                    __children.push(box_item(__node_3));
+                    __slots.extend_default(__children);
+                    Ok(__slots)
+                }
+            );
+            example(ExampleProps::props().title("Polygons, curves, fills and a path shadow").build(), __deferred)?
         };
         let __node_4 = {
-            let mut __slots = Slots::new();
-            let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-            let __node_5 = {
-                let mut __slots = Slots::new();
-                let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-                let __row_0 = {
-                    let __path_0 = {
-                        let __path_data = std::sync::Arc::new(PathData::new().move_to(Point::new(0.0, 0.0)).line_to(Point::new(100.0, 0.0)).line_to(Point::new(50.0, 80.0)).close());
-                        Path::static_data(LayoutStyle::new().width(100.0).height(80.0), __path_data, move || PathStyle { fill: Some(Paint::Solid(use_theme::<core::theme::SandboxTheme>().primary())), stroke: Some(Stroke::new(use_theme::<core::theme::SandboxTheme>().ink(), 2.0)), shadow: None, fill_rule: FillRule::Winding })?
+            let __deferred = Children::new(
+                move || {
+                    let mut __slots = Slots::new();
+                    let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
+                    let __node_5 = {
+                        let __deferred = Children::new(
+                            move || {
+                                let mut __slots = Slots::new();
+                                let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
+                                let __row_0 = {
+                                    let __path_0 = {
+                                        let __path_data = std::sync::Arc::new(PathData::new().move_to(Point::new(0.0, 0.0)).line_to(Point::new(100.0, 0.0)).line_to(Point::new(50.0, 80.0)).close());
+                                        Path::static_data(LayoutStyle::new().width(100.0).height(80.0), __path_data, move || PathStyle { fill: Some(Paint::Solid(use_theme::<core::theme::SandboxTheme>().primary())), stroke: Some(Stroke::new(use_theme::<core::theme::SandboxTheme>().ink(), 2.0)), shadow: None, fill_rule: FillRule::Winding })?
+                                    };
+                                    let __path_1 = {
+                                        let __path_data = std::sync::Arc::new(PathData::new().move_to(Point::new(6.0, 42.0)).line_to(Point::new(34.0, 70.0)).line_to(Point::new(74.0, 14.0)));
+                                        Path::static_data(LayoutStyle::new().width(80.0).height(80.0), __path_data, move || PathStyle { fill: None, stroke: Some(Stroke::new(use_theme::<core::theme::SandboxTheme>().success(), 7.0)), shadow: None, fill_rule: FillRule::Winding })?
+                                    };
+                                    let __path_2 = {
+                                        let __path_data = std::sync::Arc::new(PathData::new().move_to(Point::new(40.0, 2.0)).line_to(Point::new(50.0, 30.0)).line_to(Point::new(80.0, 30.0)).line_to(Point::new(56.0, 48.0)).line_to(Point::new(64.0, 78.0)).line_to(Point::new(40.0, 60.0)).line_to(Point::new(16.0, 78.0)).line_to(Point::new(24.0, 48.0)).line_to(Point::new(0.0, 30.0)).line_to(Point::new(30.0, 30.0)).close());
+                                        Path::static_data(LayoutStyle::new().width(80.0).height(80.0), __path_data, move || PathStyle { fill: Some(Paint::Solid(use_theme::<core::theme::SandboxTheme>().warning())), stroke: Some(Stroke::new(use_theme::<core::theme::SandboxTheme>().ink(), 1.0)), shadow: None, fill_rule: FillRule::Winding })?
+                                    };
+                                    Container::new(LayoutStyle::new().flex_row().gap(28.0).align_items(AlignItems::CENTER), children![__path_0, __path_1, __path_2])?
+                                };
+                                __children.push(box_item(__row_0));
+                                __slots.extend_default(__children);
+                                Ok(__slots)
+                            }
+                        );
+                        card(CardProps::props().build(), __deferred)?
                     };
-                    let __path_1 = {
-                        let __path_data = std::sync::Arc::new(PathData::new().move_to(Point::new(6.0, 42.0)).line_to(Point::new(34.0, 70.0)).line_to(Point::new(74.0, 14.0)));
-                        Path::static_data(LayoutStyle::new().width(80.0).height(80.0), __path_data, move || PathStyle { fill: None, stroke: Some(Stroke::new(use_theme::<core::theme::SandboxTheme>().success(), 7.0)), shadow: None, fill_rule: FillRule::Winding })?
-                    };
-                    let __path_2 = {
-                        let __path_data = std::sync::Arc::new(PathData::new().move_to(Point::new(40.0, 2.0)).line_to(Point::new(50.0, 30.0)).line_to(Point::new(80.0, 30.0)).line_to(Point::new(56.0, 48.0)).line_to(Point::new(64.0, 78.0)).line_to(Point::new(40.0, 60.0)).line_to(Point::new(16.0, 78.0)).line_to(Point::new(24.0, 48.0)).line_to(Point::new(0.0, 30.0)).line_to(Point::new(30.0, 30.0)).close());
-                        Path::static_data(LayoutStyle::new().width(80.0).height(80.0), __path_data, move || PathStyle { fill: Some(Paint::Solid(use_theme::<core::theme::SandboxTheme>().warning())), stroke: Some(Stroke::new(use_theme::<core::theme::SandboxTheme>().ink(), 1.0)), shadow: None, fill_rule: FillRule::Winding })?
-                    };
-                    Container::new(LayoutStyle::new().flex_row().gap(28.0).align_items(AlignItems::CENTER), children![__path_0, __path_1, __path_2])?
-                };
-                __children.push(box_item(__row_0));
-                __slots.extend_default(__children);
-                card(CardProps::props().build(), __slots)?
-            };
-            __children.push(box_item(__node_5));
-            let __node_6 = code_line(CodeLineProps::props().code("path d:\"M0,0 L100,0 L50,80 Z\" fill:theme.primary stroke:theme.ink stroke_width:2 width:100 height:80").build())?;
-            __children.push(box_item(__node_6));
-            __slots.extend_default(__children);
-            example(ExampleProps::props().title("Declarative paths in [view]").build(), __slots)?
+                    __children.push(box_item(__node_5));
+                    let __node_6 = code_line(CodeLineProps::props().code("path d:\"M0,0 L100,0 L50,80 Z\" fill:theme.primary stroke:theme.ink stroke_width:2 width:100 height:80").build(), Children::default())?;
+                    __children.push(box_item(__node_6));
+                    __slots.extend_default(__children);
+                    Ok(__slots)
+                }
+            );
+            example(ExampleProps::props().title("Declarative paths in [view]").build(), __deferred)?
         };
         let __node_7 = {
-            let mut __slots = Slots::new();
-            let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-            let __col_1 = {
-                let __node_8 = prop_row(PropRowProps::props().name("move_to / line_to").values("Point").about("Start a subpath, add a straight segment.").build())?;
-                let __node_9 = prop_row(PropRowProps::props().name("quad_to / cubic_to").values("Points").about("Quadratic and cubic Bézier curves.").build())?;
-                let __node_10 = prop_row(PropRowProps::props().name("fill_rule").values("Winding · EvenOdd").about("How overlapping regions are filled.").build())?;
-                let __node_11 = prop_row(PropRowProps::props().name("Stroke::with_cap").values("Butt·Round·Square").about("Line ends (and with_join for corners).").build())?;
-                Container::new(LayoutStyle::new().flex_column().gap(6.0), children![__node_8, __node_9, __node_10, __node_11])?
-            };
-            __children.push(box_item(__col_1));
-            __slots.extend_default(__children);
-            example(ExampleProps::props().title("The PathData API").build(), __slots)?
+            let __deferred = Children::new(
+                move || {
+                    let mut __slots = Slots::new();
+                    let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
+                    let __col_1 = {
+                        let __node_8 = prop_row(PropRowProps::props().name("move_to / line_to").values("Point").about("Start a subpath, add a straight segment.").build(), Children::default())?;
+                        let __node_9 = prop_row(PropRowProps::props().name("quad_to / cubic_to").values("Points").about("Quadratic and cubic Bézier curves.").build(), Children::default())?;
+                        let __node_10 = prop_row(PropRowProps::props().name("fill_rule").values("Winding · EvenOdd").about("How overlapping regions are filled.").build(), Children::default())?;
+                        let __node_11 = prop_row(PropRowProps::props().name("Stroke::with_cap").values("Butt·Round·Square").about("Line ends (and with_join for corners).").build(), Children::default())?;
+                        Container::new(LayoutStyle::new().flex_column().gap(6.0), children![__node_8, __node_9, __node_10, __node_11])?
+                    };
+                    __children.push(box_item(__col_1));
+                    __slots.extend_default(__children);
+                    Ok(__slots)
+                }
+            );
+            example(ExampleProps::props().title("The PathData API").build(), __deferred)?
         };
         Container::new(LayoutStyle::new().flex_column().gap(20.0), children![__node_0, __node_1, __node_4, __node_7])?
     };

@@ -12,7 +12,7 @@ pub struct SharedComponentsStatProps {
 }
 
 #[allow(dead_code, unused_variables, unused_mut)]
-pub fn shared_components_stat(props: SharedComponentsStatProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
+pub fn shared_components_stat(props: SharedComponentsStatProps, children: Children) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let __owner = telar::owner_scope();
     #[allow(unused_imports)] use telar::use_theme;
     let __sbox_0 = {
@@ -38,7 +38,7 @@ pub fn shared_components_stat(props: SharedComponentsStatProps) -> Result<Box<dy
 #[allow(dead_code, unused_variables, unused_mut)]
 pub fn shared_components_stat_preview_0() -> Result<Box<dyn LayoutItem>, LayoutError> {
     #[allow(unused_imports)] use telar::use_theme;
-    let __node_0 = stat(StatProps::props().value("60 fps").label("software + wgpu").build())?;
+    let __node_0 = stat(StatProps::props().value("60 fps").label("software + wgpu").build(), Children::default())?;
     Ok(Box::new(__node_0))
 }
 

@@ -2,6 +2,8 @@ use layout_core::LayoutError;
 use reactive_core::Reactive;
 use renderer_core::Color;
 use telar_macros::Props;
+#[cfg(test)]
+use ui_core::Slots;
 use ui_core::{Children, LayoutItem};
 
 use crate::dropdown;
@@ -9,7 +11,7 @@ use crate::dropdown;
 #[cfg(test)]
 use crate::dropdown::{PANEL_WIDTH, ROW_HEIGHT, TRIGGER_HEIGHT, panel_pad};
 #[cfg(test)]
-use ui_core::{Slots, track_layout};
+use ui_core::track_layout;
 
 /// A click-triggered list of action items: a labelled trigger button that opens an anchored list; picking an
 /// item fires `on_select` with its index and closes. Unlike `select`, a menu holds no bound selection state —
@@ -76,7 +78,7 @@ fn rows(labels: &'static [&'static str]) -> Children {
                     crate::list::ItemProps::props()
                         .label(Reactive::of(move || label.to_string()))
                         .build(),
-                    Slots::new(),
+                    Children::default(),
                 )?,
             );
         }
@@ -465,15 +467,24 @@ mod tests {
                         .label(Reactive::of(move || label.to_string()))
                         .disabled(Reactive::of(move || disabled))
                         .build(),
-                    Slots::new(),
+                    Children::default(),
                 )
             };
             slots.push(None, row("Rename", false)?);
             slots.push(None, row("Duplicate", true)?);
-            slots.push(None, crate::list::separator()?);
             slots.push(
                 None,
-                crate::list::group(crate::list::GroupProps::props().label("Danger").build())?,
+                crate::list::separator(
+                    crate::list::SeparatorProps::props().build(),
+                    Children::default(),
+                )?,
+            );
+            slots.push(
+                None,
+                crate::list::group(
+                    crate::list::GroupProps::props().label("Danger").build(),
+                    Children::default(),
+                )?,
             );
             slots.push(None, row("Delete", false)?);
             Ok(slots)
@@ -524,7 +535,7 @@ mod tests {
                             .label(Reactive::of(move || label.to_string()))
                             .disabled(Reactive::of(move || disabled))
                             .build(),
-                        Slots::new(),
+                        Children::default(),
                     )?,
                 );
             }
@@ -585,7 +596,7 @@ mod tests {
                             .label(Reactive::of(move || label.to_string()))
                             .disabled(Reactive::of(move || disabled))
                             .build(),
-                        Slots::new(),
+                        Children::default(),
                     )?,
                 );
             }

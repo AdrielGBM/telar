@@ -3,86 +3,122 @@
 #[allow(unused_imports)] use telar::*;
 #[allow(unused_imports)] use super::*;
 
+#[derive(::telar::Props)]
+pub struct FeaturesPillsProps {}
+
 #[allow(dead_code, unused_variables, unused_mut)]
-pub fn features_pills() -> Result<Box<dyn LayoutItem>, LayoutError> {
+pub fn features_pills(props: FeaturesPillsProps, children: Children) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let __owner = telar::owner_scope();
     #[allow(unused_imports)] use telar::use_theme;
     let tags = signal(3u32);
 
     let __col_0 = {
-        let __node_0 = doc_header(DocHeaderProps::props().kicker("PRESENTATION").title("Badges & chips").desc("badge is a small solid status tag; chip is a softer outlined pill, optionally removable via on_close. Both are components.").build())?;
+        let __node_0 = doc_header(DocHeaderProps::props().kicker("PRESENTATION").title("Badges & chips").desc("badge is a small solid status tag; chip is a softer outlined pill, optionally removable via on_close. Both are components.").build(), Children::default())?;
         let __node_1 = {
-            let mut __slots = Slots::new();
-            let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-            let __node_2 = {
-                let mut __slots = Slots::new();
-                let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-                let __row_0 = {
-                    let __text_0 = {
-                        Text::declaring(
-                            || "Inbox".to_string(),
-                            LayoutStyle::new(),
-                            move |__inherited: TextStyle| __inherited.with_font_size(15.0).with_color(use_theme::<core::theme::SandboxTheme>().ink()),
-                        )?
+            let __deferred = Children::new(
+                move || {
+                    let mut __slots = Slots::new();
+                    let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
+                    let __node_2 = {
+                        let __deferred = Children::new(
+                            move || {
+                                let mut __slots = Slots::new();
+                                let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
+                                let __row_0 = {
+                                    let __text_0 = {
+                                        Text::declaring(
+                                            || "Inbox".to_string(),
+                                            LayoutStyle::new(),
+                                            move |__inherited: TextStyle| __inherited.with_font_size(15.0).with_color(use_theme::<core::theme::SandboxTheme>().ink()),
+                                        )?
+                                    };
+                                    let __node_3 = badge(BadgeProps::props().label("12").build(), Children::default())?;
+                                    let __node_4 = badge(BadgeProps::props().label("NEW").color(Reactive::of(move || use_theme::<core::theme::SandboxTheme>().success())).build(), Children::default())?;
+                                    let __node_5 = badge(BadgeProps::props().label("BETA").color(Reactive::of(move || use_theme::<core::theme::SandboxTheme>().purple)).build(), Children::default())?;
+                                    Container::new(LayoutStyle::new().flex_row().gap(8.0).align_items(AlignItems::CENTER), children![__text_0, __node_3, __node_4, __node_5])?
+                                };
+                                __children.push(box_item(__row_0));
+                                __slots.extend_default(__children);
+                                Ok(__slots)
+                            }
+                        );
+                        card(CardProps::props().gap(10.0).build(), __deferred)?
                     };
-                    let __node_3 = badge(BadgeProps::props().label("12").build())?;
-                    let __node_4 = badge(BadgeProps::props().label("NEW").color(Reactive::of(move || use_theme::<core::theme::SandboxTheme>().success())).build())?;
-                    let __node_5 = badge(BadgeProps::props().label("BETA").color(Reactive::of(move || use_theme::<core::theme::SandboxTheme>().purple)).build())?;
-                    Container::new(LayoutStyle::new().flex_row().gap(8.0).align_items(AlignItems::CENTER), children![__text_0, __node_3, __node_4, __node_5])?
-                };
-                __children.push(box_item(__row_0));
-                __slots.extend_default(__children);
-                card(CardProps::props().gap(10.0).build(), __slots)?
-            };
-            __children.push(box_item(__node_2));
-            let __node_6 = code_line(CodeLineProps::props().code("badge label:'NEW' color:theme.success").build())?;
-            __children.push(box_item(__node_6));
-            __slots.extend_default(__children);
-            example(ExampleProps::props().title("badge — a small solid accent tag").build(), __slots)?
+                    __children.push(box_item(__node_2));
+                    let __node_6 = code_line(CodeLineProps::props().code("badge label:'NEW' color:theme.success").build(), Children::default())?;
+                    __children.push(box_item(__node_6));
+                    __slots.extend_default(__children);
+                    Ok(__slots)
+                }
+            );
+            example(ExampleProps::props().title("badge — a small solid accent tag").build(), __deferred)?
         };
         let __node_7 = {
-            let mut __slots = Slots::new();
-            let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-            let __node_8 = {
-                let mut __slots = Slots::new();
-                let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-                let __row_1 = {
-                    let __node_9 = chip(ChipProps::props().label("design").build())?;
-                    let __node_10 = chip(ChipProps::props().label("rust").build())?;
-                    let __node_11 = chip(ChipProps::props().label("removable").on_close(Box::new({ let tags = tags.clone(); move || { tags.update(|n| if *n > 0 { *n -= 1 }) } })).build())?;
-                    Container::new(LayoutStyle::new().flex_row().gap(8.0).align_items(AlignItems::CENTER), children![__node_9, __node_10, __node_11])?
-                };
-                __children.push(box_item(__row_1));
-                let __text_1 = {
+            let __deferred = Children::new(
+                {
                     let tags = tags.clone();
-                    Text::declaring(
-                        move || format!("chips · {}", { tags.get() }),
-                        LayoutStyle::new(),
-                        move |__inherited: TextStyle| __inherited.with_font_size(13.0).with_color(use_theme::<core::theme::SandboxTheme>().muted()),
-                    )?
-                };
-                __children.push(box_item(__text_1));
-                __slots.extend_default(__children);
-                card(CardProps::props().gap(10.0).build(), __slots)?
-            };
-            __children.push(box_item(__node_8));
-            let __node_12 = code_line(CodeLineProps::props().code("chip label:'removable' on_close:|| remove()").build())?;
-            __children.push(box_item(__node_12));
-            __slots.extend_default(__children);
-            example(ExampleProps::props().title("chip — a softer outlined pill; on_close makes it removable").build(), __slots)?
+                move || {
+                    let tags = tags.clone();
+                    let mut __slots = Slots::new();
+                    let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
+                    let __node_8 = {
+                        let __deferred = Children::new(
+                            {
+                                let tags = tags.clone();
+                            move || {
+                                let tags = tags.clone();
+                                let mut __slots = Slots::new();
+                                let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
+                                let __row_1 = {
+                                    let __node_9 = chip(ChipProps::props().label("design").build(), Children::default())?;
+                                    let __node_10 = chip(ChipProps::props().label("rust").build(), Children::default())?;
+                                    let __node_11 = chip(ChipProps::props().label("removable").on_close(Box::new({ let tags = tags.clone(); move || { tags.update(|n| if *n > 0 { *n -= 1 }) } })).build(), Children::default())?;
+                                    Container::new(LayoutStyle::new().flex_row().gap(8.0).align_items(AlignItems::CENTER), children![__node_9, __node_10, __node_11])?
+                                };
+                                __children.push(box_item(__row_1));
+                                let __text_1 = {
+                                    let tags = tags.clone();
+                                    Text::declaring(
+                                        move || format!("chips · {}", { tags.get() }),
+                                        LayoutStyle::new(),
+                                        move |__inherited: TextStyle| __inherited.with_font_size(13.0).with_color(use_theme::<core::theme::SandboxTheme>().muted()),
+                                    )?
+                                };
+                                __children.push(box_item(__text_1));
+                                __slots.extend_default(__children);
+                                Ok(__slots)
+                            }
+                            }
+                        );
+                        card(CardProps::props().gap(10.0).build(), __deferred)?
+                    };
+                    __children.push(box_item(__node_8));
+                    let __node_12 = code_line(CodeLineProps::props().code("chip label:'removable' on_close:|| remove()").build(), Children::default())?;
+                    __children.push(box_item(__node_12));
+                    __slots.extend_default(__children);
+                    Ok(__slots)
+                }
+                }
+            );
+            example(ExampleProps::props().title("chip — a softer outlined pill; on_close makes it removable").build(), __deferred)?
         };
         let __node_13 = {
-            let mut __slots = Slots::new();
-            let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-            let __col_1 = {
-                let __node_14 = prop_row(PropRowProps::props().name("label").values("text").about("the tag / pill text.").build())?;
-                let __node_15 = prop_row(PropRowProps::props().name("color").values("token").about("badge fill / chip accent (default: theme).").build())?;
-                let __node_16 = prop_row(PropRowProps::props().name("on_close").values("closure").about("chip only; adds a × that fires this.").build())?;
-                Container::new(LayoutStyle::new().flex_column().gap(6.0), children![__node_14, __node_15, __node_16])?
-            };
-            __children.push(box_item(__col_1));
-            __slots.extend_default(__children);
-            example(ExampleProps::props().title("Attributes").build(), __slots)?
+            let __deferred = Children::new(
+                move || {
+                    let mut __slots = Slots::new();
+                    let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
+                    let __col_1 = {
+                        let __node_14 = prop_row(PropRowProps::props().name("label").values("text").about("the tag / pill text.").build(), Children::default())?;
+                        let __node_15 = prop_row(PropRowProps::props().name("color").values("token").about("badge fill / chip accent (default: theme).").build(), Children::default())?;
+                        let __node_16 = prop_row(PropRowProps::props().name("on_close").values("closure").about("chip only; adds a × that fires this.").build(), Children::default())?;
+                        Container::new(LayoutStyle::new().flex_column().gap(6.0), children![__node_14, __node_15, __node_16])?
+                    };
+                    __children.push(box_item(__col_1));
+                    __slots.extend_default(__children);
+                    Ok(__slots)
+                }
+            );
+            example(ExampleProps::props().title("Attributes").build(), __deferred)?
         };
         Container::new(LayoutStyle::new().flex_column().gap(20.0), children![__node_0, __node_1, __node_7, __node_13])?
     };

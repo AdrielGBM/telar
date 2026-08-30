@@ -2,7 +2,9 @@ use layout_core::{AlignItems, JustifyContent, LayoutError, LayoutStyle};
 use reactive_core::{Reactive, RwSignal};
 use renderer_core::{Border, Color, RectStyle, ShapeStyle};
 use telar_macros::Props;
-use ui_core::{LayoutItem, Slots, StyledContainer, box_item};
+#[cfg(test)]
+use ui_core::Slots;
+use ui_core::{Children, LayoutItem, StyledContainer, box_item};
 
 use crate::scrim;
 use crate::shared;
@@ -48,7 +50,8 @@ pub struct DrawerProps {
     pub color: Reactive<Color>,
 }
 
-pub fn drawer(props: DrawerProps, mut slots: Slots) -> Result<Box<dyn LayoutItem>, LayoutError> {
+pub fn drawer(props: DrawerProps, children: Children) -> Result<Box<dyn LayoutItem>, LayoutError> {
+    let mut slots = children.build()?;
     let DrawerProps {
         open,
         id,
@@ -148,7 +151,11 @@ mod tests {
         crate::test_support::fresh_layout_runtime();
         let open = signal(false);
         let slots = slot_with_body("Drawer body");
-        let drawer = drawer(DrawerProps::props().open(open).side("right").build(), slots).unwrap();
+        let drawer = drawer(
+            DrawerProps::props().open(open).side("right").build(),
+            Children::from(slots),
+        )
+        .unwrap();
 
         let root = new_container(
             LayoutStyle::new().flex_column().width(400.0).height(400.0),
@@ -185,7 +192,7 @@ mod tests {
     fn unbound_drawer_renders_nothing() {
         crate::test_support::fresh_layout_runtime();
         let slots = slot_with_body("Drawer body");
-        let drawer = drawer(DrawerProps::props().build(), slots).unwrap();
+        let drawer = drawer(DrawerProps::props().build(), Children::from(slots)).unwrap();
         let tree = ComponentList::new(drawer);
         assert!(!find_text(&tree.commands(), "Drawer body"));
     }

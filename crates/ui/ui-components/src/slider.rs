@@ -6,7 +6,7 @@ use layout_core::{LayoutError, LayoutStyle};
 use reactive_core::{Reactive, RwSignal, signal};
 use renderer_core::{Border, BorderRadius, Color, RectStyle, ShapeStyle};
 use ui_core::focus::Role;
-use ui_core::{LayoutItem, StyledContainer, box_item, box_transform};
+use ui_core::{Children, LayoutItem, StyledContainer, box_item, box_transform};
 
 use crate::shared;
 
@@ -66,7 +66,7 @@ pub struct SliderProps {
     pub on_change: Option<Box<dyn Fn(f32)>>,
 }
 
-pub fn slider(props: SliderProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
+pub fn slider(props: SliderProps, _children: Children) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let SliderProps {
         value,
         color,
@@ -218,7 +218,11 @@ mod tests {
     fn drag_to_midpoint_sets_value_half() {
         crate::test_support::fresh_layout_runtime();
         let value = signal(0.0f32);
-        let mut widget = slider(SliderProps::props().value(value).width(200.0).build()).unwrap();
+        let mut widget = slider(
+            SliderProps::props().value(value).width(200.0).build(),
+            Children::default(),
+        )
+        .unwrap();
         let rect = lay_out(widget.layout_node());
 
         widget.on_event(&press((rect.x + 100.0) as f64, (rect.y + 4.0) as f64));
@@ -241,7 +245,7 @@ mod tests {
     #[test]
     fn uncontrolled_slider_builds_with_default_value() {
         crate::test_support::fresh_layout_runtime();
-        let result = slider(SliderProps::props().build());
+        let result = slider(SliderProps::props().build(), Children::default());
         assert!(result.is_ok());
     }
 
@@ -256,6 +260,7 @@ mod tests {
                 .width(100.0)
                 .on_change(Box::new(move |v| sink.set(v)))
                 .build(),
+            Children::default(),
         )
         .unwrap();
         let rect = lay_out(widget.layout_node());
@@ -280,6 +285,7 @@ mod tests {
                 .min(0.0)
                 .max(100.0)
                 .build(),
+            Children::default(),
         )
         .unwrap();
         let rect = lay_out(widget.layout_node());
@@ -305,6 +311,7 @@ mod tests {
                 .max(100.0)
                 .step(10.0)
                 .build(),
+            Children::default(),
         )
         .unwrap();
         let rect = lay_out(widget.layout_node());
@@ -322,7 +329,10 @@ mod tests {
     #[test]
     fn label_builds_without_panicking() {
         crate::test_support::fresh_layout_runtime();
-        let result = slider(SliderProps::props().label("Volume").build());
+        let result = slider(
+            SliderProps::props().label("Volume").build(),
+            Children::default(),
+        );
         assert!(result.is_ok());
     }
 }

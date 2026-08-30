@@ -3,6 +3,9 @@
 #[allow(unused_imports)] use telar::*;
 #[allow(unused_imports)] use super::*;
 
+#[derive(::telar::Props)]
+pub struct FeaturesGradientsProps {}
+
 #[allow(dead_code)]
 fn style_swatch() -> LayoutStyle {
     LayoutStyle::new()
@@ -11,158 +14,193 @@ fn style_swatch() -> LayoutStyle {
 }
 
 #[allow(dead_code, unused_variables, unused_mut)]
-pub fn features_gradients() -> Result<Box<dyn LayoutItem>, LayoutError> {
+pub fn features_gradients(props: FeaturesGradientsProps, children: Children) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let __owner = telar::owner_scope();
     #[allow(unused_imports)] use telar::use_theme;
     let __col_0 = {
-        let __node_0 = doc_header(DocHeaderProps::props().kicker("SURFACES").title("Gradients").desc("Fill a box with a linear or radial gradient: name the stops in order, and where any of them sits.").build())?;
+        let __node_0 = doc_header(DocHeaderProps::props().kicker("SURFACES").title("Gradients").desc("Fill a box with a linear or radial gradient: name the stops in order, and where any of them sits.").build(), Children::default())?;
         let __node_1 = {
-            let mut __slots = Slots::new();
-            let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-            let __node_2 = {
-                let mut __slots = Slots::new();
-                let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-                let __node_3 = {
-                    let __col_1 = {
-                        let __sbox_0 = {
-                            StyledContainer::new(LayoutStyle::new().flex_column().width(SizeDimension::Percent(1.0)).height(72.0), move |r| RectStyle { fill: Some(Paint::Gradient(Gradient::linear(Point::new(r.x, r.y + r.height * 0.5), Point::new(r.x + r.width, r.y + r.height * 0.5), &[(0.0, use_theme::<core::theme::SandboxTheme>().danger), (1.0, use_theme::<core::theme::SandboxTheme>().primary())]))), border: None, shadow: None, radius: BorderRadius::all(10.0) }, children![])?
-                        };
-                        let __text_0 = {
-                            Text::declaring(
-                                || "horizontal".to_string(),
-                                LayoutStyle::new(),
-                                move |__inherited: TextStyle| __inherited.with_font_size(12.0).with_color(use_theme::<core::theme::SandboxTheme>().muted()),
-                            )?
-                        };
-                        Container::new(style_swatch().flex_column(), children![__sbox_0, __text_0])?
+            let __deferred = Children::new(
+                move || {
+                    let mut __slots = Slots::new();
+                    let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
+                    let __node_2 = {
+                        let __deferred = Children::new(
+                            move || {
+                                let mut __slots = Slots::new();
+                                let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
+                                let __node_3 = {
+                                    let __col_1 = {
+                                        let __sbox_0 = {
+                                            StyledContainer::new(LayoutStyle::new().flex_column().width(SizeDimension::Percent(1.0)).height(72.0), move |r| RectStyle { fill: Some(Paint::Gradient(Gradient::linear(Point::new(r.x, r.y + r.height * 0.5), Point::new(r.x + r.width, r.y + r.height * 0.5), &[(0.0, use_theme::<core::theme::SandboxTheme>().danger), (1.0, use_theme::<core::theme::SandboxTheme>().primary())]))), border: None, shadow: None, radius: BorderRadius::all(10.0) }, children![])?
+                                        };
+                                        let __text_0 = {
+                                            Text::declaring(
+                                                || "horizontal".to_string(),
+                                                LayoutStyle::new(),
+                                                move |__inherited: TextStyle| __inherited.with_font_size(12.0).with_color(use_theme::<core::theme::SandboxTheme>().muted()),
+                                            )?
+                                        };
+                                        Container::new(style_swatch().flex_column(), children![__sbox_0, __text_0])?
+                                    };
+                                    let __col_2 = {
+                                        let __sbox_1 = {
+                                            StyledContainer::new(LayoutStyle::new().flex_column().width(SizeDimension::Percent(1.0)).height(72.0), move |r| RectStyle { fill: Some(Paint::Gradient(Gradient::linear(Point::new(r.x + r.width * 0.5, r.y), Point::new(r.x + r.width * 0.5, r.y + r.height), &[(0.0, use_theme::<core::theme::SandboxTheme>().purple), (1.0, use_theme::<core::theme::SandboxTheme>().success())]))), border: None, shadow: None, radius: BorderRadius::all(10.0) }, children![])?
+                                        };
+                                        let __text_1 = {
+                                            Text::declaring(
+                                                || "vertical (the default)".to_string(),
+                                                LayoutStyle::new(),
+                                                move |__inherited: TextStyle| __inherited.with_font_size(12.0).with_color(use_theme::<core::theme::SandboxTheme>().muted()),
+                                            )?
+                                        };
+                                        Container::new(style_swatch().flex_column(), children![__sbox_1, __text_1])?
+                                    };
+                                    let __col_3 = {
+                                        let __sbox_2 = {
+                                            StyledContainer::new(LayoutStyle::new().flex_column().width(SizeDimension::Percent(1.0)).height(72.0), move |r| RectStyle { fill: Some(Paint::Gradient(Gradient::linear(Point::new(r.x, r.y), Point::new(r.x + r.width, r.y + r.height), &[(0.0, use_theme::<core::theme::SandboxTheme>().warning()), (1.0, use_theme::<core::theme::SandboxTheme>().danger)]))), border: None, shadow: None, radius: BorderRadius::all(10.0) }, children![])?
+                                        };
+                                        let __text_2 = {
+                                            Text::declaring(
+                                                || "diagonal".to_string(),
+                                                LayoutStyle::new(),
+                                                move |__inherited: TextStyle| __inherited.with_font_size(12.0).with_color(use_theme::<core::theme::SandboxTheme>().muted()),
+                                            )?
+                                        };
+                                        Container::new(style_swatch().flex_column(), children![__sbox_2, __text_2])?
+                                    };
+                                    Container::new(LayoutStyle::new().display_grid().grid_template_columns(vec![TemplateTrack::fit(TemplateTrack::minmax(TemplateTrack::px(160.0), TemplateTrack::fr(1.0)))]).gap(12.0), children![__col_1, __col_2, __col_3])?
+                                };
+                                __children.push(box_item(__node_3));
+                                __slots.extend_default(__children);
+                                Ok(__slots)
+                            }
+                        );
+                        card(CardProps::props().build(), __deferred)?
                     };
-                    let __col_2 = {
-                        let __sbox_1 = {
-                            StyledContainer::new(LayoutStyle::new().flex_column().width(SizeDimension::Percent(1.0)).height(72.0), move |r| RectStyle { fill: Some(Paint::Gradient(Gradient::linear(Point::new(r.x + r.width * 0.5, r.y), Point::new(r.x + r.width * 0.5, r.y + r.height), &[(0.0, use_theme::<core::theme::SandboxTheme>().purple), (1.0, use_theme::<core::theme::SandboxTheme>().success())]))), border: None, shadow: None, radius: BorderRadius::all(10.0) }, children![])?
-                        };
-                        let __text_1 = {
-                            Text::declaring(
-                                || "vertical (the default)".to_string(),
-                                LayoutStyle::new(),
-                                move |__inherited: TextStyle| __inherited.with_font_size(12.0).with_color(use_theme::<core::theme::SandboxTheme>().muted()),
-                            )?
-                        };
-                        Container::new(style_swatch().flex_column(), children![__sbox_1, __text_1])?
-                    };
-                    let __col_3 = {
-                        let __sbox_2 = {
-                            StyledContainer::new(LayoutStyle::new().flex_column().width(SizeDimension::Percent(1.0)).height(72.0), move |r| RectStyle { fill: Some(Paint::Gradient(Gradient::linear(Point::new(r.x, r.y), Point::new(r.x + r.width, r.y + r.height), &[(0.0, use_theme::<core::theme::SandboxTheme>().warning()), (1.0, use_theme::<core::theme::SandboxTheme>().danger)]))), border: None, shadow: None, radius: BorderRadius::all(10.0) }, children![])?
-                        };
-                        let __text_2 = {
-                            Text::declaring(
-                                || "diagonal".to_string(),
-                                LayoutStyle::new(),
-                                move |__inherited: TextStyle| __inherited.with_font_size(12.0).with_color(use_theme::<core::theme::SandboxTheme>().muted()),
-                            )?
-                        };
-                        Container::new(style_swatch().flex_column(), children![__sbox_2, __text_2])?
-                    };
-                    Container::new(LayoutStyle::new().display_grid().grid_template_columns(vec![TemplateTrack::fit(TemplateTrack::minmax(TemplateTrack::px(160.0), TemplateTrack::fr(1.0)))]).gap(12.0), children![__col_1, __col_2, __col_3])?
-                };
-                __children.push(box_item(__node_3));
-                __slots.extend_default(__children);
-                card(CardProps::props().build(), __slots)?
-            };
-            __children.push(box_item(__node_2));
-            let __node_4 = code_line(CodeLineProps::props().code("box fill:linear(horizontal, theme.danger, theme.primary)").build())?;
-            __children.push(box_item(__node_4));
-            __slots.extend_default(__children);
-            example(ExampleProps::props().title("Linear — the direction leads, or the run goes top to bottom").build(), __slots)?
+                    __children.push(box_item(__node_2));
+                    let __node_4 = code_line(CodeLineProps::props().code("box fill:linear(horizontal, theme.danger, theme.primary)").build(), Children::default())?;
+                    __children.push(box_item(__node_4));
+                    __slots.extend_default(__children);
+                    Ok(__slots)
+                }
+            );
+            example(ExampleProps::props().title("Linear — the direction leads, or the run goes top to bottom").build(), __deferred)?
         };
         let __node_5 = {
-            let mut __slots = Slots::new();
-            let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-            let __node_6 = {
-                let mut __slots = Slots::new();
-                let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-                let __sbox_3 = {
-                    StyledContainer::new(LayoutStyle::new().flex_column().width(SizeDimension::Percent(1.0)).height(80.0), move |r| RectStyle { fill: Some(Paint::Gradient(Gradient::linear(Point::new(r.x, r.y + r.height * 0.5), Point::new(r.x + r.width, r.y + r.height * 0.5), &[(0.0, use_theme::<core::theme::SandboxTheme>().primary()), (0.5, use_theme::<core::theme::SandboxTheme>().purple), (1.0, use_theme::<core::theme::SandboxTheme>().danger)]))), border: None, shadow: None, radius: BorderRadius::all(10.0) }, children![])?
-                };
-                __children.push(box_item(__sbox_3));
-                __slots.extend_default(__children);
-                card(CardProps::props().build(), __slots)?
-            };
-            __children.push(box_item(__node_6));
-            let __node_7 = code_line(CodeLineProps::props().code("box fill:linear(horizontal, theme.primary, theme.purple, theme.danger)").build())?;
-            __children.push(box_item(__node_7));
-            __slots.extend_default(__children);
-            example(ExampleProps::props().title("Three stops — a stop with no position of its own takes an even share").build(), __slots)?
+            let __deferred = Children::new(
+                move || {
+                    let mut __slots = Slots::new();
+                    let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
+                    let __node_6 = {
+                        let __deferred = Children::new(
+                            move || {
+                                let mut __slots = Slots::new();
+                                let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
+                                let __sbox_3 = {
+                                    StyledContainer::new(LayoutStyle::new().flex_column().width(SizeDimension::Percent(1.0)).height(80.0), move |r| RectStyle { fill: Some(Paint::Gradient(Gradient::linear(Point::new(r.x, r.y + r.height * 0.5), Point::new(r.x + r.width, r.y + r.height * 0.5), &[(0.0, use_theme::<core::theme::SandboxTheme>().primary()), (0.5, use_theme::<core::theme::SandboxTheme>().purple), (1.0, use_theme::<core::theme::SandboxTheme>().danger)]))), border: None, shadow: None, radius: BorderRadius::all(10.0) }, children![])?
+                                };
+                                __children.push(box_item(__sbox_3));
+                                __slots.extend_default(__children);
+                                Ok(__slots)
+                            }
+                        );
+                        card(CardProps::props().build(), __deferred)?
+                    };
+                    __children.push(box_item(__node_6));
+                    let __node_7 = code_line(CodeLineProps::props().code("box fill:linear(horizontal, theme.primary, theme.purple, theme.danger)").build(), Children::default())?;
+                    __children.push(box_item(__node_7));
+                    __slots.extend_default(__children);
+                    Ok(__slots)
+                }
+            );
+            example(ExampleProps::props().title("Three stops — a stop with no position of its own takes an even share").build(), __deferred)?
         };
         let __node_8 = {
-            let mut __slots = Slots::new();
-            let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-            let __node_9 = {
-                let mut __slots = Slots::new();
-                let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-                let __node_10 = {
-                    let __col_4 = {
-                        let __sbox_4 = {
-                            StyledContainer::new(LayoutStyle::new().flex_column().width(SizeDimension::Percent(1.0)).height(80.0), move |r| RectStyle { fill: Some(Paint::Gradient(Gradient::radial(Point::new(r.x + r.width * 0.5, r.y + r.height * 0.5), 70.0, &[(0.0, use_theme::<core::theme::SandboxTheme>().cyan), (1.0, use_theme::<core::theme::SandboxTheme>().primary())]))), border: None, shadow: None, radius: BorderRadius::all(10.0) }, children![])?
-                        };
-                        let __text_3 = {
-                            Text::declaring(
-                                || "radius 70".to_string(),
-                                LayoutStyle::new(),
-                                move |__inherited: TextStyle| __inherited.with_font_size(12.0).with_color(use_theme::<core::theme::SandboxTheme>().muted()),
-                            )?
-                        };
-                        Container::new(style_swatch().flex_column(), children![__sbox_4, __text_3])?
+            let __deferred = Children::new(
+                move || {
+                    let mut __slots = Slots::new();
+                    let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
+                    let __node_9 = {
+                        let __deferred = Children::new(
+                            move || {
+                                let mut __slots = Slots::new();
+                                let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
+                                let __node_10 = {
+                                    let __col_4 = {
+                                        let __sbox_4 = {
+                                            StyledContainer::new(LayoutStyle::new().flex_column().width(SizeDimension::Percent(1.0)).height(80.0), move |r| RectStyle { fill: Some(Paint::Gradient(Gradient::radial(Point::new(r.x + r.width * 0.5, r.y + r.height * 0.5), 70.0, &[(0.0, use_theme::<core::theme::SandboxTheme>().cyan), (1.0, use_theme::<core::theme::SandboxTheme>().primary())]))), border: None, shadow: None, radius: BorderRadius::all(10.0) }, children![])?
+                                        };
+                                        let __text_3 = {
+                                            Text::declaring(
+                                                || "radius 70".to_string(),
+                                                LayoutStyle::new(),
+                                                move |__inherited: TextStyle| __inherited.with_font_size(12.0).with_color(use_theme::<core::theme::SandboxTheme>().muted()),
+                                            )?
+                                        };
+                                        Container::new(style_swatch().flex_column(), children![__sbox_4, __text_3])?
+                                    };
+                                    let __col_5 = {
+                                        let __sbox_5 = {
+                                            StyledContainer::new(LayoutStyle::new().flex_column().width(SizeDimension::Percent(1.0)).height(80.0), move |r| RectStyle { fill: Some(Paint::Gradient(Gradient::radial(Point::new(r.x + r.width * 0.5, r.y + r.height * 0.5), r.width.min(r.height) * 0.5, &[(0.0, use_theme::<core::theme::SandboxTheme>().warning()), (1.0, use_theme::<core::theme::SandboxTheme>().danger)]))), border: None, shadow: None, radius: BorderRadius::all(10.0) }, children![])?
+                                        };
+                                        let __text_4 = {
+                                            Text::declaring(
+                                                || "default radius".to_string(),
+                                                LayoutStyle::new(),
+                                                move |__inherited: TextStyle| __inherited.with_font_size(12.0).with_color(use_theme::<core::theme::SandboxTheme>().muted()),
+                                            )?
+                                        };
+                                        Container::new(style_swatch().flex_column(), children![__sbox_5, __text_4])?
+                                    };
+                                    let __col_6 = {
+                                        let __sbox_6 = {
+                                            StyledContainer::new(LayoutStyle::new().flex_column().width(SizeDimension::Percent(1.0)).height(80.0), move |r| RectStyle { fill: Some(Paint::Gradient(Gradient::radial(Point::new(r.x + r.width * 0.5, r.y + r.height * 0.5), 80.0, &[(0.0, use_theme::<core::theme::SandboxTheme>().success()), (0.45, use_theme::<core::theme::SandboxTheme>().cyan), (1.0, use_theme::<core::theme::SandboxTheme>().purple)]))), border: None, shadow: None, radius: BorderRadius::all(10.0) }, children![])?
+                                        };
+                                        let __text_5 = {
+                                            Text::declaring(
+                                                || "3 stops, the middle at 0.45".to_string(),
+                                                LayoutStyle::new(),
+                                                move |__inherited: TextStyle| __inherited.with_font_size(12.0).with_color(use_theme::<core::theme::SandboxTheme>().muted()),
+                                            )?
+                                        };
+                                        Container::new(style_swatch().flex_column(), children![__sbox_6, __text_5])?
+                                    };
+                                    Container::new(LayoutStyle::new().display_grid().grid_template_columns(vec![TemplateTrack::fit(TemplateTrack::minmax(TemplateTrack::px(160.0), TemplateTrack::fr(1.0)))]).gap(12.0), children![__col_4, __col_5, __col_6])?
+                                };
+                                __children.push(box_item(__node_10));
+                                __slots.extend_default(__children);
+                                Ok(__slots)
+                            }
+                        );
+                        card(CardProps::props().build(), __deferred)?
                     };
-                    let __col_5 = {
-                        let __sbox_5 = {
-                            StyledContainer::new(LayoutStyle::new().flex_column().width(SizeDimension::Percent(1.0)).height(80.0), move |r| RectStyle { fill: Some(Paint::Gradient(Gradient::radial(Point::new(r.x + r.width * 0.5, r.y + r.height * 0.5), r.width.min(r.height) * 0.5, &[(0.0, use_theme::<core::theme::SandboxTheme>().warning()), (1.0, use_theme::<core::theme::SandboxTheme>().danger)]))), border: None, shadow: None, radius: BorderRadius::all(10.0) }, children![])?
-                        };
-                        let __text_4 = {
-                            Text::declaring(
-                                || "default radius".to_string(),
-                                LayoutStyle::new(),
-                                move |__inherited: TextStyle| __inherited.with_font_size(12.0).with_color(use_theme::<core::theme::SandboxTheme>().muted()),
-                            )?
-                        };
-                        Container::new(style_swatch().flex_column(), children![__sbox_5, __text_4])?
-                    };
-                    let __col_6 = {
-                        let __sbox_6 = {
-                            StyledContainer::new(LayoutStyle::new().flex_column().width(SizeDimension::Percent(1.0)).height(80.0), move |r| RectStyle { fill: Some(Paint::Gradient(Gradient::radial(Point::new(r.x + r.width * 0.5, r.y + r.height * 0.5), 80.0, &[(0.0, use_theme::<core::theme::SandboxTheme>().success()), (0.45, use_theme::<core::theme::SandboxTheme>().cyan), (1.0, use_theme::<core::theme::SandboxTheme>().purple)]))), border: None, shadow: None, radius: BorderRadius::all(10.0) }, children![])?
-                        };
-                        let __text_5 = {
-                            Text::declaring(
-                                || "3 stops, the middle at 0.45".to_string(),
-                                LayoutStyle::new(),
-                                move |__inherited: TextStyle| __inherited.with_font_size(12.0).with_color(use_theme::<core::theme::SandboxTheme>().muted()),
-                            )?
-                        };
-                        Container::new(style_swatch().flex_column(), children![__sbox_6, __text_5])?
-                    };
-                    Container::new(LayoutStyle::new().display_grid().grid_template_columns(vec![TemplateTrack::fit(TemplateTrack::minmax(TemplateTrack::px(160.0), TemplateTrack::fr(1.0)))]).gap(12.0), children![__col_4, __col_5, __col_6])?
-                };
-                __children.push(box_item(__node_10));
-                __slots.extend_default(__children);
-                card(CardProps::props().build(), __slots)?
-            };
-            __children.push(box_item(__node_9));
-            let __node_11 = code_line(CodeLineProps::props().code("box fill:radial(70, theme.cyan, theme.primary)").build())?;
-            __children.push(box_item(__node_11));
-            __slots.extend_default(__children);
-            example(ExampleProps::props().title("Radial — a burst from the center; a leading number sets the radius").build(), __slots)?
+                    __children.push(box_item(__node_9));
+                    let __node_11 = code_line(CodeLineProps::props().code("box fill:radial(70, theme.cyan, theme.primary)").build(), Children::default())?;
+                    __children.push(box_item(__node_11));
+                    __slots.extend_default(__children);
+                    Ok(__slots)
+                }
+            );
+            example(ExampleProps::props().title("Radial — a burst from the center; a leading number sets the radius").build(), __deferred)?
         };
         let __node_12 = {
-            let mut __slots = Slots::new();
-            let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-            let __col_7 = {
-                let __node_13 = prop_row(PropRowProps::props().name("linear(…)").values("[horizontal·vertical·diagonal,] stop, stop…").about("A run between two or more stops. Vertical unless the axis leads.").build())?;
-                let __node_14 = prop_row(PropRowProps::props().name("radial(…)").values("[radius,] stop, stop…").about("A burst from the center. Half the shorter side unless a radius leads.").build())?;
-                let __node_15 = prop_row(PropRowProps::props().name("stop").values("color [position]").about("A color, and where it sits from 0 to 1. Unpositioned stops spread evenly.").build())?;
-                Container::new(LayoutStyle::new().flex_column().gap(6.0), children![__node_13, __node_14, __node_15])?
-            };
-            __children.push(box_item(__col_7));
-            __slots.extend_default(__children);
-            example(ExampleProps::props().title("Attributes").build(), __slots)?
+            let __deferred = Children::new(
+                move || {
+                    let mut __slots = Slots::new();
+                    let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
+                    let __col_7 = {
+                        let __node_13 = prop_row(PropRowProps::props().name("linear(…)").values("[horizontal·vertical·diagonal,] stop, stop…").about("A run between two or more stops. Vertical unless the axis leads.").build(), Children::default())?;
+                        let __node_14 = prop_row(PropRowProps::props().name("radial(…)").values("[radius,] stop, stop…").about("A burst from the center. Half the shorter side unless a radius leads.").build(), Children::default())?;
+                        let __node_15 = prop_row(PropRowProps::props().name("stop").values("color [position]").about("A color, and where it sits from 0 to 1. Unpositioned stops spread evenly.").build(), Children::default())?;
+                        Container::new(LayoutStyle::new().flex_column().gap(6.0), children![__node_13, __node_14, __node_15])?
+                    };
+                    __children.push(box_item(__col_7));
+                    __slots.extend_default(__children);
+                    Ok(__slots)
+                }
+            );
+            example(ExampleProps::props().title("Attributes").build(), __deferred)?
         };
         Container::new(LayoutStyle::new().flex_column().gap(20.0), children![__node_0, __node_1, __node_5, __node_8, __node_12])?
     };

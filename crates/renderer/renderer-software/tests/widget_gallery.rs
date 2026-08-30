@@ -16,8 +16,8 @@ use ui_components::{
 };
 use ui_components::{ModalProps, modal};
 use ui_core::{
-    Container, LayoutItem, Slots, Text, box_item, compute_layout, new_container, relayout_if_dirty,
-    reset_layout_runtime,
+    Children, Container, LayoutItem, Slots, Text, box_item, compute_layout, new_container,
+    relayout_if_dirty, reset_layout_runtime,
 };
 use ui_tree::ComponentList;
 
@@ -33,6 +33,7 @@ fn form_widgets_render() {
             .checked(signal(true))
             .label("I agree to the terms")
             .build(),
+        Children::default(),
     )
     .unwrap();
     let tg = toggle(
@@ -40,6 +41,7 @@ fn form_widgets_render() {
             .checked(signal(true))
             .label("Notifications on")
             .build(),
+        Children::default(),
     )
     .unwrap();
     let choice = signal(1u32);
@@ -49,6 +51,7 @@ fn form_widgets_render() {
             .value(0)
             .label("Small")
             .build(),
+        Children::default(),
     )
     .unwrap();
     let r1 = radio(
@@ -57,6 +60,7 @@ fn form_widgets_render() {
             .value(1)
             .label("Medium (selected)")
             .build(),
+        Children::default(),
     )
     .unwrap();
     let sl = slider(
@@ -64,6 +68,7 @@ fn form_widgets_render() {
             .value(signal(0.62))
             .width(260.0)
             .build(),
+        Children::default(),
     )
     .unwrap();
     let tf = text_field(
@@ -72,6 +77,7 @@ fn form_widgets_render() {
             .label("Name")
             .width(260.0)
             .build(),
+        Children::default(),
     )
     .unwrap();
     // A SECOND field (like the demo's two): placeholder-only, its own signal. Both must render.
@@ -81,6 +87,7 @@ fn form_widgets_render() {
             .placeholder("Search…")
             .width(260.0)
             .build(),
+        Children::default(),
     )
     .unwrap();
 
@@ -149,7 +156,7 @@ fn modal_renders_over_a_page() {
             .open(open)
             .title("Confirm action")
             .build(),
-        slots,
+        Children::from(slots),
     )
     .unwrap();
 
@@ -210,7 +217,7 @@ fn select_open_renders() {
                     None,
                     item(
                         ItemProps::props().label(label.to_string()).build(),
-                        Slots::new(),
+                        Children::default(),
                     )?,
                 );
             }

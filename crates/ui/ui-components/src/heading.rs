@@ -1,7 +1,7 @@
 use layout_core::{LayoutError, LayoutStyle};
 use reactive_core::Reactive;
 use telar_macros::Props;
-use ui_core::{LayoutItem, Text, box_item};
+use ui_core::{Children, LayoutItem, Text, box_item};
 
 /// A section title: semibold, half again the body size around it, coloured from the theme's accent
 /// (`primary`). High-level sugar over `text`; lives in `ui-components`, not the kernel.
@@ -11,7 +11,10 @@ pub struct HeadingProps {
     pub text: Reactive<String>,
 }
 
-pub fn heading(props: HeadingProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
+pub fn heading(
+    props: HeadingProps,
+    _children: Children,
+) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let text = props.text;
     // No pinned height: a measured leaf sizes itself from the text it resolved to, so a title follows a
     // declared body size without an effect having to be owned somewhere to push a number at it.

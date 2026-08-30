@@ -5,7 +5,7 @@ use telar_macros::Props;
 use layout_core::{AlignItems, JustifyContent, LayoutError, LayoutStyle};
 use motion_core::{Easing, Keyframes, Repeat};
 use renderer_core::{Border, BorderRadius, Color, RectStyle, ShapeStyle};
-use ui_core::{LayoutItem, StyledContainer, box_item, box_transform};
+use ui_core::{Children, LayoutItem, StyledContainer, box_item, box_transform};
 
 use crate::shared;
 
@@ -38,7 +38,10 @@ pub struct SpinnerProps {
     pub size: f32,
 }
 
-pub fn spinner(props: SpinnerProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
+pub fn spinner(
+    props: SpinnerProps,
+    _children: Children,
+) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let SpinnerProps { color, size } = props;
     let size = if size > 0.0 { size } else { 24.0 };
     let head_size = size * HEAD_FRACTION;
@@ -106,7 +109,7 @@ mod tests {
     #[test]
     fn spinner_builds_with_default_size() {
         crate::test_support::fresh_layout_runtime();
-        let widget = spinner(SpinnerProps::props().build());
+        let widget = spinner(SpinnerProps::props().build(), Children::default());
         assert!(widget.is_ok());
         lay_out(widget.unwrap().layout_node());
     }
@@ -114,7 +117,11 @@ mod tests {
     #[test]
     fn spinner_builds_with_custom_size() {
         crate::test_support::fresh_layout_runtime();
-        let widget = spinner(SpinnerProps::props().size(48.0).build()).unwrap();
+        let widget = spinner(
+            SpinnerProps::props().size(48.0).build(),
+            Children::default(),
+        )
+        .unwrap();
         lay_out(widget.layout_node());
     }
 }

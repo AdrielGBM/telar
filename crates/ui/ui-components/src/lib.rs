@@ -40,7 +40,7 @@ pub use chip::{ChipProps, chip};
 pub use context_menu::{ContextMenuProps, Entry as MenuEntry, MenuStyle, context_menu};
 pub use drawer::{DrawerProps, drawer};
 pub use heading::{HeadingProps, heading};
-pub use list::{GroupProps, ItemProps, group, item, separator};
+pub use list::{GroupProps, ItemProps, SeparatorProps, group, item, separator};
 pub use menu::{MenuProps, menu};
 pub use modal::{ModalProps, modal};
 pub use progress::{ProgressProps, progress};

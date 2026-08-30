@@ -41,7 +41,8 @@ pub struct SelectProps {
     pub stretch: bool,
 }
 
-pub fn select(props: SelectProps, rows: Children) -> Result<Box<dyn LayoutItem>, LayoutError> {
+pub fn select(props: SelectProps, children: Children) -> Result<Box<dyn LayoutItem>, LayoutError> {
+    let rows = children;
     // `None` selection is uncontrolled: own an internal signal so the trigger still tracks a choice.
     let selected = props.selected.unwrap_or_else(|| signal(0u32));
     dropdown::dropdown(dropdown::Dropdown {
@@ -86,7 +87,7 @@ mod tests {
                         crate::list::ItemProps::props()
                             .label(Reactive::of(move || label.to_string()))
                             .build(),
-                        Slots::new(),
+                        Children::default(),
                     )?,
                 );
             }
@@ -223,7 +224,7 @@ mod tests {
                             .label(Reactive::of(move || label.to_string()))
                             .disabled(Reactive::of(move || disabled))
                             .build(),
-                        Slots::new(),
+                        Children::default(),
                     )?,
                 );
             }

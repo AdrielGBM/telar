@@ -1,7 +1,7 @@
 use layout_core::{LayoutError, LayoutStyle};
 use reactive_core::Reactive;
 use telar_macros::Props;
-use ui_core::{Container, LayoutItem, Slots, box_item};
+use ui_core::{Children, Container, LayoutItem, box_item};
 
 use crate::heading::{HeadingProps, heading};
 use crate::shared;
@@ -14,9 +14,15 @@ pub struct SectionProps {
     pub title: Reactive<String>,
 }
 
-pub fn section(props: SectionProps, mut slots: Slots) -> Result<Box<dyn LayoutItem>, LayoutError> {
-    let mut children: Vec<Box<dyn LayoutItem>> =
-        vec![heading(HeadingProps::props().text(props.title).build())?];
+pub fn section(
+    props: SectionProps,
+    children: Children,
+) -> Result<Box<dyn LayoutItem>, LayoutError> {
+    let mut slots = children.build()?;
+    let mut children: Vec<Box<dyn LayoutItem>> = vec![heading(
+        HeadingProps::props().text(props.title).build(),
+        Children::default(),
+    )?];
     children.extend(slots.take_default());
     let col = Container::new(
         LayoutStyle::new().flex_column().gap(shared::spacing()),

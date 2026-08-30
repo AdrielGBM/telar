@@ -3,144 +3,193 @@
 #[allow(unused_imports)] use telar::*;
 #[allow(unused_imports)] use super::*;
 
+#[derive(::telar::Props)]
+pub struct FeaturesNavigationProps {}
+
 #[allow(dead_code, unused_variables, unused_mut)]
-pub fn features_navigation() -> Result<Box<dyn LayoutItem>, LayoutError> {
+pub fn features_navigation(props: FeaturesNavigationProps, children: Children) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let __owner = telar::owner_scope();
     #[allow(unused_imports)] use telar::use_theme;
     let tab = signal(0u32);
     let open = signal(true);
 
     let __col_0 = {
-        let __node_0 = doc_header(DocHeaderProps::props().kicker("NAVIGATION").title("Tabs & accordion").desc("tabs is a bound selected-index bar; pair it with reactive ifs to swap panels. accordion is an inline collapsible section that pushes its siblings as it opens. Both are components.").build())?;
+        let __node_0 = doc_header(DocHeaderProps::props().kicker("NAVIGATION").title("Tabs & accordion").desc("tabs is a bound selected-index bar; pair it with reactive ifs to swap panels. accordion is an inline collapsible section that pushes its siblings as it opens. Both are components.").build(), Children::default())?;
         let __node_1 = {
-            let mut __slots = Slots::new();
-            let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-            let __node_2 = {
-                let mut __slots = Slots::new();
-                let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-                let __node_3 = tabs(TabsProps::props().selected(tab.clone()).items(vec!["Overview","Pricing","Team"]).build())?;
-                __children.push(box_item(__node_3));
-                let __node_4 = ReactiveList::new(
-                    { let tab = tab.clone(); move || vec![tab.get() == 0] },
-                    |__cond: &bool| *__cond,
-                    move |__cond: bool| -> Result<Box<dyn LayoutItem>, LayoutError> {
-                        if __cond {
-                            let __text_0 = {
-                                Text::declaring(
-                                    || "Overview — what the product does.".to_string(),
-                                    LayoutStyle::new(),
-                                    move |__inherited: TextStyle| __inherited.with_font_size(14.0).with_color(use_theme::<core::theme::SandboxTheme>().ink()),
-                                )?
-                            };
-                            Ok(box_item(__text_0))
-                        } else {
-                            Ok(box_item(Container::column(children![])?))
-                        }
-                    },
-                    0.0,
-                )?;
-                __children.push(box_item(__node_4));
-                let __node_5 = ReactiveList::new(
-                    { let tab = tab.clone(); move || vec![tab.get() == 1] },
-                    |__cond: &bool| *__cond,
-                    move |__cond: bool| -> Result<Box<dyn LayoutItem>, LayoutError> {
-                        if __cond {
-                            let __text_1 = {
-                                Text::declaring(
-                                    || "Pricing — plans and limits.".to_string(),
-                                    LayoutStyle::new(),
-                                    move |__inherited: TextStyle| __inherited.with_font_size(14.0).with_color(use_theme::<core::theme::SandboxTheme>().ink()),
-                                )?
-                            };
-                            Ok(box_item(__text_1))
-                        } else {
-                            Ok(box_item(Container::column(children![])?))
-                        }
-                    },
-                    0.0,
-                )?;
-                __children.push(box_item(__node_5));
-                let __node_6 = ReactiveList::new(
-                    { let tab = tab.clone(); move || vec![tab.get() == 2] },
-                    |__cond: &bool| *__cond,
-                    move |__cond: bool| -> Result<Box<dyn LayoutItem>, LayoutError> {
-                        if __cond {
-                            let __text_2 = {
-                                Text::declaring(
-                                    || "Team — who is behind it.".to_string(),
-                                    LayoutStyle::new(),
-                                    move |__inherited: TextStyle| __inherited.with_font_size(14.0).with_color(use_theme::<core::theme::SandboxTheme>().ink()),
-                                )?
-                            };
-                            Ok(box_item(__text_2))
-                        } else {
-                            Ok(box_item(Container::column(children![])?))
-                        }
-                    },
-                    0.0,
-                )?;
-                __children.push(box_item(__node_6));
-                __slots.extend_default(__children);
-                card(CardProps::props().gap(10.0).build(), __slots)?
-            };
-            __children.push(box_item(__node_2));
-            let __node_7 = code_line(CodeLineProps::props().code("tabs selected:$tab items:vec!['Overview','Pricing','Team']").build())?;
-            __children.push(box_item(__node_7));
-            __slots.extend_default(__children);
-            example(ExampleProps::props().title("tabs — a bound index; swap panels with reactive ifs").build(), __slots)?
-        };
-        let __node_8 = {
-            let mut __slots = Slots::new();
-            let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-            let __node_9 = {
-                let mut __slots = Slots::new();
-                let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-                let __node_10 = {
+            let __deferred = Children::new(
+                {
+                    let tab = tab.clone();
+                move || {
+                    let tab = tab.clone();
                     let mut __slots = Slots::new();
                     let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-                    let __text_3 = {
-                        Text::declaring(
-                            || "Ships in 2–3 business days. Free over $50.".to_string(),
-                            LayoutStyle::new(),
-                            move |__inherited: TextStyle| __inherited.with_font_size(14.0).with_color(use_theme::<core::theme::SandboxTheme>().muted()),
-                        )?
+                    let __node_2 = {
+                        let __deferred = Children::new(
+                            {
+                                let tab = tab.clone();
+                            move || {
+                                let tab = tab.clone();
+                                let mut __slots = Slots::new();
+                                let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
+                                let __node_3 = tabs(TabsProps::props().selected(tab.clone()).items(vec!["Overview","Pricing","Team"]).build(), Children::default())?;
+                                __children.push(box_item(__node_3));
+                                let __node_4 = ReactiveList::new(
+                                    { let tab = tab.clone(); move || vec![tab.get() == 0] },
+                                    |__cond: &bool| *__cond,
+                                    move |__cond: bool| -> Result<Box<dyn LayoutItem>, LayoutError> {
+                                        if __cond {
+                                            let __text_0 = {
+                                                Text::declaring(
+                                                    || "Overview — what the product does.".to_string(),
+                                                    LayoutStyle::new(),
+                                                    move |__inherited: TextStyle| __inherited.with_font_size(14.0).with_color(use_theme::<core::theme::SandboxTheme>().ink()),
+                                                )?
+                                            };
+                                            Ok(box_item(__text_0))
+                                        } else {
+                                            Ok(box_item(Container::column(children![])?))
+                                        }
+                                    },
+                                    0.0,
+                                )?;
+                                __children.push(box_item(__node_4));
+                                let __node_5 = ReactiveList::new(
+                                    { let tab = tab.clone(); move || vec![tab.get() == 1] },
+                                    |__cond: &bool| *__cond,
+                                    move |__cond: bool| -> Result<Box<dyn LayoutItem>, LayoutError> {
+                                        if __cond {
+                                            let __text_1 = {
+                                                Text::declaring(
+                                                    || "Pricing — plans and limits.".to_string(),
+                                                    LayoutStyle::new(),
+                                                    move |__inherited: TextStyle| __inherited.with_font_size(14.0).with_color(use_theme::<core::theme::SandboxTheme>().ink()),
+                                                )?
+                                            };
+                                            Ok(box_item(__text_1))
+                                        } else {
+                                            Ok(box_item(Container::column(children![])?))
+                                        }
+                                    },
+                                    0.0,
+                                )?;
+                                __children.push(box_item(__node_5));
+                                let __node_6 = ReactiveList::new(
+                                    { let tab = tab.clone(); move || vec![tab.get() == 2] },
+                                    |__cond: &bool| *__cond,
+                                    move |__cond: bool| -> Result<Box<dyn LayoutItem>, LayoutError> {
+                                        if __cond {
+                                            let __text_2 = {
+                                                Text::declaring(
+                                                    || "Team — who is behind it.".to_string(),
+                                                    LayoutStyle::new(),
+                                                    move |__inherited: TextStyle| __inherited.with_font_size(14.0).with_color(use_theme::<core::theme::SandboxTheme>().ink()),
+                                                )?
+                                            };
+                                            Ok(box_item(__text_2))
+                                        } else {
+                                            Ok(box_item(Container::column(children![])?))
+                                        }
+                                    },
+                                    0.0,
+                                )?;
+                                __children.push(box_item(__node_6));
+                                __slots.extend_default(__children);
+                                Ok(__slots)
+                            }
+                            }
+                        );
+                        card(CardProps::props().gap(10.0).build(), __deferred)?
                     };
-                    __children.push(box_item(__text_3));
+                    __children.push(box_item(__node_2));
+                    let __node_7 = code_line(CodeLineProps::props().code("tabs selected:$tab items:vec!['Overview','Pricing','Team']").build(), Children::default())?;
+                    __children.push(box_item(__node_7));
                     __slots.extend_default(__children);
-                    accordion(AccordionProps::props().title("Shipping details").open(open.clone()).build(), __slots)?
-                };
-                __children.push(box_item(__node_10));
-                let __text_4 = {
+                    Ok(__slots)
+                }
+                }
+            );
+            example(ExampleProps::props().title("tabs — a bound index; swap panels with reactive ifs").build(), __deferred)?
+        };
+        let __node_8 = {
+            let __deferred = Children::new(
+                {
                     let open = open.clone();
-                    Text::declaring(
-                        move || format!("open · {}", { open.get() }),
-                        LayoutStyle::new(),
-                        move |__inherited: TextStyle| __inherited.with_font_size(13.0).with_color(use_theme::<core::theme::SandboxTheme>().muted()),
-                    )?
-                };
-                __children.push(box_item(__text_4));
-                __slots.extend_default(__children);
-                card(CardProps::props().gap(10.0).build(), __slots)?
-            };
-            __children.push(box_item(__node_9));
-            let __node_11 = code_line(CodeLineProps::props().code("accordion title:'Shipping details' open:$open  >  …body…").build())?;
-            __children.push(box_item(__node_11));
-            __slots.extend_default(__children);
-            example(ExampleProps::props().title("accordion — a collapsible section, open bound to a signal").build(), __slots)?
+                move || {
+                    let open = open.clone();
+                    let mut __slots = Slots::new();
+                    let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
+                    let __node_9 = {
+                        let __deferred = Children::new(
+                            {
+                                let open = open.clone();
+                            move || {
+                                let open = open.clone();
+                                let mut __slots = Slots::new();
+                                let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
+                                let __node_10 = {
+                                    let __deferred = Children::new(
+                                        move || {
+                                            let mut __slots = Slots::new();
+                                            let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
+                                            let __text_3 = {
+                                                Text::declaring(
+                                                    || "Ships in 2–3 business days. Free over $50.".to_string(),
+                                                    LayoutStyle::new(),
+                                                    move |__inherited: TextStyle| __inherited.with_font_size(14.0).with_color(use_theme::<core::theme::SandboxTheme>().muted()),
+                                                )?
+                                            };
+                                            __children.push(box_item(__text_3));
+                                            __slots.extend_default(__children);
+                                            Ok(__slots)
+                                        }
+                                    );
+                                    accordion(AccordionProps::props().title("Shipping details").open(open.clone()).build(), __deferred)?
+                                };
+                                __children.push(box_item(__node_10));
+                                let __text_4 = {
+                                    let open = open.clone();
+                                    Text::declaring(
+                                        move || format!("open · {}", { open.get() }),
+                                        LayoutStyle::new(),
+                                        move |__inherited: TextStyle| __inherited.with_font_size(13.0).with_color(use_theme::<core::theme::SandboxTheme>().muted()),
+                                    )?
+                                };
+                                __children.push(box_item(__text_4));
+                                __slots.extend_default(__children);
+                                Ok(__slots)
+                            }
+                            }
+                        );
+                        card(CardProps::props().gap(10.0).build(), __deferred)?
+                    };
+                    __children.push(box_item(__node_9));
+                    let __node_11 = code_line(CodeLineProps::props().code("accordion title:'Shipping details' open:$open  >  …body…").build(), Children::default())?;
+                    __children.push(box_item(__node_11));
+                    __slots.extend_default(__children);
+                    Ok(__slots)
+                }
+                }
+            );
+            example(ExampleProps::props().title("accordion — a collapsible section, open bound to a signal").build(), __deferred)?
         };
         let __node_12 = {
-            let mut __slots = Slots::new();
-            let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-            let __col_1 = {
-                let __node_13 = prop_row(PropRowProps::props().name("items").values("vec![..]").about("tabs labels, one button each.").build())?;
-                let __node_14 = prop_row(PropRowProps::props().name("selected").values("signal").about("tabs active index (u32), two-way.").build())?;
-                let __node_15 = prop_row(PropRowProps::props().name("title").values("text").about("accordion header label.").build())?;
-                let __node_16 = prop_row(PropRowProps::props().name("open").values("signal").about("accordion expanded bool, two-way.").build())?;
-                Container::new(LayoutStyle::new().flex_column().gap(6.0), children![__node_13, __node_14, __node_15, __node_16])?
-            };
-            __children.push(box_item(__col_1));
-            __slots.extend_default(__children);
-            example(ExampleProps::props().title("Attributes").build(), __slots)?
+            let __deferred = Children::new(
+                move || {
+                    let mut __slots = Slots::new();
+                    let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
+                    let __col_1 = {
+                        let __node_13 = prop_row(PropRowProps::props().name("items").values("vec![..]").about("tabs labels, one button each.").build(), Children::default())?;
+                        let __node_14 = prop_row(PropRowProps::props().name("selected").values("signal").about("tabs active index (u32), two-way.").build(), Children::default())?;
+                        let __node_15 = prop_row(PropRowProps::props().name("title").values("text").about("accordion header label.").build(), Children::default())?;
+                        let __node_16 = prop_row(PropRowProps::props().name("open").values("signal").about("accordion expanded bool, two-way.").build(), Children::default())?;
+                        Container::new(LayoutStyle::new().flex_column().gap(6.0), children![__node_13, __node_14, __node_15, __node_16])?
+                    };
+                    __children.push(box_item(__col_1));
+                    __slots.extend_default(__children);
+                    Ok(__slots)
+                }
+            );
+            example(ExampleProps::props().title("Attributes").build(), __deferred)?
         };
         Container::new(LayoutStyle::new().flex_column().gap(20.0), children![__node_0, __node_1, __node_8, __node_12])?
     };

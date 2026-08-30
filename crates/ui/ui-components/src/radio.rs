@@ -4,7 +4,7 @@ use layout_core::{AlignItems, JustifyContent, LayoutError, LayoutStyle};
 use reactive_core::{Reactive, RwSignal, signal};
 use renderer_core::{Border, BorderRadius, Color, RectStyle, ShapeStyle};
 use ui_core::focus::Role;
-use ui_core::{LayoutItem, StyledContainer, box_item};
+use ui_core::{Children, LayoutItem, StyledContainer, box_item};
 
 use crate::shared;
 
@@ -32,7 +32,7 @@ pub struct RadioProps {
     pub on_select: Option<Box<dyn Fn(u32)>>,
 }
 
-pub fn radio(props: RadioProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
+pub fn radio(props: RadioProps, _children: Children) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let RadioProps {
         selected,
         value,
@@ -128,6 +128,7 @@ mod tests {
                 .value(2)
                 .label("Large")
                 .build(),
+            Children::default(),
         )
         .unwrap();
         let (cx, cy) = lay_out(widget.layout_node());
@@ -149,6 +150,7 @@ mod tests {
                 .value(5)
                 .on_select(Box::new(move |v| sink.set(Some(v))))
                 .build(),
+            Children::default(),
         )
         .unwrap();
         let (cx, cy) = lay_out(widget.layout_node());

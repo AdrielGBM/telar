@@ -21,7 +21,7 @@ use layout_core::{AlignItems, JustifyContent, LayoutError, LayoutStyle, Margin};
 use reactive_core::{Reactive, RwSignal};
 use renderer_core::{Color, RectStyle, ShapeStyle};
 use ui_core::focus::Role;
-use ui_core::{Container, LayoutItem, Slots, StyledContainer, Text, box_item, use_context};
+use ui_core::{Children, Container, LayoutItem, StyledContainer, Text, box_item, use_context};
 
 use crate::shared;
 
@@ -297,7 +297,8 @@ pub struct ItemProps {
     pub on_press: Option<Box<dyn Fn()>>,
 }
 
-pub fn item(props: ItemProps, children: Slots) -> Result<Box<dyn LayoutItem>, LayoutError> {
+pub fn item(props: ItemProps, children: Children) -> Result<Box<dyn LayoutItem>, LayoutError> {
+    let children = children.build()?;
     let ItemProps {
         label,
         disabled,
@@ -393,7 +394,13 @@ pub fn item(props: ItemProps, children: Slots) -> Result<Box<dyn LayoutItem>, La
 
 /// A rule between groups of rows. Registered like a row so it takes a position in the list, and unreachable
 /// so the keyboard passes straight over it.
-pub fn separator() -> Result<Box<dyn LayoutItem>, LayoutError> {
+#[derive(Props)]
+pub struct SeparatorProps {}
+
+pub fn separator(
+    _props: SeparatorProps,
+    _children: Children,
+) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let list = use_context::<ListContext>();
     if let Some(ctx) = &list {
         ctx.claim_unreachable();
@@ -418,7 +425,7 @@ pub struct GroupProps {
     pub label: Reactive<String>,
 }
 
-pub fn group(props: GroupProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
+pub fn group(props: GroupProps, _children: Children) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let list = use_context::<ListContext>();
     if let Some(ctx) = &list {
         ctx.claim_unreachable();
@@ -497,7 +504,7 @@ mod tests {
                 .label("Move")
                 .hint(Reactive::from("⌘G"))
                 .build(),
-            Slots::new(),
+            Children::default(),
         )
         .unwrap();
         let root = new_container(

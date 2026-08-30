@@ -4,8 +4,10 @@ use telar_macros::Props;
 use layout_core::{AlignItems, JustifyContent, LayoutError, LayoutStyle};
 use reactive_core::{Reactive, signal};
 use renderer_core::{BorderRadius, Color, RectStyle, ShapeStyle, TextStyle, TextWrap};
+#[cfg(test)]
+use ui_core::Slots;
 use ui_core::{
-    Container, LayoutItem, Overlay, Placement, ReactiveList, Slots, StyledContainer, Text,
+    Children, Container, LayoutItem, Overlay, Placement, ReactiveList, StyledContainer, Text,
     box_item, track_layout,
 };
 
@@ -90,7 +92,11 @@ fn placement_of(side: &str) -> Placement {
     }
 }
 
-pub fn tooltip(props: TooltipProps, mut slots: Slots) -> Result<Box<dyn LayoutItem>, LayoutError> {
+pub fn tooltip(
+    props: TooltipProps,
+    children: Children,
+) -> Result<Box<dyn LayoutItem>, LayoutError> {
+    let mut slots = children.build()?;
     let TooltipProps {
         text,
         shortcut,
@@ -326,7 +332,7 @@ mod tests {
         crate::test_support::fresh_layout_runtime();
         let tooltip = tooltip(
             TooltipProps::props().text("Move").build(),
-            slot_with_trigger(),
+            Children::from(slot_with_trigger()),
         )
         .unwrap();
         let root = new_container(
@@ -369,7 +375,11 @@ mod tests {
     fn hover_shows_bubble_and_leave_hides_it() {
         crate::test_support::fresh_layout_runtime();
         let slots = slot_with_trigger();
-        let tooltip = tooltip(TooltipProps::props().text("Helpful hint").build(), slots).unwrap();
+        let tooltip = tooltip(
+            TooltipProps::props().text("Helpful hint").build(),
+            Children::from(slots),
+        )
+        .unwrap();
 
         // A parent-less root computed against the window registers the overlay host the bubble anchors into.
         let root = new_container(
@@ -417,7 +427,7 @@ mod tests {
                 .shortcut("G")
                 .description("Drag the selection along the ground")
                 .build(),
-            slot_with_trigger(),
+            Children::from(slot_with_trigger()),
         )
         .unwrap();
         let root = new_container(
@@ -458,7 +468,7 @@ mod tests {
                 .text("Setup")
                 .description("Name regions and say what it is made of")
                 .build(),
-            slot_with_trigger(),
+            Children::from(slot_with_trigger()),
         )
         .unwrap();
         let root = new_container(
@@ -512,7 +522,7 @@ mod tests {
                 .shortcut("1")
                 .description("Pick whole bodies")
                 .build(),
-            slot_with_trigger(),
+            Children::from(slot_with_trigger()),
         )
         .unwrap();
         let root = new_container(
@@ -550,7 +560,7 @@ mod tests {
     fn an_absent_shortcut_and_description_take_no_room() {
         crate::test_support::fresh_layout_runtime();
         let height_of = |props: TooltipProps| {
-            let tooltip = tooltip(props, slot_with_trigger()).unwrap();
+            let tooltip = tooltip(props, Children::from(slot_with_trigger())).unwrap();
             let root = new_container(
                 LayoutStyle::new().flex_column().width(400.0).height(400.0),
                 &[tooltip.layout_node()],
@@ -593,7 +603,7 @@ mod tests {
     fn builds_without_hover() {
         crate::test_support::fresh_layout_runtime();
         let slots = slot_with_trigger();
-        let tooltip = tooltip(TooltipProps::props().build(), slots).unwrap();
+        let tooltip = tooltip(TooltipProps::props().build(), Children::from(slots)).unwrap();
         let tree = ComponentList::new(tooltip);
         assert!(!find_text(&tree.commands(), "Helpful hint"));
     }

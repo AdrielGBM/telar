@@ -416,22 +416,6 @@ fn transpile_project(theme_type_str: Option<&str>) -> Result<TranspileOutput, To
     // `.rsx`'s own directory — see `[telar] assets` in telar.toml.
     let assets_root = telar_transpiler::assets_root(&manifest_dir);
 
-    // Pre-pass: collect every component's signature (its Props shape + whether it takes a slot) so each file's
-    // transpile can emit calls to other components correctly — optional props and the slot arg both need the
-    // callee's shape, which lives in another file.
-    let telar_transpiler::ProjectComponents {
-        registry,
-        borrowed: borrowed_files,
-        collision,
-    } = telar_transpiler::build_component_registry(
-        &src_dir,
-        &telar_transpiler::component_paths(&manifest_dir),
-        &[],
-    );
-    if let Some(msg) = collision {
-        return Err(quote! { compile_error!(#msg) });
-    }
-
     let mut include_stmts = TokenStream2::new();
     let mut rerun_stmts = TokenStream2::new();
     let mut preview_const_idents: Vec<Ident> = Vec::new();
@@ -454,7 +438,6 @@ fn transpile_project(theme_type_str: Option<&str>) -> Result<TranspileOutput, To
             &stem,
             theme_type_str,
             Some(assets_root.as_path()),
-            Some(&registry),
         ) {
             Ok(r) => r,
             Err(telar_transpiler::TranspileError::Parse(ref pe)) => {
@@ -539,7 +522,7 @@ fn transpile_project(theme_type_str: Option<&str>) -> Result<TranspileOutput, To
                 #[allow(unused_imports)]
                 pub use #mod_ident::#full_fn_ident as #base_fn_ident;
             });
-            if result.has_props {
+            {
                 let full_props = Ident::new(
                     &(telar_transpiler::naming::to_pascal_case(&full_fn) + "Props"),
                     Span::call_site(),
@@ -565,11 +548,10 @@ fn transpile_project(theme_type_str: Option<&str>) -> Result<TranspileOutput, To
 
     // Opt-in via `[telar] auto_modules = true` in telar.toml: declare the hand-written `.rs` modules by walking the
     // source tree, so an app needs no `mod.rs`/`mod` statements for them — mirroring how `.rsx` files are wired.
-    // A borrowed component's signature is baked into this crate's call sites, so editing its `Props` in the crate that owns it has to rebuild this one too — otherwise the call keeps the old arity and fails in generated code with nothing pointing at the file that moved.
-    for rsx_file in &borrowed_files {
-        let borrowed_str = rsx_file.to_string_lossy().to_string();
-        rerun_stmts.extend(quote! { const _: &str = include_str!(#borrowed_str); });
-    }
+    //
+    // Nothing tracks a borrowed component any more. Its signature used to be baked into this crate's call
+    // sites, so editing its `Props` elsewhere had to rebuild this crate or the call kept the old arity; the
+    // call now spells only names, and rustc checks them against the real type at the usual time.
 
     let telar_toml = manifest_dir.join("telar.toml");
     if telar_toml.exists() {

@@ -12,7 +12,7 @@ pub struct SharedComponentsCodeLineProps {
 }
 
 #[allow(dead_code, unused_variables, unused_mut)]
-pub fn shared_components_code_line(props: SharedComponentsCodeLineProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
+pub fn shared_components_code_line(props: SharedComponentsCodeLineProps, children: Children) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let __owner = telar::owner_scope();
     #[allow(unused_imports)] use telar::use_theme;
     let __sbox_0 = {
@@ -31,7 +31,7 @@ pub fn shared_components_code_line(props: SharedComponentsCodeLineProps) -> Resu
 #[allow(dead_code, unused_variables, unused_mut)]
 pub fn shared_components_code_line_preview_0() -> Result<Box<dyn LayoutItem>, LayoutError> {
     #[allow(unused_imports)] use telar::use_theme;
-    let __node_0 = code_line(CodeLineProps::props().code("box fill:primary radius:8 width:120 height:80").build())?;
+    let __node_0 = code_line(CodeLineProps::props().code("box fill:primary radius:8 width:120 height:80").build(), Children::default())?;
     Ok(Box::new(__node_0))
 }
 

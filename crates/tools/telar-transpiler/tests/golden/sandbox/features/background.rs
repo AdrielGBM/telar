@@ -6,8 +6,11 @@
 #[allow(unused_imports)] use std::rc::Rc;
 #[allow(unused_imports)] use std::time::Duration;
 
+#[derive(::telar::Props)]
+pub struct FeaturesBackgroundProps {}
+
 #[allow(dead_code, unused_variables, unused_mut)]
-pub fn features_background() -> Result<Box<dyn LayoutItem>, LayoutError> {
+pub fn features_background(props: FeaturesBackgroundProps, children: Children) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let __owner = telar::owner_scope();
     #[allow(unused_imports)] use telar::use_theme;
 
@@ -62,153 +65,210 @@ pub fn features_background() -> Result<Box<dyn LayoutItem>, LayoutError> {
     let beat = motion::Animated::<f32>::new(1.0, motion::spring(170.0, 12.0));
 
     let __col_0 = {
-        let __node_0 = doc_header(DocHeaderProps::props().kicker("CONCURRENCY").title("Background work").desc("Signals are !Send, so a worker thread can never write one. spawn_task and spawn_stream are the bridge: the work and its values cross the thread boundary, the callback stays here and runs on the UI thread.").build())?;
+        let __node_0 = doc_header(DocHeaderProps::props().kicker("CONCURRENCY").title("Background work").desc("Signals are !Send, so a worker thread can never write one. spawn_task and spawn_stream are the bridge: the work and its values cross the thread boundary, the callback stays here and runs on the UI thread.").build(), Children::default())?;
         let __node_1 = {
-            let mut __slots = Slots::new();
-            let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-            let __node_2 = {
-                let mut __slots = Slots::new();
-                let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-                let __row_0 = {
-                    let mut __slots: Vec<ChildSlot> = Vec::new();
-                    let __text_0 = {
-                        let total = total.clone();
-                        Text::declaring(
-                            move || format!("sum(1..2M) · {}", { total.get() }),
-                            LayoutStyle::new(),
-                            move |__inherited: TextStyle| __inherited.with_font_size(16.0).with_color(use_theme::<core::theme::SandboxTheme>().ink()),
-                        )?
-                    };
-                    __slots.push(ChildSlot::stat(box_item(__text_0)));
-                    let __node_3 = fragment(
-                        { let busy = busy.clone(); move || vec![busy.get()] },
-                        |__cond: &bool| *__cond,
-                        move |__cond: bool| -> Result<Box<dyn LayoutItem>, LayoutError> {
-                            if __cond {
-                                let __node_4 = spinner(SpinnerProps::props().size(20.0).build())?;
-                                Ok(box_item(__node_4))
-                            } else {
-                                Ok(box_item(Container::column(children![])?))
+            let __deferred = Children::new(
+                {
+                    let total = total.clone();
+                    let busy = busy.clone();
+                    let beat = beat.clone();
+                move || {
+                    let total = total.clone();
+                    let busy = busy.clone();
+                    let beat = beat.clone();
+                    let mut __slots = Slots::new();
+                    let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
+                    let __node_2 = {
+                        let __deferred = Children::new(
+                            {
+                                let total = total.clone();
+                                let busy = busy.clone();
+                                let beat = beat.clone();
+                            move || {
+                                let total = total.clone();
+                                let busy = busy.clone();
+                                let beat = beat.clone();
+                                let mut __slots = Slots::new();
+                                let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
+                                let __row_0 = {
+                                    let mut __slots: Vec<ChildSlot> = Vec::new();
+                                    let __text_0 = {
+                                        let total = total.clone();
+                                        Text::declaring(
+                                            move || format!("sum(1..2M) · {}", { total.get() }),
+                                            LayoutStyle::new(),
+                                            move |__inherited: TextStyle| __inherited.with_font_size(16.0).with_color(use_theme::<core::theme::SandboxTheme>().ink()),
+                                        )?
+                                    };
+                                    __slots.push(ChildSlot::stat(box_item(__text_0)));
+                                    let __node_3 = fragment(
+                                        { let busy = busy.clone(); move || vec![busy.get()] },
+                                        |__cond: &bool| *__cond,
+                                        move |__cond: bool| -> Result<Box<dyn LayoutItem>, LayoutError> {
+                                            if __cond {
+                                                let __node_4 = spinner(SpinnerProps::props().size(20.0).build(), Children::default())?;
+                                                Ok(box_item(__node_4))
+                                            } else {
+                                                Ok(box_item(Container::column(children![])?))
+                                            }
+                                        },
+                                        0.0,
+                                    );
+                                    __slots.push(__node_3);
+                                    Container::from_slots(LayoutStyle::new().flex_row().gap(12.0).align_items(AlignItems::CENTER), __slots)?
+                                };
+                                __children.push(box_item(__row_0));
+                                let __row_1 = {
+                                    let __node_5 = button(ButtonProps::props().label("Compute").fill(Reactive::of(move || use_theme::<core::theme::SandboxTheme>().primary())).on_press(Box::new({ let busy = busy.clone(); let total = total.clone(); move || { busy.set(true); total.set(String::from("…")); spawn_task(|| slow_sum(2_000_000), on_computed(total.clone(), busy.clone())); } })).build(), Children::default())?;
+                                    let __node_6 = button(ButtonProps::props().label("Bounce").outline(Reactive::of(move || use_theme::<core::theme::SandboxTheme>().primary())).on_press(Box::new({ let beat = beat.clone(); move || { beat.retarget(if beat.get() > 1.0 { 1.0 } else { 1.4 }) } })).build(), Children::default())?;
+                                    Container::new(LayoutStyle::new().flex_row().gap(10.0), children![__node_5, __node_6])?
+                                };
+                                __children.push(box_item(__row_1));
+                                let __row_2 = {
+                                    let __sbox_0 = {
+                                        StyledContainer::new(LayoutStyle::new().flex_column().width(48.0).height(48.0), move |_| RectStyle::default().with_fill(use_theme::<core::theme::SandboxTheme>().primary()).with_radius(BorderRadius::all(12.0)), children![])?.with_transform({ let beat = beat.clone(); move |__r: Rect| box_transform(__r, (0) as f32, (beat.get()) as f32, (beat.get()) as f32, (0) as f32, (0) as f32) })
+                                    };
+                                    let __text_1 = {
+                                        Text::declaring(
+                                            || "Press Compute, then Bounce — the spring keeps settling while the worker blocks.".to_string(),
+                                            LayoutStyle::new(),
+                                            move |__inherited: TextStyle| __inherited.with_font_size(12.0).with_color(use_theme::<core::theme::SandboxTheme>().muted()),
+                                        )?
+                                    };
+                                    Container::new(LayoutStyle::new().flex_row().gap(16.0).align_items(AlignItems::CENTER), children![__sbox_0, __text_1])?
+                                };
+                                __children.push(box_item(__row_2));
+                                __slots.extend_default(__children);
+                                Ok(__slots)
                             }
-                        },
-                        0.0,
-                    );
-                    __slots.push(__node_3);
-                    Container::from_slots(LayoutStyle::new().flex_row().gap(12.0).align_items(AlignItems::CENTER), __slots)?
-                };
-                __children.push(box_item(__row_0));
-                let __row_1 = {
-                    let __node_5 = button(ButtonProps::props().label("Compute").fill(Reactive::of(move || use_theme::<core::theme::SandboxTheme>().primary())).on_press(Box::new({ let busy = busy.clone(); let total = total.clone(); move || { busy.set(true); total.set(String::from("…")); spawn_task(|| slow_sum(2_000_000), on_computed(total.clone(), busy.clone())); } })).build())?;
-                    let __node_6 = button(ButtonProps::props().label("Bounce").outline(Reactive::of(move || use_theme::<core::theme::SandboxTheme>().primary())).on_press(Box::new({ let beat = beat.clone(); move || { beat.retarget(if beat.get() > 1.0 { 1.0 } else { 1.4 }) } })).build())?;
-                    Container::new(LayoutStyle::new().flex_row().gap(10.0), children![__node_5, __node_6])?
-                };
-                __children.push(box_item(__row_1));
-                let __row_2 = {
-                    let __sbox_0 = {
-                        StyledContainer::new(LayoutStyle::new().flex_column().width(48.0).height(48.0), move |_| RectStyle::default().with_fill(use_theme::<core::theme::SandboxTheme>().primary()).with_radius(BorderRadius::all(12.0)), children![])?.with_transform({ let beat = beat.clone(); move |__r: Rect| box_transform(__r, (0) as f32, (beat.get()) as f32, (beat.get()) as f32, (0) as f32, (0) as f32) })
+                            }
+                        );
+                        card(CardProps::props().gap(12.0).build(), __deferred)?
                     };
-                    let __text_1 = {
-                        Text::declaring(
-                            || "Press Compute, then Bounce — the spring keeps settling while the worker blocks.".to_string(),
-                            LayoutStyle::new(),
-                            move |__inherited: TextStyle| __inherited.with_font_size(12.0).with_color(use_theme::<core::theme::SandboxTheme>().muted()),
-                        )?
-                    };
-                    Container::new(LayoutStyle::new().flex_row().gap(16.0).align_items(AlignItems::CENTER), children![__sbox_0, __text_1])?
-                };
-                __children.push(box_item(__row_2));
-                __slots.extend_default(__children);
-                card(CardProps::props().gap(12.0).build(), __slots)?
-            };
-            __children.push(box_item(__node_2));
-            let __node_7 = code_line(CodeLineProps::props().code("spawn_task(|| slow_sum(n), move |sum| total.set(sum.to_string()))").build())?;
-            __children.push(box_item(__node_7));
-            __slots.extend_default(__children);
-            example(ExampleProps::props().title("spawn_task — one result, delivered on the UI thread").build(), __slots)?
+                    __children.push(box_item(__node_2));
+                    let __node_7 = code_line(CodeLineProps::props().code("spawn_task(|| slow_sum(n), move |sum| total.set(sum.to_string()))").build(), Children::default())?;
+                    __children.push(box_item(__node_7));
+                    __slots.extend_default(__children);
+                    Ok(__slots)
+                }
+                }
+            );
+            example(ExampleProps::props().title("spawn_task — one result, delivered on the UI thread").build(), __deferred)?
         };
         let __node_8 = {
-            let mut __slots = Slots::new();
-            let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-            let __node_9 = {
-                let mut __slots = Slots::new();
-                let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-                let __row_3 = {
-                    let mut __slots: Vec<ChildSlot> = Vec::new();
-                    let __node_10 = button(ButtonProps::props().label("Scan").fill(Reactive::of(move || use_theme::<core::theme::SandboxTheme>().primary())).on_press(Box::new({ let found = found.clone(); let scanning = scanning.clone(); let scan = scan.clone(); move || { found.set(Vec::new()); scanning.set(true); *scan.borrow_mut() = Some(spawn_stream(walk_project, on_found(found.clone()), on_scan_end(scanning.clone()))); } })).build())?;
-                    __slots.push(ChildSlot::stat(box_item(__node_10)));
-                    let __node_11 = button(ButtonProps::props().label("Cancel").outline(Reactive::of(move || use_theme::<core::theme::SandboxTheme>().danger)).on_press(Box::new({ let scan = scan.clone(); let scanning = scanning.clone(); move || { if let Some(task) = scan.borrow_mut().take() { task.cancel(); } scanning.set(false); } })).build())?;
-                    __slots.push(ChildSlot::stat(box_item(__node_11)));
-                    let __node_12 = fragment(
-                        { let scanning = scanning.clone(); move || vec![scanning.get()] },
-                        |__cond: &bool| *__cond,
-                        move |__cond: bool| -> Result<Box<dyn LayoutItem>, LayoutError> {
-                            if __cond {
-                                let __node_13 = spinner(SpinnerProps::props().size(20.0).build())?;
-                                Ok(box_item(__node_13))
-                            } else {
-                                Ok(box_item(Container::column(children![])?))
-                            }
-                        },
-                        0.0,
-                    );
-                    __slots.push(__node_12);
-                    Container::from_slots(LayoutStyle::new().flex_row().gap(10.0), __slots)?
-                };
-                __children.push(box_item(__row_3));
-                let __text_2 = {
+            let __deferred = Children::new(
+                {
                     let found = found.clone();
-                    Text::declaring(
-                        move || format!("{} crates", { found.get().len() }),
-                        LayoutStyle::new(),
-                        move |__inherited: TextStyle| __inherited.with_font_size(14.0).with_color(use_theme::<core::theme::SandboxTheme>().muted()),
-                    )?
-                };
-                __children.push(box_item(__text_2));
-                let __node_14 = ReactiveList::new(
-                    { let found = found.clone(); move || found.get() },
-                    |name| name.clone(),
-                    move |name| -> Result<Box<dyn LayoutItem>, LayoutError> {
-                        let __row_4 = {
-                            let __sbox_1 = {
-                                StyledContainer::new(LayoutStyle::new().flex_column().width(6.0).height(6.0), move |_| RectStyle::default().with_fill(use_theme::<core::theme::SandboxTheme>().success()).with_radius(BorderRadius::all(4.0)), children![])?
-                            };
-                            let __text_3 = {
-                                let name = name.clone();
-                                Text::declaring(
-                                    move || format!("{}", name),
-                                    LayoutStyle::new(),
-                                    move |__inherited: TextStyle| __inherited.with_font_size(13.0).with_color(use_theme::<core::theme::SandboxTheme>().ink()),
-                                )?
-                            };
-                            Container::new(LayoutStyle::new().flex_row().gap(8.0).align_items(AlignItems::CENTER).padding_vertical(2.0), children![__sbox_1, __text_3])?
-                        };
-                        Ok(box_item(__row_4))
-                    },
-                    0.0,
-                )?;
-                __children.push(box_item(__node_14));
-                __slots.extend_default(__children);
-                card(CardProps::props().gap(12.0).build(), __slots)?
-            };
-            __children.push(box_item(__node_9));
-            let __node_15 = code_line(CodeLineProps::props().code("spawn_stream(walk_project, move |name| found.update(|v| v.push(name)))").build())?;
-            __children.push(box_item(__node_15));
-            __slots.extend_default(__children);
-            example(ExampleProps::props().title("spawn_stream — many values, in order, one frame after the other").build(), __slots)?
+                    let scanning = scanning.clone();
+                    let scan = scan.clone();
+                move || {
+                    let found = found.clone();
+                    let scanning = scanning.clone();
+                    let scan = scan.clone();
+                    let mut __slots = Slots::new();
+                    let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
+                    let __node_9 = {
+                        let __deferred = Children::new(
+                            {
+                                let found = found.clone();
+                                let scanning = scanning.clone();
+                                let scan = scan.clone();
+                            move || {
+                                let found = found.clone();
+                                let scanning = scanning.clone();
+                                let scan = scan.clone();
+                                let mut __slots = Slots::new();
+                                let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
+                                let __row_3 = {
+                                    let mut __slots: Vec<ChildSlot> = Vec::new();
+                                    let __node_10 = button(ButtonProps::props().label("Scan").fill(Reactive::of(move || use_theme::<core::theme::SandboxTheme>().primary())).on_press(Box::new({ let found = found.clone(); let scanning = scanning.clone(); let scan = scan.clone(); move || { found.set(Vec::new()); scanning.set(true); *scan.borrow_mut() = Some(spawn_stream(walk_project, on_found(found.clone()), on_scan_end(scanning.clone()))); } })).build(), Children::default())?;
+                                    __slots.push(ChildSlot::stat(box_item(__node_10)));
+                                    let __node_11 = button(ButtonProps::props().label("Cancel").outline(Reactive::of(move || use_theme::<core::theme::SandboxTheme>().danger)).on_press(Box::new({ let scan = scan.clone(); let scanning = scanning.clone(); move || { if let Some(task) = scan.borrow_mut().take() { task.cancel(); } scanning.set(false); } })).build(), Children::default())?;
+                                    __slots.push(ChildSlot::stat(box_item(__node_11)));
+                                    let __node_12 = fragment(
+                                        { let scanning = scanning.clone(); move || vec![scanning.get()] },
+                                        |__cond: &bool| *__cond,
+                                        move |__cond: bool| -> Result<Box<dyn LayoutItem>, LayoutError> {
+                                            if __cond {
+                                                let __node_13 = spinner(SpinnerProps::props().size(20.0).build(), Children::default())?;
+                                                Ok(box_item(__node_13))
+                                            } else {
+                                                Ok(box_item(Container::column(children![])?))
+                                            }
+                                        },
+                                        0.0,
+                                    );
+                                    __slots.push(__node_12);
+                                    Container::from_slots(LayoutStyle::new().flex_row().gap(10.0), __slots)?
+                                };
+                                __children.push(box_item(__row_3));
+                                let __text_2 = {
+                                    let found = found.clone();
+                                    Text::declaring(
+                                        move || format!("{} crates", { found.get().len() }),
+                                        LayoutStyle::new(),
+                                        move |__inherited: TextStyle| __inherited.with_font_size(14.0).with_color(use_theme::<core::theme::SandboxTheme>().muted()),
+                                    )?
+                                };
+                                __children.push(box_item(__text_2));
+                                let __node_14 = ReactiveList::new(
+                                    { let found = found.clone(); move || found.get() },
+                                    |name| name.clone(),
+                                    move |name| -> Result<Box<dyn LayoutItem>, LayoutError> {
+                                        let __row_4 = {
+                                            let __sbox_1 = {
+                                                StyledContainer::new(LayoutStyle::new().flex_column().width(6.0).height(6.0), move |_| RectStyle::default().with_fill(use_theme::<core::theme::SandboxTheme>().success()).with_radius(BorderRadius::all(4.0)), children![])?
+                                            };
+                                            let __text_3 = {
+                                                let name = name.clone();
+                                                Text::declaring(
+                                                    move || format!("{}", name),
+                                                    LayoutStyle::new(),
+                                                    move |__inherited: TextStyle| __inherited.with_font_size(13.0).with_color(use_theme::<core::theme::SandboxTheme>().ink()),
+                                                )?
+                                            };
+                                            Container::new(LayoutStyle::new().flex_row().gap(8.0).align_items(AlignItems::CENTER).padding_vertical(2.0), children![__sbox_1, __text_3])?
+                                        };
+                                        Ok(box_item(__row_4))
+                                    },
+                                    0.0,
+                                )?;
+                                __children.push(box_item(__node_14));
+                                __slots.extend_default(__children);
+                                Ok(__slots)
+                            }
+                            }
+                        );
+                        card(CardProps::props().gap(12.0).build(), __deferred)?
+                    };
+                    __children.push(box_item(__node_9));
+                    let __node_15 = code_line(CodeLineProps::props().code("spawn_stream(walk_project, move |name| found.update(|v| v.push(name)))").build(), Children::default())?;
+                    __children.push(box_item(__node_15));
+                    __slots.extend_default(__children);
+                    Ok(__slots)
+                }
+                }
+            );
+            example(ExampleProps::props().title("spawn_stream — many values, in order, one frame after the other").build(), __deferred)?
         };
         let __node_16 = {
-            let mut __slots = Slots::new();
-            let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-            let __col_1 = {
-                let __node_17 = prop_row(PropRowProps::props().name("work").values("Send + 'static").about("Runs on a pooled thread. It may block freely — the pool grows rather than starve.").build())?;
-                let __node_18 = prop_row(PropRowProps::props().name("callback").values("stays here").about("Runs on the UI thread during a later frame, so it may write signals and hold Rc.").build())?;
-                let __node_19 = prop_row(PropRowProps::props().name("Emitter").values("Send, cloneable").about("A stream's worker handle. Poll is_cancelled() in any loop that runs for a while.").build())?;
-                let __node_20 = prop_row(PropRowProps::props().name("Task").values("!Send").about("Keep it to cancel(); dropping it detaches and the callback still fires.").build())?;
-                Container::new(LayoutStyle::new().flex_column().gap(6.0), children![__node_17, __node_18, __node_19, __node_20])?
-            };
-            __children.push(box_item(__col_1));
-            __slots.extend_default(__children);
-            example(ExampleProps::props().title("The rules").build(), __slots)?
+            let __deferred = Children::new(
+                move || {
+                    let mut __slots = Slots::new();
+                    let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
+                    let __col_1 = {
+                        let __node_17 = prop_row(PropRowProps::props().name("work").values("Send + 'static").about("Runs on a pooled thread. It may block freely — the pool grows rather than starve.").build(), Children::default())?;
+                        let __node_18 = prop_row(PropRowProps::props().name("callback").values("stays here").about("Runs on the UI thread during a later frame, so it may write signals and hold Rc.").build(), Children::default())?;
+                        let __node_19 = prop_row(PropRowProps::props().name("Emitter").values("Send, cloneable").about("A stream's worker handle. Poll is_cancelled() in any loop that runs for a while.").build(), Children::default())?;
+                        let __node_20 = prop_row(PropRowProps::props().name("Task").values("!Send").about("Keep it to cancel(); dropping it detaches and the callback still fires.").build(), Children::default())?;
+                        Container::new(LayoutStyle::new().flex_column().gap(6.0), children![__node_17, __node_18, __node_19, __node_20])?
+                    };
+                    __children.push(box_item(__col_1));
+                    __slots.extend_default(__children);
+                    Ok(__slots)
+                }
+            );
+            example(ExampleProps::props().title("The rules").build(), __deferred)?
         };
         Container::new(LayoutStyle::new().flex_column().gap(20.0), children![__node_0, __node_1, __node_8, __node_16])?
     };

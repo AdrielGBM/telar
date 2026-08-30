@@ -41,23 +41,11 @@ pub fn generated_target(
     let stem = telar_transpiler::relative_stem(rsx_path, &src_dir);
     // Match the macro: baked `src:"..."` paths resolve against the project asset root, not the `.rsx` dir.
     let assets_root = telar_transpiler::assets_root(&root);
-    // Match the macro's cross-file registry so component calls (optional props, slot arg) resolve the same
-    // in the editor as in the build. The file being edited uses its live buffer, not its on-disk content, and
-    // a short-name collision is ignored rather than fatal: the build reports it, and IntelliSense is more
-    // useful degraded than dark.
-    let components = telar_transpiler::build_component_registry(
-        &src_dir,
-        &telar_transpiler::component_paths(&root),
-        &[(rsx_path, source)],
-    );
-    let result = telar_transpiler::transpile_source(
-        source,
-        &stem,
-        theme_type,
-        Some(assets_root.as_path()),
-        Some(&components.registry),
-    )
-    .ok()?;
+    // No cross-file pre-pass: the editor mirrors the build exactly because neither one needs to know what
+    // any other file declares. A component call spells names, and the callee's own type answers for them.
+    let result =
+        telar_transpiler::transpile_source(source, &stem, theme_type, Some(assets_root.as_path()))
+            .ok()?;
     let out_path = root.join(".telar").join("build").join(&rel);
     Some(GeneratedTarget {
         path: out_path,

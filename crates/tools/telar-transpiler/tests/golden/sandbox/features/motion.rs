@@ -4,8 +4,11 @@
 #[allow(unused_imports)] use super::*;
 #[allow(unused_imports)] use crate::core::theme::theme;
 
+#[derive(::telar::Props)]
+pub struct FeaturesMotionProps {}
+
 #[allow(dead_code, unused_variables, unused_mut)]
-pub fn features_motion() -> Result<Box<dyn LayoutItem>, LayoutError> {
+pub fn features_motion(props: FeaturesMotionProps, children: Children) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let __owner = telar::owner_scope();
     #[allow(unused_imports)] use telar::use_theme;
 
@@ -82,78 +85,140 @@ pub fn features_motion() -> Result<Box<dyn LayoutItem>, LayoutError> {
     };
 
     let __col_0 = {
-        let __node_0 = doc_header(DocHeaderProps::props().kicker("INTERACTION").title("Motion").desc("Beyond transitions, the motion kernel gives you springs and keyframe timelines driven from Rust — velocity-preserving bounces, staggered loops, and one-shot playback.").build())?;
+        let __node_0 = doc_header(DocHeaderProps::props().kicker("INTERACTION").title("Motion").desc("Beyond transitions, the motion kernel gives you springs and keyframe timelines driven from Rust — velocity-preserving bounces, staggered loops, and one-shot playback.").build(), Children::default())?;
         let __node_1 = {
-            let mut __slots = Slots::new();
-            let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-            let __node_2 = {
-                let mut __slots = Slots::new();
-                let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-                let __row_0 = {
-                    let __sbox_0 = {
-                        let __sbox_1 = {
-                            StyledContainer::new(LayoutStyle::new().flex_column().width(60.0).height(60.0), move |_| RectStyle::default().with_fill(use_theme::<core::theme::SandboxTheme>().primary()).with_radius(BorderRadius::all(12.0)), children![])?.with_transform({ let scale = scale.clone(); move |__r: Rect| box_transform(__r, (0) as f32, (scale.get()) as f32, (scale.get()) as f32, (0) as f32, (0) as f32) })
-                        };
-                        StyledContainer::new(LayoutStyle::new().flex_column().width(100.0).height(100.0).align_items(AlignItems::CENTER).justify_content(JustifyContent::CENTER), move |_| RectStyle::default(), children![__sbox_1])?
+            let __deferred = Children::new(
+                {
+                    let scale = scale.clone();
+                    let big = big.clone();
+                move || {
+                    let scale = scale.clone();
+                    let big = big.clone();
+                    let mut __slots = Slots::new();
+                    let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
+                    let __node_2 = {
+                        let __deferred = Children::new(
+                            {
+                                let scale = scale.clone();
+                                let big = big.clone();
+                            move || {
+                                let scale = scale.clone();
+                                let big = big.clone();
+                                let mut __slots = Slots::new();
+                                let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
+                                let __row_0 = {
+                                    let __sbox_0 = {
+                                        let __sbox_1 = {
+                                            StyledContainer::new(LayoutStyle::new().flex_column().width(60.0).height(60.0), move |_| RectStyle::default().with_fill(use_theme::<core::theme::SandboxTheme>().primary()).with_radius(BorderRadius::all(12.0)), children![])?.with_transform({ let scale = scale.clone(); move |__r: Rect| box_transform(__r, (0) as f32, (scale.get()) as f32, (scale.get()) as f32, (0) as f32, (0) as f32) })
+                                        };
+                                        StyledContainer::new(LayoutStyle::new().flex_column().width(100.0).height(100.0).align_items(AlignItems::CENTER).justify_content(JustifyContent::CENTER), move |_| RectStyle::default(), children![__sbox_1])?
+                                    };
+                                    let __node_3 = button(ButtonProps::props().label("Bounce").fill(Reactive::of(move || use_theme::<core::theme::SandboxTheme>().primary())).on_press(Box::new({ let big = big.clone(); let scale = scale.clone(); move || { big.toggle(); scale.retarget(if big.get() { 1.3 } else { 0.6 }) } })).build(), Children::default())?;
+                                    Container::new(LayoutStyle::new().flex_row().gap(20.0).align_items(AlignItems::CENTER), children![__sbox_0, __node_3])?
+                                };
+                                __children.push(box_item(__row_0));
+                                __slots.extend_default(__children);
+                                Ok(__slots)
+                            }
+                            }
+                        );
+                        card(CardProps::props().gap(12.0).build(), __deferred)?
                     };
-                    let __node_3 = button(ButtonProps::props().label("Bounce").fill(Reactive::of(move || use_theme::<core::theme::SandboxTheme>().primary())).on_press(Box::new({ let big = big.clone(); let scale = scale.clone(); move || { big.toggle(); scale.retarget(if big.get() { 1.3 } else { 0.6 }) } })).build())?;
-                    Container::new(LayoutStyle::new().flex_row().gap(20.0).align_items(AlignItems::CENTER), children![__sbox_0, __node_3])?
-                };
-                __children.push(box_item(__row_0));
-                __slots.extend_default(__children);
-                card(CardProps::props().gap(12.0).build(), __slots)?
-            };
-            __children.push(box_item(__node_2));
-            let __node_4 = code_line(CodeLineProps::props().code("box fill:theme.primary radius:12 width:60 height:60 scale:$scale   // scale.retarget(1.3)").build())?;
-            __children.push(box_item(__node_4));
-            __slots.extend_default(__children);
-            example(ExampleProps::props().title("Spring — retarget a value and it settles with a natural bounce").build(), __slots)?
+                    __children.push(box_item(__node_2));
+                    let __node_4 = code_line(CodeLineProps::props().code("box fill:theme.primary radius:12 width:60 height:60 scale:$scale   // scale.retarget(1.3)").build(), Children::default())?;
+                    __children.push(box_item(__node_4));
+                    __slots.extend_default(__children);
+                    Ok(__slots)
+                }
+                }
+            );
+            example(ExampleProps::props().title("Spring — retarget a value and it settles with a natural bounce").build(), __deferred)?
         };
         let __node_5 = {
-            let mut __slots = Slots::new();
-            let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-            let __node_6 = {
-                let mut __slots = Slots::new();
-                let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-                let __canvas_0 = Canvas::new(LayoutStyle::new().width(196.0).height(56.0), equalizer)?;
-                __children.push(box_item(__canvas_0));
-                __slots.extend_default(__children);
-                card(CardProps::props().build(), __slots)?
-            };
-            __children.push(box_item(__node_6));
-            let __node_7 = code_line(CodeLineProps::props().code("Keyframes::new(8.0).hold(i·110ms).then(48.0, 300ms, EaseInOut).start(Repeat::PingPong)").build())?;
-            __children.push(box_item(__node_7));
-            __slots.extend_default(__children);
-            example(ExampleProps::props().title("Staggered keyframes — six PingPong loops offset by hold()").build(), __slots)?
+            let __deferred = Children::new(
+                {
+                    let equalizer = equalizer.clone();
+                move || {
+                    let equalizer = equalizer.clone();
+                    let mut __slots = Slots::new();
+                    let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
+                    let __node_6 = {
+                        let __deferred = Children::new(
+                            {
+                                let equalizer = equalizer.clone();
+                            move || {
+                                let equalizer = equalizer.clone();
+                                let mut __slots = Slots::new();
+                                let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
+                                let __canvas_0 = Canvas::new(LayoutStyle::new().width(196.0).height(56.0), equalizer)?;
+                                __children.push(box_item(__canvas_0));
+                                __slots.extend_default(__children);
+                                Ok(__slots)
+                            }
+                            }
+                        );
+                        card(CardProps::props().build(), __deferred)?
+                    };
+                    __children.push(box_item(__node_6));
+                    let __node_7 = code_line(CodeLineProps::props().code("Keyframes::new(8.0).hold(i·110ms).then(48.0, 300ms, EaseInOut).start(Repeat::PingPong)").build(), Children::default())?;
+                    __children.push(box_item(__node_7));
+                    __slots.extend_default(__children);
+                    Ok(__slots)
+                }
+                }
+            );
+            example(ExampleProps::props().title("Staggered keyframes — six PingPong loops offset by hold()").build(), __deferred)?
         };
         let __node_8 = {
-            let mut __slots = Slots::new();
-            let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-            let __node_9 = {
-                let mut __slots = Slots::new();
-                let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-                let __row_1 = {
-                    let __canvas_1 = Canvas::new(LayoutStyle::new().width(240.0).height(14.0), progress_bar)?;
-                    let __text_0 = {
-                        let progress = progress.clone();
-                        Text::declaring(
-                            move || format!("{}%", { progress.get().round() }),
-                            LayoutStyle::new(),
-                            move |__inherited: TextStyle| __inherited.with_font_size(12.0).with_color(use_theme::<core::theme::SandboxTheme>().muted()),
-                        )?
+            let __deferred = Children::new(
+                {
+                    let progress = progress.clone();
+                    let progress_bar = progress_bar.clone();
+                move || {
+                    let progress = progress.clone();
+                    let progress_bar = progress_bar.clone();
+                    let mut __slots = Slots::new();
+                    let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
+                    let __node_9 = {
+                        let __deferred = Children::new(
+                            {
+                                let progress = progress.clone();
+                                let progress_bar = progress_bar.clone();
+                            move || {
+                                let progress = progress.clone();
+                                let progress_bar = progress_bar.clone();
+                                let mut __slots = Slots::new();
+                                let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
+                                let __row_1 = {
+                                    let __canvas_1 = Canvas::new(LayoutStyle::new().width(240.0).height(14.0), progress_bar)?;
+                                    let __text_0 = {
+                                        let progress = progress.clone();
+                                        Text::declaring(
+                                            move || format!("{}%", { progress.get().round() }),
+                                            LayoutStyle::new(),
+                                            move |__inherited: TextStyle| __inherited.with_font_size(12.0).with_color(use_theme::<core::theme::SandboxTheme>().muted()),
+                                        )?
+                                    };
+                                    let __node_10 = button(ButtonProps::props().label("Replay").fill(Reactive::of(move || use_theme::<core::theme::SandboxTheme>().primary())).on_press(Box::new({ let progress = progress.clone(); move || { progress.restart() } })).build(), Children::default())?;
+                                    Container::new(LayoutStyle::new().flex_row().gap(12.0).align_items(AlignItems::CENTER), children![__canvas_1, __text_0, __node_10])?
+                                };
+                                __children.push(box_item(__row_1));
+                                __slots.extend_default(__children);
+                                Ok(__slots)
+                            }
+                            }
+                        );
+                        card(CardProps::props().gap(12.0).build(), __deferred)?
                     };
-                    let __node_10 = button(ButtonProps::props().label("Replay").fill(Reactive::of(move || use_theme::<core::theme::SandboxTheme>().primary())).on_press(Box::new({ let progress = progress.clone(); move || { progress.restart() } })).build())?;
-                    Container::new(LayoutStyle::new().flex_row().gap(12.0).align_items(AlignItems::CENTER), children![__canvas_1, __text_0, __node_10])?
-                };
-                __children.push(box_item(__row_1));
-                __slots.extend_default(__children);
-                card(CardProps::props().gap(12.0).build(), __slots)?
-            };
-            __children.push(box_item(__node_9));
-            let __node_11 = code_line(CodeLineProps::props().code("Keyframes::new(0.0).then(100.0, 1100ms, EaseInOut).start(Repeat::Once)").build())?;
-            __children.push(box_item(__node_11));
-            __slots.extend_default(__children);
-            example(ExampleProps::props().title("One-shot timeline — Replay restarts the same handle").build(), __slots)?
+                    __children.push(box_item(__node_9));
+                    let __node_11 = code_line(CodeLineProps::props().code("Keyframes::new(0.0).then(100.0, 1100ms, EaseInOut).start(Repeat::Once)").build(), Children::default())?;
+                    __children.push(box_item(__node_11));
+                    __slots.extend_default(__children);
+                    Ok(__slots)
+                }
+                }
+            );
+            example(ExampleProps::props().title("One-shot timeline — Replay restarts the same handle").build(), __deferred)?
         };
         Container::new(LayoutStyle::new().flex_column().gap(20.0), children![__node_0, __node_1, __node_5, __node_8])?
     };

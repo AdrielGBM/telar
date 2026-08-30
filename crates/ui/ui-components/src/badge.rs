@@ -2,7 +2,7 @@ use layout_core::{AlignItems, JustifyContent, LayoutError, LayoutStyle};
 use reactive_core::Reactive;
 use renderer_core::{BorderRadius, Color, RectStyle, ShapeStyle, TextStyle};
 use telar_macros::Props;
-use ui_core::{LayoutItem, StyledContainer, Text, box_item};
+use ui_core::{Children, LayoutItem, StyledContainer, Text, box_item};
 
 use crate::shared;
 
@@ -40,7 +40,7 @@ pub struct BadgeProps {
     pub color: Reactive<Color>,
 }
 
-pub fn badge(props: BadgeProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
+pub fn badge(props: BadgeProps, _children: Children) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let BadgeProps { label, color } = props;
 
     let label_widget = Text::declaring(move || label.get(), LayoutStyle::new(), on_accent_style)?;
@@ -101,7 +101,11 @@ mod tests {
     #[test]
     fn renders_label() {
         crate::test_support::fresh_layout_runtime();
-        let badge = badge(BadgeProps::props().label("New").build()).unwrap();
+        let badge = badge(
+            BadgeProps::props().label("New").build(),
+            Children::default(),
+        )
+        .unwrap();
         let tree = laid_out(badge);
         assert!(find_text(&tree.commands(), "New"));
     }
@@ -110,7 +114,7 @@ mod tests {
     #[test]
     fn empty_label_builds_without_panic() {
         crate::test_support::fresh_layout_runtime();
-        let badge = badge(BadgeProps::props().build()).unwrap();
+        let badge = badge(BadgeProps::props().build(), Children::default()).unwrap();
         let tree = laid_out(badge);
         let _ = tree.commands();
     }

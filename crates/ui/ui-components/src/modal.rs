@@ -2,8 +2,10 @@ use layout_core::{AlignItems, JustifyContent, LayoutError, LayoutStyle};
 use reactive_core::{Reactive, RwSignal};
 use renderer_core::{Border, BorderRadius, Color, RectStyle, ShapeStyle};
 use telar_macros::Props;
+#[cfg(test)]
+use ui_core::Slots;
 use ui_core::focus::Role;
-use ui_core::{Container, LayoutItem, Slots, StyledContainer, Text, box_item};
+use ui_core::{Children, Container, LayoutItem, StyledContainer, Text, box_item};
 
 use crate::heading::heading_style;
 use crate::scrim;
@@ -74,7 +76,8 @@ pub struct ModalProps {
     pub color: Reactive<Color>,
 }
 
-pub fn modal(props: ModalProps, mut slots: Slots) -> Result<Box<dyn LayoutItem>, LayoutError> {
+pub fn modal(props: ModalProps, children: Children) -> Result<Box<dyn LayoutItem>, LayoutError> {
+    let mut slots = children.build()?;
     let ModalProps {
         open,
         id,
@@ -181,7 +184,7 @@ mod tests {
         let slots = slot_with_body("Body");
         let modal = modal(
             ModalProps::props().open(open).title("Confirm").build(),
-            slots,
+            Children::from(slots),
         )
         .unwrap();
 
@@ -246,7 +249,7 @@ mod tests {
         let open = signal(false);
         let modal = modal(
             ModalProps::props().open(open).title("Confirm").build(),
-            slot_with_body("Body"),
+            Children::from(slot_with_body("Body")),
         )
         .unwrap();
         let root = new_container(
@@ -306,7 +309,7 @@ mod tests {
                 .id("confirm-test")
                 .title("Confirm")
                 .build(),
-            slot_with_body("Body"),
+            Children::from(slot_with_body("Body")),
         )
         .unwrap();
         let root = new_container(
@@ -346,7 +349,7 @@ mod tests {
                 .id("ignored-name")
                 .title("Confirm")
                 .build(),
-            slot_with_body("Body"),
+            Children::from(slot_with_body("Body")),
         )
         .unwrap();
         let tree = ComponentList::new(modal);
@@ -362,7 +365,11 @@ mod tests {
     fn unbound_modal_renders_nothing() {
         crate::test_support::fresh_layout_runtime();
         let slots = slot_with_body("Body");
-        let modal = modal(ModalProps::props().title("Confirm").build(), slots).unwrap();
+        let modal = modal(
+            ModalProps::props().title("Confirm").build(),
+            Children::from(slots),
+        )
+        .unwrap();
         let tree = ComponentList::new(modal);
         assert!(!find_text(&tree.commands(), "Confirm"));
     }

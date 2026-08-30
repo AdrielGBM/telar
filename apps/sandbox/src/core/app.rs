@@ -1,6 +1,7 @@
 use crate::core::theme::theme;
 use telar::{
-    AlignItems, App, AvailableSpace, BorderRadius, Color, Component, Container, Event, EventResult,
+    AlignItems, App, AvailableSpace, BorderRadius, Children, Color, Component, Container, Event,
+    EventResult,
     JustifyContent, LayoutError, LayoutItem, LayoutScrollArea, LayoutStyle, NavPage, NavTransition,
     Navigator, NodeId, NodeVec, PagePolicy, Rect, RectStyle, RenderNode, RwSignal, ShapeStyle,
     SizeDimension, StyledContainer, TabHost, TabStacks, Text, TextStyle, compute_layout,
@@ -39,10 +40,12 @@ enum SectionRoute {
 /// Builds the [`SECTIONS`] table, baking each entry's `.rsx` source in beside its builder so a section stays a
 /// one-line edit. `include_str!` needs a literal path, which is why the file name is spelled out per entry.
 macro_rules! sections {
-    ($(($title:literal, $build:path, $file:literal)),* $(,)?) => {
+    ($(($title:literal, $build:path, $props:ty, $file:literal)),* $(,)?) => {
         &[$(SectionDef {
             title: $title,
-            build: $build,
+            // A section is a component that names no props and places no children, so it is called like one.
+            // The closure captures nothing, which is what lets it stand where a `fn` pointer is wanted.
+            build: || $build(<$props>::props().build(), Children::default()),
             file: $file,
             source: include_str!(concat!("../features/", $file)),
         }),*]
@@ -53,55 +56,60 @@ macro_rules! sections {
 /// sidebar nav and the content pane both derive from: adding or reordering a section is a one-line edit here,
 /// not three in sync.
 const SECTIONS: &[SectionDef] = sections![
-    ("Overview", crate::features_overview, "overview.rsx"),
-    ("Layout", crate::features_layout, "layout.rsx"),
-    ("Sizing & grid", crate::features_sizing, "sizing.rsx"),
-    ("Typography", crate::features_typography, "typography.rsx"),
-    ("Color & theme", crate::features_color, "color.rsx"),
-    ("Boxes & borders", crate::features_boxes, "boxes.rsx"),
-    ("Gradients", crate::features_gradients, "gradients.rsx"),
-    ("Shadows", crate::features_shadows, "shadows.rsx"),
-    ("Opacity & layers", crate::features_opacity, "opacity.rsx"),
-    ("Images", crate::features_images, "images.rsx"),
-    ("SVG", crate::features_svg, "svg.rsx"),
-    ("Paths", crate::features_paths, "paths.rsx"),
-    ("Transforms", crate::features_transforms, "transforms.rsx"),
-    ("Buttons", crate::features_buttons, "buttons.rsx"),
-    ("Form controls", crate::features_forms, "forms.rsx"),
-    ("Sliders", crate::features_sliders, "sliders.rsx"),
+    ("Overview", crate::features_overview, crate::FeaturesOverviewProps, "overview.rsx"),
+    ("Layout", crate::features_layout, crate::FeaturesLayoutProps, "layout.rsx"),
+    ("Sizing & grid", crate::features_sizing, crate::FeaturesSizingProps, "sizing.rsx"),
+    ("Typography", crate::features_typography, crate::FeaturesTypographyProps, "typography.rsx"),
+    ("Color & theme", crate::features_color, crate::FeaturesColorProps, "color.rsx"),
+    ("Boxes & borders", crate::features_boxes, crate::FeaturesBoxesProps, "boxes.rsx"),
+    ("Gradients", crate::features_gradients, crate::FeaturesGradientsProps, "gradients.rsx"),
+    ("Shadows", crate::features_shadows, crate::FeaturesShadowsProps, "shadows.rsx"),
+    ("Opacity & layers", crate::features_opacity, crate::FeaturesOpacityProps, "opacity.rsx"),
+    ("Images", crate::features_images, crate::FeaturesImagesProps, "images.rsx"),
+    ("SVG", crate::features_svg, crate::FeaturesSvgProps, "svg.rsx"),
+    ("Paths", crate::features_paths, crate::FeaturesPathsProps, "paths.rsx"),
+    ("Transforms", crate::features_transforms, crate::FeaturesTransformsProps, "transforms.rsx"),
+    ("Buttons", crate::features_buttons, crate::FeaturesButtonsProps, "buttons.rsx"),
+    ("Form controls", crate::features_forms, crate::FeaturesFormsProps, "forms.rsx"),
+    ("Sliders", crate::features_sliders, crate::FeaturesSlidersProps, "sliders.rsx"),
     (
         "Text fields",
         crate::features_text_fields,
+        crate::FeaturesTextFieldsProps,
         "text_fields.rsx"
     ),
-    ("Stepper", crate::features_steppers, "steppers.rsx"),
+    ("Stepper", crate::features_steppers, crate::FeaturesSteppersProps, "steppers.rsx"),
     (
         "Progress & spinner",
         crate::features_indicators,
+        crate::FeaturesIndicatorsProps,
         "indicators.rsx"
     ),
     (
         "Tabs & accordion",
         crate::features_navigation,
+        crate::FeaturesNavigationProps,
         "navigation.rsx"
     ),
-    ("Badges & chips", crate::features_pills, "pills.rsx"),
-    ("Menus & select", crate::features_menus, "menus.rsx"),
-    ("Dialogs & overlays", crate::features_dialogs, "dialogs.rsx"),
-    ("Reactivity", crate::features_reactivity, "reactivity.rsx"),
+    ("Badges & chips", crate::features_pills, crate::FeaturesPillsProps, "pills.rsx"),
+    ("Menus & select", crate::features_menus, crate::FeaturesMenusProps, "menus.rsx"),
+    ("Dialogs & overlays", crate::features_dialogs, crate::FeaturesDialogsProps, "dialogs.rsx"),
+    ("Reactivity", crate::features_reactivity, crate::FeaturesReactivityProps, "reactivity.rsx"),
     (
         "Transitions",
         crate::features_transitions,
+        crate::FeaturesTransitionsProps,
         "transitions.rsx"
     ),
-    ("Motion", crate::features_motion, "motion.rsx"),
+    ("Motion", crate::features_motion, crate::FeaturesMotionProps, "motion.rsx"),
     (
         "Background work",
         crate::features_background,
+        crate::FeaturesBackgroundProps,
         "background.rsx"
     ),
-    ("Positioning", crate::features_positioning, "positioning.rsx"),
-    ("Pointer & drag", crate::features_pointer, "pointer.rsx"),
+    ("Positioning", crate::features_positioning, crate::FeaturesPositioningProps, "positioning.rsx"),
+    ("Pointer & drag", crate::features_pointer, crate::FeaturesPointerProps, "pointer.rsx"),
 ];
 
 /// A restored hot-reload stack (or a deep link) can name a section that no longer exists; clamp rather than panic.
@@ -427,7 +435,7 @@ fn build_nav(stacks: TabStacks<usize, SectionRoute>) -> Result<Box<dyn LayoutIte
 fn build_sidebar(
     stacks: TabStacks<usize, SectionRoute>,
 ) -> Result<Box<dyn LayoutItem>, LayoutError> {
-    let header_theme = crate::core_sidebar()?;
+    let header_theme = crate::core_sidebar(crate::CoreSidebarProps::props().build(), Children::default())?;
     let nav = build_nav(stacks)?;
     Ok(Box::new(Container::new(
         LayoutStyle::new()

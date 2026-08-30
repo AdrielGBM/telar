@@ -5,8 +5,11 @@
 #[allow(unused_imports)] use crate::core::theme::theme;
 #[allow(unused_imports)] use crate::shared::demo_svgs::{make_blurred, make_icon, make_logo};
 
+#[derive(::telar::Props)]
+pub struct FeaturesSvgProps {}
+
 #[allow(dead_code, unused_variables, unused_mut)]
-pub fn features_svg() -> Result<Box<dyn LayoutItem>, LayoutError> {
+pub fn features_svg(props: FeaturesSvgProps, children: Children) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let __owner = telar::owner_scope();
     #[allow(unused_imports)] use telar::use_theme;
 
@@ -16,232 +19,305 @@ pub fn features_svg() -> Result<Box<dyn LayoutItem>, LayoutError> {
     let blurred = make_blurred();
 
     let __col_0 = {
-        let __node_0 = doc_header(DocHeaderProps::props().kicker("MEDIA").title("SVG").desc("svg renders vector art crisply at any size. Tint a monochrome glyph, keep full-color gradients, or bake a file from disk.").build())?;
+        let __node_0 = doc_header(DocHeaderProps::props().kicker("MEDIA").title("SVG").desc("svg renders vector art crisply at any size. Tint a monochrome glyph, keep full-color gradients, or bake a file from disk.").build(), Children::default())?;
         let __node_1 = {
-            let mut __slots = Slots::new();
-            let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-            let __node_2 = {
-                let mut __slots = Slots::new();
-                let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-                let __row_0 = {
-                    let __svg_0 = {
-                        let __src = icon.clone();
-                        Svg::new(
-                            LayoutStyle::new().width(20.0).height(20.0),
-                            move || __src.clone(),
-                            || None,
-                            move || ObjectFit::Contain,
-                        )?
+            let __deferred = Children::new(
+                {
+                    let icon = icon.clone();
+                move || {
+                    let icon = icon.clone();
+                    let mut __slots = Slots::new();
+                    let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
+                    let __node_2 = {
+                        let __deferred = Children::new(
+                            {
+                                let icon = icon.clone();
+                            move || {
+                                let icon = icon.clone();
+                                let mut __slots = Slots::new();
+                                let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
+                                let __row_0 = {
+                                    let __svg_0 = {
+                                        let __src = icon.clone();
+                                        Svg::new(
+                                            LayoutStyle::new().width(20.0).height(20.0),
+                                            move || __src.clone(),
+                                            || None,
+                                            move || ObjectFit::Contain,
+                                        )?
+                                    };
+                                    let __svg_1 = {
+                                        let __src = icon.clone();
+                                        Svg::new(
+                                            LayoutStyle::new().width(36.0).height(36.0),
+                                            move || __src.clone(),
+                                            || None,
+                                            move || ObjectFit::Contain,
+                                        )?
+                                    };
+                                    let __svg_2 = {
+                                        let __src = icon.clone();
+                                        Svg::new(
+                                            LayoutStyle::new().width(64.0).height(64.0),
+                                            move || __src.clone(),
+                                            || None,
+                                            move || ObjectFit::Contain,
+                                        )?
+                                    };
+                                    let __svg_3 = {
+                                        let __src = icon.clone();
+                                        Svg::new(
+                                            LayoutStyle::new().width(96.0).height(96.0),
+                                            move || __src.clone(),
+                                            || None,
+                                            move || ObjectFit::Contain,
+                                        )?
+                                    };
+                                    Container::new(LayoutStyle::new().flex_row().gap(20.0).align_items(AlignItems::END), children![__svg_0, __svg_1, __svg_2, __svg_3])?
+                                };
+                                __children.push(box_item(__row_0));
+                                __slots.extend_default(__children);
+                                Ok(__slots)
+                            }
+                            }
+                        );
+                        card(CardProps::props().build(), __deferred)?
                     };
-                    let __svg_1 = {
-                        let __src = icon.clone();
-                        Svg::new(
-                            LayoutStyle::new().width(36.0).height(36.0),
-                            move || __src.clone(),
-                            || None,
-                            move || ObjectFit::Contain,
-                        )?
-                    };
-                    let __svg_2 = {
-                        let __src = icon.clone();
-                        Svg::new(
-                            LayoutStyle::new().width(64.0).height(64.0),
-                            move || __src.clone(),
-                            || None,
-                            move || ObjectFit::Contain,
-                        )?
-                    };
-                    let __svg_3 = {
-                        let __src = icon.clone();
-                        Svg::new(
-                            LayoutStyle::new().width(96.0).height(96.0),
-                            move || __src.clone(),
-                            || None,
-                            move || ObjectFit::Contain,
-                        )?
-                    };
-                    Container::new(LayoutStyle::new().flex_row().gap(20.0).align_items(AlignItems::END), children![__svg_0, __svg_1, __svg_2, __svg_3])?
-                };
-                __children.push(box_item(__row_0));
-                __slots.extend_default(__children);
-                card(CardProps::props().build(), __slots)?
-            };
-            __children.push(box_item(__node_2));
-            let __node_3 = code_line(CodeLineProps::props().code("svg src:icon width:96 height:96").build())?;
-            __children.push(box_item(__node_3));
-            __slots.extend_default(__children);
-            example(ExampleProps::props().title("One source, drawn crisp at every size").build(), __slots)?
+                    __children.push(box_item(__node_2));
+                    let __node_3 = code_line(CodeLineProps::props().code("svg src:icon width:96 height:96").build(), Children::default())?;
+                    __children.push(box_item(__node_3));
+                    __slots.extend_default(__children);
+                    Ok(__slots)
+                }
+                }
+            );
+            example(ExampleProps::props().title("One source, drawn crisp at every size").build(), __deferred)?
         };
         let __node_4 = {
-            let mut __slots = Slots::new();
-            let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-            let __node_5 = {
-                let mut __slots = Slots::new();
-                let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-                let __row_1 = {
-                    let __svg_4 = {
-                        let __src = icon.clone();
-                        Svg::new(
-                            LayoutStyle::new().width(48.0).height(48.0),
-                            move || __src.clone(),
-                            move || Some(theme().primary),
-                            move || ObjectFit::Contain,
-                        )?
+            let __deferred = Children::new(
+                {
+                    let icon = icon.clone();
+                move || {
+                    let icon = icon.clone();
+                    let mut __slots = Slots::new();
+                    let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
+                    let __node_5 = {
+                        let __deferred = Children::new(
+                            {
+                                let icon = icon.clone();
+                            move || {
+                                let icon = icon.clone();
+                                let mut __slots = Slots::new();
+                                let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
+                                let __row_1 = {
+                                    let __svg_4 = {
+                                        let __src = icon.clone();
+                                        Svg::new(
+                                            LayoutStyle::new().width(48.0).height(48.0),
+                                            move || __src.clone(),
+                                            move || Some(theme().primary),
+                                            move || ObjectFit::Contain,
+                                        )?
+                                    };
+                                    let __svg_5 = {
+                                        let __src = icon.clone();
+                                        Svg::new(
+                                            LayoutStyle::new().width(48.0).height(48.0),
+                                            move || __src.clone(),
+                                            move || Some(theme().success),
+                                            move || ObjectFit::Contain,
+                                        )?
+                                    };
+                                    let __svg_6 = {
+                                        let __src = icon.clone();
+                                        Svg::new(
+                                            LayoutStyle::new().width(48.0).height(48.0),
+                                            move || __src.clone(),
+                                            move || Some(theme().danger),
+                                            move || ObjectFit::Contain,
+                                        )?
+                                    };
+                                    let __svg_7 = {
+                                        let __src = icon.clone();
+                                        Svg::new(
+                                            LayoutStyle::new().width(48.0).height(48.0),
+                                            move || __src.clone(),
+                                            move || Some(theme().purple),
+                                            move || ObjectFit::Contain,
+                                        )?
+                                    };
+                                    Container::new(LayoutStyle::new().flex_row().gap(20.0).align_items(AlignItems::CENTER), children![__svg_4, __svg_5, __svg_6, __svg_7])?
+                                };
+                                __children.push(box_item(__row_1));
+                                __slots.extend_default(__children);
+                                Ok(__slots)
+                            }
+                            }
+                        );
+                        card(CardProps::props().build(), __deferred)?
                     };
-                    let __svg_5 = {
-                        let __src = icon.clone();
-                        Svg::new(
-                            LayoutStyle::new().width(48.0).height(48.0),
-                            move || __src.clone(),
-                            move || Some(theme().success),
-                            move || ObjectFit::Contain,
-                        )?
-                    };
-                    let __svg_6 = {
-                        let __src = icon.clone();
-                        Svg::new(
-                            LayoutStyle::new().width(48.0).height(48.0),
-                            move || __src.clone(),
-                            move || Some(theme().danger),
-                            move || ObjectFit::Contain,
-                        )?
-                    };
-                    let __svg_7 = {
-                        let __src = icon.clone();
-                        Svg::new(
-                            LayoutStyle::new().width(48.0).height(48.0),
-                            move || __src.clone(),
-                            move || Some(theme().purple),
-                            move || ObjectFit::Contain,
-                        )?
-                    };
-                    Container::new(LayoutStyle::new().flex_row().gap(20.0).align_items(AlignItems::CENTER), children![__svg_4, __svg_5, __svg_6, __svg_7])?
-                };
-                __children.push(box_item(__row_1));
-                __slots.extend_default(__children);
-                card(CardProps::props().build(), __slots)?
-            };
-            __children.push(box_item(__node_5));
-            let __node_6 = code_line(CodeLineProps::props().code("svg src:icon color:theme().primary").build())?;
-            __children.push(box_item(__node_6));
-            __slots.extend_default(__children);
-            example(ExampleProps::props().title("Tint — recolor a monochrome glyph (reads the active theme)").build(), __slots)?
+                    __children.push(box_item(__node_5));
+                    let __node_6 = code_line(CodeLineProps::props().code("svg src:icon color:theme().primary").build(), Children::default())?;
+                    __children.push(box_item(__node_6));
+                    __slots.extend_default(__children);
+                    Ok(__slots)
+                }
+                }
+            );
+            example(ExampleProps::props().title("Tint — recolor a monochrome glyph (reads the active theme)").build(), __deferred)?
         };
         let __node_7 = {
-            let mut __slots = Slots::new();
-            let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-            let __node_8 = {
-                let mut __slots = Slots::new();
-                let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-                let __row_2 = {
-                    let __col_1 = {
-                        let __svg_8 = {
-                            let __src = logo.clone();
-                            Svg::new(
-                                LayoutStyle::new().width(88.0).height(88.0),
-                                move || __src.clone(),
-                                || None,
-                                move || ObjectFit::Contain,
-                            )?
-                        };
-                        let __text_0 = {
-                            Text::declaring(
-                                || "gradient + shapes".to_string(),
-                                LayoutStyle::new(),
-                                move |__inherited: TextStyle| __inherited.with_font_size(12.0).with_color(use_theme::<core::theme::SandboxTheme>().muted()),
-                            )?
-                        };
-                        Container::new(LayoutStyle::new().flex_column().gap(6.0).align_items(AlignItems::CENTER), children![__svg_8, __text_0])?
+            let __deferred = Children::new(
+                {
+                    let logo = logo.clone();
+                    let blurred = blurred.clone();
+                move || {
+                    let logo = logo.clone();
+                    let blurred = blurred.clone();
+                    let mut __slots = Slots::new();
+                    let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
+                    let __node_8 = {
+                        let __deferred = Children::new(
+                            {
+                                let logo = logo.clone();
+                                let blurred = blurred.clone();
+                            move || {
+                                let logo = logo.clone();
+                                let blurred = blurred.clone();
+                                let mut __slots = Slots::new();
+                                let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
+                                let __row_2 = {
+                                    let __col_1 = {
+                                        let __svg_8 = {
+                                            let __src = logo.clone();
+                                            Svg::new(
+                                                LayoutStyle::new().width(88.0).height(88.0),
+                                                move || __src.clone(),
+                                                || None,
+                                                move || ObjectFit::Contain,
+                                            )?
+                                        };
+                                        let __text_0 = {
+                                            Text::declaring(
+                                                || "gradient + shapes".to_string(),
+                                                LayoutStyle::new(),
+                                                move |__inherited: TextStyle| __inherited.with_font_size(12.0).with_color(use_theme::<core::theme::SandboxTheme>().muted()),
+                                            )?
+                                        };
+                                        Container::new(LayoutStyle::new().flex_column().gap(6.0).align_items(AlignItems::CENTER), children![__svg_8, __text_0])?
+                                    };
+                                    let __col_2 = {
+                                        let __svg_9 = {
+                                            let __src = blurred.clone();
+                                            Svg::new(
+                                                LayoutStyle::new().width(88.0).height(88.0),
+                                                move || __src.clone(),
+                                                || None,
+                                                move || ObjectFit::Contain,
+                                            )?
+                                        };
+                                        let __text_1 = {
+                                            Text::declaring(
+                                                || "feGaussianBlur → raster".to_string(),
+                                                LayoutStyle::new(),
+                                                move |__inherited: TextStyle| __inherited.with_font_size(12.0).with_color(use_theme::<core::theme::SandboxTheme>().muted()),
+                                            )?
+                                        };
+                                        Container::new(LayoutStyle::new().flex_column().gap(6.0).align_items(AlignItems::CENTER), children![__svg_9, __text_1])?
+                                    };
+                                    Container::new(LayoutStyle::new().flex_row().gap(24.0).align_items(AlignItems::CENTER), children![__col_1, __col_2])?
+                                };
+                                __children.push(box_item(__row_2));
+                                __slots.extend_default(__children);
+                                Ok(__slots)
+                            }
+                            }
+                        );
+                        card(CardProps::props().build(), __deferred)?
                     };
-                    let __col_2 = {
-                        let __svg_9 = {
-                            let __src = blurred.clone();
-                            Svg::new(
-                                LayoutStyle::new().width(88.0).height(88.0),
-                                move || __src.clone(),
-                                || None,
-                                move || ObjectFit::Contain,
-                            )?
-                        };
-                        let __text_1 = {
-                            Text::declaring(
-                                || "feGaussianBlur → raster".to_string(),
-                                LayoutStyle::new(),
-                                move |__inherited: TextStyle| __inherited.with_font_size(12.0).with_color(use_theme::<core::theme::SandboxTheme>().muted()),
-                            )?
-                        };
-                        Container::new(LayoutStyle::new().flex_column().gap(6.0).align_items(AlignItems::CENTER), children![__svg_9, __text_1])?
-                    };
-                    Container::new(LayoutStyle::new().flex_row().gap(24.0).align_items(AlignItems::CENTER), children![__col_1, __col_2])?
-                };
-                __children.push(box_item(__row_2));
-                __slots.extend_default(__children);
-                card(CardProps::props().build(), __slots)?
-            };
-            __children.push(box_item(__node_8));
-            let __node_9 = code_line(CodeLineProps::props().code("svg src:logo width:88 height:88").build())?;
-            __children.push(box_item(__node_9));
-            __slots.extend_default(__children);
-            example(ExampleProps::props().title("Full-color vectors and a raster fallback for filters").build(), __slots)?
+                    __children.push(box_item(__node_8));
+                    let __node_9 = code_line(CodeLineProps::props().code("svg src:logo width:88 height:88").build(), Children::default())?;
+                    __children.push(box_item(__node_9));
+                    __slots.extend_default(__children);
+                    Ok(__slots)
+                }
+                }
+            );
+            example(ExampleProps::props().title("Full-color vectors and a raster fallback for filters").build(), __deferred)?
         };
         let __node_10 = {
-            let mut __slots = Slots::new();
-            let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-            let __node_11 = {
-                let mut __slots = Slots::new();
-                let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-                let __row_3 = {
-                    let __svg_10 = {
-                        static BAKED_SVG_0: std::sync::LazyLock<std::sync::Arc<SvgData>> = std::sync::LazyLock::new(|| std::sync::Arc::new(SvgData::from_baked_vector((48.0f32, 48.0f32), vec![VectorCommand::Path { data: std::sync::Arc::new(PathData::new().move_to(Point::new(24.0f32, 3.0f32)).line_to(Point::new(42.0f32, 10.0f32)).line_to(Point::new(42.0f32, 24.0f32)).cubic_to(Point::new(42.0f32, 36.0f32), Point::new(34.0f32, 43.0f32), Point::new(24.0f32, 46.0f32)).cubic_to(Point::new(14.0f32, 43.0f32), Point::new(6.0f32, 36.0f32), Point::new(6.0f32, 24.0f32)).line_to(Point::new(6.0f32, 10.0f32)).close()), style: std::sync::Arc::new(PathStyle { fill: Some(Paint::Gradient(Gradient::linear(Point::new(6.0f32, 3.0f32), Point::new(6.0f32, 46.0f32), &[(0.0f32, Color::rgba(0.30980393f32, 0.54901963f32, 1.0f32, 1.0f32)),(1.0f32, Color::rgba(0.11764706f32, 0.22745098f32, 0.5411765f32, 1.0f32)),]))), stroke: Some(Stroke { paint: Paint::Solid(Color::rgba(0.043137256f32, 0.101960786f32, 0.22745098f32, 1.0f32)), width: 2.0f32, cap: LineCap::Butt, join: LineJoin::Miter }), shadow: None, fill_rule: FillRule::Winding }) },VectorCommand::Path { data: std::sync::Arc::new(PathData::new().move_to(Point::new(16.0f32, 24.0f32)).line_to(Point::new(22.0f32, 30.0f32)).line_to(Point::new(33.0f32, 17.0f32))), style: std::sync::Arc::new(PathStyle { fill: None, stroke: Some(Stroke { paint: Paint::Solid(Color::rgba(1.0f32, 1.0f32, 1.0f32, 1.0f32)), width: 3.0f32, cap: LineCap::Round, join: LineJoin::Round }), shadow: None, fill_rule: FillRule::Winding }) },])));
-                        Svg::new(
-                            LayoutStyle::new().width(40.0).height(40.0),
-                            move || std::sync::Arc::clone(&BAKED_SVG_0),
-                            || None,
-                            move || ObjectFit::Contain,
-                        )?
+            let __deferred = Children::new(
+                move || {
+                    let mut __slots = Slots::new();
+                    let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
+                    let __node_11 = {
+                        let __deferred = Children::new(
+                            move || {
+                                let mut __slots = Slots::new();
+                                let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
+                                let __row_3 = {
+                                    let __svg_10 = {
+                                        static BAKED_SVG_0: std::sync::LazyLock<std::sync::Arc<SvgData>> = std::sync::LazyLock::new(|| std::sync::Arc::new(SvgData::from_baked_vector((48.0f32, 48.0f32), vec![VectorCommand::Path { data: std::sync::Arc::new(PathData::new().move_to(Point::new(24.0f32, 3.0f32)).line_to(Point::new(42.0f32, 10.0f32)).line_to(Point::new(42.0f32, 24.0f32)).cubic_to(Point::new(42.0f32, 36.0f32), Point::new(34.0f32, 43.0f32), Point::new(24.0f32, 46.0f32)).cubic_to(Point::new(14.0f32, 43.0f32), Point::new(6.0f32, 36.0f32), Point::new(6.0f32, 24.0f32)).line_to(Point::new(6.0f32, 10.0f32)).close()), style: std::sync::Arc::new(PathStyle { fill: Some(Paint::Gradient(Gradient::linear(Point::new(6.0f32, 3.0f32), Point::new(6.0f32, 46.0f32), &[(0.0f32, Color::rgba(0.30980393f32, 0.54901963f32, 1.0f32, 1.0f32)),(1.0f32, Color::rgba(0.11764706f32, 0.22745098f32, 0.5411765f32, 1.0f32)),]))), stroke: Some(Stroke { paint: Paint::Solid(Color::rgba(0.043137256f32, 0.101960786f32, 0.22745098f32, 1.0f32)), width: 2.0f32, cap: LineCap::Butt, join: LineJoin::Miter }), shadow: None, fill_rule: FillRule::Winding }) },VectorCommand::Path { data: std::sync::Arc::new(PathData::new().move_to(Point::new(16.0f32, 24.0f32)).line_to(Point::new(22.0f32, 30.0f32)).line_to(Point::new(33.0f32, 17.0f32))), style: std::sync::Arc::new(PathStyle { fill: None, stroke: Some(Stroke { paint: Paint::Solid(Color::rgba(1.0f32, 1.0f32, 1.0f32, 1.0f32)), width: 3.0f32, cap: LineCap::Round, join: LineJoin::Round }), shadow: None, fill_rule: FillRule::Winding }) },])));
+                                        Svg::new(
+                                            LayoutStyle::new().width(40.0).height(40.0),
+                                            move || std::sync::Arc::clone(&BAKED_SVG_0),
+                                            || None,
+                                            move || ObjectFit::Contain,
+                                        )?
+                                    };
+                                    let __svg_11 = {
+                                        static BAKED_SVG_1: std::sync::LazyLock<std::sync::Arc<SvgData>> = std::sync::LazyLock::new(|| std::sync::Arc::new(SvgData::from_baked_vector((48.0f32, 48.0f32), vec![VectorCommand::Path { data: std::sync::Arc::new(PathData::new().move_to(Point::new(24.0f32, 3.0f32)).line_to(Point::new(42.0f32, 10.0f32)).line_to(Point::new(42.0f32, 24.0f32)).cubic_to(Point::new(42.0f32, 36.0f32), Point::new(34.0f32, 43.0f32), Point::new(24.0f32, 46.0f32)).cubic_to(Point::new(14.0f32, 43.0f32), Point::new(6.0f32, 36.0f32), Point::new(6.0f32, 24.0f32)).line_to(Point::new(6.0f32, 10.0f32)).close()), style: std::sync::Arc::new(PathStyle { fill: Some(Paint::Gradient(Gradient::linear(Point::new(6.0f32, 3.0f32), Point::new(6.0f32, 46.0f32), &[(0.0f32, Color::rgba(0.30980393f32, 0.54901963f32, 1.0f32, 1.0f32)),(1.0f32, Color::rgba(0.11764706f32, 0.22745098f32, 0.5411765f32, 1.0f32)),]))), stroke: Some(Stroke { paint: Paint::Solid(Color::rgba(0.043137256f32, 0.101960786f32, 0.22745098f32, 1.0f32)), width: 2.0f32, cap: LineCap::Butt, join: LineJoin::Miter }), shadow: None, fill_rule: FillRule::Winding }) },VectorCommand::Path { data: std::sync::Arc::new(PathData::new().move_to(Point::new(16.0f32, 24.0f32)).line_to(Point::new(22.0f32, 30.0f32)).line_to(Point::new(33.0f32, 17.0f32))), style: std::sync::Arc::new(PathStyle { fill: None, stroke: Some(Stroke { paint: Paint::Solid(Color::rgba(1.0f32, 1.0f32, 1.0f32, 1.0f32)), width: 3.0f32, cap: LineCap::Round, join: LineJoin::Round }), shadow: None, fill_rule: FillRule::Winding }) },])));
+                                        Svg::new(
+                                            LayoutStyle::new().width(72.0).height(72.0),
+                                            move || std::sync::Arc::clone(&BAKED_SVG_1),
+                                            || None,
+                                            move || ObjectFit::Contain,
+                                        )?
+                                    };
+                                    let __svg_12 = {
+                                        static BAKED_SVG_2: std::sync::LazyLock<std::sync::Arc<SvgData>> = std::sync::LazyLock::new(|| std::sync::Arc::new(SvgData::from_baked_vector((48.0f32, 48.0f32), vec![VectorCommand::Path { data: std::sync::Arc::new(PathData::new().move_to(Point::new(24.0f32, 3.0f32)).line_to(Point::new(42.0f32, 10.0f32)).line_to(Point::new(42.0f32, 24.0f32)).cubic_to(Point::new(42.0f32, 36.0f32), Point::new(34.0f32, 43.0f32), Point::new(24.0f32, 46.0f32)).cubic_to(Point::new(14.0f32, 43.0f32), Point::new(6.0f32, 36.0f32), Point::new(6.0f32, 24.0f32)).line_to(Point::new(6.0f32, 10.0f32)).close()), style: std::sync::Arc::new(PathStyle { fill: Some(Paint::Gradient(Gradient::linear(Point::new(6.0f32, 3.0f32), Point::new(6.0f32, 46.0f32), &[(0.0f32, Color::rgba(0.30980393f32, 0.54901963f32, 1.0f32, 1.0f32)),(1.0f32, Color::rgba(0.11764706f32, 0.22745098f32, 0.5411765f32, 1.0f32)),]))), stroke: Some(Stroke { paint: Paint::Solid(Color::rgba(0.043137256f32, 0.101960786f32, 0.22745098f32, 1.0f32)), width: 2.0f32, cap: LineCap::Butt, join: LineJoin::Miter }), shadow: None, fill_rule: FillRule::Winding }) },VectorCommand::Path { data: std::sync::Arc::new(PathData::new().move_to(Point::new(16.0f32, 24.0f32)).line_to(Point::new(22.0f32, 30.0f32)).line_to(Point::new(33.0f32, 17.0f32))), style: std::sync::Arc::new(PathStyle { fill: None, stroke: Some(Stroke { paint: Paint::Solid(Color::rgba(1.0f32, 1.0f32, 1.0f32, 1.0f32)), width: 3.0f32, cap: LineCap::Round, join: LineJoin::Round }), shadow: None, fill_rule: FillRule::Winding }) },])));
+                                        Svg::new(
+                                            LayoutStyle::new().width(120.0).height(56.0),
+                                            move || std::sync::Arc::clone(&BAKED_SVG_2),
+                                            || None,
+                                            move || ObjectFit::Cover,
+                                        )?
+                                    };
+                                    Container::new(LayoutStyle::new().flex_row().gap(20.0).align_items(AlignItems::CENTER), children![__svg_10, __svg_11, __svg_12])?
+                                };
+                                __children.push(box_item(__row_3));
+                                __slots.extend_default(__children);
+                                Ok(__slots)
+                            }
+                        );
+                        card(CardProps::props().build(), __deferred)?
                     };
-                    let __svg_11 = {
-                        static BAKED_SVG_1: std::sync::LazyLock<std::sync::Arc<SvgData>> = std::sync::LazyLock::new(|| std::sync::Arc::new(SvgData::from_baked_vector((48.0f32, 48.0f32), vec![VectorCommand::Path { data: std::sync::Arc::new(PathData::new().move_to(Point::new(24.0f32, 3.0f32)).line_to(Point::new(42.0f32, 10.0f32)).line_to(Point::new(42.0f32, 24.0f32)).cubic_to(Point::new(42.0f32, 36.0f32), Point::new(34.0f32, 43.0f32), Point::new(24.0f32, 46.0f32)).cubic_to(Point::new(14.0f32, 43.0f32), Point::new(6.0f32, 36.0f32), Point::new(6.0f32, 24.0f32)).line_to(Point::new(6.0f32, 10.0f32)).close()), style: std::sync::Arc::new(PathStyle { fill: Some(Paint::Gradient(Gradient::linear(Point::new(6.0f32, 3.0f32), Point::new(6.0f32, 46.0f32), &[(0.0f32, Color::rgba(0.30980393f32, 0.54901963f32, 1.0f32, 1.0f32)),(1.0f32, Color::rgba(0.11764706f32, 0.22745098f32, 0.5411765f32, 1.0f32)),]))), stroke: Some(Stroke { paint: Paint::Solid(Color::rgba(0.043137256f32, 0.101960786f32, 0.22745098f32, 1.0f32)), width: 2.0f32, cap: LineCap::Butt, join: LineJoin::Miter }), shadow: None, fill_rule: FillRule::Winding }) },VectorCommand::Path { data: std::sync::Arc::new(PathData::new().move_to(Point::new(16.0f32, 24.0f32)).line_to(Point::new(22.0f32, 30.0f32)).line_to(Point::new(33.0f32, 17.0f32))), style: std::sync::Arc::new(PathStyle { fill: None, stroke: Some(Stroke { paint: Paint::Solid(Color::rgba(1.0f32, 1.0f32, 1.0f32, 1.0f32)), width: 3.0f32, cap: LineCap::Round, join: LineJoin::Round }), shadow: None, fill_rule: FillRule::Winding }) },])));
-                        Svg::new(
-                            LayoutStyle::new().width(72.0).height(72.0),
-                            move || std::sync::Arc::clone(&BAKED_SVG_1),
-                            || None,
-                            move || ObjectFit::Contain,
-                        )?
-                    };
-                    let __svg_12 = {
-                        static BAKED_SVG_2: std::sync::LazyLock<std::sync::Arc<SvgData>> = std::sync::LazyLock::new(|| std::sync::Arc::new(SvgData::from_baked_vector((48.0f32, 48.0f32), vec![VectorCommand::Path { data: std::sync::Arc::new(PathData::new().move_to(Point::new(24.0f32, 3.0f32)).line_to(Point::new(42.0f32, 10.0f32)).line_to(Point::new(42.0f32, 24.0f32)).cubic_to(Point::new(42.0f32, 36.0f32), Point::new(34.0f32, 43.0f32), Point::new(24.0f32, 46.0f32)).cubic_to(Point::new(14.0f32, 43.0f32), Point::new(6.0f32, 36.0f32), Point::new(6.0f32, 24.0f32)).line_to(Point::new(6.0f32, 10.0f32)).close()), style: std::sync::Arc::new(PathStyle { fill: Some(Paint::Gradient(Gradient::linear(Point::new(6.0f32, 3.0f32), Point::new(6.0f32, 46.0f32), &[(0.0f32, Color::rgba(0.30980393f32, 0.54901963f32, 1.0f32, 1.0f32)),(1.0f32, Color::rgba(0.11764706f32, 0.22745098f32, 0.5411765f32, 1.0f32)),]))), stroke: Some(Stroke { paint: Paint::Solid(Color::rgba(0.043137256f32, 0.101960786f32, 0.22745098f32, 1.0f32)), width: 2.0f32, cap: LineCap::Butt, join: LineJoin::Miter }), shadow: None, fill_rule: FillRule::Winding }) },VectorCommand::Path { data: std::sync::Arc::new(PathData::new().move_to(Point::new(16.0f32, 24.0f32)).line_to(Point::new(22.0f32, 30.0f32)).line_to(Point::new(33.0f32, 17.0f32))), style: std::sync::Arc::new(PathStyle { fill: None, stroke: Some(Stroke { paint: Paint::Solid(Color::rgba(1.0f32, 1.0f32, 1.0f32, 1.0f32)), width: 3.0f32, cap: LineCap::Round, join: LineJoin::Round }), shadow: None, fill_rule: FillRule::Winding }) },])));
-                        Svg::new(
-                            LayoutStyle::new().width(120.0).height(56.0),
-                            move || std::sync::Arc::clone(&BAKED_SVG_2),
-                            || None,
-                            move || ObjectFit::Cover,
-                        )?
-                    };
-                    Container::new(LayoutStyle::new().flex_row().gap(20.0).align_items(AlignItems::CENTER), children![__svg_10, __svg_11, __svg_12])?
-                };
-                __children.push(box_item(__row_3));
-                __slots.extend_default(__children);
-                card(CardProps::props().build(), __slots)?
-            };
-            __children.push(box_item(__node_11));
-            let __node_12 = code_line(CodeLineProps::props().code("svg src:'assets/badge.svg' width:72 height:72").build())?;
-            __children.push(box_item(__node_12));
-            __slots.extend_default(__children);
-            example(ExampleProps::props().title("A vector baked from disk at build time (no runtime parser)").build(), __slots)?
+                    __children.push(box_item(__node_11));
+                    let __node_12 = code_line(CodeLineProps::props().code("svg src:'assets/badge.svg' width:72 height:72").build(), Children::default())?;
+                    __children.push(box_item(__node_12));
+                    __slots.extend_default(__children);
+                    Ok(__slots)
+                }
+            );
+            example(ExampleProps::props().title("A vector baked from disk at build time (no runtime parser)").build(), __deferred)?
         };
         let __node_13 = {
-            let mut __slots = Slots::new();
-            let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-            let __col_3 = {
-                let __node_14 = prop_row(PropRowProps::props().name("src").values("Arc<SvgData> · 'path'").about("Runtime vector, or a baked file path.").build())?;
-                let __node_15 = prop_row(PropRowProps::props().name("color").values("Color expr").about("Recolor a glyph, e.g. theme().primary.").build())?;
-                let __node_16 = prop_row(PropRowProps::props().name("fit").values("contain · cover · fill").about("Aspect handling in the box.").build())?;
-                Container::new(LayoutStyle::new().flex_column().gap(6.0), children![__node_14, __node_15, __node_16])?
-            };
-            __children.push(box_item(__col_3));
-            __slots.extend_default(__children);
-            example(ExampleProps::props().title("Attributes").build(), __slots)?
+            let __deferred = Children::new(
+                move || {
+                    let mut __slots = Slots::new();
+                    let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
+                    let __col_3 = {
+                        let __node_14 = prop_row(PropRowProps::props().name("src").values("Arc<SvgData> · 'path'").about("Runtime vector, or a baked file path.").build(), Children::default())?;
+                        let __node_15 = prop_row(PropRowProps::props().name("color").values("Color expr").about("Recolor a glyph, e.g. theme().primary.").build(), Children::default())?;
+                        let __node_16 = prop_row(PropRowProps::props().name("fit").values("contain · cover · fill").about("Aspect handling in the box.").build(), Children::default())?;
+                        Container::new(LayoutStyle::new().flex_column().gap(6.0), children![__node_14, __node_15, __node_16])?
+                    };
+                    __children.push(box_item(__col_3));
+                    __slots.extend_default(__children);
+                    Ok(__slots)
+                }
+            );
+            example(ExampleProps::props().title("Attributes").build(), __deferred)?
         };
         Container::new(LayoutStyle::new().flex_column().gap(20.0), children![__node_0, __node_1, __node_4, __node_7, __node_10, __node_13])?
     };

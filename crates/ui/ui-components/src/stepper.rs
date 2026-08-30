@@ -5,7 +5,7 @@ use layout_core::{AlignItems, JustifyContent, LayoutError, LayoutStyle};
 use reactive_core::{Reactive, RwSignal, signal};
 use renderer_core::{BorderRadius, Color, RectStyle, ShapeStyle};
 use ui_core::focus::Role;
-use ui_core::{Container, LayoutItem, StyledContainer, Text, box_item};
+use ui_core::{Children, Container, LayoutItem, StyledContainer, Text, box_item};
 
 use crate::shared;
 
@@ -61,7 +61,10 @@ pub struct StepperProps {
     pub on_change: Option<Box<dyn Fn(f32)>>,
 }
 
-pub fn stepper(props: StepperProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
+pub fn stepper(
+    props: StepperProps,
+    _children: Children,
+) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let StepperProps {
         value,
         min,
@@ -201,6 +204,7 @@ mod tests {
                 .max(5.0)
                 .step(1.0)
                 .build(),
+            Children::default(),
         )
         .unwrap();
         let node = widget.layout_node();
@@ -231,6 +235,7 @@ mod tests {
                 .max(5.0)
                 .step(1.0)
                 .build(),
+            Children::default(),
         )
         .unwrap();
         let node = widget.layout_node();
@@ -262,6 +267,7 @@ mod tests {
                 .step(1.0)
                 .on_change(Box::new(move |v| sink.set(v)))
                 .build(),
+            Children::default(),
         )
         .unwrap();
         let node = widget.layout_node();
@@ -281,7 +287,7 @@ mod tests {
     #[test]
     fn uncontrolled_stepper_builds_with_default_value() {
         crate::test_support::fresh_layout_runtime();
-        let result = stepper(StepperProps::props().build());
+        let result = stepper(StepperProps::props().build(), Children::default());
         assert!(result.is_ok());
     }
 
@@ -290,7 +296,11 @@ mod tests {
     fn unset_max_does_not_clamp_to_min() {
         crate::test_support::fresh_layout_runtime();
         let value = signal(0.0f32);
-        let mut widget = stepper(StepperProps::props().value(value).step(1.0).build()).unwrap();
+        let mut widget = stepper(
+            StepperProps::props().value(value).step(1.0).build(),
+            Children::default(),
+        )
+        .unwrap();
         let node = widget.layout_node();
         let rect = track_layout(node).unwrap();
         compute_layout(node, AvailableSpace::MaxContent, AvailableSpace::MaxContent).unwrap();

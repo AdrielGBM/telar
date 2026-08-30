@@ -14,7 +14,7 @@ pub struct SharedComponentsDocHeaderProps {
 }
 
 #[allow(dead_code, unused_variables, unused_mut)]
-pub fn shared_components_doc_header(props: SharedComponentsDocHeaderProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
+pub fn shared_components_doc_header(props: SharedComponentsDocHeaderProps, children: Children) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let __owner = telar::owner_scope();
     #[allow(unused_imports)] use telar::use_theme;
     let __col_0 = {
@@ -47,7 +47,7 @@ pub fn shared_components_doc_header(props: SharedComponentsDocHeaderProps) -> Re
 #[allow(dead_code, unused_variables, unused_mut)]
 pub fn shared_components_doc_header_preview_0() -> Result<Box<dyn LayoutItem>, LayoutError> {
     #[allow(unused_imports)] use telar::use_theme;
-    let __node_0 = doc_header(DocHeaderProps::props().kicker("FOUNDATIONS").title("Layout").desc("Flexbox rows and columns with gaps, padding, alignment and growth.").build())?;
+    let __node_0 = doc_header(DocHeaderProps::props().kicker("FOUNDATIONS").title("Layout").desc("Flexbox rows and columns with gaps, padding, alignment and growth.").build(), Children::default())?;
     Ok(Box::new(__node_0))
 }
 

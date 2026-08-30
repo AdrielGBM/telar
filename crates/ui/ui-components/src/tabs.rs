@@ -4,7 +4,7 @@ use layout_core::{AlignItems, JustifyContent, LayoutError, LayoutStyle};
 use reactive_core::{Reactive, RwSignal, signal};
 use renderer_core::{BorderRadius, Color, RectStyle, ShapeStyle, TextStyle};
 use ui_core::focus::Role;
-use ui_core::{Container, LayoutItem, StyledContainer, Text, box_item};
+use ui_core::{Children, Container, LayoutItem, StyledContainer, Text, box_item};
 
 use crate::shared;
 
@@ -50,7 +50,7 @@ pub struct TabsProps {
     pub color: Reactive<Color>,
 }
 
-pub fn tabs(props: TabsProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
+pub fn tabs(props: TabsProps, _children: Children) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let TabsProps {
         items,
         selected,
@@ -139,7 +139,11 @@ mod tests {
     #[test]
     fn an_inactive_tab_fades_the_ink_of_the_region_around_it() {
         crate::test_support::fresh_layout_runtime();
-        let item = tabs(TabsProps::props().items(vec!["One", "Two"]).build()).unwrap();
+        let item = tabs(
+            TabsProps::props().items(vec!["One", "Two"]).build(),
+            Children::default(),
+        )
+        .unwrap();
         let root = new_container(
             LayoutStyle::new().flex_column().width(400.0).height(100.0),
             &[item.layout_node()],
@@ -186,6 +190,7 @@ mod tests {
             TabsProps::props()
                 .items(vec!["One", "Two", "Three"])
                 .build(),
+            Children::default(),
         )
         .unwrap();
         let r = lay_out(item.layout_node());
@@ -203,6 +208,7 @@ mod tests {
                 .items(vec!["One", "Two"])
                 .selected(selected)
                 .build(),
+            Children::default(),
         )
         .unwrap();
         let r = lay_out(item.layout_node());

@@ -4,10 +4,12 @@ use layout_core::{AlignItems, JustifyContent, LayoutError, LayoutStyle, NodeId};
 use platform_core::Event;
 use reactive_core::{Effect, Reactive, RwSignal, effect, signal};
 use renderer_core::{Color, RectStyle};
+#[cfg(test)]
+use ui_core::Slots;
 use ui_core::focus::Role;
 use ui_core::{
-    ClippedItem, Component, Container, EventResult, LayoutItem, RenderNode, Slots, StyledContainer,
-    Text, box_item, mark_dirty, set_display,
+    Children, ClippedItem, Component, Container, EventResult, LayoutItem, RenderNode,
+    StyledContainer, Text, box_item, mark_dirty, set_display,
 };
 
 use crate::shared;
@@ -57,8 +59,9 @@ pub struct AccordionProps {
 
 pub fn accordion(
     props: AccordionProps,
-    mut slots: Slots,
+    children: Children,
 ) -> Result<Box<dyn LayoutItem>, LayoutError> {
+    let mut slots = children.build()?;
     let AccordionProps { title, open, color } = props;
     // Uncontrolled: own the state so the section still expands/collapses when the caller binds no signal.
     let open = open.unwrap_or_else(|| signal(false));
@@ -179,7 +182,7 @@ mod tests {
         let open = signal(false);
         let mut item = accordion(
             AccordionProps::props().title("Details").open(open).build(),
-            slot_with_body("Body"),
+            Children::from(slot_with_body("Body")),
         )
         .unwrap();
         let node = item.layout_node();
@@ -214,7 +217,7 @@ mod tests {
         let open = signal(false);
         let item = accordion(
             AccordionProps::props().title("Details").open(open).build(),
-            slot_with_body("Body"),
+            Children::from(slot_with_body("Body")),
         )
         .unwrap();
         let node = item.layout_node();
@@ -254,7 +257,7 @@ mod tests {
         crate::test_support::fresh_layout_runtime();
         let item = accordion(
             AccordionProps::props().title("Details").build(),
-            slot_with_body("Body"),
+            Children::from(slot_with_body("Body")),
         )
         .unwrap();
         let node = item.layout_node();
