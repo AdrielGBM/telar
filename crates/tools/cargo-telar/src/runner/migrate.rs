@@ -443,14 +443,21 @@ fn shared_handlers(body: &str) -> String {
 fn rewrite_boxed_props(declaration: &str) -> String {
     let mut out = String::with_capacity(declaration.len());
     let mut rest = declaration;
-    while let Some(at) = rest.find("Box<dyn Fn") {
-        let Some(close) = closing_angle(rest, at + "Box".len()) else {
-            out.push_str(&rest[..at + 3]);
-            rest = &rest[at + 3..];
+    // `Rc` as well as `Box`, because what decides is whether the closure *returns* something — a prop
+    // already moved to `Rc<dyn Fn() -> T>` by hand is still a value wearing a handler's shape.
+    while let Some((at, owner)) = ["Box<dyn Fn", "Rc<dyn Fn"]
+        .iter()
+        .filter_map(|owner| rest.find(owner).map(|at| (at, *owner)))
+        .min()
+    {
+        let head = owner.len() - "<dyn Fn".len();
+        let Some(close) = closing_angle(rest, at + head) else {
+            out.push_str(&rest[..at + head]);
+            rest = &rest[at + head..];
             continue;
         };
         out.push_str(&rest[..at]);
-        let inner = &rest[at + "Box<".len()..close];
+        let inner = &rest[at + head + 1..close];
         match inner.split_once("->") {
             // A value the prop reads, which is what `Reactive` is: `Const(T)` or a closure, one shape.
             Some((_, yields)) => out.push_str(&format!("Reactive<{}>", yields.trim())),
@@ -872,6 +879,19 @@ mod tests {
             "a value, not a handler: {out}"
         );
         assert!(out.contains("pub tint: Option<Reactive<Color>>,"), "{out}");
+
+        // A prop already moved to `Rc` by hand is still a value if it returns one, and still a handler if
+        // it does not — which is what makes running the codemod twice safe.
+        let again = migrated(&out);
+        assert_eq!(again, out, "the rewrite is its own fixed point");
+        let by_hand = migrated(
+            "[logic]\nuse std::rc::Rc;\n\npub struct Props {\n    pub label: Rc<dyn Fn() -> String>,\n    pub act: Rc<dyn Fn()>,\n}\n\n[view]\ncol\n",
+        );
+        assert!(
+            by_hand.contains("pub label: Reactive<String>,"),
+            "{by_hand}"
+        );
+        assert!(by_hand.contains("pub act: Rc<dyn Fn()>,"), "{by_hand}");
         assert!(
             out.contains("let held: Box<dyn Fn()> = Box::new(|| {});"),
             "a binding outside the declaration is left alone: {out}"
