@@ -77,7 +77,8 @@ region that rebuilds.
 ### Breaking API changes
 
 - `ClippedItem::along(item, ClipAxis::…)` → `ClippedItem::new(item, Clip::…)`. `Clip` carries the axis, a
-  radius and an inset; `Clip::both()`, `Clip::x()`, `Clip::y()`, then `.rounded(r)` / `.inset(n)`.
+  radius, an inset and whether the cut edge stops the pointer: `Clip::both()`, `Clip::x()`, `Clip::y()`,
+  then `.rounded(r)` / `.inset(n)` / `.paint_only()`.
 - Handler props on the widget catalogue are `Rc<dyn Fn…>`, not `Box<dyn Fn…>`.
 - `context_menu::Entry::Custom` holds a recipe (`Rc<dyn Fn() -> Result<Box<dyn LayoutItem>, LayoutError>>`)
   rather than a built widget, so a menu can be opened twice.

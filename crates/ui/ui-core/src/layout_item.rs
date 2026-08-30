@@ -152,6 +152,21 @@ pub struct Clip {
     /// Pulled in from every cutting edge. What a stroked box wants: cut inside the border rather than under
     /// it, so the border stays whole and the content stops at its inner edge.
     pub inset: f32,
+    pub pointer: ClipPointer,
+}
+
+/// Whether a cut edge stops the pointer as well as the paint.
+///
+/// [`Stop`](ClipPointer::Stop) is what a viewport wants and the default: clipped away is *gone*, so a widget
+/// cut off cannot take the click that visually belongs to whatever is drawn over it.
+/// [`Through`](ClipPointer::Through) is for a clip that is only about paint — a rounded frame over a canvas,
+/// where a node dragged out past the edge has to keep following the hand, and a clip that swallowed the
+/// moves would drop it at the border.
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Default)]
+pub enum ClipPointer {
+    #[default]
+    Stop,
+    Through,
 }
 
 impl Clip {
@@ -185,6 +200,14 @@ impl Clip {
 
     pub fn inset(self, inset: f32) -> Self {
         Self { inset, ..self }
+    }
+
+    /// Cuts what is drawn and nothing else.
+    pub fn paint_only(self) -> Self {
+        Self {
+            pointer: ClipPointer::Through,
+            ..self
+        }
     }
 }
 
@@ -260,6 +283,9 @@ impl Component for ClippedItem {
     }
 
     fn on_event(&mut self, event: &Event) -> EventResult {
+        if self.clip.pointer == ClipPointer::Through {
+            return self.inner.on_event(event);
+        }
         let outside = |x: f64, y: f64| !self.cut().contains(x as f32, y as f32);
         match event {
             Event::PointerPressed { x, y, .. } | Event::PointerMoved { x, y, .. }
@@ -385,8 +411,14 @@ mod tests {
         let pressed = Rc::new(Cell::new(false));
         let sink = Rc::clone(&pressed);
         reset_layout_runtime();
+        // `flex_shrink(0)` so the child really overflows the 40px window instead of being squeezed into it:
+        // without it the press lands outside the child's own rect and the clip is never what stopped it.
         let inner = StyledContainer::new(
-            LayoutStyle::new().flex_row().width(100.0).height(20.0),
+            LayoutStyle::new()
+                .flex_row()
+                .width(100.0)
+                .height(20.0)
+                .flex_shrink(0.0),
             |_r| RectStyle::default(),
             vec![],
         )
@@ -454,6 +486,52 @@ mod tests {
         };
         assert_eq!(rect, Rect::new(2.0, 2.0, 36.0, 16.0));
         assert_eq!(radius, BorderRadius::all(6.0));
+    }
+
+    /// A frame drawn over a canvas cuts the paint and nothing else: a node dragged out past the edge has to
+    /// keep following the hand, and a clip that swallowed the moves would drop it at the border. This is what
+    /// a project had a hand-written widget for, beside the one that stops the pointer.
+    #[test]
+    fn a_paint_only_clip_lets_the_pointer_through() {
+        let pressed = Rc::new(Cell::new(false));
+        let sink = Rc::clone(&pressed);
+        reset_layout_runtime();
+        // `flex_shrink(0)` so the child really overflows the 40px window instead of being squeezed into it.
+        let inner = StyledContainer::new(
+            LayoutStyle::new()
+                .flex_row()
+                .width(100.0)
+                .height(20.0)
+                .flex_shrink(0.0),
+            |_r| RectStyle::default(),
+            vec![],
+        )
+        .unwrap()
+        .on_press(move || sink.set(true));
+        let mut clipped = ClippedItem::new(
+            Box::new(
+                StyledContainer::new(
+                    LayoutStyle::new().flex_row().width(40.0).height(20.0),
+                    |_r| RectStyle::default(),
+                    vec![Box::new(inner)],
+                )
+                .unwrap(),
+            ),
+            Clip::both().paint_only(),
+        );
+        compute_layout(
+            clipped.layout_node(),
+            AvailableSpace::Definite(40.0),
+            AvailableSpace::Definite(20.0),
+        )
+        .unwrap();
+
+        clipped.on_event(&press(80.0, 10.0));
+        clipped.on_event(&release(80.0, 10.0));
+        assert!(
+            pressed.get(),
+            "a press past the cut edge still reaches what it is over"
+        );
     }
 
     /// One axis cut, the other left free — the thing CSS cannot say. The inset applies to the cutting edges
