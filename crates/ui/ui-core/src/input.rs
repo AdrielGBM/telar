@@ -317,13 +317,19 @@ impl Input {
             _ => return EventResult::Ignored,
         }
         // Only push a new string when the text actually changed, so a bare caret move doesn't rebuild it.
-        if self.value.with(|s| s != &text) {
+        let edited = self.value.with(|s| s != &text);
+        if edited {
             self.value.set(text);
         }
         self.caret.set(caret);
         // An anchor that caught up with the caret is no selection at all, and keeping it would make the next
         // unshifted arrow collapse to a range of nothing.
-        self.anchor.set(anchor.filter(|a| *a != caret));
+        //
+        // An edit drops it outright: the rule above is about *movement*, and `Shift`+`M` is not a movement.
+        // Kept, the anchor sat where the caret was before the letter went in, so the next keystroke read the
+        // letter just typed as a selection and replaced it — a name came out with every capital missing but
+        // the last.
+        self.anchor.set(anchor.filter(|a| *a != caret && !edited));
         EventResult::Handled
     }
 }
@@ -834,6 +840,45 @@ mod tests {
         assert!(!focus::is_focused(plain.id));
         plain.on_event(&key(Key::Char('x')));
         assert_eq!(untouched.get(), "");
+    }
+
+    /// A capital is typed with `Shift` down, as a keyboard sends it — and `Shift` is the selection modifier,
+    /// so the anchor it left behind made the next keystroke replace the letter just typed. A name came out
+    /// with every capital missing but the last, which no test that presses `M` where a hand presses
+    /// `Shift`+`M` can see.
+    #[test]
+    fn a_capital_is_not_a_selection() {
+        let (mut input, value) = focused_input("");
+        for (c, held) in [
+            ('L', true),
+            ('a', false),
+            (' ', false),
+            ('C', true),
+            ('u', false),
+            ('e', false),
+            ('v', false),
+            ('a', false),
+        ] {
+            let event = match (c, held) {
+                (' ', _) => key(Key::Named(NamedKey::Space)),
+                (c, true) => shifted(Key::Char(c)),
+                (c, false) => key(Key::Char(c)),
+            };
+            input.on_event(&event);
+        }
+        assert_eq!(value.get(), "La Cueva");
+    }
+
+    /// `Shift` still selects when the key it is held with is a movement.
+    #[test]
+    fn a_shifted_arrow_still_selects() {
+        let (mut input, value) = focused_input("hola");
+        input.on_event(&key(Key::Named(NamedKey::End)));
+        for _ in 0..2 {
+            input.on_event(&shifted(Key::Named(NamedKey::ArrowLeft)));
+        }
+        input.on_event(&key(Key::Char('y')));
+        assert_eq!(value.get(), "hoy");
     }
 
     #[test]
