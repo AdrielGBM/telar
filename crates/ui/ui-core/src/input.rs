@@ -154,6 +154,16 @@ impl Input {
         self
     }
 
+    /// The id this field holds in the tab order.
+    ///
+    /// For the caller that has to answer «who has the keyboard» about a field it did not build — a tab that
+    /// turns into one, a cell edited in place — and cannot ask [`focus::current`] instead: that says who holds
+    /// it now, which is the same answer for every field on the surface. `focus_id:$sig` in a `[view]` is this,
+    /// mirrored into a signal and withdrawn when the field goes.
+    pub fn focus_id(&self) -> focus::FocusId {
+        self.id
+    }
+
     /// The current caret byte offset, clamped to the text and snapped to a char boundary.
     fn caret_at(&self, text: &str) -> usize {
         let mut c = self.caret.get().min(text.len());

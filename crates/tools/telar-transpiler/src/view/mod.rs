@@ -1189,8 +1189,8 @@ mod tests {
         assert!(!code.contains("with_clamp"), "{code}");
     }
 
-    // `input` binds `value:$signal` (cloned), builds a size/color text style, forwards layout attrs, and
-    // wires an optional `on_submit`.
+    // `input` binds `value:$signal` (cloned), amends the text style the tree declared, forwards layout attrs,
+    // and wires an optional `on_submit`.
     #[test]
     fn input_binds_value_style_and_submit() {
         let src = "[logic]\nlet name = signal(String::new());\n[view]\ninput value:$name font_size:16 color:$theme.primary width:200 on_submit:(|| $name.set(String::new()))\n";
@@ -1198,12 +1198,12 @@ mod tests {
             .unwrap()
             .rust_code;
         assert!(
-            code.contains("Input::new(name.clone(),"),
+            code.contains("Input::declaring(name.clone(),"),
             "binds the value signal (cloned):\n{code}"
         );
         assert!(
-            code.contains("TextStyle::new(16.0, theme.get().primary)"),
-            "size + reactive colour style:\n{code}"
+            code.contains(".with_font_size(16.0).with_color(theme.get().primary)"),
+            "amends what the tree declared rather than building a style from nothing:\n{code}"
         );
         assert!(
             code.contains(".width(200"),

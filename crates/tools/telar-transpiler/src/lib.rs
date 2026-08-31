@@ -1050,6 +1050,34 @@ col @card
         );
     }
 
+    /// A field that opens holding the keyboard, says who holds it, and can be given up — the three things a
+    /// field that stands in for something else needs, and the three that used to keep one in hand-written
+    /// Rust. `focus_id:` in particular is not something `[logic]` could do: it runs before the widget exists.
+    #[test]
+    fn a_field_can_open_focused_say_so_and_be_given_up() {
+        let out = transpile_source(
+            "[logic]\nlet typed = signal(String::new());\nlet holds = signal(None);\n[view]\ninput value:$typed autofocus focus_id:$holds on_cancel:(|| typed.set(String::new()))\n",
+            "demo",
+            None,
+            None,
+        )
+        .unwrap();
+        let code = &out.rust_code;
+        assert!(code.contains(".autofocus()"), "it opens focused:\n{code}");
+        assert!(
+            code.contains(".on_cancel(move || typed.set(String::new()))"),
+            "escape is answerable:\n{code}"
+        );
+        assert!(
+            code.contains("holds.set(Some(__field.focus_id()));"),
+            "and it publishes the id it holds the keyboard under:\n{code}"
+        );
+        assert!(
+            code.contains("on_cleanup(move || holds.set(None));"),
+            "withdrawn when the field goes:\n{code}"
+        );
+    }
+
     /// A transform is read per frame from a closure the renderer already re-runs, so animating one costs a
     /// repaint and no relayout — which is what lets `transition(…)` reach past paint without breaking the
     /// invariant the whole design rests on. It is also the half of a sliding indicator that is not `track_rect`.

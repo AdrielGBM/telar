@@ -547,16 +547,23 @@ pub fn tag_attr_keys(tag: &str) -> Vec<&'static str> {
         "scroll" => with(&["keep"]),
         // `paint` is the drawing itself; everything else shapes the leaf it draws into.
         "canvas" => with(&["paint"]),
-        // `input` binds `value:$signal` and takes text-style keys plus an optional Enter handler.
-        "input" => with(&[
-            "value",
-            "font_size",
-            "font_family",
-            "color",
-            "placeholder",
-            "on_submit",
-            "secret",
-        ]),
+        // `input` binds `value:$signal` and amends the text style the tree declared, so it takes the same
+        // inheritable keys a `text` does — a field written in a different hand from the labels beside it is
+        // the reason one standing in for a tab used to have to be Rust.
+        "input" => {
+            let mut keys = with(&[
+                "value",
+                "placeholder",
+                "on_submit",
+                "on_cancel",
+                "secret",
+                // Opens holding the keyboard, and says which id it holds it under.
+                "autofocus",
+                "focus_id",
+            ]);
+            keys.extend_from_slice(INHERITABLE_TEXT_KEYS);
+            keys
+        }
         "svg" => with(&["src", "color", "stroke", "fit"]),
         // `lazy` holds its subtree back until `when:` is true.
         "lazy" => with(&["when"]),

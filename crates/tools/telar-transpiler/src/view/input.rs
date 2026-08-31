@@ -22,28 +22,24 @@ impl ViewGen<'_> {
             None => "Default::default()".to_string(),
         };
 
-        // Text style (size + color), resolved like `text`; the closure self-clones a `$signal` colour.
+        // Styled by what the tree above it declared, amended by whatever it says for itself — the same rule a
+        // `text` takes, and for the same reason: a field that ignored the face around it was written in a
+        // different hand from the labels beside it, which is why one standing in for a tab had to stay Rust.
+        let mut hoists = Vec::new();
+        let transitions = std::collections::HashMap::new();
+        let modifiers = self.inheritable_modifiers(&el.attributes, &transitions, &mut hoists);
+        let style = wrap_signal_clones(
+            &[super::text::raw_color_value(&el.attributes)],
+            format!("move |__inherited: TextStyle| __inherited{modifiers}"),
+        );
+        // The size a leaf falls back to for its own height, which is the one thing inheritance cannot answer
+        // before the layout runs.
         let size = el
             .attributes
             .iter()
             .find(|a| a.key == "font_size")
             .map(|a| crate::style::number_or(a.value.text(), "14.0"))
             .unwrap_or_else(|| "14.0".to_string());
-        let color_attr = el.attributes.iter().find(|a| a.key == "color");
-        let color = color_attr
-            .map(|a| self.color_expr(a.value.text()))
-            .unwrap_or_else(|| "Color::BLACK".to_string());
-        let color_raw = color_attr.map(|a| a.value.text()).unwrap_or("");
-        let family = el
-            .attributes
-            .iter()
-            .find(|a| a.key == "font_family")
-            .map(|a| format!(".with_font_family({})", super::text::font_family_expr(a)))
-            .unwrap_or_default();
-        let style = wrap_signal_clones(
-            &[color_raw],
-            format!("move || TextStyle::new({size}, {color}){family}"),
-        );
 
         // Remaining attrs are layout (width/height/…); `value`/`size`/`color`/`on_submit` are consumed above.
         let mut extra = String::new();
@@ -55,6 +51,9 @@ impl ViewGen<'_> {
                     | "font_family"
                     | "color"
                     | "on_submit"
+                    | "on_cancel"
+                    | "autofocus"
+                    | "focus_id"
                     | "placeholder"
                     | "secret"
             ) {
@@ -94,9 +93,24 @@ impl ViewGen<'_> {
                 value => value.text().trim().to_string(),
             });
 
+        // The other half of `on_submit`: Escape is a key a focused field eats, so an application watching from
+        // outside cannot tell «they gave up» from «they clicked away» — opposite answers wherever losing focus
+        // commits.
+        let on_cancel = el
+            .attributes
+            .iter()
+            .find(|a| a.key == "on_cancel")
+            .map(|a| {
+                let closure = substitute_handles(&normalize_closure(a.value.text()));
+                wrap_signal_clones(&[a.value.text()], format!("move {closure}"))
+            });
+
         let mut tail = String::new();
         if let Some(c) = on_submit {
             tail.push_str(&format!(".on_submit({c})"));
+        }
+        if let Some(c) = on_cancel {
+            tail.push_str(&format!(".on_cancel({c})"));
         }
         if let Some(p) = placeholder {
             tail.push_str(&format!(".placeholder({p})"));
@@ -107,8 +121,37 @@ impl ViewGen<'_> {
         if el.attributes.iter().any(|a| a.key == "secret") {
             tail.push_str(".secret()");
         }
-        let code =
-            format!("{pad}let {var} = Input::new({value_expr}, {layout_style}, {style})?{tail};");
+        // A field somebody has to click before they can type into it is a field that has not opened — which is
+        // what a surface that exists *because* it wants a keystroke is asking for.
+        if el.attributes.iter().any(|a| a.key == "autofocus") {
+            tail.push_str(".autofocus()");
+        }
+        // `focus_id:$sig` — who holds the keyboard, published by the field itself, because the answer only
+        // exists once the widget does: `[logic]` runs before the view is built and has nothing to ask yet.
+        // Withdrawn when the field goes, by the field: an id that outlived the widget it named is an answer
+        // about something that is not there any more, and whoever is watching would read it as «still typing».
+        let held = el
+            .attributes
+            .iter()
+            .find(|a| a.key == "focus_id")
+            .map(|a| a.value.text().trim().trim_start_matches('$').to_string())
+            .filter(|target| !target.is_empty());
+        let code = match held {
+            None => {
+                format!(
+                    "{pad}let {var} = Input::declaring({value_expr}, {layout_style}, {style})?{tail};"
+                )
+            }
+            Some(target) => format!(
+                "{pad}let {var} = {{\n\
+                 {pad}    let __field = Input::declaring({value_expr}, {layout_style}, {style})?{tail};\n\
+                 {pad}    let {target} = {target}.clone();\n\
+                 {pad}    {target}.set(Some(__field.focus_id()));\n\
+                 {pad}    on_cleanup(move || {target}.set(None));\n\
+                 {pad}    __field\n\
+                 {pad}}};"
+            ),
+        };
         ChildEmit::Simple { name: var, code }
     }
 }
