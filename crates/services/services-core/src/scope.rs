@@ -85,6 +85,21 @@ mod context_tests {
         });
     }
 
+    /// A surface builder writes its context with the owner stack empty, so it lands on the surface's root.
+    /// A component built under it opens a scope of its own — and unless that scope is parented by the same
+    /// rule, it is an orphan and the walk up never reaches what the builder said. A drawer asking which
+    /// module it shows read an empty string this way, and drew the fallback panel for every module.
+    #[test]
+    fn a_scope_opened_with_an_empty_stack_still_sees_the_surface_context() {
+        #[derive(Clone, PartialEq, Debug)]
+        struct Ctx(&'static str);
+
+        reactive_core::reset_runtime();
+        set_context(Ctx("battery"));
+        let _scope = reactive_core::owner_scope();
+        assert_eq!(context::<Ctx>(), Some(Ctx("battery")));
+    }
+
     /// Two components saying different things about their own subtrees must not collide, which is what a
     /// scope *per component* buys and what nothing else does. Without one they share whoever built them: the
     /// second `provide` is refused as a repeat, and — worse than the error — it reads the first one's value.

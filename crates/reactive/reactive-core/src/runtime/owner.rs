@@ -73,11 +73,17 @@ pub fn current_owner() -> Option<OwnerId> {
 }
 
 /// Opens a fresh owner as a child of the active one and makes it current until the guard drops.
+///
+/// **The active one is whoever would own a context**, which with an empty stack is the surface's root — the
+/// same rule [`provide_context`] and [`with_context`] read by. Parenting off the bare stack instead made a
+/// scope opened at the top of a surface build an orphan: the builder had written its context on the surface
+/// root, and the walk up from the orphan never reached it. Every `.rsx` component opens a scope like this,
+/// so a panel asking which module it was built for read an empty string and drew the fallback.
 pub fn owner_scope() -> OwnerGuard {
-    let parent = current_owner();
     let surface = current_surface();
     RUNTIME.with(|rt| {
         let mut rt = rt.borrow_mut();
+        let parent = owning_id(&mut rt);
         let id = rt.owners.insert(OwnerEntry::new(parent, surface));
         if let Some(parent) = parent
             && let Some(entry) = rt.owners.get_mut(parent)
