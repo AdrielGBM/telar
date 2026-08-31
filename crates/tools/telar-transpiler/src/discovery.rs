@@ -485,8 +485,9 @@ mod tests {
             "no ancestor is declared: {out}"
         );
         assert!(out.contains("pub mod top_bar;"), "{out}");
+        let mirrored = generated.join("app").join("editor").join("top_bar.rs");
         assert!(
-            out.contains("build/app/editor/top_bar.rs"),
+            out.contains(&format!("{:?}", mirrored.to_string_lossy())),
             "the generated path still mirrors the whole src tree: {out}"
         );
         let _ = std::fs::remove_dir_all(&root);
