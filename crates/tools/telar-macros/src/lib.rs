@@ -536,6 +536,8 @@ fn transpile_project(theme_type_str: Option<&str>) -> Result<TranspileOutput, To
     // sites, so editing its `Props` elsewhere had to rebuild this crate or the call kept the old arity; the
     // call now spells only names, and rustc checks them against the real type at the usual time.
     let auto_modules = telar_transpiler::auto_modules_enabled(&manifest_dir);
+    // Set where the module tree is emitted, below, and read at the prune at the end of this function.
+    let mut invoked_at_root = true;
 
     let telar_toml = manifest_dir.join("telar.toml");
     if telar_toml.exists() {
@@ -556,6 +558,7 @@ fn transpile_project(theme_type_str: Option<&str>) -> Result<TranspileOutput, To
             .local_file()
             .and_then(|file| invocation_dir(&file, &src_dir))
             .unwrap_or_else(|| src_dir.clone());
+        invoked_at_root = invoked_in == src_dir;
         // The discovered tree is split across real generated files (one per directory) so every module is a
         // file-based `#[path] mod`; see `discover_rust_modules` for why inline `mod` blocks break rust-analyzer.
         let modtree_dir = generated_dir.join("__modules");
@@ -618,8 +621,15 @@ fn transpile_project(theme_type_str: Option<&str>) -> Result<TranspileOutput, To
         Err(msg) => return Err(quote! { compile_error!(#msg) }),
     }
 
-    // Only reached once the whole project transpiled without error, so `written_files` is complete: anything else under `generated_dir` is what an earlier run wrote for a `.rsx` (or a feature) that is gone now.
-    telar_transpiler::prune_stale_generated(&generated_dir, &written_files);
+    // Only reached once the whole project transpiled without error, so `written_files` is complete: anything
+    // else under `generated_dir` is what an earlier run wrote for a `.rsx` (or a feature) that is gone now.
+    //
+    // The root invocation only. A crate may have several — one per module that owns `.rsx` files — and each
+    // knows about its *own* module tree, so a nested one sweeping the directory deletes what the root wrote
+    // and the next build cannot read it back.
+    if invoked_at_root {
+        telar_transpiler::prune_stale_generated(&generated_dir, &written_files);
+    }
 
     Ok(TranspileOutput {
         include_stmts,
