@@ -248,7 +248,15 @@ impl LayoutEngine {
 
     /// Frees a node (and its measure context) from the tree. The caller must have already detached it from
     /// its parent (via [`set_children`]); a removed node id must not be used again.
+    ///
+    /// **Freeing one twice is a no-op, not a crash.** Two owners can reach the same node without seeing each
+    /// other — a `ReactiveList` reconciling away a row it no longer has, and the row's own owner being
+    /// disposed — and both are right to free what they held. Taffy panics on a key it has already handed
+    /// back (`invalid SlotMap key`), so the second free took the process down with it.
     pub fn remove(&mut self, node: NodeId) {
+        if self.alive(node).is_err() {
+            return;
+        }
         self.forget(node);
         let _ = self.tree.remove(node);
     }
@@ -503,6 +511,18 @@ mod tests {
                 AvailableSpace::Definite(100.0),
             )
             .unwrap();
+    }
+
+    /// Two owners can reach the same node without seeing each other — a list reconciling away a row it no
+    /// longer has, and that row's own owner being disposed — and both are right to free what they held.
+    /// Taffy panics on a key it has already handed back, so the second free took the process down with it.
+    #[test]
+    fn freeing_a_node_twice_is_a_no_op() {
+        let mut engine = LayoutEngine::new();
+        let node = engine.new_leaf(LayoutStyle::new()).unwrap();
+        engine.remove(node);
+        engine.remove(node);
+        assert!(engine.mark_dirty(node).is_err(), "and it stays gone");
     }
 
     /// Every mutator answers for a freed node instead of taking the process down with it.
