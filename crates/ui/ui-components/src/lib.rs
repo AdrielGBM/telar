@@ -37,7 +37,10 @@ pub use badge::{BadgeProps, badge};
 pub use button::{ButtonProps, button};
 pub use checkbox::{CheckboxProps, checkbox};
 pub use chip::{ChipProps, chip};
-pub use context_menu::{ContextMenuProps, Entry as MenuEntry, MenuStyle, context_menu};
+pub use context_menu::{
+    ContextMenuProps, Entry as MenuEntry, MenuCustomProps, MenuRowProps, MenuSeparatorProps,
+    MenuStyle, MenuSubProps, context_menu, menu_custom, menu_row, menu_separator, menu_sub,
+};
 pub use drawer::{DrawerProps, drawer};
 pub use heading::{HeadingProps, heading};
 pub use list::{GroupProps, ItemProps, SeparatorProps, group, item, separator};

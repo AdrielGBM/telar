@@ -133,6 +133,145 @@ impl Default for MenuStyle {
     }
 }
 
+/// The list a menu's children push themselves into as they build.
+///
+/// A context menu's rows are heterogeneous and half of them are only there when they apply, which in markup is
+/// an `if` around a row and in Rust was a `Vec` built with pushes. The pieces below register what they are and
+/// hand back a bare node, the way a bound list's pieces do for [`ListContext::declare`](crate::list): the panel
+/// still owns the highlight, the keyboard and the submenus, because it still has the entries — they are simply
+/// written where they are read now.
+#[derive(Clone)]
+struct MenuEntries(Rc<std::cell::RefCell<Declared>>);
+
+/// What a menu's children left behind: the entries they registered, and every node they handed back.
+///
+/// The nodes are kept because nothing frees a layout node on drop and `remove` does not reach descendants — so
+/// taking only what `take_default` returns would leak a row wrapped in anything: a group of rows written as a
+/// component of its own, an `if`, a `for`. Each piece knows its own node, so each piece says so.
+#[derive(Default)]
+struct Declared {
+    entries: Vec<Entry>,
+    nodes: Vec<layout_core::NodeId>,
+}
+
+/// Runs `children` for their entries alone, and takes what they handed back out of the tree: a piece that
+/// registered itself is not a widget.
+fn declared(children: &Children) -> Result<Vec<Entry>, LayoutError> {
+    let collected = MenuEntries(Rc::new(std::cell::RefCell::new(Declared::default())));
+    let mut built = children.build_with(collected.clone())?;
+    for item in built.take_default() {
+        ui_core::remove_node(item.layout_node());
+    }
+    let left = collected.0.take();
+    for node in left.nodes {
+        ui_core::remove_node(node);
+    }
+    Ok(left.entries)
+}
+
+/// Registers one entry with the menu being built, and hands back the bare node every piece returns.
+fn register(entry: Entry) -> Result<Box<dyn LayoutItem>, LayoutError> {
+    let Some(collected) = ui_core::use_context::<MenuEntries>() else {
+        // Silence here would be a row that vanished: the author wrote it, nothing drew it, and nothing said why.
+        return Err(LayoutError::Engine(
+            "a menu row belongs inside a `context_menu`, which is what collects it".to_string(),
+        ));
+    };
+    let bare = StyledContainer::new(LayoutStyle::new(), |_| RectStyle::default(), vec![])?;
+    let mut left = collected.0.borrow_mut();
+    left.entries.push(entry);
+    left.nodes.push(bare.layout_node());
+    Ok(box_item(bare))
+}
+
+#[derive(Props)]
+pub struct MenuRowProps {
+    #[props(into)]
+    pub label: String,
+    /// Drawn faintly at the trailing edge: the key that does the same thing, which is the half of a shortcut
+    /// anybody ever discovers.
+    #[props(into, default)]
+    pub hint: String,
+    #[props(default = Rc::new(|| {}))]
+    pub on_select: Rc<dyn Fn()>,
+    /// There and unavailable, which is a different thing from absent.
+    #[props(default = false)]
+    pub disabled: bool,
+}
+
+/// One line of a menu: what it says, the key that says it too, and what picking it does.
+pub fn menu_row(
+    props: MenuRowProps,
+    _children: Children,
+) -> Result<Box<dyn LayoutItem>, LayoutError> {
+    let row = Entry::Row {
+        label: props.label,
+        hint: props.hint,
+        act: props.on_select,
+        enabled: !props.disabled,
+    };
+    register(row)
+}
+
+#[derive(Props)]
+pub struct MenuSeparatorProps {}
+
+/// A line between two groups of rows. Never a stop for the keyboard.
+pub fn menu_separator(
+    _props: MenuSeparatorProps,
+    _children: Children,
+) -> Result<Box<dyn LayoutItem>, LayoutError> {
+    register(Entry::Separator)
+}
+
+#[derive(Props)]
+pub struct MenuSubProps {
+    #[props(into)]
+    pub label: String,
+}
+
+/// A row that opens another menu beside it, whose rows are this one's children.
+pub fn menu_sub(
+    props: MenuSubProps,
+    children: Children,
+) -> Result<Box<dyn LayoutItem>, LayoutError> {
+    register(Entry::Sub {
+        label: props.label,
+        entries: declared(&children)?,
+    })
+}
+
+#[derive(Props)]
+pub struct MenuCustomProps {
+    /// What picking it does, and whether the arrows stop on it at all: without one the keyboard steps over it,
+    /// which is what a heading or a self-contained strip of buttons wants.
+    #[props(some, default)]
+    pub on_select: Option<Rc<dyn Fn()>>,
+}
+
+/// A row the caller draws: a heading, a strip of icons, a swatch — whatever the children are.
+pub fn menu_custom(
+    props: MenuCustomProps,
+    children: Children,
+) -> Result<Box<dyn LayoutItem>, LayoutError> {
+    // The children are a recipe, which is exactly what a `Custom` entry wants: a menu can be opened twice.
+    let widget = Rc::new(move || {
+        let mut items = children.build()?.take_default();
+        match items.len() {
+            1 => Ok(items.remove(0)),
+            _ => Ok(box_item(StyledContainer::new(
+                LayoutStyle::new().flex_column(),
+                |_| RectStyle::default(),
+                items,
+            )?)),
+        }
+    });
+    register(Entry::Custom {
+        widget,
+        act: props.on_select,
+    })
+}
+
 #[derive(Props)]
 pub struct ContextMenuProps {
     /// Where it was asked for, in surface coordinates.
@@ -154,9 +293,12 @@ pub struct ContextMenuProps {
 }
 
 /// A menu opened at a point: rows, submenus, the keyboard, and every way out.
+///
+/// The rows are its children — `menu_row`, `menu_separator`, `menu_sub`, `menu_custom` — or the `entries`
+/// prop, which is the same list handed over already built. Children come after, so a caller may do both.
 pub fn context_menu(
     props: ContextMenuProps,
-    _children: Children,
+    children: Children,
 ) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let ContextMenuProps {
         at,
@@ -166,6 +308,8 @@ pub fn context_menu(
         within,
         style,
     } = props;
+    let mut entries = entries;
+    entries.extend(declared(&children)?);
     let closing = Rc::new(on_close);
     let panel = panel(
         entries,
@@ -632,6 +776,72 @@ mod tests {
         lay_out(menu.layout_node(), WINDOW.width, WINDOW.height);
         let tree = ComponentList::new(menu);
         (tree, said)
+    }
+
+    /// **The rows written where they are read.** A context menu's rows are heterogeneous and half of them are
+    /// only there when they apply, which is an `if` around a row — and a `Vec` built with pushes in a function
+    /// somewhere else is the one shape that cannot show that. The children register what they are, so the
+    /// panel gets the same list it would have been handed.
+    #[test]
+    fn the_rows_may_be_children() {
+        fresh_layout_runtime();
+        let said: Rc<RefCell<Vec<String>>> = Rc::new(RefCell::new(Vec::new()));
+        let picked = said.clone();
+        let rows = Children::new(move || {
+            let picked = picked.clone();
+            let mut slots = ui_core::Slots::new();
+            slots.push(
+                None,
+                menu_row(
+                    MenuRowProps::props()
+                        .label("copiar")
+                        .hint("ctrl+c")
+                        .on_select(Rc::new(move || picked.borrow_mut().push("copiar".into())))
+                        .build(),
+                    Children::default(),
+                )?,
+            );
+            slots.push(
+                None,
+                menu_separator(MenuSeparatorProps::props().build(), Children::default())?,
+            );
+            slots.push(
+                None,
+                menu_row(
+                    MenuRowProps::props().label("pegar").disabled(true).build(),
+                    Children::default(),
+                )?,
+            );
+            Ok(slots)
+        });
+        let menu = context_menu(
+            ContextMenuProps::props()
+                .at((40.0, 30.0))
+                .within(WINDOW)
+                .build(),
+            rows,
+        )
+        .unwrap();
+        lay_out(menu.layout_node(), WINDOW.width, WINDOW.height);
+        let mut tree = ComponentList::new(menu);
+
+        assert!(
+            drawn_texts(&tree).contains(&"copiar".to_string()),
+            "the row the children declared is the row the panel drew: {:?}",
+            drawn_texts(&tree)
+        );
+
+        // Down onto the first row and pick it: the entries kept their order, and the one that cannot be picked
+        // is still stepped over.
+        route(&mut tree, &key(NamedKey::ArrowDown));
+        route(&mut tree, &key(NamedKey::ArrowDown));
+        route(&mut tree, &key(NamedKey::Enter));
+        assert_eq!(
+            *said.borrow(),
+            vec!["copiar"],
+            "a disabled row declared as a child is disabled in the panel: {:?}",
+            said.borrow()
+        );
     }
 
     /// **The arrows step over what cannot be picked.** A separator is not a row and a disabled one is there to
