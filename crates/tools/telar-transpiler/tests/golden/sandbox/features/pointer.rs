@@ -166,7 +166,15 @@ pub fn pointer(props: PointerProps, children: Children) -> Result<Box<dyn Layout
                                             let __tracked = StyledContainer::new(LayoutStyle::new().flex_column().padding_horizontal(16.0).padding_vertical(8.0), { let theme = theme.clone(); move |_| RectStyle::default().with_fill(theme.get().surface_alt).with_radius(BorderRadius::all(8.0)) }, children![__text_5])?.on_press({ let tab = tab.clone(); move || tab.set(0) }).cursor(Cursor::Pointer);
                                             let __rect = track_layout(__tracked.layout_node()).expect("a container registers its rect");
                                             let handle = handle.clone();
-                                            effect(move || handle.set(__rect.get()));
+                                            effect(move || {
+                                                let __now = __rect.get();
+                                                // Guarded, and not as an optimisation: a signal notifies on every write, and the layout
+                                                // runs every frame something moves — so an unguarded copy would wake every reader of
+                                                // this rect sixty times a second for a rectangle that did not change.
+                                                if handle.peek() != __now {
+                                                    handle.set(__now);
+                                                }
+                                            });
                                             __tracked
                                         };
                                         let __sbox_6 = {

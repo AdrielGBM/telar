@@ -334,6 +334,10 @@ impl ViewGen<'_> {
     /// `track_layout` hands back the node's own rect signal; this copies it into the author's signal, which is
     /// what makes the value reachable from the rest of their `[view]` and `[logic]`. The mirroring effect is
     /// kept on the widget, so it stops when the widget goes rather than firing at a node that is gone.
+    ///
+    /// The copy is guarded, which is the difference between a rect somebody can build on and one nothing can
+    /// afford to read: a signal notifies on every write, so an unguarded mirror wakes each of its readers on
+    /// every frame the layout runs, whether or not the rectangle moved.
     fn track_rect_tail(&self, el: &Element, pad: &str) -> String {
         let Some(attr) = el.attributes.iter().find(|a| a.key == "track_rect") else {
             return String::new();
@@ -345,7 +349,15 @@ impl ViewGen<'_> {
         format!(
             "{pad}let __rect = track_layout(__tracked.layout_node()).expect(\"a container registers its rect\");\n\
              {pad}let {target} = {target}.clone();\n\
-             {pad}effect(move || {target}.set(__rect.get()));\n\
+             {pad}effect(move || {{\n\
+             {pad}    let __now = __rect.get();\n\
+             {pad}    // Guarded, and not as an optimisation: a signal notifies on every write, and the layout\n\
+             {pad}    // runs every frame something moves — so an unguarded copy would wake every reader of\n\
+             {pad}    // this rect sixty times a second for a rectangle that did not change.\n\
+             {pad}    if {target}.peek() != __now {{\n\
+             {pad}        {target}.set(__now);\n\
+             {pad}    }}\n\
+             {pad}}});\n\
              {pad}__tracked\n"
         )
     }

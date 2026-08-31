@@ -916,6 +916,10 @@ col @card
     /// The idiom `track_layout` is used for in Rust, reachable from the view: read where a node ended up so a
     /// sibling can be drawn from it. With a transform transition it is the whole of a sliding indicator, which
     /// is why the two landed together.
+    ///
+    /// **The copy is guarded**, and that is the difference between a rect somebody can build on and one
+    /// nothing can afford to read: the layout runs on every frame something moves and a signal notifies on
+    /// every write, so an unguarded mirror wakes each of its readers whether or not the rectangle moved.
     #[test]
     fn track_rect_mirrors_a_node_into_a_signal_and_keeps_the_effect() {
         let src = "[logic]\nlet active = signal(Rect::ZERO);\n[view]\ncol\n    box track_rect:$active width:20\n";
@@ -926,11 +930,15 @@ col @card
             "the node's own rect signal is the source:\n{code}"
         );
         assert!(
-            code.contains("active.set(__rect.get())"),
+            code.contains("active.set(__now);"),
             "and it is mirrored into the author's signal:\n{code}"
         );
         assert!(
-            code.contains("effect(move || active.set(__rect.get()));"),
+            code.contains("if active.peek() != __now"),
+            "only when it moved, or every reader of it wakes on every frame:\n{code}"
+        );
+        assert!(
+            code.contains("effect(move || {"),
             "as a bare effect, owned by the scope that built the widget rather than parked on it:\n{code}"
         );
     }
