@@ -4,10 +4,36 @@ use quote::{ToTokens, quote};
 use std::path::{Path, PathBuf};
 
 mod app_input;
+mod component;
 mod props;
 mod t_macro;
 mod theme_tokens;
 use app_input::{AppInput, preview_const_ident};
+
+/// Reads a function of named arguments as a tag: the arguments are the props, and the body is what the
+/// component builds.
+///
+/// ```ignore
+/// #[telar::component]
+/// pub fn glyph(rows: &'static [&'static str], #[props(into)] color: Reactive<Color>) -> Result<Box<dyn LayoutItem>, LayoutError> {
+///     chrome::mark(rows, move || color.get())
+/// }
+/// ```
+///
+/// **For the widget a `[view]` cannot build itself** — one that owns a canvas, a register, a document — which
+/// reaches the markup as a component with named props, the shape the child position took when the `widget`
+/// escape went. Written out by hand that is a struct, a `derive`, a destructuring `let` and a signature nobody
+/// reads; the arguments already say all four, and saying them twice is how the two drift apart.
+///
+/// Each argument carries the same `#[props(…)]` attributes a field of the struct would, and its doc comment.
+/// An argument named `children` is bound to the children the call site nested instead of becoming a prop.
+#[proc_macro_attribute]
+pub fn component(_attr: TokenStream, item: TokenStream) -> TokenStream {
+    match component::expand(item.into()) {
+        Ok(tokens) => tokens.into(),
+        Err(e) => e.to_compile_error().into(),
+    }
+}
 
 /// Generates a typed builder for a component's props: `Props::props()`, one setter per prop, `.build()`.
 ///
