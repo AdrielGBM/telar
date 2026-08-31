@@ -81,6 +81,8 @@ impl ViewGen<'_> {
     /// 7. No `theme_type` → file-local `COLOR_*` constant (declared in `[style]`, or rustc catches the missing symbol if undeclared).
     pub(super) fn color_expr(&self, value: &str) -> String {
         let v = value.trim();
+        // The parens a value needs to hold a space are the markup's delimiters, not part of the expression.
+        let v = super::redundant_parens(v).unwrap_or(v);
         if v.starts_with('#') {
             return hex_to_color_expr(v);
         }

@@ -252,6 +252,7 @@ fn parse_track_token(s: &str) -> Option<String> {
 /// wrote. `theme.x` is the theme's own spelling and now its only one.
 pub fn color(value: &str) -> Result<(), String> {
     let v = value.trim();
+    let v = crate::view::redundant_parens(v).unwrap_or(v);
     if v.is_empty() {
         return Err("`color` needs a value: a hex literal, `transparent`, a `$` read, or any Rust expression that yields a `Color`".to_string());
     }
@@ -278,7 +279,10 @@ pub fn color(value: &str) -> Result<(), String> {
 /// an `f32` parameter. Everything else is the author's own Rust, spliced as written for rustc to judge
 /// against this attribute's own line.
 pub fn format_number(value: &str) -> Result<String, String> {
+    // The parens a value needs to hold a space are the markup's delimiters, not part of the expression, so
+    // they come off before it is spliced — emitted, they warn `unused_parens` in code the author cannot edit.
     let v = value.trim();
+    let v = crate::view::redundant_parens(v).unwrap_or(v);
     // `50%` is a token shape, not a key's private grammar: it expands wherever it is written, and rustc
     // rejects it under a key that is not a length. Resolving it per key made the same three characters mean
     // a percentage under `width` and a verbatim splice under `grow`.

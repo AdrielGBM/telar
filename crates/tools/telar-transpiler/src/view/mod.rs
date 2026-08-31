@@ -1658,6 +1658,19 @@ mod tests {
         );
     }
 
+    /// The parens a value needs to hold a space are the markup's delimiters, not part of the expression:
+    /// emitted, they warn `unused_parens` in code the author cannot edit.
+    #[test]
+    fn a_values_own_parens_do_not_reach_the_output() {
+        let src = "[view]\ncol gap:(space::lg() * 2.0) pad:(::ui::scale::md())\n    box fill:(tint(on))\n";
+        let out = crate::transpile_source(src, "demo", None, None)
+            .unwrap()
+            .rust_code;
+        assert!(out.contains(".gap(space::lg() * 2.0)"), "{out}");
+        assert!(out.contains(".padding_all(::ui::scale::md())"), "{out}");
+        assert!(out.contains("with_fill(tint(on))"), "{out}");
+    }
+
     /// A theme read is a `$` read: the view binds `theme` as a handle, so the same sugar that reads a signal
     /// reads the theme, and it re-reads inside the paint closure instead of freezing at construction.
     #[test]
@@ -2036,7 +2049,7 @@ mod tests {
 /// are punctuation rather than grammar and emitting them warns `unused_parens` in code the author cannot
 /// edit. A top-level comma makes them a tuple, which is grammar, and stays — except in a closure, whose
 /// parameter list has a comma of its own.
-pub(super) fn redundant_parens(expr: &str) -> Option<&str> {
+pub(crate) fn redundant_parens(expr: &str) -> Option<&str> {
     let inner = expr.trim().strip_prefix('(')?.strip_suffix(')')?;
     let is_closure = inner.starts_with('|') || inner.trim_start().starts_with("move |");
     let mut depth = 0i32;
