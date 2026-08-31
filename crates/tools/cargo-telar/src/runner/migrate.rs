@@ -553,7 +553,12 @@ fn rewrite_boxed_props(declaration: &str) -> (String, Vec<String>) {
         };
         out.push_str(&rest[..at]);
         let inner = &rest[at + head + 1..close];
-        match inner.split_once("->") {
+        // A closure that takes *and* returns is a callback the framework has no shape for, so it is left
+        // exactly as written. `Fn() -> T` is the reactive one; `Fn(T)` is a handler.
+        let reads = inner
+            .split_once("->")
+            .filter(|(args, _)| args.trim().ends_with("()"));
+        match reads {
             // A value the prop reads, which is what `Reactive` is: `Const(T)` or a closure, one shape.
             Some((_, yields)) => {
                 if let Some(name) = field_name(&out) {
@@ -568,7 +573,7 @@ fn rewrite_boxed_props(declaration: &str) -> (String, Vec<String>) {
                     continue;
                 }
             }
-            // Nothing returned: a handler, shared so the struct can be cloned.
+            // A handler, shared so the struct can be cloned.
             None => out.push_str(&format!("Rc<{inner}>")),
         }
         rest = &rest[close + 1..];
@@ -1020,6 +1025,15 @@ mod tests {
             "a value, not a handler: {out}"
         );
         assert!(out.contains("pub tint: Option<Reactive<Color>>,"), "{out}");
+        // A closure that takes *and* returns is a callback with no framework shape: left as written, since
+        // reading it as a value would drop the argument it is handed.
+        let callback = migrated(
+            "[logic]\npub struct Props {\n    pub style: Box<dyn Fn(RectStyle) -> RectStyle>,\n}\n\n[view]\ncol\n",
+        );
+        assert!(
+            callback.contains("pub style: Rc<dyn Fn(RectStyle) -> RectStyle>,"),
+            "{callback}"
+        );
 
         // A prop already moved to `Rc` by hand is still a value if it returns one, and still a handler if
         // it does not — which is what makes running the codemod twice safe.
