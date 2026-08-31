@@ -536,8 +536,14 @@ fn transpile_project(theme_type_str: Option<&str>) -> Result<TranspileOutput, To
     // sites, so editing its `Props` elsewhere had to rebuild this crate or the call kept the old arity; the
     // call now spells only names, and rustc checks them against the real type at the usual time.
     let auto_modules = telar_transpiler::auto_modules_enabled(&manifest_dir);
-    // Set where the module tree is emitted, below, and read at the prune at the end of this function.
-    let mut invoked_at_root = true;
+    // The compiler's own span, not proc-macro2's shim: only the real one carries a file. A crate may invoke
+    // the macro once per module that owns `.rsx` files, and the two things that differ are what the module
+    // tree is rooted at and whether this run may sweep the generated directory.
+    let invoked_in = proc_macro::Span::call_site()
+        .local_file()
+        .and_then(|file| invocation_dir(&file, &src_dir))
+        .unwrap_or_else(|| src_dir.clone());
+    let invoked_at_root = invoked_in == src_dir;
 
     let telar_toml = manifest_dir.join("telar.toml");
     if telar_toml.exists() {
@@ -553,12 +559,6 @@ fn transpile_project(theme_type_str: Option<&str>) -> Result<TranspileOutput, To
     // `rsx_modules!()` in `app/editor/mod.rs` places `app/editor`'s files; declaring `pub mod app;` there
     // would name an ancestor of the file doing the declaring, which rustc reads as a cycle.
     {
-        // The compiler's own span, not proc-macro2's shim: only the real one carries a file.
-        let invoked_in = proc_macro::Span::call_site()
-            .local_file()
-            .and_then(|file| invocation_dir(&file, &src_dir))
-            .unwrap_or_else(|| src_dir.clone());
-        invoked_at_root = invoked_in == src_dir;
         // The discovered tree is split across real generated files (one per directory) so every module is a
         // file-based `#[path] mod`; see `discover_rust_modules` for why inline `mod` blocks break rust-analyzer.
         let modtree_dir = generated_dir.join("__modules");
