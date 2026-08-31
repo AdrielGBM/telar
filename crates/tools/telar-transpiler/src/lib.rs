@@ -935,6 +935,90 @@ col @card
         );
     }
 
+    /// `cursor:` names a variant or works one out, because a box's shape is as often picked as it is written:
+    /// a strip that could run either way would otherwise have to be two components with one attribute between
+    /// them.
+    #[test]
+    fn a_cursor_is_a_keyword_or_the_expression_that_answers_with_one() {
+        let named =
+            transpile_source("[view]\nbox cursor:col_resize\n", "demo", None, None).unwrap();
+        assert!(
+            named.rust_code.contains(".cursor(Cursor::ColResize)"),
+            "a name in the table is the variant it names:\n{}",
+            named.rust_code
+        );
+        let worked_out =
+            transpile_source("[view]\nbox cursor:(along(axis))\n", "demo", None, None).unwrap();
+        assert!(
+            worked_out.rust_code.contains(".cursor(along(axis))"),
+            "and anything else is the expression the author wrote, without its delimiters:\n{}",
+            worked_out.rust_code
+        );
+    }
+
+    /// And a shape that reads something follows it, like a colour: the box takes a `Reactive<Cursor>`, so what
+    /// is written once is written once and what is read is read again.
+    #[test]
+    fn a_cursor_that_reads_a_signal_keeps_reading_it() {
+        let out = transpile_source(
+            "[logic]\nlet busy = signal(false);\n[view]\nbox cursor:(shape($busy))\n",
+            "demo",
+            None,
+            None,
+        )
+        .unwrap();
+        assert!(
+            out.rust_code
+                .contains("Reactive::of(move || shape(busy.get()))"),
+            "the read is kept as one:\n{}",
+            out.rust_code
+        );
+    }
+
+    /// A number that is not a literal used to be dropped where it stood — no cursor call, no threshold, no
+    /// diagnostic — which is the one failure a value grammar must not have.
+    #[test]
+    fn a_computed_number_reaches_the_property_it_was_written_on() {
+        let out = transpile_source(
+            "[logic]\nconst REACH: f32 = 18.0;\n[view]\nbox drag_threshold:(REACH * 0.5) line_height:(UNIT / 11.0)\n    text \"long\" lines:(rows + 1)\n",
+            "demo",
+            None,
+            None,
+        )
+        .unwrap();
+        let code = &out.rust_code;
+        assert!(
+            code.contains(".drag_threshold(REACH * 0.5)"),
+            "a threshold is an expression:\n{code}"
+        );
+        assert!(
+            code.contains(".with_line_height(UNIT / 11.0)"),
+            "so is a line height:\n{code}"
+        );
+        assert!(
+            code.contains(".with_clamp(rows + 1,"),
+            "and a count stays a count, not a float:\n{code}"
+        );
+    }
+
+    /// The parens a `when:` needs to hold its spaces are the markup's delimiters, like everywhere else: left
+    /// on, they warn `unused_parens` in generated code the author cannot edit.
+    #[test]
+    fn a_lazy_condition_leaves_its_delimiters_behind() {
+        let out = transpile_source(
+            "[logic]\nlet shown = signal(false);\n[view]\ncol\n    lazy when:(ready(&held, 2))\n        text \"there\"\n",
+            "demo",
+            None,
+            None,
+        )
+        .unwrap();
+        assert!(
+            out.rust_code.contains("move || ready(&held, 2)"),
+            "the condition is spliced without them:\n{}",
+            out.rust_code
+        );
+    }
+
     /// `shown:` is a layout property and not a block, which is the whole point of it: the subtree it takes out
     /// of flow is still there, with its scroll where it was and its canvas measured — and it comes back
     /// because the style says so, where a `display_none` written once could never be undone.

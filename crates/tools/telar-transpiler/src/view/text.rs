@@ -6,7 +6,7 @@ use std::fmt::Write;
 use telar_parser::{Attr, Element, Value};
 
 use crate::registry;
-use crate::style::{PropCall, format_f32, layout_prop_call};
+use crate::style::{PropCall, layout_prop_call, number_or};
 
 use super::signals::{captured_idents, emit_transition_prelude, rust_str, wrap_signal_clones};
 use super::{ChildEmit, ChildMode, ViewGen};
@@ -203,12 +203,17 @@ impl ViewGen<'_> {
         // One call, because they are one decision: `ellipsis` without `lines` used to be accepted and do
         // nothing at all, since the clamp returns before ever reaching it. Not inheritable, and cannot be:
         // clamping a *subtree* to two lines means nothing.
-        if let Some(n) = attrs
+        if let Some(lines) = attrs
             .iter()
             .find(|a| a.key == "lines")
-            .and_then(|a| a.value.text().trim().parse::<u16>().ok())
+            .map(|a| a.value.text().trim().to_string())
+            .filter(|value| !value.is_empty())
         {
-            modifiers.push_str(&format!(".with_clamp({n}, {})", asserted("ellipsis")));
+            modifiers.push_str(&format!(
+                ".with_clamp({}, {})",
+                crate::style::format_integer(&lines),
+                asserted("ellipsis")
+            ));
         }
 
         let closure = format!("move |__inherited: TextStyle| __inherited{modifiers}");
@@ -276,16 +281,18 @@ impl ViewGen<'_> {
         if let Some(lh) = attrs
             .iter()
             .find(|a| a.key == "line_height")
-            .and_then(|a| a.value.text().trim().parse::<f32>().ok())
+            .map(|a| a.value.text().trim().to_string())
+            .filter(|value| !value.is_empty())
         {
-            modifiers.push_str(&format!(".with_line_height({})", format_f32(lh)));
+            modifiers.push_str(&format!(".with_line_height({})", number_or(&lh, "1.0")));
         }
         if let Some(ls) = attrs
             .iter()
             .find(|a| a.key == "letter_spacing")
-            .and_then(|a| a.value.text().trim().parse::<f32>().ok())
+            .map(|a| a.value.text().trim().to_string())
+            .filter(|value| !value.is_empty())
         {
-            modifiers.push_str(&format!(".with_letter_spacing({})", format_f32(ls)));
+            modifiers.push_str(&format!(".with_letter_spacing({})", number_or(&ls, "0.0")));
         }
         if let Some(variant) = attrs
             .iter()
@@ -319,7 +326,7 @@ impl ViewGen<'_> {
 /// A `color:`'s value as the author wrote it, before `color_expr` substitutes it — scanned for `$ident` so a
 /// signal-backed colour clones itself into the closure that reads it, leaving the outer binding usable by
 /// sibling widgets.
-fn raw_color_value(attrs: &[Attr]) -> &str {
+pub(super) fn raw_color_value(attrs: &[Attr]) -> &str {
     attrs
         .iter()
         .find(|a| a.key == "color")

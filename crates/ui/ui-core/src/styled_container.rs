@@ -3,7 +3,7 @@ use layout_core::{LayoutError, LayoutStyle, NodeId};
 use platform_core::{
     Cursor, Event, Key, NamedKey, NumericValue, PointerButton, PointerSource, WindowCommand,
 };
-use reactive_core::{Effect, RwSignal, effect, signal};
+use reactive_core::{Effect, Reactive, RwSignal, effect, signal};
 use renderer_core::{Border, Declared, RectStyle};
 use theme_core::use_theme_tokens;
 use ui_tree::{Component, EventResult, RenderNode};
@@ -75,7 +75,7 @@ struct PointerHooks {
     // Fires with the wheel delta while the pointer is over the box.
     scroll: Option<Box<dyn Fn(f32, f32)>>,
     // Pointer shape while the box is hovered; restored to the default on leave. Set from `cursor:` in the DSL.
-    cursor: Option<Cursor>,
+    cursor: Option<Reactive<Cursor>>,
 }
 
 impl PointerHooks {
@@ -385,7 +385,22 @@ impl StyledContainer {
     ///
     /// The shape is the app's statement of what the next press will do — orbit, resize a panel, place a
     /// point — so it belongs to the widget that would handle that press, not to a mode the app tracks.
-    pub fn cursor(mut self, cursor: Cursor) -> Self {
+    ///
+    /// **A shape is as often worked out as it is written**: one strip resizes a column and the same component
+    /// resizes a row. So it takes a [`Reactive<Cursor>`] — a `Cursor` converts into one, so a literal call site
+    /// says exactly what it did before — and one that reads follows what it reads, including while the pointer
+    /// is already inside: the shape is a fact about the box, not about the crossing.
+    pub fn cursor(mut self, cursor: impl Into<Reactive<Cursor>>) -> Self {
+        let cursor = cursor.into();
+        if matches!(cursor, Reactive::Read(_)) {
+            let (hovered, held) = (self.state.is_hovered, cursor.clone());
+            effect(move || {
+                let shape = held.get();
+                if hovered.get() {
+                    platform_core::push_window_command(WindowCommand::SetCursor(shape));
+                }
+            });
+        }
         self.pointer.cursor = Some(cursor);
         self
     }
@@ -820,9 +835,9 @@ impl Component for StyledContainer {
                     && inside != self.state.is_hovered.get()
                 {
                     self.state.is_hovered.set(inside);
-                    if let Some(cursor) = self.pointer.cursor {
+                    if let Some(cursor) = &self.pointer.cursor {
                         platform_core::push_window_command(WindowCommand::SetCursor(if inside {
-                            cursor
+                            cursor.get()
                         } else {
                             Cursor::Default
                         }));

@@ -256,6 +256,41 @@ pub const FIT_VALUES: &[(&str, &str)] = &[
     ("contain_integer", "ObjectFit::ContainInteger"),
 ];
 
+/// `cursor:` — the pointer's shape over a box, one spelling per `Cursor` variant.
+///
+/// A closed set **or** an expression, which is why it is not a [`ValueKind::Keywords`]: that would refuse
+/// every expression, and a cursor is as often picked as it is written — `cursor:col_resize` on one strip and
+/// `cursor:along(axis)` on the strip that could run either way. A name in this table is the variant it names,
+/// and anything else is the Rust expression the author wrote, which is the ladder a colour keyword already
+/// takes.
+///
+/// Read once, when the box is built: a cursor is a value the widget keeps, not a style it re-resolves.
+pub const CURSOR_VALUES: &[(&str, &str)] = &[
+    ("default", "Cursor::Default"),
+    ("pointer", "Cursor::Pointer"),
+    ("crosshair", "Cursor::Crosshair"),
+    ("grab", "Cursor::Grab"),
+    ("grabbing", "Cursor::Grabbing"),
+    ("col_resize", "Cursor::ColResize"),
+    ("row_resize", "Cursor::RowResize"),
+    ("text", "Cursor::Text"),
+    ("not_allowed", "Cursor::NotAllowed"),
+    ("wait", "Cursor::Wait"),
+];
+
+/// The `Cursor` variant `value` names, or `None` when it names none — in which case it is a Rust expression
+/// like every other value.
+///
+/// Matched on the pascal-cased spelling rather than on the table's own, so every way of writing a variant that
+/// worked while this key took nothing but a keyword still does: `col_resize`, `col-resize`, `ColResize`.
+pub fn cursor_keyword(value: &str) -> Option<&'static str> {
+    let wanted = crate::naming::to_pascal_case(value);
+    CURSOR_VALUES
+        .iter()
+        .find(|(_, rust)| rust.strip_prefix("Cursor::") == Some(wanted.as_str()))
+        .map(|(_, rust)| *rust)
+}
+
 /// `raster:` — how samples meet the pixel grid, for a glyph and for a picture alike.
 ///
 /// One key now, where `text` said `raster:` and `img` said `filter:` for the same decision in two
@@ -372,7 +407,8 @@ pub fn value_kind(tag: &str, key: &str) -> Option<ValueKind> {
         | "flex_basis" | "padding" | "pad" | "padding_x" | "pad_x" | "padding_y" | "pad_y"
         | "padding_start" | "pad_start" | "padding_end" | "pad_end" | "margin_start"
         | "margin_end" | "inset_start" | "inset_end" | "inset_top" | "inset_bottom" | "gap"
-        | "gap_x" | "gap_y" | "aspect" | "aspect_ratio" | "grow" | "shrink" | "font_size" => {
+        | "line_height" | "letter_spacing" | "drag_threshold" | "gap_x" | "gap_y" | "aspect"
+        | "aspect_ratio" | "grow" | "shrink" | "font_size" => {
             return Some(ValueKind::Number);
         }
         // A stroke *width* on an `svg`, where every other tag means a colour by the same name.

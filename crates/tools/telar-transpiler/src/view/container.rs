@@ -45,11 +45,29 @@ impl ViewGen<'_> {
                 self.clone_captures(&raw, format!("move || {style}"))
             )
         };
+        // `cursor:pointer` names a variant; anything else is the expression it is, so a box whose shape is
+        // worked out — one strip that runs either way — says so on its own line instead of being split in two.
+        // A value that reads something reactive becomes a reading, so the shape follows it the way a colour
+        // does, rather than being decided once while the box was built.
         let cursor = el
             .attributes
             .iter()
             .find(|a| a.key == "cursor")
-            .map(|a| format!(".cursor(Cursor::{})", to_pascal_case(a.value.text().trim())))
+            .map(|a| {
+                let raw = a.value.text();
+                let value = super::redundant_parens(raw.trim()).unwrap_or(raw.trim());
+                match crate::registry::cursor_keyword(value) {
+                    Some(variant) => format!(".cursor({variant})"),
+                    None if value.contains('$') => format!(
+                        ".cursor({})",
+                        wrap_signal_clones(
+                            &[value],
+                            format!("Reactive::of(move || {})", substitute_reads(value))
+                        )
+                    ),
+                    None => format!(".cursor({})", value),
+                }
+            })
             .unwrap_or_default();
         // `drag_button(secondary auxiliary)` — the buttons that may start this box's drag, on top of the primary one that always can. Commas are taken as separators too, for the one-token `drag_button:secondary,auxiliary` spelling that predates the parenthesized form.
         let drag_button = el
@@ -65,13 +83,20 @@ impl ViewGen<'_> {
                     .collect::<String>()
             })
             .unwrap_or_default();
-        // `drag_threshold:4` — how far a press must travel before it is a drag rather than a click.
+        // `drag_threshold:4` — how far a press must travel before it is a drag rather than a click. A value
+        // like every other: a literal, or the expression that works it out from whatever the box is sized by.
         let drag_threshold = el
             .attributes
             .iter()
             .find(|a| a.key == "drag_threshold")
-            .and_then(|a| a.value.text().trim().parse::<f32>().ok())
-            .map(|px| format!(".drag_threshold({})", format_f32(px)))
+            .map(|a| a.value.text().trim().to_string())
+            .filter(|value| !value.is_empty())
+            .map(|value| {
+                format!(
+                    ".drag_threshold({})",
+                    crate::style::number_or(&value, "0.0")
+                )
+            })
             .unwrap_or_default();
         // A bare flag, like `absolute`: an attribute with no value is the assertion itself.
         let click_through = el

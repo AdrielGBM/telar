@@ -86,9 +86,11 @@ impl ViewGen<'_> {
                     .attributes
                     .iter()
                     .find(|a| a.key == "stroke_width")
-                    .and_then(|a| a.value.text().trim().parse::<f32>().ok())
-                    .unwrap_or(1.0);
-                format!("Some(Stroke::new({color}, {}))", format_f32(width))
+                    .map(|a| a.value.text().trim().to_string())
+                    .filter(|value| !value.is_empty())
+                    .map(|value| crate::style::number_or(&value, "1.0"))
+                    .unwrap_or_else(|| "1.0".to_string());
+                format!("Some(Stroke::new({color}, {width}))")
             }
             None => "None".to_string(),
         };

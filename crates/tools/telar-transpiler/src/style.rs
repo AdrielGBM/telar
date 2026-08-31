@@ -314,6 +314,17 @@ pub fn format_number(value: &str) -> Result<String, String> {
     Ok(v.to_string())
 }
 
+/// The integer twin of [`format_number`], for the one property that counts rather than measures: `lines:2`
+/// feeds a `u16`, so it stays `2` where a length would become `2.0`.
+pub fn format_integer(value: &str) -> String {
+    let v = value.trim();
+    let v = crate::view::redundant_parens(v).unwrap_or(v);
+    match v.contains('$') {
+        true => crate::view::substitute_reads(v),
+        false => v.to_string(),
+    }
+}
+
 /// Formats an f32 so it always carries a decimal point (`240` -> `240.0`).
 pub fn format_f32(n: f32) -> String {
     if n.fract() == 0.0 {
