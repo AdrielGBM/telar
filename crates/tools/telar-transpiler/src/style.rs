@@ -142,6 +142,13 @@ fn layout_call(key: &str, value: &str) -> Result<Option<String>, String> {
         // Out of flow, pinned only by the insets the author names. `absolute_fill` is the all-four-at-zero
         // shorthand `overlay` uses; a floating panel wants three edges and its own size on the fourth.
         "absolute" => format!(".{}()", keyword(key, value, registry::ABSOLUTE_VALUES)?),
+        // Whether the node is in flow at all, re-resolved like every other layout value: `shown:$open` keeps
+        // the subtree it hides — its scroll, its measurements, whatever a canvas was looking at — where an
+        // `if` builds it again from nothing. A bare `shown` is the assertion itself.
+        "shown" => match value.is_empty() {
+            true => ".shown(true)".to_string(),
+            false => format!(".shown({})", crate::view::substitute_reads(value)),
+        },
         "gap" => format!(".gap({})", format_number(value)?),
         "gap_x" => format!(".gap_x({})", format_number(value)?),
         "gap_y" => format!(".gap_y({})", format_number(value)?),

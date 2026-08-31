@@ -935,6 +935,29 @@ col @card
         );
     }
 
+    /// `shown:` is a layout property and not a block, which is the whole point of it: the subtree it takes out
+    /// of flow is still there, with its scroll where it was and its canvas measured — and it comes back
+    /// because the style says so, where a `display_none` written once could never be undone.
+    #[test]
+    fn shown_is_a_layout_value_that_re_resolves() {
+        let out = transpile_source(
+            "[logic]\nlet open = signal(true);\n[view]\nbox shown:$open width:20\n",
+            "demo",
+            None,
+            None,
+        )
+        .unwrap();
+        let code = &out.rust_code;
+        assert!(
+            code.contains(".shown(open.get())"),
+            "the flag is read where it is written:\n{code}"
+        );
+        assert!(
+            code.contains(".styled_by("),
+            "and a value that reads something makes the whole style follow it:\n{code}"
+        );
+    }
+
     /// A transform is read per frame from a closure the renderer already re-runs, so animating one costs a
     /// repaint and no relayout — which is what lets `transition(…)` reach past paint without breaking the
     /// invariant the whole design rests on. It is also the half of a sliding indicator that is not `track_rect`.

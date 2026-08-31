@@ -958,6 +958,62 @@ mod tests {
         );
     }
 
+    /// **A style that says «shown» is heard, however the node was hidden before.** The declared answer and the
+    /// out-of-band one used to be one flag OR-ed into whatever came next, so a node taken out of flow once
+    /// could never be put back by a style — which is what a `shown:` re-resolved from what it reads does on
+    /// every change. The out-of-band answer still survives a restyle, because a fresh style cannot know it was
+    /// ever given.
+    #[test]
+    fn a_style_may_show_what_a_style_hid_and_may_not_show_what_set_display_hid() {
+        reset_layout_runtime();
+        let node = new_container(
+            LayoutStyle::new().width(100.0).height(10.0).shown(false),
+            &[],
+        )
+        .unwrap();
+        let page = new_container(LayoutStyle::new().flex_column().width(200.0), &[node]).unwrap();
+        compute_layout(
+            page,
+            AvailableSpace::Definite(200.0),
+            AvailableSpace::MaxContent,
+        )
+        .unwrap();
+        assert!(is_hidden(node), "the style declared it out of flow");
+
+        set_layout_style(
+            node,
+            LayoutStyle::new().width(100.0).height(10.0).shown(true),
+        )
+        .unwrap();
+        compute_layout(
+            page,
+            AvailableSpace::Definite(200.0),
+            AvailableSpace::MaxContent,
+        )
+        .unwrap();
+        assert!(
+            !is_hidden(node),
+            "and the next style put it back, which is what a re-resolved `shown:` asks for"
+        );
+
+        set_display(node, false);
+        set_layout_style(
+            node,
+            LayoutStyle::new().width(100.0).height(10.0).shown(true),
+        )
+        .unwrap();
+        compute_layout(
+            page,
+            AvailableSpace::Definite(200.0),
+            AvailableSpace::MaxContent,
+        )
+        .unwrap();
+        assert!(
+            is_hidden(node),
+            "an out-of-band hide is nobody else's to lift: the style never knew about it"
+        );
+    }
+
     // An auto-sized layout root fills the definite space it is computed in, so a page need not declare width:100% to avoid collapsing to its content width.
     #[test]
     fn auto_root_fills_definite_width() {

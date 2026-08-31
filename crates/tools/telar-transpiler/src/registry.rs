@@ -61,6 +61,9 @@ pub fn layout_attr_keys() -> &'static [&'static str] {
         "inset_top",
         "inset_bottom",
         "absolute",
+        // Whether the node is in flow at all. A layout property like any other, so it re-resolves from what it
+        // reads — which is what `display:none` could never be: a style that hid itself once could not undo it.
+        "shown",
         "gap",
         "gap_x",
         "gap_y",
@@ -330,6 +333,9 @@ pub enum ValueKind {
     KeywordsOrNumber(&'static [(&'static str, &'static str)]),
     /// A number: a literal, a `50%`, or any Rust expression that yields one.
     Number,
+    /// A yes or a no: the bare key, `true`/`false`, or any Rust expression that yields one. Only the first
+    /// three are literals — the rest is read, so a style carrying one re-resolves from what it reads.
+    Boolean,
     /// One number per edge: a single value, or the CSS 2/3/4-value shorthand.
     Edges,
     /// A colour: a hex literal, `transparent`, a `$signal`, or any Rust expression that yields one.
@@ -358,6 +364,7 @@ pub fn value_kind(tag: &str, key: &str) -> Option<ValueKind> {
         "self" => return Some(ValueKind::Keywords(SELF_VALUES)),
         "axis" => return Some(ValueKind::Keywords(AXIS_VALUES)),
         "absolute" => return Some(ValueKind::Keywords(ABSOLUTE_VALUES)),
+        "shown" => return Some(ValueKind::Boolean),
         "wrap" => return Some(ValueKind::Keywords(WRAP_VALUES)),
         "fit" => return Some(ValueKind::Keywords(FIT_VALUES)),
         "raster" => return Some(ValueKind::Keywords(RASTER_VALUES)),

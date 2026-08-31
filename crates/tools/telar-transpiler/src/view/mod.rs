@@ -617,6 +617,8 @@ impl<'a> ViewGen<'a> {
                 .then(|| crate::style::keyword(&attr.key, value, table).err())
                 .flatten(),
             ValueKind::Number => crate::style::format_number(value).err(),
+            // A yes or a no is whatever rustc can make one of, so there is nothing here to refuse.
+            ValueKind::Boolean => None,
             ValueKind::Edges => value
                 .split_whitespace()
                 .find_map(|token| crate::style::format_number(token).err()),

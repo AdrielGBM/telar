@@ -402,6 +402,8 @@ fn is_literal_value(tag: &str, key: &str, value: &str) -> bool {
             number(v) || table.iter().any(|(name, _)| *name == v)
         }
         Some(ValueKind::Number) => number(v),
+        // The three spellings that cannot change; anything else is read, and a style that reads follows.
+        Some(ValueKind::Boolean) => v.is_empty() || v == "true" || v == "false",
         Some(ValueKind::Edges) => v.split_whitespace().all(number),
         // A colour is paint, and paint is already a closure the renderer re-runs; anything else is a key
         // with no schema, which is a key this style does not build from.

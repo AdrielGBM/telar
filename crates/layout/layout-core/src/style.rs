@@ -72,8 +72,18 @@ pub(crate) struct LogicalStyle {
     pub(crate) row_follows_direction: bool,
     /// Set by `LayoutEngine::make_flex_row` for a node whose own declared style never called `flex_row`.
     pub(crate) row_forced: bool,
-    /// Set by [`LayoutStyle::display_none`] or `LayoutEngine::set_display`: out of flow regardless of `inner.display`.
+    /// Set by [`LayoutStyle::shown`] / [`LayoutStyle::display_none`]: what the node's own style says about
+    /// being in flow. A style is free to say the opposite of what it said last time — which is the whole of
+    /// `shown:` in a `[view]`, re-resolved from whatever it reads.
     pub(crate) hidden: bool,
+    /// Set by `LayoutEngine::set_display`: an answer given *out of band*, which no style knows about and so
+    /// none may overwrite. `None` leaves the question to [`hidden`](Self::hidden).
+    ///
+    /// The two used to be one flag that `set_style` OR-ed into whatever came next, so a node hidden once — by
+    /// either door — could never be shown again by a style. That is the trap this pair exists to close: the
+    /// out-of-band answer is carried forward because nothing else knows it, and the declared one is replaced
+    /// because the new style is exactly what does.
+    pub(crate) display_override: Option<bool>,
     /// Set by `LayoutEngine::set_min_height`: overrides `inner.min_size.height`.
     pub(crate) min_height_override: Option<f32>,
     /// Set by `LayoutEngine::set_leading_margin`; `(is_row, px)`, placed by the engine since which physical edge is "leading" depends on the parent's axis.
@@ -92,11 +102,20 @@ impl LogicalStyle {
             || self.inset_end.is_some()
     }
 
+    /// Whether the node is out of flow: what was set out of band if anything was, and what the style declares
+    /// otherwise.
+    pub(crate) fn is_hidden(&self) -> bool {
+        match self.display_override {
+            Some(shown) => !shown,
+            None => self.hidden,
+        }
+    }
     /// Whether the engine must keep this node's full style around: an edge, or out-of-band mutator state.
     pub(crate) fn needs_tracking(&self) -> bool {
         self.has_edges()
             || self.row_forced
             || self.hidden
+            || self.display_override.is_some()
             || self.min_height_override.is_some()
             || self.leading_margin.is_some()
     }
@@ -190,10 +209,19 @@ impl LayoutStyle {
         self
     }
 
-    /// Declares the node out of layout flow (no space, not laid out) as part of its own style — e.g. a tab panel that should start inactive, as opposed to the out-of-band `LayoutEngine::set_display`.
-    pub fn display_none(mut self) -> Self {
-        self.logical.hidden = true;
+    /// Whether the node is in layout flow at all — the declarative half of the question, re-read whenever the
+    /// style is: `shown:` in a `[view]` is this builder, so an area that comes and goes with what it reads
+    /// keeps its subtree and its state, where an `if` would build it again from nothing.
+    ///
+    /// Says nothing about `LayoutEngine::set_display`, which answers out of band and wins while it holds.
+    pub fn shown(mut self, shown: bool) -> Self {
+        self.logical.hidden = !shown;
         self
+    }
+
+    /// Declares the node out of layout flow (no space, not laid out) as part of its own style — e.g. a tab panel that should start inactive, as opposed to the out-of-band `LayoutEngine::set_display`.
+    pub fn display_none(self) -> Self {
+        self.shown(false)
     }
 
     /// Takes the node out of normal flow (`position: absolute`) with all four insets pinned to 0, so it
@@ -517,7 +545,7 @@ impl LayoutStyle {
                 FlexDirection::Row
             };
         }
-        if logical.hidden {
+        if logical.is_hidden() {
             style.display = Display::None;
         }
         if let Some(min_height) = logical.min_height_override {

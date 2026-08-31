@@ -172,7 +172,13 @@ impl LayoutEngine {
     pub fn set_style(&mut self, node: NodeId, mut style: LayoutStyle) -> Result<(), LayoutError> {
         self.alive(node)?;
         if let Some(previous) = self.styles.get(&node) {
-            style.logical.hidden |= previous.logical.hidden;
+            // The out-of-band answer only: a fresh style cannot know it was ever given, so it is carried
+            // forward. What the style itself says about being shown is left alone, because the style is the
+            // one thing that does know — OR-ing the two made a node hidden once hidden for ever.
+            style.logical.display_override = style
+                .logical
+                .display_override
+                .or(previous.logical.display_override);
             style.logical.row_forced |= previous.logical.row_forced;
             style.logical.min_height_override = style
                 .logical
@@ -360,7 +366,7 @@ impl LayoutEngine {
     /// Toggles a node in or out of layout flow. A hidden node (`Display::None`) takes no space and lays out none of its subtree; a visible node returns to whichever `display` it declared. Used for responsive show/hide (e.g. collapsing a sidebar on narrow windows).
     pub fn set_display(&mut self, node: NodeId, visible: bool) {
         self.mutate_style(node, |style| {
-            style.logical.hidden = !visible;
+            style.logical.display_override = Some(visible);
         });
     }
 
