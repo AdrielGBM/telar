@@ -97,10 +97,19 @@ jobs:
       - name: Install NSIS
         if: runner.os == 'Windows'
         # The choco nsis package does not shim makensis, so its install dir must be appended to PATH by hand.
+        # Chocolatey exits 0 having installed nothing when its feed 503s, so the binary is what decides, not the exit code.
         run: |
-          choco install nsis -y --no-progress
-          Add-Content -Path $env:GITHUB_PATH -Value "C:\Program Files (x86)\NSIS"
-          Add-Content -Path $env:GITHUB_PATH -Value "C:\Program Files (x86)\NSIS\Bin"
+          $nsis = "C:\Program Files (x86)\NSIS"
+          foreach ($attempt in 1..3) {
+            if (Test-Path "$nsis\makensis.exe") { break }
+            if ($attempt -gt 1) { Start-Sleep -Seconds 30 }
+            choco install nsis -y --no-progress
+          }
+          if (-not (Test-Path "$nsis\makensis.exe")) {
+            throw "NSIS did not install: no makensis.exe under $nsis after 3 attempts."
+          }
+          Add-Content -Path $env:GITHUB_PATH -Value $nsis
+          Add-Content -Path $env:GITHUB_PATH -Value "$nsis\Bin"
       - name: Package sandbox
         shell: bash
         # APPIMAGE_EXTRACT_AND_RUN lets appimagetool run without FUSE on the runner.
