@@ -68,7 +68,7 @@ default-members = [
 ]
 
 [workspace.package]
-version = "0.1.7"
+version = "0.1.8"
 edition = "2024"
 rust-version = "1.95"
 readme = "README.md"
@@ -111,33 +111,33 @@ ureq = "3.4.0"
 notify = "8.2.0"
 
 # Every crate publishes as `telar-*`; the keys keep the short internal names so `use ui_core::…` and `dep:ui-core` feature syntax stay unchanged.
-platform-core = { package = "telar-platform-core", path = "crates/platform/platform-core", version = "0.1.7" }
-platform-winit = { package = "telar-platform-winit", path = "crates/platform/platform-winit", version = "0.1.7" }
-platform-desktop = { package = "telar-platform-desktop", path = "crates/platform/platform-desktop", version = "0.1.7" }
-platform-android = { package = "telar-platform-android", path = "crates/platform/platform-android", version = "0.1.7" }
-platform-headless = { package = "telar-platform-headless", path = "crates/platform/platform-headless", version = "0.1.7" }
-renderer-core = { package = "telar-renderer-core", path = "crates/renderer/renderer-core", version = "0.1.7" }
-renderer-assets = { package = "telar-renderer-assets", path = "crates/renderer/renderer-assets", version = "0.1.7" }
-renderer-cache = { package = "telar-renderer-cache", path = "crates/renderer/renderer-cache", version = "0.1.7" }
-renderer-record = { package = "telar-renderer-record", path = "crates/renderer/renderer-record", version = "0.1.7" }
-reactive-local = { package = "telar-reactive-local", path = "crates/reactive/reactive-local", version = "0.1.7" }
-renderer-software = { package = "telar-renderer-software", path = "crates/renderer/renderer-software", version = "0.1.7" }
-renderer-hardware = { package = "telar-renderer-hardware", path = "crates/renderer/renderer-hardware", version = "0.1.7" }
-renderer-text = { package = "telar-renderer-text", path = "crates/renderer/renderer-text", version = "0.1.7" }
-reactive-core = { package = "telar-reactive-core", path = "crates/reactive/reactive-core", version = "0.1.7" }
-services-core = { package = "telar-services-core", path = "crates/services/services-core", version = "0.1.7" }
-geometry-core = { package = "telar-geometry-core", path = "crates/geometry/geometry-core", version = "0.1.7" }
-motion-core = { package = "telar-motion-core", path = "crates/motion/motion-core", version = "0.1.7" }
-layout-core = { package = "telar-layout-core", path = "crates/layout/layout-core", version = "0.1.7" }
-layout-reactive = { package = "telar-layout-reactive", path = "crates/layout/layout-reactive", version = "0.1.7" }
-theme-core = { package = "telar-theme-core", path = "crates/ui/theme-core", version = "0.1.7" }
-i18n-core = { package = "telar-i18n-core", path = "crates/i18n/i18n-core", version = "0.1.7" }
-ui-core = { package = "telar-ui-core", path = "crates/ui/ui-core", version = "0.1.7" }
-ui-tree = { package = "telar-ui-tree", path = "crates/ui/ui-tree", version = "0.1.7" }
-ui-components = { package = "telar-ui-components", path = "crates/ui/ui-components", version = "0.1.7" }
-navigate-core = { package = "telar-navigate-core", path = "crates/navigate/navigate-core", version = "0.1.7" }
-telar = { path = "crates/telar", version = "0.1.7" }
-telar-diagnostics = { path = "crates/tools/telar-diagnostics", version = "0.1.7" }
-telar-parser = { path = "crates/tools/telar-parser", version = "0.1.7" }
-telar-transpiler = { path = "crates/tools/telar-transpiler", version = "0.1.7" }
-telar-macros = { path = "crates/tools/telar-macros", version = "0.1.7" }
+platform-core = { package = "telar-platform-core", path = "crates/platform/platform-core", version = "0.1.8" }
+platform-winit = { package = "telar-platform-winit", path = "crates/platform/platform-winit", version = "0.1.8" }
+platform-desktop = { package = "telar-platform-desktop", path = "crates/platform/platform-desktop", version = "0.1.8" }
+platform-android = { package = "telar-platform-android", path = "crates/platform/platform-android", version = "0.1.8" }
+platform-headless = { package = "telar-platform-headless", path = "crates/platform/platform-headless", version = "0.1.8" }
+renderer-core = { package = "telar-renderer-core", path = "crates/renderer/renderer-core", version = "0.1.8" }
+renderer-assets = { package = "telar-renderer-assets", path = "crates/renderer/renderer-assets", version = "0.1.8" }
+renderer-cache = { package = "telar-renderer-cache", path = "crates/renderer/renderer-cache", version = "0.1.8" }
+renderer-record = { package = "telar-renderer-record", path = "crates/renderer/renderer-record", version = "0.1.8" }
+reactive-local = { package = "telar-reactive-local", path = "crates/reactive/reactive-local", version = "0.1.8" }
+renderer-software = { package = "telar-renderer-software", path = "crates/renderer/renderer-software", version = "0.1.8" }
+renderer-hardware = { package = "telar-renderer-hardware", path = "crates/renderer/renderer-hardware", version = "0.1.8" }
+renderer-text = { package = "telar-renderer-text", path = "crates/renderer/renderer-text", version = "0.1.8" }
+reactive-core = { package = "telar-reactive-core", path = "crates/reactive/reactive-core", version = "0.1.8" }
+services-core = { package = "telar-services-core", path = "crates/services/services-core", version = "0.1.8" }
+geometry-core = { package = "telar-geometry-core", path = "crates/geometry/geometry-core", version = "0.1.8" }
+motion-core = { package = "telar-motion-core", path = "crates/motion/motion-core", version = "0.1.8" }
+layout-core = { package = "telar-layout-core", path = "crates/layout/layout-core", version = "0.1.8" }
+layout-reactive = { package = "telar-layout-reactive", path = "crates/layout/layout-reactive", version = "0.1.8" }
+theme-core = { package = "telar-theme-core", path = "crates/ui/theme-core", version = "0.1.8" }
+i18n-core = { package = "telar-i18n-core", path = "crates/i18n/i18n-core", version = "0.1.8" }
+ui-core = { package = "telar-ui-core", path = "crates/ui/ui-core", version = "0.1.8" }
+ui-tree = { package = "telar-ui-tree", path = "crates/ui/ui-tree", version = "0.1.8" }
+ui-components = { package = "telar-ui-components", path = "crates/ui/ui-components", version = "0.1.8" }
+navigate-core = { package = "telar-navigate-core", path = "crates/navigate/navigate-core", version = "0.1.8" }
+telar = { path = "crates/telar", version = "0.1.8" }
+telar-diagnostics = { path = "crates/tools/telar-diagnostics", version = "0.1.8" }
+telar-parser = { path = "crates/tools/telar-parser", version = "0.1.8" }
+telar-transpiler = { path = "crates/tools/telar-transpiler", version = "0.1.8" }
+telar-macros = { path = "crates/tools/telar-macros", version = "0.1.8" }
