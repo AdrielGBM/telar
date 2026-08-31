@@ -245,14 +245,23 @@ pub(crate) fn dispatch_container_event(
     for child in children.iter_mut().rev() {
         // A child with no laid-out rect cannot be hit-tested, so it is offered the event but never blocks.
         let rect = child.rect.as_ref().map(|sig| sig.get());
-        if !rect.is_none_or(|r| r.contains(x, y)) {
-            continue;
-        }
+        // **A box that misses the point may still hold one that does**, and that is not an edge case: a child
+        // laid out absolutely is *painted* where the layout put it rather than inside its parent, so a parent
+        // of no size — the box an overlay hangs from — was painted through and hit-tested around. What it held
+        // was on screen and unreachable, which is the one asymmetry a pointer must never have: paint follows
+        // the laid-out rect, so hit-testing follows it too.
+        //
+        // The miss still costs the child the right to *block*: only a box the point is really in covers what
+        // is behind it. And a subtree offered a point outside itself can only be taken by something the point
+        // is genuinely in — every press and drag arms against the widget's own rect (`press::arm`,
+        // `drag::press`), and everything that clips refuses a pointer outside its cut (`ClippedItem`, a
+        // scroll's viewport).
+        let inside = rect.is_none_or(|r| r.contains(x, y));
         let result = child.owning(|| child.item.borrow_mut().on_event(event));
         // A widget that is not there for hit-testing purposes (an overlay, routed by its own registry) lets
         // the search carry on to whatever it was drawn over.
         if result == EventResult::Handled
-            || (rect.is_some() && child.item.borrow().pointer_opaque())
+            || (inside && rect.is_some() && child.item.borrow().pointer_opaque())
         {
             return result;
         }
@@ -336,6 +345,66 @@ mod tests {
             pane_wheels.get(),
             1,
             "over the panel it is the panel's, even though the panel ignored it"
+        );
+    }
+
+    /// **What is painted is what can be pressed.** An overlay hangs its marks from a box of no size, so the
+    /// marks are laid out absolutely and drawn far from the parent that owns them. Hit-testing used to stop at
+    /// the parent's own rect, so every one of them was visible and unreachable — and a `lazy` block, which is
+    /// exactly such a box, took a whole editor's areas out of the pointer's reach without changing a pixel.
+    #[test]
+    fn a_box_of_no_size_does_not_swallow_what_it_holds() {
+        use platform_core::PointerSource;
+        reset_layout_runtime();
+        let presses = Rc::new(Cell::new(0u32));
+        let sink = presses.clone();
+        // Placed absolutely, so it is drawn where the layout puts it and not inside the box that holds it.
+        let mark = StyledContainer::new(
+            LayoutStyle::new()
+                .absolute()
+                .inset_start(200.0)
+                .inset_top(200.0)
+                .width(40.0)
+                .height(40.0),
+            |_r| RectStyle::default(),
+            vec![],
+        )
+        .unwrap()
+        .on_press(move || sink.set(sink.get() + 1));
+        let layer = Container::new(
+            LayoutStyle::new().absolute().width(0.0).height(0.0),
+            vec![Box::new(mark)],
+        )
+        .unwrap();
+        let mut root = Container::new(
+            LayoutStyle::new().width(400.0).height(400.0),
+            vec![Box::new(layer)],
+        )
+        .unwrap();
+        compute_layout(
+            root.layout_node(),
+            AvailableSpace::Definite(400.0),
+            AvailableSpace::Definite(400.0),
+        )
+        .unwrap();
+
+        let press = |x: f64, y: f64| Event::PointerPressed {
+            x,
+            y,
+            button: PointerButton::Primary,
+            source: PointerSource::Mouse,
+        };
+        root.on_event(&press(220.0, 220.0));
+        root.on_event(&Event::PointerReleased {
+            x: 220.0,
+            y: 220.0,
+            button: PointerButton::Primary,
+            source: PointerSource::Mouse,
+        });
+        assert_eq!(
+            presses.get(),
+            1,
+            "the mark is where it is drawn, whatever the size of the box holding it"
         );
     }
 
