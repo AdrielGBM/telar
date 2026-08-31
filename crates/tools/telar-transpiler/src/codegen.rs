@@ -313,6 +313,10 @@ fn transpile(input: TranspileInput<'_>) -> Result<TranspiledSource, TranspileErr
     // `cargo clippy`. Only clippy is suppressed — rustc errors/warnings still surface (and the analyzer maps
     // them back onto the `.rsx` source), so real mistakes in `[logic]`/`[view]` are unaffected.
     code.push("#![allow(clippy::all)]\n", None);
+    // The clone emitter cannot tell a `&[T]` from an owned one, and cloning a reference is a no-op rustc
+    // warns about. Allowed for the same reason clippy is: nobody edits this file, so a lint here reaches
+    // no one who could act on it.
+    code.push("#![allow(noop_method_call)]\n", None);
     code.push("#[allow(unused_imports)] use telar::*;\n", None);
     // The crate root's own items — an app's `theme` module, its constants — which is what a `[logic]` line
     // naming `core::theme::SandboxTheme` means. Deliberately not `use super::*` as well: a `.rsx` named after

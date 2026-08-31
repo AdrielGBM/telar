@@ -266,8 +266,15 @@ impl ViewGen<'_> {
         // say "only if my caller gave me one": a no-op stand-in still reports the event handled, which turns a
         // chip with nothing to do into one that swallows the click.
         if !attr.value.is_closure() {
-            let marker = expr_marker(attr.value_start, attr.value.text().len());
-            return format!(".maybe_{method}({marker}{})", attr.value.text().trim());
+            // The delimiting parens come off here rather than at the call, so the span still covers the
+            // expression and nothing wider.
+            let text = attr.value.text().trim();
+            let (offset, inner) = match super::redundant_parens(text) {
+                Some(inner) => (1, inner),
+                None => (0, text),
+            };
+            let marker = expr_marker(attr.value_start + offset, inner.len());
+            return format!(".maybe_{method}({marker}{inner})");
         }
         format!(".{method}({})", self.emit_closure_value(attr))
     }
