@@ -1,7 +1,7 @@
 use layout_core::{LayoutError, LayoutStyle, SizeDimension};
 use motion_core::Animated;
 use platform_core::Event;
-use reactive_core::{OwnerId, dispose_owner, owner_scope};
+use reactive_core::{OwnerId, dispose_owner, owner_scope, with_owner};
 use ui_core::{
     Component, EventResult, LayoutItem, NodeId, RenderNode, absolute_rect, mark_dirty,
     new_container, remove_node, set_children, set_display,
@@ -87,6 +87,14 @@ pub struct NavHost<R: Clone + Eq + 'static> {
     transition: NavTransition,
     entrance: Option<Entrance<R>>,
     policy: Box<dyn Fn(&R) -> PagePolicy>,
+    /// The owner every page is built under: one the host mints for itself, parented to whatever built the host.
+    ///
+    /// **Not whichever owner happens to be running when a page is wanted.** A page is built during a reconcile, and a reconcile can be reached from inside the page being left — so an ambient parent makes the incoming page a *child* of the outgoing one. [`prune`](Self::prune) then uproots the outgoing owner and every descendant with it, taking the new page's signals, effects and contexts while its layout nodes stay in the tree. What that leaves on screen is a page that draws and composes at full rate, and whose handlers still report events as handled, while nothing they set is read by anybody — a window that looks frozen with no error anywhere.
+    ///
+    /// Minting rather than capturing is the half that matters in an app: a root is mounted outside every scope, so a host that captured [`current_owner`](reactive_core::current_owner) would hold `None`, and building under `None` changes nothing — [`with_owner`] pushes no frame for it and the ambient owner stays current.
+    ///
+    /// A page's lifetime is the host's to decide, so the host is what owns it.
+    owner: Option<OwnerId>,
 }
 
 impl<R: Clone + Eq + 'static> NavHost<R> {
@@ -114,6 +122,13 @@ impl<R: Clone + Eq + 'static> NavHost<R> {
             transition: NavTransition::None,
             entrance: None,
             policy: Box::new(|_| PagePolicy::default()),
+            // Minted here, not read off the ambient scope: mounting an app root runs outside every owner, so a host that only captured one would find `None` and go on parenting pages to the caller of the moment.
+            owner: Some({
+                let scope = owner_scope();
+                let id = scope.id();
+                drop(scope);
+                id
+            }),
         };
         host.current_key = host.key_for(&root);
         host.ensure_built(host.current_key.clone())?;
@@ -175,10 +190,14 @@ impl<R: Clone + Eq + 'static> NavHost<R> {
         if let Some(i) = self.index_of(&key) {
             return Ok(i);
         }
-        let scope = owner_scope();
-        let owner = scope.id();
-        let page = (self.factory)(key.route());
-        drop(scope);
+        // Built under the host's own owner — see the note on [`Self::owner`] for what an ambient one costs.
+        let (owner, page) = with_owner(self.owner, || {
+            let scope = owner_scope();
+            let owner = scope.id();
+            let page = (self.factory)(key.route());
+            drop(scope);
+            (owner, page)
+        });
         let page = page?;
         let node = page.layout_node();
         self.pages.push(BuiltPage {
@@ -341,6 +360,15 @@ impl<R: Clone + Eq + 'static> Component for NavHost<R> {
 impl<R: Clone + Eq + 'static> LayoutItem for NavHost<R> {
     fn layout_node(&self) -> NodeId {
         self.content_area
+    }
+}
+
+impl<R: Clone + Eq + 'static> Drop for NavHost<R> {
+    /// Releases the owner [`new`](Self::new) minted, and every page owner under it. A host built outside any scope is a root with no ancestor to be uprooted by, so nothing else would ever free it.
+    fn drop(&mut self) {
+        if let Some(owner) = self.owner {
+            dispose_owner(owner);
+        }
     }
 }
 
@@ -781,6 +809,71 @@ mod tests {
         );
     }
 
+    /// **A page that replaces another keeps its own effects**, whether or not a scope was open when the host was built.
+    ///
+    /// The incoming page is built during the reconcile the outgoing one is torn down by, and a reconcile can be reached from inside the page being left — so a page parented to whichever owner happened to be running became a *child* of the page about to be pruned, and `dispose_owner` uproots descendants. Its layout node survived, so it drew; its effects, signals and contexts were already gone. The window went on composing and painting at full rate, and its handlers went on reporting events as handled, while nothing they set was read by anybody. Nothing logs and nothing panics: the fault is visible only as a window that ignores its user.
+    ///
+    /// Run both ways because the two differ in what the host can capture, and the fix that serves one does not serve the other: an app root is mounted outside every scope, so a host that read the ambient owner there held `None` — and building under `None` pushes no frame at all, leaving the outgoing page current after all. Only the nested case would have passed.
+    ///
+    /// Replacing rather than pushing is what makes the two pages share a slot, so the outgoing one is pruned in the same breath the incoming one is built — the narrowest form of the case.
+    #[test]
+    fn the_page_that_replaces_another_keeps_its_own_effects() {
+        replacing_a_page_keeps_its_effects(Nesting::UnderAnOwner);
+        replacing_a_page_keeps_its_effects(Nesting::UnderNone);
+    }
+
+    enum Nesting {
+        UnderAnOwner,
+        UnderNone,
+    }
+
+    fn replacing_a_page_keeps_its_effects(nesting: Nesting) {
+        reset_layout_runtime();
+        let source = signal(0i32);
+        let runs = Rc::new(RefCell::new(0usize));
+        let nav = Navigator::new(0u8);
+        let factory = {
+            let (source, runs) = (source, runs.clone());
+            move |route: &u8| {
+                let (node, _rect) = new_leaf(LayoutStyle::new())?;
+                // Every page owns one, so what the counter tracks is whichever page is up.
+                let held = {
+                    let (source, runs) = (source, runs.clone());
+                    let route = *route;
+                    Some(effect(move || {
+                        source.get();
+                        if route == 2 {
+                            *runs.borrow_mut() += 1;
+                        }
+                    }))
+                };
+                Ok(Box::new(EffectPage { node, _held: held }) as Box<dyn NavPage>)
+            }
+        };
+        let mut host = match nesting {
+            Nesting::UnderAnOwner => {
+                let held = owner_scope();
+                let host = NavHost::new(nav.clone(), factory).unwrap();
+                drop(held);
+                host
+            }
+            Nesting::UnderNone => NavHost::new(nav.clone(), factory).unwrap(),
+        };
+        host.set_policy_for(|_| PagePolicy::Transient);
+
+        // Reconciled from inside the page being left, which is the situation this is about: a press handled in a page navigates, and the host reconciles with that page's owner still current. Called out here because a tick from a neutral owner does not reproduce it — the incoming page is only parented to the outgoing one when the outgoing one is what is running.
+        let leaving = host.pages[0].owner;
+        nav.replace(2);
+        with_owner(Some(leaving), || tick(&mut host));
+
+        let mounted = *runs.borrow();
+        source.set(1);
+        assert_eq!(
+            *runs.borrow(),
+            mounted + 1,
+            "the page that arrived still answers a source it reads — it was not uprooted with the one it replaced"
+        );
+    }
     #[test]
     fn sync_reconciles_without_an_event() {
         let (mut host, nav, h) = build(NavTransition::None);
