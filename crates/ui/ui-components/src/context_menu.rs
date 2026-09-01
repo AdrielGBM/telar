@@ -585,6 +585,7 @@ fn row(
                 style,
                 highlighted,
                 opened,
+                false,
                 move || {
                     done();
                     act();
@@ -601,6 +602,7 @@ fn row(
                 style,
                 highlighted,
                 opened,
+                true,
                 move || opened.set(Some(index)),
             )?;
             // Beside the row it belongs to, and on the side there is room for. Positioned against the row's
@@ -654,6 +656,8 @@ fn line(
     style: MenuStyle,
     highlighted: RwSignal<Option<usize>>,
     opened: RwSignal<Option<usize>>,
+    // Whether pointing at this row is already asking for it: a submenu opens by being hovered, an ordinary row does nothing until it is pressed.
+    opens: bool,
     act: impl Fn() + 'static,
 ) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let ink = match enabled {
@@ -685,13 +689,17 @@ fn line(
         vec![box_item(name), box_item(key)],
     )?
     .on_hover(move |now| {
-        if now && enabled {
-            highlighted.set(Some(index));
+        if !now || !enabled {
+            return;
+        }
+        highlighted.set(Some(index));
+        match opens {
+            // **A submenu opens by being pointed at.** Every menu bar there has ever been works this way, and one that waits for a press makes somebody click twice to reach a row they can already see the way to. The press stays: it is how a submenu is opened from the keyboard, and how a pointer that arrived by a straight line rather than by hovering the row gets in.
+            true => opened.set(Some(index)),
             // A pointer moving down a menu closes the submenu it left, which is what makes hovering back and
             // forth across a list of them show one at a time.
-            if opened.peek() != Some(index) {
-                opened.set(None);
-            }
+            false if opened.peek() != Some(index) => opened.set(None),
+            false => {}
         }
     });
     Ok(box_item(match enabled {
@@ -708,7 +716,7 @@ mod tests {
     use ui_core::{ComponentList, LayoutItem};
 
     use super::*;
-    use crate::harness::{lay_out, press, release, route};
+    use crate::harness::{lay_out, moved, press, release, route};
     use crate::test_support::fresh_layout_runtime;
 
     const WINDOW: Rect = Rect {
@@ -888,6 +896,32 @@ mod tests {
             vec!["cerrar", "hondo"],
             "{:?}",
             said.borrow()
+        );
+    }
+
+    /// **A submenu opens by being pointed at, and closes when the pointer moves off it.**
+    ///
+    /// The two halves are one behaviour: what makes hovering back and forth across a list of submenus show one at a time is that an ordinary row closes whatever was open. Opening on the press alone made somebody click twice to reach a row they could already see the way to.
+    #[test]
+    fn pointing_at_a_submenu_opens_it() {
+        let (mut tree, _said) = menu();
+        assert!(!drawn_texts(&tree).iter().any(|text| text == "hondo"));
+
+        // The fourth entry down the panel, at the metrics the default style lays it out on: two rows and a separator above it, from a panel opened at y=30.
+        route(&mut tree, &moved(60.0, 94.0));
+        ui_core::relayout_if_dirty();
+        assert!(
+            drawn_texts(&tree).iter().any(|text| text == "hondo"),
+            "el submenú no se abrió al apuntarlo: {:?}",
+            drawn_texts(&tree)
+        );
+
+        route(&mut tree, &moved(60.0, 45.0));
+        ui_core::relayout_if_dirty();
+        assert!(
+            !drawn_texts(&tree).iter().any(|text| text == "hondo"),
+            "salir de la fila no lo cerró: {:?}",
+            drawn_texts(&tree)
         );
     }
 
