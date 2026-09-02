@@ -12,7 +12,7 @@ use std::path::{Path, PathBuf};
 use std::sync::mpsc;
 use std::time::Duration;
 
-use notify::{Event, RecommendedWatcher, RecursiveMode, Watcher};
+use notify::{Event, EventKind, RecommendedWatcher, RecursiveMode, Watcher};
 use reactive_core::{Emitter, Task, spawn_stream};
 
 /// One editor save is several filesystem events — a truncate, a write, a rename into place — and a directory
@@ -42,11 +42,18 @@ pub fn watch_path(path: impl Into<PathBuf>, mut on_change: impl FnMut() + 'stati
     spawn_stream(move |out| run(&path, out), move |()| on_change(), || {})
 }
 
+/// Whether an event is the tree changing rather than somebody looking at it.
+///
+/// **Reads are not changes, and the platform reports them.** `notify` asks inotify for `IN_OPEN` alongside the writes, so a watcher that forwards every event it is handed tells a caller that re-reads the tree to re-read the tree — and one reading on a frame loop never stops. Every content change arrives as a create, a modify or a remove, a rename into place among them; what is dropped here is `Access`, which is the class the platform opens and reads under.
+fn changed(event: &Event) -> bool {
+    !matches!(event.kind, EventKind::Access(_))
+}
+
 fn run(path: &Path, out: Emitter<()>) {
     let (tx, rx) = mpsc::channel();
     let mut watcher: RecommendedWatcher =
         match notify::recommended_watcher(move |result: notify::Result<Event>| {
-            if result.is_ok() {
+            if result.is_ok_and(|event| changed(&event)) {
                 let _ = tx.send(());
             }
         }) {

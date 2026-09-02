@@ -72,3 +72,38 @@ fn a_cancelled_watch_stops_reporting() {
     assert_eq!(hits.get(), before, "a cancelled watch kept reporting");
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+/// **Reading a watched file is not a change to it.**
+///
+/// The platform reports opens and reads alongside the writes — inotify is asked for `IN_OPEN` — so a watcher
+/// that forwards every event it is handed answers "something changed" to a caller that was only looking. A
+/// caller that re-reads the tree when told to then tells itself to re-read it, and one reading on a frame
+/// loop never stops.
+#[test]
+fn reading_a_watched_file_is_not_a_change() {
+    let dir = scratch("read");
+    let file = dir.join("held.toml");
+    std::fs::write(&file, "a = 1\n").unwrap();
+
+    let hits = Rc::new(Cell::new(0usize));
+    let counted = Rc::clone(&hits);
+    let watch = watch_path(&dir, move || counted.set(counted.get() + 1));
+    std::thread::sleep(Duration::from_millis(200));
+
+    for _ in 0..20 {
+        let _ = std::fs::read_to_string(&file).unwrap();
+    }
+    std::thread::sleep(Duration::from_millis(300));
+    drain_tasks();
+    assert_eq!(hits.get(), 0, "reading the file reported it as changed");
+
+    // And the watch is still live: what it drops is the looking, not the watching.
+    std::fs::write(&file, "a = 2\n").unwrap();
+    assert!(
+        settle_until(&hits, 1, Duration::from_secs(10)) >= 1,
+        "the write after the reads never reached the callback"
+    );
+
+    watch.cancel();
+    let _ = std::fs::remove_dir_all(&dir);
+}
