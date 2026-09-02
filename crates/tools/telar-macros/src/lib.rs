@@ -635,6 +635,8 @@ fn transpile_project(theme_type_str: Option<&str>) -> Result<TranspileOutput, To
             include_stmts.extend(quote! {
                 #[path = #out_path_str]
                 #[allow(dead_code)]
+                // A crate invokes this once per module owning `.rsx`, and each one loads this same file on purpose: `t!` resolves `crate::__rsx_i18n::CATALOG`, so the module has to exist wherever the catalog is baked.
+                #[allow(clippy::duplicate_mod)]
                 pub mod #mod_ident;
             });
             // Re-bake when any locale file changes, like a `.rsx` edit.
