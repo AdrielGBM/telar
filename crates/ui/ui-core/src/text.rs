@@ -231,7 +231,7 @@ impl Component for Text {
         let line_height = text_height;
         let spans: Option<std::sync::Arc<[Span]>> =
             self.spans.as_ref().map(|f| std::sync::Arc::from(f()));
-        let placed = self.leaf.at_layout_position(RenderNode::spanned_text(
+        self.leaf.at_layout_position(RenderNode::spanned_text(
             text,
             spans.unwrap_or_else(|| std::sync::Arc::from([].as_slice())),
             Rect {
@@ -241,24 +241,7 @@ impl Component for Text {
                 height: line_height,
             },
             style,
-        ));
-        // A paragraph is a box of its own to layout, so it has to be one to a document backend too:
-        // dropping the text straight into its parent would lose the width and the flex share it was given.
-        if ui_tree::element_capture() {
-            let layout = layout_reactive::declared_css(self.leaf.node)
-                .map(|css| css.into_string())
-                .unwrap_or_default();
-            RenderNode::element(
-                std::sync::Arc::new(renderer_core::Element::new(
-                    renderer_core::ElementId(self.leaf.node.into()),
-                    renderer_core::Semantics::group(),
-                    layout,
-                )),
-                [placed],
-            )
-        } else {
-            placed
-        }
+        ))
     }
 
     fn on_event(&mut self, _event: &Event) -> EventResult {

@@ -18,6 +18,16 @@ impl LayoutLeaf {
 
     pub(crate) fn at_layout_position(&self, content: RenderNode) -> RenderNode {
         let r = self.rect.get();
+        // Every leaf is placed through here, which is what makes this the one place a document backend has
+        // to be told about them: a leaf that owns a layout node and no element is a hole in the tree the
+        // browser lays out, and its siblings lose the box that was meant to contain them.
+        //
+        // The translation is *dropped* there rather than carried, and that is the point of the branch: it
+        // says where the box goes, which on that target is already what the element says. Emitting both put
+        // every leaf at its layout position twice — a row of cards came out stepping diagonally down the page.
+        if ui_tree::element_capture() {
+            return RenderNode::element(crate::element::of(self.node), [content]);
+        }
         RenderNode::translate(r.x, r.y, [content])
     }
 }

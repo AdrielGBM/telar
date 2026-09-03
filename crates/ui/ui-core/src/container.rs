@@ -121,9 +121,23 @@ impl LayoutItem for Container {
 impl Component for Container {
     fn view(&self) -> RenderNode {
         // Each child is its own segment: referencing it is a cheap Rc clone, so this view() does not re-run children and is not subscribed to their signals.
-        match &self.dyn_host {
+        let content = match &self.dyn_host {
             Some(host) => RenderNode::group(host.child_boundaries()),
             None => RenderNode::group(self.children.iter().map(|c| c.segment.boundary())),
+        };
+        // A transparent box still owns a layout node, so it is still a box a document has to create: its
+        // children are laid out by *it*, and attaching them to its parent instead puts them in the wrong flow.
+        if ui_tree::element_capture() {
+            let mut semantics = renderer_core::Semantics::group();
+            if self.press.is_set() {
+                semantics.role = renderer_core::Role::Button;
+            }
+            RenderNode::element(
+                crate::element::with_semantics(self.node, semantics),
+                [content],
+            )
+        } else {
+            content
         }
     }
 

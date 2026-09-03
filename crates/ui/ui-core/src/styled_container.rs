@@ -205,14 +205,7 @@ impl StyledContainer {
             semantics.role = renderer_core::Role::Button;
         }
         semantics.click_through = self.click_through;
-        let layout = layout_reactive::declared_css(self.node)
-            .map(|css| css.into_string())
-            .unwrap_or_default();
-        std::sync::Arc::new(renderer_core::Element::new(
-            renderer_core::ElementId(self.node.into()),
-            semantics,
-            layout,
-        ))
+        crate::element::with_semantics(self.node, semantics)
     }
 
     /// Whether the box is currently refusing input. `None` — the common case — answers without a dyn call on

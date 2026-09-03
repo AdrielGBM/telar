@@ -302,7 +302,8 @@ impl Component for ReactiveList {
         self.version.get();
         let _ = self.rect.get();
         let st = self.state.borrow();
-        RenderNode::group(st.children.iter().map(|c| c.segment.boundary()))
+        let content = RenderNode::group(st.children.iter().map(|c| c.segment.boundary()));
+        crate::element::wrap(self.node, content)
     }
 
     fn on_event(&mut self, event: &Event) -> EventResult {

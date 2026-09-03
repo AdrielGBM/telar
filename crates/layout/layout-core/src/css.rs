@@ -148,7 +148,94 @@ fn css_of(style: &Style) -> Css {
         css.push("align-content", align);
     }
 
+    if style.display == Display::Grid {
+        if let Some(tracks) = template(&style.grid_template_columns) {
+            css.push("grid-template-columns", &tracks);
+        }
+        if let Some(tracks) = template(&style.grid_template_rows) {
+            css.push("grid-template-rows", &tracks);
+        }
+    }
+    if let Some(span) = placement_span(&style.grid_column) {
+        css.push("grid-column", &span);
+    }
+    if let Some(span) = placement_span(&style.grid_row) {
+        css.push("grid-row", &span);
+    }
+
     css
+}
+
+/// A track list, or nothing when there are no tracks to describe.
+fn template(tracks: &[taffy::GridTemplateComponent<String>]) -> Option<String> {
+    if tracks.is_empty() {
+        return None;
+    }
+    let written: Vec<String> = tracks.iter().map(component).collect();
+    Some(written.join(" "))
+}
+
+fn component(track: &taffy::GridTemplateComponent<String>) -> String {
+    match track {
+        taffy::GridTemplateComponent::Single(sizing) => sizing_of(*sizing),
+        taffy::GridTemplateComponent::Repeat(repetition) => {
+            let count = match repetition.count {
+                taffy::RepetitionCount::AutoFill => "auto-fill".to_string(),
+                taffy::RepetitionCount::AutoFit => "auto-fit".to_string(),
+                taffy::RepetitionCount::Count(n) => n.to_string(),
+            };
+            let tracks: Vec<String> = repetition.tracks.iter().copied().map(sizing_of).collect();
+            format!("repeat({count},{})", tracks.join(" "))
+        }
+    }
+}
+
+/// One track's size. A track whose min and max agree is written once, as CSS does.
+fn sizing_of(sizing: taffy::TrackSizingFunction) -> String {
+    let min_raw = sizing.min.into_raw();
+    let min = track_length(min_raw);
+    let max = track_length(sizing.max.into_raw());
+    // A flexible track is written as the bare `fr`. `1fr` *is* `minmax(auto, 1fr)` in CSS, so the long form
+    // would be right and unidiomatic — and this string is compared every frame, so shorter is also cheaper.
+    if min_raw.tag() == CompactLength::AUTO_TAG
+        && sizing.max.into_raw().tag() == CompactLength::FR_TAG
+        && let Some(max) = max.clone()
+    {
+        return max;
+    }
+    match (min, max) {
+        (Some(min), Some(max)) if min == max => min,
+        (Some(min), Some(max)) => format!("minmax({min},{max})"),
+        (None, Some(max)) => max,
+        (Some(min), None) => min,
+        (None, None) => "auto".to_string(),
+    }
+}
+
+/// A track length, which has three spellings CSS has and a plain length does not: `fr`, the content
+/// keywords, and `fit-content`.
+fn track_length(compact: CompactLength) -> Option<String> {
+    match compact.tag() {
+        CompactLength::FR_TAG => Some(format!("{}fr", format_number(compact.value()))),
+        CompactLength::MIN_CONTENT_TAG => Some("min-content".to_string()),
+        CompactLength::MAX_CONTENT_TAG => Some("max-content".to_string()),
+        CompactLength::FIT_CONTENT_PX_TAG => {
+            Some(format!("fit-content({}px)", format_number(compact.value())))
+        }
+        CompactLength::FIT_CONTENT_PERCENT_TAG => Some(format!(
+            "fit-content({}%)",
+            format_number(compact.value() * 100.0)
+        )),
+        _ => length_of(compact),
+    }
+}
+
+/// `span N`, which is the only placement this vocabulary can express.
+fn placement_span(line: &taffy::Line<taffy::GridPlacement<String>>) -> Option<String> {
+    match line.start {
+        taffy::GridPlacement::Span(n) if n > 1 => Some(format!("span {n}")),
+        _ => None,
+    }
 }
 
 fn display_of(display: Display) -> &'static str {
@@ -467,5 +554,80 @@ mod tests {
             "rtl: {}",
             style.to_css(Direction::Rtl)
         );
+    }
+}
+
+#[cfg(test)]
+mod grid_tests {
+    use super::*;
+    use crate::track::TemplateTrack;
+
+    fn css(style: LayoutStyle) -> String {
+        style.to_css(Direction::Ltr).into_string()
+    }
+
+    #[test]
+    fn a_grid_says_its_columns() {
+        let out = css(LayoutStyle::new()
+            .display_grid()
+            .grid_template_columns(vec![TemplateTrack::fr(1.0), TemplateTrack::px(200.0)]));
+        assert!(out.contains("display:grid;"), "got {out}");
+        assert!(
+            out.contains("grid-template-columns:1fr 200px;"),
+            "got {out}"
+        );
+    }
+
+    /// What `grid cols:"fit 150"` means, and the case that made the sandbox stack: a grid with no track
+    /// list is one implicit column, so every card came out full width.
+    #[test]
+    fn an_auto_fitting_repeat_keeps_its_keyword() {
+        let out = css(LayoutStyle::new()
+            .display_grid()
+            .grid_template_columns(vec![TemplateTrack::fit(TemplateTrack::minmax(
+                TemplateTrack::px(150.0),
+                TemplateTrack::fr(1.0),
+            ))]));
+        assert!(
+            out.contains("grid-template-columns:repeat(auto-fit,minmax(150px,1fr));"),
+            "got {out}"
+        );
+    }
+
+    #[test]
+    fn a_filling_repeat_says_auto_fill() {
+        let out = css(LayoutStyle::new()
+            .display_grid()
+            .grid_template_columns(vec![TemplateTrack::fill(TemplateTrack::px(100.0))]));
+        assert!(
+            out.contains("grid-template-columns:repeat(auto-fill,100px);"),
+            "got {out}"
+        );
+    }
+
+    #[test]
+    fn a_counted_repeat_says_the_count() {
+        let out = css(LayoutStyle::new()
+            .display_grid()
+            .grid_template_columns(vec![TemplateTrack::repeat(3, TemplateTrack::fr(1.0))]));
+        assert!(
+            out.contains("grid-template-columns:repeat(3,1fr);"),
+            "got {out}"
+        );
+    }
+
+    #[test]
+    fn a_span_is_stated_and_a_single_track_is_not() {
+        assert!(css(LayoutStyle::new().grid_column_span(2)).contains("grid-column:span 2;"));
+        assert!(!css(LayoutStyle::new().grid_column_span(1)).contains("grid-column"));
+    }
+
+    /// A track list only means anything on a grid, and saying it elsewhere is noise the browser parses.
+    #[test]
+    fn a_flex_box_does_not_describe_tracks() {
+        let out = css(LayoutStyle::new()
+            .flex_row()
+            .grid_template_columns(vec![TemplateTrack::fr(1.0)]));
+        assert!(!out.contains("grid-template-columns"), "got {out}");
     }
 }
