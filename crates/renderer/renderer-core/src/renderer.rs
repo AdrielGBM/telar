@@ -114,4 +114,13 @@ pub trait RendererFactory<W>: 'static {
         window: &W,
         build: RendererBuild<'_>,
     ) -> Result<Box<dyn RenderBackend + Send>, RendererError>;
+
+    /// Whether this renderer draws text by shaping glyphs from font files.
+    ///
+    /// `false` for a backend whose text is somebody else's to draw — a terminal writes the characters and
+    /// lets the terminal emulator pick the face. Saying so keeps the runtime from scanning the system font
+    /// directories on startup for a renderer that will never open one of them.
+    fn shapes_text(&self) -> bool {
+        true
+    }
 }

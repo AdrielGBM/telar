@@ -126,6 +126,11 @@ pub(super) trait RendererHost<W>: 'static {
         false
     }
 
+    /// Whether this host's renderer shapes text from font files. See [`RendererFactory::shapes_text`].
+    fn shapes_text(&self) -> bool {
+        true
+    }
+
     /// The channels of the running renderer, or `None` when there is none to send to.
     fn channels(&self) -> Option<&RenderChannels>;
 
@@ -213,6 +218,10 @@ where
             keepalive: false,
             label: "installed renderer",
         }
+    }
+
+    fn shapes_text(&self) -> bool {
+        self.factory.shapes_text()
     }
 
     fn channels(&self) -> Option<&RenderChannels> {

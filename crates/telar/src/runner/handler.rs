@@ -515,14 +515,19 @@ where
 
     fn on_resume(&mut self, window: &W) -> bool {
         let _surface = self.enter_surface();
-        let system_fonts = SystemFonts::from_provider(self.paths.as_ref());
         // Load the app's faces before the tree below measures a word of text. Building a renderer loads them too — that is what makes measure and draw agree — but a hardware renderer builds on its own thread, so waiting for it would leave the first layout sized in the platform's fonts. The renderer's own load then finds these already there and clones the database instead of scanning again.
-        renderer_text::fonts::install(build_font_config(
-            self.font_paths.clone(),
-            self.font_data.clone(),
-            self.font_family.clone(),
-            &system_fonts,
-        ));
+        //
+        // A renderer that does not shape glyphs — a terminal — skips the scan outright: it opens no font file,
+        // and the measurer it installed for itself must not be replaced by the raster one this would install.
+        if self.renderer_host.shapes_text() {
+            let system_fonts = SystemFonts::from_provider(self.paths.as_ref());
+            renderer_text::fonts::install(build_font_config(
+                self.font_paths.clone(),
+                self.font_data.clone(),
+                self.font_family.clone(),
+                &system_fonts,
+            ));
+        }
         // Offscreen/headless windows have no surface, so a windowed renderer can't create one: rasterize into a
         // CPU pixmap (read back via `last_frame_rgba`), forced regardless of the configured backend so the
         // headless path needs no GPU adapter. On-screen windows build the configured renderer.
