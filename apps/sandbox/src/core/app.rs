@@ -520,9 +520,6 @@ struct ShellPage {
     mobile: bool,
     win_w: f32,
     win_h: f32,
-    // Last pointer position, tracked so coordinate-less Scrolled events route to whichever pane the pointer is over.
-    ptr_x: f32,
-    ptr_y: f32,
 }
 
 impl ShellPage {
@@ -591,9 +588,6 @@ impl ShellPage {
             mobile: false,
             win_w: 0.0,
             win_h: 0.0,
-            // Defaults to the content pane so a scroll before the first pointer event does the expected thing.
-            ptr_x: f32::MAX,
-            ptr_y: 0.0,
         })
     }
 
@@ -733,16 +727,15 @@ impl Component for ShellPage {
             self.relayout(*width as f32, *height as f32);
             return EventResult::Handled;
         }
-        match event {
-            Event::PointerMoved { x, y, .. } | Event::PointerPressed { x, y, .. } => {
-                self.ptr_x = *x as f32;
-                self.ptr_y = *y as f32;
-            }
-            _ => {}
-        }
-        // A Scrolled event carries no coordinates, so route it by where the pointer last was.
+        // Every positioned event says where it is, the wheel included: a pane claims what is over it.
         let rail_x = self.rail_x();
-        let over_sidebar = (rail_x..rail_x + SIDEBAR_W).contains(&self.ptr_x);
+        let over_sidebar = match event {
+            Event::PointerMoved { x, .. }
+            | Event::PointerPressed { x, .. }
+            | Event::PointerReleased { x, .. }
+            | Event::Scrolled { x, .. } => (rail_x..rail_x + SIDEBAR_W).contains(&(*x as f32)),
+            _ => false,
+        };
 
         if self.mobile {
             if self.menu_open.get() {
