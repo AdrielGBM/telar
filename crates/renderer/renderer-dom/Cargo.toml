@@ -29,9 +29,12 @@ features = [
     "TextMetrics",
     "CssStyleDeclaration",
     "Document",
+    "DomRect",
     "Element",
     "HtmlElement",
+    "HtmlHeadElement",
     "Node",
     "Text",
     "Window",
+    "Location",
 ]

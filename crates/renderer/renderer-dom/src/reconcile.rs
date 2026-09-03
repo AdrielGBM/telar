@@ -19,6 +19,51 @@ use crate::vector::Drawing;
 
 const SVG_NS: &str = "http://www.w3.org/2000/svg";
 
+/// Marks the element the app fills, so the reset below reaches its boxes and nothing else on the page.
+const HOST_ATTRIBUTE: &str = "data-telar";
+const RESET_ID: &str = "telar-reset";
+
+/// Where a box was told to be, beside where the browser put it.
+///
+/// Written only when the page asks for it, because the whole claim of this backend is that the two agree —
+/// and a claim nothing checks is a claim that quietly stops being true. Off by default: it is an attribute
+/// written per box per frame, which is exactly the cost this reconcile exists to avoid.
+const AUDIT_ATTRIBUTE: &str = "data-telar-rect";
+const AUDIT_QUERY: &str = "telar-audit";
+
+fn audit_requested() -> bool {
+    web_sys::window()
+        .and_then(|window| window.location().search().ok())
+        .is_some_and(|search| search.contains(AUDIT_QUERY))
+}
+
+/// What a document brings to an element that Telar never asked for: a button's border and its own font, a
+/// heading's margins, a link's colour and underline. A widget's style is the whole of what its box looks
+/// like, and the browser's idea of it is the difference between what layout computed and what the page shows
+/// — a button's 2px frame made every row of a list four pixels taller than the rect hit-testing reads.
+///
+/// One rule rather than a declaration per box per frame, and the base font is the one the measurer assumes,
+/// so a paragraph is drawn in the face it was measured in.
+const RESET: &str = "[data-telar]{font:400 16px sans-serif}\
+[data-telar] *{margin:0;border:0;padding:0;background:none;font:inherit;color:inherit;\
+text-align:inherit;text-decoration:none;box-sizing:border-box;appearance:none;\
+-webkit-appearance:none;outline:none}";
+
+fn install_reset(document: &web_sys::Document) {
+    if document.get_element_by_id(RESET_ID).is_some() {
+        return;
+    }
+    let Some(head) = document.head() else {
+        return;
+    };
+    let Ok(style) = document.create_element("style") else {
+        return;
+    };
+    let _ = style.set_attribute("id", RESET_ID);
+    style.set_text_content(Some(RESET));
+    let _ = head.append_child(style.as_ref());
+}
+
 /// One element the document is currently showing.
 struct Live {
     node: web_sys::Element,
@@ -95,6 +140,8 @@ pub struct Reconciler {
     /// Ids seen this frame, so what is missing can be removed at the end.
     seen: Vec<u64>,
     open: Vec<Open>,
+    /// Whether each box also carries the rect layout computed for it, for a test that compares the two.
+    audit: bool,
 }
 
 impl Reconciler {
@@ -104,7 +151,10 @@ impl Reconciler {
         let document = host
             .owner_document()
             .ok_or_else(|| "the host element is not in a document".to_string())?;
+        let _ = host.set_attribute(HOST_ATTRIBUTE, "");
+        install_reset(&document);
         Ok(Self {
+            audit: audit_requested(),
             document,
             host,
             live: FxHashMap::default(),
@@ -256,6 +306,13 @@ impl Reconciler {
                 let _ = node.set_attribute("aria-hidden", "true");
             }
             None => {}
+        }
+        if self.audit {
+            let rect = element.rect;
+            let _ = node.set_attribute(
+                AUDIT_ATTRIBUTE,
+                &format!("{} {} {} {}", rect.x, rect.y, rect.width, rect.height),
+            );
         }
         self.seen.push(element.id.0);
         self.open.push(Open {

@@ -89,20 +89,35 @@ fn radius(r: BorderRadius) -> Option<String> {
     )
 }
 
-fn border(b: &Border) -> Option<String> {
+/// A box's frame, as the inset shadows that draw it.
+///
+/// Not `border`, which takes room: Telar's frame is paint on a box whose size layout already decided, and a
+/// CSS border eats into the content box instead — a 1px frame left every child two pixels narrower than the
+/// rect hit-testing reads. An inset shadow is drawn inside the same shape, follows the radius, and costs the
+/// layout nothing.
+fn border(b: &Border) -> Vec<String> {
     if !b.is_visible() {
-        return None;
+        return Vec::new();
     }
-    let [top, right, bottom, left] = b.widths;
     let colour = paint(&b.paint);
-    // A gradient border needs `border-image`, which cannot be combined with a radius; a solid colour is the
-    // only case a plain border draws faithfully, and the rest fall back to the colour a solid would be.
-    let widths = if top == right && top == bottom && top == left {
-        px(top)
-    } else {
-        format!("{} {} {} {}", px(top), px(right), px(bottom), px(left))
-    };
-    Some(format!("{widths} solid {colour}"))
+    let [top, right, bottom, left] = b.widths;
+    if top == right && top == bottom && top == left {
+        return vec![format!("inset 0 0 0 {} {colour}", px(top))];
+    }
+    // Each side is a shadow displaced by its own width, which fills exactly the band between the edge and
+    // where it moved to. They overlap at the corners, which for a solid colour is the corner drawn twice.
+    [
+        (top > 0.0, format!("inset 0 {} 0 0 {colour}", px(top))),
+        (right > 0.0, format!("inset {} 0 0 0 {colour}", px(-right))),
+        (
+            bottom > 0.0,
+            format!("inset 0 {} 0 0 {colour}", px(-bottom)),
+        ),
+        (left > 0.0, format!("inset {} 0 0 0 {colour}", px(left))),
+    ]
+    .into_iter()
+    .filter_map(|(drawn, shadow)| drawn.then_some(shadow))
+    .collect()
 }
 
 fn shadow(s: Shadow) -> String {
@@ -121,18 +136,14 @@ pub fn rect_style(style: &RectStyle, out: &mut String) {
     if let Some(fill) = &style.fill {
         declare(out, "background", &paint(fill));
     }
-    if let Some(b) = &style.border {
-        if let Some(value) = border(b) {
-            declare(out, "border", &value);
-            // Telar's border sits inside the box, as CSS's does only under `border-box`.
-            declare(out, "box-sizing", "border-box");
-        }
-    }
     if let Some(value) = radius(style.radius) {
         declare(out, "border-radius", &value);
     }
-    if let Some(s) = style.shadow {
-        declare(out, "box-shadow", &shadow(s));
+    // The frame and the shadow share one property, and the frame is drawn over the shadow.
+    let mut shadows = style.border.as_ref().map(border).unwrap_or_default();
+    shadows.extend(style.shadow.map(shadow));
+    if !shadows.is_empty() {
+        declare(out, "box-shadow", &shadows.join(","));
     }
 }
 
@@ -171,5 +182,92 @@ pub fn text_style(style: &TextStyle, out: &mut String) {
         declare(out, "-webkit-box-orient", "vertical");
         declare(out, "-webkit-line-clamp", &max.to_string());
         declare(out, "overflow", "hidden");
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use geometry_core::Point;
+    use renderer_core::{Border, ShapeStyle};
+
+    fn css_of(style: &RectStyle) -> String {
+        let mut out = String::new();
+        rect_style(style, &mut out);
+        out
+    }
+
+    #[test]
+    fn a_frame_takes_no_room_from_the_box_it_is_drawn_on() {
+        let css = css_of(&RectStyle::default().with_border(Border::uniform(Color::BLACK, 1.0)));
+        assert_eq!(css, "box-shadow:inset 0 0 0 1px #000000;");
+        assert!(
+            !css.contains("border:"),
+            "a CSS border would eat the content box"
+        );
+    }
+
+    #[test]
+    fn each_side_of_an_uneven_frame_is_drawn_on_its_own() {
+        let css = css_of(&RectStyle::default().with_border(Border::per_side(
+            Color::BLACK,
+            2.0,
+            0.0,
+            4.0,
+            0.0,
+        )));
+        assert_eq!(
+            css,
+            "box-shadow:inset 0 2px 0 0 #000000,inset 0 -4px 0 0 #000000;"
+        );
+    }
+
+    #[test]
+    fn a_frame_and_a_shadow_share_one_property_with_the_frame_on_top() {
+        let css = css_of(
+            &RectStyle::default()
+                .with_border(Border::uniform(Color::BLACK, 1.0))
+                .with_shadow(Shadow {
+                    offset_x: 0.0,
+                    offset_y: 2.0,
+                    blur_radius: 6.0,
+                    spread: 0.0,
+                    color: Color::BLACK,
+                }),
+        );
+        assert_eq!(
+            css,
+            "box-shadow:inset 0 0 0 1px #000000,0px 2px 6px 0px #000000;"
+        );
+    }
+
+    #[test]
+    fn a_fill_and_a_radius_are_what_they_look_like() {
+        let css = css_of(
+            &RectStyle::default()
+                .with_fill(Color::WHITE)
+                .with_radius(BorderRadius::all(6.0)),
+        );
+        assert_eq!(css, "background:#ffffff;border-radius:6px;");
+    }
+
+    #[test]
+    fn a_gradient_fill_is_measured_from_where_it_points() {
+        let css = css_of(
+            &RectStyle::default().with_fill(Paint::Gradient(Gradient::linear(
+                Point::new(0.0, 0.0),
+                Point::new(0.0, 10.0),
+                &[(0.0, Color::BLACK), (1.0, Color::WHITE)],
+            ))),
+        );
+        assert!(
+            css.contains("linear-gradient(180deg,#000000 0%,#ffffff 100%)"),
+            "{css}"
+        );
+    }
+
+    #[test]
+    fn a_transparent_colour_keeps_its_alpha() {
+        assert_eq!(color(Color::rgba(0.0, 0.0, 0.0, 0.5)), "rgba(0,0,0,0.5)");
     }
 }

@@ -15,6 +15,9 @@ use wasm_bindgen::JsCast;
 // means nothing, but has to be true for it to be installed at all.
 thread_local! {
     static CONTEXT: RefCell<Option<web_sys::CanvasRenderingContext2d>> = const { RefCell::new(None) };
+    /// A face's line box, which is a property of the face and the size and of nothing a paragraph does.
+    static LINE_BOXES: RefCell<rustc_hash::FxHashMap<String, f32>> =
+        RefCell::new(rustc_hash::FxHashMap::default());
 }
 
 fn with_context<R>(f: impl FnOnce(&web_sys::CanvasRenderingContext2d) -> R) -> Option<R> {
@@ -77,10 +80,26 @@ fn width_of(text: &str, style: &TextStyle) -> f32 {
 fn line_height(style: &TextStyle) -> f32 {
     match style.line_height {
         renderer_core::LineHeight::Times(factor) => style.font_size * factor,
-        // What browsers use for `line-height: normal` on most faces. Approximate by construction: the exact
-        // value is the font's own, and a canvas will not report it.
-        renderer_core::LineHeight::Natural => style.font_size * 1.2,
+        renderer_core::LineHeight::Natural => natural(style),
     }
+}
+
+/// What `line-height: normal` comes to for this face at this size — the font's own ascent and descent,
+/// which is what the browser will lay the line out with.
+///
+/// Guessing it as a multiple of the size is close and wrong, and wrong by a pixel a row accumulates: a list
+/// of twenty items ended forty pixels below where hit-testing believed it was.
+fn natural(style: &TextStyle) -> f32 {
+    let font = font_of(style);
+    if let Some(known) = LINE_BOXES.with(|cache| cache.borrow().get(&font).copied()) {
+        return known;
+    }
+    let measured = laid_out_line(&font)
+        // A page that will not lay out a probe still has to be measured for, and this is what most faces
+        // come to.
+        .unwrap_or(style.font_size * 1.2);
+    LINE_BOXES.with(|cache| cache.borrow_mut().insert(font, measured));
+    measured
 }
 
 /// The paragraph as the browser would break it, in the style it will be drawn in.
@@ -98,6 +117,36 @@ fn wrap(text: &str, max_width: f32, style: &TextStyle) -> (f32, usize) {
         lines = lines.min(max);
     }
     (widest, lines.max(1))
+}
+
+/// How tall one line comes out when the browser lays it out, asked of the browser.
+///
+/// A canvas reports the *font's* box, and `line-height: normal` is not quite that — the difference is under
+/// a pixel and a column of twenty rows is twenty of them. So the question is put to the thing that will
+/// answer it later anyway: a box with this font and one line in it, measured and thrown away. It costs a
+/// layout, which is why the answer is kept: a face at a size has one line height and nothing a paragraph
+/// does changes it.
+fn laid_out_line(font: &str) -> Option<f32> {
+    let document = web_sys::window()?.document()?;
+    let body = document.body()?;
+    let probe = document
+        .create_element("div")
+        .ok()?
+        .dyn_into::<web_sys::HtmlElement>()
+        .ok()?;
+    probe
+        .set_attribute(
+            "style",
+            &format!(
+                "position:absolute;top:-9999px;left:-9999px;visibility:hidden;white-space:pre;font:{font}"
+            ),
+        )
+        .ok()?;
+    probe.set_text_content(Some("Hg"));
+    body.append_child(probe.as_ref()).ok()?;
+    let height = probe.get_bounding_client_rect().height() as f32;
+    probe.remove();
+    (height > 0.0).then_some(height)
 }
 
 /// Measures with the same engine that will draw.
@@ -123,7 +172,8 @@ impl TextMetrics for CanvasTextMetrics {
         self.measure(text, None, max_width, style)
     }
 
+    /// Asked with a size and nothing else, which is the default face at that size.
     fn line_height(&self, font_size: f32) -> f32 {
-        font_size * 1.2
+        natural(&TextStyle::new(font_size, renderer_core::Color::BLACK))
     }
 }
