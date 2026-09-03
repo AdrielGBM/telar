@@ -30,8 +30,11 @@ impl NoGpu {
                  so an app served over plain http from anywhere but localhost will not see it either."
             }
             NoGpu::NoAdapter => {
-                "this browser has WebGPU but offered no adapter: there is no compatible GPU, or the browser \
-                 has blocked the one there is."
+                "this browser has WebGPU but offered no adapter. On Linux that is usually Vulkan being off: \
+                 Chrome draws WebGPU through it, and `chrome://gpu` saying \"WebGPU: Hardware accelerated\" \
+                 only reports the feature flag, not that an adapter exists. Turn it on at \
+                 `chrome://flags/#enable-vulkan`, or start the browser with `--enable-features=Vulkan`. \
+                 Otherwise there is no compatible GPU, or the browser has blocked the one there is."
             }
         }
     }
