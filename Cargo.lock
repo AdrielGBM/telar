@@ -5508,6 +5508,7 @@ dependencies = [
  "telar-reactive-core",
  "telar-renderer-assets",
  "telar-renderer-core",
+ "telar-renderer-dom",
  "telar-renderer-hardware",
  "telar-renderer-record",
  "telar-renderer-software",
@@ -5522,6 +5523,8 @@ dependencies = [
  "toml",
  "tracing",
  "ureq",
+ "wasm-bindgen-futures",
+ "web-sys",
  "web-time",
 ]
 
@@ -5773,6 +5776,18 @@ dependencies = [
  "web-time",
  "wide",
  "xxhash-rust",
+]
+
+[[package]]
+name = "telar-renderer-dom"
+version = "0.1.8"
+dependencies = [
+ "rustc-hash 2.1.3",
+ "telar-geometry-core",
+ "telar-renderer-core",
+ "tracing",
+ "wasm-bindgen",
+ "web-sys",
 ]
 
 [[package]]

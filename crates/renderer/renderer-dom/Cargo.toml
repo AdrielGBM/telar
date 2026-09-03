@@ -1,0 +1,36 @@
+[package]
+name = "telar-renderer-dom"
+version = { workspace = true }
+edition = { workspace = true }
+rust-version = { workspace = true }
+description = "Document renderer for Telar: a frame reconciled into real DOM elements laid out by CSS."
+keywords = ["telar", "web", "wasm", "dom", "renderer"]
+categories = ["wasm", "gui", "web-programming"]
+readme = { workspace = true }
+license = { workspace = true }
+repository = { workspace = true }
+
+[dependencies]
+geometry-core = { workspace = true }
+renderer-core = { workspace = true }
+rustc-hash = { workspace = true }
+tracing = { workspace = true }
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+wasm-bindgen = { workspace = true }
+
+[target.'cfg(target_arch = "wasm32")'.dependencies.web-sys]
+workspace = true
+features = [
+    "CanvasRenderingContext2d",
+    "HtmlCanvasElement",
+    "NodeList",
+    "TextMetrics",
+    "CssStyleDeclaration",
+    "Document",
+    "Element",
+    "HtmlElement",
+    "Node",
+    "Text",
+    "Window",
+]

@@ -46,7 +46,7 @@ tui = ["runtime", "dep:platform-tui", "dep:renderer-tui", "services-core/system-
 
 # A browser frontend. Only meaningful for a `wasm32` build; the dependencies behind it are target-gated, so
 # turning it on for a host build enables nothing.
-web = ["runtime", "dep:platform-web", "dep:renderer-web"]
+web = ["runtime", "dep:platform-web", "dep:renderer-web", "dep:renderer-dom"]
 
 dev = ["runtime", "desktop", "dep:libloading", "dep:serde_json"]
 preview = ["runtime", "desktop"]
@@ -157,3 +157,6 @@ unexpected_cfgs = { level = "warn", check-cfg = [
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 platform-web = { workspace = true, optional = true }
 renderer-web = { workspace = true, optional = true }
+renderer-dom = { workspace = true, optional = true }
+wasm-bindgen-futures = { workspace = true }
+web-sys = { workspace = true, features = ["HtmlElement"] }

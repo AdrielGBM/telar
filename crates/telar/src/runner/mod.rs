@@ -82,4 +82,4 @@ pub use multi::{build_surface_handler, run_multi_with_platform};
 #[cfg(feature = "tui")]
 pub use tui::{TuiOptions, run_tui_app_with_name};
 #[cfg(all(feature = "web", target_arch = "wasm32"))]
-pub use web::{WebOptions, run_web_app_with_name};
+pub use web::{WebOptions, WebRenderer, run_web_app_with_name};
