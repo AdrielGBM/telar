@@ -77,6 +77,7 @@ fn run_dev_cmd(args: DevArgs) {
     if matches!(target, Target::Android) {
         cargo_args.push("--android".to_string());
     }
+    let terminal = select_frontend(target, &mut cargo_args);
     let mut config = load_config(&cargo_args);
     if let Some(backend) = backend {
         config.backend = Some(backend);
@@ -91,7 +92,9 @@ fn run_dev_cmd(args: DevArgs) {
         HotLoopOpts {
             args: cargo_args,
             config,
-            no_hot_reload,
+            // The hot-reload host opens a window of its own, so an app running in the terminal restarts on
+            // a change instead. Reloading in place is the only thing lost: the rebuild is the same one.
+            no_hot_reload: no_hot_reload || terminal,
         },
     );
 }
@@ -201,6 +204,7 @@ fn run_build_cmd(args: BuildArgs) -> ! {
         cargo_args: extra,
     } = common;
     let mut android = matches!(target, Target::Android);
+    let terminal = target == Target::Tui;
 
     // All desktop formats reject `--target android`; `--format apk` implies Android. Host-OS gating (dmg → macOS, nsis → Windows) happens in each build fn since rsx does not cross-compile.
     match &format {
@@ -228,6 +232,9 @@ fn run_build_cmd(args: BuildArgs) -> ! {
     cargo_args.extend(extra);
     if android {
         cargo_args.push("--android".to_string());
+    }
+    if terminal {
+        select_frontend(target, &mut cargo_args);
     }
     let mut config = load_config(&cargo_args);
     if let Some(backend) = backend {
@@ -265,4 +272,21 @@ fn build_cargo_args(
         args.push(features.clone());
     }
     args
+}
+
+/// Turns on the frontend `target` names and tells the app to start on it, returning whether the app will run
+/// in this terminal.
+///
+/// The feature goes through `telar/` rather than a feature of the app's own, so any project reaches a
+/// frontend without first declaring one; the environment variable is what picks between the frontends a
+/// build ends up with, since a default build still has the windowed one compiled in.
+fn select_frontend(target: Target, cargo_args: &mut Vec<String>) -> bool {
+    if target != Target::Tui {
+        return false;
+    }
+    cargo_args.push("--features".to_string());
+    cargo_args.push("telar/tui".to_string());
+    // SAFETY: single-threaded at this point — set before any child is spawned or any thread started.
+    unsafe { std::env::set_var("TELAR_TARGET", "tui") };
+    true
 }

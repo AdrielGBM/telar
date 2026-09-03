@@ -139,10 +139,12 @@ pub(crate) struct BuildArgs {
     pub(crate) format: Option<BuildFormat>,
 }
 
-#[derive(Clone, ValueEnum)]
+#[derive(Clone, Copy, PartialEq, Eq, ValueEnum)]
 pub(crate) enum Target {
     Desktop,
     Android,
+    /// The terminal the command was run from.
+    Tui,
 }
 
 #[derive(Clone, ValueEnum)]
