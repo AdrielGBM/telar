@@ -76,6 +76,30 @@ struct Live {
     drawn: String,
     /// The paint this box carries that is not a box, as the children standing in for it.
     pieces: Vec<Piece>,
+    /// What was last said about what this box *is*, so an unchanged frame writes no attributes.
+    described: Described,
+}
+
+/// What a box is, as the attributes that say so.
+#[derive(Default, PartialEq)]
+struct Described {
+    role: Option<&'static str>,
+    label: Option<String>,
+    link: Option<String>,
+    hidden: bool,
+}
+
+/// Writes an attribute, or takes it off where there is nothing to say. Removing matters as much as setting:
+/// a box that stops being a link keeps sending the reader somewhere until the `href` goes.
+fn set_or_clear(node: &web_sys::Element, name: &str, value: Option<&str>) {
+    match value {
+        Some(value) => {
+            let _ = node.set_attribute(name, value);
+        }
+        None => {
+            let _ = node.remove_attribute(name);
+        }
+    }
 }
 
 /// One thing an element paints inside itself that the browser has to place rather than lay out.
@@ -306,19 +330,7 @@ impl Reconciler {
         if let Some(matrix) = self.open.last().and_then(|parent| parent.moved.clone()) {
             paint::declare(&mut style, "transform", &matrix);
         }
-        match &element.semantics.label {
-            Some(label) => {
-                let _ = node.set_attribute("aria-label", label);
-                if drawing {
-                    let _ = node.set_attribute("role", "img");
-                }
-            }
-            // Artwork nobody named is decoration, and a graphic with no accessible name is noise to read out.
-            None if drawing => {
-                let _ = node.set_attribute("aria-hidden", "true");
-            }
-            None => {}
-        }
+        self.describe(&node, element, tag);
         if self.audit {
             let rect = element.rect;
             let _ = node.set_attribute(
@@ -337,6 +349,37 @@ impl Reconciler {
             pieces: Vec::new(),
             moved: None,
         });
+    }
+
+    /// Says what the box is, in whatever way the element it became does not already say it.
+    ///
+    /// A `<nav>` needs no `role="navigation"` — it *is* one, and duplicating it is noise a reader has to
+    /// step over. Only the roles with no element of their own carry the attribute.
+    fn describe(&mut self, node: &web_sys::Element, element: &Element, tag: &'static str) {
+        let semantics = &element.semantics;
+        let role = (tag == "div" || tag == "svg")
+            .then(|| aria_role(semantics.role))
+            .flatten();
+        let label = semantics.label.as_deref();
+        // Artwork nobody named is decoration, and a graphic with no accessible name is noise to read out.
+        let hidden = semantics.role == Role::Drawing && label.is_none();
+        let described = Described {
+            role,
+            label: label.map(str::to_string),
+            link: semantics.link.as_deref().map(str::to_string),
+            hidden,
+        };
+        let Some(live) = self.live.get_mut(&element.id.0) else {
+            return;
+        };
+        if live.described == described {
+            return;
+        }
+        set_or_clear(node, "role", described.role);
+        set_or_clear(node, "aria-label", described.label.as_deref());
+        set_or_clear(node, "href", described.link.as_deref());
+        set_or_clear(node, "aria-hidden", described.hidden.then_some("true"));
+        live.described = described;
     }
 
     fn pop(&mut self) {
@@ -453,6 +496,7 @@ impl Reconciler {
                 text: String::new(),
                 drawn: String::new(),
                 pieces: Vec::new(),
+                described: Described::default(),
             },
         );
         node
@@ -583,16 +627,27 @@ fn truncate(parent: &web_sys::Node, keep: u32) {
     }
 }
 
-/// The tag a role is.
+/// The element a role *is*.
 ///
-/// A role that maps to `div` is not a role that failed: it is one where the element carries the meaning
-/// through an attribute instead, or one the document has no better word for.
+/// A `div` is not a role that failed: it is one the document has no element for, and
+/// [`aria_role`] then says in an attribute what the tag could not. Preferring the element where there is one
+/// is not decoration — an element carries the meaning to a reader, to a search index and to a stylesheet,
+/// where an attribute reaches only the first.
 fn tag_of(role: &Role) -> &'static str {
     match role {
-        Role::Group | Role::ScrollArea => "div",
+        Role::Banner => "header",
+        Role::Navigation => "nav",
+        Role::Main => "main",
+        Role::Complementary => "aside",
+        Role::ContentInfo => "footer",
+        Role::Article => "article",
+        Role::Section => "section",
+        Role::Form => "form",
+        Role::Search => "search",
+        Role::List => "ul",
+        Role::ListItem => "li",
         Role::Button => "button",
-        Role::Link(_) => "a",
-        Role::TextInput => "div",
+        Role::Link => "a",
         Role::Drawing => "svg",
         Role::Heading(level) => match level {
             1 => "h1",
@@ -602,5 +657,22 @@ fn tag_of(role: &Role) -> &'static str {
             5 => "h5",
             _ => "h6",
         },
+        _ => "div",
+    }
+}
+
+/// The `role` attribute a box needs because the element it became does not carry its meaning.
+///
+/// `None` where the role *is* the element, and where there is nothing worth announcing: a plain group is a
+/// `div`, and `role="group"` on every box in the tree is a reader reading out the scaffolding.
+fn aria_role(role: Role) -> Option<&'static str> {
+    match role {
+        Role::Group => None,
+        // A picture with a name; without one it is hidden instead, which `describe` decides.
+        Role::Drawing => Some("img"),
+        // A scroll area is a region a reader can be told about, but `scrollarea` is not an ARIA role and a
+        // browser would ignore it.
+        Role::ScrollArea => None,
+        other => Some(other.as_str()),
     }
 }

@@ -6,7 +6,11 @@
 //! `<div>` that happens to be clickable.
 
 use geometry_core::Rect;
-use std::sync::Arc;
+
+/// What a box *is* and what to call it. Shared with the platform layer rather than defined here: the
+/// desktop announcing a checkbox and a document drawing one are describing the same box, and two
+/// vocabularies for that is how they came to disagree.
+pub use semantics_core::{Role, Semantics};
 
 /// Identifies one box across frames.
 ///
@@ -15,71 +19,6 @@ use std::sync::Arc;
 /// in step.
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug, PartialOrd, Ord)]
 pub struct ElementId(pub u64);
-
-/// What a box is, beyond a rectangle.
-///
-/// Deliberately small. Each variant has to earn itself by changing what a document backend emits — a role
-/// that lands on the same element with the same attributes is a role that does not exist.
-#[derive(Clone, PartialEq, Eq, Hash, Debug, Default)]
-pub enum Role {
-    /// A box that groups. The overwhelming majority.
-    #[default]
-    Group,
-    /// Something pressable, whatever it is drawn as.
-    Button,
-    /// A link, and where it goes.
-    Link(Arc<str>),
-    /// A heading, and how deep. `1` is the page's own title.
-    Heading(u8),
-    /// A single-line editable field.
-    TextInput,
-    /// A box whose content is drawn rather than laid out: a bitmap, vector art, an immediate-mode canvas.
-    ///
-    /// Everything between it and its `PopElement` is geometry in the box's own coordinates — a document can
-    /// draw those, but it cannot place them, and reading them as boxes puts a canvas's whole artwork in the
-    /// element's background and its labels in one run of text.
-    Drawing,
-    /// A region that scrolls its content.
-    ScrollArea,
-}
-
-/// What a box is and how it should be described, carried alongside its geometry.
-#[derive(Clone, PartialEq, Eq, Hash, Debug, Default)]
-pub struct Semantics {
-    pub role: Role,
-    /// The name assistive technology reads, when the box's own content is not it — an icon-only button.
-    pub label: Option<Arc<str>>,
-    /// Whether the box refuses pointer events, so what is drawn under it takes them instead.
-    pub click_through: bool,
-}
-
-impl Semantics {
-    pub fn group() -> Self {
-        Self::default()
-    }
-
-    pub fn drawing() -> Self {
-        Self {
-            role: Role::Drawing,
-            ..Self::default()
-        }
-    }
-
-    pub fn with_role(mut self, role: Role) -> Self {
-        self.role = role;
-        self
-    }
-
-    pub fn with_label(mut self, label: impl Into<Arc<str>>) -> Self {
-        self.label = Some(label.into());
-        self
-    }
-
-    pub fn click_through(mut self) -> Self {
-        self.click_through = true;
-        self
-    }
-}
 
 /// One box in a frame: what it is, what it was asked for, and what to call it.
 ///

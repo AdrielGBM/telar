@@ -14,6 +14,7 @@ repository = { workspace = true }
 web-time = { workspace = true }
 bytemuck = { workspace = true }
 geometry-core = { workspace = true }
+semantics-core = { workspace = true }
 rustc-hash = { workspace = true }
 smallvec = { workspace = true }
 thiserror = { workspace = true }

@@ -310,7 +310,9 @@ fn register_node(id: FocusId, kind: FocusKind, node: Option<NodeId>, role: Role,
             // Re-registering only ever adds knowledge: a widget that learns its node later keeps its place.
             Some(existing) => {
                 existing.node = existing.node.or(node);
-                if role != Role::default() {
+                // A re-registration that only repeats the default has said nothing, and must not write over a
+                // role the widget declared the first time.
+                if role != default_role(kind) {
                     existing.role = role;
                 }
                 existing.tabbable &= tabbable;

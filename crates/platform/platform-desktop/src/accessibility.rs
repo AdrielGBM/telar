@@ -82,23 +82,47 @@ pub(crate) fn tree_update(nodes: &[AccessNode], title: &str) -> TreeUpdate {
     }
 }
 
-/// Telar's short list of roles, mapped outwards. The mapping is one-way and lossy by design: Telar names what
-/// its catalogue actually has, and each platform names rather more.
+/// Telar's roles, mapped outwards. One-way and lossy by design: Telar names what its catalogue actually has,
+/// and each platform names rather more.
+///
+/// The regions are here because a reader offers "jump to the navigation" and cannot until something says
+/// which box that is. They arrived with the document backend, and this is the half of that work that a
+/// screen reader on a desktop gets out of it.
 fn role_of(role: Role) -> AkRole {
     match role {
-        Role::Button => AkRole::Button,
+        Role::Button | Role::Disclosure => AkRole::Button,
+        Role::Link => AkRole::Link,
         Role::CheckBox => AkRole::CheckBox,
         Role::Radio => AkRole::RadioButton,
         Role::Switch => AkRole::Switch,
         Role::Tab => AkRole::Tab,
+        Role::TabPanel => AkRole::TabPanel,
         Role::MenuItem => AkRole::MenuItem,
         Role::Slider => AkRole::Slider,
         Role::SpinButton => AkRole::SpinButton,
         Role::TextInput => AkRole::TextInput,
         Role::MultilineTextInput => AkRole::MultilineTextInput,
         Role::ComboBox => AkRole::ComboBox,
-        Role::Disclosure => AkRole::DisclosureTriangle,
+        Role::ProgressBar => AkRole::ProgressIndicator,
         Role::Label => AkRole::Label,
+        Role::Banner => AkRole::Banner,
+        Role::Navigation => AkRole::Navigation,
+        Role::Main => AkRole::Main,
+        Role::Complementary => AkRole::Complementary,
+        Role::ContentInfo => AkRole::ContentInfo,
+        Role::Article => AkRole::Article,
+        Role::Section => AkRole::Section,
+        Role::Form => AkRole::Form,
+        Role::Search => AkRole::SearchInput,
+        Role::Heading(_) => AkRole::Heading,
+        Role::List => AkRole::List,
+        Role::ListItem => AkRole::ListItem,
+        Role::Dialog => AkRole::Dialog,
+        Role::ScrollArea => AkRole::ScrollView,
+        // A picture with no name is decoration, and a reader is better off stepping over it than announcing
+        // "graphic" at every icon. One that has a name arrives as a labelled image.
+        Role::Drawing => AkRole::Image,
+        Role::Group => AkRole::GenericContainer,
     }
 }
 

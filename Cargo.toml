@@ -16,6 +16,7 @@ members = [
     "crates/reactive/reactive-core",
     "crates/services/services-core",
     "crates/geometry/geometry-core",
+    "crates/semantics/semantics-core",
     "crates/motion/motion-core",
     "crates/layout/layout-core",
     "crates/layout/layout-reactive",
@@ -57,6 +58,7 @@ default-members = [
     "crates/reactive/reactive-core",
     "crates/services/services-core",
     "crates/geometry/geometry-core",
+    "crates/semantics/semantics-core",
     "crates/motion/motion-core",
     "crates/layout/layout-core",
     "crates/layout/layout-reactive",
@@ -150,6 +152,7 @@ renderer-text = { package = "telar-renderer-text", path = "crates/renderer/rende
 reactive-core = { package = "telar-reactive-core", path = "crates/reactive/reactive-core", version = "0.1.8" }
 services-core = { package = "telar-services-core", path = "crates/services/services-core", version = "0.1.8" }
 geometry-core = { package = "telar-geometry-core", path = "crates/geometry/geometry-core", version = "0.1.8" }
+semantics-core = { package = "telar-semantics-core", path = "crates/semantics/semantics-core", version = "0.1.8" }
 motion-core = { package = "telar-motion-core", path = "crates/motion/motion-core", version = "0.1.8" }
 layout-core = { package = "telar-layout-core", path = "crates/layout/layout-core", version = "0.1.8" }
 layout-reactive = { package = "telar-layout-reactive", path = "crates/layout/layout-reactive", version = "0.1.8" }
