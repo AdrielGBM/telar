@@ -296,7 +296,13 @@ pub use runner::run_with_platform;
 #[cfg(all(feature = "runtime", not(target_os = "android")))]
 pub use runner::{SurfaceWindow, run_with_platform_and_renderer};
 #[cfg(all(feature = "runtime", feature = "desktop", not(target_os = "android")))]
-pub use runner::{open_window, run_app_windowed, run_app_with_name};
+pub use runner::{open_window, run_app_windowed, run_desktop_app_with_name};
+// The frontend an app actually starts on. Not gated on `desktop`: choosing between the frontends a build
+// has is the whole point of it, and a terminal-only build has no window to open.
+#[cfg(all(feature = "runtime", not(target_os = "android")))]
+pub use runner::run_app_with_name;
+#[cfg(all(feature = "runtime", feature = "tui", not(target_os = "android")))]
+pub use runner::{TuiOptions, run_tui_app_with_name};
 
 pub use telar_macros::{Props, ThemeTokens, app, component, rsx_modules, t};
 

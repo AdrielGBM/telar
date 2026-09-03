@@ -31,7 +31,7 @@ fn run_desktop_with_plugin<A: App, D: DevPlugin>(config: AppConfig, app: A, app_
     }
 }
 
-pub fn run_app_with_name<A: App>(config: AppConfig, app: A, app_name: &str) {
+pub fn run_desktop_app_with_name<A: App>(config: AppConfig, app: A, app_name: &str) {
     #[cfg(feature = "dev")]
     {
         // TELAR_DEVTOOLS=0 disables the overlay even in a dev build.

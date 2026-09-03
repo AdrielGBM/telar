@@ -22,6 +22,8 @@ tracing-subscriber = { workspace = true, features = ["env-filter"] }
 [features]
 # Mirrors the feature `cargo telar dev` injects, so the hot-reload integration test can gate on it.
 dev = ["telar/dev"]
+# Runs the same app in the terminal. `TELAR_TARGET=tui` picks it when the desktop frontend is also compiled in.
+tui = ["telar/tui"]
 
 [dev-dependencies]
 platform-core = { workspace = true }

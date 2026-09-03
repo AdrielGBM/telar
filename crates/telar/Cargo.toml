@@ -40,6 +40,10 @@ desktop = ["runtime", "dep:platform-desktop"]
 # Exposes `rasterize`: draw commands in, pixels out, with no window and no GPU.
 platform-headless = ["runtime", "software", "dep:platform-headless"]
 
+# A terminal frontend. Neither `desktop` nor a GPU is involved: the app runs in the terminal it was
+# launched from, drawing through `renderer-tui`.
+tui = ["runtime", "dep:platform-tui", "dep:renderer-tui", "services-core/system-paths"]
+
 dev = ["runtime", "desktop", "dep:libloading", "dep:serde_json"]
 preview = ["runtime", "desktop"]
 # `platform-headless` plus a PNG encoder, which is the only thing `image` is here for.
@@ -105,10 +109,12 @@ motion-core = { workspace = true }
 navigate-core = { workspace = true, optional = true }
 platform-core = { workspace = true, optional = true }
 platform-headless = { workspace = true, optional = true }
+platform-tui = { workspace = true, optional = true }
 reactive-core = { workspace = true, optional = true }
 renderer-assets = { workspace = true, optional = true }
 renderer-core = { workspace = true, optional = true }
 renderer-hardware = { workspace = true, optional = true }
+renderer-tui = { workspace = true, optional = true }
 renderer-software = { workspace = true, optional = true }
 renderer-text = { workspace = true, optional = true }
 services-core = { workspace = true }

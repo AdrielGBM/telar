@@ -1,0 +1,18 @@
+[package]
+name = "telar-platform-tui"
+version = { workspace = true }
+edition = { workspace = true }
+rust-version = { workspace = true }
+description = "Terminal window, input and event loop for Telar's platform abstraction."
+keywords = ["telar", "tui", "terminal", "platform", "crossterm"]
+categories = ["command-line-interface", "os", "gui"]
+readme = { workspace = true }
+license = { workspace = true }
+repository = { workspace = true }
+
+[dependencies]
+crossterm = { workspace = true }
+geometry-core = { workspace = true }
+platform-core = { workspace = true }
+services-core = { workspace = true, features = ["system-paths"] }
+tracing = { workspace = true }

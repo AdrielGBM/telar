@@ -22,6 +22,8 @@ members = [
     "crates/ui/theme-core",
     "crates/ui/ui-core",
     "crates/ui/ui-tree",
+    "crates/renderer/renderer-tui",
+    "crates/platform/platform-tui",
     "crates/telar",
     "crates/tools/cargo-telar",
     "crates/tools/telar-parser",
@@ -58,6 +60,8 @@ default-members = [
     "crates/ui/theme-core",
     "crates/ui/ui-core",
     "crates/ui/ui-tree",
+    "crates/renderer/renderer-tui",
+    "crates/platform/platform-tui",
     "crates/telar",
     "crates/tools/cargo-telar",
     "crates/tools/telar-parser",
@@ -109,6 +113,9 @@ winit = "0.30"
 tiny-skia = "0.12.0"
 ureq = "3.4.0"
 notify = "8.2.0"
+crossterm = "0.29.0"
+unicode-width = "0.2.2"
+unicode-segmentation = "1.13.3"
 
 # Every crate publishes as `telar-*`; the keys keep the short internal names so `use ui_core::…` and `dep:ui-core` feature syntax stay unchanged.
 platform-core = { package = "telar-platform-core", path = "crates/platform/platform-core", version = "0.1.8" }
@@ -120,6 +127,8 @@ renderer-core = { package = "telar-renderer-core", path = "crates/renderer/rende
 renderer-assets = { package = "telar-renderer-assets", path = "crates/renderer/renderer-assets", version = "0.1.8" }
 renderer-cache = { package = "telar-renderer-cache", path = "crates/renderer/renderer-cache", version = "0.1.8" }
 renderer-record = { package = "telar-renderer-record", path = "crates/renderer/renderer-record", version = "0.1.8" }
+renderer-tui = { package = "telar-renderer-tui", path = "crates/renderer/renderer-tui", version = "0.1.8" }
+platform-tui = { package = "telar-platform-tui", path = "crates/platform/platform-tui", version = "0.1.8" }
 reactive-local = { package = "telar-reactive-local", path = "crates/reactive/reactive-local", version = "0.1.8" }
 renderer-software = { package = "telar-renderer-software", path = "crates/renderer/renderer-software", version = "0.1.8" }
 renderer-hardware = { package = "telar-renderer-hardware", path = "crates/renderer/renderer-hardware", version = "0.1.8" }

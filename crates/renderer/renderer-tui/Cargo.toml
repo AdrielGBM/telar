@@ -1,0 +1,18 @@
+[package]
+name = "telar-renderer-tui"
+version = { workspace = true }
+edition = { workspace = true }
+rust-version = { workspace = true }
+description = "Terminal renderer for Telar: draw commands composited into a character-cell grid."
+keywords = ["telar", "tui", "terminal", "renderer", "ansi"]
+categories = ["command-line-interface", "rendering", "gui"]
+readme = { workspace = true }
+license = { workspace = true }
+repository = { workspace = true }
+
+[dependencies]
+geometry-core = { workspace = true }
+renderer-core = { workspace = true }
+rustc-hash = { workspace = true }
+unicode-segmentation = { workspace = true }
+unicode-width = { workspace = true }
