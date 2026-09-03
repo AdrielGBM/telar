@@ -173,9 +173,23 @@ pub fn text_style(style: &TextStyle, out: &mut String) {
     if style.letter_spacing != 0.0 {
         declare(out, "letter-spacing", &px(style.letter_spacing));
     }
-    if style.text_wrap == renderer_core::TextWrap::NoWrap {
-        declare(out, "white-space", "nowrap");
-    }
+    // Always said, because the document's default is not Telar's. `normal` collapses a run of spaces to one
+    // and a newline to a space, so a paragraph written on several lines arrives as one — a source listing came
+    // out as a single line thousands of characters wide. What Telar means is `pre-wrap`: the newlines an
+    // author wrote are breaks, the spaces are spaces, and what does not fit still wraps.
+    //
+    // It is also what keeps the two engines agreeing on height. The measurer breaks on `\n` and counts the
+    // lines; a document that collapsed them measured one line where layout had reserved twenty, and the
+    // scroll area went on believing there was content below that the browser no longer had.
+    declare(
+        out,
+        "white-space",
+        if style.text_wrap == renderer_core::TextWrap::NoWrap {
+            "pre"
+        } else {
+            "pre-wrap"
+        },
+    );
     if let Some(max) = style.clamp.max_lines() {
         // The only cross-browser line clamp there is, and it needs all four declarations to work.
         declare(out, "display", "-webkit-box");
@@ -269,5 +283,35 @@ mod tests {
     #[test]
     fn a_transparent_colour_keeps_its_alpha() {
         assert_eq!(color(Color::rgba(0.0, 0.0, 0.0, 0.5)), "rgba(0,0,0,0.5)");
+    }
+}
+
+#[cfg(test)]
+mod text_tests {
+    use super::*;
+    use renderer_core::TextWrap;
+
+    fn css_of(style: &TextStyle) -> String {
+        let mut out = String::new();
+        text_style(style, &mut out);
+        out
+    }
+
+    /// The document's default collapses a newline to a space and a run of spaces to one; Telar's model does
+    /// neither, and a paragraph written on several lines came out as a single line.
+    #[test]
+    fn the_lines_an_author_wrote_stay_lines() {
+        assert!(
+            css_of(&TextStyle::new(12.0, Color::BLACK)).contains("white-space:pre-wrap;"),
+            "wrapping text has to keep its breaks and still wrap"
+        );
+    }
+
+    #[test]
+    fn text_that_must_not_wrap_still_keeps_its_spaces() {
+        let style = TextStyle::new(12.0, Color::BLACK).with_text_wrap(TextWrap::NoWrap);
+        let css = css_of(&style);
+        assert!(css.contains("white-space:pre;"), "{css}");
+        assert!(!css.contains("pre-wrap"), "{css}");
     }
 }
