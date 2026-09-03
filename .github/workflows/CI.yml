@@ -43,6 +43,18 @@ jobs:
         env:
           CARGO_TARGET_AARCH64_LINUX_ANDROID_LINKER: ${{ steps.setup-ndk.outputs.ndk-path }}/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android24-clang
 
+  check-web:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+      - uses: Swatinem/rust-cache@v2
+      # The only leg that compiles the document renderer, the WebGPU one and the web platform at all: they are
+      # `cfg`'d to nothing off wasm, so every other check here passes with them broken.
+      - run: cargo check -p sandbox --lib --target wasm32-unknown-unknown --features telar/web
+
   test:
     strategy:
       fail-fast: false
