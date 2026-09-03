@@ -83,43 +83,17 @@ fn line_height(style: &TextStyle) -> f32 {
     }
 }
 
-/// Greedy word wrap, which is what a browser does for text with no hyphenation or `text-wrap: pretty`.
+/// The paragraph as the browser would break it, in the style it will be drawn in.
 fn wrap(text: &str, max_width: f32, style: &TextStyle) -> (f32, usize) {
-    let mut widest: f32 = 0.0;
-    let mut lines = 0usize;
-
-    for hard in text.split('\n') {
-        lines += 1;
+    // Text that must stay on one line, and a column nothing could overflow, are the same instruction to a
+    // wrap: never break.
+    let column =
         if style.text_wrap == TextWrap::NoWrap || !max_width.is_finite() || max_width >= 1.0e5 {
-            widest = widest.max(width_of(hard, style));
-            continue;
-        }
-        let mut line_start = 0usize;
-        let mut last_break: Option<usize> = None;
-        for (offset, c) in hard.char_indices() {
-            if c.is_whitespace() {
-                last_break = Some(offset);
-            }
-            let candidate = &hard[line_start..offset + c.len_utf8()];
-            if width_of(candidate, style) <= max_width {
-                continue;
-            }
-            let cut = match last_break {
-                Some(at) if at > line_start => at,
-                // A word wider than the column breaks inside itself, as `overflow-wrap` does.
-                _ => offset.max(line_start + c.len_utf8()),
-            };
-            widest = widest.max(width_of(&hard[line_start..cut], style));
-            line_start = hard[cut..]
-                .find(|c: char| !c.is_whitespace())
-                .map(|skip| cut + skip)
-                .unwrap_or(hard.len());
-            last_break = None;
-            lines += 1;
-        }
-        widest = widest.max(width_of(&hard[line_start..], style));
-    }
-
+            f32::INFINITY
+        } else {
+            max_width
+        };
+    let (widest, mut lines) = crate::wrap::greedy(text, column, |run| width_of(run, style));
     if let Some(max) = style.clamp.max_lines() {
         lines = lines.min(max);
     }
