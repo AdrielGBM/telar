@@ -98,6 +98,7 @@ impl Painter<'_> {
     pub(crate) fn rect(&mut self, rect: Rect, style: &RectStyle) {
         let cells = self.cells_of(rect);
         if cells.is_empty() {
+            self.hairline(rect, style);
             return;
         }
         // The shadow is dropped rather than approximated. A terminal has no sub-cell falloff, so the only
@@ -420,5 +421,48 @@ fn run_char(dc: i32, dr: i32) -> char {
         (c, r) if c * 2 <= r => '│',
         _ if (dc > 0) == (dr > 0) => '╲',
         _ => '╱',
+    }
+}
+
+impl Painter<'_> {
+    /// A rect thinner than a cell, drawn as the line it is.
+    ///
+    /// Rounding both edges to the same column is the right answer for a box — it is what makes neighbours
+    /// tile — but it erases everything a UI draws at hairline width: a text caret, a one-pixel divider, a
+    /// separator between rows. Those are not boxes that happen to be small; they are lines, and a terminal
+    /// has characters for lines.
+    fn hairline(&mut self, rect: Rect, style: &RectStyle) {
+        let Some(fill) = &style.fill else {
+            return;
+        };
+        if rect.width <= 0.0 || rect.height <= 0.0 {
+            return;
+        }
+        let mapped_rect = renderer_core::transform_clip_rect(self.matrix(), rect);
+        let full = CellRect::of(mapped_rect, self.cell);
+        // One cell in whichever axis collapsed, keeping the other as it laid out.
+        let cells = CellRect {
+            col0: full.col0,
+            row0: full.row0,
+            col1: full.col1.max(full.col0 + 1),
+            row1: full.row1.max(full.row0 + 1),
+        };
+        let glyph = match (full.cols() == 0, full.rows() == 0) {
+            (true, true) => '·',
+            (true, false) => '│',
+            (false, true) => '─',
+            (false, false) => return,
+        };
+        let paint = mapped(fill, self.matrix(), self.scale());
+        for row in cells.row0..cells.row1 {
+            for col in cells.col0..cells.col1 {
+                if !self.clipped_in(col, row) {
+                    continue;
+                }
+                let p = cell_center(col, row, self.cell);
+                let color = sample(&paint, p.x, p.y);
+                self.put_glyph(col, row, Grapheme::from(glyph), color, Attrs::NONE);
+            }
+        }
     }
 }

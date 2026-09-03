@@ -384,6 +384,45 @@ mod tests {
     }
 
     #[test]
+    fn a_caret_thinner_than_a_cell_is_drawn_as_a_bar() {
+        let mut buf = grid(8, 1);
+        paint(
+            &mut buf,
+            &[rect_cmd(
+                Rect::new(8.0 * 3.0, 0.0, 2.0, 16.0),
+                RectStyle::default().with_fill(Color::WHITE),
+            )],
+        );
+        assert_eq!(row(&buf, 0), "   │    ");
+    }
+
+    #[test]
+    fn a_hairline_divider_is_drawn_as_a_rule() {
+        let mut buf = grid(6, 2);
+        paint(
+            &mut buf,
+            &[rect_cmd(
+                Rect::new(0.0, 16.0, 8.0 * 4.0, 1.0),
+                RectStyle::default().with_fill(Color::WHITE),
+            )],
+        );
+        assert_eq!(row(&buf, 1), "────  ");
+    }
+
+    #[test]
+    fn a_zero_sized_rect_draws_nothing() {
+        let mut buf = grid(4, 1);
+        paint(
+            &mut buf,
+            &[rect_cmd(
+                Rect::new(0.0, 0.0, 0.0, 0.0),
+                RectStyle::default().with_fill(Color::WHITE),
+            )],
+        );
+        assert_eq!(row(&buf, 0), "    ");
+    }
+
+    #[test]
     fn a_filled_path_covers_its_interior() {
         let mut buf = grid(8, 4);
         let path = renderer_core::PathData::new()
