@@ -259,7 +259,20 @@ fn install_listeners(host: &web_sys::HtmlElement, window: &WebWindow) -> Vec<Lis
     }
 
     for (name, focused) in [("focusin", true), ("focusout", false)] {
-        listeners.push(listen(target, name, true, move |_| {
+        let host = host.clone();
+        listeners.push(listen(target, name, true, move |event| {
+            // Both bubble, so the host is told about every focus move *inside* it — and a backend whose
+            // output is a document fills it with real buttons and fields for focus to move between. Only
+            // focus crossing the host's own border is the window gaining or losing it: reporting the rest
+            // told the app the window had gone away, and every widget dutifully ended the gesture the click
+            // that moved the focus had just begun.
+            if let Some(event) = event.dyn_ref::<web_sys::FocusEvent>()
+                && let Some(other) = event.related_target()
+                && let Some(node) = other.dyn_ref::<web_sys::Node>()
+                && host.contains(Some(node))
+            {
+                return;
+            }
             push([Event::FocusChanged {
                 is_focused: focused,
             }]);

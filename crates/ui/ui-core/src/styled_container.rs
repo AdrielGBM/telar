@@ -1881,6 +1881,23 @@ mod tests {
     }
 
     #[test]
+    fn a_document_backend_does_not_cost_a_box_its_press() {
+        let tapped = Rc::new(Cell::new(false));
+        let sink = tapped.clone();
+        let mut card = laid_out_box().on_press(move || sink.set(true));
+        settle(&mut card);
+        let previous = ui_tree::set_element_capture(true);
+        let _ = card.view();
+        card.on_event(&press_with(50.0, 50.0, PointerButton::Primary));
+        card.on_event(&release_with(50.0, 50.0, PointerButton::Primary));
+        ui_tree::set_element_capture(previous);
+        assert!(
+            tapped.get(),
+            "a box that becomes an element is still the box that was pressed"
+        );
+    }
+
+    #[test]
     fn a_plain_pressable_box_still_ignores_non_primary_buttons() {
         let tapped = Rc::new(Cell::new(false));
         let sink = tapped.clone();
