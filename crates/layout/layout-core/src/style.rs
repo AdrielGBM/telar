@@ -91,17 +91,6 @@ pub(crate) struct LogicalStyle {
 }
 
 impl LogicalStyle {
-    /// Whether any edge needs re-resolving on a direction flip. A direction-following row alone does not: it
-    /// is a single flag the engine can toggle in place, without the original style to resolve against.
-    pub(crate) fn has_edges(&self) -> bool {
-        self.padding_start.is_some()
-            || self.padding_end.is_some()
-            || self.margin_start.is_some()
-            || self.margin_end.is_some()
-            || self.inset_start.is_some()
-            || self.inset_end.is_some()
-    }
-
     /// Whether the node is out of flow: what was set out of band if anything was, and what the style declares
     /// otherwise.
     pub(crate) fn is_hidden(&self) -> bool {
@@ -109,15 +98,6 @@ impl LogicalStyle {
             Some(shown) => !shown,
             None => self.hidden,
         }
-    }
-    /// Whether the engine must keep this node's full style around: an edge, or out-of-band mutator state.
-    pub(crate) fn needs_tracking(&self) -> bool {
-        self.has_edges()
-            || self.row_forced
-            || self.hidden
-            || self.display_override.is_some()
-            || self.min_height_override.is_some()
-            || self.leading_margin.is_some()
     }
 }
 
@@ -660,16 +640,19 @@ mod tests {
         }
     }
 
+    /// The point of keeping the style a node was built from: a logical edge resolves against whichever
+    /// direction is current, from the intent, rather than being un-swapped from a physical edge that no
+    /// longer says which one it was.
     #[test]
-    fn only_logical_edges_need_the_style_kept_for_a_flip() {
-        assert!(!LayoutStyle::new().flex_row().logical.has_edges());
-        assert!(
-            LayoutStyle::new()
-                .margin_inline_start(4.0)
-                .logical
-                .has_edges()
-        );
-        assert!(LayoutStyle::new().inset_end(4.0).logical.has_edges());
+    fn a_logical_edge_resolves_to_the_side_the_direction_chose() {
+        let style = LayoutStyle::new().margin_inline_start(4.0);
+        let ltr = style.resolve(Direction::Ltr).margin;
+        assert_eq!(ltr.left, LengthPercentageAuto::length(4.0));
+        assert_eq!(ltr.right, LengthPercentageAuto::length(0.0));
+
+        let rtl = style.resolve(Direction::Rtl).margin;
+        assert_eq!(rtl.right, LengthPercentageAuto::length(4.0));
+        assert_eq!(rtl.left, LengthPercentageAuto::length(0.0));
     }
 
     #[test]

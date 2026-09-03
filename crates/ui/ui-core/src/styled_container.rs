@@ -195,6 +195,19 @@ impl StyledContainer {
         ))
     }
 
+    /// What this box is, for a backend whose output is a document.
+    ///
+    /// Derived rather than declared: a box that answers a press *is* a button whether or not anybody said
+    /// so, and one that declines pointer events is one the document should let events through.
+    fn semantics(&self) -> std::sync::Arc<renderer_core::Semantics> {
+        let mut semantics = renderer_core::Semantics::group();
+        if self.press.is_set() {
+            semantics.role = renderer_core::Role::Button;
+        }
+        semantics.click_through = self.click_through;
+        std::sync::Arc::new(semantics)
+    }
+
     /// Whether the box is currently refusing input. `None` — the common case — answers without a dyn call on
     /// the pointer-move broadcast path, which every box in the tree pays.
     fn is_disabled(&self) -> bool {
@@ -776,9 +789,20 @@ impl Component for StyledContainer {
         } else {
             content
         };
-        match self.transform.as_ref().and_then(|t| t(r)) {
+        let placed = match self.transform.as_ref().and_then(|t| t(r)) {
             Some(matrix) => RenderNode::transform_with(matrix, [composed]),
             None => composed,
+        };
+        // The element wraps everything, so a document backend finds the transform and the layer *inside* it
+        // and folds them into the box's own style rather than inventing a wrapper for each.
+        if ui_tree::element_capture() {
+            RenderNode::element(
+                renderer_core::ElementId(self.node.into()),
+                self.semantics(),
+                [placed],
+            )
+        } else {
+            placed
         }
     }
 

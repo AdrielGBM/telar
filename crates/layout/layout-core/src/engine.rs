@@ -15,10 +15,9 @@ pub type MeasureFn = Box<dyn FnMut(f32) -> (f32, f32)>;
 pub struct LayoutEngine {
     tree: TaffyTree<MeasureFn>,
     direction: Direction,
-    /// Every node's single current intent — a logical edge or out-of-band mutator state — that every path pushing a style to taffy resolves from; a node needing neither pays nothing (see [`LogicalStyle::needs_tracking`]).
+    /// What every node was asked for, which every path pushing a style to taffy resolves from. See
+    /// [`current_style`](Self::current_style) for why it is every node and not only those needing it.
     styles: FxHashMap<NodeId, LayoutStyle>,
-    /// Plain direction-following rows, cheaper than a `styles` entry until one acquires other tracked state.
-    directional_rows: FxHashSet<NodeId>,
     /// Every node this engine currently owns. Kept because taffy has no total way to ask: `style()` indexes
     /// its slot map and panics on a freed key rather than answering, so there is nothing to guard with. See
     /// [`alive`](Self::alive) for why anything asks at all.
@@ -31,7 +30,6 @@ impl LayoutEngine {
             tree: TaffyTree::new(),
             direction: Direction::default(),
             styles: FxHashMap::default(),
-            directional_rows: FxHashSet::default(),
             live: FxHashSet::default(),
         }
     }
@@ -51,19 +49,6 @@ impl LayoutEngine {
             return false;
         }
         self.direction = direction;
-        let rows = std::mem::take(&mut self.directional_rows);
-        for &node in &rows {
-            if let Some(current) = self.style_of(node) {
-                let mut style = current.clone();
-                style.flex_direction = if direction.is_rtl() {
-                    taffy::FlexDirection::RowReverse
-                } else {
-                    taffy::FlexDirection::Row
-                };
-                let _ = self.tree.set_style(node, style);
-            }
-        }
-        self.directional_rows = rows;
         let styles = std::mem::take(&mut self.styles);
         for (&node, style) in &styles {
             self.push_style(node, style);
@@ -72,34 +57,26 @@ impl LayoutEngine {
         true
     }
 
-    /// Files `style` under `styles` or `directional_rows` depending on what it needs tracked for later.
+    /// Records the intent this node was built from, which every later push resolves again.
     fn track(&mut self, node: NodeId, style: LayoutStyle) {
         self.live.insert(node);
-        if style.logical.needs_tracking() {
-            self.directional_rows.remove(&node);
-            self.styles.insert(node, style);
-            return;
-        }
-        self.styles.remove(&node);
-        if style.logical.row_follows_direction {
-            self.directional_rows.insert(node);
-        } else {
-            self.directional_rows.remove(&node);
-        }
+        self.styles.insert(node, style);
     }
 
-    /// The node's tracked style, or one reconstructed from its live taffy style if it never needed tracking.
+    /// The intent this node was built from.
+    ///
+    /// Every node keeps one — including those needing nothing resolved — so this is exact rather than
+    /// reconstructed. It costs one style per node, which is what taffy already holds, and buys two things:
+    /// a direction flip re-resolves from what was written instead of trying to un-swap edges it can no
+    /// longer tell apart, and a backend whose output is a document can ask what a box was *asked* for
+    /// rather than only where it ended up.
     fn current_style(&self, node: NodeId) -> LayoutStyle {
-        if let Some(style) = self.styles.get(&node) {
-            return style.clone();
-        }
-        LayoutStyle {
-            inner: self.tree.style(node).cloned().unwrap_or_default(),
-            logical: crate::style::LogicalStyle {
-                row_follows_direction: self.directional_rows.contains(&node),
-                ..Default::default()
-            },
-        }
+        self.styles.get(&node).cloned().unwrap_or_default()
+    }
+
+    /// The intent `node` was built from, for a caller that wants to read it rather than change it.
+    pub fn declared_style(&self, node: NodeId) -> Option<&LayoutStyle> {
+        self.styles.get(&node)
     }
 
     /// Resolves `style` and pushes it to taffy, placing the leading margin — `resolve` cannot, since that needs the parent's axis to know which physical edge is "leading".
@@ -135,7 +112,6 @@ impl LayoutEngine {
     fn forget(&mut self, node: NodeId) {
         self.live.remove(&node);
         self.styles.remove(&node);
-        self.directional_rows.remove(&node);
     }
 
     pub fn new_leaf(&mut self, style: LayoutStyle) -> Result<NodeId, LayoutError> {

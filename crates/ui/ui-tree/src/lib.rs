@@ -1,10 +1,12 @@
 mod component;
+mod element;
 mod overlay_dispatch;
 mod render_node;
 mod segment;
 mod tree;
 
 pub use component::{Component, EventResult};
+pub use element::{element_capture, set_element_capture};
 pub use overlay_dispatch::{
     OverlayContext, OverlayGuard, OverlaySink, dispatch_overlays, register_overlay,
     unregister_overlay,

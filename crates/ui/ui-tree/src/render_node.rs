@@ -70,6 +70,16 @@ pub enum RenderNode {
         backdrop_blur: f32,
         children: NodeVec,
     },
+    /// A box, for a backend whose output is a document: its identity, what it means, and what it holds.
+    ///
+    /// Emitted only while [`element_capture`](crate::element_capture) is on. A rasteriser flattens straight
+    /// through it — the commands inside are already positioned — so the only cost where nobody reads it is
+    /// not building it at all.
+    Element {
+        id: renderer_core::ElementId,
+        semantics: std::sync::Arc<renderer_core::Semantics>,
+        children: NodeVec,
+    },
     // A portal: its subtree is hoisted to the top layer at compose time (drawn last, above everything, and
     // escaping any ancestor clip/transform/layer). Used for overlays — dropdowns, modals, drawers, toasts.
     // Positioning is the caller's job (lay the content out where it should appear, e.g. an absolute-fill box).
@@ -170,6 +180,19 @@ impl RenderNode {
         Self::Layer {
             opacity,
             backdrop_blur,
+            children: NodeVec::collect(children),
+        }
+    }
+
+    /// Wraps `children` as one box a document backend can reconcile. See [`RenderNode::Element`].
+    pub fn element(
+        id: renderer_core::ElementId,
+        semantics: std::sync::Arc<renderer_core::Semantics>,
+        children: impl IntoIterator<Item = RenderNode>,
+    ) -> Self {
+        Self::Element {
+            id,
+            semantics,
             children: NodeVec::collect(children),
         }
     }
