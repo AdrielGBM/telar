@@ -115,3 +115,34 @@ mod tests {
         assert_eq!(provider.cache_dir(), None);
     }
 }
+
+/// The directories the host operating system keeps for a user's applications.
+///
+/// Lives here rather than in a platform adapter because it is not one platform's answer: every backend that
+/// runs as an ordinary process — a windowed app, a terminal app, a tool — wants exactly these, and each
+/// having its own copy is one more place for them to drift apart.
+#[cfg(feature = "system-paths")]
+pub struct SystemPaths;
+
+#[cfg(feature = "system-paths")]
+impl AppPathsProvider for SystemPaths {
+    fn config_dir(&self) -> Option<PathBuf> {
+        dirs::config_dir()
+    }
+
+    fn data_dir(&self) -> Option<PathBuf> {
+        dirs::data_dir()
+    }
+
+    fn cache_dir(&self) -> Option<PathBuf> {
+        dirs::cache_dir()
+    }
+
+    fn state_dir(&self) -> Option<PathBuf> {
+        dirs::state_dir().or_else(dirs::data_dir)
+    }
+
+    fn runtime_dir(&self) -> Option<PathBuf> {
+        dirs::runtime_dir()
+    }
+}

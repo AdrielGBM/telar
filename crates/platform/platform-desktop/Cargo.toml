@@ -14,13 +14,12 @@ repository = { workspace = true }
 accesskit = "0.24.1"
 accesskit_winit = "0.33.2"
 arboard = { version = "3.6.1", default-features = false, features = ["wayland-data-control"] }
-dirs = "6.0.0"
 geometry-core = { workspace = true }
 platform-core = { workspace = true }
 platform-winit = { workspace = true }
 renderer-core = { workspace = true }
 rfd = { version = "0.17.2", default-features = false, features = ["xdg-portal"] }
-services-core = { workspace = true }
+services-core = { workspace = true, features = ["system-paths"] }
 tracing = { workspace = true }
 winit = { workspace = true }
 

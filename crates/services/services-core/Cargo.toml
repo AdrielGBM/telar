@@ -11,6 +11,7 @@ license = { workspace = true }
 repository = { workspace = true }
 
 [dependencies]
+dirs = { version = "6.0.0", optional = true }
 reactive-core.workspace = true
 reactive-local = { workspace = true }
 rustc-hash = { workspace = true, optional = true }
@@ -21,3 +22,6 @@ tracing.workspace = true
 default = []
 # Dependency-injection scope/registry. Off by default; no runtime consumer wires it yet, so it stays opt-in to keep the default build lean.
 di = ["dep:rustc-hash", "dep:thiserror"]
+# The host OS's user directories. Opt-in: a target with no filesystem (the web) must not link a crate
+# whose whole job is to name paths on one.
+system-paths = ["dep:dirs"]

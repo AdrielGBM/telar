@@ -9,6 +9,8 @@ mod scope;
 
 pub use clipboard::{Clipboard, clipboard, clipboard_text, set_clipboard, set_clipboard_text};
 pub use dialogs::{FileDialog, FileDialogs, FileFilter, file_dialogs, set_file_dialogs};
+#[cfg(feature = "system-paths")]
+pub use paths::SystemPaths;
 pub use paths::{AppPathsProvider, NoPaths};
 #[cfg(feature = "di")]
 pub use registry::ServiceError;
