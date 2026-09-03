@@ -51,6 +51,7 @@ fn default_dev_command() -> TelarCommand {
                 features: None,
                 target: Target::Desktop,
                 backend: None,
+                renderer: None,
                 cargo_args: vec![],
             },
             release: false,
@@ -72,6 +73,7 @@ fn run_dev_cmd(args: DevArgs) {
         features,
         target,
         backend,
+        renderer,
         cargo_args: extra,
     } = common;
     let mut cargo_args = build_cargo_args(&package, release, &features);
@@ -90,7 +92,7 @@ fn run_dev_cmd(args: DevArgs) {
             Some(matches!(devtools, DevtoolsArg::On));
     }
     if target == Target::Web {
-        run_web_dev(cargo_args, config, WEB_DEV_PORT);
+        run_web_dev(cargo_args, config, WEB_DEV_PORT, renderer);
     }
     run_hot_loop(
         HotMode::Dev,
@@ -137,6 +139,7 @@ fn run_preview_cmd(args: PreviewArgs) {
         features,
         target,
         backend,
+        renderer,
         cargo_args: extra,
     } = common;
     let mut cargo_args = build_cargo_args(&package, release, &features);
@@ -148,6 +151,8 @@ fn run_preview_cmd(args: PreviewArgs) {
     if let Some(backend) = backend {
         config.backend = Some(backend);
     }
+    // A preview renders one component in a window of its own; there is no page to draw it as a document.
+    let _ = renderer;
     run_hot_loop(
         HotMode::Preview,
         HotLoopOpts {
@@ -165,6 +170,7 @@ fn run_test_cmd(args: TestArgs) -> ! {
         features,
         target,
         backend,
+        renderer,
         cargo_args: extra,
     } = common;
     if matches!(target, Target::Android) {
@@ -178,7 +184,7 @@ fn run_test_cmd(args: TestArgs) -> ! {
     cargo_args.extend(build_cargo_args(&package, release, &features));
     cargo_args.extend(extra);
     // No TELAR_RENDERER_BACKEND: the test host never instantiates a renderer, and that value is read via option_env!, so setting it would change the build fingerprint and force a needless recompile.
-    let _ = backend;
+    let _ = (backend, renderer);
     eprintln!("[cargo-telar] Running component render tests...");
     let status = Command::new("cargo")
         .args(&cargo_args)
@@ -206,6 +212,7 @@ fn run_build_cmd(args: BuildArgs) -> ! {
         features,
         target,
         backend,
+        renderer,
         cargo_args: extra,
     } = common;
     let mut android = matches!(target, Target::Android);
@@ -220,7 +227,7 @@ fn run_build_cmd(args: BuildArgs) -> ! {
         }
         let mut cargo_args = build_cargo_args(&package, true, &features);
         cargo_args.extend(extra);
-        build_web(cargo_args, load_config(&[]), true);
+        build_web(cargo_args, load_config(&[]), true, renderer);
     }
 
     // All desktop formats reject `--target android`; `--format apk` implies Android. Host-OS gating (dmg → macOS, nsis → Windows) happens in each build fn since rsx does not cross-compile.

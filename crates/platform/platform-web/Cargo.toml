@@ -40,6 +40,7 @@ features = [
     "FocusEvent",
     "HtmlCanvasElement",
     "HtmlElement",
+    "Location",
     "HtmlInputElement",
     "InputEvent",
     "KeyboardEvent",

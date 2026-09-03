@@ -2,6 +2,7 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 
 use super::{dist_dir, tool_missing};
+use crate::runner::cli::WebRenderer;
 use crate::runner::config::{TelarConfig, resolve_package, split_android_flag};
 
 /// The name `wasm-bindgen` gives its output, and what the generated page imports.
@@ -13,8 +14,13 @@ const BUNDLE: &str = "app";
 /// Three tools rather than one, because that is what the toolchain is: cargo produces a wasm module whose
 /// imports are `wasm-bindgen`'s ABI, `wasm-bindgen` writes the JavaScript that satisfies them, and `wasm-opt`
 /// shrinks the result. The first two are required; the third is skipped with a note if it is not installed.
-pub(crate) fn build_web(cargo_args: Vec<String>, config: TelarConfig, release: bool) -> ! {
-    let out = match build_web_bundle(cargo_args, config, release) {
+pub(crate) fn build_web(
+    cargo_args: Vec<String>,
+    config: TelarConfig,
+    release: bool,
+    renderer: Option<WebRenderer>,
+) -> ! {
+    let out = match build_web_bundle(cargo_args, config, release, renderer) {
         Ok(out) => out,
         Err(e) => {
             eprintln!("[cargo-telar] {e}");
@@ -30,6 +36,7 @@ pub(crate) fn build_web_bundle(
     cargo_args: Vec<String>,
     _config: TelarConfig,
     release: bool,
+    renderer: Option<WebRenderer>,
 ) -> Result<PathBuf, String> {
     let (_android, rest) = split_android_flag(cargo_args);
 
@@ -78,7 +85,7 @@ pub(crate) fn build_web_bundle(
 
     run_wasm_bindgen(&module, &out)?;
     optimise(&out.join(format!("{BUNDLE}_bg.wasm")), release);
-    write_page(&out, &resolved.name())?;
+    write_page(&out, &resolved.name(), renderer)?;
     Ok(out)
 }
 
@@ -143,7 +150,7 @@ fn optimise(module: &Path, release: bool) {
 ///
 /// A project that wants control puts a `web/index.html` beside its manifest, and this leaves it alone: the
 /// generated one is a starting point, not a thing to fight.
-fn write_page(out: &Path, app_name: &str) -> Result<(), String> {
+fn write_page(out: &Path, app_name: &str, renderer: Option<WebRenderer>) -> Result<(), String> {
     let page = out.join("index.html");
     let provided = Path::new("web").join("index.html");
     if provided.exists() {
@@ -151,11 +158,16 @@ fn write_page(out: &Path, app_name: &str) -> Result<(), String> {
             .map(|_| ())
             .map_err(|e| format!("could not copy {}: {e}", provided.display()));
     }
-    std::fs::write(&page, default_page(app_name))
+    std::fs::write(&page, default_page(app_name, renderer))
         .map_err(|e| format!("could not write {}: {e}", page.display()))
 }
 
-fn default_page(app_name: &str) -> String {
+fn default_page(app_name: &str, renderer: Option<WebRenderer>) -> String {
+    // Stamped on the element rather than compiled in, so the same bundle can be loaded either way — and a
+    // `?telar-renderer=` on the URL still wins over it.
+    let choice = renderer
+        .map(|r| format!(" data-telar-renderer=\"{}\"", r.as_str()))
+        .unwrap_or_default();
     format!(
         r#"<!doctype html>
 <html lang="en">
@@ -169,7 +181,7 @@ fn default_page(app_name: &str) -> String {
     </style>
   </head>
   <body>
-    <div id="telar-root"></div>
+    <div id="telar-root"{choice}></div>
     <script type="module">
       import init from './{BUNDLE}.js';
       // `init` instantiates the module and returns its exports; `telar_start` is the entry `telar::app!`

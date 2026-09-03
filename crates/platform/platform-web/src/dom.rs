@@ -41,6 +41,30 @@ pub fn host(selector: Option<&str>) -> Result<web_sys::HtmlElement, String> {
     }
 }
 
+/// A setting the *page* makes rather than the application: `?telar-<name>=<value>` in the URL, or
+/// `data-telar-<name>` on the host element.
+///
+/// The browser's answer to `TELAR_TARGET`. A build carries every frontend it was compiled with, and which
+/// one runs should not need a rebuild to change — here the page says, and a link can say over it, which is
+/// why the query wins over the attribute.
+pub fn page_setting(host: &web_sys::HtmlElement, name: &str) -> Option<String> {
+    query_value(name).or_else(|| host.get_attribute(&format!("data-telar-{name}")))
+}
+
+fn query_value(name: &str) -> Option<String> {
+    let search = window().location().search().ok()?;
+    let key = format!("telar-{name}");
+    search
+        .trim_start_matches('?')
+        .split('&')
+        .find_map(|pair| match pair.split_once('=') {
+            Some((k, value)) if k == key => Some(value.to_string()),
+            // A bare `?telar-audit` is the setting turned on, which is how a flag reads in a URL.
+            None if pair == key => Some(String::new()),
+            _ => None,
+        })
+}
+
 /// Whether the user's system asks for a dark interface.
 pub fn prefers_dark() -> Option<bool> {
     window()

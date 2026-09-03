@@ -37,6 +37,34 @@ pub enum WebRenderer {
     Document,
 }
 
+impl WebRenderer {
+    /// The choice, once the page has had its say.
+    ///
+    /// A document is not a fallback for a canvas; it is the other way of drawing an interface, and which one
+    /// a build uses is a decision the page can make and a link can override — `?telar-renderer=dom` — without
+    /// rebuilding anything. An application that named one keeps it: `Auto` is what "let somebody else decide"
+    /// is spelled as, so only it asks.
+    fn resolved(self, host: &web_sys::HtmlElement) -> Self {
+        if self != Self::Auto {
+            return self;
+        }
+        match platform_web::page_setting(host, "renderer")
+            .as_deref()
+            .map(str::trim)
+        {
+            Some("dom" | "document") => Self::Document,
+            Some("canvas" | "gpu" | "webgpu") => Self::Canvas,
+            Some(other) if !other.is_empty() && other != "auto" => {
+                tracing::warn!(
+                    "`{other}` is not a renderer this build has; the choice is `dom`, `canvas` or `auto`"
+                );
+                Self::Auto
+            }
+            _ => Self::Auto,
+        }
+    }
+}
+
 /// Mounts an app on the page and returns, leaving it running on the browser's animation-frame loop.
 ///
 /// There is no filesystem behind [`NoPaths`], which is deliberate rather than a stub: the preferences file
@@ -65,7 +93,7 @@ pub fn run_web_app_with_name<A: App>(
     // The choice has to be made before the app is built: it decides what measures text, and text is measured
     // while the tree is being built. Asking the browser costs one promise, and answering wrong costs a page
     // that never draws.
-    let wanted = options.renderer;
+    let wanted = options.renderer.resolved(&host);
     let host_for_start = host.clone();
     wasm_bindgen_futures::spawn_local(async move {
         let document = match wanted {

@@ -9,6 +9,7 @@ use std::time::Duration;
 
 use notify::{Config as NotifyConfig, EventKind, RecommendedWatcher, RecursiveMode, Watcher};
 
+use super::cli::WebRenderer;
 use super::config::TelarConfig;
 use super::package::build_web_bundle;
 
@@ -20,8 +21,13 @@ const SETTLE: Duration = Duration::from_millis(150);
 /// live-reload protocol: no websocket, no client library, and nothing to go stale.
 static BUILD: AtomicU64 = AtomicU64::new(1);
 
-pub(crate) fn run_web_dev(cargo_args: Vec<String>, config: TelarConfig, port: u16) -> ! {
-    let dist = match build_web_bundle(cargo_args.clone(), config.clone(), false) {
+pub(crate) fn run_web_dev(
+    cargo_args: Vec<String>,
+    config: TelarConfig,
+    port: u16,
+    renderer: Option<WebRenderer>,
+) -> ! {
+    let dist = match build_web_bundle(cargo_args.clone(), config.clone(), false, renderer) {
         Ok(dist) => dist,
         Err(e) => {
             eprintln!("[cargo-telar] {e}");
@@ -49,10 +55,15 @@ pub(crate) fn run_web_dev(cargo_args: Vec<String>, config: TelarConfig, port: u1
         }
     });
 
-    watch_and_rebuild(cargo_args, config, &dist)
+    watch_and_rebuild(cargo_args, config, &dist, renderer)
 }
 
-fn watch_and_rebuild(cargo_args: Vec<String>, config: TelarConfig, dist: &Path) -> ! {
+fn watch_and_rebuild(
+    cargo_args: Vec<String>,
+    config: TelarConfig,
+    dist: &Path,
+    renderer: Option<WebRenderer>,
+) -> ! {
     let (tx, rx) = mpsc::channel();
     let mut watcher = match RecommendedWatcher::new(tx, NotifyConfig::default()) {
         Ok(watcher) => watcher,
@@ -82,7 +93,7 @@ fn watch_and_rebuild(cargo_args: Vec<String>, config: TelarConfig, dist: &Path) 
         while rx.recv_timeout(SETTLE).is_ok() {}
 
         eprintln!("[cargo-telar] Rebuilding...");
-        match build_web_bundle(cargo_args.clone(), config.clone(), false) {
+        match build_web_bundle(cargo_args.clone(), config.clone(), false, renderer) {
             Ok(_) => {
                 inject_reload_poll(dist);
                 BUILD.fetch_add(1, Ordering::Relaxed);

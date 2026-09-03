@@ -70,6 +70,9 @@ pub(crate) struct CommonArgs {
     /// Renderer backend
     #[arg(long, value_enum)]
     pub(crate) backend: Option<RendererBackend>,
+    /// Which renderer a browser build draws with (`--target web`)
+    #[arg(long, value_enum)]
+    pub(crate) renderer: Option<WebRenderer>,
     /// Extra args passed directly to cargo (after --)
     #[arg(last = true)]
     pub(crate) cargo_args: Vec<String>,
@@ -147,6 +150,29 @@ pub(crate) enum Target {
     Tui,
     /// A browser, through WebAssembly.
     Web,
+}
+
+/// How a browser build draws. Not a fallback order: a document is the other way of drawing an interface,
+/// and this is the build saying which one it wants. The page can still say otherwise at load time with
+/// `?telar-renderer=`.
+#[derive(Clone, Copy, ValueEnum)]
+pub(crate) enum WebRenderer {
+    /// Pixels where the browser offers a GPU adapter, a document where it does not.
+    Auto,
+    /// Pixels on a canvas, through WebGPU.
+    Canvas,
+    /// Real elements, laid out by CSS.
+    Dom,
+}
+
+impl WebRenderer {
+    pub(crate) fn as_str(self) -> &'static str {
+        match self {
+            Self::Auto => "auto",
+            Self::Canvas => "canvas",
+            Self::Dom => "dom",
+        }
+    }
 }
 
 #[derive(Clone, ValueEnum)]
