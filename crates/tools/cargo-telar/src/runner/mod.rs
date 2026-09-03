@@ -12,6 +12,7 @@ mod fmt;
 mod migrate;
 mod package;
 mod watch;
+mod web_dev;
 
 use android::build_android_package;
 use check::run_check_cmd;
@@ -23,8 +24,9 @@ use config::load_config;
 use doctor::run_doctor_cmd;
 use fmt::run_fmt_cmd;
 use migrate::run_migrate_cmd;
-use package::{build_appimage, build_deb, build_desktop_dir, build_dmg, build_nsis};
+use package::{build_appimage, build_deb, build_desktop_dir, build_dmg, build_nsis, build_web};
 use watch::{HotLoopOpts, HotMode, run_hot_loop};
+use web_dev::run_web_dev;
 
 pub fn run(args: Vec<String>) {
     let cli = Cli::parse_from(std::iter::once("cargo-telar".to_string()).chain(args));
@@ -86,6 +88,9 @@ fn run_dev_cmd(args: DevArgs) {
     if let Some(devtools) = devtools {
         config.dev.get_or_insert_with(Default::default).devtools =
             Some(matches!(devtools, DevtoolsArg::On));
+    }
+    if target == Target::Web {
+        run_web_dev(cargo_args, config, WEB_DEV_PORT);
     }
     run_hot_loop(
         HotMode::Dev,
@@ -206,6 +211,18 @@ fn run_build_cmd(args: BuildArgs) -> ! {
     let mut android = matches!(target, Target::Android);
     let terminal = target == Target::Tui;
 
+    if target == Target::Web {
+        if format.is_some() {
+            eprintln!(
+                "[cargo-telar] `--format` is for native installers; a web build is a directory of files."
+            );
+            std::process::exit(2);
+        }
+        let mut cargo_args = build_cargo_args(&package, true, &features);
+        cargo_args.extend(extra);
+        build_web(cargo_args, load_config(&[]), true);
+    }
+
     // All desktop formats reject `--target android`; `--format apk` implies Android. Host-OS gating (dmg → macOS, nsis → Windows) happens in each build fn since rsx does not cross-compile.
     match &format {
         Some(
@@ -290,3 +307,7 @@ fn select_frontend(target: Target, cargo_args: &mut Vec<String>) -> bool {
     unsafe { std::env::set_var("TELAR_TARGET", "tui") };
     true
 }
+
+/// Where `cargo telar dev --target web` serves from. Fixed rather than chosen: a page reloaded by hand, a
+/// bookmark and a second terminal all have to name the same address.
+const WEB_DEV_PORT: u16 = 8080;

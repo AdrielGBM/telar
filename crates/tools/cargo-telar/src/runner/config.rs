@@ -37,7 +37,7 @@ pub(crate) struct DevConfig {
     pub devtools: Option<bool>,
 }
 
-#[derive(Deserialize, Default)]
+#[derive(Deserialize, Default, Clone)]
 pub(crate) struct TelarConfig {
     #[serde(default)]
     pub backend: Option<RendererBackend>,

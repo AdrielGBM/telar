@@ -145,6 +145,8 @@ pub(crate) enum Target {
     Android,
     /// The terminal the command was run from.
     Tui,
+    /// A browser, through WebAssembly.
+    Web,
 }
 
 #[derive(Clone, ValueEnum)]

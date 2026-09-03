@@ -9,11 +9,13 @@ mod appimage;
 mod deb;
 mod dmg;
 mod nsis;
+mod web;
 
 pub(crate) use appimage::build_appimage;
 pub(crate) use deb::build_deb;
 pub(crate) use dmg::build_dmg;
 pub(crate) use nsis::build_nsis;
+pub(crate) use web::{build_web, build_web_bundle};
 
 pub(crate) fn package_lib_path(
     workspace_root: &Path,
@@ -205,4 +207,9 @@ mod tests {
         let with_icon = desktop_entry_file("myapp", true);
         assert!(with_icon.contains("Icon=myapp"));
     }
+}
+
+/// The message for a tool the build needs and cannot find.
+pub(crate) fn tool_missing(tool: &str, install: &str) -> String {
+    format!("`{tool}` is not installed, and the web build needs it.\n  Install it with: {install}")
 }
