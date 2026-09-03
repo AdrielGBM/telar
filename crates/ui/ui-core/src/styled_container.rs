@@ -195,17 +195,24 @@ impl StyledContainer {
         ))
     }
 
-    /// What this box is, for a backend whose output is a document.
+    /// This box, for a backend whose output is a document: what it is, and what it asked layout for.
     ///
-    /// Derived rather than declared: a box that answers a press *is* a button whether or not anybody said
-    /// so, and one that declines pointer events is one the document should let events through.
-    fn semantics(&self) -> std::sync::Arc<renderer_core::Semantics> {
+    /// The role is derived rather than declared — a box that answers a press *is* a button whether or not
+    /// anybody said so, and one that declines pointer events is one the document should let events through.
+    fn element(&self) -> std::sync::Arc<renderer_core::Element> {
         let mut semantics = renderer_core::Semantics::group();
         if self.press.is_set() {
             semantics.role = renderer_core::Role::Button;
         }
         semantics.click_through = self.click_through;
-        std::sync::Arc::new(semantics)
+        let layout = layout_reactive::declared_css(self.node)
+            .map(|css| css.into_string())
+            .unwrap_or_default();
+        std::sync::Arc::new(renderer_core::Element::new(
+            renderer_core::ElementId(self.node.into()),
+            semantics,
+            layout,
+        ))
     }
 
     /// Whether the box is currently refusing input. `None` — the common case — answers without a dyn call on
@@ -796,11 +803,7 @@ impl Component for StyledContainer {
         // The element wraps everything, so a document backend finds the transform and the layer *inside* it
         // and folds them into the box's own style rather than inventing a wrapper for each.
         if ui_tree::element_capture() {
-            RenderNode::element(
-                renderer_core::ElementId(self.node.into()),
-                self.semantics(),
-                [placed],
-            )
+            RenderNode::element(self.element(), [placed])
         } else {
             placed
         }
@@ -2535,6 +2538,111 @@ mod tests {
             }
             _ => None,
         }
+    }
+
+    /// The elements a view emits, outermost first, as `(id, css)`.
+    fn elements(view: &RenderNode) -> Vec<(u64, String)> {
+        let mut out = Vec::new();
+        collect_elements(view, &mut out);
+        out
+    }
+
+    fn collect_elements(node: &RenderNode, out: &mut Vec<(u64, String)>) {
+        match node {
+            RenderNode::Element { element, children } => {
+                out.push((element.id.0, element.layout.to_string()));
+                for child in children.iter() {
+                    collect_elements(child, out);
+                }
+            }
+            RenderNode::Group { children }
+            | RenderNode::Transform { children, .. }
+            | RenderNode::Clip { children, .. }
+            | RenderNode::Layer { children, .. }
+            | RenderNode::Overlay { children } => {
+                for child in children.iter() {
+                    collect_elements(child, out);
+                }
+            }
+            _ => {}
+        }
+    }
+
+    /// A document backend is handed what the box *asked layout for*, not the rect layout produced — that is
+    /// what lets the browser lay it out itself. Checked here, with no browser in sight, which is the whole
+    /// reason capture is a flag and not a build.
+    #[test]
+    fn a_captured_box_carries_the_css_it_asked_for() {
+        reset_layout_runtime();
+        let card = StyledContainer::new(
+            LayoutStyle::new()
+                .flex_row()
+                .width(300.0)
+                .padding_all(24.0)
+                .gap(8.0),
+            |_r| RectStyle::default(),
+            vec![],
+        )
+        .unwrap();
+
+        let was = ui_tree::set_element_capture(true);
+        let captured = elements(&card.view());
+        ui_tree::set_element_capture(was);
+        assert!(!ui_tree::element_capture(), "the flag is restored");
+
+        assert_eq!(captured.len(), 1, "one box, one element: {captured:?}");
+        let css = &captured[0].1;
+        for declaration in [
+            "display:flex",
+            "flex-direction:row",
+            "width:300px",
+            "padding:24px",
+            "gap:8px",
+        ] {
+            assert!(
+                css.contains(declaration),
+                "{declaration} missing from {css}"
+            );
+        }
+    }
+
+    #[test]
+    fn a_box_emits_no_element_while_capture_is_off() {
+        reset_layout_runtime();
+        let card =
+            StyledContainer::new(LayoutStyle::new(), |_r| RectStyle::default(), vec![]).unwrap();
+        assert!(
+            elements(&card.view()).is_empty(),
+            "a desktop build pays for none of this"
+        );
+    }
+
+    #[test]
+    fn nested_boxes_nest_their_elements() {
+        reset_layout_runtime();
+        let inner = StyledContainer::new(
+            LayoutStyle::new().height(10.0),
+            |_r| RectStyle::default(),
+            vec![],
+        )
+        .unwrap();
+        let inner_node = inner.layout_node();
+        let outer = StyledContainer::new(
+            LayoutStyle::new().flex_column(),
+            |_r| RectStyle::default(),
+            vec![Box::new(inner)],
+        )
+        .unwrap();
+        let outer_node = outer.layout_node();
+
+        let was = ui_tree::set_element_capture(true);
+        // The child is behind a segment boundary, so the parent's own view holds one element and names it.
+        let captured = elements(&outer.view());
+        ui_tree::set_element_capture(was);
+
+        assert_eq!(captured.len(), 1);
+        assert_eq!(captured[0].0, u64::from(outer_node));
+        assert_ne!(u64::from(inner_node), u64::from(outer_node));
     }
 
     fn fill_color(view: &RenderNode) -> Color {

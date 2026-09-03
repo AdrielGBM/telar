@@ -24,7 +24,7 @@ pub use culling::{FontMetrics, extend_bounds};
 #[doc(hidden)]
 pub use dirty::ScrollBlit;
 pub use draw_state::{DrawState, for_each_with_matrix, transform_clip_rect};
-pub use element::{ElementId, Role, Semantics};
+pub use element::{Element, ElementId, Role, Semantics};
 pub use error::RendererError;
 pub use font_config::FontConfig;
 pub use geometry_core::{BorderRadius, Color};

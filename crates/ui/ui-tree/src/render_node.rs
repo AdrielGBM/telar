@@ -76,8 +76,7 @@ pub enum RenderNode {
     /// through it — the commands inside are already positioned — so the only cost where nobody reads it is
     /// not building it at all.
     Element {
-        id: renderer_core::ElementId,
-        semantics: std::sync::Arc<renderer_core::Semantics>,
+        element: std::sync::Arc<renderer_core::Element>,
         children: NodeVec,
     },
     // A portal: its subtree is hoisted to the top layer at compose time (drawn last, above everything, and
@@ -186,13 +185,11 @@ impl RenderNode {
 
     /// Wraps `children` as one box a document backend can reconcile. See [`RenderNode::Element`].
     pub fn element(
-        id: renderer_core::ElementId,
-        semantics: std::sync::Arc<renderer_core::Semantics>,
+        element: std::sync::Arc<renderer_core::Element>,
         children: impl IntoIterator<Item = RenderNode>,
     ) -> Self {
         Self::Element {
-            id,
-            semantics,
+            element,
             children: NodeVec::collect(children),
         }
     }

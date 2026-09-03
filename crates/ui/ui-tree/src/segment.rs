@@ -275,16 +275,12 @@ fn flatten_segment(
             // Opens and closes the box in the command stream, so the structure survives the flattening the
             // way a clip's does — and is compared by the same per-command diff, so a widget that moved to a
             // different parent counts as changed output.
-            RenderNode::Element {
-                id,
-                semantics,
-                children,
-            } => {
+            RenderNode::Element { element, children } => {
                 stack.push(Step::Node(RenderNode::Primitive(DrawCommand::PopElement)));
                 for child in children.into_iter().rev() {
                     stack.push(Step::Node(child));
                 }
-                emit_command!(DrawCommand::PushElement { id, semantics });
+                emit_command!(DrawCommand::PushElement { element });
             }
             // Everything emitted until the matching EndOverlay marker is overlay content (hoisted at compose).
             RenderNode::Overlay { children } => {

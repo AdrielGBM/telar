@@ -68,3 +68,28 @@ impl Semantics {
         self
     }
 }
+
+/// One box in a frame: what it is, what it was asked for, and what to call it.
+///
+/// Carries its own layout rather than leaving a document backend to look it up. Two things follow. The
+/// backend becomes a pure function of the command stream — it needs no access to the layout engine, and can
+/// therefore be tested against a stream built on a machine with no browser. And the string is built where
+/// the style is already known, once per re-render of the widget that owns it, rather than once per frame.
+#[derive(Clone, PartialEq, Eq, Hash, Debug)]
+pub struct Element {
+    pub id: ElementId,
+    pub semantics: Semantics,
+    /// The box's layout, as CSS declarations — `display:flex;gap:8px;` and so on. Empty where the target
+    /// does not want them, which is every target that positions the box itself.
+    pub layout: Box<str>,
+}
+
+impl Element {
+    pub fn new(id: ElementId, semantics: Semantics, layout: impl Into<Box<str>>) -> Self {
+        Self {
+            id,
+            semantics,
+            layout: layout.into(),
+        }
+    }
+}

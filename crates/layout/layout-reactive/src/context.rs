@@ -1434,3 +1434,17 @@ mod tests {
         );
     }
 }
+
+/// The CSS for what `node` was asked for, resolved against the direction in force.
+///
+/// For a backend whose output is a document rather than pixels: it is handed the box's intent, not the rect
+/// the intent produced, so the browser can lay the box out itself. `None` for a node this runtime does not
+/// own — a widget mid-teardown, or one built on another surface.
+pub fn declared_css(node: NodeId) -> Option<layout_core::Css> {
+    let direction = crate::direction::current_direction();
+    with_runtime(|rt| {
+        rt.engine
+            .declared_style(node)
+            .map(|style| style.to_css(direction))
+    })
+}

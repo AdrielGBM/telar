@@ -133,9 +133,8 @@ fn scale_command(cmd: &DrawCommand, sf: f32) -> DrawCommand {
         },
         DrawCommand::PopLayer => DrawCommand::PopLayer,
         // Markers, not geometry: an element's box is described by the commands inside it, which scale.
-        DrawCommand::PushElement { id, semantics } => DrawCommand::PushElement {
-            id: *id,
-            semantics: semantics.clone(),
+        DrawCommand::PushElement { element } => DrawCommand::PushElement {
+            element: element.clone(),
         },
         DrawCommand::PopElement => DrawCommand::PopElement,
     }

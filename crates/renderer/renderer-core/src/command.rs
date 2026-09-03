@@ -3,8 +3,8 @@ use std::sync::Arc;
 use geometry_core::{Point, Rect};
 
 use crate::{
-    BorderRadius, ElementId, ImageData, PathData, PathStyle, Raster, RectStyle, Semantics, Span,
-    Stroke, TextStyle,
+    BorderRadius, Element, ImageData, PathData, PathStyle, Raster, RectStyle, Span, Stroke,
+    TextStyle,
 };
 
 #[derive(Debug, Clone)]
@@ -62,8 +62,7 @@ pub enum DrawCommand {
     /// between them are already positioned. What a document backend gets is the structure the flattening
     /// would otherwise have thrown away, and the identity that lets it move an element instead of rebuilding it.
     PushElement {
-        id: ElementId,
-        semantics: Arc<Semantics>,
+        element: Arc<Element>,
     },
     PopElement,
 }
@@ -158,15 +157,9 @@ impl PartialEq for DrawCommand {
             ) => o1 == o2 && b1 == b2,
             (DrawCommand::PopLayer, DrawCommand::PopLayer) => true,
             (
-                DrawCommand::PushElement {
-                    id: id1,
-                    semantics: s1,
-                },
-                DrawCommand::PushElement {
-                    id: id2,
-                    semantics: s2,
-                },
-            ) => id1 == id2 && (Arc::ptr_eq(s1, s2) || s1 == s2),
+                DrawCommand::PushElement { element: e1 },
+                DrawCommand::PushElement { element: e2 },
+            ) => Arc::ptr_eq(e1, e2) || e1 == e2,
             (DrawCommand::PopElement, DrawCommand::PopElement) => true,
             _ => false,
         }

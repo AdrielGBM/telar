@@ -245,9 +245,15 @@ impl Component for Text {
         // A paragraph is a box of its own to layout, so it has to be one to a document backend too:
         // dropping the text straight into its parent would lose the width and the flex share it was given.
         if ui_tree::element_capture() {
+            let layout = layout_reactive::declared_css(self.leaf.node)
+                .map(|css| css.into_string())
+                .unwrap_or_default();
             RenderNode::element(
-                renderer_core::ElementId(self.leaf.node.into()),
-                std::sync::Arc::new(renderer_core::Semantics::group()),
+                std::sync::Arc::new(renderer_core::Element::new(
+                    renderer_core::ElementId(self.leaf.node.into()),
+                    renderer_core::Semantics::group(),
+                    layout,
+                )),
                 [placed],
             )
         } else {
