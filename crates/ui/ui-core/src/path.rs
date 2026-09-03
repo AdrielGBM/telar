@@ -53,8 +53,10 @@ impl Component for Path {
         if rect.width <= 0.0 || rect.height <= 0.0 {
             return RenderNode::Empty;
         }
-        self.leaf
-            .at_layout_position(RenderNode::path((self.data)(), (self.style)()))
+        self.leaf.at_layout_position_as(
+            renderer_core::Semantics::drawing,
+            RenderNode::path((self.data)(), (self.style)()),
+        )
     }
 
     fn on_event(&mut self, _event: &Event) -> EventResult {

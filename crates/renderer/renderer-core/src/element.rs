@@ -33,8 +33,12 @@ pub enum Role {
     Heading(u8),
     /// A single-line editable field.
     TextInput,
-    /// A picture.
-    Image,
+    /// A box whose content is drawn rather than laid out: a bitmap, vector art, an immediate-mode canvas.
+    ///
+    /// Everything between it and its `PopElement` is geometry in the box's own coordinates — a document can
+    /// draw those, but it cannot place them, and reading them as boxes puts a canvas's whole artwork in the
+    /// element's background and its labels in one run of text.
+    Drawing,
     /// A region that scrolls its content.
     ScrollArea,
 }
@@ -52,6 +56,13 @@ pub struct Semantics {
 impl Semantics {
     pub fn group() -> Self {
         Self::default()
+    }
+
+    pub fn drawing() -> Self {
+        Self {
+            role: Role::Drawing,
+            ..Self::default()
+        }
     }
 
     pub fn with_role(mut self, role: Role) -> Self {

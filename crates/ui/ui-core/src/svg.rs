@@ -64,7 +64,8 @@ impl Component for Svg {
         } else {
             group
         };
-        self.leaf.at_layout_position(node)
+        self.leaf
+            .at_layout_position_as(renderer_core::Semantics::drawing, node)
     }
 
     fn on_event(&mut self, _event: &Event) -> EventResult {

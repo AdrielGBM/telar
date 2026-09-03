@@ -27,7 +27,7 @@ pub fn color(c: Color) -> String {
 
 /// A number with at most three decimals, so an animated value does not churn the string every frame with
 /// digits nobody can see.
-fn round(value: f32) -> String {
+pub fn round(value: f32) -> String {
     let rounded = (value * 1000.0).round() / 1000.0;
     if rounded.fract() == 0.0 {
         format!("{}", rounded as i64)

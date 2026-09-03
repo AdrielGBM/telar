@@ -80,7 +80,8 @@ impl Component for Canvas {
                 draw(local, crate::inherit::inherited_text_style(self.leaf.node))
             }
         };
-        self.leaf.at_layout_position(inner)
+        self.leaf
+            .at_layout_position_as(renderer_core::Semantics::drawing, inner)
     }
 
     fn on_event(&mut self, _event: &Event) -> EventResult {

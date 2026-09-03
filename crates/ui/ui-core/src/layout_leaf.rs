@@ -17,7 +17,16 @@ impl LayoutLeaf {
     }
 
     pub(crate) fn at_layout_position(&self, content: RenderNode) -> RenderNode {
-        let r = self.rect.get();
+        self.at_layout_position_as(renderer_core::Semantics::group, content)
+    }
+
+    /// As [`Self::at_layout_position`], for a leaf that is more than a box — artwork, a bitmap — and has to
+    /// say so where the box becomes an element. `semantics` is only called on that target.
+    pub(crate) fn at_layout_position_as(
+        &self,
+        semantics: impl FnOnce() -> renderer_core::Semantics,
+        content: RenderNode,
+    ) -> RenderNode {
         // Every leaf is placed through here, which is what makes this the one place a document backend has
         // to be told about them: a leaf that owns a layout node and no element is a hole in the tree the
         // browser lays out, and its siblings lose the box that was meant to contain them.
@@ -26,8 +35,10 @@ impl LayoutLeaf {
         // says where the box goes, which on that target is already what the element says. Emitting both put
         // every leaf at its layout position twice — a row of cards came out stepping diagonally down the page.
         if ui_tree::element_capture() {
-            return RenderNode::element(crate::element::of(self.node), [content]);
+            let element = crate::element::with_semantics(self.node, semantics());
+            return RenderNode::element(element, [content]);
         }
+        let r = self.rect.get();
         RenderNode::translate(r.x, r.y, [content])
     }
 }

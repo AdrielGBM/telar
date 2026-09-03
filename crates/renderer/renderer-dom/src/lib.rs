@@ -9,15 +9,25 @@
 //! What this buys over drawing pixels is everything a document is and a canvas is not: text that can be
 //! selected and found, elements a screen reader can walk, native focus, and an input method that works.
 //!
-//! Compiles to nothing off `wasm32`, so the crate sits in the workspace without pulling `web-sys` into a
-//! host build.
+//! Only the halves that touch the browser are compiled off `wasm32` — the ones that turn a style into CSS
+//! and a shape into SVG are plain string building, and are tested on the host that builds them.
 
-#![cfg(target_arch = "wasm32")]
+// The document half of the crate is absent off wasm, so what it would have called is unreachable there.
+#![cfg_attr(not(target_arch = "wasm32"), allow(dead_code))]
 
-mod metrics;
 mod paint;
+mod vector;
+
+#[cfg(target_arch = "wasm32")]
+mod bitmap;
+#[cfg(target_arch = "wasm32")]
+mod metrics;
+#[cfg(target_arch = "wasm32")]
 mod reconcile;
+#[cfg(target_arch = "wasm32")]
 mod renderer;
 
+#[cfg(target_arch = "wasm32")]
 pub use metrics::CanvasTextMetrics;
+#[cfg(target_arch = "wasm32")]
 pub use renderer::{DomRenderer, DomRendererFactory};

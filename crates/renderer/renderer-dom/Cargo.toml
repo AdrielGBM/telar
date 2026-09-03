@@ -24,6 +24,7 @@ workspace = true
 features = [
     "CanvasRenderingContext2d",
     "HtmlCanvasElement",
+    "ImageData",
     "NodeList",
     "TextMetrics",
     "CssStyleDeclaration",

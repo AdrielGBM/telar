@@ -225,8 +225,15 @@ impl ScrollCore {
                 [self.content_segment.boundary()],
             )],
         );
+        // The bars are drawn in the same space as the content, and for the same reason: an element already
+        // sits where the viewport is, so a bar placed from the page's corner would be that far outside it.
+        let bar_viewport = if ui_tree::element_capture() {
+            Rect::new(0.0, 0.0, viewport.width, viewport.height)
+        } else {
+            viewport
+        };
         let (vbar, hbar) = draw_scrollbars(
-            viewport,
+            bar_viewport,
             scroll_x,
             scroll_y,
             content_rect,

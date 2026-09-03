@@ -4,34 +4,88 @@
 //! built with: it lives as long as the widget, so a box that only moved is *moved*, and only a box that is
 //! genuinely new is created. Nothing here diffs strings against the DOM — the last style written is kept
 //! beside the node, because reading a property back out of the browser is the expensive direction.
+//!
+//! A box is a box, but not everything a box paints is one. Three things arrive inside an element: its own
+//! background, which is CSS; child boxes, which the browser lays out; and paint that is neither — a caret, a
+//! selection band, a scrollbar. The last of those become positioned children, in the order they were drawn,
+//! so what covered what on a canvas covers the same thing here.
 
+use geometry_core::Rect;
 use renderer_core::{DrawCommand, Element, Role};
 use rustc_hash::FxHashMap;
-use wasm_bindgen::JsCast;
 
 use crate::paint;
+use crate::vector::Drawing;
+
+const SVG_NS: &str = "http://www.w3.org/2000/svg";
 
 /// One element the document is currently showing.
 struct Live {
-    node: web_sys::HtmlElement,
+    node: web_sys::Element,
     /// The tag it was created with. A box whose role changes needs a different element, not a new attribute.
     tag: &'static str,
     /// What was last written to its `style` attribute, so an unchanged frame writes nothing.
     style: String,
     text: String,
+    /// The markup last written into a drawing element.
+    drawn: String,
+    /// The paint this box carries that is not a box, as the children standing in for it.
+    pieces: Vec<Piece>,
+}
+
+/// One thing an element paints inside itself that the browser has to place rather than lay out.
+struct Piece {
+    node: web_sys::Element,
+    style: String,
+    text: String,
+}
+
+/// A piece as it is collected, before the element it belongs to is closed.
+enum Painted {
+    Rect {
+        rect: Rect,
+        style: String,
+    },
+    Text {
+        rect: Rect,
+        style: String,
+        text: String,
+    },
 }
 
 /// What is being assembled while the walk is inside one element.
 struct Open {
     id: u64,
+    /// Where layout put the box, so paint that *is* the box can be told from paint that is inside it.
+    box_rect: Rect,
+    /// Set for a box whose content is drawn rather than laid out; everything inside it goes here.
+    drawing: Option<Drawing>,
     style: String,
-    text: String,
-    /// Whether the element's own background has been taken. The first `Rect` inside an element is the box's
-    /// own — it is what `StyledContainer` draws before anything else — and later ones are decorations this
-    /// backend does not yet place.
+    /// Whether the element's own background has been taken, so a box painted twice keeps the first.
     painted: bool,
-    /// How many children have been put in place, and therefore where the next one belongs.
+    /// How many child boxes have been put in place, and therefore where the next one belongs.
     placed: u32,
+    pieces: Vec<Painted>,
+}
+
+impl Open {
+    fn root() -> Self {
+        Self {
+            id: u64::MAX,
+            box_rect: Rect::new(0.0, 0.0, 0.0, 0.0),
+            drawing: None,
+            style: String::new(),
+            // The host is not Telar's to paint: an application chose its size and its background before the
+            // first frame, and a surface-wide fill would be written over both.
+            painted: true,
+            placed: 0,
+            pieces: Vec::new(),
+        }
+    }
+
+    fn is_root(&self) -> bool {
+        self.id == u64::MAX
+    }
 }
 
 pub struct Reconciler {
@@ -64,16 +118,14 @@ impl Reconciler {
         self.open.clear();
         // The host is the outermost frame, so a top-level element is placed in it by the same code that
         // places every other child.
-        self.open.push(Open {
-            id: u64::MAX,
-            style: String::new(),
-            text: String::new(),
-            painted: true,
-            placed: 0,
-        });
+        self.open.push(Open::root());
 
         for command in commands {
-            self.one(command);
+            match command {
+                DrawCommand::PushElement { element } => self.push(element),
+                DrawCommand::PopElement => self.pop(),
+                other => self.paint(other),
+            }
         }
 
         // Close the host frame: anything left beyond what this frame placed is gone.
@@ -83,52 +135,71 @@ impl Reconciler {
         self.retire();
     }
 
-    fn one(&mut self, command: &DrawCommand) {
+    /// Everything that is not an element boundary: what the open box paints.
+    fn paint(&mut self, command: &DrawCommand) {
+        let Some(open) = self.open.last_mut() else {
+            return;
+        };
+        if let Some(drawing) = open.drawing.as_mut() {
+            draw(drawing, command);
+            return;
+        }
         match command {
-            DrawCommand::PushElement { element } => self.push(element),
-            DrawCommand::PopElement => self.pop(),
-            DrawCommand::Rect { style, .. } => {
-                let Some(open) = self.open.last_mut() else {
-                    return;
-                };
+            DrawCommand::Rect { rect, style } => {
                 if open.painted {
                     return;
                 }
-                open.painted = true;
-                paint::rect_style(style, &mut open.style);
-            }
-            DrawCommand::Text { text, style, .. } => {
-                let Some(open) = self.open.last_mut() else {
+                // The box's own background is the one that *is* the box. Anything else is paint the widget
+                // put inside it — a scroll area's bar, a field's selection — and folding that into the
+                // background would spread one small mark over the whole element.
+                if is_own_box(*rect, open.box_rect) {
+                    open.painted = true;
+                    paint::rect_style(style, &mut open.style);
                     return;
-                };
-                open.text.push_str(text);
-                paint::text_style(style, &mut open.style);
+                }
+                if open.is_root() {
+                    return;
+                }
+                let mut css = String::new();
+                paint::rect_style(style, &mut css);
+                open.pieces.push(Painted::Rect {
+                    rect: *rect,
+                    style: css,
+                });
+            }
+            DrawCommand::Text {
+                text, rect, style, ..
+            } => {
+                if open.is_root() {
+                    return;
+                }
+                let mut css = String::new();
+                paint::text_style(style, &mut css);
+                open.pieces.push(Painted::Text {
+                    rect: *rect,
+                    style: css,
+                    text: text.to_string(),
+                });
             }
             DrawCommand::PushLayer { opacity, .. } => {
-                if let Some(open) = self.open.last_mut()
-                    && *opacity < 1.0
-                {
-                    paint::declare(&mut open.style, "opacity", &format!("{opacity:.3}"));
+                if *opacity < 1.0 {
+                    paint::declare(&mut open.style, "opacity", &paint::round(*opacity));
                 }
             }
             DrawCommand::PushClip { radius, .. } => {
-                if let Some(open) = self.open.last_mut() {
-                    paint::declare(&mut open.style, "overflow", "hidden");
-                    if !radius.is_zero() {
-                        paint::declare(
-                            &mut open.style,
-                            "border-radius",
-                            &format!("{}px", radius.top_left),
-                        );
-                    }
+                paint::declare(&mut open.style, "overflow", "hidden");
+                if !radius.is_zero() {
+                    paint::declare(
+                        &mut open.style,
+                        "border-radius",
+                        &paint::px(radius.top_left),
+                    );
                 }
             }
             // A matrix inside an element is that element's own transform: the widget applied it to move or
             // scale itself, and CSS says the same thing in the same order.
             DrawCommand::PushMatrix { matrix } => {
-                if let Some(open) = self.open.last_mut()
-                    && *matrix != IDENTITY
-                {
+                if *matrix != IDENTITY {
                     let [a, b, c, d, e, f] = matrix;
                     paint::declare(
                         &mut open.style,
@@ -137,17 +208,28 @@ impl Reconciler {
                     );
                 }
             }
-            // Pictures, vector art and rules are drawn by the raster backends and have no element of their
-            // own yet; the box that holds them is still placed and still lays out.
-            DrawCommand::Image { .. } | DrawCommand::Path { .. } | DrawCommand::Line { .. } => {}
+            // Artwork and bitmaps reach a document as an SVG, which is what a drawing element is; one that
+            // arrives in a box means a widget drew geometry without saying its box was a drawing.
+            DrawCommand::Image { .. } | DrawCommand::Path { .. } | DrawCommand::Line { .. } => {
+                tracing::debug!("a box painted geometry it did not declare itself a drawing for");
+            }
             DrawCommand::PopClip | DrawCommand::PopMatrix | DrawCommand::PopLayer => {}
+            DrawCommand::PushElement { .. } | DrawCommand::PopElement => {}
         }
     }
 
     fn push(&mut self, element: &Element) {
         let tag = tag_of(&element.semantics.role);
         let node = self.element_for(element.id.0, tag);
-        let mut style = element.layout.to_string();
+        let drawing = matches!(element.semantics.role, Role::Drawing);
+        let mut style = String::new();
+        if drawing {
+            // An `<svg>` is inline by default, which reserves a descender's worth of space under it that the
+            // box it is standing in never asked for. The declarations follow, so a box that wants another
+            // display still gets it.
+            paint::declare(&mut style, "display", "block");
+        }
+        style.push_str(&element.layout);
         // A box whose parent is the host is a layout root: the application computed it and placed it itself,
         // so there is no parent expressing where it goes and the declarations alone would stack them. This
         // is the one place the *computed* rect is used instead of what the box asked for.
@@ -162,40 +244,81 @@ impl Reconciler {
         if element.semantics.click_through {
             paint::declare(&mut style, "pointer-events", "none");
         }
-        if let Some(label) = &element.semantics.label {
-            let _ = node.set_attribute("aria-label", label);
+        match &element.semantics.label {
+            Some(label) => {
+                let _ = node.set_attribute("aria-label", label);
+                if drawing {
+                    let _ = node.set_attribute("role", "img");
+                }
+            }
+            // Artwork nobody named is decoration, and a graphic with no accessible name is noise to read out.
+            None if drawing => {
+                let _ = node.set_attribute("aria-hidden", "true");
+            }
+            None => {}
         }
         self.seen.push(element.id.0);
         self.open.push(Open {
             id: element.id.0,
+            box_rect: element.rect,
+            drawing: drawing.then(|| Drawing::new(element.id.0)),
             style,
-            text: String::new(),
             painted: false,
             placed: 0,
+            pieces: Vec::new(),
         });
     }
 
     fn pop(&mut self) {
-        let Some(open) = self.open.pop() else {
+        let Some(mut open) = self.open.pop() else {
             return;
         };
+        // A single run of text is the box's own label, not something inside it: it becomes the element's
+        // text and its style, which is what lets it be selected, found and read as part of the document.
+        let inline_text = open.placed == 0
+            && open.pieces.len() == 1
+            && matches!(open.pieces[0], Painted::Text { .. });
+        if inline_text && let Painted::Text { style, .. } = &open.pieces[0] {
+            open.style.push_str(style);
+        }
+
+        let document = self.document.clone();
         let Some(live) = self.live.get_mut(&open.id) else {
             return;
         };
-        // Everything the element ended up holding is known now, so the two attributes are written once.
+        // Everything the element ended up holding is known now, so the attribute is written once.
         if live.style != open.style {
             let _ = live.node.set_attribute("style", &open.style);
             live.style = open.style;
         }
-        // A box with children of its own never carries text: `set_text_content` would delete them.
-        if open.placed == 0 {
-            if live.text != open.text {
-                live.node.set_text_content(Some(&open.text));
-                live.text = open.text;
+
+        if let Some(drawing) = open.drawing {
+            let markup = drawing.finish();
+            if live.drawn != markup {
+                live.node.set_inner_html(&markup);
+                live.drawn = markup;
+                live.text.clear();
+                live.pieces.clear();
             }
+        } else if inline_text {
+            let Painted::Text { text, .. } = &open.pieces[0] else {
+                unreachable!("inline_text is exactly this shape")
+            };
+            if live.text != *text {
+                // Wipes the children with it, which is the point: the element carries the text itself now.
+                live.node.set_text_content(Some(text));
+                live.text = text.clone();
+                live.pieces.clear();
+            }
+        } else if open.placed == 0 {
+            live.text.clear();
+            fill_pieces(&document, live, &open.pieces);
         } else {
+            // A box with children of its own is laid out, not painted: paint that is not its background has
+            // nowhere to go that would not fight the browser for the same space.
             truncate(live.node.as_ref(), open.placed);
             live.text.clear();
+            live.pieces.clear();
         }
 
         let node = live.node.clone();
@@ -204,13 +327,18 @@ impl Reconciler {
 
     /// Puts `node` where the frame says it belongs inside the element being assembled, moving it only when
     /// it is not there already.
-    fn place(&mut self, node: web_sys::HtmlElement) {
+    fn place(&mut self, node: web_sys::Element) {
         let Some(parent_frame) = self.open.last_mut() else {
             return;
         };
+        // A drawing owns everything inside it as markup; a box placed in one would be written over by the
+        // next frame that changes the picture.
+        if parent_frame.drawing.is_some() {
+            return;
+        }
         let index = parent_frame.placed;
         parent_frame.placed += 1;
-        let parent: web_sys::Node = if parent_frame.id == u64::MAX {
+        let parent: web_sys::Node = if parent_frame.is_root() {
             self.host.clone().into()
         } else {
             match self.live.get(&parent_frame.id) {
@@ -230,22 +358,17 @@ impl Reconciler {
 
     /// The element for `id`, created if this is the first frame that mentions it — or recreated if what it
     /// means changed, since a role is a tag and a tag cannot be edited.
-    fn element_for(&mut self, id: u64, tag: &'static str) -> web_sys::HtmlElement {
+    fn element_for(&mut self, id: u64, tag: &'static str) -> web_sys::Element {
         if let Some(live) = self.live.get(&id)
             && live.tag == tag
         {
             return live.node.clone();
         }
-        let node = self
-            .document
-            .create_element(tag)
-            .ok()
-            .and_then(|e| e.dyn_into::<web_sys::HtmlElement>().ok());
-        let Some(node) = node else {
+        let Some(node) = create(&self.document, tag) else {
             // Only reachable if the document refuses a tag this crate chose, which would be a bug here
             // rather than something an application can act on.
             tracing::error!("could not create a <{tag}>");
-            return self.host.clone();
+            return self.host.clone().into();
         };
         if let Some(previous) = self.live.remove(&id) {
             previous.node.remove();
@@ -257,6 +380,8 @@ impl Reconciler {
                 tag,
                 style: String::new(),
                 text: String::new(),
+                drawn: String::new(),
+                pieces: Vec::new(),
             },
         );
         node
@@ -280,6 +405,96 @@ impl Reconciler {
 
 const IDENTITY: [f32; 6] = [1.0, 0.0, 0.0, 1.0, 0.0, 0.0];
 
+/// Whether a painted rect is the box it was painted in, in either of the two ways a widget can say so: a
+/// box that draws its own frame knows where it is, and a leaf that draws inside itself starts at its corner.
+fn is_own_box(rect: Rect, box_rect: Rect) -> bool {
+    let same = |a: f32, b: f32| (a - b).abs() < 0.01;
+    same(rect.width, box_rect.width)
+        && same(rect.height, box_rect.height)
+        && ((same(rect.x, box_rect.x) && same(rect.y, box_rect.y))
+            || (same(rect.x, 0.0) && same(rect.y, 0.0)))
+}
+
+fn create(document: &web_sys::Document, tag: &'static str) -> Option<web_sys::Element> {
+    // An `svg` made as an HTML element is an unknown tag that renders nothing: what makes it a drawing is
+    // the namespace, not the name.
+    if tag == "svg" {
+        return document.create_element_ns(Some(SVG_NS), tag).ok();
+    }
+    document.create_element(tag).ok()
+}
+
+/// Brings the element's positioned children in line with what it painted this frame.
+fn fill_pieces(document: &web_sys::Document, live: &mut Live, pieces: &[Painted]) {
+    // Whatever else was in there was children from a frame where this box laid out rather than painted.
+    truncate(live.node.as_ref(), live.pieces.len() as u32);
+    for (index, painted) in pieces.iter().enumerate() {
+        let (rect, css, text) = match painted {
+            Painted::Rect { rect, style } => (rect, style, ""),
+            Painted::Text { rect, style, text } => (rect, style, text.as_str()),
+        };
+        let mut style = String::new();
+        paint::declare(&mut style, "position", "absolute");
+        paint::declare(&mut style, "left", &paint::px(rect.x));
+        paint::declare(&mut style, "top", &paint::px(rect.y));
+        paint::declare(&mut style, "width", &paint::px(rect.width.max(0.0)));
+        paint::declare(&mut style, "height", &paint::px(rect.height.max(0.0)));
+        style.push_str(css);
+
+        if index == live.pieces.len() {
+            let Ok(node) = document.create_element("div") else {
+                return;
+            };
+            if live.node.append_child(node.as_ref()).is_err() {
+                return;
+            }
+            live.pieces.push(Piece {
+                node,
+                style: String::new(),
+                text: String::new(),
+            });
+        }
+        let piece = &mut live.pieces[index];
+        if piece.style != style {
+            let _ = piece.node.set_attribute("style", &style);
+            piece.style = style;
+        }
+        if piece.text != text {
+            piece.node.set_text_content(Some(text));
+            piece.text = text.to_string();
+        }
+    }
+    while live.pieces.len() > pieces.len() {
+        if let Some(extra) = live.pieces.pop() {
+            extra.node.remove();
+        }
+    }
+}
+
+/// What one command adds to the picture an element is drawing.
+fn draw(drawing: &mut Drawing, command: &DrawCommand) {
+    match command {
+        DrawCommand::Rect { rect, style } => drawing.rect(*rect, style),
+        DrawCommand::Text {
+            text, rect, style, ..
+        } => drawing.text(text, *rect, style),
+        DrawCommand::Path { data, style } => drawing.path(data, style),
+        DrawCommand::Line { p1, p2, style } => drawing.line(*p1, *p2, style),
+        DrawCommand::Image { data, rect, raster } => {
+            if let Some(href) = crate::bitmap::href(data) {
+                drawing.image(&href, *rect, *raster);
+            }
+        }
+        DrawCommand::PushClip { rect, radius } => drawing.open_clip(*rect, *radius),
+        DrawCommand::PushMatrix { matrix } => drawing.open_matrix(*matrix),
+        DrawCommand::PushLayer { opacity, .. } => drawing.open_layer(*opacity),
+        DrawCommand::PopClip | DrawCommand::PopMatrix | DrawCommand::PopLayer => {
+            drawing.close_group()
+        }
+        DrawCommand::PushElement { .. } | DrawCommand::PopElement => {}
+    }
+}
+
 /// Removes every child past `keep`, which is what a box that lost children leaves behind.
 fn truncate(parent: &web_sys::Node, keep: u32) {
     while parent.child_nodes().length() > keep {
@@ -296,10 +511,11 @@ fn truncate(parent: &web_sys::Node, keep: u32) {
 /// through an attribute instead, or one the document has no better word for.
 fn tag_of(role: &Role) -> &'static str {
     match role {
-        Role::Group | Role::ScrollArea | Role::Image => "div",
+        Role::Group | Role::ScrollArea => "div",
         Role::Button => "button",
         Role::Link(_) => "a",
         Role::TextInput => "div",
+        Role::Drawing => "svg",
         Role::Heading(level) => match level {
             1 => "h1",
             2 => "h2",
