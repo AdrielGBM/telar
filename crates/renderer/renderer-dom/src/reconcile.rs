@@ -111,6 +111,9 @@ struct Open {
     /// How many child boxes have been put in place, and therefore where the next one belongs.
     placed: u32,
     pieces: Vec<Painted>,
+    /// A transform whose subject is not yet known: the box itself if its own paint turns up inside, and the
+    /// boxes it wraps otherwise.
+    moved: Option<String>,
 }
 
 impl Open {
@@ -125,6 +128,7 @@ impl Open {
             painted: true,
             placed: 0,
             pieces: Vec::new(),
+            moved: None,
         }
     }
 
@@ -204,6 +208,11 @@ impl Reconciler {
                 // background would spread one small mark over the whole element.
                 if is_own_box(*rect, open.box_rect) {
                     open.painted = true;
+                    // A matrix this box's own paint sits inside is the box's own transform, and now it is
+                    // known to be: the boxes it also wraps are moved by moving the box.
+                    if let Some(matrix) = open.moved.take() {
+                        paint::declare(&mut open.style, "transform", &matrix);
+                    }
                     paint::rect_style(style, &mut open.style);
                     return;
                 }
@@ -246,16 +255,13 @@ impl Reconciler {
                     );
                 }
             }
-            // A matrix inside an element is that element's own transform: the widget applied it to move or
-            // scale itself, and CSS says the same thing in the same order.
+            // A matrix moves whatever it wraps, and which that is only becomes clear inside it. A widget that
+            // transforms itself draws its own box in there; a scroll area wraps its content and nothing
+            // else, and a transform on the viewport would carry the viewport away with it.
             DrawCommand::PushMatrix { matrix } => {
                 if *matrix != IDENTITY {
                     let [a, b, c, d, e, f] = matrix;
-                    paint::declare(
-                        &mut open.style,
-                        "transform",
-                        &format!("matrix({a},{b},{c},{d},{e},{f})"),
-                    );
+                    open.moved = Some(format!("matrix({a},{b},{c},{d},{e},{f})"));
                 }
             }
             // Artwork and bitmaps reach a document as an SVG, which is what a drawing element is; one that
@@ -263,7 +269,8 @@ impl Reconciler {
             DrawCommand::Image { .. } | DrawCommand::Path { .. } | DrawCommand::Line { .. } => {
                 tracing::debug!("a box painted geometry it did not declare itself a drawing for");
             }
-            DrawCommand::PopClip | DrawCommand::PopMatrix | DrawCommand::PopLayer => {}
+            DrawCommand::PopMatrix => open.moved = None,
+            DrawCommand::PopClip | DrawCommand::PopLayer => {}
             DrawCommand::PushElement { .. } | DrawCommand::PopElement => {}
         }
     }
@@ -294,6 +301,11 @@ impl Reconciler {
         if element.semantics.click_through {
             paint::declare(&mut style, "pointer-events", "none");
         }
+        // A transform its parent is still holding is one that wraps this box rather than the parent: a
+        // scroll area moves its content, and moving the viewport instead takes the panel off the page.
+        if let Some(matrix) = self.open.last().and_then(|parent| parent.moved.clone()) {
+            paint::declare(&mut style, "transform", &matrix);
+        }
         match &element.semantics.label {
             Some(label) => {
                 let _ = node.set_attribute("aria-label", label);
@@ -323,6 +335,7 @@ impl Reconciler {
             painted: false,
             placed: 0,
             pieces: Vec::new(),
+            moved: None,
         });
     }
 
@@ -367,15 +380,11 @@ impl Reconciler {
                 live.text = text.clone();
                 live.pieces.clear();
             }
-        } else if open.placed == 0 {
-            live.text.clear();
-            fill_pieces(&document, live, &open.pieces);
         } else {
-            // A box with children of its own is laid out, not painted: paint that is not its background has
-            // nowhere to go that would not fight the browser for the same space.
-            truncate(live.node.as_ref(), open.placed);
+            // Paint the box carries that is not a box goes after the boxes, which is the order it was drawn
+            // in and therefore what it covers: a scroll area's bars are drawn over the content they scroll.
             live.text.clear();
-            live.pieces.clear();
+            fill_pieces(&document, live, open.placed, &open.pieces);
         }
 
         let node = live.node.clone();
@@ -482,9 +491,9 @@ fn create(document: &web_sys::Document, tag: &'static str) -> Option<web_sys::El
 }
 
 /// Brings the element's positioned children in line with what it painted this frame.
-fn fill_pieces(document: &web_sys::Document, live: &mut Live, pieces: &[Painted]) {
-    // Whatever else was in there was children from a frame where this box laid out rather than painted.
-    truncate(live.node.as_ref(), live.pieces.len() as u32);
+fn fill_pieces(document: &web_sys::Document, live: &mut Live, after: u32, pieces: &[Painted]) {
+    // Anything past the boxes and the pieces is a child from a frame that had more of either.
+    truncate(live.node.as_ref(), after + live.pieces.len() as u32);
     for (index, painted) in pieces.iter().enumerate() {
         let (rect, css, text) = match painted {
             Painted::Rect { rect, style } => (rect, style, ""),
@@ -502,14 +511,21 @@ fn fill_pieces(document: &web_sys::Document, live: &mut Live, pieces: &[Painted]
             let Ok(node) = document.create_element("div") else {
                 return;
             };
-            if live.node.append_child(node.as_ref()).is_err() {
-                return;
-            }
             live.pieces.push(Piece {
                 node,
                 style: String::new(),
                 text: String::new(),
             });
+        }
+        // Where the boxes end, in the order the paint was drawn — and only moved when it is not there.
+        let at = after + index as u32;
+        let node: &web_sys::Node = live.pieces[index].node.as_ref();
+        let current = live.node.child_nodes().item(at);
+        if !current
+            .as_ref()
+            .is_some_and(|existing| existing.is_same_node(Some(node)))
+        {
+            let _ = live.node.insert_before(node, current.as_ref());
         }
         let piece = &mut live.pieces[index];
         if piece.style != style {
