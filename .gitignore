@@ -7,3 +7,7 @@
 
 /docs
 /librust_out.*
+
+.direnv/
+result
+result-*
