@@ -22,6 +22,8 @@ mod wrap;
 #[cfg(target_arch = "wasm32")]
 mod bitmap;
 #[cfg(target_arch = "wasm32")]
+mod entry;
+#[cfg(target_arch = "wasm32")]
 mod metrics;
 #[cfg(target_arch = "wasm32")]
 mod reconcile;

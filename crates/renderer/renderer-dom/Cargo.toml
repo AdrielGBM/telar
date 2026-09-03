@@ -12,6 +12,7 @@ repository = { workspace = true }
 
 [dependencies]
 geometry-core = { workspace = true }
+platform-core = { workspace = true }
 renderer-core = { workspace = true }
 rustc-hash = { workspace = true }
 tracing = { workspace = true }
@@ -32,6 +33,9 @@ features = [
     "DomRect",
     "Element",
     "HtmlElement",
+    "HtmlTextAreaElement",
+    "InputEvent",
+    "KeyboardEvent",
     "HtmlHeadElement",
     "Node",
     "Text",

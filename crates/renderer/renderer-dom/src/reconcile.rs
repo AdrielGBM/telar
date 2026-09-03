@@ -179,6 +179,10 @@ pub struct Reconciler {
     audit: bool,
     /// Whether a box claimed the keyboard this frame, so a frame where none did can put it back.
     claimed_focus: bool,
+    /// The one editable element the browser will type into, parked over whichever field holds the keyboard.
+    entry: Option<crate::entry::TextEntry>,
+    /// The field that holds the keyboard this frame, measured once everything is in the document.
+    entry_target: Option<(web_sys::Element, bool)>,
 }
 
 impl Reconciler {
@@ -190,9 +194,12 @@ impl Reconciler {
             .ok_or_else(|| "the host element is not in a document".to_string())?;
         let _ = host.set_attribute(HOST_ATTRIBUTE, "");
         install_reset(&document);
+        let entry = crate::entry::TextEntry::new(&document, &host);
         Ok(Self {
             audit: audit_requested(),
             claimed_focus: false,
+            entry,
+            entry_target: None,
             document,
             host,
             live: FxHashMap::default(),
@@ -216,9 +223,14 @@ impl Reconciler {
             }
         }
 
-        // Close the host frame: anything left beyond what this frame placed is gone.
+        // Close the host frame: anything left beyond what this frame placed is gone — except the one editable
+        // element the browser types into, which is a child of the host and is put back rather than swept.
         if let Some(root) = self.open.pop() {
-            truncate(self.host.as_ref(), root.placed);
+            let entry = u32::from(self.entry.is_some());
+            truncate(self.host.as_ref(), root.placed + entry);
+            if let Some(entry) = self.entry.as_ref() {
+                entry.settle(&self.host, root.placed);
+            }
         }
         self.retire();
         self.keep_the_keyboard();
@@ -369,8 +381,28 @@ impl Reconciler {
     /// this reconcile replaces takes its focus down with it, and the browser hands it to the document. When
     /// no box claimed the keyboard this frame and nothing inside the app holds it, the host takes it back.
     fn keep_the_keyboard(&mut self) {
+        // A field is typed into through the entry, and the entry is placed against what the browser did with
+        // the field — which is only knowable now, with everything in the document.
+        if let Some((node, multiline)) = self.entry_target.take() {
+            let host = self.host.get_bounding_client_rect();
+            let box_rect = node.get_bounding_client_rect();
+            let placed = Rect::new(
+                (box_rect.x() - host.x()) as f32,
+                (box_rect.y() - host.y()) as f32,
+                box_rect.width() as f32,
+                box_rect.height() as f32,
+            );
+            if let Some(entry) = self.entry.as_mut() {
+                entry.park(placed, multiline);
+            }
+            self.claimed_focus = false;
+            return;
+        }
         if std::mem::take(&mut self.claimed_focus) {
             return;
+        }
+        if let Some(entry) = self.entry.as_mut() {
+            entry.release();
         }
         let inside = self
             .document
@@ -404,6 +436,33 @@ impl Reconciler {
             focused,
             control: semantics.role.is_control(),
         };
+        // Every frame, before the attributes: what is written can be skipped when nothing changed, but where
+        // the keyboard is has to be answered each time — a frame that skipped it read as a frame where no box
+        // held the keyboard, and the entry was taken out from under the field being typed into.
+        if focused {
+            self.claimed_focus = true;
+            // A field is typed into through the entry, not through its own box: what a browser accepts
+            // characters for is an editable element, and the box a person sees is not one. Measured at the
+            // end of the frame, because this runs as the box is opened and a detached element measures as
+            // nothing.
+            match semantics.role {
+                Role::TextInput | Role::MultilineTextInput => {
+                    self.entry_target =
+                        Some((node.clone(), semantics.role == Role::MultilineTextInput));
+                }
+                // The document has a focus of its own, and two that disagree is one interface the keyboard
+                // and the screen reader read differently. Only ever moved *to* what Telar focused: blurring
+                // here would fight the element about to take it.
+                _ => {
+                    if let Some(html) = node.dyn_ref::<web_sys::HtmlElement>() {
+                        let active = self.document.active_element();
+                        if active.as_ref() != Some(node) {
+                            let _ = html.focus();
+                        }
+                    }
+                }
+            }
+        }
         let Some(live) = self.live.get_mut(&element.id.0) else {
             return;
         };
@@ -427,18 +486,6 @@ impl Reconciler {
         // person through the interface in a different order than the app believes they are in.
         set_or_clear(node, "tabindex", described.control.then_some("-1"));
         live.described = described;
-        // The document has a focus of its own, and two focuses that disagree is one interface the keyboard
-        // and the screen reader read differently. Only ever moved *to* what Telar focused: blurring here
-        // would fight the element about to take it.
-        if focused {
-            self.claimed_focus = true;
-            if let Some(html) = node.dyn_ref::<web_sys::HtmlElement>() {
-                let active = self.document.active_element();
-                if active.as_ref() != Some(node) {
-                    let _ = html.focus();
-                }
-            }
-        }
     }
 
     fn pop(&mut self) {

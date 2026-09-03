@@ -148,6 +148,9 @@ impl Platform for WebPlatform {
         // A capture-free closure, so it satisfies the `Send + Sync` the waker is declared with. It reaches a
         // thread-local, which on a target with one thread is the same thing as reaching the loop.
         platform_core::set_loop_waker(std::sync::Arc::new(request_frame));
+        // The other half: a document backend creates elements that notice things the platform cannot, and
+        // this is the way in for what they notice.
+        platform_core::set_event_sink(std::sync::Arc::new(|event| push([event])));
 
         install_frame_callback();
 
