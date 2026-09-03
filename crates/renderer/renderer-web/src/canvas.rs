@@ -102,3 +102,8 @@ impl CanvasSurface {
         Self { canvas, handle }
     }
 }
+
+/// The browser window, for the probe.
+pub(crate) fn dom_window() -> web_sys::Window {
+    web_sys::window().expect("a browser window")
+}

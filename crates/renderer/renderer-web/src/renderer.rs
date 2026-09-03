@@ -37,6 +37,14 @@ impl WebGpuRenderer {
         let build_into = Rc::clone(&device);
         let build_on = canvas.clone();
         wasm_bindgen_futures::spawn_local(async move {
+            // Asked before wgpu, so a browser that cannot draw says so in words rather than throwing a
+            // `TypeError` out of the generated glue. See `probe`.
+            if let Err(reason) = crate::webgpu_available().await {
+                tracing::error!("telar cannot draw here: {}", reason.message());
+                report_on_page(&build_on, reason.message());
+                *build_into.borrow_mut() = Device::Failed;
+                return;
+            }
             let font_config = renderer_text::TextShaperConfig {
                 font: fonts,
                 ..Default::default()
@@ -124,4 +132,27 @@ impl<W: 'static> RendererFactory<W> for WebGpuRendererFactory {
             build.transparent,
         ))))
     }
+}
+
+/// Puts the reason a frame will never arrive where somebody looking at the page can read it.
+///
+/// A console message is not enough on its own: the visible result of a device that will not open is a blank
+/// area, and a blank area reads as a bug in the application rather than as a browser that cannot draw.
+fn report_on_page(canvas: &CanvasSurface, message: &str) {
+    let Some(host) = canvas.canvas().parent_element() else {
+        return;
+    };
+    let Ok(notice) = host.owner_document().map_or(Err(()), Ok) else {
+        return;
+    };
+    let Ok(element) = notice.create_element("div") else {
+        return;
+    };
+    element.set_text_content(Some(message));
+    let _ = element.set_attribute(
+        "style",
+        "position:absolute;inset:0;display:flex;align-items:center;justify-content:center;\
+         padding:2rem;font:14px/1.6 system-ui,sans-serif;text-align:center;color:#c33",
+    );
+    let _ = host.append_child(&element);
 }

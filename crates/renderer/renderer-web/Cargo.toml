@@ -15,6 +15,7 @@ renderer-core = { workspace = true }
 tracing = { workspace = true }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
+js-sys = { workspace = true }
 platform-core = { workspace = true }
 raw-window-handle = { workspace = true }
 renderer-hardware = { workspace = true }
@@ -24,4 +25,13 @@ wasm-bindgen-futures = { workspace = true }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies.web-sys]
 workspace = true
-features = ["CssStyleDeclaration", "Document", "Element", "HtmlCanvasElement", "HtmlElement", "Node", "Window"]
+features = [
+    "CssStyleDeclaration",
+    "Document",
+    "Element",
+    "HtmlCanvasElement",
+    "HtmlElement",
+    "Navigator",
+    "Node",
+    "Window",
+]

@@ -5868,6 +5868,7 @@ dependencies = [
 name = "telar-renderer-web"
 version = "0.1.8"
 dependencies = [
+ "js-sys",
  "raw-window-handle",
  "telar-platform-core",
  "telar-renderer-core",

@@ -12,7 +12,10 @@
 #![cfg(target_arch = "wasm32")]
 
 mod canvas;
+mod probe;
 mod renderer;
 
+pub(crate) use canvas::dom_window;
 pub use canvas::{CanvasSurface, canvas_in};
+pub use probe::{NoGpu, webgpu_available};
 pub use renderer::{WebGpuRenderer, WebGpuRendererFactory};
