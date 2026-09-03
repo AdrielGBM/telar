@@ -66,6 +66,12 @@ fn css_of(style: &Style) -> Css {
         return css;
     }
 
+    // Taffy's `size` is the border box, padding and border inside it; CSS's default `content-box` adds them
+    // around it instead. Left out, a `pad:20` box came out 40px wider than Taffy said, its children were
+    // measured against the wrong width, and every box below it in the column drifted further down the page
+    // than the rects hit-testing reads — an interface that draws correctly and cannot be clicked.
+    css.push("box-sizing", "border-box");
+
     if style.position == Position::Absolute {
         css.push("position", "absolute");
     }
@@ -412,12 +418,18 @@ mod tests {
     /// what the app actually asked for.
     #[test]
     fn a_plain_style_says_only_what_it_is() {
-        assert_eq!(css(LayoutStyle::new()), "display:block;");
+        assert_eq!(
+            css(LayoutStyle::new()),
+            "display:block;box-sizing:border-box;"
+        );
     }
 
     #[test]
     fn a_row_becomes_a_flex_row() {
-        assert!(css(LayoutStyle::new().flex_row()).starts_with("display:flex;flex-direction:row;"));
+        assert!(
+            css(LayoutStyle::new().flex_row())
+                .starts_with("display:flex;box-sizing:border-box;flex-direction:row;")
+        );
     }
 
     #[test]
