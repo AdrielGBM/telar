@@ -1,6 +1,7 @@
 use std::borrow::Cow;
 use std::collections::VecDeque;
-use std::time::{Duration, Instant};
+use std::time::Duration;
+use web_time::Instant;
 
 use crate::dev_plugin::{DevAction, DevPlugin};
 use geometry_core::Rect;

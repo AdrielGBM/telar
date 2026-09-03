@@ -1,7 +1,8 @@
 use std::cell::Cell;
 use std::hash::{Hash, Hasher};
 use std::num::NonZeroUsize;
-use std::time::{Duration, Instant};
+use std::time::Duration;
+use web_time::Instant;
 
 use clru::{CLruCache, CLruCacheConfig, WeightScale};
 use rustc_hash::{FxBuildHasher, FxHasher};

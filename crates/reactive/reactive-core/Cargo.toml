@@ -11,7 +11,11 @@ license = { workspace = true }
 repository = { workspace = true }
 
 [dependencies]
+web-time = { workspace = true }
 rustc-hash = { workspace = true }
 smallvec = { workspace = true }
 reactive-local = { workspace = true }
 slotmap = "1.1.1"
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+wasm-bindgen-futures = { workspace = true }

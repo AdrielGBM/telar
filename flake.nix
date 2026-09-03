@@ -47,7 +47,7 @@
       devShells.${system}.default = pkgs.mkShell {
         packages = [
           rustToolchain
-          pkgs.mold-wrapped
+          pkgs.mold
           pkgs.cargo-apk
           androidSdk
           pkgs.jdk17

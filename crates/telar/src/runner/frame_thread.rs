@@ -14,7 +14,7 @@ pub(super) struct FrameMsg {
     pub(super) generation: u64,
     pub(super) commands: Vec<renderer_core::DrawCommand>,
     pub(super) clear: Option<renderer_core::Color>,
-    pub(super) timestamp: std::time::Instant,
+    pub(super) timestamp: web_time::Instant,
 }
 
 /// Drives `renderer` on a thread of its own, fed one [`FrameMsg`] at a time.
@@ -88,7 +88,7 @@ where
                     continue;
                 }
                 #[cfg(target_os = "android")]
-                let frame_start = std::time::Instant::now();
+                let frame_start = web_time::Instant::now();
                 // begin_frame reconfigures the swapchain and recreates size-dependent textures; a wgpu fatal
                 // error there (e.g. a lost device after a compositor resize storm) is a panic, not an `Err`, so
                 // catch it as render_frame does below and drop the frame instead of unwinding into an abort.
@@ -136,7 +136,8 @@ where
 mod tests {
     use std::sync::Arc;
     use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
-    use std::time::{Duration, Instant};
+    use std::time::Duration;
+    use web_time::Instant;
 
     use geometry_core::Rect;
     use renderer_core::{DrawCommand, RectStyle, RendererError};

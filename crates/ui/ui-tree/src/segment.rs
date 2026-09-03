@@ -689,7 +689,8 @@ mod tests {
     // `Duration`s drives the tween deterministically.
     #[test]
     fn animated_get_reflects_tick_in_commands_and_settles() {
-        use std::time::{Duration, Instant};
+        use std::time::Duration;
+        use web_time::Instant;
 
         // Isolate this test's ticker state: the registry is thread-local and other tests on a
         // reused libtest thread must not leak active animations into this one (mirrors the

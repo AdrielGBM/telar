@@ -691,7 +691,7 @@ mod tests {
         motion_core::reset();
         input.blink.follow(true);
 
-        let start = std::time::Instant::now();
+        let start = web_time::Instant::now();
         motion_core::tick(start);
         let lit = caret_of(&input).1;
         motion_core::tick(start + Duration::from_millis(700));
@@ -707,7 +707,7 @@ mod tests {
         let (mut input, _) = focused_input("hola");
         motion_core::reset();
         input.blink.follow(true);
-        let start = std::time::Instant::now();
+        let start = web_time::Instant::now();
         motion_core::tick(start);
         motion_core::tick(start + Duration::from_millis(700));
         assert!(caret_of(&input).1 < 0.1, "el cursor debería estar apagado");
@@ -769,7 +769,7 @@ mod tests {
         motion_core::reset();
         let input = aligned_input("hola", TextAlign::Start);
         input.blink.follow(false);
-        motion_core::tick(std::time::Instant::now());
+        motion_core::tick(web_time::Instant::now());
         assert!(
             !motion_core::has_active(),
             "un campo sin el teclado sigue pidiendo cuadros"

@@ -9,7 +9,7 @@
 use std::sync::{Arc, Mutex};
 
 use renderer_core::{
-    Color, DrawCommand, RenderBackend, RendererBuild, RendererError, RendererFactory,
+    BuiltRenderer, Color, DrawCommand, RenderBackend, RendererBuild, RendererError, RendererFactory,
 };
 
 /// One frame as the recorder was handed it.
@@ -128,8 +128,8 @@ impl<W> RendererFactory<W> for RecordingFactory {
         &self,
         _window: &W,
         _build: RendererBuild<'_>,
-    ) -> Result<Box<dyn RenderBackend + Send>, RendererError> {
-        Ok(Box::new(self.recording.backend()))
+    ) -> Result<BuiltRenderer, RendererError> {
+        Ok(BuiltRenderer::Threaded(Box::new(self.recording.backend())))
     }
 }
 

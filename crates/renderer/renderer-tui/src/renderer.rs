@@ -3,7 +3,7 @@
 use std::io::Write;
 
 use renderer_core::{
-    Color, DrawCommand, RenderBackend, RendererBuild, RendererError, RendererFactory,
+    BuiltRenderer, Color, DrawCommand, RenderBackend, RendererBuild, RendererError, RendererFactory,
 };
 
 use crate::buffer::CellBuffer;
@@ -136,11 +136,11 @@ impl<W: 'static> RendererFactory<W> for TuiRendererFactory {
         &self,
         _window: &W,
         _build: RendererBuild<'_>,
-    ) -> Result<Box<dyn RenderBackend + Send>, RendererError> {
-        Ok(Box::new(TuiRenderer::new(
+    ) -> Result<BuiltRenderer, RendererError> {
+        Ok(BuiltRenderer::Threaded(Box::new(TuiRenderer::new(
             self.config.clone(),
             Box::new(std::io::stdout()),
-        )))
+        ))))
     }
 
     /// The terminal draws the characters; this renderer never opens a font file.

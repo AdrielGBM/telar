@@ -1,4 +1,5 @@
-use std::time::{Duration, Instant};
+use std::time::Duration;
+use web_time::Instant;
 
 use geometry_core::Rect;
 use platform_core::{Event, PointerButton};

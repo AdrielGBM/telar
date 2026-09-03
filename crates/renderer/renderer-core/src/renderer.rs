@@ -104,16 +104,30 @@ pub struct RendererBuild<'a> {
     pub transparent: bool,
 }
 
-/// Builds the renderer for a surface — the seam an out-of-tree frontend installs to draw Telar's frames itself.
+/// A renderer that has been built, and where it may be driven from.
 ///
-/// Generic over the window type because that is the platform's business: whoever brings a `Platform` brings the
-/// window this draws on. The backend is boxed and `Send` so the frame pipeline can move it to its own thread.
+/// The distinction is not a preference: a renderer built on top of a browser.s WebGPU device holds JavaScript
+/// objects, which are `!Send` by construction and cannot leave the thread that made them. A backend that says
+/// so is driven inline on the UI thread; one that can move gets a render thread of its own.
+pub enum BuiltRenderer {
+    /// Free to be moved to a render thread, which is where the frame pipeline puts it.
+    Threaded(Box<dyn RenderBackend + Send>),
+    /// Bound to the thread that built it, and driven there.
+    Inline(Box<dyn RenderBackend>),
+}
+
+impl From<Box<dyn RenderBackend + Send>> for BuiltRenderer {
+    fn from(backend: Box<dyn RenderBackend + Send>) -> Self {
+        Self::Threaded(backend)
+    }
+}
+
+/// Builds the renderer for a surface — the seam an out-of-tree frontend installs to draw Telar.s frames itself.
+///
+/// Generic over the window type because that is the platform.s business: whoever brings a `Platform` brings the
+/// window this draws on.
 pub trait RendererFactory<W>: 'static {
-    fn build(
-        &self,
-        window: &W,
-        build: RendererBuild<'_>,
-    ) -> Result<Box<dyn RenderBackend + Send>, RendererError>;
+    fn build(&self, window: &W, build: RendererBuild<'_>) -> Result<BuiltRenderer, RendererError>;
 
     /// Whether this renderer draws text by shaping glyphs from font files.
     ///

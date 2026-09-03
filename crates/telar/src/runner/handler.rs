@@ -43,7 +43,7 @@ where
     /// Whether this window has the keyboard. The keepalive rides on it: somebody who can type is somebody
     /// whose next frame should not wait for the GPU to wake up.
     pub(super) focused: bool,
-    pub(super) last_input: std::time::Instant,
+    pub(super) last_input: web_time::Instant,
     // The transparency the live renderer was built for. Only `remount` reads it: an app whose surface changes
     // from opaque to transparent between two mounts needs the renderer built again, and asking the app after
     // the rebuild would compare the new answer with itself.
@@ -64,11 +64,11 @@ where
     // Reused across frames so the SW/HiDPI command scaling allocates neither a fresh Vec nor redundant per-command style Arcs.
     pub(super) scale_scratch: renderer_core::ScaleScratch,
     pub(super) app_name: String,
-    pub(super) last_frame: std::time::Instant,
+    pub(super) last_frame: web_time::Instant,
     // When the frame pass last ran, as opposed to `last_frame`, which only advances on a frame carrying new content; `on_redraw` paces itself against this so the pass costs the same however often the platform calls it.
-    pub(super) last_tick: std::time::Instant,
+    pub(super) last_tick: web_time::Instant,
     // When a frame was last submitted, content or keepalive; paces the keepalive blit.
-    pub(super) last_submit: std::time::Instant,
+    pub(super) last_submit: web_time::Instant,
     pub(super) dev: D,
     pub(super) font_paths: Vec<std::path::PathBuf>,
     pub(super) font_data: Vec<Vec<u8>>,
@@ -155,7 +155,7 @@ where
         // A platform that never reports focus is one whose window is the only thing on screen, so being
         // believed focused is both the safe answer and the true one.
         focused: true,
-        last_input: std::time::Instant::now(),
+        last_input: web_time::Instant::now(),
         renderer_transparent: false,
         generation: FrameGeneration::default(),
         backend,
@@ -167,14 +167,14 @@ where
         redraw_waker: None,
         scale_scratch: renderer_core::ScaleScratch::new(),
         app_name,
-        last_frame: std::time::Instant::now(),
+        last_frame: web_time::Instant::now(),
         // Backdated so the first `on_redraw` after resume composes immediately instead of waiting out a frame it has nothing to pace against yet.
-        last_tick: std::time::Instant::now()
+        last_tick: web_time::Instant::now()
             .checked_sub(FRAME_BUDGET)
-            .unwrap_or_else(std::time::Instant::now),
-        last_submit: std::time::Instant::now()
+            .unwrap_or_else(web_time::Instant::now),
+        last_submit: web_time::Instant::now()
             .checked_sub(HW_KEEPALIVE_INTERVAL)
-            .unwrap_or_else(std::time::Instant::now),
+            .unwrap_or_else(web_time::Instant::now),
         dev: D::default(),
         paths,
         font_paths,
@@ -323,6 +323,9 @@ where
             RendererStart::Started { keepalive, label } => {
                 self.renderer_keepalive = keepalive;
                 self.dev.set_renderer_info(label);
+                // A renderer that cannot leave this thread is driven here instead of on a render thread;
+                // `channels()` stays empty, which is what routes the frame to `render_inline`.
+                self.renderer = self.renderer_host.take_inline();
                 true
             }
             RendererStart::Building => true,
@@ -404,7 +407,7 @@ where
     /// Whether to submit a frame now, and whether it carries new content. The second of the pass's three
     /// clocks: the frame budget gates the whole pass, this gates submission, `about_to_wait` reports the next
     /// wake. `None` means skip this turn.
-    fn frame_is_due(&self, now: std::time::Instant) -> Option<bool> {
+    fn frame_is_due(&self, now: web_time::Instant) -> Option<bool> {
         // A continuous region carries new content the tree cannot report: the application repaints its own texture and the draw commands naming it never change. Counting only `is_dirty` here drops such a frame through to the 1 fps keepalive below, which shows a region refilled at sixty once a second.
         let has_content = self.tree.as_ref().map(|t| t.is_dirty()).unwrap_or(false)
             || self.app.motion_has_continuous();
@@ -452,13 +455,16 @@ where
             .unwrap_or(false)
     }
 
-    /// Rasterises a frame inline, for the offscreen renderer that has no thread of its own.
+    /// Draws a frame on this thread, for a renderer that has no thread of its own.
     ///
-    /// Headless runs, `[preview]` captures and `cargo telar test` all read the pixels back with
-    /// `last_frame_rgba` in the same call that asked for them, so this one has to stay synchronous — and it
-    /// deliberately does *not* wrap the render in `catch_unwind`, because a panic here is a test failure to
-    /// surface rather than a dropped frame to recover from.
-    fn render_offscreen(&mut self, msg: FrameMsg) {
+    /// Two kinds end up here. An offscreen renderer must, because headless runs, `[preview]` captures and
+    /// `cargo telar test` all read the pixels back with `last_frame_rgba` in the same call that asked for
+    /// them. A renderer that is `!Send` — one built on a browser device, which holds JavaScript objects —
+    /// must, because it cannot be moved anywhere else.
+    ///
+    /// Deliberately does *not* wrap the render in `catch_unwind`: a panic here is a test failure to surface
+    /// rather than a dropped frame to recover from.
+    fn render_inline(&mut self, msg: FrameMsg) {
         let Some(renderer) = &mut self.renderer else {
             return;
         };
@@ -627,7 +633,7 @@ where
                 | Event::PointerReleased { .. }
                 | Event::Scrolled { .. }
         ) {
-            self.last_input = std::time::Instant::now();
+            self.last_input = web_time::Instant::now();
         }
         // The four events the runner reads before the app does, matched once. Written as four sequential
         // `if let`s it re-tested the same value each time, and the two that end the dispatch read as though
@@ -710,7 +716,7 @@ where
         }
         // Drive the motion engine before tree_dirty is read below: tick()'s .set() calls only enqueue effects while a batch is open (new_events already opened one), so force a flush here to re-run any segment reading an animated value now, not on the next cycle. This is what makes an animation-only frame (no user event, tree otherwise clean) observe interpolated values in this same frame's tree.commands(). The tree is mounted in the app's own runtime (`crate::tree`), so those values reach the segments that read them even under hot reload — a host-mounted tree would instead re-send the commands composed for the animation's first value (a page stuck at opacity 0) until some event forced a re-render.
         // Everything below composes a frame, so pace the whole pass rather than only capping the render at the end. A platform may call `on_redraw` on every loop turn, and the pass then schedules its own next call — the motion tick's `.set()` writes flush, and the flush notifies the platform to redraw — so the loop free-runs instead of sleeping.
-        let now = std::time::Instant::now();
+        let now = web_time::Instant::now();
         if now.duration_since(self.last_tick) < FRAME_BUDGET {
             return;
         }
@@ -838,7 +844,7 @@ where
             generation,
             commands,
             clear,
-            timestamp: std::time::Instant::now(),
+            timestamp: web_time::Instant::now(),
         };
 
         // On-screen: hand the frame to the render thread and return. Drop it if that thread is still busy,
@@ -857,7 +863,7 @@ where
             return;
         }
 
-        self.render_offscreen(msg);
+        self.render_inline(msg);
     }
 
     fn on_suspend(&mut self) {
@@ -963,7 +969,7 @@ mod tests {
         );
 
         handler.focused = true;
-        handler.last_input = std::time::Instant::now() - IDLE_GRACE - FRAME_BUDGET;
+        handler.last_input = web_time::Instant::now() - IDLE_GRACE - FRAME_BUDGET;
         assert!(
             !handler.keepalive_due(),
             "a window left focused and abandoned sleeps on the backstop"
@@ -1131,7 +1137,7 @@ mod tests {
         begin_batch();
 
         // Forced open before each pass: this is about what counts as content, not about the frame clock.
-        let opened = || std::time::Instant::now() - FRAME_BUDGET * 2;
+        let opened = || web_time::Instant::now() - FRAME_BUDGET * 2;
 
         handler.last_tick = opened();
         handler.on_redraw(&window);

@@ -131,6 +131,12 @@ pub(super) trait RendererHost<W>: 'static {
         true
     }
 
+    /// The renderer [`start`](Self::start) built that cannot leave the calling thread, for the handler to
+    /// drive inline. `None` for a host whose renderer went to a thread of its own, which is every native one.
+    fn take_inline(&mut self) -> Option<Box<dyn RenderBackend>> {
+        None
+    }
+
     /// The channels of the running renderer, or `None` when there is none to send to.
     fn channels(&self) -> Option<&RenderChannels>;
 
@@ -161,6 +167,8 @@ pub(super) struct FactoryHost<W, F> {
     factory: F,
     channels: Option<RenderChannels>,
     join: Option<std::thread::JoinHandle<Box<dyn RenderBackend + Send>>>,
+    /// A renderer that cannot leave this thread, waiting to be taken and driven here.
+    inline: Option<Box<dyn RenderBackend>>,
     _window: std::marker::PhantomData<W>,
 }
 
@@ -170,6 +178,7 @@ impl<W, F> FactoryHost<W, F> {
             factory,
             channels: None,
             join: None,
+            inline: None,
             _window: std::marker::PhantomData,
         }
     }
@@ -184,7 +193,7 @@ where
         &self,
         window: &W,
         req: &RendererRequest<'_>,
-    ) -> Result<Box<dyn RenderBackend + Send>, RendererError> {
+    ) -> Result<renderer_core::BuiltRenderer, RendererError> {
         let fonts = super::font_config::build_font_config(
             req.font_paths.to_vec(),
             req.font_data.to_vec(),
@@ -211,9 +220,14 @@ where
             Ok(renderer) => renderer,
             Err(e) => return RendererStart::Failed(e),
         };
-        let (tx, ret_rx, join) = spawn_render_thread(renderer);
-        self.channels = Some(RenderChannels { tx, ret_rx });
-        self.join = Some(join);
+        match renderer {
+            renderer_core::BuiltRenderer::Threaded(renderer) => {
+                let (tx, ret_rx, join) = spawn_render_thread(renderer);
+                self.channels = Some(RenderChannels { tx, ret_rx });
+                self.join = Some(join);
+            }
+            renderer_core::BuiltRenderer::Inline(renderer) => self.inline = Some(renderer),
+        }
         RendererStart::Started {
             keepalive: false,
             label: "installed renderer",
@@ -222,6 +236,10 @@ where
 
     fn shapes_text(&self) -> bool {
         self.factory.shapes_text()
+    }
+
+    fn take_inline(&mut self) -> Option<Box<dyn RenderBackend>> {
+        self.inline.take()
     }
 
     fn channels(&self) -> Option<&RenderChannels> {
@@ -235,6 +253,7 @@ where
     fn retire(&mut self) {
         // The thread parks on the frame channel, so it only ever exits once the sender is gone.
         self.channels = None;
+        self.inline = None;
         if let Some(join) = self.join.take() {
             let _ = join.join();
         }
@@ -246,7 +265,8 @@ where
         req: &RendererRequest<'_>,
     ) -> Option<Box<dyn RenderBackend>> {
         match self.build(window, req) {
-            Ok(renderer) => Some(renderer),
+            Ok(renderer_core::BuiltRenderer::Threaded(renderer)) => Some(renderer),
+            Ok(renderer_core::BuiltRenderer::Inline(renderer)) => Some(renderer),
             Err(e) => {
                 tracing::error!("the installed renderer could not be built offscreen: {e}");
                 None

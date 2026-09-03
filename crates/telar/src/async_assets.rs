@@ -16,7 +16,8 @@ use std::path::{Path, PathBuf};
 use std::rc::Rc;
 use std::sync::Arc;
 use std::sync::mpsc::{self, Receiver, Sender};
-use std::time::{Duration, Instant};
+use std::time::Duration;
+use web_time::Instant;
 
 use reactive_core::{Emitter, ReadSignal, RwSignal, Task, signal, spawn_stream};
 use renderer_assets::SvgData;

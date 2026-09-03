@@ -1,7 +1,7 @@
 use std::cell::RefCell;
 use std::marker::PhantomData;
 use std::rc::Rc;
-use std::time::Instant;
+use web_time::Instant;
 
 use reactive_core::{ReadSignal, RwSignal, signal};
 

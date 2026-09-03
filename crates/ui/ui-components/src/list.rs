@@ -14,8 +14,9 @@
 use renderer_core::TextWrap;
 use std::cell::{Cell, RefCell};
 use std::rc::Rc;
-use std::time::{Duration, Instant};
+use std::time::Duration;
 use telar_macros::Props;
+use web_time::Instant;
 
 use layout_core::{AlignItems, JustifyContent, LayoutError, LayoutStyle, Margin};
 use reactive_core::{Reactive, RwSignal};

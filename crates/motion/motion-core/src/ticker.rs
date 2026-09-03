@@ -2,7 +2,7 @@ use std::cell::RefCell;
 use std::collections::HashMap;
 use std::mem::ManuallyDrop;
 use std::rc::Weak;
-use std::time::Instant;
+use web_time::Instant;
 
 /// Registry-facing behavior of an animation, erased over its value type.
 pub(crate) trait Tickable {

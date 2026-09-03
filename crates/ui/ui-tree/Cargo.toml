@@ -11,6 +11,7 @@ license = { workspace = true }
 repository = { workspace = true }
 
 [dependencies]
+web-time = { workspace = true }
 reactive-core = { workspace = true }
 renderer-core = { workspace = true }
 platform-core = { workspace = true }

@@ -41,7 +41,7 @@ pub trait App: 'static {
 
     /// Advances the motion engine. Only the dylib-backed `HotApp` overrides this — in dev mode, host and app dylib link separate copies of motion-core, so the host must tick the app's own registry across the FFI boundary rather than its own (empty) one.
     #[doc(hidden)]
-    fn motion_tick(&self, now: std::time::Instant) {
+    fn motion_tick(&self, now: web_time::Instant) {
         motion_core::tick(now);
     }
 
@@ -153,7 +153,7 @@ impl<A: App + ?Sized> App for Box<A> {
     fn hot_restore(&self, blob: &str) {
         (**self).hot_restore(blob)
     }
-    fn motion_tick(&self, now: std::time::Instant) {
+    fn motion_tick(&self, now: web_time::Instant) {
         (**self).motion_tick(now)
     }
     fn motion_has_active(&self) -> bool {

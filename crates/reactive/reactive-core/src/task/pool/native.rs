@@ -11,7 +11,7 @@ use std::sync::{Condvar, Mutex, MutexGuard};
 use std::thread::JoinHandle;
 use std::time::Duration;
 
-pub(super) type Job = Box<dyn FnOnce() + Send>;
+pub(in crate::task) type Job = Box<dyn FnOnce() + Send>;
 
 /// How long a worker waits for another job before retiring.
 const KEEP_ALIVE: Duration = Duration::from_secs(10);
@@ -50,7 +50,7 @@ fn lock() -> MutexGuard<'static, State> {
     POOL.state.lock().unwrap_or_else(|e| e.into_inner())
 }
 
-pub(super) fn submit(job: Job) {
+pub(in crate::task) fn submit(job: Job) {
     let mut state = lock();
     state.workers.retain(|handle| !handle.is_finished());
     state.queue.push_back(job);
@@ -105,7 +105,7 @@ fn worker() {
 /// A job already running finishes first, and that is the point: its code lives in the dylib, so unloading
 /// underneath it is exactly the crash this prevents. The cost is that a reload waits for in-flight
 /// background work, and a task that blocks forever blocks the reload with it.
-pub(super) fn shutdown_and_join() {
+pub(in crate::task) fn shutdown_and_join() {
     let (queued, handles) = {
         let mut state = lock();
         state.shutdown = true;

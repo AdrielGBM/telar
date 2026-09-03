@@ -17,7 +17,7 @@
 
 use std::cell::RefCell;
 use std::rc::Rc;
-use std::time::Instant;
+use web_time::Instant;
 
 use geometry_core::Rect;
 use layout_core::AvailableSpace;

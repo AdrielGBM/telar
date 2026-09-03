@@ -100,6 +100,7 @@ serde_json = { version = "1", optional = true }
 toml = { workspace = true, optional = true }
 tracing = { workspace = true, optional = true }
 ureq = { workspace = true, optional = true }
+web-time = { workspace = true }
 
 geometry-core = { workspace = true, optional = true }
 i18n-core = { workspace = true }
@@ -124,7 +125,9 @@ ui-components = { workspace = true, optional = true }
 ui-core = { workspace = true, optional = true }
 ui-tree = { workspace = true, optional = true }
 
-[target.'cfg(not(target_os = "android"))'.dependencies]
+# Excludes wasm as well as Android: `not(target_os = "android")` is true on wasm32, which would drag winit
+# into a build that has no window server to talk to. A web build takes `--no-default-features`.
+[target.'cfg(all(not(target_os = "android"), not(target_arch = "wasm32")))'.dependencies]
 platform-desktop = { workspace = true, optional = true }
 
 [target.'cfg(target_os = "android")'.dependencies]

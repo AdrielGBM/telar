@@ -6,7 +6,8 @@
 
 use std::sync::OnceLock;
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::time::{Duration, Instant};
+use std::time::Duration;
+use web_time::Instant;
 
 /// Frame phases attributed to CPU vs GPU so a baseline can split the ~16 ms budget.
 #[derive(Clone, Copy)]

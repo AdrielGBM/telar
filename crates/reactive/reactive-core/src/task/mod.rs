@@ -437,7 +437,8 @@ fn pending_task_count() -> usize {
 mod tests {
     use std::rc::Rc;
     use std::sync::atomic::AtomicUsize;
-    use std::time::{Duration, Instant};
+    use std::time::Duration;
+    use web_time::Instant;
 
     use super::*;
     use crate::runtime::{SurfaceEnterGuard, set_current_surface, set_surface_enter_hook};
