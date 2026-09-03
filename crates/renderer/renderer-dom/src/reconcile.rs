@@ -13,6 +13,7 @@
 use geometry_core::Rect;
 use renderer_core::{DrawCommand, Element, Role};
 use rustc_hash::FxHashMap;
+use wasm_bindgen::JsCast;
 
 use crate::paint;
 use crate::vector::Drawing;
@@ -87,6 +88,12 @@ struct Described {
     label: Option<String>,
     link: Option<String>,
     hidden: bool,
+    checked: Option<bool>,
+    disabled: bool,
+    /// Part of the record even though it writes no attribute: a box that has just become the focused one is a
+    /// box this has to act on, and comparing without it made the acting unreachable.
+    focused: bool,
+    control: bool,
 }
 
 /// Writes an attribute, or takes it off where there is nothing to say. Removing matters as much as setting:
@@ -170,6 +177,8 @@ pub struct Reconciler {
     open: Vec<Open>,
     /// Whether each box also carries the rect layout computed for it, for a test that compares the two.
     audit: bool,
+    /// Whether a box claimed the keyboard this frame, so a frame where none did can put it back.
+    claimed_focus: bool,
 }
 
 impl Reconciler {
@@ -183,6 +192,7 @@ impl Reconciler {
         install_reset(&document);
         Ok(Self {
             audit: audit_requested(),
+            claimed_focus: false,
             document,
             host,
             live: FxHashMap::default(),
@@ -211,6 +221,7 @@ impl Reconciler {
             truncate(self.host.as_ref(), root.placed);
         }
         self.retire();
+        self.keep_the_keyboard();
     }
 
     /// Everything that is not an element boundary: what the open box paints.
@@ -351,6 +362,25 @@ impl Reconciler {
         });
     }
 
+    /// Keeps the keyboard inside the app.
+    ///
+    /// Key listeners sit on the host, and an event only reaches them by bubbling *up* to it — so focus that
+    /// escapes to `<body>` takes the whole keyboard with it, silently. It escapes on its own: an element
+    /// this reconcile replaces takes its focus down with it, and the browser hands it to the document. When
+    /// no box claimed the keyboard this frame and nothing inside the app holds it, the host takes it back.
+    fn keep_the_keyboard(&mut self) {
+        if std::mem::take(&mut self.claimed_focus) {
+            return;
+        }
+        let inside = self
+            .document
+            .active_element()
+            .is_some_and(|active| self.host.contains(Some(active.as_ref())));
+        if !inside {
+            let _ = self.host.focus();
+        }
+    }
+
     /// Says what the box is, in whatever way the element it became does not already say it.
     ///
     /// A `<nav>` needs no `role="navigation"` — it *is* one, and duplicating it is noise a reader has to
@@ -363,11 +393,16 @@ impl Reconciler {
         let label = semantics.label.as_deref();
         // Artwork nobody named is decoration, and a graphic with no accessible name is noise to read out.
         let hidden = semantics.role == Role::Drawing && label.is_none();
+        let focused = semantics.focused;
         let described = Described {
             role,
             label: label.map(str::to_string),
             link: semantics.link.as_deref().map(str::to_string),
             hidden,
+            checked: semantics.toggled,
+            disabled: semantics.disabled,
+            focused,
+            control: semantics.role.is_control(),
         };
         let Some(live) = self.live.get_mut(&element.id.0) else {
             return;
@@ -379,7 +414,31 @@ impl Reconciler {
         set_or_clear(node, "aria-label", described.label.as_deref());
         set_or_clear(node, "href", described.link.as_deref());
         set_or_clear(node, "aria-hidden", described.hidden.then_some("true"));
+        set_or_clear(
+            node,
+            "aria-checked",
+            described
+                .checked
+                .map(|on| if on { "true" } else { "false" }),
+        );
+        set_or_clear(node, "aria-disabled", described.disabled.then_some("true"));
+        // A `div` cannot hold focus at all without this, and every control that is not a `<button>` is one.
+        // `-1` rather than `0`: Telar owns the tab order, and a second one the browser kept would walk a
+        // person through the interface in a different order than the app believes they are in.
+        set_or_clear(node, "tabindex", described.control.then_some("-1"));
         live.described = described;
+        // The document has a focus of its own, and two focuses that disagree is one interface the keyboard
+        // and the screen reader read differently. Only ever moved *to* what Telar focused: blurring here
+        // would fight the element about to take it.
+        if focused {
+            self.claimed_focus = true;
+            if let Some(html) = node.dyn_ref::<web_sys::HtmlElement>() {
+                let active = self.document.active_element();
+                if active.as_ref() != Some(node) {
+                    let _ = html.focus();
+                }
+            }
+        }
     }
 
     fn pop(&mut self) {

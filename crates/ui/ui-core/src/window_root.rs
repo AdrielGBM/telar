@@ -97,6 +97,24 @@ impl Component for WindowRoot {
         {
             crate::focus::blur_from_pointer(*x as f32, *y as f32);
         }
+        // Tab is answered by the box that holds focus, which leaves the first one: with nothing focused there
+        // is no box to answer and the key reached nobody, so the keyboard could never get *into* an interface
+        // it had not already been clicked into. The root is where this can be asked, and it asks last — a
+        // control that wants Tab for itself has already taken it.
+        if let Event::KeyPressed { key, modifiers } = event
+            && matches!(key, platform_core::Key::Named(platform_core::NamedKey::Tab))
+            && crate::focus::current().is_none()
+        {
+            if self.content.on_event(event) == EventResult::Handled {
+                return EventResult::Handled;
+            }
+            if modifiers.is_shift {
+                crate::focus::focus_prev();
+            } else {
+                crate::focus::focus_next();
+            }
+            return EventResult::Handled;
+        }
         if let Event::WindowResized { width, height } = event {
             mark_dirty(self.root).ok();
             compute_layout(

@@ -45,6 +45,18 @@ pub struct Input {
 }
 
 impl Input {
+    /// A single-line field, and whether the keyboard is in it.
+    ///
+    /// A target that draws its own caret needs neither; one that hands the box to a document needs both, so
+    /// the document's own focus lands on the field a person clicked into rather than beside it.
+    fn semantics(&self) -> renderer_core::Semantics {
+        renderer_core::Semantics::of(renderer_core::Role::TextInput).in_state(
+            focus::is_focused(self.id),
+            None,
+            false,
+        )
+    }
+
     pub fn new(
         value: RwSignal<String>,
         layout_style: LayoutStyle,
@@ -416,9 +428,11 @@ impl Component for Input {
                 Some(highlight) => vec![highlight, text_node, caret_node],
                 None => vec![text_node, caret_node],
             };
-            self.leaf.at_layout_position(RenderNode::group(layers))
+            self.leaf
+                .at_layout_position_as(|| self.semantics(), RenderNode::group(layers))
         } else {
-            self.leaf.at_layout_position(text_node)
+            self.leaf
+                .at_layout_position_as(|| self.semantics(), text_node)
         }
     }
 

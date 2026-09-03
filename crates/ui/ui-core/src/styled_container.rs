@@ -206,6 +206,13 @@ impl StyledContainer {
         let mut semantics =
             renderer_core::Semantics::of(crate::element::role_of(self.role, self.press.is_set()));
         semantics.click_through = self.click_through;
+        // Read inside `view()`, so a box re-emits when its state changes and the document keeps up: what a
+        // reader is told and what is drawn are the same frame rather than two that agree most of the time.
+        if let Some(id) = self.focusable.id {
+            semantics.focused = focus::is_focused(id);
+            semantics.toggled = focus::toggled_state(id);
+        }
+        semantics.disabled = self.is_disabled();
         crate::element::with_semantics(self.node, semantics)
     }
 

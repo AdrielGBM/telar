@@ -50,6 +50,15 @@ pub struct TextArea {
 }
 
 impl TextArea {
+    /// A multi-line editor, and whether the keyboard is in it. See [`Input::semantics`](crate::Input).
+    fn semantics(&self) -> renderer_core::Semantics {
+        renderer_core::Semantics::of(renderer_core::Role::MultilineTextInput).in_state(
+            focus::is_focused(self.id),
+            None,
+            false,
+        )
+    }
+
     pub fn new(
         value: RwSignal<String>,
         layout_style: LayoutStyle,
@@ -374,9 +383,11 @@ impl Component for TextArea {
                 Some(highlight) => vec![highlight, text_node, caret_node],
                 None => vec![text_node, caret_node],
             };
-            self.leaf.at_layout_position(RenderNode::group(layers))
+            self.leaf
+                .at_layout_position_as(|| self.semantics(), RenderNode::group(layers))
         } else {
-            self.leaf.at_layout_position(text_node)
+            self.leaf
+                .at_layout_position_as(|| self.semantics(), text_node)
         }
     }
 

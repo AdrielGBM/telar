@@ -250,6 +250,17 @@ pub struct Semantics {
     pub label: Option<Arc<str>>,
     /// Where a [`Link`](Role::Link) goes. Meaningless on every other role, and absent there.
     pub link: Option<Arc<str>>,
+    /// Whether the box is where the keyboard currently is.
+    ///
+    /// A target that draws its own focus ring does not need telling; one that hands the box to a document
+    /// does, because the document has a focus of its own and the two must be the same box.
+    pub focused: bool,
+    /// Whether a control carrying a checked state is in it. `None` for the roles that have no such state —
+    /// never a default of `false` for the ones that do, which announces every checkbox as unticked.
+    pub toggled: Option<bool>,
+    /// Whether the box is present but not operable. Announced rather than hidden: a control that is
+    /// genuinely not there is absent instead.
+    pub disabled: bool,
     /// Whether the box refuses pointer events, so what is drawn under it takes them instead.
     pub click_through: bool,
 }
@@ -289,6 +300,14 @@ impl Semantics {
 
     pub fn click_through(mut self) -> Self {
         self.click_through = true;
+        self
+    }
+
+    /// The state a control is in, as the thing operating it reports it.
+    pub fn in_state(mut self, focused: bool, toggled: Option<bool>, disabled: bool) -> Self {
+        self.focused = focused;
+        self.toggled = toggled;
+        self.disabled = disabled;
         self
     }
 }

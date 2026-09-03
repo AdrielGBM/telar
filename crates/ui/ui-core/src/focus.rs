@@ -769,3 +769,19 @@ mod tests {
         unregister(c);
     }
 }
+
+/// The checked state `id` declared, read now.
+///
+/// `None` both for a control that carries no such state and for one nothing has registered. Reading it here
+/// rather than through [`exposed`] is what lets a widget put its own state on the box it draws: the reading
+/// happens inside `view()`, so the box re-emits when the state changes, which a snapshot taken afterwards
+/// could never do.
+pub fn toggled_state(id: FocusId) -> Option<bool> {
+    let read = with_focus(|s| {
+        s.order
+            .iter()
+            .find(|e| e.id == id)
+            .and_then(|e| e.toggled.clone())
+    })?;
+    Some(read())
+}

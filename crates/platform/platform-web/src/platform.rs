@@ -339,7 +339,12 @@ fn on_pointer(
             // Capture, so a drag that leaves the element keeps arriving — which is what a slider or a
             // resize handle needs, and what the browser otherwise stops at the boundary.
             let _ = host.set_pointer_capture(event.pointer_id());
-            let _ = host.focus();
+            // Only where the keyboard is somewhere else entirely. A document backend gives focus to the
+            // element the press landed on, and taking it straight back would leave the app focused and the
+            // box it just focused not.
+            if !focus_is_inside(host) {
+                let _ = host.focus();
+            }
             events.extend(map::pointer_pressed(x, y, button, source));
         }
         PointerKind::Up => {
@@ -439,4 +444,11 @@ fn turn() {
     if wants_another {
         request_frame();
     }
+}
+
+/// Whether the keyboard is already somewhere in the app.
+fn focus_is_inside(host: &web_sys::HtmlElement) -> bool {
+    dom::document()
+        .active_element()
+        .is_some_and(|active| host.contains(Some(active.as_ref())))
 }
