@@ -113,12 +113,31 @@ pub trait Window {
     fn prefers_dark(&self) -> Option<bool> {
         None
     }
+    /// A handle that asks this window for a frame, usable from any thread.
+    ///
+    /// `None` where a window cannot hand one out: a browser surface redraws through a callback that never
+    /// leaves the thread that registered it. Such a platform installs a process-global
+    /// [`set_loop_waker`](crate::set_loop_waker) instead, which is what the runtime prefers anyway. A window
+    /// that is `Clone + Send + Sync` answers this with [`window_waker`].
+    fn redraw_waker(&self) -> Option<std::sync::Arc<dyn Fn() + Send + Sync>> {
+        None
+    }
+
     /// Whether this window renders to an offscreen target with no on-screen surface (its raw handles are
     /// unavailable). A handler must build a windowless renderer for it — a windowed renderer would fail to
     /// create a surface. Defaults to `false` (an on-screen window).
     fn is_offscreen(&self) -> bool {
         false
     }
+}
+
+/// The obvious [`Window::redraw_waker`] for a window that can be cloned and shared: one that keeps the
+/// window alive and asks it for a frame.
+pub fn window_waker<W: Window + Clone + Send + Sync + 'static>(
+    window: &W,
+) -> std::sync::Arc<dyn Fn() + Send + Sync> {
+    let window = window.clone();
+    std::sync::Arc::new(move || window.request_redraw())
 }
 
 pub trait EventHandler<W: Window> {
@@ -225,7 +244,12 @@ impl<W: Window> EventHandler<W> for Box<dyn EventHandler<W>> {
 
 pub trait Platform {
     type Window: Window;
-    fn run<H: EventHandler<Self::Window>>(
+    /// Runs `handler` until the app closes.
+    ///
+    /// `'static` because a platform is allowed to *keep* the handler rather than drive it to completion
+    /// before returning: a browser owns its own loop, so the run there mounts the app onto it and returns
+    /// while the app carries on inside callbacks the platform registered.
+    fn run<H: EventHandler<Self::Window> + 'static>(
         self,
         config: WindowConfig,
         handler: H,

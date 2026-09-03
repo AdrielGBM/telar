@@ -18,7 +18,7 @@ use super::{FRAME_BUDGET, HW_KEEPALIVE_INTERVAL, IDLE_GRACE};
 
 pub(super) struct AppHandler<W, D: DevPlugin>
 where
-    W: Window + Clone + Send + Sync + 'static,
+    W: Window + Clone + 'static,
 {
     pub(super) app: Box<dyn App>,
     // This handler's surface world, activated around every lifecycle call so its build/event/frame resolve
@@ -139,7 +139,7 @@ pub(super) fn build_app_handler<W, D>(
     renderer: SurfaceRenderer<W>,
 ) -> AppHandler<W, D>
 where
-    W: Window + Clone + Send + Sync + 'static,
+    W: Window + Clone + 'static,
     D: DevPlugin,
 {
     let SurfaceRenderer { host, raw_handles } = renderer;
@@ -198,7 +198,7 @@ struct LifecycleGuard {
 
 impl<W, D> AppHandler<W, D>
 where
-    W: Window + Clone + Send + Sync + 'static,
+    W: Window + Clone + 'static,
     D: DevPlugin,
 {
     /// Drains and applies the window-management commands a handler enqueued — from a title-bar control during
@@ -494,7 +494,7 @@ where
 
 impl<W, D> EventHandler<W> for AppHandler<W, D>
 where
-    W: Window + Clone + Send + Sync + 'static,
+    W: Window + Clone + 'static,
     D: DevPlugin,
 {
     fn accessibility(&self) -> Vec<platform_core::AccessNode> {
@@ -562,14 +562,11 @@ where
         // Prefer the process-global loop wake (installed by the platform): it wakes the loop — redrawing every
         // surface — without holding any window, so an app can cache this waker or hand it to a worker thread
         // and, if its content is later moved to another window, the original still closes and wakeups still
-        // reach it. Fall back to a window-cloning wake on backends that install no loop waker.
-        self.redraw_waker = Some(match platform_core::loop_waker() {
-            Some(wake) => crate::app_context::RedrawWaker::new(move || wake()),
-            None => {
-                let window = window.clone();
-                crate::app_context::RedrawWaker::new(move || window.request_redraw())
-            }
-        });
+        // reach it. Fall back to the window's own waker on backends that install no loop waker, and to none
+        // at all where a window cannot hand one out — a browser surface, whose redraw never leaves its thread.
+        self.redraw_waker = platform_core::loop_waker()
+            .or_else(|| window.redraw_waker())
+            .map(|wake| crate::app_context::RedrawWaker::new(move || wake()));
         // Hand the same wake to the app's reactive runtime so `spawn_task` needs no waker ceremony from the
         // app. Under the per-window fallback above this points at whichever surface resumed last, which is
         // enough: any redraw runs a frame, and every surface's frame drains the whole task queue.
@@ -579,7 +576,7 @@ where
         #[cfg(all(feature = "dev", not(target_os = "android")))]
         if let Some(rx) = self.hot_reload_rx.take() {
             let (relay_tx, relay_rx) = std::sync::mpsc::channel::<crate::hot::HotEvent>();
-            let window_clone = window.clone();
+            let wake = self.redraw_waker.clone();
             std::thread::Builder::new()
                 .name("telar-hot-relay".to_string())
                 .spawn(move || {
@@ -587,7 +584,9 @@ where
                         if relay_tx.send(event).is_err() {
                             break;
                         }
-                        window_clone.request_redraw();
+                        if let Some(wake) = &wake {
+                            wake.wake();
+                        }
                     }
                 })
                 .ok();

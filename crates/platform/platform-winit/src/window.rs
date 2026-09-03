@@ -22,6 +22,10 @@ impl HasDisplayHandle for WinitWindow {
 }
 
 impl PlatformWindow for WinitWindow {
+    fn redraw_waker(&self) -> Option<std::sync::Arc<dyn Fn() + Send + Sync>> {
+        Some(platform_core::window_waker(self))
+    }
+
     fn width(&self) -> u32 {
         self.0.inner_size().width
     }

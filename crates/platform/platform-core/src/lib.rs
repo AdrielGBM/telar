@@ -11,7 +11,7 @@ pub use event::{Event, Key, ModifiersState, NamedKey, PointerButton, PointerSour
 pub use loop_waker::{loop_waker, set_loop_waker};
 pub use window::{
     Cursor, EventHandler, FullscreenMode, MultiSurfacePlatform, Platform, SurfaceId, Window,
-    WindowConfig, WindowPosition,
+    WindowConfig, WindowPosition, window_waker,
 };
 pub use window_command::{
     WindowCommand, WindowCommandContext, WindowCommandGuard, push_window_command,

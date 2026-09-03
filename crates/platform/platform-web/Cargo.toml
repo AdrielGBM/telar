@@ -1,0 +1,56 @@
+[package]
+name = "telar-platform-web"
+version = { workspace = true }
+edition = { workspace = true }
+rust-version = { workspace = true }
+description = "Browser surface, input and animation-frame loop for Telar's platform abstraction."
+keywords = ["telar", "web", "wasm", "platform", "gui"]
+categories = ["wasm", "gui", "web-programming"]
+readme = { workspace = true }
+license = { workspace = true }
+repository = { workspace = true }
+
+[dependencies]
+geometry-core = { workspace = true }
+platform-core = { workspace = true }
+services-core = { workspace = true }
+tracing = { workspace = true }
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+js-sys = { workspace = true }
+wasm-bindgen = { workspace = true }
+wasm-bindgen-futures = { workspace = true }
+
+[target.'cfg(target_arch = "wasm32")'.dependencies.web-sys]
+workspace = true
+features = [
+    "AddEventListenerOptions",
+    "Clipboard",
+    "CompositionEvent",
+    "console",
+    "CssStyleDeclaration",
+    "Document",
+    "DomRect",
+    "DomRectReadOnly",
+    "Element",
+    "Event",
+    "EventTarget",
+    "FocusEvent",
+    "HtmlCanvasElement",
+    "HtmlElement",
+    "HtmlInputElement",
+    "InputEvent",
+    "KeyboardEvent",
+    "MediaQueryList",
+    "MediaQueryListEvent",
+    "MouseEvent",
+    "Navigator",
+    "Node",
+    "Performance",
+    "PointerEvent",
+    "ResizeObserver",
+    "ResizeObserverEntry",
+    "ResizeObserverSize",
+    "WheelEvent",
+    "Window",
+]

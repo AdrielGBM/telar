@@ -65,7 +65,7 @@ pub fn run_with_platform_and_renderer<P, F, A, D>(
 ) -> Result<(), PlatformError>
 where
     P: Platform,
-    P::Window: Clone + Send + Sync + 'static,
+    P::Window: Clone + 'static,
     F: RendererFactory<P::Window>,
     A: App,
     D: DevPlugin,
@@ -90,7 +90,7 @@ fn run_on_platform<P, A, D>(
 ) -> Result<(), PlatformError>
 where
     P: Platform,
-    P::Window: Clone + Send + Sync + 'static,
+    P::Window: Clone + 'static,
     A: App,
     D: DevPlugin,
 {

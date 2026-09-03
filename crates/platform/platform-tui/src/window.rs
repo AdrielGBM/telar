@@ -61,6 +61,10 @@ impl TuiWindow {
 }
 
 impl Window for TuiWindow {
+    fn redraw_waker(&self) -> Option<std::sync::Arc<dyn Fn() + Send + Sync>> {
+        Some(platform_core::window_waker(self))
+    }
+
     fn width(&self) -> u32 {
         (self.inner.cols.load(Ordering::Relaxed) as f32 * self.inner.cell_width).round() as u32
     }

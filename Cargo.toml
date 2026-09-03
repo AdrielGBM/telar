@@ -24,6 +24,7 @@ members = [
     "crates/ui/ui-tree",
     "crates/renderer/renderer-tui",
     "crates/platform/platform-tui",
+    "crates/platform/platform-web",
     "crates/telar",
     "crates/tools/cargo-telar",
     "crates/tools/telar-parser",
@@ -116,10 +117,10 @@ notify = "8.2.0"
 # std's Instant aborts on wasm32-unknown-unknown; this is the same type on every other target.
 web-time = "1.1.0"
 # Pinned: the generated glue must match the `wasm-bindgen` CLI, and the one in the dev shell is this version.
-wasm-bindgen = "=0.2.121"
-wasm-bindgen-futures = "0.4.77"
-js-sys = "0.3.104"
-web-sys = "0.3.104"
+wasm-bindgen = "=0.2.126"
+wasm-bindgen-futures = "0.4"
+js-sys = "0.3"
+web-sys = "0.3"
 console_error_panic_hook = "0.1.7"
 crossterm = "0.29.0"
 unicode-width = "0.2.2"
@@ -137,6 +138,7 @@ renderer-cache = { package = "telar-renderer-cache", path = "crates/renderer/ren
 renderer-record = { package = "telar-renderer-record", path = "crates/renderer/renderer-record", version = "0.1.8" }
 renderer-tui = { package = "telar-renderer-tui", path = "crates/renderer/renderer-tui", version = "0.1.8" }
 platform-tui = { package = "telar-platform-tui", path = "crates/platform/platform-tui", version = "0.1.8" }
+platform-web = { package = "telar-platform-web", path = "crates/platform/platform-web", version = "0.1.8" }
 reactive-local = { package = "telar-reactive-local", path = "crates/reactive/reactive-local", version = "0.1.8" }
 renderer-software = { package = "telar-renderer-software", path = "crates/renderer/renderer-software", version = "0.1.8" }
 renderer-hardware = { package = "telar-renderer-hardware", path = "crates/renderer/renderer-hardware", version = "0.1.8" }

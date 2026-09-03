@@ -63,6 +63,10 @@ impl HasDisplayHandle for HeadlessWindow {
 }
 
 impl Window for HeadlessWindow {
+    fn redraw_waker(&self) -> Option<std::sync::Arc<dyn Fn() + Send + Sync>> {
+        Some(platform_core::window_waker(self))
+    }
+
     fn width(&self) -> u32 {
         self.inner.width
     }

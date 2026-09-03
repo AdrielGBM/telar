@@ -54,8 +54,8 @@
           pkgs.nodejs
           pkgs.pnpm
           pkgs.pkg-config
-          # Must match the `wasm-bindgen` version pinned in Cargo.toml, or the generated glue is rejected.
-          pkgs.wasm-bindgen-cli
+          # Must match the pinned `wasm-bindgen` crate version, or the generated glue is rejected.
+          pkgs.wasm-bindgen-cli_0_2_126
           pkgs.binaryen
         ];
         buildInputs = desktopDeps;
