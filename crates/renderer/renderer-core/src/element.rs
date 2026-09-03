@@ -5,6 +5,7 @@
 //! rather than rebuild it — and needs to know what a box *means*, so a button is a `<button>` and not a
 //! `<div>` that happens to be clickable.
 
+use geometry_core::Rect;
 use std::sync::Arc;
 
 /// Identifies one box across frames.
@@ -75,21 +76,34 @@ impl Semantics {
 /// backend becomes a pure function of the command stream — it needs no access to the layout engine, and can
 /// therefore be tested against a stream built on a machine with no browser. And the string is built where
 /// the style is already known, once per re-render of the widget that owns it, rather than once per frame.
-#[derive(Clone, PartialEq, Eq, Hash, Debug)]
+#[derive(Clone, PartialEq, Debug)]
 pub struct Element {
     pub id: ElementId,
     pub semantics: Semantics,
     /// The box's layout, as CSS declarations — `display:flex;gap:8px;` and so on. Empty where the target
     /// does not want them, which is every target that positions the box itself.
     pub layout: Box<str>,
+    /// Where layout put the box, in the surface's own coordinates.
+    ///
+    /// Carried alongside the declarations, not instead of them, because the two answer different questions.
+    /// A box inside another box is placed by its parent, and the declarations are what the parent needs. A
+    /// box that *is* a layout root — an application that computes several and places them itself — has no
+    /// parent to place it, and a document told only what it asked for would stack them.
+    pub rect: Rect,
 }
 
 impl Element {
-    pub fn new(id: ElementId, semantics: Semantics, layout: impl Into<Box<str>>) -> Self {
+    pub fn new(
+        id: ElementId,
+        semantics: Semantics,
+        layout: impl Into<Box<str>>,
+        rect: Rect,
+    ) -> Self {
         Self {
             id,
             semantics,
             layout: layout.into(),
+            rect,
         }
     }
 }

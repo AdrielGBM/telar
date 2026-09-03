@@ -36,7 +36,7 @@ fn round(value: f32) -> String {
     }
 }
 
-fn px(value: f32) -> String {
+pub fn px(value: f32) -> String {
     format!("{}px", round(value))
 }
 

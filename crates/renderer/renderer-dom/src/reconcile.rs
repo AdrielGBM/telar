@@ -45,6 +45,8 @@ pub struct Reconciler {
 
 impl Reconciler {
     pub fn new(host: web_sys::HtmlElement) -> Result<Self, String> {
+        // Layout roots are placed in it absolutely, so it has to be what they are placed relative to.
+        let _ = host.style().set_property("position", "relative");
         let document = host
             .owner_document()
             .ok_or_else(|| "the host element is not in a document".to_string())?;
@@ -146,6 +148,17 @@ impl Reconciler {
         let tag = tag_of(&element.semantics.role);
         let node = self.element_for(element.id.0, tag);
         let mut style = element.layout.to_string();
+        // A box whose parent is the host is a layout root: the application computed it and placed it itself,
+        // so there is no parent expressing where it goes and the declarations alone would stack them. This
+        // is the one place the *computed* rect is used instead of what the box asked for.
+        if self.open.len() == 1 {
+            let rect = element.rect;
+            paint::declare(&mut style, "position", "absolute");
+            paint::declare(&mut style, "left", &paint::px(rect.x));
+            paint::declare(&mut style, "top", &paint::px(rect.y));
+            paint::declare(&mut style, "width", &paint::px(rect.width));
+            paint::declare(&mut style, "height", &paint::px(rect.height));
+        }
         if element.semantics.click_through {
             paint::declare(&mut style, "pointer-events", "none");
         }

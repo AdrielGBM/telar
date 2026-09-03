@@ -208,12 +208,20 @@ impl ScrollCore {
         let scroll_x = self.scroll_x.get();
         let scroll_y = self.scroll_y.get();
         let content_rect = self.content_rect_signal.get();
+        // Where the content sits. The viewport's own position is part of it only for a backend that draws
+        // into one flat surface; where an element carries the box, the browser has already put it there and
+        // adding it again would offset the content by the panel's distance from the page's corner.
+        let (dx, dy) = if ui_tree::element_capture() {
+            (-scroll_x, -scroll_y)
+        } else {
+            (viewport.x - scroll_x, viewport.y - scroll_y)
+        };
         let scrollable = RenderNode::clip(
             viewport,
             BorderRadius::zero(),
             [RenderNode::translate(
-                viewport.x - scroll_x,
-                viewport.y - scroll_y,
+                dx,
+                dy,
                 [self.content_segment.boundary()],
             )],
         );
@@ -540,7 +548,9 @@ impl_leaf_widget!(LayoutScrollArea);
 
 impl Component for LayoutScrollArea {
     fn view(&self) -> RenderNode {
-        self.core.view(self.leaf.rect.get())
+        // Its own box rather than `LayoutLeaf::at_layout_position`: the content is positioned by the scroll
+        // offset inside the viewport, not by the leaf's own placement, so the two must not both apply.
+        crate::element::wrap(self.leaf.node, self.core.view(self.leaf.rect.get()))
     }
 
     fn on_event(&mut self, event: &Event) -> EventResult {

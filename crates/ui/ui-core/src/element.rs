@@ -19,7 +19,17 @@ pub(crate) fn with_semantics(node: NodeId, semantics: Semantics) -> Arc<Element>
     let layout = layout_reactive::declared_css(node)
         .map(|css| css.into_string())
         .unwrap_or_default();
-    Arc::new(Element::new(ElementId(node.into()), semantics, layout))
+    // Read, not peeked: a box that moves has to re-emit, because where it is is part of what a document
+    // needs for the boxes nothing else places.
+    let rect = layout_reactive::track_layout(node)
+        .map(|rect| rect.get())
+        .unwrap_or_default();
+    Arc::new(Element::new(
+        ElementId(node.into()),
+        semantics,
+        layout,
+        rect,
+    ))
 }
 
 /// Wraps `content` as the box `node` names, when a document backend is listening.
