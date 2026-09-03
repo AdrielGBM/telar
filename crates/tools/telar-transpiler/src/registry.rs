@@ -177,6 +177,9 @@ const CONTAINER_PAINT: &[&str] = &[
     "drag_button",
     // How far a press must travel before it is a drag and not a click on what sits under it.
     "drag_threshold",
+    // What this box *is*, beyond a box: a region of the screen, a list, a heading. One word on a `col` the
+    // author already wrote, rather than a different kind of box to write.
+    "role",
     // A box that is drawn over something without standing between it and the pointer.
     "click_through",
     // A control inside something draggable, saying the stroke that starts on it is its own.
@@ -394,6 +397,7 @@ pub fn value_kind(tag: &str, key: &str) -> Option<ValueKind> {
         // fill rule is a keyword, not a paint.
         _ if key != "stroke" && color_attr_keys().contains(&key) => return Some(ValueKind::Color),
         "stroke" if tag != "svg" && tag != "path" => return Some(ValueKind::Color),
+        "role" => return Some(ValueKind::Keywords(role_values())),
         "align" => return Some(ValueKind::Keywords(ALIGN_VALUES)),
         "justify" => return Some(ValueKind::Keywords(JUSTIFY_VALUES)),
         "self" => return Some(ValueKind::Keywords(SELF_VALUES)),
@@ -630,6 +634,85 @@ mod tests {
         // A gradient's stops are a value now, so its old keys are not properties a box has.
         for key in ["gradient", "from", "to", "mid", "mid_pos", "radial_radius"] {
             assert!(!color_attr_keys().contains(&key), "{key} should be gone");
+        }
+    }
+}
+
+/// The roles an application may name on a box, and the variant each one is.
+///
+/// Written here rather than derived from `semantics-core` because the transpiler emits a *path*, and a path
+/// is not something a runtime value can produce. Kept beside the tag tables for the same reason they are
+/// here: tooling offers these as completions, and an unknown one is a diagnostic rather than a box that
+/// silently means nothing.
+///
+/// The aliases are the words an author reaches for first. `sidebar` is not an ARIA role — `complementary`
+/// is — and pointing one at the other is cheaper than explaining the difference at every use.
+pub fn role_values() -> &'static [(&'static str, &'static str)] {
+    &[
+        ("group", "Group"),
+        ("banner", "Banner"),
+        ("header", "Banner"),
+        ("navigation", "Navigation"),
+        ("nav", "Navigation"),
+        ("main", "Main"),
+        ("content", "Main"),
+        ("complementary", "Complementary"),
+        ("aside", "Complementary"),
+        ("sidebar", "Complementary"),
+        ("contentinfo", "ContentInfo"),
+        ("footer", "ContentInfo"),
+        ("article", "Article"),
+        ("section", "Section"),
+        ("form", "Form"),
+        ("search", "Search"),
+        ("h1", "Heading(1)"),
+        ("h2", "Heading(2)"),
+        ("h3", "Heading(3)"),
+        ("h4", "Heading(4)"),
+        ("h5", "Heading(5)"),
+        ("h6", "Heading(6)"),
+        ("list", "List"),
+        ("listitem", "ListItem"),
+        ("item", "ListItem"),
+        ("dialog", "Dialog"),
+        ("button", "Button"),
+        ("link", "Link"),
+        ("checkbox", "CheckBox"),
+        ("radio", "Radio"),
+        ("switch", "Switch"),
+        ("toggle", "Switch"),
+        ("tab", "Tab"),
+        ("tabpanel", "TabPanel"),
+        ("menuitem", "MenuItem"),
+        ("slider", "Slider"),
+        ("spinbutton", "SpinButton"),
+        ("progressbar", "ProgressBar"),
+        ("progress", "ProgressBar"),
+        ("label", "Label"),
+    ]
+}
+
+/// The variant `name` spells, or `None` for a word nothing answers to.
+pub fn role_variant(name: &str) -> Option<&'static str> {
+    role_values()
+        .iter()
+        .find(|(spelling, _)| *spelling == name)
+        .map(|(_, variant)| *variant)
+}
+
+#[cfg(test)]
+mod role_tests {
+    use super::*;
+
+    /// The transpiler emits a path and the runtime parses a name; they are two tables and they have to agree,
+    /// or a role an author is offered is one the vocabulary does not have.
+    #[test]
+    fn every_spelling_is_one_the_vocabulary_answers_to() {
+        for (name, _) in role_values() {
+            assert!(
+                semantics_core::Role::parse(name).is_some(),
+                "`{name}` is offered but the vocabulary does not know it"
+            );
         }
     }
 }

@@ -3,7 +3,7 @@ use telar::{
     AlignItems, App, AvailableSpace, BorderRadius, Children, Color, Component, Container, Event,
     EventResult,
     JustifyContent, LayoutError, LayoutItem, LayoutScrollArea, LayoutStyle, NavPage, NavTransition,
-    Navigator, NodeId, NodeVec, PagePolicy, Rect, RectStyle, RenderNode, RwSignal, ShapeStyle,
+    Navigator, NodeId, NodeVec, PagePolicy, Rect, RectStyle, RenderNode, Role, RwSignal, ShapeStyle,
     SizeDimension, StyledContainer, TabHost, TabStacks, Text, TextStyle, compute_layout,
     hot_signal, mark_dirty, new_container, new_leaf, reset_layout_runtime, set_display,
     set_overlay_host, signal, transform_pointer, use_direction, use_dismiss_depth,
@@ -136,7 +136,9 @@ impl SectionPage {
                 .padding_all(32.0)
                 .gap(40.0),
             vec![(def.build)()?, build_source_link(nav, section)?],
-        )?;
+        )?
+        // The one region this screen is *for*. What a reader jumps to first and a document writes as `<main>`.
+        .role(Role::Main);
         // Outer wrapper fills the scroll viewport and centers the capped column on wide windows.
         let centered = Container::new(
             LayoutStyle::new()
@@ -420,15 +422,18 @@ fn build_nav(stacks: TabStacks<usize, SectionRoute>) -> Result<Box<dyn LayoutIte
         .on_press(move || on_press.select(i));
         buttons.push(Box::new(btn));
     }
-    let list = Container::new(LayoutStyle::new().flex_column().gap(3.0), buttons)?;
+    let list = Container::new(LayoutStyle::new().flex_column().gap(3.0), buttons)?.role(Role::List);
     let label = Text::single_line(
         || "CONTENTS".to_string(),
         || TextStyle::new(11.0, theme().muted),
     )?;
-    Ok(Box::new(Container::new(
-        LayoutStyle::new().flex_column().gap(8.0),
-        vec![build_back(stacks)?, Box::new(label), Box::new(list)],
-    )?))
+    Ok(Box::new(
+        Container::new(
+            LayoutStyle::new().flex_column().gap(8.0),
+            vec![build_back(stacks)?, Box::new(label), Box::new(list)],
+        )?
+        .role(Role::Navigation),
+    ))
 }
 
 /// Full sidebar: the `.rsx` header + theme switcher, then the Rust-built section nav.
@@ -444,7 +449,10 @@ fn build_sidebar(
             .padding_all(20.0)
             .gap(22.0),
         vec![header_theme, nav],
-    )?))
+    )?
+    // Supporting content beside the section being read, which is what a rail of links to other sections
+    // is. A reader can jump straight past it; a document writes it as an `<aside>`.
+    .role(Role::Complementary)))
 }
 
 /// Mobile top bar: a hamburger button (toggles `menu_open`) next to the wordmark. Shown only below the breakpoint.

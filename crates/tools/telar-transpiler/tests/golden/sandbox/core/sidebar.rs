@@ -31,7 +31,7 @@ pub fn sidebar(props: SidebarProps, children: Children) -> Result<Box<dyn Layout
                     { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(12.0).with_color(theme.get().muted) },
                 )?
             };
-            Container::new(LayoutStyle::new().flex_column().gap(2.0), children![__text_0, __text_1])?
+            Container::new(LayoutStyle::new().flex_column().gap(2.0), children![__text_0, __text_1])?.role(::telar::Role::Banner)
         };
         let __col_2 = {
             let __text_2 = {

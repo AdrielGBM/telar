@@ -20,6 +20,8 @@ pub struct Container {
     dyn_host: Option<DynHost>,
     // Optional tap gesture so a plain row/col can be pressable; children still hit-test first.
     press: PressGesture,
+    // What this box *is*, where it is more than a box. `None` reads it from what the box does.
+    role: Option<renderer_core::Role>,
 }
 
 impl Container {
@@ -34,6 +36,7 @@ impl Container {
             children,
             dyn_host: None,
             press: PressGesture::default(),
+            role: None,
         })
     }
 
@@ -53,6 +56,7 @@ impl Container {
             children: Vec::new(),
             dyn_host: Some(dyn_host),
             press: PressGesture::default(),
+            role: None,
         })
     }
 
@@ -80,6 +84,19 @@ impl Container {
     pub fn styled_by(self, style: impl Fn() -> LayoutStyle + 'static) -> Self {
         let node = self.node;
         crate::styled_container::style_follows(node, style);
+        self
+    }
+
+    /// What this box *is*, beyond a box: a region of the screen, a list, a heading.
+    ///
+    /// Only a description — it does not make the box focusable, because a region is not something the
+    /// keyboard stops at. A control says so with [`StyledContainer::control`](crate::StyledContainer::control),
+    /// which declares the role *and* joins the tab order.
+    ///
+    /// What it buys: a screen reader that can jump between the regions of a screen, and a document backend
+    /// that writes `<nav>` where a box said it was the navigation. A target that has no use for it drops it.
+    pub fn role(mut self, role: renderer_core::Role) -> Self {
+        self.role = Some(role);
         self
     }
 
@@ -128,10 +145,10 @@ impl Component for Container {
         // A transparent box still owns a layout node, so it is still a box a document has to create: its
         // children are laid out by *it*, and attaching them to its parent instead puts them in the wrong flow.
         if ui_tree::element_capture() {
-            let mut semantics = renderer_core::Semantics::group();
-            if self.press.is_set() {
-                semantics.role = renderer_core::Role::Button;
-            }
+            let semantics = renderer_core::Semantics::of(crate::element::role_of(
+                self.role,
+                self.press.is_set(),
+            ));
             RenderNode::element(
                 crate::element::with_semantics(self.node, semantics),
                 [content],

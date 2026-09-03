@@ -134,6 +134,8 @@ pub struct StyledContainer {
     click_through: bool,
     // Whether a stroke that starts here is this box's and goes no further out. See `holds_stroke`.
     holds_stroke: bool,
+    // What this box *is*, where it is more than a box. `None` reads it from what the box does.
+    role: Option<renderer_core::Role>,
 }
 
 impl StyledContainer {
@@ -172,6 +174,7 @@ impl StyledContainer {
             focusable: Focusable::default(),
             click_through: false,
             holds_stroke: false,
+            role: None,
         }
     }
 
@@ -200,10 +203,8 @@ impl StyledContainer {
     /// The role is derived rather than declared — a box that answers a press *is* a button whether or not
     /// anybody said so, and one that declines pointer events is one the document should let events through.
     fn element(&self) -> std::sync::Arc<renderer_core::Element> {
-        let mut semantics = renderer_core::Semantics::group();
-        if self.press.is_set() {
-            semantics.role = renderer_core::Role::Button;
-        }
+        let mut semantics =
+            renderer_core::Semantics::of(crate::element::role_of(self.role, self.press.is_set()));
         semantics.click_through = self.click_through;
         crate::element::with_semantics(self.node, semantics)
     }
@@ -326,6 +327,7 @@ impl StyledContainer {
     /// Deliberately not implied by [`on_press`](Self::on_press): a scrim, a click-away backdrop and a drag
     /// surface all take presses and none of them is a place the keyboard should stop.
     pub fn control(mut self, role: focus::Role) -> Self {
+        self.role = Some(role);
         let id = *self.focusable.id.get_or_insert_with(focus::next_id);
         focus::register_with_role(id, focus::FocusKind::Widget, self.node, role);
         self.focusable.activates = true;
@@ -333,6 +335,15 @@ impl StyledContainer {
             self.state.focus = Some(Box::new(|_r| default_focus_ring()));
         }
         self.mark_interactive();
+        self
+    }
+
+    /// What this box *is*, beyond a box: a region of the screen, a list, an article.
+    ///
+    /// Description only — it does not join the tab order, because a region is not a place the keyboard
+    /// stops. [`control`](Self::control) is the one that declares a role *and* makes it focusable.
+    pub fn role(mut self, role: renderer_core::Role) -> Self {
+        self.role = Some(role);
         self
     }
 

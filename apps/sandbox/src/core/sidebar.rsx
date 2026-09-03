@@ -5,7 +5,7 @@ let theme_name = memo(move || theme.get().name.to_string());
 
 [view]
 col gap:22
-    col gap:2
+    col gap:2 role:banner
         text "▲ rsx" font_size:20 color:$theme.ink
         text "Feature gallery" font_size:12 color:$theme.muted
     col gap:8

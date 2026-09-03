@@ -14,6 +14,22 @@ pub(crate) fn of(node: NodeId) -> Arc<Element> {
     with_semantics(node, Semantics::group())
 }
 
+/// What a box is: what it was told, or what it does.
+///
+/// A box that answers a press *is* a button whether or not anybody said so, and the derivation is what keeps
+/// most of an interface meaningful without a word of markup. It stays a derivation and not a default, so a
+/// box that says it is a menu item is one, press or no press.
+pub(crate) fn role_of(
+    declared: Option<renderer_core::Role>,
+    pressable: bool,
+) -> renderer_core::Role {
+    match (declared, pressable) {
+        (Some(role), _) => role,
+        (None, true) => renderer_core::Role::Button,
+        (None, false) => renderer_core::Role::Group,
+    }
+}
+
 /// The element for a node that means something more than a box.
 pub(crate) fn with_semantics(node: NodeId, semantics: Semantics) -> Arc<Element> {
     let layout = layout_reactive::declared_css(node)

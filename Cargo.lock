@@ -5933,6 +5933,7 @@ dependencies = [
  "telar-i18n-core",
  "telar-parser",
  "telar-renderer-assets",
+ "telar-semantics-core",
  "thiserror 2.0.20",
  "toml",
 ]

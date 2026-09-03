@@ -644,8 +644,6 @@ fn tag_of(role: &Role) -> &'static str {
         Role::Section => "section",
         Role::Form => "form",
         Role::Search => "search",
-        Role::List => "ul",
-        Role::ListItem => "li",
         Role::Button => "button",
         Role::Link => "a",
         Role::Drawing => "svg",
@@ -673,6 +671,10 @@ fn aria_role(role: Role) -> Option<&'static str> {
         // A scroll area is a region a reader can be told about, but `scrollarea` is not an ARIA role and a
         // browser would ignore it.
         Role::ScrollArea => None,
+        // `ul` and `li` are a pair with a content model — a `ul` may hold only `li` — and nothing here can
+        // promise an author marked both. The ARIA roles are announced the same and are valid anywhere.
+        Role::List => Some("list"),
+        Role::ListItem => Some("listitem"),
         other => Some(other.as_str()),
     }
 }

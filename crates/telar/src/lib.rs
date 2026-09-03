@@ -149,8 +149,8 @@ pub use renderer_assets::{static_key, svg_cached};
 pub use renderer_core::{
     Border, BorderRadius, Clamp, Color, Declared, DrawCommand, DrawState, FillRule, FontFamily,
     FontStyle, Gradient, GradientKind, GradientStop, GradientStops, ImageData, LineCap, LineHeight,
-    LineJoin, Paint, PathData, PathStyle, PathVerb, Raster, RectStyle, RendererError, Scale,
-    Shadow, ShapeStyle, Span, Stroke, TextAlign, TextShadow, TextStyle, TextWrap,
+    LineJoin, Paint, PathData, PathStyle, PathVerb, Raster, RectStyle, RendererError, Role, Scale,
+    Semantics, Shadow, ShapeStyle, Span, Stroke, TextAlign, TextShadow, TextStyle, TextWrap,
     for_each_with_matrix, hash_draw_commands, measure_text, transform_clip_rect,
 };
 // Backend-author API, the drawing half: a frontend implements `RendererFactory`, installs it with `run_with_platform_and_renderer`, and installs `TextMetrics` for whatever "how wide is this string" means on its surface.

@@ -98,6 +98,15 @@ impl ViewGen<'_> {
                 )
             })
             .unwrap_or_default();
+        // What the box is, where it is more than a box. Emitted on a plain `Container` too, so saying a
+        // `col` is the navigation does not silently turn it into a styled box.
+        let role = el
+            .attributes
+            .iter()
+            .find(|a| a.key == "role")
+            .and_then(|a| crate::registry::role_variant(a.value.text().trim()))
+            .map(|variant| format!(".role(::telar::Role::{variant})"))
+            .unwrap_or_default();
         // A bare flag, like `absolute`: an attribute with no value is the assertion itself.
         let click_through = el
             .attributes
@@ -192,13 +201,13 @@ impl ViewGen<'_> {
             Some((closure, opacity_call)) => {
                 let _ = writeln!(
                     code,
-                    "{inner_pad}{bind}StyledContainer::{ctor}({style}, {closure}, {children})?{opacity_call}{hover_call}{active_call}{disabled_call}{focus_ring}{disabled}{on_press}{transform_call}{on_hover}{on_pointer_move}{on_key}{on_drag}{on_drag_end}{on_scroll}{on_focus}{on_long_press}{on_alt_press}{cursor}{drag_button}{drag_threshold}{click_through}{holds_stroke}{styled_by}{declaring}{terminator}"
+                    "{inner_pad}{bind}StyledContainer::{ctor}({style}, {closure}, {children})?{opacity_call}{hover_call}{active_call}{disabled_call}{focus_ring}{disabled}{on_press}{transform_call}{on_hover}{on_pointer_move}{on_key}{on_drag}{on_drag_end}{on_scroll}{on_focus}{on_long_press}{on_alt_press}{cursor}{drag_button}{drag_threshold}{click_through}{holds_stroke}{role}{styled_by}{declaring}{terminator}"
                 );
             }
             None => {
                 let _ = writeln!(
                     code,
-                    "{inner_pad}{bind}Container::{ctor}({style}, {children})?{on_press}{styled_by}{declaring}{terminator}"
+                    "{inner_pad}{bind}Container::{ctor}({style}, {children})?{on_press}{role}{styled_by}{declaring}{terminator}"
                 );
             }
         }
