@@ -32,6 +32,8 @@ features = [
     "Document",
     "DomRect",
     "Element",
+    "AddEventListenerOptions",
+    "EventTarget",
     "HtmlElement",
     "HtmlTextAreaElement",
     "InputEvent",

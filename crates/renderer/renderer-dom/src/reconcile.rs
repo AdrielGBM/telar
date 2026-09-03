@@ -14,6 +14,7 @@ use geometry_core::Rect;
 use renderer_core::{DrawCommand, Element, Role};
 use rustc_hash::FxHashMap;
 use wasm_bindgen::JsCast;
+use wasm_bindgen::prelude::Closure;
 
 use crate::paint;
 use crate::vector::Drawing;
@@ -45,10 +46,16 @@ fn audit_requested() -> bool {
 ///
 /// One rule rather than a declaration per box per frame, and the base font is the one the measurer assumes,
 /// so a paragraph is drawn in the face it was measured in.
+///
+/// The scrollbars go too, and not for looks: a native one takes width out of the box it is in, layout never
+/// reserved it, and the sidebar came out fifteen pixels narrower than every rect hit-testing reads — with a
+/// horizontal scrollbar underneath for the fifteen pixels that no longer fitted. The scrolling stays the
+/// browser's; only the bar is Telar's, as it is on every other target.
 const RESET: &str = "[data-telar]{font:400 16px sans-serif}\
 [data-telar] *{margin:0;border:0;padding:0;background:none;font:inherit;color:inherit;\
-text-align:inherit;text-decoration:none;box-sizing:border-box;appearance:none;\
--webkit-appearance:none;outline:none}";
+text-align:inherit;text-decoration:none;box-sizing:border-box;appearance:none;scrollbar-width:none;\
+-webkit-appearance:none;outline:none}\
+[data-telar] *::-webkit-scrollbar{display:none}";
 
 fn install_reset(document: &web_sys::Document) {
     if document.get_element_by_id(RESET_ID).is_some() {
@@ -79,6 +86,8 @@ struct Live {
     pieces: Vec<Piece>,
     /// What was last said about what this box *is*, so an unchanged frame writes no attributes.
     described: Described,
+    /// Kept alive for a box that scrolls itself: dropping the closure unregisters the listener behind it.
+    _scrolls: Option<Closure<dyn FnMut(web_sys::Event)>>,
 }
 
 /// What a box is, as the attributes that say so.
@@ -145,6 +154,8 @@ struct Open {
     /// A transform whose subject is not yet known: the box itself if its own paint turns up inside, and the
     /// boxes it wraps otherwise.
     moved: Option<String>,
+    /// Whether this box scrolls its own content, which is what makes its clip an overflow rather than a cut.
+    scrolls: bool,
 }
 
 impl Open {
@@ -160,6 +171,7 @@ impl Open {
             placed: 0,
             pieces: Vec::new(),
             moved: None,
+            scrolls: false,
         }
     }
 
@@ -293,7 +305,11 @@ impl Reconciler {
                 }
             }
             DrawCommand::PushClip { radius, .. } => {
-                paint::declare(&mut open.style, "overflow", "hidden");
+                // A scroll area clips the same way, and the difference is the whole point: `hidden` cuts what
+                // does not fit, `auto` lets the compositor move it — and with it find-in-page, the keyboard,
+                // `scrollIntoView` and every anchor, none of which a transform can give back.
+                let overflow = if open.scrolls { "auto" } else { "hidden" };
+                paint::declare(&mut open.style, "overflow", overflow);
                 if !radius.is_zero() {
                     paint::declare(
                         &mut open.style,
@@ -324,7 +340,8 @@ impl Reconciler {
 
     fn push(&mut self, element: &Element) {
         let tag = tag_of(&element.semantics.role);
-        let node = self.element_for(element.id.0, tag);
+        let scrolls = element.semantics.role == Role::ScrollArea;
+        let node = self.element_for(element.id.0, tag, scrolls);
         let drawing = matches!(element.semantics.role, Role::Drawing);
         let mut style = String::new();
         if drawing {
@@ -344,6 +361,14 @@ impl Reconciler {
             paint::declare(&mut style, "top", &paint::px(rect.y));
             paint::declare(&mut style, "width", &paint::px(rect.width));
             paint::declare(&mut style, "height", &paint::px(rect.height));
+        }
+        if scrolls {
+            // The host declines touch gestures so a drag inside the app does not pan the page; a box that
+            // scrolls has to take them back, or a finger moves nothing at all.
+            paint::declare(&mut style, "touch-action", "pan-x pan-y");
+            // What is scrolled to the end is the end. Without this the page behind takes over and the app
+            // slides away under the finger.
+            paint::declare(&mut style, "overscroll-behavior", "contain");
         }
         if element.semantics.click_through {
             paint::declare(&mut style, "pointer-events", "none");
@@ -371,6 +396,7 @@ impl Reconciler {
             placed: 0,
             pieces: Vec::new(),
             moved: None,
+            scrolls,
         });
     }
 
@@ -578,7 +604,7 @@ impl Reconciler {
 
     /// The element for `id`, created if this is the first frame that mentions it — or recreated if what it
     /// means changed, since a role is a tag and a tag cannot be edited.
-    fn element_for(&mut self, id: u64, tag: &'static str) -> web_sys::Element {
+    fn element_for(&mut self, id: u64, tag: &'static str, scrolls: bool) -> web_sys::Element {
         if let Some(live) = self.live.get(&id)
             && live.tag == tag
         {
@@ -593,6 +619,9 @@ impl Reconciler {
         if let Some(previous) = self.live.remove(&id) {
             previous.node.remove();
         }
+        // A box that scrolls itself has to say where it ended up, or hit-testing and every anchored overlay
+        // keep reading an offset that stopped being true the moment the compositor moved it.
+        let scrolls = scrolls.then(|| watch_scroll(&node, id)).flatten();
         self.live.insert(
             id,
             Live {
@@ -603,6 +632,7 @@ impl Reconciler {
                 drawn: String::new(),
                 pieces: Vec::new(),
                 described: Described::default(),
+                _scrolls: scrolls,
             },
         );
         node
@@ -783,4 +813,31 @@ fn aria_role(role: Role) -> Option<&'static str> {
         Role::ListItem => Some("listitem"),
         other => Some(other.as_str()),
     }
+}
+
+/// Listens for the scroll a box performs on its own, and reports where it ended up.
+///
+/// The offset is read back rather than accumulated from deltas: the compositor may have applied several
+/// between two of these, and a rubber-band at the edge undoes part of what it applied. Where it *is* is the
+/// only thing that is true.
+fn watch_scroll(node: &web_sys::Element, id: u64) -> Option<Closure<dyn FnMut(web_sys::Event)>> {
+    let target = node.clone();
+    let closure = Closure::<dyn FnMut(web_sys::Event)>::new(move |_: web_sys::Event| {
+        platform_core::post_event(platform_core::Event::BoxScrolled {
+            box_id: id,
+            x: target.scroll_left() as f32,
+            y: target.scroll_top() as f32,
+        });
+    });
+    // Passive: this only reports, and saying so lets the browser scroll without waiting to hear whether the
+    // listener wanted to prevent it — which is the whole reason a compositor scroll stays smooth.
+    let options = web_sys::AddEventListenerOptions::new();
+    options.set_passive(true);
+    node.add_event_listener_with_callback_and_add_event_listener_options(
+        "scroll",
+        closure.as_ref().unchecked_ref(),
+        &options,
+    )
+    .ok()?;
+    Some(closure)
 }

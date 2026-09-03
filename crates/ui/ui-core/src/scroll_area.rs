@@ -91,6 +91,11 @@ fn handle_scroll_event(
     content: &Rc<RefCell<Box<dyn LayoutItem>>>,
 ) -> EventResult {
     if let Event::Scrolled { delta, x, y } = event {
+        // A surface that scrolls for itself has already decided which box the wheel moved, and says so with
+        // `BoxScrolled`. Answering it here as well would move the offset twice for one turn.
+        if ui_tree::element_capture() {
+            return EventResult::Ignored;
+        }
         // The wheel belongs to whatever is under it: outside this viewport it is an ancestor's to handle.
         if !viewport.contains(*x as f32, *y as f32) {
             return EventResult::Ignored;
@@ -190,6 +195,19 @@ impl ScrollCore {
         }
     }
 
+    /// Takes the offset a surface that scrolls for itself has already applied.
+    ///
+    /// `peek` on both, and not for tidiness: this runs while the app is dispatching, and a reactive read here
+    /// would subscribe whatever is running to an offset it is about to be told again.
+    fn follow(&mut self, x: f32, y: f32) {
+        if self.scroll_x.peek() != x {
+            self.scroll_x.set(x);
+        }
+        if self.scroll_y.peek() != y {
+            self.scroll_y.set(y);
+        }
+    }
+
     fn clamp_scroll(&mut self, viewport: Rect) {
         let content_rect = self.content_rect_signal.peek();
         let max_x = (content_rect.width - viewport.width).max(0.0);
@@ -208,11 +226,13 @@ impl ScrollCore {
         let scroll_x = self.scroll_x.get();
         let scroll_y = self.scroll_y.get();
         let content_rect = self.content_rect_signal.get();
-        // Where the content sits. The viewport's own position is part of it only for a backend that draws
-        // into one flat surface; where an element carries the box, the browser has already put it there and
-        // adding it again would offset the content by the panel's distance from the page's corner.
-        let (dx, dy) = if ui_tree::element_capture() {
-            (-scroll_x, -scroll_y)
+        // Where the content sits. Nowhere, on a target that scrolls for itself: it lays the content out at
+        // full height inside a box that scrolls, and has already moved it — displacing it again here would
+        // scroll it twice. The offset is still *held*, because hit-testing, anchored overlays and
+        // `visible_rect` all read it; it is just no longer what puts the content where it is.
+        let owns_scroll = ui_tree::element_capture();
+        let (dx, dy) = if owns_scroll {
+            (0.0, 0.0)
         } else {
             (viewport.x - scroll_x, viewport.y - scroll_y)
         };
@@ -225,10 +245,12 @@ impl ScrollCore {
                 [self.content_segment.boundary()],
             )],
         );
-        // The bars are drawn in the same space as the content, and for the same reason: an element already
-        // sits where the viewport is, so a bar placed from the page's corner would be that far outside it.
-        let bar_viewport = if ui_tree::element_capture() {
-            Rect::new(0.0, 0.0, viewport.width, viewport.height)
+        // The bar is Telar's on every target, the one that scrolls itself included: a native bar takes width
+        // out of the box it is in, and layout never reserved it — a rail came out fifteen pixels narrower
+        // than every rect hit-testing reads. Where the surface scrolls, the content moves under a bar that
+        // must not, so it is drawn at the offset the content is at and comes out standing still.
+        let bar_viewport = if owns_scroll {
+            Rect::new(scroll_x, scroll_y, viewport.width, viewport.height)
         } else {
             viewport
         };
@@ -557,10 +579,25 @@ impl Component for LayoutScrollArea {
     fn view(&self) -> RenderNode {
         // Its own box rather than `LayoutLeaf::at_layout_position`: the content is positioned by the scroll
         // offset inside the viewport, not by the leaf's own placement, so the two must not both apply.
-        crate::element::wrap(self.leaf.node, self.core.view(self.leaf.rect.get()))
+        let content = self.core.view(self.leaf.rect.get());
+        if ui_tree::element_capture() {
+            let semantics = renderer_core::Semantics::of(renderer_core::Role::ScrollArea);
+            let element = crate::element::with_semantics(self.leaf.node, semantics);
+            RenderNode::element(element, [content])
+        } else {
+            content
+        }
     }
 
     fn on_event(&mut self, event: &Event) -> EventResult {
+        // A scroll the surface already performed: the content is drawn where it now is, and what needs
+        // correcting is this widget's idea of where that is.
+        if let Event::BoxScrolled { box_id, x, y } = event
+            && *box_id == u64::from(self.leaf.node)
+        {
+            self.core.follow(*x, *y);
+            return EventResult::Handled;
+        }
         self.core.on_event(event, self.leaf.rect.get())
     }
 

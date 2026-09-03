@@ -83,6 +83,11 @@ pub struct WebPlatformConfig {
     /// Whether to set the host's `touch-action` and `overscroll-behavior` so a drag inside the app does not
     /// scroll or bounce the page. On by default; an app embedded in a scrolling document turns it off.
     pub owns_gestures: bool,
+    /// Whether the *surface* scrolls its own regions, rather than the app scrolling them by redrawing.
+    ///
+    /// Set where the app is drawn as a document: the boxes that scroll are real scroll containers, and a
+    /// wheel the platform claimed for the app would be a wheel the compositor never sees.
+    pub owns_scroll: bool,
 }
 
 impl Default for WebPlatformConfig {
@@ -91,6 +96,7 @@ impl Default for WebPlatformConfig {
             host: None,
             autofocus: true,
             owns_gestures: true,
+            owns_scroll: false,
         }
     }
 }
@@ -143,7 +149,7 @@ impl Platform for WebPlatform {
         dom::document().set_title(&config.title);
 
         let window = WebWindow::new(host.clone());
-        let listeners = install_listeners(&host, &window);
+        let listeners = install_listeners(&host, &window, &self.config);
 
         // A capture-free closure, so it satisfies the `Send + Sync` the waker is declared with. It reaches a
         // thread-local, which on a target with one thread is the same thing as reaching the loop.
@@ -215,7 +221,11 @@ fn listen(
     }
 }
 
-fn install_listeners(host: &web_sys::HtmlElement, window: &WebWindow) -> Vec<Listener> {
+fn install_listeners(
+    host: &web_sys::HtmlElement,
+    window: &WebWindow,
+    config: &WebPlatformConfig,
+) -> Vec<Listener> {
     let target: &web_sys::EventTarget = host.as_ref();
     let mut listeners = Vec::new();
 
@@ -237,12 +247,19 @@ fn install_listeners(host: &web_sys::HtmlElement, window: &WebWindow) -> Vec<Lis
 
     {
         let window = window.clone();
-        listeners.push(listen(target, "wheel", false, move |event| {
+        let owns_scroll = config.owns_scroll;
+        // Passive where the surface scrolls: a listener that might prevent the default is a listener the
+        // compositor has to wait for, which is exactly what takes a scroll off the fast path.
+        listeners.push(listen(target, "wheel", owns_scroll, move |event| {
             let Ok(event) = event.dyn_into::<web_sys::WheelEvent>() else {
                 return;
             };
-            // The app scrolls its own panes, so the page must not scroll underneath them.
-            event.prevent_default();
+            // The app scrolls its own panes, so the page must not scroll underneath them — unless the boxes
+            // that scroll are the surface's own, in which case the wheel is the surface's and claiming it
+            // here would mean nothing scrolled at all.
+            if !owns_scroll {
+                event.prevent_default();
+            }
             let (x, y) = window.to_local(event.client_x() as f64, event.client_y() as f64);
             push([Event::Scrolled {
                 delta: map::scroll_delta(&event),

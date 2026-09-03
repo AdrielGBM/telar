@@ -125,6 +125,9 @@ fn start<A: App>(
         host: options.host,
         autofocus,
         owns_gestures,
+        // The boxes that scroll are the document's own, and a wheel the app claimed would be a wheel the
+        // compositor never sees.
+        owns_scroll: document,
     };
     let platform = WebPlatform::with_host(host.clone(), platform_config);
 
