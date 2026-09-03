@@ -350,6 +350,11 @@ impl Reconciler {
             && matches!(open.pieces[0], Painted::Text { .. });
         if inline_text && let Painted::Text { style, .. } = &open.pieces[0] {
             open.style.push_str(style);
+        } else if !open.pieces.is_empty() && !open.style.contains("position:") {
+            // Paint placed inside a box is placed against *that* box. Without this it is placed against
+            // whatever the nearest positioned ancestor happens to be — the host, for most boxes — and a
+            // field's own text went to the corner of the page.
+            paint::declare(&mut open.style, "position", "relative");
         }
 
         let document = self.document.clone();
