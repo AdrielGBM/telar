@@ -596,6 +596,9 @@ where
                         self.pixmap_pool.push(layer);
                     }
                 }
+                // Structure, for a backend whose output is a document. Every command inside carries the
+                // position it was laid out at, so skipping the markers draws the same frame.
+                DrawCommand::PushElement { .. } | DrawCommand::PopElement => {}
             }
         }
     }

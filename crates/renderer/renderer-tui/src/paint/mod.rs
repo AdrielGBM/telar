@@ -81,6 +81,9 @@ impl<'a> Painter<'a> {
             // Pictures need a graphics protocol, which is negotiated with the terminal rather than decided
             // here. Until that lands a picture leaves its box alone rather than filling it with a guess.
             DrawCommand::Image { .. } => {}
+            // Structure, for a backend whose output is a document. The commands inside are already where
+            // they belong, so skipping the markers draws exactly the same grid.
+            DrawCommand::PushElement { .. } | DrawCommand::PopElement => {}
         }
     }
 

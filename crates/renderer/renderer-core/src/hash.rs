@@ -90,6 +90,12 @@ pub fn hash_draw_commands_into<H: Hasher>(cmds: &[DrawCommand], h: &mut H) {
                 backdrop_blur.to_bits().hash(h);
             }
             DrawCommand::PopLayer => 11u8.hash(h),
+            DrawCommand::PushElement { id, semantics } => {
+                12u8.hash(h);
+                id.0.hash(h);
+                semantics.hash(h);
+            }
+            DrawCommand::PopElement => 13u8.hash(h),
         }
     }
 }

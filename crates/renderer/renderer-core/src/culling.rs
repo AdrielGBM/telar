@@ -130,7 +130,9 @@ pub fn command_visual_rect(
         | DrawCommand::PushMatrix { .. }
         | DrawCommand::PopMatrix
         | DrawCommand::PushLayer { .. }
-        | DrawCommand::PopLayer => None,
+        | DrawCommand::PopLayer
+        | DrawCommand::PushElement { .. }
+        | DrawCommand::PopElement => None,
     }
 }
 

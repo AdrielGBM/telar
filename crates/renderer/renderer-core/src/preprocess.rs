@@ -132,6 +132,12 @@ fn scale_command(cmd: &DrawCommand, sf: f32) -> DrawCommand {
             backdrop_blur: backdrop_blur * sf,
         },
         DrawCommand::PopLayer => DrawCommand::PopLayer,
+        // Markers, not geometry: an element's box is described by the commands inside it, which scale.
+        DrawCommand::PushElement { id, semantics } => DrawCommand::PushElement {
+            id: *id,
+            semantics: semantics.clone(),
+        },
+        DrawCommand::PopElement => DrawCommand::PopElement,
     }
 }
 

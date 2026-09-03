@@ -3,7 +3,8 @@ use std::sync::Arc;
 use geometry_core::{Point, Rect};
 
 use crate::{
-    BorderRadius, ImageData, PathData, PathStyle, Raster, RectStyle, Span, Stroke, TextStyle,
+    BorderRadius, ElementId, ImageData, PathData, PathStyle, Raster, RectStyle, Semantics, Span,
+    Stroke, TextStyle,
 };
 
 #[derive(Debug, Clone)]
@@ -54,6 +55,17 @@ pub enum DrawCommand {
         backdrop_blur: f32,
     },
     PopLayer,
+    /// Opens the box `id` names, for a backend whose output is a document rather than pixels.
+    ///
+    /// A marker, like [`PushClip`](Self::PushClip): everything until the matching [`PopElement`](Self::PopElement)
+    /// belongs to this box. A rasteriser skips both and draws exactly what it drew before — the commands
+    /// between them are already positioned. What a document backend gets is the structure the flattening
+    /// would otherwise have thrown away, and the identity that lets it move an element instead of rebuilding it.
+    PushElement {
+        id: ElementId,
+        semantics: Arc<Semantics>,
+    },
+    PopElement,
 }
 
 impl PartialEq for DrawCommand {
@@ -145,6 +157,17 @@ impl PartialEq for DrawCommand {
                 },
             ) => o1 == o2 && b1 == b2,
             (DrawCommand::PopLayer, DrawCommand::PopLayer) => true,
+            (
+                DrawCommand::PushElement {
+                    id: id1,
+                    semantics: s1,
+                },
+                DrawCommand::PushElement {
+                    id: id2,
+                    semantics: s2,
+                },
+            ) => id1 == id2 && (Arc::ptr_eq(s1, s2) || s1 == s2),
+            (DrawCommand::PopElement, DrawCommand::PopElement) => true,
             _ => false,
         }
     }
