@@ -11,10 +11,13 @@
 
 mod clipboard;
 mod dom;
+mod log;
 mod map;
 mod platform;
 mod window;
 
 pub use clipboard::WebClipboard;
+pub use dom::host as host_element;
+pub use log::install_console_logging;
 pub use platform::{WebPlatform, WebPlatformConfig};
 pub use window::{Measured, WebWindow};

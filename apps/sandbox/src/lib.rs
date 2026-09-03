@@ -8,9 +8,26 @@ telar::app!(
         telar::follow_system(core::theme::DEFAULT_MODE, "midnight");
         telar::follow_locale_direction();
     },
-    telar::AppConfig::default(),
+    app_config(),
     core::app::SandboxRoot
 );
+
+/// The faces this app shapes its text in.
+///
+/// A browser build has to bring its own: there is no font directory behind a page, so a shaper handed
+/// nothing finds nothing and every string measures to zero. Every other target reads the system's.
+fn app_config() -> telar::AppConfig {
+    #[allow(unused_mut)]
+    let mut config = telar::AppConfig::default();
+    #[cfg(target_arch = "wasm32")]
+    {
+        config
+            .font_data
+            .push(include_bytes!("../assets/fonts/DejaVuSans.ttf").to_vec());
+        config.font_family = Some("DejaVu Sans".to_string());
+    }
+    config
+}
 
 #[cfg(test)]
 mod smoke {

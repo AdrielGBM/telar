@@ -253,6 +253,7 @@ pub(crate) fn swapchain_rebuild_lock() -> std::sync::RwLockWriteGuard<'static, (
 /// lost by any window arrives as one on every thread that touches it afterwards. Unwrapping would carry that
 /// into the caller — the UI thread — and end the process, which is how one dead device cost a whole
 /// application rather than the one surface that failed to open.
+#[cfg(not(target_arch = "wasm32"))]
 fn built<T>(handle: std::thread::ScopedJoinHandle<'_, T>) -> Result<T, RendererError> {
     handle
         .join()
@@ -581,8 +582,65 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
         let (atlas_bgl, atlas_bind_group) =
             crate::caches::atlas_handles(&device, font_config.font.clone());
 
-        // Create all Send-safe pipelines in parallel; on Vulkan/Metal this reduces startup from ~8 serial compilations to ~1 critical path, ImagePipeline (Rc<> cache) must be created on this thread, and `pc` must be defined here (not inside the scope closure) so its lifetime covers the spawned threads.
+        // `pc` is defined here rather than inside the scope closure below so its lifetime covers the
+        // spawned threads. `ImagePipeline` is absent: its `Rc<>` cache must be built on this thread.
         let pc = pipeline_cache.as_ref();
+        // Each pipeline's construction as a closure, so the two ways of running them — in parallel where
+        // there are threads, one after another where there are none — share one set of definitions.
+        let make_rect = || {
+            RectPipeline::new(
+                &device,
+                surface_format,
+                &viewport_bind_group_layout,
+                pc,
+                msaa_samples,
+            )
+        };
+        let make_text = || {
+            TextPipeline::new(
+                &device,
+                surface_format,
+                &viewport_bind_group_layout,
+                pc,
+                msaa_samples,
+                &atlas_bgl,
+                atlas_bind_group.clone(),
+            )
+        };
+        let make_line = || {
+            LinePipeline::new(
+                &device,
+                surface_format,
+                &viewport_bind_group_layout,
+                pc,
+                msaa_samples,
+            )
+        };
+        let make_path = || {
+            PathPipeline::new(
+                &device,
+                surface_format,
+                &viewport_bind_group_layout,
+                pc,
+                msaa_samples,
+            )
+        };
+        let make_layer = || LayerPipeline::new(&device, surface_format, msaa_samples);
+        let make_blur = || BlurPipeline::new(&device, surface_format, pc, supports_immediates);
+        let make_composite = || {
+            CompositePipeline::new(
+                &device,
+                surface_format,
+                msaa_samples,
+                &viewport_bind_group_layout,
+                pc,
+            )
+        };
+        let make_retained =
+            || CompositePipeline::new(&device, surface_format, 1, &viewport_bind_group_layout, pc);
+
+        // On Vulkan/Metal this takes startup from ~8 serial shader compilations to ~1 critical path.
+        #[cfg(not(target_arch = "wasm32"))]
         let (
             rect_pipeline,
             text_pipeline,
@@ -593,59 +651,14 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
             composite_pipeline,
             retained_blit_pipeline,
         ) = std::thread::scope(|s| {
-            let t_rect = s.spawn(|| {
-                RectPipeline::new(
-                    &device,
-                    surface_format,
-                    &viewport_bind_group_layout,
-                    pc,
-                    msaa_samples,
-                )
-            });
-            let t_text = s.spawn(|| {
-                TextPipeline::new(
-                    &device,
-                    surface_format,
-                    &viewport_bind_group_layout,
-                    pc,
-                    msaa_samples,
-                    &atlas_bgl,
-                    atlas_bind_group.clone(),
-                )
-            });
-            let t_line = s.spawn(|| {
-                LinePipeline::new(
-                    &device,
-                    surface_format,
-                    &viewport_bind_group_layout,
-                    pc,
-                    msaa_samples,
-                )
-            });
-            let t_path = s.spawn(|| {
-                PathPipeline::new(
-                    &device,
-                    surface_format,
-                    &viewport_bind_group_layout,
-                    pc,
-                    msaa_samples,
-                )
-            });
-            let t_layer = s.spawn(|| LayerPipeline::new(&device, surface_format, msaa_samples));
-            let t_blur =
-                s.spawn(|| BlurPipeline::new(&device, surface_format, pc, supports_immediates));
-            let t_composite = s.spawn(|| {
-                CompositePipeline::new(
-                    &device,
-                    surface_format,
-                    msaa_samples,
-                    &viewport_bind_group_layout,
-                    pc,
-                )
-            });
-            let t_retained = s.spawn(|| {
-                CompositePipeline::new(&device, surface_format, 1, &viewport_bind_group_layout, pc)
-            });
+            let t_rect = s.spawn(make_rect);
+            let t_text = s.spawn(make_text);
+            let t_line = s.spawn(make_line);
+            let t_path = s.spawn(make_path);
+            let t_layer = s.spawn(make_layer);
+            let t_blur = s.spawn(make_blur);
+            let t_composite = s.spawn(make_composite);
+            let t_retained = s.spawn(make_retained);
             Ok::<_, RendererError>((
                 built(t_rect)?,
                 built(t_text)?,
@@ -657,6 +670,27 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
                 built(t_retained)?,
             ))
         })?;
+        // The browser has one thread, and `std::thread::scope` there is not slower but absent: it panics.
+        #[cfg(target_arch = "wasm32")]
+        let (
+            rect_pipeline,
+            text_pipeline,
+            line_pipeline,
+            path_pipeline,
+            layer_pipeline,
+            blur_pipeline,
+            composite_pipeline,
+            retained_blit_pipeline,
+        ) = (
+            make_rect(),
+            make_text(),
+            make_line(),
+            make_path(),
+            make_layer(),
+            make_blur(),
+            make_composite(),
+            make_retained(),
+        );
         // Built after the parallel scope because it needs the shared image layout, which the borrow of the shared
         // set cannot cross a spawned thread to reach.
         let image_bgl =

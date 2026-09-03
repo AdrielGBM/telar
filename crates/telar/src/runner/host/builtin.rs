@@ -58,6 +58,11 @@ impl<W: SurfaceWindow> BuiltinHost<W> {
 
     /// Waits for the render thread, keeping the hardware device when `keep_warm`: its caches, pipelines and adapter
     /// are what make a resume cheap. Software has nothing worth carrying.
+    // Every reader of `keep_warm` is behind a `cfg`, so a build with neither renderer reads it nowhere.
+    #[cfg_attr(
+        not(any(feature = "hardware", target_os = "linux")),
+        allow(unused_variables)
+    )]
     fn join_thread(&mut self, keep_warm: bool) {
         // First, and load-bearing: the thread parks on the frame channel, so it only exits once the sender is gone.
         self.channels = None;

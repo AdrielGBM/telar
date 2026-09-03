@@ -1,0 +1,27 @@
+[package]
+name = "telar-renderer-web"
+version = { workspace = true }
+edition = { workspace = true }
+rust-version = { workspace = true }
+description = "Browser renderer for Telar: a canvas surface and the wgpu backend that draws into it."
+keywords = ["telar", "web", "wasm", "wgpu", "webgpu"]
+categories = ["wasm", "rendering", "web-programming"]
+readme = { workspace = true }
+license = { workspace = true }
+repository = { workspace = true }
+
+[dependencies]
+renderer-core = { workspace = true }
+tracing = { workspace = true }
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+platform-core = { workspace = true }
+raw-window-handle = { workspace = true }
+renderer-hardware = { workspace = true }
+renderer-text = { workspace = true }
+wasm-bindgen = { workspace = true }
+wasm-bindgen-futures = { workspace = true }
+
+[target.'cfg(target_arch = "wasm32")'.dependencies.web-sys]
+workspace = true
+features = ["CssStyleDeclaration", "Document", "Element", "HtmlCanvasElement", "HtmlElement", "Node", "Window"]

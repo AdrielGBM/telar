@@ -17,9 +17,13 @@ struct Inner {
 
 /// One element of a page, presented as a window.
 ///
-/// Its size is the element's own, in CSS pixels: a Telar layout and a CSS layout agree on what a pixel is,
-/// so an app mounted in a 900-pixel column lays out to 900 whether the page put that column there with a
-/// media query or a flex rule.
+/// Its logical size is the element's own, in CSS pixels: a Telar layout and a CSS layout agree on what a
+/// pixel is, so an app mounted in a 900-pixel column lays out to 900 whether the page put that column there
+/// with a media query or a flex rule.
+///
+/// [`Window::width`] and [`Window::height`], though, report **device** pixels — the same contract every other
+/// backend keeps, because what asks for them is a renderer sizing its backing store. What lays out asks for
+/// the logical size instead, through the resize event.
 #[derive(Clone)]
 pub struct WebWindow {
     inner: Rc<Inner>,
@@ -78,15 +82,24 @@ impl WebWindow {
         let rect = self.inner.host.get_bounding_client_rect();
         (client_x - rect.left(), client_y - rect.top())
     }
+
+    /// The host's size in CSS pixels — what lays out.
+    pub fn logical_size(&self) -> (u32, u32) {
+        (self.inner.width.get(), self.inner.height.get())
+    }
+
+    fn device_pixels(&self, css: u32) -> u32 {
+        (css as f64 * self.inner.scale.get()).round().max(1.0) as u32
+    }
 }
 
 impl Window for WebWindow {
     fn width(&self) -> u32 {
-        self.inner.width.get()
+        self.device_pixels(self.inner.width.get())
     }
 
     fn height(&self) -> u32 {
-        self.inner.height.get()
+        self.device_pixels(self.inner.height.get())
     }
 
     fn request_redraw(&self) {

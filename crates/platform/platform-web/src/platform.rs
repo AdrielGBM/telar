@@ -97,11 +97,22 @@ impl Default for WebPlatformConfig {
 
 pub struct WebPlatform {
     config: WebPlatformConfig,
+    /// The element to mount on, when the caller already resolved it. Whoever builds the renderer has to put
+    /// its canvas somewhere, so it resolves the host first and hands the same one over rather than letting
+    /// the two look it up independently and disagree.
+    host: Option<web_sys::HtmlElement>,
 }
 
 impl WebPlatform {
     pub fn new(config: WebPlatformConfig) -> Self {
-        Self { config }
+        Self { config, host: None }
+    }
+
+    pub fn with_host(host: web_sys::HtmlElement, config: WebPlatformConfig) -> Self {
+        Self {
+            config,
+            host: Some(host),
+        }
     }
 }
 
@@ -124,7 +135,10 @@ impl Platform for WebPlatform {
         config: WindowConfig,
         mut handler: H,
     ) -> Result<(), PlatformError> {
-        let host = dom::host(self.config.host.as_deref()).map_err(PlatformError)?;
+        let host = match self.host.clone() {
+            Some(host) => host,
+            None => dom::host(self.config.host.as_deref()).map_err(PlatformError)?,
+        };
         prepare_host(&host, &self.config);
         dom::document().set_title(&config.title);
 
@@ -389,13 +403,10 @@ fn turn() {
         );
     }
     if measured.size {
-        app.handler.on_event(
-            Event::WindowResized {
-                width: app.window.width(),
-                height: app.window.height(),
-            },
-            &app.window,
-        );
+        // The logical size, not the device one: what this drives is layout, which works in CSS pixels.
+        let (width, height) = app.window.logical_size();
+        app.handler
+            .on_event(Event::WindowResized { width, height }, &app.window);
     }
 
     let events = QUEUE.with(|queue| std::mem::take(&mut *queue.borrow_mut()));

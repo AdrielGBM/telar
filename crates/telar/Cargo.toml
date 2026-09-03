@@ -44,6 +44,10 @@ platform-headless = ["runtime", "software", "dep:platform-headless"]
 # launched from, drawing through `renderer-tui`.
 tui = ["runtime", "dep:platform-tui", "dep:renderer-tui", "services-core/system-paths"]
 
+# A browser frontend. Only meaningful for a `wasm32` build; the dependencies behind it are target-gated, so
+# turning it on for a host build enables nothing.
+web = ["runtime", "dep:platform-web", "dep:renderer-web"]
+
 dev = ["runtime", "desktop", "dep:libloading", "dep:serde_json"]
 preview = ["runtime", "desktop"]
 # `platform-headless` plus a PNG encoder, which is the only thing `image` is here for.
@@ -149,3 +153,7 @@ unexpected_cfgs = { level = "warn", check-cfg = [
     'cfg(telar_hot_reload)',
     'cfg(telar_preview)',
 ] }
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+platform-web = { workspace = true, optional = true }
+renderer-web = { workspace = true, optional = true }

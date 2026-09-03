@@ -31,3 +31,16 @@ platform-headless = { workspace = true }
 [[bench]]
 name = "render_frame"
 harness = false
+
+# `fragile-send-sync-non-atomic-wasm` makes wgpu's browser handles — which wrap JS objects in `Rc` — count as
+# `Send + Sync`. Sound only because a wasm build without the `atomics` feature has exactly one thread, so
+# nothing ever crosses one; without it every process-wide slot in this crate stops compiling there.
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+wgpu = { version = "30", features = ["fragile-send-sync-non-atomic-wasm"] }
+js-sys = { workspace = true }
+wasm-bindgen = { workspace = true }
+wasm-bindgen-futures = { workspace = true }
+
+[target.'cfg(target_arch = "wasm32")'.dependencies.web-sys]
+workspace = true
+features = ["Document", "Element", "HtmlCanvasElement", "HtmlElement", "Window", "CssStyleDeclaration"]

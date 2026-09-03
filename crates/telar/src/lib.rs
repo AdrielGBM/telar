@@ -17,13 +17,21 @@ pub mod dev_tools;
 #[cfg(feature = "runtime")]
 mod direction;
 #[cfg(any(
-    all(feature = "dev", not(target_os = "android")),
+    all(
+        feature = "dev",
+        not(target_os = "android"),
+        not(target_arch = "wasm32")
+    ),
     feature = "plugin-host"
 ))]
 mod dylib;
 #[cfg(feature = "runtime")]
 pub mod files;
-#[cfg(all(feature = "dev", not(target_os = "android")))]
+#[cfg(all(
+    feature = "dev",
+    not(target_os = "android"),
+    not(target_arch = "wasm32")
+))]
 pub mod hot;
 #[cfg(feature = "dev")]
 pub mod hot_state;
@@ -117,7 +125,12 @@ pub use platform_core::{
     EventHandler, ModifiersState, MultiSurfacePlatform, Platform, PlatformError, PointerButton,
     PointerSource, SurfaceId, Window,
 };
-#[cfg(all(feature = "runtime", feature = "desktop", not(target_os = "android")))]
+#[cfg(all(
+    feature = "runtime",
+    feature = "desktop",
+    not(target_os = "android"),
+    not(target_arch = "wasm32")
+))]
 pub use platform_desktop::DesktopPathsProvider;
 #[cfg(feature = "runtime")]
 pub use reactive_core::{
@@ -285,7 +298,11 @@ pub use platform_android::AndroidApp;
 pub use runner::build_surface_handler;
 #[cfg(all(feature = "runtime", target_os = "android"))]
 pub use runner::run_android_app_with_name;
-#[cfg(all(feature = "dev", not(target_os = "android")))]
+#[cfg(all(
+    feature = "dev",
+    not(target_os = "android"),
+    not(target_arch = "wasm32")
+))]
 pub use runner::run_hot_reload_host;
 #[cfg(all(feature = "runtime", not(target_os = "android")))]
 pub use runner::run_multi_with_platform;
@@ -295,7 +312,12 @@ pub use runner::run_with_platform;
 // The renderer seam, and what a window has to be for the built-in renderers to draw on it.
 #[cfg(all(feature = "runtime", not(target_os = "android")))]
 pub use runner::{SurfaceWindow, run_with_platform_and_renderer};
-#[cfg(all(feature = "runtime", feature = "desktop", not(target_os = "android")))]
+#[cfg(all(
+    feature = "runtime",
+    feature = "desktop",
+    not(target_os = "android"),
+    not(target_arch = "wasm32")
+))]
 pub use runner::{open_window, run_app_windowed, run_desktop_app_with_name};
 // The frontend an app actually starts on. Not gated on `desktop`: choosing between the frontends a build
 // has is the whole point of it, and a terminal-only build has no window to open.

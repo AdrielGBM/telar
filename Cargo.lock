@@ -955,6 +955,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "console_error_panic_hook"
+version = "0.1.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a06aeb73f470f66dcdbf7223caeebb85984942f22f1adb2a088cf9668146bbbc"
+dependencies = [
+ "cfg-if",
+ "wasm-bindgen",
+]
+
+[[package]]
 name = "convert_case"
 version = "0.10.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5494,6 +5504,7 @@ dependencies = [
  "telar-platform-desktop",
  "telar-platform-headless",
  "telar-platform-tui",
+ "telar-platform-web",
  "telar-reactive-core",
  "telar-renderer-assets",
  "telar-renderer-core",
@@ -5502,6 +5513,7 @@ dependencies = [
  "telar-renderer-software",
  "telar-renderer-text",
  "telar-renderer-tui",
+ "telar-renderer-web",
  "telar-services-core",
  "telar-theme-core",
  "telar-ui-components",
@@ -5689,11 +5701,13 @@ dependencies = [
 name = "telar-platform-web"
 version = "0.1.8"
 dependencies = [
+ "console_error_panic_hook",
  "js-sys",
  "telar-geometry-core",
  "telar-platform-core",
  "telar-services-core",
  "tracing",
+ "tracing-subscriber",
  "wasm-bindgen",
  "wasm-bindgen-futures",
  "web-sys",
@@ -5767,6 +5781,7 @@ version = "0.1.8"
 dependencies = [
  "bytemuck",
  "criterion",
+ "js-sys",
  "lru",
  "lyon",
  "pollster 1.0.1",
@@ -5778,6 +5793,9 @@ dependencies = [
  "telar-renderer-core",
  "telar-renderer-text",
  "tracing",
+ "wasm-bindgen",
+ "wasm-bindgen-futures",
+ "web-sys",
  "wgpu",
 ]
 
@@ -5844,6 +5862,21 @@ dependencies = [
  "telar-renderer-core",
  "unicode-segmentation",
  "unicode-width",
+]
+
+[[package]]
+name = "telar-renderer-web"
+version = "0.1.8"
+dependencies = [
+ "raw-window-handle",
+ "telar-platform-core",
+ "telar-renderer-core",
+ "telar-renderer-hardware",
+ "telar-renderer-text",
+ "tracing",
+ "wasm-bindgen",
+ "wasm-bindgen-futures",
+ "web-sys",
 ]
 
 [[package]]

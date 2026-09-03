@@ -25,6 +25,7 @@ members = [
     "crates/renderer/renderer-tui",
     "crates/platform/platform-tui",
     "crates/platform/platform-web",
+    "crates/renderer/renderer-web",
     "crates/telar",
     "crates/tools/cargo-telar",
     "crates/tools/telar-parser",
@@ -139,6 +140,7 @@ renderer-record = { package = "telar-renderer-record", path = "crates/renderer/r
 renderer-tui = { package = "telar-renderer-tui", path = "crates/renderer/renderer-tui", version = "0.1.8" }
 platform-tui = { package = "telar-platform-tui", path = "crates/platform/platform-tui", version = "0.1.8" }
 platform-web = { package = "telar-platform-web", path = "crates/platform/platform-web", version = "0.1.8" }
+renderer-web = { package = "telar-renderer-web", path = "crates/renderer/renderer-web", version = "0.1.8" }
 reactive-local = { package = "telar-reactive-local", path = "crates/reactive/reactive-local", version = "0.1.8" }
 renderer-software = { package = "telar-renderer-software", path = "crates/renderer/renderer-software", version = "0.1.8" }
 renderer-hardware = { package = "telar-renderer-hardware", path = "crates/renderer/renderer-hardware", version = "0.1.8" }

@@ -24,6 +24,8 @@ tracing-subscriber = { workspace = true, features = ["env-filter"] }
 dev = ["telar/dev"]
 # Runs the same app in the terminal. `TELAR_TARGET=tui` picks it when the desktop frontend is also compiled in.
 tui = ["telar/tui"]
+# The browser. Only meaningful for a wasm32 build.
+web = ["telar/web"]
 
 [dev-dependencies]
 platform-core = { workspace = true }

@@ -1,9 +1,17 @@
 #[cfg(target_os = "android")]
 mod android;
-#[cfg(all(feature = "desktop", not(target_os = "android")))]
+#[cfg(all(
+    feature = "desktop",
+    not(target_os = "android"),
+    not(target_arch = "wasm32")
+))]
 mod desktop;
 #[cfg(any(
-    all(feature = "desktop", not(target_os = "android")),
+    all(
+        feature = "desktop",
+        not(target_os = "android"),
+        not(target_arch = "wasm32")
+    ),
     target_os = "android"
 ))]
 mod dev_window;
@@ -15,11 +23,17 @@ mod entry;
 mod generic;
 mod handler;
 mod host;
-#[cfg(all(feature = "dev", not(target_os = "android")))]
+#[cfg(all(
+    feature = "dev",
+    not(target_os = "android"),
+    not(target_arch = "wasm32")
+))]
 mod hot_host;
 mod multi;
 #[cfg(feature = "tui")]
 mod tui;
+#[cfg(all(feature = "web", target_arch = "wasm32"))]
+mod web;
 
 /// The window an app opens with: `App::window_config` outright replaces whatever the caller passed,
 /// including the `[telar.dev.window]` overrides. See [`dev_window::with_dev_overrides`] for why that order.
@@ -49,13 +63,23 @@ const COMMAND_BUF_POOL_CAP: usize = 3;
 
 #[cfg(target_os = "android")]
 pub use android::run_android_app_with_name;
-#[cfg(all(feature = "desktop", not(target_os = "android")))]
+#[cfg(all(
+    feature = "desktop",
+    not(target_os = "android"),
+    not(target_arch = "wasm32")
+))]
 pub use desktop::{open_window, run_app_windowed, run_desktop_app_with_name};
 pub use entry::run_app_with_name;
 pub use generic::{run_with_platform, run_with_platform_and_renderer};
 pub use host::SurfaceWindow;
-#[cfg(all(feature = "dev", not(target_os = "android")))]
+#[cfg(all(
+    feature = "dev",
+    not(target_os = "android"),
+    not(target_arch = "wasm32")
+))]
 pub use hot_host::run_hot_reload_host;
 pub use multi::{build_surface_handler, run_multi_with_platform};
 #[cfg(feature = "tui")]
 pub use tui::{TuiOptions, run_tui_app_with_name};
+#[cfg(all(feature = "web", target_arch = "wasm32"))]
+pub use web::{WebOptions, run_web_app_with_name};

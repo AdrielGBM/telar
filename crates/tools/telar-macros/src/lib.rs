@@ -193,6 +193,15 @@ pub fn app(input: TokenStream) -> TokenStream {
             #hot_reload_prefix
             #run_tail
         }
+
+        // A browser has no `main` to reach: `wasm-bindgen`'s `init()` runs the module's constructors and
+        // returns its exports, and the page calls this by name. A raw export rather than
+        // `#[wasm_bindgen(start)]` so an app needs no `wasm-bindgen` dependency of its own to be startable.
+        #[cfg(target_arch = "wasm32")]
+        #[unsafe(no_mangle)]
+        pub extern "C" fn telar_start() {
+            run()
+        }
     };
 
     // Only emitted under TELAR_HOT_RELOAD_BUILD so dlopen can find the factory; TELAR_PREVIEW_BUILD lets the macro branch here without leaking a custom cfg into generated output (--cfg=telar_preview in RUSTFLAGS is only for cache-busting recompilation when switching modes).

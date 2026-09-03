@@ -80,7 +80,11 @@ where
     /// rather than on every frame. A control is named by the text drawn inside it, and that is the only part
     /// of a frame the naming needs — a handful of commands, held by refcounted `Arc<str>`.
     pub(super) frame_text: Vec<renderer_core::DrawCommand>,
-    #[cfg(all(feature = "dev", not(target_os = "android")))]
+    #[cfg(all(
+        feature = "dev",
+        not(target_os = "android"),
+        not(target_arch = "wasm32")
+    ))]
     pub(super) hot_reload_rx: Option<std::sync::mpsc::Receiver<crate::hot::HotEvent>>,
 }
 
@@ -183,7 +187,11 @@ where
         _window: std::marker::PhantomData,
         command_buf_pool: Vec::new(),
         frame_text: Vec::new(),
-        #[cfg(all(feature = "dev", not(target_os = "android")))]
+        #[cfg(all(
+            feature = "dev",
+            not(target_os = "android"),
+            not(target_arch = "wasm32")
+        ))]
         hot_reload_rx: None,
     }
 }
@@ -264,7 +272,11 @@ where
 
     /// Swaps in a rebuilt dylib, or shows the banner for one that failed to build. `true` means the frame is
     /// the reload's own and this pass is over.
-    #[cfg(all(feature = "dev", not(target_os = "android")))]
+    #[cfg(all(
+        feature = "dev",
+        not(target_os = "android"),
+        not(target_arch = "wasm32")
+    ))]
     fn poll_hot_reload(&mut self, window: &W) -> bool {
         let Some(rx) = &self.hot_reload_rx else {
             return false;
@@ -573,7 +585,11 @@ where
         if let Some(waker) = self.redraw_waker.clone() {
             self.app.install_task_waker(waker);
         }
-        #[cfg(all(feature = "dev", not(target_os = "android")))]
+        #[cfg(all(
+            feature = "dev",
+            not(target_os = "android"),
+            not(target_arch = "wasm32")
+        ))]
         if let Some(rx) = self.hot_reload_rx.take() {
             let (relay_tx, relay_rx) = std::sync::mpsc::channel::<crate::hot::HotEvent>();
             let wake = self.redraw_waker.clone();
@@ -709,7 +725,11 @@ where
 
     fn on_redraw(&mut self, window: &W) {
         let _surface = self.enter_surface();
-        #[cfg(all(feature = "dev", not(target_os = "android")))]
+        #[cfg(all(
+            feature = "dev",
+            not(target_os = "android"),
+            not(target_arch = "wasm32")
+        ))]
         if self.poll_hot_reload(window) {
             return;
         }
