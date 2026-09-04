@@ -72,9 +72,18 @@ fn css_of(style: &Style) -> Css {
     // than the rects hit-testing reads — an interface that draws correctly and cannot be clicked.
     css.push("box-sizing", "border-box");
 
-    if style.position == Position::Absolute {
-        css.push("position", "absolute");
-    }
+    // Every box is a containing block, because in Taffy every box is: an absolutely positioned child
+    // resolves its inset against its parent node, full stop. A document resolves it against the nearest
+    // ancestor that is positioned at all, and a box left `static` is not one — so a slider's fill, sized to
+    // overlay a 260x14 track, escaped to the layout root and came out the height of the window.
+    css.push(
+        "position",
+        if style.position == Position::Absolute {
+            "absolute"
+        } else {
+            "relative"
+        },
+    );
     for (property, value) in [
         ("top", style.inset.top),
         ("right", style.inset.right),
@@ -410,7 +419,7 @@ mod tests {
     use super::*;
     use crate::style::{AlignItems, JustifyContent, SizeDimension};
 
-    fn css(style: LayoutStyle) -> String {
+    pub(crate) fn css(style: LayoutStyle) -> String {
         style.to_css(Direction::Ltr).into_string()
     }
 
@@ -420,16 +429,15 @@ mod tests {
     fn a_plain_style_says_only_what_it_is() {
         assert_eq!(
             css(LayoutStyle::new()),
-            "display:block;box-sizing:border-box;"
+            "display:block;box-sizing:border-box;position:relative;"
         );
     }
 
     #[test]
     fn a_row_becomes_a_flex_row() {
-        assert!(
-            css(LayoutStyle::new().flex_row())
-                .starts_with("display:flex;box-sizing:border-box;flex-direction:row;")
-        );
+        assert!(css(LayoutStyle::new().flex_row()).starts_with(
+            "display:flex;box-sizing:border-box;position:relative;flex-direction:row;"
+        ));
     }
 
     #[test]
@@ -641,5 +649,30 @@ mod grid_tests {
             .flex_row()
             .grid_template_columns(vec![TemplateTrack::fr(1.0)]));
         assert!(!out.contains("grid-template-columns"), "got {out}");
+    }
+}
+
+#[cfg(test)]
+mod containing_block_tests {
+    use super::tests::css;
+    use super::*;
+
+    /// Taffy resolves an absolute child against its parent node; a document resolves it against the nearest
+    /// positioned ancestor. Left `static`, a box is not one, and what it was meant to overlay it escapes.
+    #[test]
+    fn an_ordinary_box_is_a_containing_block_for_its_children() {
+        assert!(css(LayoutStyle::new()).contains("position:relative;"));
+    }
+
+    #[test]
+    fn a_box_that_positions_itself_still_says_so() {
+        let out = css(LayoutStyle::new().absolute_fill());
+        assert!(out.contains("position:absolute;"), "{out}");
+        assert!(!out.contains("position:relative;"), "{out}");
+        // Overlaying its parent is the whole point of the inset, and it is what escaped.
+        assert!(
+            out.contains("top:0px;") && out.contains("left:0px;"),
+            "{out}"
+        );
     }
 }
