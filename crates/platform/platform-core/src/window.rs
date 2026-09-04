@@ -217,6 +217,7 @@ impl<W: Window> EventHandler<W> for Box<dyn EventHandler<W>> {
 
 /// A backend that opens one window and runs its event loop.
 pub trait Platform {
+    /// The window this backend hands to each handler.
     type Window: Window;
     /// Runs `handler` until the app closes.
     ///
@@ -236,6 +237,7 @@ pub struct SurfaceId(pub u64);
 ///
 /// The handler for each surface is produced by a `factory`, not moved in: this is the *handler-factory* shape, so a factory that builds several surfaces need not clone one app. Under M3 every surface shares one UI thread and one reactive runtime (per-surface isolation comes from `ui_core::Surface`), so the factory runs on the UI thread and neither it nor the handler `H` must be `Send`/`Sync` — which lets a `!Send` app (one holding `Rc` state) be produced by the factory.
 pub trait MultiSurfacePlatform {
+    /// The window this backend hands to each handler.
     type Window: Window;
     /// Runs every surface in `surfaces` (each an `(id, config)` pair), building its handler via `factory(id)`. Blocks until all surfaces have closed.
     fn run_surfaces<H, F>(

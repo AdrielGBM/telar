@@ -8,6 +8,7 @@ use crate::{Memo, ReadSignal, RwSignal, memo};
 ///
 /// A widget that takes `impl Source<Value = T>` instead of `RwSignal<T>` can be fed a derivation. One that takes the signal cannot, and that is how a catalogue ends up re-implemented next to it — a card wanting a percentage computed from two services has nothing to hand a widget that insists on a signal it can write.
 pub trait Source {
+    /// What a read yields.
     type Value;
     fn read(&self) -> Self::Value;
 }

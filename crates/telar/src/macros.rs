@@ -1,5 +1,6 @@
 //! The macros an application writes: `app!`, `rsx_modules!` and the tree shims they expand to.
 
+/// Collects widgets of different types into the `Vec<Box<dyn LayoutItem>>` a container takes, boxing each one.
 #[macro_export]
 macro_rules! children {
     ($($item:expr),* $(,)?) => {

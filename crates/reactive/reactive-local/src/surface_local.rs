@@ -136,6 +136,7 @@ macro_rules! surface_local {
             }
         }
 
+        /// Keeps its surface's instance live. Dropping it restores whichever instance was active before.
         #[must_use = "the surface context is only active while this guard is alive"]
         pub struct $guard {
             prev: *mut ::std::cell::RefCell<$ty>,

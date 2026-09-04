@@ -21,6 +21,7 @@ use super::{EffectId, RUNTIME, Runtime, SignalId, SurfaceHandle};
 use crate::runtime::effects::deregister_effect;
 
 slotmap::new_key_type! {
+    /// A node in the owner tree: the scope a signal, memo or effect was created in, and what disposes it.
     pub struct OwnerId;
 }
 
