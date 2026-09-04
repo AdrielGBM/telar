@@ -128,18 +128,24 @@ fn draw_scrollbars(
     (vbar, hbar)
 }
 
-/// The wheel notches still being covered, one per axis.
+/// How one scroll area's offset is moving other than by being set outright.
 #[derive(Default)]
-struct Glides {
-    x: Option<Rc<crate::fling::Glide>>,
-    y: Option<Rc<crate::fling::Glide>>,
+struct Motion {
+    /// The wheel notches still being covered, one per axis.
+    glide_x: Option<Rc<crate::fling::Glide>>,
+    glide_y: Option<Rc<crate::fling::Glide>>,
+    /// What the gesture in progress is doing, so its end can carry it on.
+    velocity: crate::fling::Velocity,
 }
 
-impl Glides {
+impl Motion {
     /// Ends both. Whatever is taking the offset over is now the one that says where it goes, and a glide
     /// finishing afterwards would drag it back to where the wheel had asked for.
-    fn stop(&mut self) {
-        for glide in [self.x.take(), self.y.take()].into_iter().flatten() {
+    fn stop_glides(&mut self) {
+        for glide in [self.glide_x.take(), self.glide_y.take()]
+            .into_iter()
+            .flatten()
+        {
             glide.stop();
         }
     }
@@ -169,7 +175,7 @@ fn handle_scroll_event(
     scroll_y: RwSignal<f32>,
     content_rect_signal: RwSignal<Rect>,
     content: &Rc<RefCell<Box<dyn LayoutItem>>>,
-    glides: &mut Glides,
+    motion: &mut Motion,
 ) -> EventResult {
     if let Event::Scrolled { delta, x, y } = event {
         // A surface that scrolls for itself has already decided which box the wheel moved, and says so with
@@ -196,6 +202,10 @@ fn handle_scroll_event(
             return EventResult::Handled;
         }
         let (delta_x, delta_y) = delta.pixels();
+        // Here rather than where the event arrived: this is the point at which the scroll is known to be
+        // this area's and not an inner one's. Recorded earlier, an outer area built up the speed of a
+        // gesture its content had consumed, and let go of it into a fling of its own.
+        motion.velocity.record(delta_y);
         let content_rect = content_rect_signal.get();
         let max_scroll_x = (content_rect.width - viewport.width).max(0.0);
         let max_scroll_y = (content_rect.height - viewport.height).max(0.0);
@@ -203,8 +213,8 @@ fn handle_scroll_event(
         // trackpad and a finger report pixels they have already travelled, and animating those would be
         // animating a movement that has happened.
         if ui_tree::smooth_wheel() && matches!(delta, platform_core::ScrollDelta::Lines { .. }) {
-            glide_axis(&mut glides.x, scroll_x, -delta_x, (0.0, max_scroll_x));
-            glide_axis(&mut glides.y, scroll_y, -delta_y, (0.0, max_scroll_y));
+            glide_axis(&mut motion.glide_x, scroll_x, -delta_x, (0.0, max_scroll_x));
+            glide_axis(&mut motion.glide_y, scroll_y, -delta_y, (0.0, max_scroll_y));
         } else {
             scroll_x.set((scroll_x.get() - delta_x).clamp(0.0, max_scroll_x));
             scroll_y.set((scroll_y.get() - delta_y).clamp(0.0, max_scroll_y));
@@ -242,11 +252,9 @@ pub(crate) struct ScrollCore {
     press_active: bool,
     gesture_scroll: f32,
     tap_cancelled: bool,
-    /// What the gesture in progress is doing, so letting go can carry it on.
-    velocity: crate::fling::Velocity,
     /// The one carrying on right now, if any. Held so a hand on the screen can stop it.
     fling: Option<std::rc::Rc<crate::fling::Fling>>,
-    glides: Glides,
+    motion: Motion,
     /// The bar a pointer has hold of, and where along the thumb it took hold.
     bar_drag: Option<(Axis, f32)>,
 }
@@ -276,9 +284,8 @@ impl ScrollCore {
             press_active: false,
             gesture_scroll: 0.0,
             tap_cancelled: false,
-            velocity: crate::fling::Velocity::default(),
             fling: None,
-            glides: Glides::default(),
+            motion: Motion::default(),
             bar_drag: None,
         }
     }
@@ -288,7 +295,7 @@ impl ScrollCore {
     // `ScrollViewport::reveal`, where that bug bites).
     fn scroll_to_top(&mut self) {
         // Whatever was still gliding was gliding through the page being left.
-        self.catch_fling();
+        self.catch_all();
         if self.scroll_x.peek() != 0.0 {
             self.scroll_x.set(0.0);
         }
@@ -315,11 +322,13 @@ impl ScrollCore {
         if let Some(fling) = self.fling.take() {
             fling.stop();
         }
-        self.catch_glide();
     }
 
-    fn catch_glide(&mut self) {
-        self.glides.stop();
+    /// Stops everything moving on its own. What a hand on the screen does, and what a jump to an offset
+    /// somebody asked for does.
+    fn catch_all(&mut self) {
+        self.catch_fling();
+        self.motion.stop_glides();
     }
 
     /// Takes hold of a bar under `(x, y)`, or pages towards a press on its track. `false` when the press
@@ -361,7 +370,7 @@ impl ScrollCore {
         let Some(thumb) = Thumb::of(origin, extent, content_extent, offset.get()) else {
             return false;
         };
-        self.catch_fling();
+        self.catch_all();
         if thumb.holds(along) {
             self.bar_drag = Some((axis, along - thumb.start));
         } else {
@@ -395,18 +404,18 @@ impl ScrollCore {
     fn launch_fling(&mut self, viewport: Rect) {
         // A surface that scrolls for itself brings its own physics, and two would fight over one offset.
         if ui_tree::element_capture() {
-            self.velocity.clear();
+            self.motion.velocity.clear();
             return;
         }
         // The offset grows as the content moves *up*, which is the opposite sign to the gesture.
-        let velocity = -self.velocity.take();
+        let velocity = -self.motion.velocity.take();
         let max = (self.content_rect_signal.peek().height - viewport.height).max(0.0);
         self.fling = crate::fling::Fling::start(self.scroll_y, velocity, (0.0, max));
     }
 
     fn clamp_scroll(&mut self, viewport: Rect) {
         // The content resized under it, so the ground it was travelling over is not there any more.
-        self.catch_fling();
+        self.catch_all();
         let content_rect = self.content_rect_signal.peek();
         let max_x = (content_rect.width - viewport.width).max(0.0);
         let max_y = (content_rect.height - viewport.height).max(0.0);
@@ -484,24 +493,24 @@ impl ScrollCore {
                 self.tap_cancelled = false;
                 // A hand on the screen stops whatever was still moving, and stops it where it stands: that
                 // is how a list is caught.
-                self.catch_fling();
-                self.velocity.clear();
+                self.catch_all();
+                self.motion.velocity.clear();
             }
             // A drag that ends while still moving does not stop where it was let go of.
             Event::PointerReleased { .. } => {
                 self.press_active = false;
                 self.launch_fling(viewport);
             }
-            // While a pointer is down (a touch drag, not a mouse wheel), once the finger has travelled past
-            // the slop this gesture is a scroll, not a tap: cancel the pending press on the content once (it
-            // sees pinned content-space coords and can't tell on its own).
-            Event::Scrolled { delta, .. } if self.press_active => {
-                let (dx, dy) = delta.pixels();
-                // Every move of the gesture, not only the ones before it was declared a scroll: the estimate
-                // has to still be warm when the finger lifts, and the arm below stops matching after the
-                // first eight pixels.
-                self.velocity.record(dy);
-                if !self.tap_cancelled {
+            // Anything scrolling now is in charge of the offset, so what was still coasting is not. This is
+            // also what keeps a platform that runs its own inertia from having Telar's added on top of it:
+            // the momentum it sends after the fingers lift takes the offset straight back over.
+            Event::Scrolled { delta, .. } => {
+                self.catch_fling();
+                // While a pointer is down (a touch drag, not a mouse wheel), once the finger has travelled
+                // past the slop this gesture is a scroll, not a tap: cancel the pending press on the content
+                // once (it sees pinned content-space coords and can't tell on its own).
+                if self.press_active && !self.tap_cancelled {
+                    let (dx, dy) = delta.pixels();
                     self.gesture_scroll += (dx * dx + dy * dy).sqrt();
                     if self.gesture_scroll > SCROLL_TAP_SLOP {
                         self.tap_cancelled = true;
@@ -509,6 +518,9 @@ impl ScrollCore {
                     }
                 }
             }
+            // Fingers off the touchpad. A drag on a touch screen ends with a release instead, which is why
+            // both arms end here.
+            Event::ScrollEnded { .. } => self.launch_fling(viewport),
             _ => {}
         }
         handle_scroll_event(
@@ -518,7 +530,7 @@ impl ScrollCore {
             self.scroll_y,
             self.content_rect_signal,
             &self.content,
-            &mut self.glides,
+            &mut self.motion,
         )
     }
 }
@@ -1832,5 +1844,103 @@ mod scrollbar_tests {
         assert_eq!(sa.on_event(&press(80.0, 296.0)), EventResult::Handled);
         sa.on_event(&moved(200.0, 296.0));
         assert_eq!(sa.core.scroll_x.get(), 300.0);
+    }
+}
+
+#[cfg(test)]
+mod touchpad_tests {
+    use super::tests::make_scroll_area;
+    use super::*;
+    use platform_core::ScrollDelta;
+    use std::time::{Duration, Instant};
+
+    fn glided(y: f32) -> Event {
+        Event::Scrolled {
+            delta: ScrollDelta::Pixels { x: 0.0, y },
+            x: 100.0,
+            y: 100.0,
+        }
+    }
+
+    fn lifted() -> Event {
+        Event::ScrollEnded { x: 100.0, y: 100.0 }
+    }
+
+    /// Two fingers moving fast and then leaving: the same gesture a finger makes on a phone, reported the
+    /// way a touchpad reports it.
+    fn flick(sa: &mut ScrollArea) {
+        for _ in 0..6 {
+            sa.on_event(&glided(-30.0));
+            std::thread::sleep(Duration::from_millis(8));
+        }
+    }
+
+    fn run_frames(count: u32) {
+        let start = Instant::now();
+        for frame in 1..=count {
+            motion_core::tick(start + Duration::from_millis(16 * frame as u64));
+        }
+    }
+
+    #[test]
+    fn a_flick_carries_on_after_the_fingers_leave() {
+        let mut sa = make_scroll_area();
+        flick(&mut sa);
+        let released_at = sa.core.scroll_y.get();
+        sa.on_event(&lifted());
+        run_frames(20);
+        assert!(
+            sa.core.scroll_y.get() > released_at,
+            "it should have travelled past where the fingers left it: \
+             {released_at} -> {}",
+            sa.core.scroll_y.get()
+        );
+    }
+
+    /// What macOS does: the system sends its own momentum after the fingers lift. Telar's must not be
+    /// added on top of it.
+    #[test]
+    fn a_platform_running_its_own_momentum_takes_the_offset_back() {
+        let mut sa = make_scroll_area();
+        flick(&mut sa);
+        sa.on_event(&lifted());
+        run_frames(2);
+        sa.on_event(&glided(-5.0));
+        let taken_over = sa.core.scroll_y.get();
+        run_frames(20);
+        assert_eq!(
+            sa.core.scroll_y.get(),
+            taken_over,
+            "the platform's own scroll is in charge now"
+        );
+    }
+
+    #[test]
+    fn fingers_leaving_without_having_moved_carry_nothing() {
+        let mut sa = make_scroll_area();
+        sa.on_event(&lifted());
+        run_frames(20);
+        assert_eq!(sa.core.scroll_y.get(), 0.0);
+    }
+
+    /// The speed belongs to whoever the scroll belonged to: an area that ignored it must not let go of it.
+    #[test]
+    fn a_gesture_this_area_never_applied_is_not_its_to_carry() {
+        let mut sa = make_scroll_area();
+        for _ in 0..6 {
+            sa.on_event(&Event::Scrolled {
+                delta: ScrollDelta::Pixels { x: 0.0, y: -30.0 },
+                x: 900.0,
+                y: 900.0,
+            });
+            std::thread::sleep(Duration::from_millis(8));
+        }
+        sa.on_event(&lifted());
+        run_frames(20);
+        assert_eq!(
+            sa.core.scroll_y.get(),
+            0.0,
+            "it was never this area's scroll"
+        );
     }
 }
