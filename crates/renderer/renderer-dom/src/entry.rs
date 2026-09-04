@@ -15,6 +15,9 @@ const HIDDEN: &str = "position:absolute;padding:0;border:0;outline:none;backgrou
 color:transparent;caret-color:transparent;font:inherit;resize:none;overflow:hidden;\
 -webkit-user-select:text;user-select:text;";
 
+/// What the entry answers to while standing for a field that named nothing.
+const FALLBACK: &str = "Text field";
+
 /// The hidden editable element the browser types into, placed over whichever field holds the keyboard.
 pub struct TextEntry {
     node: web_sys::HtmlElement,
@@ -22,6 +25,8 @@ pub struct TextEntry {
     _listeners: Vec<Closure<dyn FnMut(web_sys::Event)>>,
     /// Where it is parked, so an unchanged frame writes nothing.
     placed: String,
+    /// The name it is currently answering to, for the same reason.
+    named: Option<String>,
     /// Whether it currently stands for a field, so it can be taken out of the way when none does.
     active: bool,
 }
@@ -39,8 +44,10 @@ impl TextEntry {
         let _ = node.set_attribute("spellcheck", "false");
         // A single line as far as the browser is concerned; `Enter` is Telar's to interpret, and a textarea lets an input method compose without the element submitting anything.
         let _ = node.set_attribute("rows", "1");
-        // Deliberately not `aria-hidden`: this is where the keyboard actually is, and a focused element a reader has been told to ignore is worse than an unnamed one. What it lacks is a name.
+        // Deliberately not `aria-hidden`: this is where the keyboard actually is, and a focused element a reader has been told to ignore is worse than an unnamed one. It takes the name of whichever field it stands for in `park`.
         let _ = node.set_attribute("tabindex", "-1");
+        // Named from the moment it exists, not only once a field has claimed it. The element is in the document for the whole life of the app and holds no field for most of it, and a control with no name is one an audit reports whenever it happens to look — which on a page nobody has typed into yet is always.
+        let _ = node.set_attribute("aria-label", FALLBACK);
         host.append_child(node.as_ref()).ok()?;
 
         let listeners = vec![
@@ -52,6 +59,7 @@ impl TextEntry {
             node,
             _listeners: listeners,
             placed: String::new(),
+            named: Some(FALLBACK.to_string()),
             active: false,
         })
     }
@@ -59,7 +67,9 @@ impl TextEntry {
     /// Parks the entry over the field that holds the keyboard, and takes the keyboard with it.
     ///
     /// Focus goes here rather than to the field's own element, and that is the point: the element a person sees is not one a browser will type into, and the one it will type into must not be seen.
-    pub fn park(&mut self, rect: geometry_core::Rect, multiline: bool) {
+    ///
+    /// It answers to the field's own name while it stands for it. A screen reader reads the *focused* element, which is this one and never the field, so an entry with no name is a person being told they are in an edit box and not which one — and an unnamed form control is a failure every accessibility audit reports. `FALLBACK` covers the field that named nothing, because "text field" read out is still better than silence.
+    pub fn park(&mut self, rect: geometry_core::Rect, multiline: bool, label: Option<&str>) {
         let mut style = String::from(HIDDEN);
         paint::declare(&mut style, "left", &paint::px(rect.x));
         paint::declare(&mut style, "top", &paint::px(rect.y));
@@ -68,6 +78,11 @@ impl TextEntry {
         if style != self.placed {
             let _ = self.node.set_attribute("style", &style);
             self.placed = style;
+        }
+        let name = label.filter(|label| !label.is_empty()).unwrap_or(FALLBACK);
+        if self.named.as_deref() != Some(name) {
+            let _ = self.node.set_attribute("aria-label", name);
+            self.named = Some(name.to_string());
         }
         let _ = self
             .node
@@ -87,6 +102,11 @@ impl TextEntry {
         }
         let _ = self.node.set_attribute("style", HIDDEN);
         self.placed.clear();
+        // Back to the generic name: standing for no field, it must not keep answering to the last one.
+        if self.named.as_deref() != Some(FALLBACK) {
+            let _ = self.node.set_attribute("aria-label", FALLBACK);
+            self.named = Some(FALLBACK.to_string());
+        }
     }
 
     /// Puts the entry back where the reconcile expects it, after a frame that swept the host of anything past the boxes it placed. It is a child of the host and not of the page so that the coordinates it is parked at are the ones every other box uses.

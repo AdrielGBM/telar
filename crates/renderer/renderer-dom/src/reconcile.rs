@@ -514,8 +514,9 @@ impl Reconciler {
                 box_rect.width() as f32,
                 box_rect.height() as f32,
             );
+            let label = node.get_attribute("aria-label");
             if let Some(entry) = self.entry.as_mut() {
-                entry.park(placed, multiline);
+                entry.park(placed, multiline, label.as_deref());
             }
             self.claimed_focus = false;
             return;
@@ -780,6 +781,8 @@ fn fill_pieces(document: &web_sys::Document, live: &mut Live, after: u32, pieces
             let Ok(node) = document.create_element("div") else {
                 return;
             };
+            // Paint, not content: a caret, a selection band, a scrollbar's thumb. Out of the accessibility tree entirely, because in it they are children — and a role that comes with a content model counts them. A `role="list"` whose scrollbar is one of its children has a child that is not a `listitem`, which is exactly what an audit reports and a reader walks into.
+            let _ = node.set_attribute("role", "presentation");
             live.pieces.push(Piece {
                 node,
                 style: String::new(),
