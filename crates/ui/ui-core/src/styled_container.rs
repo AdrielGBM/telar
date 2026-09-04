@@ -27,6 +27,22 @@ pub fn style_follows(node: NodeId, style: impl Fn() -> LayoutStyle + 'static) ->
     })
 }
 
+/// The states a box paints differently in, **in precedence order**: the first one engaged wins.
+///
+/// A list rather than a chain of `else if`, so a new state is added by putting it at the right place here instead of at the right place inside `view()` — where the order was a comment and nothing held the code to it.
+const PAINT_STATES: [PaintState; 3] = [PaintState::Disabled, PaintState::Active, PaintState::Hover];
+
+/// One of the box's paint states. See [`PAINT_STATES`] for the order they resolve in.
+#[derive(Clone, Copy)]
+enum PaintState {
+    /// A control that cannot be used must not also look pressable, so this is ahead of every other state.
+    Disabled,
+    /// A primary pointer held down inside the box — CSS `:active`.
+    Active,
+    /// Mouse only, like the hover callback.
+    Hover,
+}
+
 /// The paint a box swaps in per state, and the state itself.
 ///
 /// One value so "does this box repaint on a pointer transition" is a question with an owner, instead of a term someone has to remember to add to a disjunction spelled out at the top of `on_event`.
@@ -202,6 +218,18 @@ impl StyledContainer {
     /// Whether the box is currently refusing input. `None` — the common case — answers without a dyn call on the pointer-move broadcast path, which every box in the tree pays.
     fn is_disabled(&self) -> bool {
         self.disabled_source.as_ref().is_some_and(|f| f())
+    }
+
+    /// The paint `state` swaps in, or `None` when the box has no style for it or is not in it.
+    ///
+    /// **The engagement test runs only once a style exists.** Each test reads a signal, and reading one subscribes this `view()` to it, so testing a state the box has no paint for would make a plain box re-render on every pointer move. That is why the states are a list of thunks rather than a table of booleans: a table would have to evaluate all four to build itself.
+    fn state_style(&self, state: PaintState) -> Option<&dyn Fn(Rect) -> RectStyle> {
+        let (style, is_engaged): (_, fn(&Self) -> bool) = match state {
+            PaintState::Disabled => (&self.state.disabled, Self::is_disabled),
+            PaintState::Active => (&self.state.active, |box_| box_.state.is_active.get()),
+            PaintState::Hover => (&self.state.hover, |box_| box_.state.is_hovered.get()),
+        };
+        style.as_deref().filter(|_| is_engaged(self))
     }
 
     /// Whether the box wants nothing from an event and can route it straight to its children, exactly as a plain container would.
@@ -625,22 +653,10 @@ impl LayoutItem for StyledContainer {
 impl Component for StyledContainer {
     fn view(&self) -> RenderNode {
         let r = self.rect.get();
-        // Disabled over pressed over hover over base. Each state is read only when its style exists, so a plain box's `view()` subscribes to none of them.
-        let style = if let Some(disabled) = &self.state.disabled
-            && self.is_disabled()
-        {
-            disabled
-        } else if let Some(active) = &self.state.active
-            && self.state.is_active.get()
-        {
-            active
-        } else if let Some(hover) = &self.state.hover
-            && self.state.is_hovered.get()
-        {
-            hover
-        } else {
-            &self.style
-        };
+        let style = PAINT_STATES
+            .iter()
+            .find_map(|&state| self.state_style(state))
+            .unwrap_or(&*self.style);
         let painted = match (&self.state.focus, self.focusable.id) {
             (Some(ring), Some(id)) if focus::is_focus_visible(id) => {
                 let base = style(r);
@@ -2934,5 +2950,40 @@ mod tests {
         reactive_core::dispose_owner(owner);
         source.set(9);
         assert_eq!(seen.get(), 7, "and stops when the scope is disposed");
+    }
+}
+
+#[cfg(test)]
+mod paint_state_tests {
+    use super::*;
+    use crate::context::reset_layout_runtime;
+
+    /// The order is the precedence, and it is the whole of the rule `view()` used to spell out as a chain. A state inserted in the wrong place here is the bug this list exists to make visible.
+    #[test]
+    fn states_resolve_most_specific_first() {
+        assert!(matches!(
+            PAINT_STATES,
+            [PaintState::Disabled, PaintState::Active, PaintState::Hover]
+        ));
+    }
+
+    /// **A state with no paint is never asked whether it is engaged.** The test reads a signal, and reading one subscribes the enclosing `view()` to it — so a box with no `hover_style` would re-render on every pointer move. A table of `(style, bool)` pairs would have to evaluate all three to build itself, which is why this resolves through thunks.
+    #[test]
+    fn a_state_without_a_style_never_reads_its_signal() {
+        reset_layout_runtime();
+        let plain = StyledContainer::new(
+            LayoutStyle::new().flex_column().width(10.0).height(10.0),
+            |_r| RectStyle::default(),
+            vec![],
+        )
+        .unwrap();
+        plain.state.is_hovered.set(true);
+        plain.state.is_active.set(true);
+        for state in PAINT_STATES {
+            assert!(
+                plain.state_style(state).is_none(),
+                "a box with no state paint resolved one anyway"
+            );
+        }
     }
 }
