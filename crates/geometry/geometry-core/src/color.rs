@@ -180,14 +180,17 @@ impl Color {
         }
     }
 
+    /// The colour as eight bits a channel, rounded to the nearest.
+    ///
+    /// Rounded, not truncated, and the difference is a whole channel step: `as u8` throws the fraction away,
+    /// so `0.5` came out 127 where every other path in the codebase produces 128 — tiny-skia and the GPU both
+    /// round when they write their own final byte. Only the backends that name a colour in *text* go through
+    /// here, so the truncation showed up as a document drawing every theme one step darker than the same
+    /// theme rasterised.
     #[inline]
     pub fn to_rgba8(self) -> [u8; 4] {
-        [
-            (self.r * 255.0).clamp(0.0, 255.0) as u8,
-            (self.g * 255.0).clamp(0.0, 255.0) as u8,
-            (self.b * 255.0).clamp(0.0, 255.0) as u8,
-            (self.a * 255.0).clamp(0.0, 255.0) as u8,
-        ]
+        let byte = |channel: f32| (channel * 255.0).round().clamp(0.0, 255.0) as u8;
+        [byte(self.r), byte(self.g), byte(self.b), byte(self.a)]
     }
 
     pub const BLACK: Self = Self::rgb(0.0, 0.0, 0.0);
@@ -251,6 +254,24 @@ mod tests {
     fn to_rgba8_clamps_below_zero() {
         let color = Color::rgba(-1.0, -1.0, -1.0, -1.0);
         assert_eq!(color.to_rgba8(), [0, 0, 0, 0]);
+    }
+
+    /// Truncating threw away a whole channel step, and only the backends that write a colour as text went
+    /// through here — so a document drew a theme one step darker than the same theme rasterised.
+    #[test]
+    fn to_rgba8_rounds_to_the_nearest_channel() {
+        let color = Color::rgba(0.5, 0.47, 0.98, 0.1);
+        assert_eq!(color.to_rgba8(), [128, 120, 250, 26]);
+    }
+
+    /// A colour written as hex is the bytes it was written with, whichever way it has been round-tripped.
+    #[test]
+    fn to_rgba8_returns_the_bytes_a_hex_colour_was_written_with() {
+        for hex in ["#0e1017", "#3b5bdb", "#5b7cfa", "#f2b53c", "#e2e5ee"] {
+            let color = Color::from_hex(hex).unwrap();
+            let [r, g, b, _] = color.to_rgba8();
+            assert_eq!(format!("#{r:02x}{g:02x}{b:02x}"), hex);
+        }
     }
 
     #[test]
