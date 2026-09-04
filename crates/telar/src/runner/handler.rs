@@ -181,6 +181,18 @@ struct LifecycleGuard {
     _commands: platform_core::WindowCommandGuard,
 }
 
+/// One frame's pass through `on_redraw`, opened once the frame is known to be due.
+///
+/// Its fields are the ordering argument the pass used to make in prose. [`generation`](Self::generation) in particular is stamped after the reactive flush that settles this frame's commands, so a phase holding a `FramePass` cannot read a number describing the frame before it.
+struct FramePass {
+    /// The window's physical size this frame is composed for.
+    size: (u32, u32),
+    /// Whether the frame carries new content, or is the keepalive blit that only re-presents.
+    has_content: bool,
+    /// Identifies the command list this frame ships, for a renderer whose contract is that equal generations mean identical commands.
+    generation: u64,
+}
+
 impl<W, D> AppHandler<W, D>
 where
     W: Window + Clone + 'static,
@@ -439,6 +451,164 @@ where
             self.command_buf_pool.push(msg.commands);
         }
     }
+
+    /// This frame's start instant, or `None` while the previous one is still inside [`FRAME_BUDGET`].
+    ///
+    /// Ahead of every other phase because everything below it composes a frame: a platform may call `on_redraw` every loop turn, and the tick's own writes notify it to redraw again, so an ungated pass would free-run instead of sleeping.
+    fn claim_frame_budget(&mut self) -> Option<web_time::Instant> {
+        let now = web_time::Instant::now();
+        if now.duration_since(self.last_tick) < FRAME_BUDGET {
+            return None;
+        }
+        self.last_tick = now;
+        Some(now)
+    }
+
+    /// Runs the frame's reactive work — queued tasks, then the motion tick — and relayouts whatever they dirtied, leaving a fresh batch open for the app's own frame.
+    ///
+    /// Ahead of the dirtiness [`frame_is_due`](Self::frame_is_due) reads: `motion_tick`'s writes only enqueue effects while a batch is open, so flushing here re-runs any segment reading an animated value in this frame rather than the next.
+    fn advance_reactive_state(&mut self, now: web_time::Instant) {
+        // Before the tick: the batch open here defers its flush to the `end_batch` below, so a task that dirties layout is picked up by the `relayout` that follows instead of waiting a frame.
+        self.app.drain_tasks();
+        self.app.motion_tick(now);
+        end_batch();
+        // A reactive change may mutate the layout tree during the flush above while the app shell only recomputes on resize or route change. Outside a batch, so the rect updates flush their segment effects before the frame is composed. Routed through the app, so a dylib-backed tree relayouts its own runtime.
+        self.app.relayout();
+        begin_batch();
+    }
+
+    /// Gives the app its frame: `on_frame`, then the end-of-frame registries, the window commands it queued, and whatever the renderer host has pending.
+    fn run_app_frame(&mut self, window: &W) {
+        let mut redraw_requested = false;
+        {
+            // `None` when this surface has no OS handles to give.
+            let (raw_window_handle, raw_display_handle) = self
+                .raw_handles
+                .map(|of| of(window))
+                .unwrap_or((None, None));
+            let mut ctx = crate::app_context::AppCtx {
+                redraw_requested: &mut redraw_requested,
+                redraw_waker: self.redraw_waker.as_ref(),
+                raw_window_handle,
+                raw_display_handle,
+            };
+            self.app.on_frame(&mut ctx);
+        }
+        // After `on_frame`, where an app reads them: a press answers true for the whole frame it arrived in.
+        ui_core::end_keyboard_frame();
+        // And again on the tree's own side, a different set of registries behind a dylib boundary.
+        if let Some(ref tree) = self.tree {
+            tree.end_frame();
+        }
+        // `on_event`'s drain runs only on input events, so a frame-driven command would otherwise wait for the next one.
+        self.apply_window_commands(window);
+        if redraw_requested {
+            window.request_redraw();
+        }
+
+        self.poll_pending_renderer(window);
+        self.apply_pending_restart(window);
+    }
+
+    /// Opens this frame's pass, or `None` when nothing is due — no new content, and no keepalive owed.
+    ///
+    /// The reactive flush lands here rather than in [`build_frame`](Self::build_frame) so `clear_color` and the draw commands come from one pass: without it a redraw firing before `about_to_wait` reads the new colour against commands from the previous `view()`. [`FramePass::generation`] is stamped after that flush, since the number has to describe the commands this frame ships and the effects deciding them have only just run.
+    fn open_frame_pass(&mut self, now: web_time::Instant, window: &W) -> Option<FramePass> {
+        let has_content = self.frame_is_due(now)?;
+        self.last_submit = now;
+        // Keepalive blits must not reset the budget clock, which would delay the next content render.
+        if has_content {
+            self.last_frame = now;
+        }
+        let size = (window.width(), window.height());
+        tracing::debug!(
+            "on_redraw: window {}x{} scale={} has_content={}",
+            size.0,
+            size.1,
+            self.scale_factor,
+            has_content
+        );
+        end_batch();
+        begin_batch();
+        Some(FramePass {
+            size,
+            has_content,
+            generation: self.frame_generation(),
+        })
+    }
+
+    /// Composes the tree's commands, hands them past the dev plugin, and packs the result into the message a renderer takes.
+    fn build_frame(&mut self, pass: &FramePass) -> FrameMsg {
+        renderer_core::perf::tick();
+        // Reclaim buffers the render thread finished with, capped so the free-list stays tiny.
+        if let Some(channels) = self.renderer_host.channels() {
+            while let Ok(buf) = channels.ret_rx.try_recv() {
+                if self.command_buf_pool.len() < COMMAND_BUF_POOL_CAP {
+                    self.command_buf_pool.push(buf);
+                }
+            }
+        }
+        let build_start = renderer_core::perf::now_if_enabled();
+        let clear = self.app.clear_color();
+        let commands_ref = self.tree.as_ref().map(|t| t.frame());
+        let base_slice: &[renderer_core::DrawCommand] = commands_ref.as_deref().unwrap_or(&[]);
+        if let Some(tree) = &self.tree {
+            let mut nodes = Vec::new();
+            tree.walk(&mut nodes);
+            self.dev.on_tree(&nodes);
+        }
+        let (width, height) = pass.size;
+        let logical_w = width as f32 / self.scale_factor;
+        let logical_h = height as f32 / self.scale_factor;
+        let frame_commands = self
+            .dev
+            .on_frame(base_slice, logical_w, logical_h, pass.has_content);
+        renderer_core::perf::record_since(renderer_core::perf::Phase::Build, build_start);
+        let clone_start = renderer_core::perf::now_if_enabled();
+        // Refill a recycled buffer instead of allocating a fresh Vec every frame.
+        let mut commands = self.command_buf_pool.pop().unwrap_or_default();
+        commands.clear();
+        commands.extend_from_slice(&frame_commands);
+        renderer_core::perf::record_since(renderer_core::perf::Phase::Clone, clone_start);
+        // Before the frame is handed off: naming a control means asking what text was drawn inside it, and by then the frame belongs to the render thread.
+        self.frame_text.clear();
+        self.frame_text.extend(
+            frame_commands
+                .iter()
+                .filter(|c| matches!(c, renderer_core::DrawCommand::Text { .. }))
+                .cloned(),
+        );
+        // The message owns its commands from here, so release the tree and dev-plugin borrows for the submit below.
+        drop(frame_commands);
+        drop(commands_ref);
+        FrameMsg {
+            width,
+            height,
+            scale_factor: self.scale_factor,
+            generation: pass.generation,
+            commands,
+            clear,
+            timestamp: web_time::Instant::now(),
+        }
+    }
+
+    /// Hands the frame to the render thread, or rasterises it inline when this surface has no thread of its own.
+    fn submit_frame(&mut self, msg: FrameMsg) {
+        // Dropped if the render thread is still busy, which keeps input handling off the rasteriser's critical path. On a dropped or disconnected send, the buffer is recovered for the free-list.
+        if let Some(channels) = self.renderer_host.channels() {
+            if let Err(e) = channels.tx.try_send(msg) {
+                let recovered = match e {
+                    std::sync::mpsc::TrySendError::Full(m)
+                    | std::sync::mpsc::TrySendError::Disconnected(m) => m.commands,
+                };
+                if self.command_buf_pool.len() < COMMAND_BUF_POOL_CAP {
+                    self.command_buf_pool.push(recovered);
+                }
+            }
+            return;
+        }
+        self.render_inline(msg);
+    }
 }
 
 impl<W, D> EventHandler<W> for AppHandler<W, D>
@@ -641,139 +811,16 @@ where
         if self.poll_hot_reload(window) {
             return;
         }
-        // Before `tree_dirty` is read: `tick()`'s writes only enqueue effects while a batch is open, so the flush re-runs any segment reading an animated value in this frame rather than the next. Everything below composes a frame, so the whole pass is paced: a platform may call `on_redraw` every loop turn, and the tick's writes notify it to redraw again, so the loop would free-run instead of sleeping.
-        let now = web_time::Instant::now();
-        if now.duration_since(self.last_tick) < FRAME_BUDGET {
-            return;
-        }
-        self.last_tick = now;
-        // Before the tick: the batch opened here defers its flush to the `end_batch` below, so a task that dirties layout is picked up by the `relayout` that follows instead of waiting a frame.
-        self.app.drain_tasks();
-        self.app.motion_tick(now);
-        end_batch();
-        // A reactive change may mutate the layout tree during the flush above while the app shell only recomputes on resize or route change. Outside a batch, so the rect updates flush their segment effects before the frame is composed. Routed through the app, so a dylib-backed tree relayouts its own runtime.
-        self.app.relayout();
-        begin_batch();
-
-        let mut redraw_requested = false;
-        {
-            // `None` when this surface has no OS handles to give.
-            let (raw_window_handle, raw_display_handle) = self
-                .raw_handles
-                .map(|of| of(window))
-                .unwrap_or((None, None));
-            let mut ctx = crate::app_context::AppCtx {
-                redraw_requested: &mut redraw_requested,
-                redraw_waker: self.redraw_waker.as_ref(),
-                raw_window_handle,
-                raw_display_handle,
-            };
-            self.app.on_frame(&mut ctx);
-        }
-        // After `on_frame`, where an app reads them: a press answers true for the whole frame it arrived in.
-        ui_core::end_keyboard_frame();
-        // And again on the tree's own side, a different set of registries behind a dylib boundary.
-        if let Some(ref tree) = self.tree {
-            tree.end_frame();
-        }
-        // `on_event`'s drain runs only on input events, so a frame-driven command would wait for the next one. drain only runs on input events, so a frame-driven command would otherwise wait for the next one.
-        self.apply_window_commands(window);
-        if redraw_requested {
-            window.request_redraw();
-        }
-
-        self.poll_pending_renderer(window);
-        self.apply_pending_restart(window);
-
-        let Some(has_content) = self.frame_is_due(now) else {
+        let Some(now) = self.claim_frame_budget() else {
             return;
         };
-        self.last_submit = now;
-        // Keepalive blits must not reset the budget clock, which would delay the next content render.
-        if has_content {
-            self.last_frame = now;
-        }
-
-        let (w, h) = (window.width(), window.height());
-        tracing::debug!(
-            "on_redraw: window {}x{} scale={} has_content={}",
-            w,
-            h,
-            self.scale_factor,
-            has_content
-        );
-
-        // So `clear_color` and the draw commands come from one reactive pass: without it a redraw firing before `about_to_wait` reads the new colour against commands from the previous `view()`.
-        end_batch();
-        begin_batch();
-        // After that flush: the number has to describe the commands this frame ships, and the effects deciding them have only just run.
-        let generation = self.frame_generation();
-        renderer_core::perf::tick();
-        // Reclaim buffers the render thread finished with, capped so the free-list stays tiny.
-        if let Some(channels) = self.renderer_host.channels() {
-            while let Ok(buf) = channels.ret_rx.try_recv() {
-                if self.command_buf_pool.len() < COMMAND_BUF_POOL_CAP {
-                    self.command_buf_pool.push(buf);
-                }
-            }
-        }
-        let build_start = renderer_core::perf::now_if_enabled();
-        let clear = self.app.clear_color();
-        let commands_ref = self.tree.as_ref().map(|t| t.frame());
-        let base_slice: &[renderer_core::DrawCommand] = commands_ref.as_deref().unwrap_or(&[]);
-        if let Some(tree) = &self.tree {
-            let mut nodes = Vec::new();
-            tree.walk(&mut nodes);
-            self.dev.on_tree(&nodes);
-        }
-        let logical_w = w as f32 / self.scale_factor;
-        let logical_h = h as f32 / self.scale_factor;
-        let frame_commands = self
-            .dev
-            .on_frame(base_slice, logical_w, logical_h, has_content);
-        renderer_core::perf::record_since(renderer_core::perf::Phase::Build, build_start);
-        let clone_start = renderer_core::perf::now_if_enabled();
-        // Refill a recycled buffer instead of allocating a fresh Vec every frame.
-        let mut commands = self.command_buf_pool.pop().unwrap_or_default();
-        commands.clear();
-        commands.extend_from_slice(&frame_commands);
-        renderer_core::perf::record_since(renderer_core::perf::Phase::Clone, clone_start);
-        // Before the frame is handed off: naming a control means asking what text was drawn inside it, and by then the frame belongs to the render thread.
-        self.frame_text.clear();
-        self.frame_text.extend(
-            frame_commands
-                .iter()
-                .filter(|c| matches!(c, renderer_core::DrawCommand::Text { .. }))
-                .cloned(),
-        );
-        // The message owns its commands from here, so release the tree and dev-plugin borrows for the branch below.
-        drop(frame_commands);
-        drop(commands_ref);
-        let msg = FrameMsg {
-            width: w,
-            height: h,
-            scale_factor: self.scale_factor,
-            generation,
-            commands,
-            clear,
-            timestamp: web_time::Instant::now(),
-        };
-
-        // Dropped if the render thread is still busy, which keeps input handling off the rasteriser's critical path. On a dropped or disconnected send, the buffer is recovered for the free-list.
-        if let Some(channels) = self.renderer_host.channels() {
-            if let Err(e) = channels.tx.try_send(msg) {
-                let recovered = match e {
-                    std::sync::mpsc::TrySendError::Full(m)
-                    | std::sync::mpsc::TrySendError::Disconnected(m) => m.commands,
-                };
-                if self.command_buf_pool.len() < COMMAND_BUF_POOL_CAP {
-                    self.command_buf_pool.push(recovered);
-                }
-            }
+        self.advance_reactive_state(now);
+        self.run_app_frame(window);
+        let Some(pass) = self.open_frame_pass(now, window) else {
             return;
-        }
-
-        self.render_inline(msg);
+        };
+        let msg = self.build_frame(&pass);
+        self.submit_frame(msg);
     }
 
     fn on_suspend(&mut self) {
