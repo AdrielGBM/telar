@@ -2,6 +2,8 @@
 //!
 //! Deliberately dependency-free, so layout, rendering and the widget tree can all name the same types without any of them depending on each other.
 
+#![warn(rustdoc::broken_intra_doc_links)]
+
 mod border_radius;
 mod color;
 mod object_fit;

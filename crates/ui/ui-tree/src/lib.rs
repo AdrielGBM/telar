@@ -1,5 +1,7 @@
 //! The widget tree: components, the render nodes they emit, and the reactive segments that keep a frame's command list up to date without re-rendering what did not change.
 
+#![warn(rustdoc::broken_intra_doc_links)]
+
 mod component;
 mod element;
 mod overlay_dispatch;

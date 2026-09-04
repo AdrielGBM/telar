@@ -20,6 +20,8 @@
 //!
 //! [`format::format_document`] is the inverse: it re-serializes that AST into canonical source. It lives beside the parser rather than with the language server so anything holding a `.rsx` file can reach it — the editor through the LSP, `cargo telar fmt` from a terminal — and both give the same answer by construction.
 
+#![warn(rustdoc::broken_intra_doc_links)]
+
 pub mod format;
 
 mod ast;

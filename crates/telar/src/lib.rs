@@ -2,6 +2,8 @@
 //!
 //! Re-exports the widget catalogue, the reactive primitives and the geometry types, and carries the runner that turns a mounted tree into a window.
 
+#![warn(rustdoc::broken_intra_doc_links)]
+
 mod macros;
 
 pub mod config;

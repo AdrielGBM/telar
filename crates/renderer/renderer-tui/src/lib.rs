@@ -4,6 +4,8 @@
 //!
 //! The unit bridge is [`CellSize`]: the terminal reports its size in logical pixels (columns × a declared cell width), so layout runs exactly as it does on the desktop and nothing above this crate learns that a cell exists. See [`CellMetrics`] for why measurement is the piece that has to know.
 
+#![warn(rustdoc::broken_intra_doc_links)]
+
 mod buffer;
 mod cell;
 mod color;

@@ -2,6 +2,8 @@
 //!
 //! Carries the damage tracking the GPU path also uses, plus a scroll blit and background shadow workers, because a frame it cannot skip is a frame it has to draw a pixel at a time.
 
+#![warn(rustdoc::broken_intra_doc_links)]
+
 mod budget;
 mod caches;
 mod primitives;

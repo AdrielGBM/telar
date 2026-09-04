@@ -13,6 +13,8 @@
 //! }
 //! ```
 
+#![warn(rustdoc::broken_intra_doc_links)]
+
 mod cache;
 pub mod limits;
 mod policy;

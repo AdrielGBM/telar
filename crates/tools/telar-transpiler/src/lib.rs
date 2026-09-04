@@ -1,5 +1,7 @@
 //! RSX transpiler: converts a parsed [`RsxDocument`](telar_parser::RsxDocument) AST into compilable Rust source code that depends on `telar::*`.
 
+#![warn(rustdoc::broken_intra_doc_links)]
+
 mod codegen;
 mod discovery;
 mod edges;

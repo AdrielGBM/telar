@@ -11,6 +11,7 @@
 //! `platform-core` and `renderer-core` are siblings — neither may depend on the other — and both need this. It lived in both, differently, which is how a checkbox came to be announced as a checkbox on the desktop and drawn as an anonymous box in a browser.
 
 #![forbid(unsafe_code)]
+#![warn(rustdoc::broken_intra_doc_links)]
 
 use std::sync::Arc;
 

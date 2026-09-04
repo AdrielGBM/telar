@@ -4,6 +4,8 @@
 //!
 //! [`TabStacks`] and [`TabHost`] are the same pair one level up: one stack *per tab* rather than one shared stack, which is the native model (`UITabBarController`, a nested `Navigator`, a nested nav graph) and what lets a tab you leave stay several screens deep until you come back to it.
 
+#![warn(rustdoc::broken_intra_doc_links)]
+
 mod host;
 mod navigator;
 mod page;

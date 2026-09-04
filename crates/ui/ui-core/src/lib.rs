@@ -1,5 +1,7 @@
 //! The widget catalogue's foundation: the primitives every component is built from, and the ambient state they share — focus, pointer, overlays, the cascade and the per-surface worlds all of it lives in.
 
+#![warn(rustdoc::broken_intra_doc_links)]
+
 pub mod accessibility;
 #[cfg(feature = "async-assets")]
 mod async_asset;

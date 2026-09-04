@@ -1,5 +1,7 @@
 //! Text: font resolution, shaping through cosmic-text, and the glyph atlas both backends sample.
 
+#![warn(rustdoc::broken_intra_doc_links)]
+
 pub mod colr;
 pub mod fonts;
 mod measure;

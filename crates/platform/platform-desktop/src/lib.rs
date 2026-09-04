@@ -1,5 +1,7 @@
 //! The desktop backend: the winit runner, plus the accessibility, clipboard, dialog and colour-scheme integrations a desktop expects.
 
+#![warn(rustdoc::broken_intra_doc_links)]
+
 mod accessibility;
 mod clipboard;
 // D-Bus, and only reached on Linux: winit answers the colour-scheme question itself on Windows and macOS. The gate belongs to this module alone — `zbus` is the one dependency declared for Linux only, so a `mod` that drifts above this line takes the gate with it.

@@ -2,6 +2,8 @@
 //!
 //! A backend implements [`Platform`] and [`Window`] against these types; everything above this crate speaks only in them, so a frontend can be swapped without touching the UI.
 
+#![warn(rustdoc::broken_intra_doc_links)]
+
 pub mod accessibility;
 pub mod error;
 pub mod event;

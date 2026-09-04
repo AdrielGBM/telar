@@ -1,5 +1,7 @@
 //! The ambient services an application reaches for without naming a backend: the clipboard, file dialogs and the per-app directories.
 
+#![warn(rustdoc::broken_intra_doc_links)]
+
 pub mod app_paths;
 pub mod clipboard;
 pub mod dialogs;

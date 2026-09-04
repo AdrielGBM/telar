@@ -1,5 +1,7 @@
 //! Layout made reactive: a taffy tree whose node rects are signals, so a widget re-renders when its box moves.
 
+#![warn(rustdoc::broken_intra_doc_links)]
+
 mod context;
 mod direction;
 

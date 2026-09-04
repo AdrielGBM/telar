@@ -1,5 +1,7 @@
 //! The winit pieces the desktop and Android backends share: the window wrapper and the event mapping.
 
+#![warn(rustdoc::broken_intra_doc_links)]
+
 pub mod map;
 pub mod window;
 

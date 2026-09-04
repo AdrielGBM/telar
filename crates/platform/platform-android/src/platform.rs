@@ -93,7 +93,7 @@ mod choreographer {
         let _ = cb_data.proxy.send_event(());
     }
 
-    // Heap-allocated state shared between the runner and the vsync callback. The pointer lives for the full duration of the AndroidRunner.
+    /// Heap-allocated state shared between the runner and the vsync callback. The pointer lives for the full duration of the AndroidRunner.
     pub struct VsyncCallbackData {
         pub is_pending: Arc<AtomicBool>,
         pub proxy: winit::event_loop::EventLoopProxy<()>,
@@ -110,7 +110,7 @@ mod choreographer {
     unsafe impl Send for Choreographer {}
 
     impl Choreographer {
-        // Returns None if AChoreographer is not available on this device/API level.
+        /// Returns None if AChoreographer is not available on this device/API level.
         pub fn new(
             proxy: winit::event_loop::EventLoopProxy<()>,
             pending: Arc<AtomicBool>,
@@ -129,7 +129,7 @@ mod choreographer {
             })
         }
 
-        // Post a single vsync callback. No-op if the symbols are unavailable.
+        /// Post a single vsync callback. No-op if the symbols are unavailable.
         pub fn request_vsync(&self) {
             let post = match unsafe { post_callback_fn() } {
                 Some(f) => f,

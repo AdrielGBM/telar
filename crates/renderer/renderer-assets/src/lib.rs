@@ -2,6 +2,8 @@
 //!
 //! `renderer-core` owns the vocabulary (`DrawCommand`, `PathData`, `ImageData`, …); this crate concentrates the usvg/resvg/image dependencies and turns those external formats into that vocabulary. The `dynamic-svg`/`dynamic-image` features carry those deps and drive both the runtime parse/decode AND the build-time bakers; the transpiler enables them host-side so baking is always available without adding usvg/image to the app runtime.
 
+#![warn(rustdoc::broken_intra_doc_links)]
+
 mod image;
 mod svg;
 #[cfg(feature = "dynamic-svg")]

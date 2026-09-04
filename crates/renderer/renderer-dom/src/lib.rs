@@ -6,6 +6,7 @@
 //!
 //! Only the halves that touch the browser are compiled off `wasm32` — the ones that turn a style into CSS and a shape into SVG are plain string building, and are tested on the host that builds them.
 
+#![warn(rustdoc::broken_intra_doc_links)]
 // The document half of the crate is absent off wasm, so what it would have called is unreachable there.
 #![cfg_attr(not(target_arch = "wasm32"), allow(dead_code))]
 

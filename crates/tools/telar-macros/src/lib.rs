@@ -1,5 +1,7 @@
 //! The proc macros: `app!` and `rsx_modules!`, which transpile a project's `.rsx` at build time, plus the `Props` and `ThemeTokens` derives and the `t!` catalogue lookup.
 
+#![warn(rustdoc::broken_intra_doc_links)]
+
 use proc_macro::TokenStream;
 use proc_macro2::{Ident, Span, TokenStream as TokenStream2};
 use quote::{ToTokens, quote};

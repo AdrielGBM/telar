@@ -29,7 +29,7 @@ pub struct AdpfSession {
 }
 
 impl AdpfSession {
-    // `tid` defaults to the calling thread's kernel TID (SYS_gettid) when None, so the hint must be created on the thread that will report. Returns None when the platform exposes no hint manager or session creation fails.
+    /// `tid` defaults to the calling thread's kernel TID (SYS_gettid) when None, so the hint must be created on the thread that will report. Returns None when the platform exposes no hint manager or session creation fails.
     pub fn new(target_ns: i64, tid: Option<i32>) -> Option<Self> {
         let session = unsafe {
             let manager = ffi::APerformanceHint_getManager();

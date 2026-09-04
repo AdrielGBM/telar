@@ -15,6 +15,8 @@
 //!
 //! [`Inherited`]: https://docs.rs/telar-ui-core/latest/telar_ui_core/struct.Inherited.html
 
+#![warn(rustdoc::broken_intra_doc_links)]
+
 mod context;
 mod density;
 mod mode;

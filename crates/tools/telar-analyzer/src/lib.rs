@@ -1,5 +1,7 @@
 //! Language server for `.rsx` files.
 
+#![warn(rustdoc::broken_intra_doc_links)]
+
 mod analysis;
 mod backend;
 mod build_sync;

@@ -2,6 +2,8 @@
 //!
 //! Holds no rasterizer of its own — the software, hardware, terminal and document backends all consume these types, which is what lets a frame be composed once and drawn by any of them.
 
+#![warn(rustdoc::broken_intra_doc_links)]
+
 mod command;
 pub mod culling;
 pub mod dirty;

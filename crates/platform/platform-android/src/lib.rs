@@ -1,5 +1,7 @@
 //! The Android backend: an `android-activity` loop, plus the platform facts the NDK answers for.
 
+#![warn(rustdoc::broken_intra_doc_links)]
+
 #[cfg(target_os = "android")]
 mod adpf;
 #[cfg(target_os = "android")]

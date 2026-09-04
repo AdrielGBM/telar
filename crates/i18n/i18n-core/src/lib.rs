@@ -2,6 +2,8 @@
 //!
 //! This crate is always-on and dependency-light (only `reactive-core`). The heavy work — parsing translation catalogs — happens at build time in the transpiler's i18n baker, which emits a `static CATALOG: Catalog` of pure `&'static` data. At runtime a translated string is nothing more than `translate(&CATALOG, key, args)`, which reads the active locale reactively and renders the matching [`Message`].
 
+#![warn(rustdoc::broken_intra_doc_links)]
+
 #[cfg(feature = "runtime-catalog")]
 mod catalog;
 mod installed;

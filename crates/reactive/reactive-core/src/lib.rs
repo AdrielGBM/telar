@@ -1,5 +1,7 @@
 //! Factory functions (`signal`, `effect`, `memo`) create nodes in the reactive graph. Struct constructors (`Runtime::new`, etc.) own their state. Free functions (`batch`, `set_flush_notify`) operate on the thread-local runtime.
 
+#![warn(rustdoc::broken_intra_doc_links)]
+
 mod effect;
 mod memo;
 mod reactive;

@@ -4,6 +4,8 @@
 //!
 //! It is also the in-tree proof that [`renderer_core::RendererFactory`] is a real seam: installed from outside the runtime, naming neither a window system nor a surface.
 
+#![warn(rustdoc::broken_intra_doc_links)]
+
 use std::sync::{Arc, Mutex};
 
 use renderer_core::{
