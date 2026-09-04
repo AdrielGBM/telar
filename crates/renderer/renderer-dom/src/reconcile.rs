@@ -9,6 +9,10 @@
 //! background, which is CSS; child boxes, which the browser lays out; and paint that is neither — a caret, a
 //! selection band, a scrollbar. The last of those become positioned children, in the order they were drawn,
 //! so what covered what on a canvas covers the same thing here.
+//!
+//! And a frame paints at its own level too, outside every element: an application's shell fills the panel its
+//! rail stands on, and dims the page behind a drawer. That becomes a box inside the host, placed as it is
+//! drawn — see `paint_at_root`.
 
 use geometry_core::Rect;
 use renderer_core::{Color, DrawCommand, Element, Role};
@@ -174,8 +178,10 @@ impl Open {
             box_rect: Rect::new(0.0, 0.0, 0.0, 0.0),
             drawing: None,
             style: String::new(),
-            // The host is not Telar's to paint: an application chose its size and its background before the
-            // first frame, and a surface-wide fill would be written over both.
+            // The host takes no paint of its own: the page chose that element's size and the application
+            // named its background in `clear_color`, which `paint_host` has already written there. What the
+            // frame draws at this level becomes a box inside it instead — see `paint_at_root`, which is
+            // reached before this flag is ever read.
             painted: true,
             placed: 0,
             pieces: Vec::new(),
@@ -200,6 +206,10 @@ pub struct Reconciler {
     audit: bool,
     /// The surface background last written to the host, so an unchanged frame writes nothing.
     background: String,
+    /// The boxes standing in for paint the frame carries at its top level, in the order it was drawn.
+    root_paint: Vec<Piece>,
+    /// How many of those this frame has used, so the ones a shorter frame leaves over can be dropped.
+    root_painted: usize,
     /// Whether a box claimed the keyboard this frame, so a frame where none did can put it back.
     claimed_focus: bool,
     /// The one editable element the browser will type into, parked over whichever field holds the keyboard.
@@ -221,6 +231,8 @@ impl Reconciler {
         Ok(Self {
             audit: audit_requested(),
             background: String::new(),
+            root_paint: Vec::new(),
+            root_painted: 0,
             claimed_focus: false,
             entry,
             entry_target: None,
@@ -236,6 +248,7 @@ impl Reconciler {
         self.paint_host(clear);
         self.seen.clear();
         self.open.clear();
+        self.root_painted = 0;
         // The host is the outermost frame, so a top-level element is placed in it by the same code that
         // places every other child.
         self.open.push(Open::root());
@@ -248,6 +261,11 @@ impl Reconciler {
             }
         }
 
+        while self.root_paint.len() > self.root_painted {
+            if let Some(extra) = self.root_paint.pop() {
+                extra.node.remove();
+            }
+        }
         // Close the host frame: anything left beyond what this frame placed is gone — except the one editable
         // element the browser types into, which is a child of the host and is put back rather than swept.
         if let Some(root) = self.open.pop() {
@@ -298,8 +316,91 @@ impl Reconciler {
         self.background = declared;
     }
 
+    /// A box for paint the frame carries at its own top level.
+    ///
+    /// A widget may draw where there is no element for it to be the background of: an application's shell
+    /// paints the panel its rail stands on before it draws the rail, and dims the page behind a drawer. The
+    /// host cannot take it — the page chose that element's size and the application named its background in
+    /// `clear_color` — so it becomes a box of its own inside it. Dropped, as it was, the rail stood on the
+    /// page's own colour and every pill in it that had been invisible against its panel was suddenly a
+    /// shape.
+    ///
+    /// Put in place as it is drawn, and not collected the way paint *inside* an element is. There the pieces
+    /// go after the boxes because that is what they are — a scroll area's bar is drawn over the content it
+    /// scrolls. Here the order is the frame's own: a panel drawn before the rail belongs under it, and
+    /// holding it back would have laid it over the thing it stands behind.
+    fn paint_at_root(&mut self, rect: Rect, painted: &str, text: &str) {
+        let index = self.root_painted;
+        self.root_painted += 1;
+        if index == self.root_paint.len() {
+            let Ok(node) = self.document.create_element("div") else {
+                return;
+            };
+            self.root_paint.push(Piece {
+                node,
+                style: String::new(),
+                text: String::new(),
+            });
+        }
+        let mut style = String::new();
+        paint::declare(&mut style, "position", "absolute");
+        paint::declare(&mut style, "left", &paint::px(rect.x));
+        paint::declare(&mut style, "top", &paint::px(rect.y));
+        paint::declare(&mut style, "width", &paint::px(rect.width.max(0.0)));
+        paint::declare(&mut style, "height", &paint::px(rect.height.max(0.0)));
+        // This answers no pointer: the boxes do, and a pane of paint across them would swallow every press
+        // meant for what is underneath.
+        paint::declare(&mut style, "pointer-events", "none");
+        if let Some(matrix) = self.open.last().and_then(|root| root.moved) {
+            paint::declare(&mut style, "transform-origin", "0 0");
+            paint::declare(
+                &mut style,
+                "transform",
+                &paint::matrix(matrix, rect.x, rect.y),
+            );
+        }
+        style.push_str(painted);
+
+        let piece = &mut self.root_paint[index];
+        if piece.style != style {
+            let _ = piece.node.set_attribute("style", &style);
+            piece.style = style;
+        }
+        if piece.text != text {
+            piece.node.set_text_content(Some(text));
+            piece.text = text.to_string();
+        }
+        let node = piece.node.clone();
+        self.place(node);
+    }
+
     /// Everything that is not an element boundary: what the open box paints.
     fn paint(&mut self, command: &DrawCommand) {
+        // The frame's own paint, before the borrow the rest of this needs: it is placed as it is drawn, and
+        // placing reaches the host.
+        if self
+            .open
+            .last()
+            .is_some_and(|open| open.is_root() && open.drawing.is_none())
+        {
+            match command {
+                DrawCommand::Rect { rect, style } => {
+                    let mut css = String::new();
+                    paint::rect_style(style, *rect, &mut css);
+                    self.paint_at_root(*rect, &css, "");
+                    return;
+                }
+                DrawCommand::Text {
+                    text, rect, style, ..
+                } => {
+                    let mut css = String::new();
+                    paint::text_style(style, &mut css);
+                    self.paint_at_root(*rect, &css, text);
+                    return;
+                }
+                _ => {}
+            }
+        }
         let Some(open) = self.open.last_mut() else {
             return;
         };
@@ -331,9 +432,6 @@ impl Reconciler {
                     paint::rect_style(style, *rect, &mut open.style);
                     return;
                 }
-                if open.is_root() {
-                    return;
-                }
                 let mut css = String::new();
                 paint::rect_style(style, *rect, &mut css);
                 open.pieces.push(Painted::Rect {
@@ -344,9 +442,6 @@ impl Reconciler {
             DrawCommand::Text {
                 text, rect, style, ..
             } => {
-                if open.is_root() {
-                    return;
-                }
                 let mut css = String::new();
                 paint::text_style(style, &mut css);
                 open.pieces.push(Painted::Text {
