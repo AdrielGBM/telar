@@ -16,4 +16,6 @@ pub use curve::{Curve, Spring, Tween, spring, tween};
 pub use easing::Easing;
 pub use keyframes::{Keyframes, KeyframesBuilder, Repeat};
 pub use lerp::Lerp;
-pub use ticker::{Continuous, has_active, has_continuous, reset, set_scale, tick};
+pub use ticker::{
+    Continuous, Tickable, has_active, has_continuous, next_id, register, reset, set_scale, tick,
+};

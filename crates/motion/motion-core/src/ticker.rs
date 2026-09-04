@@ -4,9 +4,16 @@ use std::mem::ManuallyDrop;
 use std::rc::Weak;
 use web_time::Instant;
 
-/// Registry-facing behavior of an animation, erased over its value type.
-pub(crate) trait Tickable {
+/// Something that advances with the frame clock, erased over whatever it is advancing.
+///
+/// `Animated` is the usual one, and not the only kind there is: a value eased between two endpoints is one
+/// thing, and a velocity that decays until it runs out or meets a bound is another. A scroll fling is the
+/// second — it has no target until it stops — so the registry takes anything that can be told the time
+/// rather than only animations.
+pub trait Tickable {
+    /// Advance to `now`. `scale` is the global time scale: `0.0` means jump straight to the end.
     fn tick(&self, now: Instant, scale: f32);
+    /// Whether there is nothing left to advance, at which point the registry lets go of it.
     fn is_settled(&self) -> bool;
 }
 
@@ -36,7 +43,8 @@ thread_local! {
     static REGISTRY: ManuallyDrop<RefCell<Registry>> = ManuallyDrop::new(RefCell::new(Registry::new()));
 }
 
-pub(crate) fn next_id() -> u64 {
+/// An identity for one registration, so re-registering the same thing replaces rather than duplicates it.
+pub fn next_id() -> u64 {
     REGISTRY.with(|r| {
         let mut reg = r.borrow_mut();
         let id = reg.next_id;
@@ -45,7 +53,12 @@ pub(crate) fn next_id() -> u64 {
     })
 }
 
-pub(crate) fn register(id: u64, weak: Weak<dyn Tickable>) {
+/// Registers something to be advanced once per frame.
+///
+/// Held weakly, so whatever registered it deregisters by being dropped and nothing has to remember to say
+/// so. Ticking is the frame's, and a value written from `tick` is a write like any other — the runner calls
+/// it outside the render, which is why an animation may publish into a signal from there at all.
+pub fn register(id: u64, weak: Weak<dyn Tickable>) {
     REGISTRY.with(|r| {
         r.borrow_mut().entries.insert(id, weak);
     });

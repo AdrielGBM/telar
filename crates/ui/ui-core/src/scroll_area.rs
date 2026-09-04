@@ -119,7 +119,8 @@ fn handle_scroll_event(
         let max_scroll_x = (content_rect.width - viewport.width).max(0.0);
         let max_scroll_y = (content_rect.height - viewport.height).max(0.0);
         scroll_x.set((scroll_x.get() - delta_x).clamp(0.0, max_scroll_x));
-        scroll_y.set((scroll_y.get() - delta_y).clamp(0.0, max_scroll_y));
+        let next_y = (scroll_y.get() - delta_y).clamp(0.0, max_scroll_y);
+        scroll_y.set(next_y);
         return EventResult::Handled;
     }
 
@@ -153,6 +154,10 @@ pub(crate) struct ScrollCore {
     press_active: bool,
     gesture_scroll: f32,
     tap_cancelled: bool,
+    /// What the gesture in progress is doing, so letting go can carry it on.
+    velocity: crate::fling::Velocity,
+    /// The one carrying on right now, if any. Held so a hand on the screen can stop it.
+    fling: Option<std::rc::Rc<crate::fling::Fling>>,
 }
 
 /// Accumulated finger travel (logical px) within a gesture past which the scroll area treats it as a scroll
@@ -180,6 +185,8 @@ impl ScrollCore {
             press_active: false,
             gesture_scroll: 0.0,
             tap_cancelled: false,
+            velocity: crate::fling::Velocity::default(),
+            fling: None,
         }
     }
 
@@ -187,6 +194,8 @@ impl ScrollCore {
     // an effect, and a reactive read there would subscribe that effect to its own correction (see
     // `ScrollViewport::reveal`, where that bug bites).
     fn scroll_to_top(&mut self) {
+        // Whatever was still gliding was gliding through the page being left.
+        self.catch_fling();
         if self.scroll_x.peek() != 0.0 {
             self.scroll_x.set(0.0);
         }
@@ -208,7 +217,29 @@ impl ScrollCore {
         }
     }
 
+    /// Ends any fling where it stands.
+    fn catch_fling(&mut self) {
+        if let Some(fling) = self.fling.take() {
+            fling.stop();
+        }
+    }
+
+    /// Carries the gesture on, if it was still going when it ended.
+    fn launch_fling(&mut self, viewport: Rect) {
+        // A surface that scrolls for itself brings its own physics, and two would fight over one offset.
+        if ui_tree::element_capture() {
+            self.velocity.clear();
+            return;
+        }
+        // The offset grows as the content moves *up*, which is the opposite sign to the gesture.
+        let velocity = -self.velocity.take();
+        let max = (self.content_rect_signal.peek().height - viewport.height).max(0.0);
+        self.fling = crate::fling::Fling::start(self.scroll_y, velocity, (0.0, max));
+    }
+
     fn clamp_scroll(&mut self, viewport: Rect) {
+        // The content resized under it, so the ground it was travelling over is not there any more.
+        self.catch_fling();
         let content_rect = self.content_rect_signal.peek();
         let max_x = (content_rect.width - viewport.width).max(0.0);
         let max_y = (content_rect.height - viewport.height).max(0.0);
@@ -271,17 +302,31 @@ impl ScrollCore {
                 self.press_active = true;
                 self.gesture_scroll = 0.0;
                 self.tap_cancelled = false;
+                // A hand on the screen stops whatever was still moving, and stops it where it stands: that
+                // is how a list is caught.
+                self.catch_fling();
+                self.velocity.clear();
             }
-            Event::PointerReleased { .. } => self.press_active = false,
+            // A drag that ends while still moving does not stop where it was let go of.
+            Event::PointerReleased { .. } => {
+                self.press_active = false;
+                self.launch_fling(viewport);
+            }
             // While a pointer is down (a touch drag, not a mouse wheel), once the finger has travelled past
             // the slop this gesture is a scroll, not a tap: cancel the pending press on the content once (it
             // sees pinned content-space coords and can't tell on its own).
-            Event::Scrolled { delta, .. } if self.press_active && !self.tap_cancelled => {
+            Event::Scrolled { delta, .. } if self.press_active => {
                 let (dx, dy) = delta.pixels();
-                self.gesture_scroll += (dx * dx + dy * dy).sqrt();
-                if self.gesture_scroll > SCROLL_TAP_SLOP {
-                    self.tap_cancelled = true;
-                    self.content.borrow_mut().on_event(&Event::CursorLeft);
+                // Every move of the gesture, not only the ones before it was declared a scroll: the estimate
+                // has to still be warm when the finger lifts, and the arm below stops matching after the
+                // first eight pixels.
+                self.velocity.record(dy);
+                if !self.tap_cancelled {
+                    self.gesture_scroll += (dx * dx + dy * dy).sqrt();
+                    if self.gesture_scroll > SCROLL_TAP_SLOP {
+                        self.tap_cancelled = true;
+                        self.content.borrow_mut().on_event(&Event::CursorLeft);
+                    }
                 }
             }
             _ => {}

@@ -11,6 +11,7 @@ pub mod dismiss;
 mod disposal;
 mod drag;
 mod element;
+mod fling;
 pub mod focus;
 mod image;
 mod inherit;
