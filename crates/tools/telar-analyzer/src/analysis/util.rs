@@ -20,6 +20,8 @@ pub enum ViewToken<'a> {
     Class(&'a str),
     /// The value of a colour-typed attribute (`fill:accent`).
     ColorValue(&'a str),
+    /// An attribute key, with the tag it is written on — one spelling is still two properties.
+    Attr { tag: &'a str, key: &'a str },
     /// The leading token of a line — a builtin tag or a component call, raw, for the caller to tell apart.
     Tag(&'a str),
 }
@@ -44,8 +46,10 @@ pub fn view_token_at(source: &str, line: u32, character: u32) -> Option<ViewToke
             .contains(&key)
             .then_some(ViewToken::ColorValue(word));
     }
-    line_text[..word_start]
-        .trim()
-        .is_empty()
-        .then_some(ViewToken::Tag(word))
+    let is_leading = line_text[..word_start].trim().is_empty();
+    if !is_leading && line_text[word_start + word.len()..].starts_with(':') {
+        let tag = line_text.split_whitespace().next()?;
+        return Some(ViewToken::Attr { tag, key: word });
+    }
+    is_leading.then_some(ViewToken::Tag(word))
 }

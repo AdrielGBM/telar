@@ -18,6 +18,8 @@ pub fn goto_definition(
 ) -> Option<GotoDefinitionResponse> {
     match view_token_at(source, line, character)? {
         ViewToken::Class(class) => find_class(doc, class, uri),
+        // An attribute is declared in the registry, not in a file this can open.
+        ViewToken::Attr { .. } => None,
         ViewToken::ColorValue(value) => find_color(value, project),
         // A builtin tag is defined in the framework, not in a file this can open.
         ViewToken::Tag(tag) if !is_builtin_tag(tag) => find_component(tag, project, uri),

@@ -7,7 +7,7 @@ use lsp_types::{CompletionItem, CompletionItemKind};
 use std::collections::HashSet;
 use std::path::Path;
 use telar_parser::RsxDocument;
-use telar_transpiler::{color_attr_keys, color_keywords, is_control_flow_keyword, tag_attr_keys};
+use telar_transpiler::{color_attr_keys, color_keywords, is_control_flow_keyword};
 
 /// What may be written at the cursor: an element name, an attribute key, a colour or a class.
 pub enum CompletionKind {
@@ -117,12 +117,16 @@ pub fn element_name_items(dir: Option<&Path>) -> Vec<CompletionItem> {
     items
 }
 
-fn attribute_items(keys: &[&str]) -> Vec<CompletionItem> {
-    keys.iter()
-        .map(|k| CompletionItem {
-            label: k.to_string(),
+fn attribute_items(specs: &[telar_transpiler::AttrSpec]) -> Vec<CompletionItem> {
+    specs
+        .iter()
+        .map(|spec| CompletionItem {
+            label: spec.key.to_string(),
             kind: Some(CompletionItemKind::PROPERTY),
-            insert_text: Some(format!("{k}:")),
+            insert_text: Some(format!("{}:", spec.key)),
+            documentation: spec
+                .doc
+                .map(|doc| lsp_types::Documentation::String(doc.to_string())),
             ..Default::default()
         })
         .collect()
@@ -130,7 +134,7 @@ fn attribute_items(keys: &[&str]) -> Vec<CompletionItem> {
 
 /// The attribute keys a tag accepts.
 pub fn attribute_key_items(tag: &str) -> Vec<CompletionItem> {
-    attribute_items(&tag_attr_keys(tag))
+    attribute_items(&telar_transpiler::tag_attr_specs(tag))
 }
 
 /// The colour keywords, plus the project theme's own tokens.
