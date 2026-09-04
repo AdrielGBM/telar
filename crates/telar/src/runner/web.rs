@@ -18,6 +18,13 @@ pub struct WebOptions {
     pub focus_and_gestures: Option<(bool, bool)>,
     /// Which renderer to use, when the page wants to decide rather than let the browser decide for it.
     pub renderer: WebRenderer,
+    /// Whether a right-click opens the application's own menu instead of the browser's.
+    ///
+    /// `None`, the default, lets the way the app draws decide. Pixels on a canvas give the browser's menu
+    /// nothing to act on — no text to copy, no link to open, no image to save — so there the app takes it. A
+    /// document has all three, and an app that swallowed the menu there would be a page missing the one
+    /// thing every other page has. An application that draws its own menus over a document says so here.
+    pub owns_context_menu: Option<bool>,
 }
 
 /// How a browser app draws.
@@ -128,6 +135,7 @@ fn start<A: App>(
         // The boxes that scroll are the document's own, and a wheel the app claimed would be a wheel the
         // compositor never sees.
         owns_scroll: document,
+        owns_context_menu: options.owns_context_menu.unwrap_or(!document),
     };
     let platform = WebPlatform::with_host(host.clone(), platform_config);
 

@@ -88,6 +88,12 @@ pub struct WebPlatformConfig {
     /// Set where the app is drawn as a document: the boxes that scroll are real scroll containers, and a
     /// wheel the platform claimed for the app would be a wheel the compositor never sees.
     pub owns_scroll: bool,
+    /// Whether a right-click belongs to the app rather than to the browser.
+    ///
+    /// Set where the app draws pixels: there is nothing on a canvas the browser's own menu could act on — no
+    /// text to copy, no link to open, no image to save — so the only menu worth showing is the app's. A
+    /// document is the other case entirely, and taking that menu away there takes away the page.
+    pub owns_context_menu: bool,
 }
 
 impl Default for WebPlatformConfig {
@@ -97,6 +103,7 @@ impl Default for WebPlatformConfig {
             autofocus: true,
             owns_gestures: true,
             owns_scroll: false,
+            owns_context_menu: true,
         }
     }
 }
@@ -312,10 +319,13 @@ fn install_listeners(
         push([Event::CursorLeft]);
     }));
 
-    // A right-click belongs to the app, which draws its own menus.
-    listeners.push(listen(target, "contextmenu", false, move |event| {
-        event.prevent_default();
-    }));
+    // Only where the app has a menu of its own to show instead — see `owns_context_menu`. Swallowed
+    // everywhere, it left a page without the one thing every other page offers on a right-click.
+    if config.owns_context_menu {
+        listeners.push(listen(target, "contextmenu", false, move |event| {
+            event.prevent_default();
+        }));
+    }
 
     let viewport: web_sys::EventTarget = dom::window().into();
     listeners.push(listen(&viewport, "resize", true, move |_| {
