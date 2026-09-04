@@ -159,6 +159,13 @@ mod tests {
 // single-window runner applies it to a handler directly; the multi-window runner forwards it to that
 // surface's worker thread. Keeping the mapping here (and the application at the call site) lets both share
 // the exact same winit→platform translation.
+/// Lines one detent of a mouse wheel is worth.
+///
+/// Every winit backend reports a notch as one line, and one line is a fifth of what a browser moves for the
+/// same flick of the finger — which is what turning a wheel here felt like against any other window on the
+/// screen. The number is the browsers' hundred pixels over the runtime's twenty-pixel line.
+const LINES_PER_NOTCH: f32 = 5.0;
+
 pub enum SurfaceIntent {
     // Deliver this platform event to the handler.
     Event(Event),
@@ -309,7 +316,10 @@ pub fn map_window_event(
         }
         WindowEvent::MouseWheel { delta, .. } => {
             let scroll_delta = match delta {
-                MouseScrollDelta::LineDelta(x, y) => ScrollDelta::Lines { x, y },
+                MouseScrollDelta::LineDelta(x, y) => ScrollDelta::Lines {
+                    x: x * LINES_PER_NOTCH,
+                    y: y * LINES_PER_NOTCH,
+                },
                 MouseScrollDelta::PixelDelta(pos) => ScrollDelta::Pixels {
                     x: (pos.x / *scale_factor) as f32,
                     y: (pos.y / *scale_factor) as f32,
