@@ -232,6 +232,136 @@ impl StyledContainer {
         style.as_deref().filter(|_| is_engaged(self))
     }
 
+    /// A move: the hover state, the cursor, and whatever gesture is already running.
+    ///
+    /// Broadcast to all children for their hover, and feeding our own scroll-vs-tap tracking. Hover is mouse-only: touch has no "pointer left", so a tap would leave the box stuck in its hover style.
+    fn on_pointer_moved(
+        &mut self,
+        event: &Event,
+        rect: Rect,
+        x: f64,
+        y: f64,
+        source: &PointerSource,
+    ) -> EventResult {
+        self.press.track_move(event);
+        let dragged = self.drag.moved(event, rect) == EventResult::Handled;
+        // A stroke past its drag threshold has committed to being a drag, so it is no longer a tap. Only for a box that set one: without a threshold both have always fired, and a slider taking a press keeps that.
+        if self.drag.has_threshold() && self.drag.has_started() {
+            self.press.cancel();
+        }
+        let child = self.dispatch_children(event);
+        // A move is broadcast for gestures already running, but only the topmost box under the pointer is hovered.
+        let inside = rect.contains(x as f32, y as f32) && !crate::pointer::pointer_occluded();
+        // Pressed clears once the pointer drags off the box, so it never sticks.
+        if !inside {
+            self.set_active(false);
+        }
+        if inside && let Some(cb) = &self.pointer.moved {
+            cb(x as f32 - rect.x, y as f32 - rect.y);
+        }
+        let tracks_hover = self.state.hover.is_some()
+            || self.pointer.hover.is_some()
+            || self.pointer.cursor.is_some();
+        if tracks_hover
+            && matches!(source, PointerSource::Mouse)
+            && inside != self.state.is_hovered.get()
+        {
+            self.state.is_hovered.set(inside);
+            if let Some(cursor) = &self.pointer.cursor {
+                platform_core::push_window_command(WindowCommand::SetCursor(if inside {
+                    cursor.get()
+                } else {
+                    Cursor::Default
+                }));
+            }
+            if let Some(cb) = &self.pointer.hover {
+                cb(inside);
+            }
+            return EventResult::Handled;
+        }
+        if dragged { EventResult::Handled } else { child }
+    }
+
+    /// A press: who claims the stroke, who takes the tap, and who takes focus.
+    fn on_pointer_pressed(
+        &mut self,
+        event: &Event,
+        rect: Rect,
+        x: f64,
+        y: f64,
+        button: &PointerButton,
+    ) -> EventResult {
+        // Pressed state and focus are primary-only. Other buttons route to the press or drag gesture of a box that asked for them, and fall through untouched otherwise.
+        let primary = *button == PointerButton::Primary;
+        if !primary && !self.press.wants_alt() && !self.drag.arms(button) {
+            return self.dispatch_children(event);
+        }
+        // A child takes the tap; the innermost drag takes the stroke. Standing this drag down because a child took the press made a strip draggable only where nothing pressable sat in it; arming it regardless moved the band and reordered the tab on one press. So the children are asked who claimed the stroke.
+        let (below, claimed) = crate::drag::claimed(|| self.dispatch_children(event));
+        // Said after the children have had the press and before this returns, so it reaches whatever contains this box.
+        if self.holds_stroke && rect.contains(x as f32, y as f32) {
+            crate::drag::claim();
+        }
+        if below == EventResult::Handled {
+            self.press.cancel();
+            if self.drag.is_set() && !claimed {
+                self.drag.press(event, rect);
+            }
+            return EventResult::Handled;
+        }
+        if primary && rect.contains(x as f32, y as f32) {
+            self.set_active(true);
+        }
+        let focused = match self.focusable.id {
+            Some(id) if primary && rect.contains(x as f32, y as f32) => {
+                focus::request_from_pointer(id);
+                true
+            }
+            _ => false,
+        };
+        let tapped = self.press.is_set() && self.press.arm(event, rect) == EventResult::Handled;
+        let dragged =
+            !claimed && self.drag.is_set() && self.drag.press(event, rect) == EventResult::Handled;
+        if tapped || dragged || focused {
+            EventResult::Handled
+        } else {
+            EventResult::Ignored
+        }
+    }
+
+    /// A release: the end of the tap, of the drag, or of neither.
+    fn on_pointer_released(
+        &mut self,
+        event: &Event,
+        rect: Rect,
+        button: &PointerButton,
+    ) -> EventResult {
+        let primary = *button == PointerButton::Primary;
+        if !primary && !self.press.wants_alt() && !self.drag.arms(button) {
+            return self.dispatch_children(event);
+        }
+        if primary {
+            self.set_active(false);
+        }
+        if self.dispatch_children(event) == EventResult::Handled {
+            self.press.cancel();
+            self.drag.end(None);
+            return EventResult::Handled;
+        }
+        // The release carries the position the gesture actually finished at; a drag can end past the last move the compositor delivered.
+        let released_at = match event {
+            Event::PointerReleased { x, y, .. } => Some((*x as f32 - rect.x, *y as f32 - rect.y)),
+            _ => None,
+        };
+        let dragged = self.drag.arms(button) && self.drag.end(released_at);
+        let tapped = self.press.is_set() && self.press.release(event, rect) == EventResult::Handled;
+        if tapped || dragged {
+            EventResult::Handled
+        } else {
+            EventResult::Ignored
+        }
+    }
+
     /// Whether the box wants nothing from an event and can route it straight to its children, exactly as a plain container would.
     ///
     /// One question per group rather than one term per field: this predicate was a ten-term disjunction amended in ten commits, two of them fixing the omission the shape invites — a box whose only claim was a cursor, and one whose only claim was `on_key`, each silently lost its events.
@@ -727,116 +857,13 @@ impl Component for StyledContainer {
         }
         let rect = self.rect.get();
         match event {
-            // Broadcast to all children for their hover, and feeding our own scroll-vs-tap tracking. Hover is mouse-only: touch has no "pointer left", so a tap would leave the box stuck in its hover style.
             Event::PointerMoved { x, y, source } => {
-                self.press.track_move(event);
-                let dragged = self.drag.moved(event, rect) == EventResult::Handled;
-                // A stroke past its drag threshold has committed to being a drag, so it is no longer a tap. Only for a box that set one: without a threshold both have always fired, and a slider taking a press keeps that.
-                if self.drag.has_threshold() && self.drag.has_started() {
-                    self.press.cancel();
-                }
-                let child = self.dispatch_children(event);
-                // A move is broadcast for gestures already running, but only the topmost box under the pointer is hovered.
-                let inside =
-                    rect.contains(*x as f32, *y as f32) && !crate::pointer::pointer_occluded();
-                // Pressed clears once the pointer drags off the box, so it never sticks.
-                if !inside {
-                    self.set_active(false);
-                }
-                if inside && let Some(cb) = &self.pointer.moved {
-                    cb(*x as f32 - rect.x, *y as f32 - rect.y);
-                }
-                let tracks_hover = self.state.hover.is_some()
-                    || self.pointer.hover.is_some()
-                    || self.pointer.cursor.is_some();
-                if tracks_hover
-                    && matches!(source, PointerSource::Mouse)
-                    && inside != self.state.is_hovered.get()
-                {
-                    self.state.is_hovered.set(inside);
-                    if let Some(cursor) = &self.pointer.cursor {
-                        platform_core::push_window_command(WindowCommand::SetCursor(if inside {
-                            cursor.get()
-                        } else {
-                            Cursor::Default
-                        }));
-                    }
-                    if let Some(cb) = &self.pointer.hover {
-                        cb(inside);
-                    }
-                    return EventResult::Handled;
-                }
-                if dragged { EventResult::Handled } else { child }
+                self.on_pointer_moved(event, rect, *x, *y, source)
             }
             Event::PointerPressed { x, y, button, .. } => {
-                // Pressed state and focus are primary-only. Other buttons route to the press or drag gesture of a box that asked for them, and fall through untouched otherwise.
-                let primary = *button == PointerButton::Primary;
-                if !primary && !self.press.wants_alt() && !self.drag.arms(button) {
-                    return self.dispatch_children(event);
-                }
-                // A child takes the tap; the innermost drag takes the stroke. Standing this drag down because a child took the press made a strip draggable only where nothing pressable sat in it; arming it regardless moved the band and reordered the tab on one press. So the children are asked who claimed the stroke.
-                let (below, claimed) = crate::drag::claimed(|| self.dispatch_children(event));
-                // Said after the children have had the press and before this returns, so it reaches whatever contains this box.
-                if self.holds_stroke && rect.contains(*x as f32, *y as f32) {
-                    crate::drag::claim();
-                }
-                if below == EventResult::Handled {
-                    self.press.cancel();
-                    if self.drag.is_set() && !claimed {
-                        self.drag.press(event, rect);
-                    }
-                    return EventResult::Handled;
-                }
-                if primary && rect.contains(*x as f32, *y as f32) {
-                    self.set_active(true);
-                }
-                let focused = match self.focusable.id {
-                    Some(id) if primary && rect.contains(*x as f32, *y as f32) => {
-                        focus::request_from_pointer(id);
-                        true
-                    }
-                    _ => false,
-                };
-                let tapped =
-                    self.press.is_set() && self.press.arm(event, rect) == EventResult::Handled;
-                let dragged = !claimed
-                    && self.drag.is_set()
-                    && self.drag.press(event, rect) == EventResult::Handled;
-                if tapped || dragged || focused {
-                    EventResult::Handled
-                } else {
-                    EventResult::Ignored
-                }
+                self.on_pointer_pressed(event, rect, *x, *y, button)
             }
-            Event::PointerReleased { button, .. } => {
-                let primary = *button == PointerButton::Primary;
-                if !primary && !self.press.wants_alt() && !self.drag.arms(button) {
-                    return self.dispatch_children(event);
-                }
-                if primary {
-                    self.set_active(false);
-                }
-                if self.dispatch_children(event) == EventResult::Handled {
-                    self.press.cancel();
-                    self.drag.end(None);
-                    return EventResult::Handled;
-                }
-                // The release carries the position the gesture actually finished at; a drag can end past the last move the compositor delivered.
-                let released_at = match event {
-                    Event::PointerReleased { x, y, .. } => {
-                        Some((*x as f32 - rect.x, *y as f32 - rect.y))
-                    }
-                    _ => None,
-                };
-                let dragged = self.drag.arms(button) && self.drag.end(released_at);
-                let tapped =
-                    self.press.is_set() && self.press.release(event, rect) == EventResult::Handled;
-                if tapped || dragged {
-                    EventResult::Handled
-                } else {
-                    EventResult::Ignored
-                }
-            }
+            Event::PointerReleased { button, .. } => self.on_pointer_released(event, rect, button),
             // A drag is measured from the press, so ending it at the window border would cut an orbit short. What leaving does invalidate is containment.
             Event::CursorLeft => {
                 self.end_containment();
