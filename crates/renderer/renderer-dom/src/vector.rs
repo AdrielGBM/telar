@@ -287,6 +287,50 @@ impl Drawing {
     }
 }
 
+/// A box's gradient frame, as a picture of the ring it is.
+///
+/// Every other frame here is an inset `box-shadow`, which follows the radius and takes no room from the box
+/// — but a shadow carries a colour, and a gradient is not one. So the ring is drawn: the box's own outline
+/// with the inner edge punched out of it under the even-odd rule, which is the shape the rasterising
+/// backends fill for the same border.
+///
+/// Drawn in the box's own corner rather than where it stands on the surface, so the picture can be laid over
+/// it as a background of exactly its size — and the gradient moves with it, since its points were measured
+/// against the rect the widget drew.
+pub fn frame_svg(
+    rect: Rect,
+    radius: BorderRadius,
+    widths: [f32; 4],
+    gradient: &Gradient,
+) -> String {
+    let outer = Rect::new(0.0, 0.0, rect.width, rect.height);
+    let mut d = rounded_outline(outer, radius);
+    // No interior means the frame swallowed the box, and the outer outline alone is the whole of it.
+    if let Some((inner, inner_radius)) = renderer_core::border_inner_shape(outer, radius, widths) {
+        d.push_str(&rounded_outline(inner, inner_radius));
+    }
+    format!(
+        "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"{}\" height=\"{}\"><defs>{}</defs><path d=\"{d}\" fill=\"url(#f)\" fill-rule=\"evenodd\"/></svg>",
+        round(rect.width),
+        round(rect.height),
+        gradient_def("f", &moved(*gradient, -rect.x, -rect.y)),
+    )
+}
+
+fn moved(g: Gradient, dx: f32, dy: f32) -> Gradient {
+    let kind = match g.kind {
+        GradientKind::Linear { start, end } => GradientKind::Linear {
+            start: Point::new(start.x + dx, start.y + dy),
+            end: Point::new(end.x + dx, end.y + dy),
+        },
+        GradientKind::Radial { center, radius } => GradientKind::Radial {
+            center: Point::new(center.x + dx, center.y + dy),
+            radius,
+        },
+    };
+    Gradient { kind, ..g }
+}
+
 fn gradient_def(id: &str, g: &Gradient) -> String {
     let stops: String = g
         .stops
@@ -671,5 +715,48 @@ mod tests {
             &RectStyle::default().with_fill(Color::BLACK),
         );
         assert_eq!(d.finish(), "");
+    }
+
+    /// The ring the rasterising backends fill, as a picture that can be laid over the box: outer outline,
+    /// inner outline, even-odd. Drawn in the box's own corner, and the gradient moved to meet it — measured
+    /// where the widget drew it, the colours would have started off the left edge of the picture.
+    #[test]
+    fn a_gradient_frame_is_a_ring_drawn_in_the_box_s_own_corner() {
+        let svg = frame_svg(
+            Rect::new(300.0, 500.0, 100.0, 40.0),
+            BorderRadius::all(8.0),
+            [2.0; 4],
+            &Gradient::linear(
+                Point::new(300.0, 500.0),
+                Point::new(400.0, 500.0),
+                &[(0.0, Color::BLACK), (1.0, Color::WHITE)],
+            ),
+        );
+        assert!(svg.contains("width=\"100\" height=\"40\""), "{svg}");
+        assert!(svg.contains("fill-rule=\"evenodd\""), "{svg}");
+        assert!(
+            svg.contains("x1=\"0\" y1=\"0\" x2=\"100\" y2=\"0\""),
+            "{svg}"
+        );
+        assert!(svg.contains("d=\"M8 0"), "{svg}");
+        assert!(svg.contains("M8 2"), "{svg}");
+        assert!(svg.contains("A6 6 0 0 1"), "{svg}");
+    }
+
+    /// A frame thicker than the box it frames has no interior to punch out, and the outline alone is the
+    /// whole of it — a second subpath of nothing would have cut a hole under the even-odd rule.
+    #[test]
+    fn a_frame_that_swallows_its_box_is_the_outline_alone() {
+        let svg = frame_svg(
+            Rect::new(0.0, 0.0, 6.0, 6.0),
+            BorderRadius::zero(),
+            [4.0; 4],
+            &Gradient::linear(
+                Point::new(0.0, 0.0),
+                Point::new(6.0, 0.0),
+                &[(0.0, Color::BLACK), (1.0, Color::WHITE)],
+            ),
+        );
+        assert_eq!(svg.matches('M').count(), 1, "{svg}");
     }
 }

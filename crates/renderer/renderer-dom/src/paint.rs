@@ -4,6 +4,7 @@
 //! the `Rect` the widget drew. The two reach a document backend by different routes and are only joined
 //! here, in the string one element ends up with.
 
+use geometry_core::Rect;
 use renderer_core::{
     Border, BorderRadius, Color, Gradient, GradientKind, Paint, RectStyle, Shadow, TextStyle,
 };
@@ -99,7 +100,13 @@ fn border(b: &Border) -> Vec<String> {
     if !b.is_visible() {
         return Vec::new();
     }
-    let colour = paint(&b.paint);
+    // A shadow carries a colour, and a gradient is not one: written here it made the whole `box-shadow`
+    // invalid, and the browser dropped it — taking the box's drop shadow down with it, since the two share
+    // the property. A frame painted with a gradient is a background layer instead; see [`frame_image`].
+    let Paint::Solid(colour) = b.paint else {
+        return Vec::new();
+    };
+    let colour = color(colour);
     let [top, right, bottom, left] = b.widths;
     if top == right && top == bottom && top == left {
         return vec![format!("inset 0 0 0 {} {colour}", px(top))];
@@ -131,10 +138,51 @@ fn shadow(s: Shadow) -> String {
     )
 }
 
+/// A picture, as the CSS that names it.
+///
+/// Only what a URL cannot carry raw is escaped: `%` because it introduces an escape, `#` because it would
+/// start a fragment, and the three the markup itself is made of.
+fn data_uri(svg: &str) -> String {
+    let mut out = String::from("url(\"data:image/svg+xml,");
+    for character in svg.chars() {
+        match character {
+            '%' => out.push_str("%25"),
+            '#' => out.push_str("%23"),
+            '<' => out.push_str("%3C"),
+            '>' => out.push_str("%3E"),
+            '"' => out.push_str("%22"),
+            _ => out.push(character),
+        }
+    }
+    out.push_str("\")");
+    out
+}
+
+/// A gradient frame, as the background layer that draws it — `None` for every frame [`border`] can draw
+/// itself.
+///
+/// Laid over the fill rather than beside it because a frame is over the box it frames, and sized to the box
+/// so the ring inside the picture lands exactly on its edge.
+fn frame_image(style: &RectStyle, rect: Rect) -> Option<String> {
+    let border = style.border.as_ref().filter(|b| b.is_visible())?;
+    let Paint::Gradient(gradient) = &border.paint else {
+        return None;
+    };
+    let svg = crate::vector::frame_svg(rect, style.radius, border.widths, gradient);
+    Some(format!("{} 0 0/100% 100% no-repeat", data_uri(&svg)))
+}
+
 /// What a `Rect` the widget drew for its own box contributes to that box's style.
-pub fn rect_style(style: &RectStyle, out: &mut String) {
-    if let Some(fill) = &style.fill {
-        declare(out, "background", &paint(fill));
+///
+/// `rect` is the one it was drawn with, which is what a gradient's own coordinates are measured against.
+pub fn rect_style(style: &RectStyle, rect: Rect, out: &mut String) {
+    // One property, because a background is one property: the frame is a layer over the fill, and a fill
+    // that is a colour may only be the last of them.
+    match (style.fill.as_ref().map(paint), frame_image(style, rect)) {
+        (Some(fill), Some(frame)) => declare(out, "background", &format!("{frame},{fill}")),
+        (Some(fill), None) => declare(out, "background", &fill),
+        (None, Some(frame)) => declare(out, "background", &frame),
+        (None, None) => {}
     }
     if let Some(value) = radius(style.radius) {
         declare(out, "border-radius", &value);
@@ -147,10 +195,44 @@ pub fn rect_style(style: &RectStyle, out: &mut String) {
     }
 }
 
+/// Whether text in this style takes the element's background for itself.
+///
+/// A box paints its own background, so it cannot also be the element this text is drawn on: what makes the
+/// glyphs a gradient is a background clipped to their shape, and the box's fill would be clipped to it too.
+pub fn text_claims_background(style: &TextStyle) -> bool {
+    matches!(style.color, Paint::Gradient(_))
+}
+
 /// What a `Text` command contributes to the element that holds it.
 pub fn text_style(style: &TextStyle, out: &mut String) {
     declare(out, "font-size", &px(style.font_size));
-    declare(out, "color", &paint(&style.color));
+    match &style.color {
+        Paint::Solid(ink) => declare(out, "color", &color(*ink)),
+        // `color` takes a colour, so a gradient written there was dropped and the text came out in whatever
+        // it had inherited. Painted behind the element and clipped to the glyphs instead, which is the only
+        // way a document fills text with anything but a colour. It costs the element its own background,
+        // which is why a text that asks for one is never folded into the box it is in — see `Reconciler::pop`.
+        Paint::Gradient(g) => {
+            declare(out, "background-image", &gradient(g));
+            declare(out, "-webkit-background-clip", "text");
+            declare(out, "background-clip", "text");
+            declare(out, "color", "transparent");
+        }
+    }
+    if let Some(cast) = style.text_shadow.cast() {
+        // No spread: `text-shadow` has no such length, and the glyphs are not a shape to grow.
+        declare(
+            out,
+            "text-shadow",
+            &format!(
+                "{} {} {} {}",
+                px(cast.offset_x),
+                px(cast.offset_y),
+                px(cast.blur_radius),
+                color(cast.color)
+            ),
+        );
+    }
     if style.font_weight != 400 {
         declare(out, "font-weight", &style.font_weight.to_string());
     }
@@ -207,7 +289,7 @@ mod tests {
 
     fn css_of(style: &RectStyle) -> String {
         let mut out = String::new();
-        rect_style(style, &mut out);
+        rect_style(style, Rect::new(0.0, 0.0, 100.0, 40.0), &mut out);
         out
     }
 
@@ -284,11 +366,74 @@ mod tests {
     fn a_transparent_colour_keeps_its_alpha() {
         assert_eq!(color(Color::rgba(0.0, 0.0, 0.0, 0.5)), "rgba(0,0,0,0.5)");
     }
+
+    /// A gradient is not a colour, and `box-shadow` takes one: written there the declaration was invalid and
+    /// the browser dropped it whole — the frame *and* the drop shadow that shares the property.
+    #[test]
+    fn a_gradient_frame_does_not_take_the_drop_shadow_down_with_it() {
+        let gradient = Gradient::linear(
+            Point::new(0.0, 0.0),
+            Point::new(100.0, 0.0),
+            &[(0.0, Color::BLACK), (1.0, Color::WHITE)],
+        );
+        let css = css_of(
+            &RectStyle::default()
+                .with_border(Border::uniform(Paint::Gradient(gradient), 2.0))
+                .with_shadow(Shadow {
+                    offset_x: 0.0,
+                    offset_y: 2.0,
+                    blur_radius: 6.0,
+                    spread: 0.0,
+                    color: Color::BLACK,
+                }),
+        );
+        assert!(
+            css.contains("box-shadow:0px 2px 6px 0px #000000;"),
+            "the shadow is the whole of the property, and valid: {css}"
+        );
+        assert!(
+            css.contains("background:url(\"data:image/svg+xml,"),
+            "the frame is drawn as the ring it is: {css}"
+        );
+    }
+
+    /// A frame over a fill, in one property — and the colour last, which is the only layer it may be.
+    #[test]
+    fn a_gradient_frame_is_a_layer_over_the_fill() {
+        let gradient = Gradient::linear(
+            Point::new(0.0, 0.0),
+            Point::new(100.0, 0.0),
+            &[(0.0, Color::BLACK), (1.0, Color::WHITE)],
+        );
+        let css = css_of(
+            &RectStyle::default()
+                .with_fill(Color::WHITE)
+                .with_border(Border::uniform(Paint::Gradient(gradient), 2.0)),
+        );
+        let background = css
+            .strip_prefix("background:")
+            .and_then(|rest| rest.strip_suffix(';'))
+            .unwrap_or_else(|| panic!("one background property and nothing else: {css}"));
+        assert!(background.starts_with("url(\""), "{background}");
+        assert!(background.ends_with(",#ffffff"), "{background}");
+    }
+
+    /// `#` starts a fragment and `<` is not a character a URL carries; a colour or a tag written raw ended
+    /// the picture early and the frame did not draw at all.
+    #[test]
+    fn a_picture_is_escaped_where_a_url_cannot_carry_it() {
+        let uri = data_uri("<svg fill=\"#abc\"/>");
+        assert_eq!(
+            uri,
+            "url(\"data:image/svg+xml,%3Csvg fill=%22%23abc%22/%3E\")"
+        );
+    }
 }
 
 #[cfg(test)]
 mod text_tests {
     use super::*;
+    use geometry_core::Point;
     use renderer_core::TextWrap;
 
     fn css_of(style: &TextStyle) -> String {
@@ -313,6 +458,54 @@ mod text_tests {
         let css = css_of(&style);
         assert!(css.contains("white-space:pre;"), "{css}");
         assert!(!css.contains("pre-wrap"), "{css}");
+    }
+
+    /// `color` takes a colour, so a gradient written there was dropped and the glyphs came out in whatever
+    /// they had inherited — the page's black, under a dark theme as much as a light one.
+    #[test]
+    fn glyphs_filled_with_a_gradient_are_a_background_clipped_to_them() {
+        let gradient = Gradient::linear(
+            Point::new(0.0, 0.0),
+            Point::new(40.0, 0.0),
+            &[(0.0, Color::BLACK), (1.0, Color::WHITE)],
+        );
+        let style = TextStyle::new(12.0, Paint::Gradient(gradient));
+        let css = css_of(&style);
+        assert!(
+            !css.contains("color:linear-gradient"),
+            "a colour property cannot carry a gradient: {css}"
+        );
+        assert!(css.contains("background-image:linear-gradient("), "{css}");
+        assert!(css.contains("background-clip:text;"), "{css}");
+        assert!(css.contains("color:transparent;"), "{css}");
+        assert!(
+            text_claims_background(&style),
+            "and so it cannot share an element with a box that paints one"
+        );
+    }
+
+    #[test]
+    fn a_colour_is_still_just_a_colour() {
+        let style = TextStyle::new(12.0, Color::BLACK);
+        assert!(css_of(&style).contains("color:#000000;"));
+        assert!(!text_claims_background(&style));
+    }
+
+    /// Drawn on every other backend and on none of this one, so text that leaned on it for contrast had none.
+    #[test]
+    fn a_shadow_behind_the_glyphs_is_drawn() {
+        let style = TextStyle::new(12.0, Color::WHITE).with_text_shadow(Shadow {
+            offset_x: 0.0,
+            offset_y: 1.0,
+            blur_radius: 3.0,
+            spread: 4.0,
+            color: Color::BLACK,
+        });
+        let css = css_of(&style);
+        assert!(
+            css.contains("text-shadow:0px 1px 3px #000000;"),
+            "and no spread, which `text-shadow` has no length for: {css}"
+        );
     }
 }
 

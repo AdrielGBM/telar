@@ -135,6 +135,8 @@ enum Painted {
         rect: Rect,
         style: String,
         text: String,
+        /// Whether its style takes the element's background, which keeps it out of a box that paints one.
+        claims_background: bool,
     },
 }
 
@@ -278,14 +280,14 @@ impl Reconciler {
                             &paint::matrix(matrix, at.x, at.y),
                         );
                     }
-                    paint::rect_style(style, &mut open.style);
+                    paint::rect_style(style, *rect, &mut open.style);
                     return;
                 }
                 if open.is_root() {
                     return;
                 }
                 let mut css = String::new();
-                paint::rect_style(style, &mut css);
+                paint::rect_style(style, *rect, &mut css);
                 open.pieces.push(Painted::Rect {
                     rect: *rect,
                     style: css,
@@ -303,6 +305,7 @@ impl Reconciler {
                     rect: *rect,
                     style: css,
                     text: text.to_string(),
+                    claims_background: paint::text_claims_background(style),
                 });
             }
             DrawCommand::PushLayer { opacity, .. } => {
@@ -527,9 +530,17 @@ impl Reconciler {
         };
         // A single run of text is the box's own label, not something inside it: it becomes the element's
         // text and its style, which is what lets it be selected, found and read as part of the document.
+        // Unless the text needs the background to itself — glyphs filled with a gradient are a background
+        // clipped to their shape, and the box's own fill would be clipped away with it.
         let inline_text = open.placed == 0
             && open.pieces.len() == 1
-            && matches!(open.pieces[0], Painted::Text { .. });
+            && matches!(
+                open.pieces[0],
+                Painted::Text {
+                    claims_background: false,
+                    ..
+                }
+            );
         if inline_text && let Painted::Text { style, .. } = &open.pieces[0] {
             open.style.push_str(style);
         } else if !open.pieces.is_empty() && !open.style.contains("position:") {
@@ -689,7 +700,9 @@ fn fill_pieces(document: &web_sys::Document, live: &mut Live, after: u32, pieces
     for (index, painted) in pieces.iter().enumerate() {
         let (rect, css, text) = match painted {
             Painted::Rect { rect, style } => (rect, style, ""),
-            Painted::Text { rect, style, text } => (rect, style, text.as_str()),
+            Painted::Text {
+                rect, style, text, ..
+            } => (rect, style, text.as_str()),
         };
         let mut style = String::new();
         paint::declare(&mut style, "position", "absolute");
