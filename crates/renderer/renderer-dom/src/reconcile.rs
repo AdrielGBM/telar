@@ -153,7 +153,7 @@ struct Open {
     pieces: Vec<Painted>,
     /// A transform whose subject is not yet known: the box itself if its own paint turns up inside, and the
     /// boxes it wraps otherwise.
-    moved: Option<String>,
+    moved: Option<[f32; 6]>,
     /// Whether this box scrolls its own content, which is what makes its clip an overflow rather than a cut.
     scrolls: bool,
 }
@@ -270,7 +270,13 @@ impl Reconciler {
                     // A matrix this box's own paint sits inside is the box's own transform, and now it is
                     // known to be: the boxes it also wraps are moved by moving the box.
                     if let Some(matrix) = open.moved.take() {
-                        paint::declare(&mut open.style, "transform", &matrix);
+                        let at = open.box_rect;
+                        paint::declare(&mut open.style, "transform-origin", "0 0");
+                        paint::declare(
+                            &mut open.style,
+                            "transform",
+                            &paint::matrix(matrix, at.x, at.y),
+                        );
                     }
                     paint::rect_style(style, &mut open.style);
                     return;
@@ -323,8 +329,7 @@ impl Reconciler {
             // else, and a transform on the viewport would carry the viewport away with it.
             DrawCommand::PushMatrix { matrix } => {
                 if *matrix != IDENTITY {
-                    let [a, b, c, d, e, f] = matrix;
-                    open.moved = Some(format!("matrix({a},{b},{c},{d},{e},{f})"));
+                    open.moved = Some(*matrix);
                 }
             }
             // Artwork and bitmaps reach a document as an SVG, which is what a drawing element is; one that
@@ -375,8 +380,10 @@ impl Reconciler {
         }
         // A transform its parent is still holding is one that wraps this box rather than the parent: a
         // scroll area moves its content, and moving the viewport instead takes the panel off the page.
-        if let Some(matrix) = self.open.last().and_then(|parent| parent.moved.clone()) {
-            paint::declare(&mut style, "transform", &matrix);
+        if let Some(matrix) = self.open.last().and_then(|parent| parent.moved) {
+            let at = element.rect;
+            paint::declare(&mut style, "transform-origin", "0 0");
+            paint::declare(&mut style, "transform", &paint::matrix(matrix, at.x, at.y));
         }
         self.describe(&node, element, tag);
         if self.audit {
