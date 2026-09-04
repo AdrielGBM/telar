@@ -116,6 +116,16 @@ struct Described {
     control: bool,
 }
 
+/// Text a drag across this box must not select, because the drag means something else there.
+///
+/// A document starts a selection under any drag that begins on selectable content, and sweeping one out of a
+/// margin and across a page is exactly what a person expects — so this is not for boxes at large. It is for
+/// the two kinds where a drag is already spoken for: a control, which is what a browser's own stylesheet says
+/// this about (`<button>`, `<input>`); and paint that is not a box at all — a scrollbar's thumb, a caret, a
+/// panel a shell fills behind its rail — which has nothing to select in the first place. Dragging the bar of
+/// a scroll area used to sweep a selection across everything it scrolled past.
+const UNSELECTABLE: &str = "-webkit-user-select:none;user-select:none;";
+
 /// Writes an attribute, or takes it off where there is nothing to say. Removing matters as much as setting:
 /// a box that stops being a link keeps sending the reader somewhere until the `href` goes.
 fn set_or_clear(node: &web_sys::Element, name: &str, value: Option<&str>) {
@@ -351,6 +361,7 @@ impl Reconciler {
         // This answers no pointer: the boxes do, and a pane of paint across them would swallow every press
         // meant for what is underneath.
         paint::declare(&mut style, "pointer-events", "none");
+        style.push_str(UNSELECTABLE);
         if let Some(matrix) = self.open.last().and_then(|root| root.moved) {
             paint::declare(&mut style, "transform-origin", "0 0");
             paint::declare(
@@ -500,6 +511,9 @@ impl Reconciler {
             // box it is standing in never asked for. The declarations follow, so a box that wants another
             // display still gets it.
             paint::declare(&mut style, "display", "block");
+        }
+        if element.semantics.role.is_control() {
+            style.push_str(UNSELECTABLE);
         }
         style.push_str(&element.layout);
         // A box whose parent is the host is a layout root: the application computed it and placed it itself,
@@ -854,6 +868,7 @@ fn fill_pieces(document: &web_sys::Document, live: &mut Live, after: u32, pieces
         paint::declare(&mut style, "top", &paint::px(rect.y));
         paint::declare(&mut style, "width", &paint::px(rect.width.max(0.0)));
         paint::declare(&mut style, "height", &paint::px(rect.height.max(0.0)));
+        style.push_str(UNSELECTABLE);
         style.push_str(css);
 
         if index == live.pieces.len() {
