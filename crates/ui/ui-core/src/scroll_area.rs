@@ -82,6 +82,23 @@ fn draw_scrollbars(
     (vbar, hbar)
 }
 
+fn glide_axis(
+    slot: &mut Option<Rc<crate::fling::Glide>>,
+    offset: RwSignal<f32>,
+    delta: f32,
+    bounds: (f32, f32),
+) {
+    if delta == 0.0 {
+        return;
+    }
+    if let Some(glide) = slot.as_ref()
+        && glide.extend(delta, bounds)
+    {
+        return;
+    }
+    *slot = crate::fling::Glide::start(offset, offset.peek() + delta, bounds);
+}
+
 fn handle_scroll_event(
     event: &Event,
     viewport: Rect,
@@ -89,6 +106,8 @@ fn handle_scroll_event(
     scroll_y: RwSignal<f32>,
     content_rect_signal: RwSignal<Rect>,
     content: &Rc<RefCell<Box<dyn LayoutItem>>>,
+    glide_x: &mut Option<Rc<crate::fling::Glide>>,
+    glide_y: &mut Option<Rc<crate::fling::Glide>>,
 ) -> EventResult {
     if let Event::Scrolled { delta, x, y } = event {
         // A surface that scrolls for itself has already decided which box the wheel moved, and says so with
@@ -118,9 +137,16 @@ fn handle_scroll_event(
         let content_rect = content_rect_signal.get();
         let max_scroll_x = (content_rect.width - viewport.width).max(0.0);
         let max_scroll_y = (content_rect.height - viewport.height).max(0.0);
-        scroll_x.set((scroll_x.get() - delta_x).clamp(0.0, max_scroll_x));
-        let next_y = (scroll_y.get() - delta_y).clamp(0.0, max_scroll_y);
-        scroll_y.set(next_y);
+        // A notch says how far, never how fast, so it is the one kind of scroll worth easing across. A
+        // trackpad and a finger report pixels they have already travelled, and animating those would be
+        // animating a movement that has happened.
+        if ui_tree::smooth_wheel() && matches!(delta, platform_core::ScrollDelta::Lines { .. }) {
+            glide_axis(glide_x, scroll_x, -delta_x, (0.0, max_scroll_x));
+            glide_axis(glide_y, scroll_y, -delta_y, (0.0, max_scroll_y));
+        } else {
+            scroll_x.set((scroll_x.get() - delta_x).clamp(0.0, max_scroll_x));
+            scroll_y.set((scroll_y.get() - delta_y).clamp(0.0, max_scroll_y));
+        }
         return EventResult::Handled;
     }
 
@@ -158,6 +184,9 @@ pub(crate) struct ScrollCore {
     velocity: crate::fling::Velocity,
     /// The one carrying on right now, if any. Held so a hand on the screen can stop it.
     fling: Option<std::rc::Rc<crate::fling::Fling>>,
+    /// The wheel notches still being covered, one per axis.
+    glide_x: Option<std::rc::Rc<crate::fling::Glide>>,
+    glide_y: Option<std::rc::Rc<crate::fling::Glide>>,
 }
 
 /// Accumulated finger travel (logical px) within a gesture past which the scroll area treats it as a scroll
@@ -187,6 +216,8 @@ impl ScrollCore {
             tap_cancelled: false,
             velocity: crate::fling::Velocity::default(),
             fling: None,
+            glide_x: None,
+            glide_y: None,
         }
     }
 
@@ -221,6 +252,18 @@ impl ScrollCore {
     fn catch_fling(&mut self) {
         if let Some(fling) = self.fling.take() {
             fling.stop();
+        }
+        self.catch_glide();
+    }
+
+    /// Ends any wheel notch still being covered. Whatever is taking the offset over is now the one that says
+    /// where it goes, and a glide finishing afterwards would drag it back to where the wheel had asked for.
+    fn catch_glide(&mut self) {
+        for glide in [self.glide_x.take(), self.glide_y.take()]
+            .into_iter()
+            .flatten()
+        {
+            glide.stop();
         }
     }
 
@@ -338,6 +381,8 @@ impl ScrollCore {
             self.scroll_y,
             self.content_rect_signal,
             &self.content,
+            &mut self.glide_x,
+            &mut self.glide_y,
         )
     }
 }
@@ -997,6 +1042,13 @@ mod tests {
     }
 
     /// A wheel turn in the middle of the 400×300 viewport every fixture here uses.
+    fn settle() {
+        let start = std::time::Instant::now();
+        for frame in 1..=40 {
+            motion_core::tick(start + std::time::Duration::from_millis(16 * frame));
+        }
+    }
+
     fn wheel_over(delta: ScrollDelta) -> Event {
         Event::Scrolled {
             delta,
@@ -1260,6 +1312,7 @@ mod tests {
     fn scroll_lines_updates_offset() {
         let mut sa = make_scroll_area();
         sa.on_event(&wheel_over(ScrollDelta::Lines { x: 0.0, y: -3.0 }));
+        settle();
         assert_eq!(sa.core.scroll_y.get(), 60.0);
     }
 
@@ -1287,10 +1340,42 @@ mod tests {
     fn wheel_inside_viewport_scrolls_without_a_prior_move() {
         let mut sa = make_scroll_area();
         sa.on_event(&wheel_over(ScrollDelta::Lines { x: 0.0, y: -3.0 }));
+        settle();
         assert!(
             sa.core.scroll_y.get() > 0.0,
             "wheel over the viewport scrolls it"
         );
+    }
+
+    #[test]
+    /// What a terminal does: its smallest visible step is a whole cell, so the notch is applied at once.
+    #[test]
+    fn a_surface_that_cannot_show_the_gap_takes_the_notch_whole() {
+        let was = ui_tree::set_smooth_wheel(false);
+        let mut sa = make_scroll_area();
+        sa.on_event(&wheel_over(ScrollDelta::Lines { x: 0.0, y: -3.0 }));
+        assert_eq!(sa.core.scroll_y.get(), 60.0, "no frame clock involved");
+        ui_tree::set_smooth_wheel(was);
+    }
+
+    /// A finger landing on a laptop that has both a wheel and a touch screen takes the offset over.
+    #[test]
+    fn a_press_catches_a_notch_still_being_covered() {
+        let mut sa = make_scroll_area();
+        sa.on_event(&wheel_over(ScrollDelta::Lines { x: 0.0, y: -3.0 }));
+        let start = std::time::Instant::now();
+        motion_core::tick(start);
+        motion_core::tick(start + std::time::Duration::from_millis(16));
+        let caught = sa.core.scroll_y.get();
+        assert!((0.0..60.0).contains(&caught), "partway there: {caught}");
+        sa.on_event(&Event::PointerPressed {
+            x: 10.0,
+            y: 10.0,
+            button: platform_core::PointerButton::Primary,
+            source: platform_core::PointerSource::Mouse,
+        });
+        settle();
+        assert_eq!(sa.core.scroll_y.get(), caught, "the press is in charge now");
     }
 
     #[test]
@@ -1434,6 +1519,7 @@ mod tests {
     fn scroll_x_lines_updates_offset() {
         let mut sa = make_scroll_area_wide();
         sa.on_event(&wheel_over(ScrollDelta::Lines { x: -3.0, y: 0.0 }));
+        settle();
         assert_eq!(sa.core.scroll_x.get(), 60.0);
     }
 

@@ -252,3 +252,178 @@ mod tests {
         );
     }
 }
+
+/// How much of the distance left is still uncovered after one second.
+///
+/// A notch lands in about a tenth of a second, which is roughly what a browser takes and is short enough that
+/// the movement reads as the wheel's own rather than as the list lagging behind it.
+const GLIDE_REMAINING_PER_SECOND: f32 = 1e-9;
+
+/// Under half a pixel from the target is arrived.
+const GLIDE_EPSILON: f32 = 0.5;
+
+/// One scroll offset easing towards where a wheel asked it to be.
+///
+/// The opposite problem to a [`Fling`], and the reason they are different types rather than one: a notch says
+/// exactly how far to go and nothing about how fast, so this knows its destination from the start and a fling
+/// never does. What it borrows is the frame clock — a wheel that jumps its whole notch in one frame gives no
+/// sense of which way the content went, which is why every desktop platform animates the gap.
+pub(crate) struct Glide {
+    offset: RwSignal<f32>,
+    target: Cell<f32>,
+    last: Cell<Option<Instant>>,
+    stopped: Cell<bool>,
+}
+
+impl Glide {
+    /// Eases `offset` to `target`, clamped into `bounds`.
+    pub(crate) fn start(
+        offset: RwSignal<f32>,
+        target: f32,
+        bounds: (f32, f32),
+    ) -> Option<Rc<Self>> {
+        let target = target.clamp(bounds.0, bounds.1);
+        if (target - offset.peek()).abs() < GLIDE_EPSILON {
+            return None;
+        }
+        let glide = Rc::new(Self {
+            offset,
+            target: Cell::new(target),
+            last: Cell::new(None),
+            stopped: Cell::new(false),
+        });
+        motion_core::register(
+            motion_core::next_id(),
+            Rc::downgrade(&glide) as std::rc::Weak<dyn motion_core::Tickable>,
+        );
+        Some(glide)
+    }
+
+    /// Adds another notch to what this one is already covering, and says whether it could take it.
+    ///
+    /// Turning the wheel again mid-glide means *further*, not *instead*: restarting from where the content
+    /// happens to have reached loses the ground the first notch had not covered yet, so a fast series of
+    /// notches would travel less than the same notches turned slowly.
+    pub(crate) fn extend(&self, delta: f32, bounds: (f32, f32)) -> bool {
+        if self.stopped.get() {
+            return false;
+        }
+        self.target
+            .set((self.target.get() + delta).clamp(bounds.0, bounds.1));
+        true
+    }
+
+    /// Ends it where it stands, for a gesture or a jump that is now in charge of this offset.
+    pub(crate) fn stop(&self) {
+        self.stopped.set(true);
+    }
+}
+
+impl motion_core::Tickable for Glide {
+    fn tick(&self, now: Instant, scale: f32) {
+        if self.stopped.get() {
+            return;
+        }
+        // The first tick only establishes when "now" is; there is no elapsed time to ease over yet.
+        let Some(last) = self.last.replace(Some(now)) else {
+            return;
+        };
+        let seconds = now.duration_since(last).as_secs_f32() * scale;
+        if seconds <= 0.0 {
+            return;
+        }
+        let target = self.target.get();
+        let at = self.offset.peek();
+        let remaining = (target - at) * GLIDE_REMAINING_PER_SECOND.powf(seconds);
+        if remaining.abs() < GLIDE_EPSILON {
+            self.offset.set(target);
+            self.stopped.set(true);
+            return;
+        }
+        self.offset.set(target - remaining);
+    }
+
+    fn is_settled(&self) -> bool {
+        self.stopped.get()
+    }
+}
+
+#[cfg(test)]
+mod glide_tests {
+    use super::*;
+    use motion_core::Tickable;
+    use std::time::Duration;
+
+    fn run(glide: &Glide, frames: u32) {
+        let mut now = Instant::now();
+        glide.tick(now, 1.0);
+        for _ in 0..frames {
+            now += Duration::from_millis(16);
+            glide.tick(now, 1.0);
+        }
+    }
+
+    /// The gap is widest at the start, so the first frame already covers a good part of the notch. A glide
+    /// that eased in from nothing would read as the wheel not having taken.
+    #[test]
+    fn a_notch_starts_moving_on_the_frame_after_it_is_turned() {
+        let offset = reactive_core::signal(0.0);
+        let glide = Glide::start(offset, 60.0, (0.0, 1000.0)).expect("a notch to cover");
+        run(&glide, 1);
+        let after_one = offset.peek();
+        assert!(
+            after_one > 6.0,
+            "a tenth of the way at least, not a standing start: {after_one}"
+        );
+        assert!(after_one < 60.0, "and not the whole notch at once");
+    }
+
+    #[test]
+    fn it_arrives_exactly_where_the_notch_asked() {
+        let offset = reactive_core::signal(0.0);
+        let glide = Glide::start(offset, 60.0, (0.0, 1000.0)).expect("a notch to cover");
+        run(&glide, 30);
+        assert_eq!(offset.peek(), 60.0);
+        assert!(glide.is_settled());
+    }
+
+    /// Turning again mid-glide means further, not instead: restarting from wherever the content had reached
+    /// would drop the ground the first notch had not covered, so spinning the wheel fast would travel less
+    /// than turning it slowly.
+    #[test]
+    fn a_second_notch_adds_to_the_first_rather_than_replacing_it() {
+        let offset = reactive_core::signal(0.0);
+        let glide = Glide::start(offset, 60.0, (0.0, 1000.0)).expect("a notch to cover");
+        run(&glide, 1);
+        assert!(glide.extend(60.0, (0.0, 1000.0)));
+        run(&glide, 30);
+        assert_eq!(offset.peek(), 120.0, "both notches, not the later one");
+    }
+
+    #[test]
+    fn it_stops_at_the_end_of_the_content() {
+        let offset = reactive_core::signal(0.0);
+        let glide = Glide::start(offset, 500.0, (0.0, 80.0)).expect("a notch to cover");
+        run(&glide, 30);
+        assert_eq!(offset.peek(), 80.0);
+    }
+
+    #[test]
+    fn a_notch_at_the_edge_starts_nothing() {
+        let offset = reactive_core::signal(80.0);
+        assert!(Glide::start(offset, 500.0, (0.0, 80.0)).is_none());
+    }
+
+    /// Whatever took the offset over says where it goes; a glide finishing afterwards would pull it back.
+    #[test]
+    fn a_stopped_glide_takes_no_more_notches_and_moves_no_further() {
+        let offset = reactive_core::signal(0.0);
+        let glide = Glide::start(offset, 60.0, (0.0, 1000.0)).expect("a notch to cover");
+        run(&glide, 1);
+        let caught = offset.peek();
+        glide.stop();
+        assert!(!glide.extend(60.0, (0.0, 1000.0)));
+        run(&glide, 20);
+        assert_eq!(offset.peek(), caught);
+    }
+}

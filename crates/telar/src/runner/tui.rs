@@ -44,6 +44,9 @@ pub fn run_tui_app_with_name<A: App>(
     app_name: &str,
 ) {
     renderer_core::set_text_metrics(CellMetrics::new(options.cell));
+    // A cell is the smallest step this surface can show, so easing across a wheel notch would repaint the
+    // screen several times over to draw the same two or three rows.
+    ui_tree::set_smooth_wheel(false);
     services_core::set_clipboard(Arc::new(OscClipboard::new()));
 
     let paths: Arc<dyn AppPathsProvider> = Arc::new(SystemPaths);
