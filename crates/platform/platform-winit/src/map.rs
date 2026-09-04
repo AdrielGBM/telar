@@ -314,7 +314,12 @@ pub fn map_window_event(
                 scale_factor: new_scale,
             })
         }
-        WindowEvent::MouseWheel { delta, .. } => {
+        WindowEvent::MouseWheel { delta, phase, .. } => {
+            let (x, y) = *cursor_position;
+            // Fingers lifting: the gesture is over and what it was doing is now the scroll's to carry on.
+            if phase == TouchPhase::Ended {
+                return SurfaceIntent::Event(Event::ScrollEnded { x, y });
+            }
             let scroll_delta = match delta {
                 MouseScrollDelta::LineDelta(x, y) => ScrollDelta::Lines {
                     x: x * LINES_PER_NOTCH,
@@ -325,7 +330,6 @@ pub fn map_window_event(
                     y: (pos.y / *scale_factor) as f32,
                 },
             };
-            let (x, y) = *cursor_position;
             SurfaceIntent::Event(Event::Scrolled {
                 delta: scroll_delta,
                 x,

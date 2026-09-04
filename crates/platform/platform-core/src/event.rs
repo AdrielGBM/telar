@@ -178,6 +178,16 @@ pub enum Event {
         x: f32,
         y: f32,
     },
+    /// Fingers left the touchpad, ending a scroll that was theirs to drive.
+    ///
+    /// A wheel has no such moment — a notch is over as soon as it is reported — so this arrives only from a
+    /// continuous gesture, and is what tells a scroll it may carry on under its own momentum. Whether one
+    /// follows is the surface's to say: a platform that runs its own inertia sends more [`Event::Scrolled`]
+    /// after this one, and those take the offset back over.
+    ScrollEnded {
+        x: f64,
+        y: f64,
+    },
     // OS light/dark color-scheme preference changed (or was first reported at window creation). `dark` is
     // true for a dark preference. On Linux this is surfaced only when the compositor exposes it (Wayland +
     // xdg-desktop-portal); X11 sessions typically never emit it.
