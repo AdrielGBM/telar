@@ -100,6 +100,15 @@ lto = "fat"
 codegen-units = 1
 strip = "symbols"
 
+# What a browser build optimises for, which is not what a desktop one does: the module crosses a network
+# before it runs a single instruction, and a megabyte of extra code costs more there than the cycles
+# `opt-level = 3` bought. `panic = "abort"` goes with it because a wasm module cannot unwind out through the
+# JavaScript that called it anyway, so the landing pads are tables nothing will ever read.
+[profile.web]
+inherits = "release"
+opt-level = "z"
+panic = "abort"
+
 [workspace.dependencies]
 thiserror = "2"
 raw-window-handle = "0.6"

@@ -75,6 +75,9 @@ pub(crate) struct CargoManifest {
     pub(crate) workspace: Option<CargoWorkspace>,
     pub(crate) package: Option<CargoPackage>,
     pub(crate) lib: Option<CargoLib>,
+    // Only the names are read: what a feature turns on is cargo's business, and all this has to know is whether the package named one.
+    #[serde(default)]
+    pub(crate) features: std::collections::BTreeMap<String, toml::Value>,
 }
 #[derive(Deserialize, Default)]
 pub(crate) struct CargoLib {
@@ -223,6 +226,8 @@ pub(crate) struct ResolvedPackage {
     pub(crate) workspace_package: Option<CargoWorkspacePackage>,
     // Hot reload dlopens the package's own cdylib, and without `crate-type = ["cdylib", ..]` cargo never emits one, so the dylib build is dead weight and the runner falls back to process restart.
     pub(crate) produces_cdylib: bool,
+    // What the web build checks before deciding it may turn the package's defaults off.
+    pub(crate) features: std::collections::BTreeMap<String, toml::Value>,
 }
 
 impl ResolvedPackage {
@@ -302,11 +307,16 @@ pub(crate) fn resolve_package(args: &[String]) -> ResolvedPackage {
     .and_then(|m| m.workspace.as_ref())
     .and_then(|w| w.package.clone())
     .or_else(|| read_manifest_in(&workspace_root)?.workspace?.package);
+    let features = manifest
+        .as_ref()
+        .map(|m| m.features.clone())
+        .unwrap_or_default();
     ResolvedPackage {
         workspace_root,
         package: manifest.and_then(|m| m.package),
         workspace_package,
         produces_cdylib,
+        features,
     }
 }
 
@@ -575,6 +585,7 @@ mod tests {
                 description: None,
             }),
             produces_cdylib: false,
+            features: Default::default(),
         };
         assert_eq!(resolved.version(), "2.0.0");
         assert_eq!(
@@ -605,6 +616,7 @@ mod tests {
             package: None,
             workspace_package: None,
             produces_cdylib: false,
+            features: Default::default(),
         };
         assert_eq!(resolved.name(), "app");
         assert_eq!(resolved.version(), "0.1.0");

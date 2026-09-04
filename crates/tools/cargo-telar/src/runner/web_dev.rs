@@ -143,6 +143,7 @@ fn serve(mut stream: TcpStream, root: &Path) {
         return;
     }
     let path = request.split_whitespace().nth(1).unwrap_or("/");
+    let accepts_gzip = accepts_gzip(&mut reader);
 
     if path == "/telar-build" {
         let build = BUILD.load(Ordering::Relaxed).to_string();
@@ -175,12 +176,48 @@ fn serve(mut stream: TcpStream, root: &Path) {
         Some("wasm") => "application/wasm",
         _ => "application/octet-stream",
     };
+    // A debug module is tens of megabytes and compresses to a fraction of that. Uncompressed, the wait here is nothing like the one a real server puts a release build behind, and a measurement taken against this server reads the difference rather than the app.
+    let (body, encoding) = match accepts_gzip && body.len() >= GZIP_FLOOR {
+        true => (gzip(&body), "content-encoding: gzip\r\n"),
+        false => (body, ""),
+    };
     let _ = write!(
         stream,
-        "HTTP/1.1 200 OK\r\ncontent-type: {mime}\r\ncontent-length: {}\r\ncache-control: no-store\r\n\r\n",
+        "HTTP/1.1 200 OK\r\ncontent-type: {mime}\r\ncontent-length: {}\r\n{encoding}vary: accept-encoding\r\ncache-control: no-store\r\n\r\n",
         body.len()
     );
     let _ = stream.write_all(&body);
+}
+
+/// Below this a compressed body is the same size or larger, and the round trip through the encoder buys nothing.
+const GZIP_FLOOR: usize = 1024;
+
+fn gzip(body: &[u8]) -> Vec<u8> {
+    let mut encoder = flate2::write::GzEncoder::new(Vec::new(), flate2::Compression::fast());
+    if encoder.write_all(body).is_err() {
+        return body.to_vec();
+    }
+    encoder.finish().unwrap_or_else(|_| body.to_vec())
+}
+
+/// Whether the client said it takes gzip, from the headers following the request line.
+///
+/// The rest of the request is read either way: what is left unread in the socket when the response goes out is what the browser sees as a connection reset.
+fn accepts_gzip(reader: &mut BufReader<TcpStream>) -> bool {
+    let mut accepts = false;
+    let mut line = String::new();
+    while reader.read_line(&mut line).is_ok_and(|read| read > 0) {
+        if line.trim_end().is_empty() {
+            break;
+        }
+        if let Some((name, value)) = line.split_once(':')
+            && name.trim().eq_ignore_ascii_case("accept-encoding")
+        {
+            accepts = value.to_ascii_lowercase().contains("gzip");
+        }
+        line.clear();
+    }
+    accepts
 }
 
 /// The file a request path names, or `None` for anything that tries to leave the directory.
