@@ -240,7 +240,7 @@ pub fn remove_node(node: NodeId) {
 /// What a panel needs to stay on screen. Without it an anchored bubble is placed from its trigger alone and runs off whichever edge the trigger happens to be near — which is not a rare case but the common one, a tooltip on the rightmost button of a toolbar.
 pub fn overlay_viewport() -> Option<geometry_core::Rect> {
     with_runtime(|rt| {
-        let host = rt.overlay_host?;
+        let host = rt.overlay_host.node()?;
         rt.engine.layout(host).ok()
     })
 }
@@ -248,15 +248,14 @@ pub fn overlay_viewport() -> Option<geometry_core::Rect> {
 /// Pins the node overlays attach their content to, overriding the auto-detected one.
 pub fn set_overlay_host(node: NodeId) {
     with_runtime(|rt| {
-        rt.overlay_host = Some(node);
-        rt.host_pinned = true;
+        rt.overlay_host.pin(node);
     });
 }
 
 /// Attaches `node` (an overlay's out-of-flow content) as an extra child of the current layout host — the top-level root computed against the window — so it fills the viewport regardless of where the `overlay` was declared in the tree. Returns `true` when attached; `false` when no host has been computed yet (the caller then falls back to normal in-tree layout). The host is marked dirty so the next frame lays the portal out.
 pub fn attach_overlay(node: NodeId) -> bool {
     with_runtime(|rt| {
-        let Some(host) = rt.overlay_host else {
+        let Some(host) = rt.overlay_host.node() else {
             return false;
         };
         // A host sitting inside the content it would carry closes a parent cycle, and no root is reachable from it.
@@ -283,6 +282,40 @@ pub fn detach_overlay(node: NodeId) {
     });
 }
 
+/// The layout root overlays attach their out-of-flow content to, so a portal fills the viewport regardless of where it is declared.
+///
+/// One type rather than a node beside a flag, because the two are one rule: who the host is, and when auto-detection is still allowed to say. Split apart, the rule lived in [`Self::offer`]'s caller and nothing tied it to the flag it reads.
+#[derive(Default)]
+struct OverlayHost {
+    node: Option<NodeId>,
+    /// Pinned by the app, so auto-detection must not override it. An app with several independent roots needs this: the window-spanning root is the host, not whichever root happened to be computed last.
+    pinned: bool,
+}
+
+impl OverlayHost {
+    /// The node overlays attach to, or `None` before any root has been computed.
+    fn node(&self) -> Option<NodeId> {
+        self.node
+    }
+
+    /// Pins the host to `node`, so auto-detection no longer overrides it.
+    fn pin(&mut self, node: NodeId) {
+        self.node = Some(node);
+        self.pinned = true;
+    }
+
+    /// Offers `root` as the host for the compute about to run, taking it only when the rule allows.
+    ///
+    /// A top-level root computed against the window is the overlay host, refreshed each compute so it stays current across a hot-reload rebuild. A definite height marks the surface root; a detached sub-root laid out for its intrinsic height must not become the host, or a portal declared inside it would attach to that scroll and be torn down with it.
+    ///
+    /// `is_top_level` is a closure so the parent map is only borrowed once the cheaper terms have already agreed.
+    fn offer(&mut self, root: NodeId, height: AvailableSpace, is_top_level: impl FnOnce() -> bool) {
+        if !self.pinned && matches!(height, AvailableSpace::Definite(_)) && is_top_level() {
+            self.node = Some(root);
+        }
+    }
+}
+
 struct LayoutRuntime {
     engine: LayoutEngine,
     registry: FxHashMap<NodeId, RwSignal<Rect>>,
@@ -291,10 +324,7 @@ struct LayoutRuntime {
     last_space: FxHashMap<NodeId, (AvailableSpace, AvailableSpace)>,
     // Nodes with a definite `max-width`, their original style, and the width pinned on the previous compute. Captured the first time each compute-root is computed.
     root_auto: FxHashMap<NodeId, (bool, bool)>,
-    // The layout host overlays attach their out-of-flow content to, so a portal fills the viewport regardless of where it is declared.
-    overlay_host: Option<NodeId>,
-    // Pinned by the app, so auto-detection must not override it. An app with several independent roots needs this: the window-spanning root is the host, not whichever root happened to be computed last.
-    host_pinned: bool,
+    overlay_host: OverlayHost,
     // Captured during the top-level root's walk, which runs from the window origin. Node rect signals stay root-local, so this map is the one place with window-absolute positions — which is what lets `absolute_rect` anchor a portaled overlay to a trigger in a sub-root.
     abs_pos: FxHashMap<NodeId, (f32, f32)>,
     /// The observable half of `abs_pos`, minted on first `absolute_rect` and never eagerly.
@@ -314,8 +344,7 @@ impl LayoutRuntime {
             boundary_nodes: FxHashMap::default(),
             last_space: FxHashMap::default(),
             root_auto: FxHashMap::default(),
-            overlay_host: None,
-            host_pinned: false,
+            overlay_host: OverlayHost::default(),
             abs_pos: FxHashMap::default(),
             abs_pos_signals: FxHashMap::default(),
             #[cfg(debug_assertions)]
@@ -370,13 +399,9 @@ impl LayoutRuntime {
         width: AvailableSpace,
         height: AvailableSpace,
     ) -> Result<Vec<Update>, LayoutError> {
-        // A top-level root computed against the window is the overlay host, refreshed each compute so it stays current across a hot-reload rebuild. A definite height marks the surface root; a detached sub-root laid out for its intrinsic height must not become the host, or a portal declared inside it would attach to that scroll and be torn down with it.
-        if !self.host_pinned
-            && with_parents_ref(|p| !p.contains_key(&root))
-            && matches!(height, AvailableSpace::Definite(_))
-        {
-            self.overlay_host = Some(root);
-        }
+        self.overlay_host.offer(root, height, || {
+            with_parents_ref(|parents| !parents.contains_key(&root))
+        });
         // A changed available space must re-run layout even when the node is clean.
         let is_space_changed = self.last_space.get(&root) != Some(&(width, height));
         if is_space_changed {
