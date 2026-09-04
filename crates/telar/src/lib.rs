@@ -158,10 +158,17 @@ pub use renderer_core::{
     set_default_text_metrics, set_text_metrics,
 };
 
+/// Whether this build turns font files into glyphs itself.
+///
+/// The question an application asks before supplying [`AppConfig::font_data`](crate::AppConfig::font_data): a shaper on a target with no font directory behind it — a browser — finds nothing and measures every string to zero, so the app has to carry a face. A build that draws as a document has no shaper to feed. Its text is laid out and drawn by the browser in the browser's own fonts, and a face baked into the module would be bytes nothing reads.
+///
+/// A `const` rather than a function so the branch that answers it is folded away, and the faces behind an `include_bytes!` in the arm not taken never reach the binary.
+pub const SHAPES_TEXT: bool = cfg!(feature = "shaper");
+
 /// Whether `family` names a font installed on this system.
 ///
 /// Both [`AppConfig::font_family`](crate::AppConfig::font_family) and [`TextStyle::with_font_family`](crate::TextStyle::with_font_family) take any name and fall back silently when the family is not installed, so this is how an application warns instead. Answered by the database the text shaper already loaded — asking it costs nothing, where a second `fontdb` is a full system font scan and a second answer that can disagree with the one the text is shaped in.
-#[cfg(feature = "runtime")]
+#[cfg(feature = "shaper")]
 pub fn font_family_available(family: &str) -> bool {
     renderer_text::font_family_available(family)
 }
@@ -169,7 +176,7 @@ pub fn font_family_available(family: &str) -> bool {
 /// Installs the glyph-shaping text measurer, for code that lays out text with no runner behind it — a layout test, or a tool that composes a tree only to measure it.
 ///
 /// An app never needs this: the runner installs it on resume with the app's own fonts. Nothing happens if a measurer is already installed.
-#[cfg(feature = "runtime")]
+#[cfg(feature = "shaper")]
 pub fn install_default_text_metrics() {
     renderer_core::set_default_text_metrics(renderer_text::ShaperMetrics);
 }
@@ -221,8 +228,11 @@ pub use ui_core::{
 /// Empties the layout runtime for a fresh tree, and installs the glyph measurer if nothing installed one.
 ///
 /// The measurer rides along because sizing text is part of laying it out, and this is the first call every tree makes: a tree built with no runner behind it — a layout test, a tool measuring a page — would otherwise have to ask for one separately. A frontend that installed its own keeps it; see [`install_default_text_metrics`].
+///
+/// A build with no shaper has no measurer to fall back to, and needs none: the only frontend that comes without one draws as a document, which measures with the engine that will draw the text and installs that before the first tree is built.
 #[cfg(feature = "runtime")]
 pub fn reset_layout_runtime() {
+    #[cfg(feature = "shaper")]
     install_default_text_metrics();
     ui_core::reset_layout_runtime();
 }

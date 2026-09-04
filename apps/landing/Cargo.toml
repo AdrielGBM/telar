@@ -14,8 +14,18 @@ name = "landing"
 path = "src/main.rs"
 
 [dependencies]
-telar = { workspace = true, features = ["components"] }
+# The workspace turns telar's default features off, so the frontend is this app's `default` to name.
+telar = { workspace = true, features = ["runtime", "components"] }
 tracing-subscriber = { workspace = true, features = ["env-filter"] }
+
+[features]
+default = ["desktop"]
+# A window, drawn by the GPU where there is one and the CPU where there is not.
+desktop = ["telar/desktop", "telar/hardware", "telar/software"]
+# The browser, both ways it can draw. Only meaningful for a wasm32 build.
+web = ["telar/web"]
+# The browser drawing as a document alone: no GPU and no glyph shaper, which is most of a page's weight.
+web-dom = ["telar/web-dom"]
 
 [package.metadata.android]
 package = "com.example.telar.landing"

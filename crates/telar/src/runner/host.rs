@@ -117,6 +117,9 @@ pub(super) trait RendererHost<W>: 'static {
     }
 
     /// Whether this host's renderer shapes text from font files. See [`RendererFactory::shapes_text`].
+    ///
+    /// Only the font scan asks, and a build with no shaper has no scan to skip — the question is still worth answering for the hosts that do, so it stays rather than being split across two definitions of the trait.
+    #[cfg_attr(not(feature = "shaper"), allow(dead_code))]
     fn shapes_text(&self) -> bool {
         true
     }

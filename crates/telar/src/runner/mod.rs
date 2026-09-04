@@ -34,7 +34,7 @@ mod hot_host;
 mod multi;
 #[cfg(feature = "tui")]
 mod tui;
-#[cfg(all(feature = "web", target_arch = "wasm32"))]
+#[cfg(all(feature = "web-dom", target_arch = "wasm32"))]
 mod web;
 
 /// The window an app opens with: `App::window_config` outright replaces whatever the caller passed, including the `[telar.dev.window]` overrides. See [`dev_window::with_dev_overrides`] for why that order.
@@ -76,5 +76,5 @@ pub use hot_host::run_hot_reload_host;
 pub use multi::{build_surface_handler, run_multi_with_platform};
 #[cfg(feature = "tui")]
 pub use tui::{TuiOptions, run_tui_app_with_name};
-#[cfg(all(feature = "web", target_arch = "wasm32"))]
+#[cfg(all(feature = "web-dom", target_arch = "wasm32"))]
 pub use web::{WebOptions, WebRenderer, run_web_app_with_name};

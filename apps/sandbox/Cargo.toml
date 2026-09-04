@@ -15,17 +15,29 @@ name = "sandbox"
 path = "src/main.rs"
 
 [dependencies]
-telar = { workspace = true, features = ["dynamic-svg", "components", "navigate"] }
+# The frontend is this app's `default` to choose rather than telar's — the workspace turns telar's own off.
+# Everything named here is what the app needs whichever frontend it runs on; the rest is under `[features]`.
+telar = { workspace = true, features = [
+    "runtime",
+    "dynamic-svg",
+    "components",
+    "navigate",
+] }
 serde = { workspace = true }
 tracing-subscriber = { workspace = true, features = ["env-filter"] }
 
 [features]
+default = ["desktop"]
+# A window, drawn by the GPU where there is one and the CPU where there is not.
+desktop = ["telar/desktop", "telar/hardware", "telar/software"]
 # Mirrors the feature `cargo telar dev` injects, so the hot-reload integration test can gate on it.
 dev = ["telar/dev"]
 # Runs the same app in the terminal. `TELAR_TARGET=tui` picks it when the desktop frontend is also compiled in.
 tui = ["telar/tui"]
-# The browser. Only meaningful for a wasm32 build.
+# The browser, both ways it can draw. Only meaningful for a wasm32 build.
 web = ["telar/web"]
+# The browser drawing as a document alone: no GPU, no shaper, and no faces to carry for one.
+web-dom = ["telar/web-dom"]
 
 [dev-dependencies]
 platform-core = { workspace = true }

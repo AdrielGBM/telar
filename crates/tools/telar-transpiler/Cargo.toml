@@ -12,9 +12,12 @@ repository = { workspace = true }
 
 [dependencies]
 # Always-on baker: renderer-assets (usvg/resvg/image) compiles into the proc-macro HOST only, never the app binary. `dynamic-svg`/`dynamic-image` are the host features that let the baker parse SVG / decode images at build time.
+# Everything on, including the two knobs an app build leaves off: this runs on the machine doing the compiling, where a text stack costs seconds rather than megabytes over a network, and it is what lets a baked SVG keep its text whatever the app's own build turned off.
 renderer-assets = { workspace = true, features = [
     "dynamic-svg",
     "dynamic-image",
+    "svg-text",
+    "svg-images",
 ] }
 serde = { workspace = true, features = ["derive"] }
 serde_json = "1.0.151"

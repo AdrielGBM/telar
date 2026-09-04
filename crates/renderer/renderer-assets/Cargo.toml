@@ -14,16 +14,30 @@ repository = { workspace = true }
 renderer-core = { workspace = true }
 geometry-core = { workspace = true }
 image = { version = "0.25.10", default-features = false, features = ["png", "jpeg"], optional = true }
-resvg = { version = "0.48", optional = true }
+# Both stripped to their cores, because their defaults are a whole text stack and a set of image decoders —
+# see `svg-text` and `svg-images` below for what that costs and who should pay it.
+resvg = { version = "0.48", optional = true, default-features = false }
 rustc-hash = { workspace = true }
 thiserror = { workspace = true }
-usvg = { version = "0.48", optional = true }
+usvg = { version = "0.48", optional = true, default-features = false }
 
 [features]
 # usvg/resvg. Enables the runtime dynamic SVG path (`from_str`) AND the build-time baker (`bake_to_source`); the transpiler turns this on host-side so baking is always available without putting usvg in the app binary.
 dynamic-svg = ["dep:usvg", "dep:resvg"]
 # The `image` crate: runtime decode (`decode`) plus the build-time image baker (`bake_image_to_source`), host-only same as `dynamic-svg`.
 dynamic-image = ["dep:image"]
+
+# `<text>` in an SVG parsed at *runtime*. Off by default, and the reason is what it weighs: shaping a glyph
+# needs a shaper, a font database and an outline rasterizer — harfrust, fontdb, skrifa and read_fonts — which
+# came to 1.6MB of the sandbox's wasm module, most of it for a feature its icons never used.
+#
+# Only the runtime path is affected. The baker runs on the host with everything on, so an SVG baked at build
+# time keeps its text either way, which is where most SVG in an application comes from. Fails the way the
+# `image-*` knobs do: text in a runtime SVG is dropped rather than refusing to compile, because which
+# features an SVG uses is not knowable until the string arrives.
+svg-text = ["usvg?/text", "resvg?/text"]
+# `<image>` in an SVG parsed at runtime, which is a GIF, WebP and JPEG decoder to read what it points at.
+svg-images = ["resvg?/raster-images"]
 
 # Extra decode formats, one knob each, passed straight through to `image`. PNG and JPEG are always on; every
 # other format costs binary size that an app which never meets one should not pay.

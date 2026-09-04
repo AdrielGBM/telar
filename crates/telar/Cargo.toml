@@ -18,7 +18,6 @@ runtime = [
     "dep:platform-android",
     "dep:renderer-core",
     "dep:renderer-assets",
-    "dep:renderer-text",
     "dep:reactive-core",
     "dep:layout-core",
     "dep:theme-core",
@@ -30,11 +29,17 @@ runtime = [
     "dep:libc",
 ]
 
+# Shaping glyphs out of font files, which is what a backend that draws its own text needs and what one
+# handing text to somebody else's engine does not. Split out of `runtime` because it is the heaviest thing
+# in a build that never uses it: cosmic-text, swash, skrifa and two `fontdb`s come with it, and a document
+# renderer measures with the browser's own canvas instead.
+shaper = ["runtime", "dep:renderer-text"]
+
 # Both renderers are opt-in, so a frontend installing its own via `run_with_platform_and_renderer` compiles
 # neither. `RendererBackend::Auto` resolves to whichever is present.
 # `platform-headless` rides along because `TextureUi` names `HeadlessWindow` as its offscreen marker.
-hardware = ["runtime", "dep:renderer-hardware", "dep:platform-headless"]
-software = ["runtime", "dep:renderer-software"]
+hardware = ["runtime", "shaper", "dep:renderer-hardware", "dep:platform-headless"]
+software = ["runtime", "shaper", "dep:renderer-software"]
 
 desktop = ["runtime", "dep:platform-desktop"]
 # Exposes `rasterize`: draw commands in, pixels out, with no window and no GPU.
@@ -44,9 +49,16 @@ platform-headless = ["runtime", "software", "dep:platform-headless"]
 # launched from, drawing through `renderer-tui`.
 tui = ["runtime", "dep:platform-tui", "dep:renderer-tui", "services-core/system-paths"]
 
-# A browser frontend. Only meaningful for a `wasm32` build; the dependencies behind it are target-gated, so
-# turning it on for a host build enables nothing.
-web = ["runtime", "dep:platform-web", "dep:renderer-web", "dep:renderer-dom"]
+# A browser frontend drawing as a document: real elements laid out by CSS, measured with the browser's own
+# canvas. No GPU and no shaper, which is most of what a web build used to weigh.
+#
+# Only meaningful for a `wasm32` build; the dependencies behind it are target-gated, so turning it on for a
+# host build enables nothing.
+web-dom = ["runtime", "dep:platform-web", "dep:renderer-dom"]
+
+# Both browser frontends: the document above, and pixels on a canvas through WebGPU. What `WebRenderer::Auto`
+# needs to have a choice to make. The canvas draws its own glyphs, hence the shaper.
+web = ["web-dom", "shaper", "dep:renderer-web"]
 
 dev = ["runtime", "desktop", "dep:libloading", "dep:serde_json"]
 preview = ["runtime", "desktop"]
@@ -77,6 +89,11 @@ watch = ["runtime", "dep:notify"]
 svg = ["ui-core?/svg"]
 dynamic-svg = ["svg", "renderer-assets?/dynamic-svg"]
 dynamic-image = ["renderer-assets?/dynamic-image"]
+# What a *runtime-parsed* SVG may contain beyond shapes. Both off by default because both are heavy and most
+# SVG is icons: `svg-text` links a shaper, a font database and an outline rasterizer, `svg-images` three
+# decoders. An SVG baked at build time keeps both regardless — the baker runs on the host with everything on.
+svg-text = ["dynamic-svg", "renderer-assets?/svg-text"]
+svg-images = ["dynamic-svg", "renderer-assets?/svg-images"]
 # Decode formats beyond the always-on PNG and JPEG. See `renderer-assets` for why there is one per format:
 # a format nobody enabled fails at runtime, not at compile time.
 image-avif = ["dynamic-image", "renderer-assets?/image-avif"]

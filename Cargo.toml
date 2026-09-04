@@ -162,7 +162,10 @@ ui-core = { package = "telar-ui-core", path = "crates/ui/ui-core", version = "0.
 ui-tree = { package = "telar-ui-tree", path = "crates/ui/ui-tree", version = "0.1.8" }
 ui-components = { package = "telar-ui-components", path = "crates/ui/ui-components", version = "0.1.8" }
 navigate-core = { package = "telar-navigate-core", path = "crates/navigate/navigate-core", version = "0.1.8" }
-telar = { path = "crates/telar", version = "0.1.8" }
+# `default-features = false` here so each member says which frontend it wants. A member cannot override the
+# workspace on this, and the browser build of an app needs the desktop renderers off: neither is target-gated,
+# so a default left on drags wgpu and a glyph shaper into a page that draws as a document and calls neither.
+telar = { path = "crates/telar", version = "0.1.8", default-features = false }
 telar-diagnostics = { path = "crates/tools/telar-diagnostics", version = "0.1.8" }
 telar-parser = { path = "crates/tools/telar-parser", version = "0.1.8" }
 telar-transpiler = { path = "crates/tools/telar-transpiler", version = "0.1.8" }

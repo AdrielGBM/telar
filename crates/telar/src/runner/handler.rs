@@ -13,6 +13,7 @@ use crate::config::{self, RendererBackend};
 use crate::prefs::UserPrefs;
 
 use super::COMMAND_BUF_POOL_CAP;
+#[cfg(feature = "shaper")]
 use super::font_config::{SystemFonts, build_font_config};
 use super::frame_thread::FrameMsg;
 use super::host::{RawHandles, RendererHost, RendererRequest, RendererStart, SurfaceRenderer};
@@ -639,6 +640,7 @@ where
     fn on_resume(&mut self, window: &W) -> bool {
         let _surface = self.enter_surface();
         // Before the tree measures a word of text. Building a renderer loads them too — which is what makes measure and draw agree — but a hardware renderer builds on its own thread, so the first layout would be sized in the platform's fonts. A renderer that does not shape glyphs skips the scan, keeping its own measurer.
+        #[cfg(feature = "shaper")]
         if self.renderer_host.shapes_text() {
             let system_fonts = SystemFonts::from_provider(self.paths.as_ref());
             renderer_text::fonts::install(build_font_config(

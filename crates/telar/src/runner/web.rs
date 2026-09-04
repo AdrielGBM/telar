@@ -3,6 +3,7 @@
 use std::sync::Arc;
 
 use platform_web::{WebClipboard, WebPlatform, WebPlatformConfig};
+#[cfg(feature = "web")]
 use renderer_web::{WebGpuRendererFactory, canvas_in};
 use services_core::{AppPathsProvider, NoPaths};
 
@@ -90,19 +91,36 @@ pub fn run_web_app_with_name<A: App>(
     let wanted = options.renderer.resolved(&host);
     let host_for_start = host.clone();
     wasm_bindgen_futures::spawn_local(async move {
-        let document = match wanted {
-            WebRenderer::Document => true,
-            WebRenderer::Canvas => false,
-            WebRenderer::Auto => match renderer_web::webgpu_available().await {
-                Ok(()) => false,
-                Err(reason) => {
-                    tracing::info!("drawing as a document: {}", reason.message());
-                    true
-                }
-            },
-        };
+        let document = draws_as_document(wanted).await;
         start(config, options, host_for_start, document, app, &app_name);
     });
+}
+
+/// Whether this app draws as a document, once the build and then the browser have each had their say.
+#[cfg(feature = "web")]
+async fn draws_as_document(wanted: WebRenderer) -> bool {
+    match wanted {
+        WebRenderer::Document => true,
+        WebRenderer::Canvas => false,
+        WebRenderer::Auto => match renderer_web::webgpu_available().await {
+            Ok(()) => false,
+            Err(reason) => {
+                tracing::info!("drawing as a document: {}", reason.message());
+                true
+            }
+        },
+    }
+}
+
+/// The same question in a build that compiled no canvas renderer, which has one answer and does not ask the browser for an adapter it could not draw through anyway.
+#[cfg(not(feature = "web"))]
+async fn draws_as_document(wanted: WebRenderer) -> bool {
+    if wanted == WebRenderer::Canvas {
+        tracing::warn!(
+            "this build draws as a document; `canvas` needs the `web` feature, where `web-dom` is the document alone"
+        );
+    }
+    true
 }
 
 fn start<A: App>(
@@ -138,21 +156,27 @@ fn start<A: App>(
             app_name,
         )
     } else {
-        let canvas = match canvas_in(&host) {
-            Ok(canvas) => canvas,
-            Err(e) => {
-                tracing::error!("telar could not create a canvas to draw on: {e}");
-                return;
-            }
-        };
-        crate::runner::run_with_platform_and_renderer::<_, _, A, ()>(
-            platform,
-            WebGpuRendererFactory::new(canvas),
-            config,
-            paths,
-            app,
-            app_name,
-        )
+        #[cfg(feature = "web")]
+        {
+            let canvas = match canvas_in(&host) {
+                Ok(canvas) => canvas,
+                Err(e) => {
+                    tracing::error!("telar could not create a canvas to draw on: {e}");
+                    return;
+                }
+            };
+            crate::runner::run_with_platform_and_renderer::<_, _, A, ()>(
+                platform,
+                WebGpuRendererFactory::new(canvas),
+                config,
+                paths,
+                app,
+                app_name,
+            )
+        }
+        // `draws_as_document` answers unconditionally in a build with no canvas renderer, so this arm is one nothing reaches.
+        #[cfg(not(feature = "web"))]
+        unreachable!("a build without the canvas renderer draws as a document")
     };
     if let Err(e) = result {
         tracing::error!("telar could not start: {e}");
