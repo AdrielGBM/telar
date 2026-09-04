@@ -10,7 +10,7 @@ use winit::event::{StartCause, WindowEvent};
 use winit::event_loop::{ActiveEventLoop, ControlFlow, EventLoop};
 use winit::window::{Fullscreen, WindowAttributes, WindowId, WindowLevel};
 
-use platform_winit::{SurfaceIntent, WinitWindow, map_window_event};
+use platform_winit::{SurfaceIntent, TouchDrag, WinitWindow, map_window_event};
 
 // Winit user-event payloads injected from background threads (via EventLoopProxy) to wake the loop.
 enum UserEvent {
@@ -54,6 +54,7 @@ struct WinitRunner<H: EventHandler<WinitWindow>> {
     cursor_position: (f64, f64),
     scale_factor: f64,
     modifiers: platform_core::ModifiersState,
+    touch: TouchDrag,
     // True only on WaitUntil timer expiry; gates keepalive request_redraw() so it doesn't fire on every event queue drain.
     timer_has_fired: bool,
     // Built at resume, before the window is shown, which the adapter requires. The tree behind it is only ever
@@ -182,6 +183,7 @@ impl<H: EventHandler<WinitWindow>> ApplicationHandler<UserEvent> for WinitRunner
             &mut self.cursor_position,
             &mut self.scale_factor,
             &mut self.modifiers,
+            &mut self.touch,
             event,
         );
         // After the frame rather than before: what is announced is then the frame that was drawn.
@@ -254,10 +256,15 @@ fn dispatch_window_event<H: EventHandler<WinitWindow>>(
     cursor_position: &mut (f64, f64),
     scale_factor: &mut f64,
     modifiers: &mut platform_core::ModifiersState,
+    touch: &mut TouchDrag,
     event: WindowEvent,
 ) -> WindowEventOutcome {
-    match map_window_event(event, cursor_position, scale_factor, modifiers) {
+    match map_window_event(event, cursor_position, scale_factor, modifiers, touch) {
         SurfaceIntent::Event(e) => handler.on_event(e, window),
+        SurfaceIntent::Dragged(scrolled, moved) => {
+            handler.on_event(scrolled, window);
+            handler.on_event(moved, window);
+        }
         SurfaceIntent::Resized(e) => {
             handler.on_event(e, window);
             window.request_redraw();
@@ -287,6 +294,7 @@ impl Platform for WinitPlatform {
             cursor_position: (0.0, 0.0),
             scale_factor: 1.0,
             modifiers: platform_core::ModifiersState::default(),
+            touch: TouchDrag::default(),
             timer_has_fired: false,
             a11y: None,
             a11y_proxy: self.event_loop.create_proxy(),
@@ -386,6 +394,7 @@ struct SurfaceRunner {
     cursor_position: (f64, f64),
     scale_factor: f64,
     modifiers: platform_core::ModifiersState,
+    touch: TouchDrag,
     pace: Option<std::time::Duration>,
     // `None` for a statically-declared surface; `Some` for one opened via `open_surface`.
     close_flag: Option<Arc<std::sync::atomic::AtomicBool>>,
@@ -484,6 +493,7 @@ impl WinitMultiRunner {
             cursor_position: (0.0, 0.0),
             scale_factor: 1.0,
             modifiers: platform_core::ModifiersState::default(),
+            touch: TouchDrag::default(),
             pace: None,
             close_flag,
             resumed: false,
@@ -665,6 +675,7 @@ impl ApplicationHandler<UserEvent> for WinitMultiRunner {
                 &mut surface.cursor_position,
                 &mut surface.scale_factor,
                 &mut surface.modifiers,
+                &mut surface.touch,
                 event,
             )
         }));

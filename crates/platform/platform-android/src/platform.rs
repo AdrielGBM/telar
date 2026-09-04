@@ -1,8 +1,5 @@
 use android_activity::AndroidApp;
-use platform_core::{
-    Event, EventHandler, Platform, PlatformError, PointerButton, PointerSource, Window,
-    WindowConfig,
-};
+use platform_core::{Event, EventHandler, Platform, PlatformError, Window, WindowConfig};
 
 // ANativeWindow_setFrameRate is API 30+ and may live in libnativewindow.so on some OEM devices rather than libandroid.so, so resolve it at runtime to avoid a hard dlopen failure on devices where the NDK stub does not match the runtime library.
 #[cfg(target_os = "android")]
@@ -145,12 +142,12 @@ mod choreographer {
 }
 
 use winit::application::ApplicationHandler;
-use winit::event::{StartCause, Touch, TouchPhase, WindowEvent};
+use winit::event::{StartCause, WindowEvent};
 use winit::event_loop::{ActiveEventLoop, ControlFlow, EventLoop};
 use winit::platform::android::EventLoopBuilderExtAndroid;
 use winit::window::{WindowAttributes, WindowId};
 
-use platform_winit::{SurfaceIntent, WinitWindow as AndroidWindow, map_window_event};
+use platform_winit::{SurfaceIntent, TouchDrag, WinitWindow as AndroidWindow, map_window_event};
 
 pub struct AndroidPlatform {
     event_loop: EventLoop<()>,
@@ -206,7 +203,7 @@ struct AndroidRunner<H: EventHandler<AndroidWindow>> {
     modifiers: platform_core::ModifiersState,
     cursor_position: (f64, f64),
     // Last position of an active touch finger, used to emit Scrolled deltas from drag gestures.
-    last_touch_pos: Option<(f64, f64, u64)>,
+    touch: TouchDrag,
     app: AndroidApp,
     // The preference last reported to the app, so a poll only produces an event when it actually changed.
     last_dark: Option<bool>,
@@ -328,84 +325,28 @@ impl<H: EventHandler<AndroidWindow>> ApplicationHandler<()> for AndroidRunner<H>
         let Some(window) = self.window.clone() else {
             return;
         };
-        match event {
-            // Android is the only backend reporting touch, and `TouchPhase::Moved` emits two events — a scroll synthesised from the `last_touch_pos` delta, then the move — which one `SurfaceIntent` cannot carry.
-            WindowEvent::Touch(Touch {
-                phase,
-                location,
-                id,
-                ..
-            }) => {
-                let x = location.x / self.scale_factor;
-                let y = location.y / self.scale_factor;
-                let source = PointerSource::Touch { id };
-                match phase {
-                    TouchPhase::Started => {
-                        self.last_touch_pos = Some((x, y, id));
-                        self.handler.on_event(
-                            Event::PointerPressed {
-                                x,
-                                y,
-                                button: PointerButton::Primary,
-                                source,
-                            },
-                            &window,
-                        );
-                    }
-                    TouchPhase::Moved => {
-                        if let Some((lx, ly, lid)) = self.last_touch_pos {
-                            if lid == id {
-                                let dx = x - lx;
-                                let dy = y - ly;
-                                self.handler.on_event(
-                                    Event::Scrolled {
-                                        delta: platform_core::ScrollDelta::Pixels {
-                                            x: dx as f32,
-                                            y: dy as f32,
-                                        },
-                                        x,
-                                        y,
-                                    },
-                                    &window,
-                                );
-                            }
-                        }
-                        self.last_touch_pos = Some((x, y, id));
-                        self.handler
-                            .on_event(Event::PointerMoved { x, y, source }, &window);
-                    }
-                    TouchPhase::Ended | TouchPhase::Cancelled => {
-                        self.last_touch_pos = None;
-                        self.handler.on_event(
-                            Event::PointerReleased {
-                                x,
-                                y,
-                                button: PointerButton::Primary,
-                                source,
-                            },
-                            &window,
-                        );
-                    }
-                }
+        match map_window_event(
+            event,
+            &mut self.cursor_position,
+            &mut self.scale_factor,
+            &mut self.modifiers,
+            &mut self.touch,
+        ) {
+            SurfaceIntent::Event(e) => self.handler.on_event(e, &window),
+            SurfaceIntent::Dragged(scrolled, moved) => {
+                self.handler.on_event(scrolled, &window);
+                self.handler.on_event(moved, &window);
             }
-            other => match map_window_event(
-                other,
-                &mut self.cursor_position,
-                &mut self.scale_factor,
-                &mut self.modifiers,
-            ) {
-                SurfaceIntent::Event(e) => self.handler.on_event(e, &window),
-                SurfaceIntent::Resized(e) => {
-                    self.handler.on_event(e, &window);
-                    window.request_redraw();
-                }
-                SurfaceIntent::Redraw => self.handler.on_redraw(&window),
-                SurfaceIntent::Close(e) => {
-                    self.handler.on_event(e, &window);
-                    event_loop.exit();
-                }
-                SurfaceIntent::Ignore => {}
-            },
+            SurfaceIntent::Resized(e) => {
+                self.handler.on_event(e, &window);
+                window.request_redraw();
+            }
+            SurfaceIntent::Redraw => self.handler.on_redraw(&window),
+            SurfaceIntent::Close(e) => {
+                self.handler.on_event(e, &window);
+                event_loop.exit();
+            }
+            SurfaceIntent::Ignore => {}
         }
     }
 }
@@ -434,7 +375,7 @@ impl Platform for AndroidPlatform {
             scale_factor: 1.0,
             modifiers: platform_core::ModifiersState::default(),
             cursor_position: (0.0, 0.0),
-            last_touch_pos: None,
+            touch: TouchDrag::default(),
             app: self.app,
             last_dark: None,
             last_theme_poll: None,

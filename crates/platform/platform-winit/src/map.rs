@@ -168,8 +168,39 @@ pub enum SurfaceIntent {
     Redraw,
     // Deliver `WindowCloseRequested`, then close this surface.
     Close(Event),
+    // A finger that moved: the scroll it amounts to, then the move itself.
+    //
+    // Both, because a drag is both. The list under the finger scrolls while a slider under that same finger
+    // tracks the movement, and a backend delivering only one of the two broke whichever widget needed the other.
+    Dragged(Event, Event),
     // State-only (e.g. `ModifiersChanged`) or an unmapped event — nothing to deliver.
     Ignore,
+}
+
+/// Where a finger was last seen, so the next report can be told as the distance it covered.
+///
+/// A touch screen reports positions; a scroll is made of deltas. Nothing in winit turns one into the other, so
+/// a backend wanting a finger to scroll has to remember the last point itself — and while only one of them did,
+/// dragging a list moved nothing anywhere else.
+#[derive(Default)]
+pub struct TouchDrag {
+    last: Option<(f64, f64, u64)>,
+}
+
+impl TouchDrag {
+    // How far this finger has come since it was last seen. `None` for one arriving mid-gesture, and for a
+    // second finger landing while the first is still down: the distance between two fingers is not a scroll.
+    fn advance(&mut self, x: f64, y: f64, id: u64) -> Option<(f32, f32)> {
+        let moved = self
+            .last
+            .and_then(|(lx, ly, lid)| (lid == id).then_some(((x - lx) as f32, (y - ly) as f32)));
+        self.last = Some((x, y, id));
+        moved
+    }
+
+    fn end(&mut self) {
+        self.last = None;
+    }
 }
 
 // Pure winit `WindowEvent` → [`SurfaceIntent`] translation, updating this surface's cursor/scale/modifiers.
@@ -179,6 +210,7 @@ pub fn map_window_event(
     cursor_position: &mut (f64, f64),
     scale_factor: &mut f64,
     modifiers: &mut platform_core::ModifiersState,
+    touch: &mut TouchDrag,
 ) -> SurfaceIntent {
     match event {
         WindowEvent::CloseRequested => SurfaceIntent::Close(Event::WindowCloseRequested),
@@ -226,21 +258,40 @@ pub fn map_window_event(
             let x = location.x / *scale_factor;
             let y = location.y / *scale_factor;
             let source = PointerSource::Touch { id };
-            SurfaceIntent::Event(match phase {
-                TouchPhase::Started => Event::PointerPressed {
-                    x,
-                    y,
-                    button: PointerButton::Primary,
-                    source,
-                },
-                TouchPhase::Moved => Event::PointerMoved { x, y, source },
-                TouchPhase::Ended | TouchPhase::Cancelled => Event::PointerReleased {
-                    x,
-                    y,
-                    button: PointerButton::Primary,
-                    source,
-                },
-            })
+            match phase {
+                TouchPhase::Started => {
+                    touch.advance(x, y, id);
+                    SurfaceIntent::Event(Event::PointerPressed {
+                        x,
+                        y,
+                        button: PointerButton::Primary,
+                        source,
+                    })
+                }
+                TouchPhase::Moved => {
+                    let moved = Event::PointerMoved { x, y, source };
+                    match touch.advance(x, y, id) {
+                        Some((dx, dy)) => SurfaceIntent::Dragged(
+                            Event::Scrolled {
+                                delta: ScrollDelta::Pixels { x: dx, y: dy },
+                                x,
+                                y,
+                            },
+                            moved,
+                        ),
+                        None => SurfaceIntent::Event(moved),
+                    }
+                }
+                TouchPhase::Ended | TouchPhase::Cancelled => {
+                    touch.end();
+                    SurfaceIntent::Event(Event::PointerReleased {
+                        x,
+                        y,
+                        button: PointerButton::Primary,
+                        source,
+                    })
+                }
+            }
         }
         WindowEvent::Focused(is_focused) => {
             SurfaceIntent::Event(Event::FocusChanged { is_focused })
@@ -297,5 +348,45 @@ pub fn map_window_event(
             dark: theme == winit::window::Theme::Dark,
         }),
         _ => SurfaceIntent::Ignore,
+    }
+}
+
+#[cfg(test)]
+mod touch_tests {
+    use super::*;
+
+    fn drag(touch: &mut TouchDrag, x: f64, y: f64) -> Option<(f32, f32)> {
+        touch.advance(x, y, 1)
+    }
+
+    #[test]
+    fn a_finger_that_moves_covers_the_distance_between_its_reports() {
+        let mut touch = TouchDrag::default();
+        assert_eq!(
+            drag(&mut touch, 100.0, 200.0),
+            None,
+            "nothing to measure yet"
+        );
+        assert_eq!(drag(&mut touch, 100.0, 180.0), Some((0.0, -20.0)));
+        assert_eq!(drag(&mut touch, 90.0, 170.0), Some((-10.0, -10.0)));
+    }
+
+    #[test]
+    fn a_finger_lifting_leaves_nothing_behind_for_the_next_one() {
+        let mut touch = TouchDrag::default();
+        drag(&mut touch, 0.0, 0.0);
+        drag(&mut touch, 0.0, 50.0);
+        touch.end();
+        // Without the reset the next gesture opens with the jump from wherever the last one ended, which on a
+        // long page is the whole list moving at once.
+        assert_eq!(drag(&mut touch, 0.0, 400.0), None);
+    }
+
+    #[test]
+    fn a_second_finger_landing_is_not_a_distance_from_the_first() {
+        let mut touch = TouchDrag::default();
+        touch.advance(0.0, 0.0, 1);
+        assert_eq!(touch.advance(300.0, 0.0, 2), None);
+        assert_eq!(touch.advance(300.0, 40.0, 2), Some((0.0, 40.0)));
     }
 }
