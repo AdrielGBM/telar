@@ -40,6 +40,19 @@ pub struct Element {
     /// box that *is* a layout root — an application that computes several and places them itself — has no
     /// parent to place it, and a document told only what it asked for would stack them.
     pub rect: Rect,
+    /// Where a box that scrolls its own content is being *asked* to put it.
+    ///
+    /// The same shape of thing as [`Semantics::focused`], and for the same reason: a target that draws the
+    /// content at the offset needs no telling, because there the offset is the whole of it. One that hands
+    /// the box to a document does — there the compositor holds the content and reports where it moved it, so
+    /// a widget that moves the offset itself (a bar dragged with the mouse, a jump to the top of a page just
+    /// navigated to) is only stating a wish that the next report overrules. Said here, a backend can act on
+    /// it.
+    ///
+    /// Not part of [`Semantics`], which is what the box *means* and is compared and hashed as such. This is a
+    /// fact about one frame, like [`rect`](Self::rect) beside it, and it is `None` on almost every one: only
+    /// the frame in which the widget asks carries it.
+    pub scroll_to: Option<(f32, f32)>,
 }
 
 impl Element {
@@ -54,6 +67,13 @@ impl Element {
             semantics,
             layout: layout.into(),
             rect,
+            scroll_to: None,
         }
+    }
+
+    /// Asks the backend to put this box's own scroll at `offset`. See [`Element::scroll_to`].
+    pub fn asking_to_scroll(mut self, offset: Option<(f32, f32)>) -> Self {
+        self.scroll_to = offset;
+        self
     }
 }

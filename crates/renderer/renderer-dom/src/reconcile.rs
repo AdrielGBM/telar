@@ -532,6 +532,7 @@ impl Reconciler {
             paint::declare(&mut style, "transform", &paint::matrix(matrix, at.x, at.y));
         }
         self.describe(&node, element, tag);
+        settle_scroll(&node, element);
         if self.audit {
             let rect = element.rect;
             let _ = node.set_attribute(
@@ -983,6 +984,30 @@ fn aria_role(role: Role) -> Option<&'static str> {
 /// The offset is read back rather than accumulated from deltas: the compositor may have applied several
 /// between two of these, and a rubber-band at the edge undoes part of what it applied. Where it *is* is the
 /// only thing that is true.
+/// Puts a box's own scroll where the widget is asking for it.
+///
+/// The offset travels the other way on almost every frame — the compositor scrolls, and `watch_scroll`
+/// reports where the content ended up. This is the other direction, and without it a widget had no way to
+/// move a box the compositor is holding: the scrollbar could not be dragged with a mouse, and a page
+/// navigated to opened wherever the last one had been left.
+///
+/// Only where the widget asks, and only for the one frame it asks in. Written every frame it would fight the
+/// scroll it is reporting — a fling is an offset the widget learns of a frame late, and answering with that
+/// stale value stops it dead.
+fn settle_scroll(node: &web_sys::Element, element: &Element) {
+    let Some((x, y)) = element.scroll_to else {
+        return;
+    };
+    // Compared before writing: an assignment that changes nothing still costs a layout flush, and this runs
+    // while the frame is being built.
+    if (node.scroll_left() as f32 - x).abs() >= 0.5 {
+        node.set_scroll_left(x.round() as i32);
+    }
+    if (node.scroll_top() as f32 - y).abs() >= 0.5 {
+        node.set_scroll_top(y.round() as i32);
+    }
+}
+
 fn watch_scroll(node: &web_sys::Element, id: u64) -> Option<Closure<dyn FnMut(web_sys::Event)>> {
     let target = node.clone();
     let closure = Closure::<dyn FnMut(web_sys::Event)>::new(move |_: web_sys::Event| {

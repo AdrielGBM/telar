@@ -30,8 +30,23 @@ pub(crate) fn role_of(
     }
 }
 
+/// The element for a node that means something more than a box, asking the backend to put its own scroll at
+/// `scroll_to`. See [`renderer_core::Element::scroll_to`]; every box but a scroll area that is being moved
+/// passes `None`.
+pub(crate) fn with_semantics_scrolled(
+    node: NodeId,
+    semantics: Semantics,
+    scroll_to: Option<(f32, f32)>,
+) -> Arc<Element> {
+    Arc::new(element_of(node, semantics).asking_to_scroll(scroll_to))
+}
+
 /// The element for a node that means something more than a box.
 pub(crate) fn with_semantics(node: NodeId, semantics: Semantics) -> Arc<Element> {
+    Arc::new(element_of(node, semantics))
+}
+
+fn element_of(node: NodeId, semantics: Semantics) -> Element {
     let layout = layout_reactive::declared_css(node)
         .map(|css| css.into_string())
         .unwrap_or_default();
@@ -40,12 +55,7 @@ pub(crate) fn with_semantics(node: NodeId, semantics: Semantics) -> Arc<Element>
     let rect = layout_reactive::track_layout(node)
         .map(|rect| rect.get())
         .unwrap_or_default();
-    Arc::new(Element::new(
-        ElementId(node.into()),
-        semantics,
-        layout,
-        rect,
-    ))
+    Element::new(ElementId(node.into()), semantics, layout, rect)
 }
 
 /// Wraps `content` as the box `node` names, when a document backend is listening.

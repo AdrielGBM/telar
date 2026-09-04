@@ -257,6 +257,15 @@ pub(crate) struct ScrollCore {
     motion: Motion,
     /// The bar a pointer has hold of, and where along the thumb it took hold.
     bar_drag: Option<(Axis, f32)>,
+    /// An offset this widget is *asking* for, on a surface that holds the content itself.
+    ///
+    /// There the offset travels the other way almost always: the compositor scrolls, and `BoxScrolled`
+    /// tells this widget where the content ended up. Moving the signal alone would be overruled by the very
+    /// next offset the surface reports — which is why the bar could not be dragged there at all. So it is
+    /// published instead, on the element, and the backend puts the box where this says it should be.
+    ///
+    /// A `Cell`, because `view` is where it is handed over and `view` takes `&self`.
+    commanded: std::cell::Cell<Option<(f32, f32)>>,
 }
 
 /// Accumulated finger travel (logical px) within a gesture past which the scroll area treats it as a scroll
@@ -287,6 +296,41 @@ impl ScrollCore {
             fling: None,
             motion: Motion::default(),
             bar_drag: None,
+            commanded: std::cell::Cell::new(None),
+        }
+    }
+
+    /// Puts an offset where this widget wants it, wherever the content actually is.
+    ///
+    /// The signal is the whole of it on a target that draws the content at the offset. Where the surface
+    /// holds the content instead, the signal only *records* where the surface put it, so the surface has to
+    /// be asked as well — see [`ScrollCore::commanded`].
+    fn command(&self, x: f32, y: f32) {
+        if self.scroll_x.peek() != x {
+            self.scroll_x.set(x);
+        }
+        if self.scroll_y.peek() != y {
+            self.scroll_y.set(y);
+        }
+        if ui_tree::element_capture() {
+            self.commanded.set(Some((x, y)));
+        }
+    }
+
+    /// The offset this widget is asking the surface for, taken by the frame that carries it.
+    ///
+    /// One frame, one request: a scroll a backend applies is applied at once, and one it does not — because
+    /// the box cannot go that far — must not be asked for again, or every later frame would drag the box
+    /// back to it and nothing else could scroll at all.
+    fn take_command(&self) -> Option<(f32, f32)> {
+        self.commanded.take()
+    }
+
+    /// [`ScrollCore::command`] for one axis, leaving the other where it is.
+    fn command_axis(&self, axis: Axis, to: f32) {
+        match axis {
+            Axis::Vertical => self.command(self.scroll_x.peek(), to),
+            Axis::Horizontal => self.command(to, self.scroll_y.peek()),
         }
     }
 
@@ -296,12 +340,7 @@ impl ScrollCore {
     fn scroll_to_top(&mut self) {
         // Whatever was still gliding was gliding through the page being left.
         self.catch_all();
-        if self.scroll_x.peek() != 0.0 {
-            self.scroll_x.set(0.0);
-        }
-        if self.scroll_y.peek() != 0.0 {
-            self.scroll_y.set(0.0);
-        }
+        self.command(0.0, 0.0);
     }
 
     /// Takes the offset a surface that scrolls for itself has already applied.
@@ -309,6 +348,9 @@ impl ScrollCore {
     /// `peek` on both, and not for tidiness: this runs while the app is dispatching, and a reactive read here
     /// would subscribe whatever is running to an offset it is about to be told again.
     fn follow(&mut self, x: f32, y: f32) {
+        // Where the content is beats where this widget was about to ask for it to be: a fling is a scroll
+        // reported a frame late, and answering it with a stale request stops it dead.
+        self.commanded.set(None);
         if self.scroll_x.peek() != x {
             self.scroll_x.set(x);
         }
@@ -334,9 +376,7 @@ impl ScrollCore {
     /// Takes hold of a bar under `(x, y)`, or pages towards a press on its track. `false` when the press
     /// landed somewhere else and belongs to the content.
     fn grab_bar(&mut self, viewport: Rect, x: f32, y: f32) -> bool {
-        // A surface that scrolls for itself draws these bars pinned to a viewport it does not own the offset
-        // of; moving that offset from here would be overruled by the next frame the surface reports.
-        if ui_tree::element_capture() || !viewport.contains(x, y) {
+        if !viewport.contains(x, y) {
             return false;
         }
         let content = self.content_rect_signal.get();
@@ -375,7 +415,7 @@ impl ScrollCore {
             self.bar_drag = Some((axis, along - thumb.start));
         } else {
             let by = if along < thumb.start { -extent } else { extent };
-            offset.set((offset.get() + by).clamp(0.0, thumb.max_scroll));
+            self.command_axis(axis, (offset.get() + by).clamp(0.0, thumb.max_scroll));
         }
         true
     }
@@ -396,7 +436,7 @@ impl ScrollCore {
             Axis::Horizontal => (x, viewport.x, viewport.width, content.width, self.scroll_x),
         };
         if let Some(thumb) = Thumb::of(origin, extent, content_extent, offset.get()) {
-            offset.set(thumb.scroll_for(origin, along - grab));
+            self.command_axis(axis, thumb.scroll_for(origin, along - grab));
         }
     }
 
@@ -820,7 +860,11 @@ impl Component for LayoutScrollArea {
         let content = self.core.view(self.leaf.rect.get());
         if ui_tree::element_capture() {
             let semantics = renderer_core::Semantics::of(renderer_core::Role::ScrollArea);
-            let element = crate::element::with_semantics(self.leaf.node, semantics);
+            let element = crate::element::with_semantics_scrolled(
+                self.leaf.node,
+                semantics,
+                self.core.take_command(),
+            );
             RenderNode::element(element, [content])
         } else {
             content
@@ -1730,7 +1774,7 @@ mod scrollbar_tests {
     use layout_core::AvailableSpace;
     use platform_core::{PointerButton, PointerSource};
 
-    fn press(x: f32, y: f32) -> Event {
+    pub(super) fn press(x: f32, y: f32) -> Event {
         Event::PointerPressed {
             x: x as f64,
             y: y as f64,
@@ -1739,7 +1783,7 @@ mod scrollbar_tests {
         }
     }
 
-    fn moved(x: f32, y: f32) -> Event {
+    pub(super) fn moved(x: f32, y: f32) -> Event {
         Event::PointerMoved {
             x: x as f64,
             y: y as f64,
@@ -1942,5 +1986,123 @@ mod touchpad_tests {
             0.0,
             "it was never this area's scroll"
         );
+    }
+}
+
+/// The bar on a surface that holds the content itself — a document backend, where the compositor scrolls and
+/// this widget is told where the content ended up rather than deciding it.
+#[cfg(test)]
+mod surface_scroll_tests {
+    use super::scrollbar_tests::{moved, press};
+    use super::tests::make_scroll_area;
+    use super::*;
+
+    /// Turns element capture on for one test and puts it back, so a test that panics does not leave every
+    /// later one running as a document backend.
+    struct AsADocument(bool);
+
+    impl AsADocument {
+        fn new() -> Self {
+            Self(ui_tree::set_element_capture(true))
+        }
+    }
+
+    impl Drop for AsADocument {
+        fn drop(&mut self) {
+            ui_tree::set_element_capture(self.0);
+        }
+    }
+
+    /// The whole of the bug: the drag was refused outright where the surface owns the offset, because moving
+    /// the signal alone would be overruled by the next offset the surface reported. It is a request now.
+    #[test]
+    fn the_thumb_can_be_dragged_and_asks_the_surface_to_move() {
+        let _document = AsADocument::new();
+        let mut sa = make_scroll_area();
+        assert_eq!(
+            sa.on_event(&press(396.0, 45.0)),
+            EventResult::Handled,
+            "the press lands on the thumb rather than falling through to the content"
+        );
+        sa.on_event(&moved(396.0, 150.0));
+        assert_eq!(
+            sa.core.scroll_y.get(),
+            350.0,
+            "half the travel, half the range"
+        );
+        assert_eq!(
+            sa.core.commanded.get(),
+            Some((0.0, 350.0)),
+            "and the surface is asked to put the content there"
+        );
+    }
+
+    /// One frame, one request. A box that cannot go as far as it was asked reports the offset it settled on,
+    /// and a request left standing would drag it back there on every later frame.
+    #[test]
+    fn a_request_is_taken_by_the_frame_that_carries_it() {
+        use crate::canvas::Canvas;
+        use crate::context::{compute_layout, new_container, reset_layout_runtime};
+        use layout_core::AvailableSpace;
+
+        let _document = AsADocument::new();
+        reset_layout_runtime();
+        let content = Canvas::new(LayoutStyle::new().width(400.0).height(1000.0), |_| {
+            RenderNode::Empty
+        })
+        .unwrap();
+        let sa = LayoutScrollArea::new(
+            LayoutStyle::new().width(400.0).height(300.0),
+            Box::new(content),
+        )
+        .unwrap();
+        let root = new_container(
+            LayoutStyle::new().flex_column().width(400.0).height(300.0),
+            &[sa.layout_node()],
+        )
+        .unwrap();
+        compute_layout(
+            root,
+            AvailableSpace::Definite(400.0),
+            AvailableSpace::Definite(300.0),
+        )
+        .unwrap();
+
+        sa.core.command(0.0, 350.0);
+        let node = sa.view();
+        let asked = match &node {
+            RenderNode::Element { element, .. } => element.scroll_to,
+            _ => panic!("a document backend gets an element"),
+        };
+        assert_eq!(asked, Some((0.0, 350.0)), "the frame carries the request");
+        assert_eq!(
+            sa.core.commanded.get(),
+            None,
+            "and takes it, so no later frame repeats it"
+        );
+    }
+
+    /// Where the content already is beats where this widget was about to ask for it: a fling is an offset
+    /// reported a frame late, and answering it with a stale request stops it dead.
+    #[test]
+    fn a_scroll_the_surface_reports_drops_the_request_still_pending() {
+        let _document = AsADocument::new();
+        let mut sa = make_scroll_area();
+        sa.on_event(&press(396.0, 45.0));
+        sa.on_event(&moved(396.0, 150.0));
+        sa.core.follow(0.0, 120.0);
+        assert_eq!(sa.core.commanded.get(), None);
+        assert_eq!(sa.core.scroll_y.get(), 120.0);
+    }
+
+    /// A target that draws the content at the offset needs no request at all — there the signal *is* where
+    /// the content is, and a backend asked to scroll a box it does not have would be answering nothing.
+    #[test]
+    fn a_target_that_draws_the_offset_asks_for_nothing() {
+        let mut sa = make_scroll_area();
+        sa.on_event(&press(396.0, 45.0));
+        sa.on_event(&moved(396.0, 150.0));
+        assert_eq!(sa.core.scroll_y.get(), 350.0);
+        assert_eq!(sa.core.commanded.get(), None);
     }
 }
