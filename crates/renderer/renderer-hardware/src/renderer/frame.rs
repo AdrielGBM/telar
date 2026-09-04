@@ -151,6 +151,20 @@ fn confine_to_dirty(scissor: Option<Rect>, dirty: Option<Rect>) -> Option<Rect> 
     }
 }
 
+/// What a frame may reuse of the one before it, decided once by [`HardwareRenderer::analyze_frame`] before anything is drawn.
+struct FramePlan {
+    /// The previous frame's content shifted by a scroll delta, when the content only scrolled.
+    scroll_blit: Option<renderer_core::ScrollBlit>,
+    /// Whether the offscreen is seeded with the previous frame before the main pass Loads it.
+    prime: bool,
+    /// How far that seed is shifted: a scroll's delta, or zero for plain damage.
+    prime_delta: (f32, f32),
+    /// The one rect this frame is confined to, or `None` for a full repaint.
+    dirty_scissor: Option<Rect>,
+    /// Whether the frame is damage-tracked: the previous frame preserved outside [`Self::dirty_scissor`], the clear colour repainted only inside it.
+    damage: bool,
+}
+
 impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBackend
     for HardwareRenderer<W>
 {
@@ -238,24 +252,28 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
         self.draw_state.reset();
 
         let interpret_start = renderer_core::perf::now_if_enabled();
-        let (scroll_blit, prime, prime_delta, dirty_scissor, damage) =
-            self.analyze_frame(commands, clear_color, frame_has_backdrop_blur);
+        let plan = self.analyze_frame(commands, clear_color, frame_has_backdrop_blur);
 
-        renderer_core::perf::note_damage(damage);
+        renderer_core::perf::note_damage(plan.damage);
         // Repaint the app background inside the dirty scissor, so ghosts of moved or removed content left by the preserved previous frame are erased.
-        let damage_bg = match (damage, dirty_scissor, clear_color) {
+        let damage_bg = match (plan.damage, plan.dirty_scissor, clear_color) {
             (true, Some(ds), Some(c)) => Some((ds, c)),
             _ => None,
         };
-        self.interpret_commands(commands, dirty_scissor, scroll_blit.as_ref(), damage_bg);
+        self.interpret_commands(
+            commands,
+            plan.dirty_scissor,
+            plan.scroll_blit.as_ref(),
+            damage_bg,
+        );
         renderer_core::perf::record_since(renderer_core::perf::Phase::Interpret, interpret_start);
 
         let gpu_start = renderer_core::perf::now_if_enabled();
         let mut ctx = FrameCtx {
             direct_to_surface,
-            prime,
-            prime_delta,
-            dirty_scissor,
+            prime: plan.prime,
+            prime_delta: plan.prime_delta,
+            dirty_scissor: plan.dirty_scissor,
             load_op: frame_load_op(clear_color),
             output: None,
             targets: None,
@@ -267,7 +285,7 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
         }
 
         // `msaa_texture` already holds the previous frame, so Load it and preserve everything outside the dirty scissor; the injected background rect repaints the clear colour only inside it.
-        if damage && self.msaa_samples == 1 {
+        if plan.damage && self.msaa_samples == 1 {
             ctx.load_op = wgpu::LoadOp::Load;
         }
 
@@ -360,59 +378,100 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
         Ok(false)
     }
 
+    /// Whether this frame's clear colour can be repainted as a rect inside the dirty scissor.
+    ///
+    /// The injected background rect draws through the premultiplied-alpha pipeline, so a translucent colour would blend over the primed previous frame and accumulate error every frame it survived.
+    fn clear_is_opaque(clear_color: Option<Color>) -> bool {
+        clear_color.is_some_and(|c| c.a >= 1.0)
+    }
+
+    /// Whether a layer in this frame samples what is behind it, which no partial repaint can serve: it would read the primed previous frame outside the dirty rect and pull in stale content.
+    fn no_layer_samples_the_backdrop(frame_has_backdrop_blur: bool) -> bool {
+        !frame_has_backdrop_blur
+    }
+
+    /// Whether some target still holds the previous frame for priming to read back.
+    ///
+    /// True on the single-sample path, whose `msaa_texture` stores and is never written by an idle frame. On the multisample path the frame resolves out to `retained_view` and the multisample target keeps no dependable copy, so that retained texture has to exist.
+    fn holds_previous_frame(&self) -> bool {
+        (self.msaa_samples > 1 && self.retained_view.is_some()) || self.msaa_samples == 1
+    }
+
+    /// Whether a frame that clears may still take the scroll blit.
+    ///
+    /// `scroll_blit` normally requires `LoadOp::Load`, which a clear colour forces off. Priming the offscreen with the previous frame shifted by the scroll delta keeps the optimisation for a cleared frame, leaving only the exposed band to redraw. Multisample only, because the prime quad is what serves that target.
+    fn allows_scroll_with_clear(
+        &self,
+        clear_color: Option<Color>,
+        frame_has_backdrop_blur: bool,
+    ) -> bool {
+        hw_scroll_blit_enabled()
+            && clear_color.is_some()
+            && self.retained_view.is_some()
+            && Self::no_layer_samples_the_backdrop(frame_has_backdrop_blur)
+            && self.msaa_samples > 1
+    }
+
+    /// Whether a frame that clears may be damage-tracked: an arbitrary dirty rect with a zero delta, gated like scroll-with-clear and needing an opaque clear on top of it.
+    fn allows_damage_with_clear(
+        &self,
+        clear_color: Option<Color>,
+        frame_has_backdrop_blur: bool,
+    ) -> bool {
+        hw_damage_with_clear_enabled()
+            && Self::clear_is_opaque(clear_color)
+            && Self::no_layer_samples_the_backdrop(frame_has_backdrop_blur)
+            && self.holds_previous_frame()
+    }
+
+    /// Whether a transparent frame may be damage-tracked.
+    ///
+    /// A transparent frame Loads rather than Clears, assuming the target still holds the previous frame. That holds on the single-sample path and not on the multisample one, where repainting only the dirty rect blinked out everything unchanged this frame. Priming it would need an erase-to-transparent inside the dirty rect, since primed pixels are not overwritten by a background fill, so this refuses instead.
+    fn allows_damage_transparent(&self, clear_color: Option<Color>) -> bool {
+        clear_color.is_none() && self.msaa_samples == 1
+    }
+
+    /// What this frame may reuse of the one before it.
     fn analyze_frame(
         &self,
         commands: &[DrawCommand],
         clear_color: Option<Color>,
         frame_has_backdrop_blur: bool,
-    ) -> (
-        Option<renderer_core::ScrollBlit>,
-        bool,
-        (f32, f32),
-        Option<Rect>,
-        bool,
-    ) {
-        // `scroll_blit` normally requires `LoadOp::Load`, which a clear colour forces off. Priming the offscreen with the previous frame shifted by the scroll delta keeps the optimisation for a cleared frame, leaving only the exposed band to redraw.
-        let allow_scroll_with_clear = hw_scroll_blit_enabled()
-            && clear_color.is_some()
-            && self.retained_view.is_some()
-            && !frame_has_backdrop_blur
-            && self.msaa_samples > 1;
-        let scroll_blit = if clear_color.is_none() || allow_scroll_with_clear {
+    ) -> FramePlan {
+        let scroll_with_clear = self.allows_scroll_with_clear(clear_color, frame_has_backdrop_blur);
+        let scroll_blit = if clear_color.is_none() || scroll_with_clear {
             renderer_core::dirty::detect_scroll_blit(commands, &self.prev_commands)
         } else {
             None
         };
         // The offscreen is seeded with the shifted previous frame instead of a plain clear, so only the exposed band is redrawn.
-        let scroll_prime = allow_scroll_with_clear && scroll_blit.is_some();
+        let scroll_prime = scroll_with_clear && scroll_blit.is_some();
         let prime_delta = scroll_blit
             .as_ref()
             .map(|sb| (sb.delta_x as f32, sb.delta_y as f32))
             .unwrap_or((0.0, 0.0));
-        // Damage tracking for an arbitrary dirty rect with a zero delta. Gated like scroll-with-clear, plus no `PushLayer` (a layer re-composited from only its dirty slice would be wrong) and only when the dirty region is small enough to beat a full clear and repaint. It requires an opaque clear: the injected background rect draws through the premultiplied-alpha pipeline, so a translucent colour would blend over the primed frame and accumulate error. Only a backdrop-blur layer still blocks damage, since it samples the primed previous frame outside the dirty rect and would pull in stale content.
-        let allow_damage_with_clear = hw_damage_with_clear_enabled()
-            && clear_color.is_some_and(|c| c.a >= 1.0)
-            && !frame_has_backdrop_blur
-            && ((self.msaa_samples > 1 && self.retained_view.is_some()) || self.msaa_samples == 1);
-        // A transparent frame Loads rather than Clears, assuming the target still holds the previous frame. That holds on the single-sample path and not on the multisample one, where the frame resolves out to `retained_view` and the multisample target keeps no dependable copy: repainting only the dirty rect there blinked out everything unchanged this frame. Priming it would need an erase-to-transparent inside the dirty rect, since primed pixels are not overwritten by a background fill, so this refuses instead.
-        let allow_damage_transparent = clear_color.is_none() && self.msaa_samples == 1;
+        let damage_with_clear = self.allows_damage_with_clear(clear_color, frame_has_backdrop_blur);
+        let may_damage = self.allows_damage_transparent(clear_color) || damage_with_clear;
         // GPUs support a single scissor rect per pass, unlike the software backend, which can clip per rect.
-        let dirty_scissor: Option<Rect> = if scroll_blit.is_none()
-            && !self.prev_commands.is_empty()
-            && (allow_damage_transparent || allow_damage_with_clear)
-        {
-            renderer_core::dirty::compute_dirty_rect(commands, &self.prev_commands, |cmd, m| {
-                renderer_core::culling::command_visual_rect(cmd, m, &self.font_metrics)
-            })
-            .and_then(|rects| rects.into_iter().reduce(Rect::union))
-            .filter(|ds| self.damage_worth_priming(*ds))
-        } else {
-            None
-        };
-        let damage = allow_damage_with_clear && dirty_scissor.is_some();
-        // The prime quad only serves the multisample target; the single-sample path Loads its persistent `msaa_texture` and primes without a quad.
-        let prime = scroll_prime || (damage && self.msaa_samples > 1);
-        (scroll_blit, prime, prime_delta, dirty_scissor, damage)
+        let dirty_scissor: Option<Rect> =
+            if scroll_blit.is_none() && !self.prev_commands.is_empty() && may_damage {
+                renderer_core::dirty::compute_dirty_rect(commands, &self.prev_commands, |cmd, m| {
+                    renderer_core::culling::command_visual_rect(cmd, m, &self.font_metrics)
+                })
+                .and_then(|rects| rects.into_iter().reduce(Rect::union))
+                .filter(|ds| self.damage_worth_priming(*ds))
+            } else {
+                None
+            };
+        let damage = damage_with_clear && dirty_scissor.is_some();
+        FramePlan {
+            scroll_blit,
+            // The prime quad only serves the multisample target; the single-sample path Loads its persistent `msaa_texture` and primes without a quad.
+            prime: scroll_prime || (damage && self.msaa_samples > 1),
+            prime_delta,
+            dirty_scissor,
+            damage,
+        }
     }
 
     // A near-full-surface dirty rect costs more to prime than a plain full clear and repaint.
