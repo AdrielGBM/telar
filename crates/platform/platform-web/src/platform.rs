@@ -161,6 +161,12 @@ impl Platform for WebPlatform {
         install_frame_callback();
 
         handler.new_events();
+        // Delivered before the tree mounts, so its first layout is already in the right theme. The media
+        // query installed above reports only *changes*, and a page opened by someone whose system is already
+        // dark has no change to report — it drew light until they went and toggled the setting.
+        if let Some(dark) = window.prefers_dark() {
+            handler.on_event(Event::ColorSchemeChanged { dark }, &window);
+        }
         let resumed = handler.on_resume(&window);
         handler.about_to_wait();
         if !resumed {
