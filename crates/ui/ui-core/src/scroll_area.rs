@@ -34,6 +34,56 @@ impl Default for ScrollbarStyle {
     }
 }
 
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+enum Axis {
+    Vertical,
+    Horizontal,
+}
+
+/// Shortest a thumb is allowed to get, so a very long document still leaves something to take hold of.
+const MIN_THUMB: f32 = 24.0;
+
+/// Where a scrollbar's thumb sits along one axis, and the room it has to travel.
+///
+/// One description read by both the drawing and the pointer: a thumb hit-tested against geometry worked out
+/// a second time is a thumb that can be drawn in one place and grabbed in another.
+struct Thumb {
+    start: f32,
+    length: f32,
+    travel: f32,
+    max_scroll: f32,
+}
+
+impl Thumb {
+    /// `None` when the content fits, which is when there is no bar to draw or to grab.
+    fn of(origin: f32, viewport: f32, content: f32, scroll: f32) -> Option<Self> {
+        if content <= viewport {
+            return None;
+        }
+        let length = (viewport / content * viewport).max(MIN_THUMB);
+        let max_scroll = (content - viewport).max(1.0);
+        let travel = (viewport - length).max(0.0);
+        Some(Self {
+            start: origin + (scroll / max_scroll) * travel,
+            length,
+            travel,
+            max_scroll,
+        })
+    }
+
+    fn holds(&self, at: f32) -> bool {
+        at >= self.start && at < self.start + self.length
+    }
+
+    /// The offset that would put the thumb's near edge at `start`.
+    fn scroll_for(&self, origin: f32, start: f32) -> f32 {
+        if self.travel <= 0.0 {
+            return 0.0;
+        }
+        ((start - origin) / self.travel * self.max_scroll).clamp(0.0, self.max_scroll)
+    }
+}
+
 fn draw_scrollbars(
     viewport: Rect,
     scroll_x: f32,
@@ -41,45 +91,58 @@ fn draw_scrollbars(
     content_rect: Rect,
     scrollbar_style: &ScrollbarStyle,
 ) -> (RenderNode, RenderNode) {
-    let vbar = if content_rect.height > viewport.height {
-        let bar_h = (viewport.height / content_rect.height * viewport.height).max(24.0);
-        let max_scroll = (content_rect.height - viewport.height).max(1.0);
-        let bar_y = viewport.y + (scroll_y / max_scroll) * (viewport.height - bar_h);
-        RenderNode::rect(
-            Rect::new(
-                viewport.x + viewport.width - scrollbar_style.width,
-                bar_y,
-                scrollbar_style.width - 2.0,
-                bar_h,
-            ),
-            RectStyle::default()
-                .with_fill(scrollbar_style.color)
-                .with_radius(BorderRadius::all(scrollbar_style.corner_radius)),
-        )
-    } else {
-        RenderNode::Empty
+    let style = || {
+        RectStyle::default()
+            .with_fill(scrollbar_style.color)
+            .with_radius(BorderRadius::all(scrollbar_style.corner_radius))
     };
 
-    let hbar = if content_rect.width > viewport.width {
-        let bar_w = (viewport.width / content_rect.width * viewport.width).max(24.0);
-        let max_scroll_x = (content_rect.width - viewport.width).max(1.0);
-        let bar_x = viewport.x + (scroll_x / max_scroll_x) * (viewport.width - bar_w);
-        RenderNode::rect(
-            Rect::new(
-                bar_x,
-                viewport.y + viewport.height - scrollbar_style.width,
-                bar_w,
-                scrollbar_style.width - 2.0,
-            ),
-            RectStyle::default()
-                .with_fill(scrollbar_style.color)
-                .with_radius(BorderRadius::all(scrollbar_style.corner_radius)),
-        )
-    } else {
-        RenderNode::Empty
-    };
+    let vbar = Thumb::of(viewport.y, viewport.height, content_rect.height, scroll_y)
+        .map(|thumb| {
+            RenderNode::rect(
+                Rect::new(
+                    viewport.x + viewport.width - scrollbar_style.width,
+                    thumb.start,
+                    scrollbar_style.width - 2.0,
+                    thumb.length,
+                ),
+                style(),
+            )
+        })
+        .unwrap_or(RenderNode::Empty);
+
+    let hbar = Thumb::of(viewport.x, viewport.width, content_rect.width, scroll_x)
+        .map(|thumb| {
+            RenderNode::rect(
+                Rect::new(
+                    thumb.start,
+                    viewport.y + viewport.height - scrollbar_style.width,
+                    thumb.length,
+                    scrollbar_style.width - 2.0,
+                ),
+                style(),
+            )
+        })
+        .unwrap_or(RenderNode::Empty);
 
     (vbar, hbar)
+}
+
+/// The wheel notches still being covered, one per axis.
+#[derive(Default)]
+struct Glides {
+    x: Option<Rc<crate::fling::Glide>>,
+    y: Option<Rc<crate::fling::Glide>>,
+}
+
+impl Glides {
+    /// Ends both. Whatever is taking the offset over is now the one that says where it goes, and a glide
+    /// finishing afterwards would drag it back to where the wheel had asked for.
+    fn stop(&mut self) {
+        for glide in [self.x.take(), self.y.take()].into_iter().flatten() {
+            glide.stop();
+        }
+    }
 }
 
 fn glide_axis(
@@ -106,8 +169,7 @@ fn handle_scroll_event(
     scroll_y: RwSignal<f32>,
     content_rect_signal: RwSignal<Rect>,
     content: &Rc<RefCell<Box<dyn LayoutItem>>>,
-    glide_x: &mut Option<Rc<crate::fling::Glide>>,
-    glide_y: &mut Option<Rc<crate::fling::Glide>>,
+    glides: &mut Glides,
 ) -> EventResult {
     if let Event::Scrolled { delta, x, y } = event {
         // A surface that scrolls for itself has already decided which box the wheel moved, and says so with
@@ -141,8 +203,8 @@ fn handle_scroll_event(
         // trackpad and a finger report pixels they have already travelled, and animating those would be
         // animating a movement that has happened.
         if ui_tree::smooth_wheel() && matches!(delta, platform_core::ScrollDelta::Lines { .. }) {
-            glide_axis(glide_x, scroll_x, -delta_x, (0.0, max_scroll_x));
-            glide_axis(glide_y, scroll_y, -delta_y, (0.0, max_scroll_y));
+            glide_axis(&mut glides.x, scroll_x, -delta_x, (0.0, max_scroll_x));
+            glide_axis(&mut glides.y, scroll_y, -delta_y, (0.0, max_scroll_y));
         } else {
             scroll_x.set((scroll_x.get() - delta_x).clamp(0.0, max_scroll_x));
             scroll_y.set((scroll_y.get() - delta_y).clamp(0.0, max_scroll_y));
@@ -184,9 +246,9 @@ pub(crate) struct ScrollCore {
     velocity: crate::fling::Velocity,
     /// The one carrying on right now, if any. Held so a hand on the screen can stop it.
     fling: Option<std::rc::Rc<crate::fling::Fling>>,
-    /// The wheel notches still being covered, one per axis.
-    glide_x: Option<std::rc::Rc<crate::fling::Glide>>,
-    glide_y: Option<std::rc::Rc<crate::fling::Glide>>,
+    glides: Glides,
+    /// The bar a pointer has hold of, and where along the thumb it took hold.
+    bar_drag: Option<(Axis, f32)>,
 }
 
 /// Accumulated finger travel (logical px) within a gesture past which the scroll area treats it as a scroll
@@ -216,8 +278,8 @@ impl ScrollCore {
             tap_cancelled: false,
             velocity: crate::fling::Velocity::default(),
             fling: None,
-            glide_x: None,
-            glide_y: None,
+            glides: Glides::default(),
+            bar_drag: None,
         }
     }
 
@@ -256,14 +318,76 @@ impl ScrollCore {
         self.catch_glide();
     }
 
-    /// Ends any wheel notch still being covered. Whatever is taking the offset over is now the one that says
-    /// where it goes, and a glide finishing afterwards would drag it back to where the wheel had asked for.
     fn catch_glide(&mut self) {
-        for glide in [self.glide_x.take(), self.glide_y.take()]
-            .into_iter()
-            .flatten()
-        {
-            glide.stop();
+        self.glides.stop();
+    }
+
+    /// Takes hold of a bar under `(x, y)`, or pages towards a press on its track. `false` when the press
+    /// landed somewhere else and belongs to the content.
+    fn grab_bar(&mut self, viewport: Rect, x: f32, y: f32) -> bool {
+        // A surface that scrolls for itself draws these bars pinned to a viewport it does not own the offset
+        // of; moving that offset from here would be overruled by the next frame the surface reports.
+        if ui_tree::element_capture() || !viewport.contains(x, y) {
+            return false;
+        }
+        let content = self.content_rect_signal.get();
+        let width = self.scrollbar_style.width;
+        let on_vertical = x >= viewport.x + viewport.width - width;
+        let on_horizontal = y >= viewport.y + viewport.height - width;
+
+        // The vertical bar wins the corner they share, matching where it is drawn.
+        let (axis, along, origin, extent, content_extent, offset) = if on_vertical {
+            (
+                Axis::Vertical,
+                y,
+                viewport.y,
+                viewport.height,
+                content.height,
+                self.scroll_y,
+            )
+        } else if on_horizontal {
+            (
+                Axis::Horizontal,
+                x,
+                viewport.x,
+                viewport.width,
+                content.width,
+                self.scroll_x,
+            )
+        } else {
+            return false;
+        };
+
+        let Some(thumb) = Thumb::of(origin, extent, content_extent, offset.get()) else {
+            return false;
+        };
+        self.catch_fling();
+        if thumb.holds(along) {
+            self.bar_drag = Some((axis, along - thumb.start));
+        } else {
+            let by = if along < thumb.start { -extent } else { extent };
+            offset.set((offset.get() + by).clamp(0.0, thumb.max_scroll));
+        }
+        true
+    }
+
+    fn drag_bar(&mut self, viewport: Rect, x: f32, y: f32) {
+        let Some((axis, grab)) = self.bar_drag else {
+            return;
+        };
+        let content = self.content_rect_signal.get();
+        let (along, origin, extent, content_extent, offset) = match axis {
+            Axis::Vertical => (
+                y,
+                viewport.y,
+                viewport.height,
+                content.height,
+                self.scroll_y,
+            ),
+            Axis::Horizontal => (x, viewport.x, viewport.width, content.width, self.scroll_x),
+        };
+        if let Some(thumb) = Thumb::of(origin, extent, content_extent, offset.get()) {
+            offset.set(thumb.scroll_for(origin, along - grab));
         }
     }
 
@@ -340,6 +464,19 @@ impl ScrollCore {
 
     fn on_event(&mut self, event: &Event, viewport: Rect) -> EventResult {
         match event {
+            // A press on a scrollbar is that bar's, not the content's: the bar is drawn over whatever is
+            // beneath it, and a button under the thumb must not take the click that grabbed it.
+            Event::PointerPressed { x, y, .. } if self.grab_bar(viewport, *x as f32, *y as f32) => {
+                return EventResult::Handled;
+            }
+            Event::PointerMoved { x, y, .. } if self.bar_drag.is_some() => {
+                self.drag_bar(viewport, *x as f32, *y as f32);
+                return EventResult::Handled;
+            }
+            Event::PointerReleased { .. } if self.bar_drag.is_some() => {
+                self.bar_drag = None;
+                return EventResult::Handled;
+            }
             // A new press starts a fresh tap candidate; forget the prior gesture's accumulated scroll.
             Event::PointerPressed { .. } => {
                 self.press_active = true;
@@ -381,8 +518,7 @@ impl ScrollCore {
             self.scroll_y,
             self.content_rect_signal,
             &self.content,
-            &mut self.glide_x,
-            &mut self.glide_y,
+            &mut self.glides,
         )
     }
 }
@@ -1024,7 +1160,7 @@ mod tests {
         );
     }
 
-    fn make_scroll_area() -> ScrollArea {
+    pub(crate) fn make_scroll_area() -> ScrollArea {
         reset_layout_runtime();
         let content = Canvas::new(LayoutStyle::new().width(400.0).height(1000.0), |_| {
             RenderNode::Empty
@@ -1347,7 +1483,6 @@ mod tests {
         );
     }
 
-    #[test]
     /// What a terminal does: its smallest visible step is a whole cell, so the notch is applied at once.
     #[test]
     fn a_surface_that_cannot_show_the_gap_takes_the_notch_whole() {
@@ -1498,7 +1633,7 @@ mod tests {
         assert!((captured_y.get() - 250.0).abs() < 0.001);
     }
 
-    fn make_scroll_area_wide() -> ScrollArea {
+    pub(crate) fn make_scroll_area_wide() -> ScrollArea {
         reset_layout_runtime();
         let content = Canvas::new(LayoutStyle::new().width(1000.0).height(300.0), |_| {
             RenderNode::Empty
@@ -1571,5 +1706,131 @@ mod tests {
         } else {
             panic!("expected Group");
         }
+    }
+}
+
+#[cfg(test)]
+mod scrollbar_tests {
+    use super::tests::{make_scroll_area, make_scroll_area_wide};
+    use super::*;
+    use crate::canvas::Canvas;
+    use crate::context::{compute_layout, reset_layout_runtime};
+    use layout_core::AvailableSpace;
+    use platform_core::{PointerButton, PointerSource};
+
+    fn press(x: f32, y: f32) -> Event {
+        Event::PointerPressed {
+            x: x as f64,
+            y: y as f64,
+            button: PointerButton::Primary,
+            source: PointerSource::Mouse,
+        }
+    }
+
+    fn moved(x: f32, y: f32) -> Event {
+        Event::PointerMoved {
+            x: x as f64,
+            y: y as f64,
+            source: PointerSource::Mouse,
+        }
+    }
+
+    fn released(x: f32, y: f32) -> Event {
+        Event::PointerReleased {
+            x: x as f64,
+            y: y as f64,
+            button: PointerButton::Primary,
+            source: PointerSource::Mouse,
+        }
+    }
+
+    // Viewport 400x300 over content 400x1000: a 90px thumb with 210px of travel over 700px of scroll.
+    fn tall() -> ScrollArea {
+        make_scroll_area()
+    }
+
+    /// The content moves by its own range, not by the distance the thumb was dragged.
+    #[test]
+    fn dragging_the_thumb_moves_the_content_in_proportion() {
+        let mut sa = tall();
+        assert_eq!(sa.on_event(&press(396.0, 45.0)), EventResult::Handled);
+        sa.on_event(&moved(396.0, 150.0));
+        assert_eq!(
+            sa.core.scroll_y.get(),
+            350.0,
+            "half the travel, half the range"
+        );
+        sa.on_event(&moved(396.0, 400.0));
+        assert_eq!(sa.core.scroll_y.get(), 700.0, "and it stops at the end");
+    }
+
+    #[test]
+    fn the_thumb_is_grabbed_where_it_was_taken_hold_of() {
+        let mut sa = tall();
+        // Held near its lower edge: the thumb must not jump so its top lands under the pointer.
+        sa.on_event(&press(396.0, 80.0));
+        sa.on_event(&moved(396.0, 80.0));
+        assert_eq!(sa.core.scroll_y.get(), 0.0, "no jump on the first move");
+    }
+
+    #[test]
+    fn a_press_on_the_track_pages_towards_it() {
+        let mut sa = tall();
+        sa.on_event(&press(396.0, 200.0));
+        assert_eq!(sa.core.scroll_y.get(), 300.0, "one viewport down");
+        sa.on_event(&released(396.0, 200.0));
+        sa.on_event(&press(396.0, 5.0));
+        assert_eq!(sa.core.scroll_y.get(), 0.0, "and back up again");
+    }
+
+    #[test]
+    fn letting_go_ends_the_drag() {
+        let mut sa = tall();
+        sa.on_event(&press(396.0, 45.0));
+        sa.on_event(&moved(396.0, 150.0));
+        sa.on_event(&released(396.0, 150.0));
+        let settled = sa.core.scroll_y.get();
+        sa.on_event(&moved(396.0, 250.0));
+        assert_eq!(sa.core.scroll_y.get(), settled, "the pointer is free again");
+    }
+
+    /// The bar is a strip at the edge; a press anywhere else is the content's.
+    #[test]
+    fn a_press_beside_the_bar_is_not_a_grab() {
+        let mut sa = tall();
+        sa.on_event(&press(100.0, 45.0));
+        sa.on_event(&moved(100.0, 250.0));
+        assert_eq!(sa.core.scroll_y.get(), 0.0);
+    }
+
+    #[test]
+    fn there_is_nothing_to_grab_when_the_content_fits() {
+        reset_layout_runtime();
+        let content = Canvas::new(LayoutStyle::new().width(400.0).height(120.0), |_| {
+            RenderNode::Empty
+        })
+        .unwrap();
+        let node = content.layout_node();
+        let mut sa = ScrollArea::new(|| Rect::new(0.0, 0.0, 400.0, 300.0), Box::new(content));
+        compute_layout(
+            node,
+            AvailableSpace::Definite(400.0),
+            AvailableSpace::MaxContent,
+        )
+        .unwrap();
+        assert_ne!(
+            sa.on_event(&press(396.0, 45.0)),
+            EventResult::Handled,
+            "no bar is drawn, so nothing there answers a press"
+        );
+    }
+
+    /// Viewport 400x300 over content 1000x300: a 160px thumb with 240px of travel over 600px of scroll.
+    #[test]
+    fn the_horizontal_bar_drags_the_same_way() {
+        let mut sa = make_scroll_area_wide();
+        assert_eq!(sa.on_event(&press(80.0, 296.0)), EventResult::Handled);
+        sa.on_event(&moved(200.0, 296.0));
+        assert_eq!(sa.core.scroll_x.get(), 300.0);
     }
 }
