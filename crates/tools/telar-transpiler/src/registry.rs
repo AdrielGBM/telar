@@ -28,52 +28,60 @@ pub fn builtin_tags() -> &'static [(&'static str, &'static str)] {
     ]
 }
 
-/// Layout attribute keys common to every container-like tag.
+/// Layout attribute keys common to every container-like tag, paired with what each one takes.
 ///
 /// Mirrors the recognized `match` arms in `style::layout_prop_call` that map to `LayoutStyle` builder calls, excluding the grid-only keys (`cols`, `span`, `row_span`) which downstream tooling offers solely on the `grid` tag. Aliases (`pad`/`padding`) are listed individually so completion offers both.
-pub fn layout_attr_keys() -> &'static [&'static str] {
-    &[
-        "track_rect",
-        // Cuts a node's output to its laid-out rect: bare, or a `Clip` shape naming axis, radius and inset.
-        "clip",
-        "width",
-        "height",
-        "min_width",
-        "min_height",
-        "max_width",
-        "max_height",
-        "basis",
-        "padding",
-        "pad",
-        "padding_x",
-        "pad_x",
-        "padding_y",
-        "pad_y",
-        "padding_start",
-        "pad_start",
-        "padding_end",
-        "pad_end",
-        "margin_start",
-        "margin_end",
-        "inset_start",
-        "inset_end",
-        "inset_top",
-        "inset_bottom",
-        "absolute",
-        // Whether the node is in flow, re-resolved from what it reads — unlike `display:none`, which could not undo itself.
-        "shown",
-        "gap",
-        "gap_x",
-        "gap_y",
-        "grow",
-        "shrink",
-        "wrap",
-        "cursor",
-        "self",
-        "axis",
-        "align",
-        "justify",
-    ]
+const LAYOUT_ATTRS: &[AttrSpec] = &[
+    AttrSpec::free("track_rect"),
+    AttrSpec::free("clip").doc(
+        "Cuts a node's output to its laid-out rect: bare, or a `Clip` shape naming axis, radius and inset.",
+    ),
+    AttrSpec::num("width"),
+    AttrSpec::num("height"),
+    AttrSpec::num("min_width"),
+    AttrSpec::num("min_height"),
+    AttrSpec::num("max_width"),
+    AttrSpec::num("max_height"),
+    AttrSpec::num("basis"),
+    AttrSpec::num("flex_basis"),
+    AttrSpec::num("aspect"),
+    AttrSpec::num("aspect_ratio"),
+    AttrSpec::num("padding"),
+    AttrSpec::num("pad"),
+    AttrSpec::num("padding_x"),
+    AttrSpec::num("pad_x"),
+    AttrSpec::num("padding_y"),
+    AttrSpec::num("pad_y"),
+    AttrSpec::num("padding_start"),
+    AttrSpec::num("pad_start"),
+    AttrSpec::num("padding_end"),
+    AttrSpec::num("pad_end"),
+    AttrSpec::num("margin_start"),
+    AttrSpec::num("margin_end"),
+    AttrSpec::num("inset_start"),
+    AttrSpec::num("inset_end"),
+    AttrSpec::num("inset_top"),
+    AttrSpec::num("inset_bottom"),
+    AttrSpec::keywords("absolute", ABSOLUTE_VALUES),
+    AttrSpec::boolean("shown").doc(
+        "Whether the node is in flow, re-resolved from what it reads — unlike `display:none`, which could not undo itself.",
+    ),
+    AttrSpec::num("gap"),
+    AttrSpec::num("gap_x"),
+    AttrSpec::num("gap_y"),
+    AttrSpec::num("grow"),
+    AttrSpec::num("shrink"),
+    AttrSpec::keywords("wrap", WRAP_VALUES),
+    AttrSpec::free("cursor"),
+    AttrSpec::keywords("self", SELF_VALUES),
+    AttrSpec::keywords("axis", AXIS_VALUES),
+    AttrSpec::keywords("align", ALIGN_VALUES),
+    AttrSpec::keywords("justify", JUSTIFY_VALUES),
+];
+
+/// The layout keys, spelling only. Completion and the emitter's unknown-attribute check read the same table [`value_kind`] does.
+pub fn layout_attr_keys() -> Vec<&'static str> {
+    LAYOUT_ATTRS.iter().map(|spec| spec.key).collect()
 }
 
 /// Whether `tag` is a built-in tag (vs. a component referencing another `.rsx`).
@@ -109,65 +117,69 @@ pub fn keyword_color_rgba(name: &str) -> Option<[u8; 4]> {
 /// The full paint + behavior attribute set every styled container (`box`, `col`, `row`, `grid`) accepts. Kept in one place so the four tags stay consistent — the codegen already treats them identically (`rect_style_pieces` resolves fill/stroke/shadow/gradient/opacity for all of them, and `on_press` is wired on both `Container` and `StyledContainer`).
 ///
 /// No generic value-callback key (`on_change` et al.) is in this list: a container has no "value" to change, so a container-level callback here would be meaningless (the codegen has nothing to call it on `Container`/`StyledContainer`). Instead each value-bearing widget (built as a component) declares its own callback as a `Props` field, named for what the value actually is: `on_toggle` for a bool (checkbox/toggle), `on_select` for a picked index (radio/menu/select), `on_change` for a continuous value (slider), `on_submit` for a commit (text_field, fires on Enter — it has no per-keystroke callback). `emit_component_call` boxes any closure-valued attr generically by field name (see `component_props_arg` in `view/component.rs`), so each of these works today with no transpiler change needed here.
-const CONTAINER_PAINT: &[&str] = &[
-    "fill",
-    "stroke",
-    "stroke_width",
-    "radius",
-    "shadow_x",
-    // One number per edge. Both keys also take the CSS shorthand (`radius:"8 8 0 0"`); these name a single edge, and `start`/`end`, the only form that follows the writing direction.
-    "stroke_top",
-    "stroke_right",
-    "stroke_bottom",
-    "stroke_left",
-    "stroke_x",
-    "stroke_y",
-    "stroke_start",
-    "stroke_end",
-    "radius_top",
-    "radius_bottom",
-    "radius_left",
-    "radius_right",
-    "radius_top_left",
-    "radius_top_right",
-    "radius_bottom_right",
-    "radius_bottom_left",
-    "radius_start",
-    "radius_end",
-    "shadow_y",
-    "shadow_blur",
-    "shadow_color",
-    "opacity",
-    "on_press",
-    // Separate from `on_press`, or every pressable box would swallow right- and middle-clicks too.
-    "on_alt_press",
-    "on_long_press",
-    "on_hover",
-    "on_pointer_move",
-    "on_key",
-    "on_drag",
-    "on_drag_end",
-    "on_scroll",
-    "on_focus",
-    "cursor",
-    // Which other buttons may start this box's drag; the primary one always can.
-    "drag_button",
-    // How far a press must travel before it is a drag rather than a click.
-    "drag_threshold",
-    // What the box is, beyond a box: a region, a list, a heading.
-    "role",
-    // Drawn over something without standing between it and the pointer.
-    "click_through",
-    // A control inside something draggable, claiming the stroke that starts on it.
-    "holds_stroke",
-    "hover_style",
-    "active_style",
-    // Read by the framework to close the pointer, the hover tracking and the cursor together.
-    "disabled",
-    "disabled_style",
-    // Composed over whichever state won rather than replacing it, so it survives a hover.
-    "focus_style",
-    "transition",
+const CONTAINER_PAINT: &[AttrSpec] = &[
+    AttrSpec::color("fill"),
+    AttrSpec::color("stroke"),
+    AttrSpec::edges("stroke_width"),
+    AttrSpec::edges("radius"),
+    AttrSpec::free("shadow_x"),
+    AttrSpec::edges("stroke_top").doc(
+        "One number per edge. `stroke_width` and `radius` also take the CSS shorthand (`radius:\"8 8 0 0\"`); these name a single edge, and `start`/`end`, the only form that follows the writing direction.",
+    ),
+    AttrSpec::edges("stroke_right"),
+    AttrSpec::edges("stroke_bottom"),
+    AttrSpec::edges("stroke_left"),
+    AttrSpec::edges("stroke_x"),
+    AttrSpec::edges("stroke_y"),
+    AttrSpec::edges("stroke_start"),
+    AttrSpec::edges("stroke_end"),
+    AttrSpec::edges("radius_top"),
+    AttrSpec::edges("radius_bottom"),
+    AttrSpec::edges("radius_left"),
+    AttrSpec::edges("radius_right"),
+    AttrSpec::edges("radius_top_left"),
+    AttrSpec::edges("radius_top_right"),
+    AttrSpec::edges("radius_bottom_right"),
+    AttrSpec::edges("radius_bottom_left"),
+    AttrSpec::edges("radius_start"),
+    AttrSpec::edges("radius_end"),
+    AttrSpec::free("shadow_y"),
+    AttrSpec::free("shadow_blur"),
+    AttrSpec::color("shadow_color"),
+    AttrSpec::free("opacity"),
+    AttrSpec::free("on_press"),
+    AttrSpec::free("on_alt_press").doc(
+        "Separate from `on_press`, or every pressable box would swallow right- and middle-clicks too.",
+    ),
+    AttrSpec::free("on_long_press"),
+    AttrSpec::free("on_hover"),
+    AttrSpec::free("on_pointer_move"),
+    AttrSpec::free("on_key"),
+    AttrSpec::free("on_drag"),
+    AttrSpec::free("on_drag_end"),
+    AttrSpec::free("on_scroll"),
+    AttrSpec::free("on_focus"),
+    AttrSpec::free("cursor"),
+    AttrSpec::free("drag_button")
+        .doc("Which other buttons may start this box's drag; the primary one always can."),
+    AttrSpec::num("drag_threshold")
+        .doc("How far a press must travel before it is a drag rather than a click."),
+    AttrSpec::keywords("role", ROLE_VALUES)
+        .doc("What the box is, beyond a box: a region, a list, a heading."),
+    AttrSpec::flag("click_through")
+        .doc("Drawn over something without standing between it and the pointer."),
+    AttrSpec::flag("holds_stroke")
+        .doc("A control inside something draggable, claiming the stroke that starts on it."),
+    AttrSpec::free("hover_style"),
+    AttrSpec::free("active_style"),
+    AttrSpec::free("disabled").doc(
+        "Read by the framework to close the pointer, the hover tracking and the cursor together.",
+    ),
+    AttrSpec::free("disabled_style"),
+    AttrSpec::free("focus_style").doc(
+        "Composed over whichever state won rather than replacing it, so it survives a hover.",
+    ),
+    AttrSpec::free("transition"),
 ];
 
 /// `align:` on a container: where children sit across the axis they are not laid along.
@@ -318,6 +330,7 @@ pub const TEXT_ALIGN_VALUES: &[(&str, &str)] = &[
 /// What an attribute's value has to be for its key to mean anything, so a value outside it is a build error on the attribute instead of a property quietly dropped or quietly defaulted.
 ///
 /// The counterpart to [`tag_attr_keys`]: that answers which keys a tag has, this answers what those keys take. A key absent from [`value_kind`] carries a value only rustc can judge — a string, a callback, an expression — and is left alone.
+#[derive(Clone, Copy)]
 pub enum ValueKind {
     /// A closed set of spellings, each paired with the Rust name it generates. Also the completion list.
     Keywords(&'static [(&'static str, &'static str)]),
@@ -333,74 +346,106 @@ pub enum ValueKind {
     Color,
 }
 
+/// One attribute of one tag: its spelling, what its value has to be, and what it does.
+///
+/// The single entry the whole DSL vocabulary is described by. Completion lists [`key`](Self::key), the emitter validates against [`kind`](Self::kind), and hover shows [`doc`](field@Self::doc) — so a key cannot be offered by the editor without the build knowing what it takes, which is what the three parallel tables here used to allow.
+#[derive(Clone, Copy)]
+pub struct AttrSpec {
+    /// The attribute's spelling in the markup.
+    pub key: &'static str,
+    /// What the value has to be, or `None` when only rustc can judge it — a string, a callback, an arbitrary expression.
+    pub kind: Option<ValueKind>,
+    /// One line on what the attribute does, or `None` for a key whose name is the whole of it.
+    pub doc: Option<&'static str>,
+}
+
+impl AttrSpec {
+    const fn of(key: &'static str, kind: Option<ValueKind>) -> Self {
+        Self {
+            key,
+            kind,
+            doc: None,
+        }
+    }
+
+    /// A key whose value only rustc can judge.
+    const fn free(key: &'static str) -> Self {
+        Self::of(key, None)
+    }
+
+    const fn num(key: &'static str) -> Self {
+        Self::of(key, Some(ValueKind::Number))
+    }
+
+    const fn color(key: &'static str) -> Self {
+        Self::of(key, Some(ValueKind::Color))
+    }
+
+    const fn edges(key: &'static str) -> Self {
+        Self::of(key, Some(ValueKind::Edges))
+    }
+
+    const fn boolean(key: &'static str) -> Self {
+        Self::of(key, Some(ValueKind::Boolean))
+    }
+
+    /// A key that is the assertion itself: writing it turns the thing on. See [`FLAG_VALUES`].
+    const fn flag(key: &'static str) -> Self {
+        Self::of(key, Some(ValueKind::Keywords(FLAG_VALUES)))
+    }
+
+    const fn keywords(key: &'static str, table: &'static [(&'static str, &'static str)]) -> Self {
+        Self::of(key, Some(ValueKind::Keywords(table)))
+    }
+
+    const fn keywords_or_number(
+        key: &'static str,
+        table: &'static [(&'static str, &'static str)],
+    ) -> Self {
+        Self::of(key, Some(ValueKind::KeywordsOrNumber(table)))
+    }
+
+    const fn doc(self, doc: &'static str) -> Self {
+        Self {
+            key: self.key,
+            kind: self.kind,
+            doc: Some(doc),
+        }
+    }
+}
+
+/// The spec for `tag`'s `key`, or `None` when the tag does not take it.
+///
+/// A component tag has no table of its own — its keys are `Props` fields, which rustc checks — but the layout and paint attributes written on one still mean what they mean on a container, so it is read against `box`.
+pub fn attr_spec(tag: &str, key: &str) -> Option<AttrSpec> {
+    let lens = if is_builtin_tag(tag) { tag } else { "box" };
+    tag_attr_specs(lens)
+        .into_iter()
+        .find(|spec| spec.key == key)
+}
+
 /// The value schema of `tag`'s `key`, or `None` when the key takes a free-form value.
 ///
-/// Tag-aware because one name is still two properties: `stroke` is a colour on a box and a *width* on an `svg`, and the four edges a box collects are one plain number on a `path`.
+/// Tag-aware because one name is still two properties: `stroke` is a colour on a box and a *width* on an `svg`, and the four edges a box collects are one plain number on a `path`. That distinction lives in the per-tag tables rather than here, so a key and its schema cannot be added in different places.
 pub fn value_kind(tag: &str, key: &str) -> Option<ValueKind> {
-    match key {
-        "text_align" => return Some(ValueKind::Keywords(TEXT_ALIGN_VALUES)),
-        "text_wrap" => return Some(ValueKind::Keywords(TEXT_WRAP_VALUES)),
-        "font_style" => return Some(ValueKind::Keywords(FONT_STYLE_VALUES)),
-        "ellipsis" | "click_through" | "holds_stroke" | "secret" => {
-            return Some(ValueKind::Keywords(FLAG_VALUES));
-        }
-        "font_weight" => return Some(ValueKind::KeywordsOrNumber(FONT_WEIGHT_VALUES)),
-        // On `svg` and `path`, `stroke` is a width and `fill_rule` a keyword, not paint.
-        _ if key != "stroke" && color_attr_keys().contains(&key) => return Some(ValueKind::Color),
-        "stroke" if tag != "svg" && tag != "path" => return Some(ValueKind::Color),
-        "role" => return Some(ValueKind::Keywords(role_values())),
-        "align" => return Some(ValueKind::Keywords(ALIGN_VALUES)),
-        "justify" => return Some(ValueKind::Keywords(JUSTIFY_VALUES)),
-        "self" => return Some(ValueKind::Keywords(SELF_VALUES)),
-        "axis" => return Some(ValueKind::Keywords(AXIS_VALUES)),
-        "absolute" => return Some(ValueKind::Keywords(ABSOLUTE_VALUES)),
-        "shown" => return Some(ValueKind::Boolean),
-        "wrap" => return Some(ValueKind::Keywords(WRAP_VALUES)),
-        "fit" => return Some(ValueKind::Keywords(FIT_VALUES)),
-        "raster" => return Some(ValueKind::Keywords(RASTER_VALUES)),
-        "width" | "height" | "min_width" | "min_height" | "max_width" | "max_height" | "basis"
-        | "flex_basis" | "padding" | "pad" | "padding_x" | "pad_x" | "padding_y" | "pad_y"
-        | "padding_start" | "pad_start" | "padding_end" | "pad_end" | "margin_start"
-        | "margin_end" | "inset_start" | "inset_end" | "inset_top" | "inset_bottom" | "gap"
-        | "line_height" | "letter_spacing" | "drag_threshold" | "gap_x" | "gap_y" | "aspect"
-        | "aspect_ratio" | "grow" | "shrink" | "font_size" => {
-            return Some(ValueKind::Number);
-        }
-        // A width here, where every other tag means a colour by the same name.
-        "stroke" if tag == "svg" => return Some(ValueKind::Number),
-        _ => {}
-    }
-    // A `path`'s stroke is one plain width, not the four `crate::edges` collects for a box.
-    let edged = key == "radius"
-        || key.strip_prefix("radius_").is_some_and(corner_suffix)
-        || (tag != "path"
-            && (key == "stroke_width" || key.strip_prefix("stroke_").is_some_and(side_suffix)));
-    edged.then_some(ValueKind::Edges)
+    attr_spec(tag, key).and_then(|spec| spec.kind)
 }
 
-/// Whether `suffix` names an edge of `radius_*`. Mirrors `crate::edges::corner_target`.
-fn corner_suffix(suffix: &str) -> bool {
-    matches!(
-        suffix,
-        "top"
-            | "bottom"
-            | "left"
-            | "right"
-            | "top_left"
-            | "top_right"
-            | "bottom_right"
-            | "bottom_left"
-            | "start"
-            | "end"
-    )
+/// One line on what `tag`'s `key` does, for hover and completion detail.
+pub fn attr_doc(tag: &str, key: &str) -> Option<&'static str> {
+    attr_spec(tag, key).and_then(|spec| spec.doc)
 }
 
-/// Whether `suffix` names a side of `stroke_*`. Mirrors `crate::edges::side_target`.
-fn side_suffix(suffix: &str) -> bool {
-    matches!(
-        suffix,
-        "top" | "right" | "bottom" | "left" | "x" | "y" | "start" | "end"
-    )
+/// Whether `key` is one of the declarative affine transform attributes (see `container::transform_call`, which gates `.with_transform` emission on exactly this set).
+pub fn is_transform_attr(key: &str) -> bool {
+    TRANSFORM_ATTRS.iter().any(|spec| spec.key == key)
+}
+
+/// Whether `key` is a text property that flows down the tree, so a container may name it for everything beneath it and a leaf takes what it did not name itself.
+///
+/// The same set on a container and on a `text`, which is the point: `font_size:11` means one thing, and where it is written decides how far it reaches rather than what it says. Absent from it are the properties that clamp *one* paragraph — `lines`, `ellipsis` — which would be nonsense applied to a subtree, and which [`renderer_core::Declared`] has no way to spell for the same reason.
+pub fn is_inheritable_text_attr(key: &str) -> bool {
+    INHERITABLE_TEXT_ATTRS.iter().any(|spec| spec.key == key)
 }
 
 /// The Rust name a keyword spelling generates, or `None` when the set does not contain it.
@@ -414,104 +459,135 @@ pub fn keyword(
         .map(|(_, rust)| *rust)
 }
 
-/// Declarative affine transform attribute keys (see `container::transform_call`, which gates `.with_transform` emission on this exact list — shared here so codegen and completion cannot drift). The text properties that flow down the tree, so a container may name any of them for everything beneath it and a leaf takes what it did not name itself.
+/// The text properties that flow down the tree. See [`is_inheritable_text_attr`].
+const INHERITABLE_TEXT_ATTRS: &[AttrSpec] = &[
+    AttrSpec::num("font_size"),
+    AttrSpec::free("font_family"),
+    AttrSpec::keywords_or_number("font_weight", FONT_WEIGHT_VALUES),
+    AttrSpec::keywords("font_style", FONT_STYLE_VALUES),
+    AttrSpec::color("color"),
+    AttrSpec::keywords("text_align", TEXT_ALIGN_VALUES),
+    AttrSpec::keywords("text_wrap", TEXT_WRAP_VALUES),
+    AttrSpec::num("line_height"),
+    AttrSpec::num("letter_spacing"),
+    AttrSpec::keywords("raster", RASTER_VALUES),
+];
+
+/// The transform attributes, appended to every container's key set. See [`is_transform_attr`].
+const TRANSFORM_ATTRS: &[AttrSpec] = &[
+    AttrSpec::free("rotate"),
+    AttrSpec::free("scale"),
+    AttrSpec::free("scale_x"),
+    AttrSpec::free("scale_y"),
+    AttrSpec::free("translate_x"),
+    AttrSpec::free("translate_y"),
+];
+
+/// What clamps one paragraph and would be nonsense applied to a subtree, which is why these are a `text`'s alone rather than [`INHERITABLE_TEXT_ATTRS`].
+const TEXT_ONLY_ATTRS: &[AttrSpec] = &[
+    AttrSpec::free("lines"),
+    AttrSpec::flag("ellipsis"),
+    AttrSpec::free("transition"),
+];
+
+/// Every attribute `tag` accepts, with what each one takes and what it does.
 ///
-/// The same set on a container and on a `text`, which is the point: `font_size:11` means one thing, and where it is written decides how far it reaches rather than what it says. Absent from it are the properties that clamp *one* paragraph — `lines`, `ellipsis` — which would be nonsense applied to a subtree, and which [`renderer_core::Declared`] has no way to spell for the same reason.
-pub const INHERITABLE_TEXT_KEYS: &[&str] = &[
-    "font_size",
-    "font_family",
-    "font_weight",
-    "font_style",
-    "color",
-    "text_align",
-    "text_wrap",
-    "line_height",
-    "letter_spacing",
-    "raster",
-];
-
-/// The transform attributes, appended to every container's key set.
-pub const TRANSFORM_ATTR_KEYS: &[&str] = &[
-    "rotate",
-    "scale",
-    "scale_x",
-    "scale_y",
-    "translate_x",
-    "translate_y",
-];
-
-/// Completion attribute keys for `tag`: the shared layout keys plus the tag's own visual/behavioral keys. Mirrors the per-tag attribute handling in `crate::view`; a component tag (not built-in) takes its `Props` fields, so it returns no suggestions here.
-pub fn tag_attr_keys(tag: &str) -> Vec<&'static str> {
-    let with = |extra: &[&'static str]| {
-        let mut keys = layout_attr_keys().to_vec();
-        keys.extend_from_slice(extra);
-        keys
+/// The authority the rest of the vocabulary is read off: [`tag_attr_keys`] projects the spellings for completion, [`value_kind`] reads the schema, [`attr_doc`] the prose. Mirrors the per-tag attribute handling in `crate::view`; a component tag (not built-in) takes its `Props` fields, so it returns nothing.
+pub fn tag_attr_specs(tag: &str) -> Vec<AttrSpec> {
+    let with = |extra: &[AttrSpec]| {
+        let mut specs = LAYOUT_ATTRS.to_vec();
+        specs.extend_from_slice(extra);
+        specs
     };
     match tag {
         // A `text` is a leaf in a flex box, so it takes the layout keys that place it among its siblings.
-        "text" => with(&[
-            "font_size",
-            "font_family",
-            "color",
-            "font_weight",
-            "font_style",
-            "text_align",
-            "lines",
-            "ellipsis",
-            "text_wrap",
-            "line_height",
-            "letter_spacing",
-            "raster",
-            "transition",
-        ]),
+        "text" => {
+            let mut specs = with(INHERITABLE_TEXT_ATTRS);
+            specs.extend_from_slice(TEXT_ONLY_ATTRS);
+            specs
+        }
         // Spliced children own their own style, so the placeholder takes no layout or paint keys.
-        "children" => vec!["name", "in"],
+        "children" => vec![AttrSpec::free("name"), AttrSpec::free("in")],
         // box/col/row/grid share one paint set; grid adds its track keys.
         "grid" => {
-            let mut keys = with(CONTAINER_PAINT);
-            keys.extend_from_slice(TRANSFORM_ATTR_KEYS);
-            keys.extend_from_slice(INHERITABLE_TEXT_KEYS);
-            keys.extend_from_slice(&["cols", "span", "row_span"]);
-            keys
+            let mut specs = with(CONTAINER_PAINT);
+            specs.extend_from_slice(TRANSFORM_ATTRS);
+            specs.extend_from_slice(INHERITABLE_TEXT_ATTRS);
+            specs.extend_from_slice(&[
+                AttrSpec::free("cols"),
+                AttrSpec::free("span"),
+                AttrSpec::free("row_span"),
+            ]);
+            specs
         }
         "col" | "row" | "box" => {
-            let mut keys = with(CONTAINER_PAINT);
-            keys.extend_from_slice(TRANSFORM_ATTR_KEYS);
-            keys.extend_from_slice(INHERITABLE_TEXT_KEYS);
+            let mut specs = with(CONTAINER_PAINT);
+            specs.extend_from_slice(TRANSFORM_ATTRS);
+            specs.extend_from_slice(INHERITABLE_TEXT_ATTRS);
             // A box is a grid *item* wherever its parent is a grid, so it carries the placement keys.
-            keys.extend_from_slice(&["span", "row_span"]);
-            keys
+            specs.extend_from_slice(&[AttrSpec::free("span"), AttrSpec::free("row_span")]);
+            specs
         }
         // `radius` rounds the picture itself; a leaf takes no other paint key.
         "img" | "image" => {
-            let mut keys = with(&["src", "fit", "raster", "radius"]);
-            keys.extend(CONTAINER_PAINT.iter().filter(|k| k.starts_with("radius_")));
-            keys
+            let mut specs = with(&[
+                AttrSpec::free("src"),
+                AttrSpec::keywords("fit", FIT_VALUES),
+                AttrSpec::keywords("raster", RASTER_VALUES),
+                AttrSpec::edges("radius"),
+            ]);
+            specs.extend(
+                CONTAINER_PAINT
+                    .iter()
+                    .filter(|spec| spec.key.starts_with("radius_")),
+            );
+            specs
         }
         // Names the kept scroll position, so a remounted tree reopens where it was.
-        "scroll" => with(&["keep"]),
-        "canvas" => with(&["paint"]),
+        "scroll" => with(&[AttrSpec::free("keep")]),
+        "canvas" => with(&[AttrSpec::free("paint")]),
         // `input` amends the text style the tree declared, so it takes the same inheritable keys a `text` does.
         "input" => {
-            let mut keys = with(&[
-                "value",
-                "placeholder",
-                "on_submit",
-                "on_cancel",
-                "secret",
+            let mut specs = with(&[
+                AttrSpec::free("value"),
+                AttrSpec::free("placeholder"),
+                AttrSpec::free("on_submit"),
+                AttrSpec::free("on_cancel"),
+                AttrSpec::flag("secret"),
                 // Opens holding the keyboard, and says which id it holds it under.
-                "autofocus",
-                "focus_id",
+                AttrSpec::free("autofocus"),
+                AttrSpec::free("focus_id"),
             ]);
-            keys.extend_from_slice(INHERITABLE_TEXT_KEYS);
-            keys
+            specs.extend_from_slice(INHERITABLE_TEXT_ATTRS);
+            specs
         }
-        "svg" => with(&["src", "color", "stroke", "fit"]),
-        "lazy" => with(&["when"]),
-        "path" => with(&["d", "fill", "stroke", "stroke_width", "fill_rule"]),
-        _ if is_builtin_tag(tag) => layout_attr_keys().to_vec(),
+        // A width here, where every other tag means a colour by the same name.
+        "svg" => with(&[
+            AttrSpec::free("src"),
+            AttrSpec::color("color"),
+            AttrSpec::num("stroke"),
+            AttrSpec::keywords("fit", FIT_VALUES),
+        ]),
+        "lazy" => with(&[AttrSpec::free("when")]),
+        // A `path`'s stroke is one plain width, not the four `crate::edges` collects for a box, and `fill_rule` is a keyword rather than paint.
+        "path" => with(&[
+            AttrSpec::free("d"),
+            AttrSpec::color("fill"),
+            AttrSpec::free("stroke"),
+            AttrSpec::free("stroke_width"),
+            AttrSpec::free("fill_rule"),
+        ]),
+        _ if is_builtin_tag(tag) => LAYOUT_ATTRS.to_vec(),
         _ => vec![],
     }
+}
+
+/// Completion attribute keys for `tag`: the spellings [`tag_attr_specs`] carries.
+pub fn tag_attr_keys(tag: &str) -> Vec<&'static str> {
+    tag_attr_specs(tag)
+        .into_iter()
+        .map(|spec| spec.key)
+        .collect()
 }
 
 #[cfg(test)]
@@ -538,8 +614,12 @@ mod tests {
         assert!(tag_attr_keys("text").contains(&"transition"));
         assert!(tag_attr_keys("col").contains(&"transition"));
         for tag in ["box", "col", "row", "grid"] {
-            for key in TRANSFORM_ATTR_KEYS {
-                assert!(tag_attr_keys(tag).contains(key), "{tag} missing {key}");
+            for spec in TRANSFORM_ATTRS {
+                assert!(
+                    tag_attr_keys(tag).contains(&spec.key),
+                    "{tag} missing {}",
+                    spec.key
+                );
             }
         }
     }
@@ -569,49 +649,52 @@ mod tests {
 /// Written here rather than derived from `semantics-core` because the transpiler emits a *path*, and a path is not something a runtime value can produce. Kept beside the tag tables for the same reason they are here: tooling offers these as completions, and an unknown one is a diagnostic rather than a box that silently means nothing.
 ///
 /// The aliases are the words an author reaches for first. `sidebar` is not an ARIA role — `complementary` is — and pointing one at the other is cheaper than explaining the difference at every use.
+pub const ROLE_VALUES: &[(&str, &str)] = &[
+    ("group", "Group"),
+    ("banner", "Banner"),
+    ("header", "Banner"),
+    ("navigation", "Navigation"),
+    ("nav", "Navigation"),
+    ("main", "Main"),
+    ("content", "Main"),
+    ("complementary", "Complementary"),
+    ("aside", "Complementary"),
+    ("sidebar", "Complementary"),
+    ("contentinfo", "ContentInfo"),
+    ("footer", "ContentInfo"),
+    ("article", "Article"),
+    ("section", "Section"),
+    ("form", "Form"),
+    ("search", "Search"),
+    ("h1", "Heading(1)"),
+    ("h2", "Heading(2)"),
+    ("h3", "Heading(3)"),
+    ("h4", "Heading(4)"),
+    ("h5", "Heading(5)"),
+    ("h6", "Heading(6)"),
+    ("list", "List"),
+    ("listitem", "ListItem"),
+    ("item", "ListItem"),
+    ("dialog", "Dialog"),
+    ("button", "Button"),
+    ("link", "Link"),
+    ("checkbox", "CheckBox"),
+    ("radio", "Radio"),
+    ("switch", "Switch"),
+    ("toggle", "Switch"),
+    ("tab", "Tab"),
+    ("tabpanel", "TabPanel"),
+    ("menuitem", "MenuItem"),
+    ("slider", "Slider"),
+    ("spinbutton", "SpinButton"),
+    ("progressbar", "ProgressBar"),
+    ("progress", "ProgressBar"),
+    ("label", "Label"),
+];
+
+/// The roles an application may name on a box, as [`ROLE_VALUES`].
 pub fn role_values() -> &'static [(&'static str, &'static str)] {
-    &[
-        ("group", "Group"),
-        ("banner", "Banner"),
-        ("header", "Banner"),
-        ("navigation", "Navigation"),
-        ("nav", "Navigation"),
-        ("main", "Main"),
-        ("content", "Main"),
-        ("complementary", "Complementary"),
-        ("aside", "Complementary"),
-        ("sidebar", "Complementary"),
-        ("contentinfo", "ContentInfo"),
-        ("footer", "ContentInfo"),
-        ("article", "Article"),
-        ("section", "Section"),
-        ("form", "Form"),
-        ("search", "Search"),
-        ("h1", "Heading(1)"),
-        ("h2", "Heading(2)"),
-        ("h3", "Heading(3)"),
-        ("h4", "Heading(4)"),
-        ("h5", "Heading(5)"),
-        ("h6", "Heading(6)"),
-        ("list", "List"),
-        ("listitem", "ListItem"),
-        ("item", "ListItem"),
-        ("dialog", "Dialog"),
-        ("button", "Button"),
-        ("link", "Link"),
-        ("checkbox", "CheckBox"),
-        ("radio", "Radio"),
-        ("switch", "Switch"),
-        ("toggle", "Switch"),
-        ("tab", "Tab"),
-        ("tabpanel", "TabPanel"),
-        ("menuitem", "MenuItem"),
-        ("slider", "Slider"),
-        ("spinbutton", "SpinButton"),
-        ("progressbar", "ProgressBar"),
-        ("progress", "ProgressBar"),
-        ("label", "Label"),
-    ]
+    ROLE_VALUES
 }
 
 /// The variant `name` spells, or `None` for a word nothing answers to.
@@ -635,5 +718,73 @@ mod role_tests {
                 "`{name}` is offered but the vocabulary does not know it"
             );
         }
+    }
+}
+
+#[cfg(test)]
+mod vocabulary_tests {
+    use super::*;
+
+    /// The emitter and the tables were two lists of the same vocabulary, and they drifted: `aspect`, `aspect_ratio` and `flex_basis` were emitted by `layout_prop_call` for years while completion never offered them and the unknown-attribute check refused them. One table now, and this is what holds it to one.
+    #[test]
+    fn every_layout_key_offered_is_one_the_emitter_accepts() {
+        let probe = |key: &str| match value_kind("box", key) {
+            Some(ValueKind::Keywords(table)) | Some(ValueKind::KeywordsOrNumber(table)) => {
+                table.first().map(|(name, _)| *name).unwrap_or("")
+            }
+            Some(ValueKind::Boolean) => "true",
+            Some(ValueKind::Color) => "#000000",
+            _ => "1",
+        };
+        for key in layout_attr_keys() {
+            assert!(
+                !matches!(
+                    crate::style::layout_prop_call(key, probe(key)),
+                    crate::style::PropCall::Invalid(_)
+                ),
+                "`{key}` is offered and the emitter refuses it"
+            );
+        }
+        for key in ["aspect", "aspect_ratio", "flex_basis"] {
+            assert!(
+                matches!(
+                    crate::style::layout_prop_call(key, "1"),
+                    crate::style::PropCall::Call(_)
+                ) && layout_attr_keys().contains(&key),
+                "`{key}` drifted out of the table again"
+            );
+        }
+    }
+
+    /// A key is offered by completion and validated by the build off the same entry, so neither can name one the other does not.
+    #[test]
+    fn every_offered_key_resolves_to_its_own_spec() {
+        for (tag, _) in builtin_tags() {
+            for key in tag_attr_keys(tag) {
+                assert!(
+                    attr_spec(tag, key).is_some(),
+                    "`{tag}` offers `{key}` and nothing describes it"
+                );
+            }
+        }
+    }
+
+    /// One name is still two properties, and the per-tag tables are what keep them apart.
+    #[test]
+    fn stroke_means_what_the_tag_says_it_means() {
+        assert!(matches!(
+            value_kind("box", "stroke"),
+            Some(ValueKind::Color)
+        ));
+        assert!(matches!(
+            value_kind("svg", "stroke"),
+            Some(ValueKind::Number)
+        ));
+        assert!(value_kind("path", "stroke").is_none());
+        assert!(matches!(
+            value_kind("box", "stroke_width"),
+            Some(ValueKind::Edges)
+        ));
+        assert!(value_kind("path", "stroke_width").is_none());
     }
 }

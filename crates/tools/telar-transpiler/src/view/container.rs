@@ -332,7 +332,7 @@ impl ViewGen<'_> {
         if !el
             .attributes
             .iter()
-            .any(|a| crate::registry::TRANSFORM_ATTR_KEYS.contains(&a.key.as_str()))
+            .any(|a| crate::registry::is_transform_attr(&a.key))
         {
             return String::new();
         }

@@ -44,7 +44,7 @@ pub fn generate_style_section(section: &StyleSection, theme: Option<&str>) -> St
 /// What a class may carry beyond the layout keys: what a box paints with, and what flows down to the text below it. Anything else is a typo, and used to be dropped on the floor.
 fn is_style_key(key: &str) -> bool {
     crate::view::is_paint_key(key)
-        || crate::registry::INHERITABLE_TEXT_KEYS.contains(&key)
+        || crate::registry::is_inheritable_text_attr(key)
         || matches!(key, "lines" | "ellipsis")
 }
 
