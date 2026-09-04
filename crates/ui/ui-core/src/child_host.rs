@@ -1,15 +1,8 @@
 //! Transparent reactive regions inside a container.
 //!
-//! A container's children are a sequence of [`ChildSlot`]s, each either a fixed widget or a reactive
-//! *fragment* — a keyed, reconciling region that has **no box of its own**. A fragment reconciles its
-//! items directly into the *host container's* layout node, so the items are real siblings of the static
-//! children: they inherit the host's flex direction, gap and alignment, resolved at layout time (like the
-//! web's transparent `array.map(...)`, which Taffy can't express via `display:contents`). This is what
-//! makes a reactive `for`/`if` flow horizontally inside a `row` without a wrapper imposing a column axis.
+//! A container's children are a sequence of [`ChildSlot`]s, each either a fixed widget or a reactive *fragment* — a keyed, reconciling region that has **no box of its own**. A fragment reconciles its items directly into the *host container's* layout node, so the items are real siblings of the static children: they inherit the host's flex direction, gap and alignment, resolved at layout time (like the web's transparent `array.map(...)`, which Taffy can't express via `display:contents`). This is what makes a reactive `for`/`if` flow horizontally inside a `row` without a wrapper imposing a column axis.
 //!
-//! Reconciliation reuses the host node via [`set_children`] (which replaces all of a node's children in
-//! order), re-flattening every slot on each change — so several fragments and static siblings interleave
-//! correctly. Compare [`crate::reactive_list::ReactiveList`], which is the boxed, standalone variant.
+//! Reconciliation reuses the host node via [`set_children`] (which replaces all of a node's children in order), re-flattening every slot on each change — so several fragments and static siblings interleave correctly. Compare [`crate::reactive_list::ReactiveList`], which is the boxed, standalone variant.
 
 use std::cell::RefCell;
 use std::collections::HashMap;
@@ -32,34 +25,26 @@ fn hash_key<K: Hash>(k: &K) -> u64 {
     h.finish()
 }
 
-/// One child position in a container: a fixed widget, or a reactive fragment (built lazily once the host
-/// node exists). Produced by [`ChildSlot::stat`] / [`fragment`] / [`fragment_positional`].
+/// One child position in a container: a fixed widget, or a reactive fragment (built lazily once the host node exists). Produced by [`ChildSlot::stat`] / [`fragment`] / [`fragment_positional`].
 pub enum ChildSlot {
     Static(Box<dyn LayoutItem>),
     Dynamic(FragmentSpec),
 }
 
 impl ChildSlot {
-    /// A fixed widget slot — the transpiler's `Slot::stat(box_item(x))` for a static child of a container
-    /// that also holds a reactive region.
+    /// A fixed widget slot — the transpiler's `Slot::stat(box_item(x))` for a static child of a container that also holds a reactive region.
     pub fn stat(item: Box<dyn LayoutItem>) -> Self {
         ChildSlot::Static(item)
     }
 }
 
-/// A generic-erased reactive region. Captures `source`/`key`/`build` behind one closure that, given the
-/// shared host state and this slot's index, wires the reconcile [`Effect`]. Erasing here keeps
-/// [`HostState`] non-generic (a container can hold fragments over different item types). `gap` is the
-/// per-item spacing (`0.0` = none), applied as a main-axis leading margin so the region stays transparent.
+/// A generic-erased reactive region. Captures `source`/`key`/`build` behind one closure that, given the shared host state and this slot's index, wires the reconcile [`Effect`]. Erasing here keeps [`HostState`] non-generic (a container can hold fragments over different item types). `gap` is the per-item spacing (`0.0` = none), applied as a main-axis leading margin so the region stays transparent.
 pub struct FragmentSpec {
     install: Box<dyn FnOnce(Rc<RefCell<HostState>>, usize) -> Effect>,
     gap: f32,
 }
 
-/// A keyed reactive region — `for item in $items key <expr>` (identity-stable reconciliation). `gap` is laid
-/// out as a main-axis leading margin between consecutive items (see [`reconcile_slot`]), so the region still
-/// flows transparently in the host's direction (horizontal in a `row`) instead of becoming a boxed list; pass
-/// `0.0` for none.
+/// A keyed reactive region — `for item in $items key <expr>` (identity-stable reconciliation). `gap` is laid out as a main-axis leading margin between consecutive items (see `reconcile_slot`), so the region still flows transparently in the host's direction (horizontal in a `row`) instead of becoming a boxed list; pass `0.0` for none.
 pub fn fragment<Item, Key, S, K, B>(source: S, key: K, build: B, gap: f32) -> ChildSlot
 where
     Key: Hash + 'static,
@@ -95,7 +80,7 @@ where
 {
     let install = Box::new(
         move |state: Rc<RefCell<HostState>>, index: usize| -> Effect {
-            // Runs once now (builds the initial items) and again on every change to a signal `source` reads.
+            // Runs once now to build the initial items, and again on every change to a signal `source` reads.
             effect(move || {
                 let items = source();
                 reconcile_slot(&state, index, items, &keyer, &build);
@@ -105,9 +90,7 @@ where
     ChildSlot::Dynamic(FragmentSpec { install, gap })
 }
 
-/// The reconciled items of one dynamic slot, plus their key hashes (mirrors `ReactiveList`'s `ListState`).
-/// `gap` (px) is spaced between consecutive items as a main-axis leading margin — `left` when `is_row`, else
-/// `top`; both are captured once from the host when the slot is built (`0.0` gap = no margin work).
+/// The reconciled items of one dynamic slot, plus their key hashes (mirrors `ReactiveList`'s `ListState`). `gap` (px) is spaced between consecutive items as a main-axis leading margin — `left` when `is_row`, else `top`; both are captured once from the host when the slot is built (`0.0` gap = no margin work).
 #[derive(Default)]
 struct DynState {
     items: Vec<Child>,
@@ -121,9 +104,7 @@ enum SlotState {
     Dynamic(DynState),
 }
 
-/// Shared host state: the container's layout node plus its slots in order. Mutated by fragment reconcile
-/// effects (during the reactive flush) and read by the container's `view`/`on_event` (during
-/// render/dispatch) — never concurrently, so the `RefCell` never double-borrows.
+/// Shared host state: the container's layout node plus its slots in order. Mutated by fragment reconcile effects (during the reactive flush) and read by the container's `view`/`on_event` (during render/dispatch) — never concurrently, so the `RefCell` never double-borrows.
 struct HostState {
     node: NodeId,
     slots: Vec<SlotState>,
@@ -164,7 +145,7 @@ fn reconcile_slot<Item, KeyFn, B>(
 {
     let mut st = state.borrow_mut();
 
-    // Index this slot's current items by key hash so a persisting key reuses its widget/node.
+    // Indexed by key hash so a persisting key reuses its widget and node.
     let (old_items, old_keys) = match &mut st.slots[index] {
         SlotState::Dynamic(dyn_state) => (
             std::mem::take(&mut dyn_state.items),
@@ -189,8 +170,7 @@ fn reconcile_slot<Item, KeyFn, B>(
         keys.push(k);
     }
 
-    // Capture this slot's item nodes (in order) and its gap/axis before writing them back, so the gap can be
-    // re-applied as a per-item margin below without re-borrowing.
+    // Captured before writing back, so the gap can be re-applied as a per-item margin without re-borrowing.
     let (gap, is_row, item_nodes) = if let SlotState::Dynamic(dyn_state) = &mut st.slots[index] {
         let item_nodes: Vec<NodeId> = new_items.iter().map(Child::node).collect();
         dyn_state.items = new_items;
@@ -200,16 +180,14 @@ fn reconcile_slot<Item, KeyFn, B>(
         (0.0, false, Vec::new())
     };
 
-    // Reorder/insert/drop across the whole host node, then free the nodes of items that went away.
+    // Reorder, insert and drop across the whole host node, then free the nodes of items that went away.
     let nodes = flatten_nodes(&st.slots);
     let node = st.node;
     let version = st.version;
     drop(st);
 
     let _ = set_children(node, &nodes);
-    // A `for … gap:N` has no box to carry a container gap, so the spacing lives on the items: every item but
-    // the first gets a leading main-axis margin of `gap`. Re-applied each reconcile (not baked at build) so a
-    // reordered item that lands first loses its margin and one that leaves the front gains it.
+    // A `for … gap:N` has no box to carry a container gap, so the spacing lives on the items. Re-applied each reconcile, so a reordered item landing first loses its margin and one leaving the front gains it.
     if gap != 0.0 {
         for (i, &item) in item_nodes.iter().enumerate() {
             set_leading_margin(item, is_row, if i == 0 { 0.0 } else { gap });
@@ -221,8 +199,7 @@ fn reconcile_slot<Item, KeyFn, B>(
     version.update(|v| *v = v.wrapping_add(1));
 }
 
-/// The dynamic child store a container embeds when it holds at least one reactive fragment. Owns the
-/// slots and keeps the reconcile effects alive; the container delegates render/hit-test to it.
+/// The dynamic child store a container embeds when it holds at least one reactive fragment. Owns the slots and keeps the reconcile effects alive; the container delegates render/hit-test to it.
 pub(crate) struct DynHost {
     state: Rc<RefCell<HostState>>,
     version: RwSignal<u64>,
@@ -230,8 +207,7 @@ pub(crate) struct DynHost {
 }
 
 impl DynHost {
-    /// `node` is the already-registered container node; `slots` are its children in order. Fragments
-    /// reconcile their items straight into `node`.
+    /// `node` is the already-registered container node; `slots` are its children in order. Fragments reconcile their items straight into `node`.
     pub(crate) fn build(node: NodeId, slots: Vec<ChildSlot>) -> Result<Self, LayoutError> {
         let version = signal(0u64);
         let state = Rc::new(RefCell::new(HostState {
@@ -240,12 +216,10 @@ impl DynHost {
             version: version,
         }));
 
-        // The host's flex axis is fixed by now (its style, class-driven direction included, was set when the
-        // node was created), so a gap fragment can capture which margin edge to space its items on, once.
+        // Fixed by now, since the node's style was set when it was created, so a gap fragment can capture which margin edge to space its items on once.
         let host_is_row = container_is_row(node);
 
-        // Materialize every slot in order first (statics as children, dynamics as empty placeholders) so
-        // that when a fragment effect runs it flattens the complete slot structure, keeping sibling order.
+        // In order, statics as children and dynamics as empty placeholders, so a fragment effect flattens the complete slot structure and sibling order holds.
         let mut specs: Vec<(usize, FragmentSpec)> = Vec::new();
         {
             let mut st = state.borrow_mut();
@@ -280,8 +254,7 @@ impl DynHost {
         })
     }
 
-    /// The current children's render boundaries, in order. Subscribes to reconciles so the container's
-    /// `view()` re-emits the new/reordered set.
+    /// The current children's render boundaries, in order. Subscribes to reconciles so the container's `view()` re-emits the new/reordered set.
     pub(crate) fn child_boundaries(&self) -> Vec<RenderNode> {
         self.version.get();
         let st = self.state.borrow();
@@ -297,8 +270,7 @@ impl DynHost {
         out
     }
 
-    /// Dispatch an event to the current children (cheap `Rc`-clone flatten, so hit-testing sees every
-    /// live item in order).
+    /// Dispatch an event to the current children (cheap `Rc`-clone flatten, so hit-testing sees every live item in order).
     pub(crate) fn dispatch(&self, event: &Event) -> EventResult {
         let mut children = collect_children(&self.state.borrow().slots);
         dispatch_container_event(&mut children, event)
@@ -318,7 +290,7 @@ mod tests {
         Box::new(Container::new(LayoutStyle::new().width(10.0).height(10.0), vec![]).unwrap())
     }
 
-    // Returns a 10×10 leaf together with its layout node, so a test can read its laid-out rect.
+    // A 10×10 leaf with its layout node, so a test can read the laid-out rect.
     fn leaf10_node() -> (NodeId, Box<dyn LayoutItem>) {
         let c = Container::new(LayoutStyle::new().width(10.0).height(10.0), vec![]).unwrap();
         (c.layout_node(), Box::new(c))
@@ -331,8 +303,6 @@ mod tests {
         }
     }
 
-    // A fragment's items flatten between the static siblings and reconcile on source change: the host's
-    // `view()` group holds `static + dynamic + static`, growing and shrinking with the signal.
     #[test]
     fn fragment_children_flatten_and_reconcile() {
         reset_layout_runtime();
@@ -350,7 +320,6 @@ mod tests {
 
         assert_eq!(group_len(&container.view()), 5, "2 static + 3 dynamic");
 
-        // Outside a batch, `set` flushes the reconcile effect immediately.
         items.set(vec![9]);
         assert_eq!(group_len(&container.view()), 3, "2 static + 1 dynamic");
 
@@ -360,12 +329,7 @@ mod tests {
 
     /// A fragment whose host node is gone must go quiet, not take the process down.
     ///
-    /// The real shape of this is a reactive branch holding a reactive list — `if $has_active { for p in
-    /// $params }` — where one write changes both: the branch tears its content down (freeing the very node
-    /// the fragment reconciles into, since a fragment host *is* its container's node) and the list's own
-    /// effect still has a run scheduled. The effect outlives the node because a `Segment` holds the widget
-    /// so a re-render mid-dispatch can still flatten it, so this is not a lifetime that can simply be
-    /// tightened. Clearing the selection in a properties panel did exactly this.
+    /// The real shape of this is a reactive branch holding a reactive list — `if $has_active { for p in $params }` — where one write changes both: the branch tears its content down (freeing the very node the fragment reconciles into, since a fragment host *is* its container's node) and the list's own effect still has a run scheduled. The effect outlives the node because a `Segment` holds the widget so a re-render mid-dispatch can still flatten it, so this is not a lifetime that can simply be tightened. Clearing the selection in a properties panel did exactly this.
     #[test]
     fn a_fragment_whose_node_is_gone_reconciles_into_nothing() {
         reset_layout_runtime();
@@ -389,8 +353,7 @@ mod tests {
         items.set(Vec::new());
     }
 
-    // The load-bearing property of C: the fragment's items are laid out as real siblings of the static
-    // children, IN THE HOST'S ROW DIRECTION and BETWEEN the two statics — not stacked in a private column.
+    // The fragment's items lay out as real siblings of the statics, in the host's row direction and between them, rather than stacked in a private column.
     #[test]
     fn fragment_items_flow_in_host_direction_between_statics() {
         reset_layout_runtime();
@@ -430,7 +393,7 @@ mod tests {
         let frag = built.borrow().clone();
         assert_eq!(frag.len(), 3);
         let x = |node: NodeId| track_layout(node).unwrap().get().x;
-        // static0 → frag[0] → frag[1] → frag[2] → static1, strictly left-to-right: horizontal + interleaved.
+        // static0 → frag[0..3] → static1, strictly left-to-right: horizontal and interleaved.
         let xs = [x(s0), x(frag[0]), x(frag[1]), x(frag[2]), x(s1)];
         for pair in xs.windows(2) {
             assert!(
@@ -438,14 +401,11 @@ mod tests {
                 "children must advance along the row (got x sequence {xs:?})"
             );
         }
-        // All share the row's top: same y, so they are siblings on one line, not a nested column.
         let y = |node: NodeId| track_layout(node).unwrap().get().y;
         assert!((y(frag[0]) - y(s0)).abs() < 0.01 && (y(s1) - y(frag[2])).abs() < 0.01);
     }
 
-    // A fragment chip added AFTER the initial layout (workspace chips built when the socket answers, well
-    // after the bar first laid out) must still fire its handler. Mirrors the workspaces shape: a `from_slots`
-    // row is the component root, hosting a `fragment_gap` whose single-`box` body is a bare `StyledContainer`.
+    // Chips built when a socket answers, well after the bar first laid out, must still fire their handler. A `from_slots` row is the component root, hosting a `fragment_gap` whose body is a bare `StyledContainer`.
     #[test]
     fn pressing_a_fragment_chip_added_after_layout_fires_its_handler() {
         use crate::context::{new_container, relayout_if_dirty};
@@ -460,7 +420,6 @@ mod tests {
         let src = ids;
         let sink = fired.clone();
 
-        // The `row` is the module root itself (the fixed `generate_root` returns the branch element bare).
         let mut row = Container::from_slots(
             LayoutStyle::new()
                 .flex_row()
@@ -500,11 +459,9 @@ mod tests {
         )
         .unwrap();
 
-        // Data arrives after layout: the fragment reconciles (builds 3 chips) and the runtime relayouts them.
         ids.set(vec![7, 8, 9]);
         relayout_if_dirty();
 
-        // Click the first chip: no leading gap, so it sits at x∈[0,24), y∈[0,24). Press then release inside it.
         let press = |x: f64, y: f64| Event::PointerPressed {
             x,
             y,
@@ -527,9 +484,7 @@ mod tests {
         );
     }
 
-    // Regression (workspaces "chips don't fill the bar height"): a `from_slots` stretch row of bare
-    // `StyledContainer` chips, placed in a STRETCH zone, must stretch each chip to the full zone height —
-    // no injected flex-column around the root or the chips to trap them at content height.
+    // Regression: a `from_slots` stretch row of bare `StyledContainer` chips in a stretch zone must stretch each chip to the full zone height, with no injected flex-column trapping them at content height.
     #[test]
     fn stretch_row_of_fragment_chips_fills_the_zone_height() {
         use crate::context::{new_container, relayout_if_dirty};
@@ -600,8 +555,7 @@ mod tests {
         }
     }
 
-    // `for … gap:N` inside a `row` stays transparent AND spaced: the items flow horizontally, `gap` apart,
-    // carried as a per-item leading margin (no box of its own). 10px leaves + 8px gap → x 0, 18, 36.
+    // Transparent and spaced: 10px leaves plus an 8px per-item leading margin give x 0, 18, 36.
     #[test]
     fn fragment_gap_spaces_items_along_the_row() {
         reset_layout_runtime();
@@ -646,8 +600,7 @@ mod tests {
         );
     }
 
-    // The gap margin is re-applied per reconcile, not baked at build: when a keyed item moves to the front it
-    // must LOSE its leading margin (else it would be pushed off by a stale gap), and the former first gains one.
+    // Re-applied per reconcile, not baked at build: a keyed item moving to the front must lose its leading margin, and the former first must gain one.
     #[test]
     fn fragment_gap_reorder_moves_gap_off_the_new_first_item() {
         reset_layout_runtime();
@@ -678,8 +631,6 @@ mod tests {
         };
         compute_layout(root, space().0, space().1).unwrap();
 
-        // Initial builds, in source order: [key1, key2, key3]. No reorder rebuilds a persisting key, so these
-        // node ids stay valid across the reconcile below.
         let (n1, n3) = {
             let b = built.borrow();
             (b[0], b[2])
@@ -688,7 +639,6 @@ mod tests {
         assert!(x(n1).abs() < 0.01, "key1 first, flush: {}", x(n1));
         assert!((x(n3) - 36.0).abs() < 0.01, "key3 last, at 36: {}", x(n3));
 
-        // key3 moves to the front: it drops its gap margin (→ 0), key1 becomes second (→ 18).
         items.set(vec![3, 1, 2]);
         compute_layout(root, space().0, space().1).unwrap();
         assert!(

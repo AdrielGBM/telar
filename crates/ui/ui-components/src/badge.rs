@@ -1,3 +1,5 @@
+//! [`badge`]: a small status label, filled from a semantic colour.
+
 use layout_core::{AlignItems, JustifyContent, LayoutError, LayoutStyle};
 use reactive_core::Reactive;
 use renderer_core::{BorderRadius, Color, RectStyle, ShapeStyle, TextStyle};
@@ -27,19 +29,17 @@ fn pill() -> LayoutStyle {
         .padding_vertical(pad_y())
 }
 
-/// A small solid pill tag: an accent-filled box with a short label in a contrasting on-accent colour.
-/// Non-interactive (unlike `button`) — pure presentation sugar over `StyledContainer` + `Text`; lives in
-/// `ui-components`, not the kernel, so an app can drop it or ship its own.
+/// A small solid pill tag: an accent-filled box with a short label in a contrasting on-accent colour. Non-interactive (unlike `button`) — pure presentation sugar over `StyledContainer` + `Text`; lives in `ui-components`, not the kernel, so an app can drop it or ship its own.
 #[derive(Props)]
 pub struct BadgeProps {
     #[props(into, default)]
     pub label: Reactive<String>,
-    /// Fill colour. `Color::TRANSPARENT` (the default) means "unset" -> the theme's `primary()`. A
-    /// closure (re-read every frame) so a theme token or `$signal` colour re-colours live, like `button`'s `fill`.
+    /// Fill colour. `Color::TRANSPARENT` (the default) means "unset" -> the theme's `primary()`. A closure (re-read every frame) so a theme token or `$signal` colour re-colours live, like `button`'s `fill`.
     #[props(into, default = Reactive::of(|| Color::TRANSPARENT))]
     pub color: Reactive<Color>,
 }
 
+/// A small status label, filled from a semantic colour.
 pub fn badge(props: BadgeProps, _children: Children) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let BadgeProps { label, color } = props;
 
@@ -63,8 +63,7 @@ fn fill_default() -> Color {
     shared::accent()
 }
 
-/// The label's on-accent colour, re-read every frame so it tracks the active theme (mirrors `button`'s
-/// no-variant label default: the theme's `on_primary()`, or white with no theme installed).
+/// The label's on-accent colour, re-read every frame so it tracks the active theme (mirrors `button`'s no-variant label default: the theme's `on_primary()`, or white with no theme installed).
 fn on_accent_style(inherited: TextStyle) -> TextStyle {
     shared::control_text(inherited, TEXT_RATIO).with_color(shared::on_accent())
 }
@@ -97,7 +96,6 @@ mod tests {
         ComponentList::new(item)
     }
 
-    // A labelled badge draws its label text.
     #[test]
     fn renders_label() {
         crate::test_support::fresh_layout_runtime();
@@ -110,7 +108,6 @@ mod tests {
         assert!(find_text(&tree.commands(), "New"));
     }
 
-    // An empty label still builds and lays out without panicking.
     #[test]
     fn empty_label_builds_without_panic() {
         crate::test_support::fresh_layout_runtime();

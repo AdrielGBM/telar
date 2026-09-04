@@ -1,3 +1,5 @@
+//! [`Animated`]: a value that travels to its target under a curve, integrated once per frame by the ticker.
+
 use std::cell::RefCell;
 use std::marker::PhantomData;
 use std::rc::Rc;
@@ -15,7 +17,7 @@ const NOOP_EPS_SQ: f32 = 1e-12;
 const MAX_SUBSTEP: f32 = 1.0 / 240.0;
 // Upper bound on a single integrated frame; caps the jump after a long stall (paused window, breakpoint).
 const MAX_FRAME_DT: f32 = 0.1;
-// Lower bound on one. The registry is thread-global but driven per surface, so a multi-surface app ticks every animation once per surface per frame; at those microsecond gaps both integration steps round away in f32 and the animation freezes short of settling, pinning `has_active()` true for good.
+// A multi-surface app ticks every animation once per surface per frame, and at those microsecond gaps both integration steps round away in f32, freezing the animation short of settling and pinning `has_active()`.
 const MIN_FRAME_DT: f32 = 1.0 / 1000.0;
 // Spring settles once both squared displacement and squared velocity fall below these.
 const DISP_EPS_SQ: f32 = 1e-6;
@@ -101,7 +103,7 @@ impl<T: Lerp + 'static> AnimInner<T> {
         Some(self.current.clone())
     }
 
-    // A frame that left the value bit-identical will never move it again — same state, same forces — so the animation is over. This is what guarantees one terminates at all: the epsilons above cannot, being absolute while the value is not, so a spring on screen coordinates (one f32 ULP is 2.4e-4 at x=2400) goes numerically dead while still short of `DISP_EPS_SQ` and ticks forever. Snapping is safe precisely because the step failed to round: what is left to travel is below what the value can represent.
+    // A frame that left the value bit-identical will never move it again — same state, same forces — so the animation is over. This is what guarantees termination: the epsilons above are absolute while the value is not, so a spring on screen coordinates goes numerically dead while still short of `DISP_EPS_SQ`.
     fn value_is_frozen(&self, before: &T) -> bool {
         self.current.sub(before).magnitude_sq() == 0.0
     }
@@ -134,10 +136,7 @@ impl<T: Lerp + 'static> Tickable for RefCell<AnimInner<T>> {
 
 /// A signal-backed value that chases a `target` over time under a [`Curve`], driven by the central ticker.
 ///
-/// `Copy`, like every other reactive handle. The state it used to hold directly now lives in the reactive
-/// runtime's arena and this is an id into it, so a closure that reads an animation takes a register copy
-/// rather than an `Rc` bump — and the animation is disposed with the owner that built it instead of with its
-/// last handle. The ticker's `Weak` is unaffected: the `Rc` did not disappear, it changed owner.
+/// `Copy`, like every other reactive handle. The state it used to hold directly now lives in the reactive runtime's arena and this is an id into it, so a closure that reads an animation takes a register copy rather than an `Rc` bump — and the animation is disposed with the owner that built it instead of with its last handle. The ticker's `Weak` is unaffected: the `Rc` did not disappear, it changed owner.
 pub struct Animated<T: Lerp + 'static> {
     state: RwSignal<Shared<T>>,
     id: u64,
@@ -250,7 +249,6 @@ mod tests {
     use crate::ticker::{has_active, reset, set_scale, tick};
     use geometry_core::Rect;
 
-    // Each test isolates the thread-local ticker state; libtest runs one thread per test but this is defensive against thread reuse.
     fn fresh() -> Instant {
         reset();
         set_scale(1.0);
@@ -289,7 +287,6 @@ mod tests {
         let base = fresh();
         let a = Animated::new(0.0f32, tween(Duration::from_millis(200), Easing::Linear));
         a.retarget(1.0);
-        // The establishing tick only records t0; nothing is set yet.
         tick(base);
         assert_eq!(a.get(), 0.0);
         assert!(has_active());
@@ -316,14 +313,12 @@ mod tests {
     #[test]
     fn spring_preserves_velocity_across_retarget() {
         let base = fresh();
-        // Underdamped so it builds clear upward velocity early in the flight.
         let a = Animated::new(0.0f32, spring(120.0, 14.0));
         a.retarget(1.0);
         tick(base);
         tick(base + Duration::from_millis(16));
         tick(base + Duration::from_millis(32));
         let value_before = a.get();
-        // Retarget to the current value: with zero displacement, only preserved velocity can still move it.
         a.retarget(value_before);
         tick(base + Duration::from_millis(33));
         tick(base + Duration::from_millis(37));
@@ -351,7 +346,6 @@ mod tests {
         tick(base);
         tick(base + Duration::from_millis(100));
         assert!((a.get() - 0.5).abs() < 1e-4);
-        // A no-op retarget must not reset the timeline; progress continues.
         a.retarget(1.0);
         tick(base + Duration::from_millis(150));
         assert!((a.get() - 0.75).abs() < 1e-4, "restarted: {}", a.get());
@@ -414,9 +408,7 @@ mod tests {
 
     /// An animation stops when the scope that made it goes, not when a handle does.
     ///
-    /// The registry holds a `Weak` and prunes what it cannot upgrade, which is unchanged — what changed is
-    /// who holds the strong reference. It used to be the handles, so the last one dropping ended the
-    /// animation; it is the reactive arena now, so disposing the owner does.
+    /// The registry holds a `Weak` and prunes what it cannot upgrade, which is unchanged — what changed is who holds the strong reference. It used to be the handles, so the last one dropping ended the animation; it is the reactive arena now, so disposing the owner does.
     #[test]
     fn an_animation_ends_with_the_scope_that_made_it() {
         let base = fresh();

@@ -15,6 +15,7 @@ use crate::color::Rgb;
 use crate::metrics::{CellMetrics, CellSize};
 use crate::wrap::WrappedLine;
 
+/// Paints a command list into a cell grid, in whatever a terminal can express of it.
 pub struct Painter<'a> {
     pub(crate) buf: &'a mut CellBuffer,
     pub(crate) cell: CellSize,
@@ -49,8 +50,7 @@ impl<'a> Painter<'a> {
             DrawCommand::PushMatrix { matrix } => self.state.push_matrix(*matrix),
             DrawCommand::PopMatrix => self.state.pop_matrix(),
             DrawCommand::PushClip { rect, .. } => {
-                // The radius is dropped: a cell is either inside the clip or outside it, and there is no
-                // sub-cell coverage in which a rounded corner could mean anything.
+                // The radius is dropped: a cell is either inside the clip or outside it, and there is no sub-cell coverage in which a rounded corner could mean anything.
                 let mapped =
                     renderer_core::transform_clip_rect(self.state.cumulative_matrix, *rect);
                 self.state.push_clip(mapped);
@@ -59,8 +59,7 @@ impl<'a> Painter<'a> {
                 self.state.pop_clip();
             }
             DrawCommand::PushLayer { opacity, .. } => {
-                // `backdrop_blur` has no terminal expression and is dropped rather than approximated: a
-                // wrong blur reads as a rendering fault, an absent one as a plainer surface.
+                // `backdrop_blur` has no terminal expression and is dropped rather than approximated: a wrong blur reads as a rendering fault, an absent one as a plainer surface.
                 let composed = self.alpha() * opacity.clamp(0.0, 1.0);
                 self.opacity.push(composed);
             }
@@ -78,11 +77,9 @@ impl<'a> Painter<'a> {
             } => self.text(text, spans.as_deref(), *rect, style),
             DrawCommand::Line { p1, p2, style } => self.line(*p1, *p2, style),
             DrawCommand::Path { data, style } => self.path(data, style),
-            // Pictures need a graphics protocol, which is negotiated with the terminal rather than decided
-            // here. Until that lands a picture leaves its box alone rather than filling it with a guess.
+            // Pictures need a graphics protocol, which is negotiated with the terminal rather than decided here. Until that lands a picture leaves its box alone rather than filling it with a guess.
             DrawCommand::Image { .. } => {}
-            // Structure, for a backend whose output is a document. The commands inside are already where
-            // they belong, so skipping the markers draws exactly the same grid.
+            // Structure, for a backend whose output is a document. The commands inside are already where they belong, so skipping the markers draws exactly the same grid.
             DrawCommand::PushElement { .. } | DrawCommand::PopElement => {}
         }
     }
@@ -114,8 +111,7 @@ impl<'a> Painter<'a> {
         })
     }
 
-    /// Whether a cell is inside the active clip. Used by painters that walk cells one at a time rather than
-    /// by rectangle — a path scanline, a line.
+    /// Whether a cell is inside the active clip. Used by painters that walk cells one at a time rather than by rectangle — a path scanline, a line.
     pub(crate) fn clipped_in(&self, col: i32, row: i32) -> bool {
         let Some(clip) = self.state.current_clip() else {
             return col >= 0

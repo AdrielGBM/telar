@@ -1,14 +1,10 @@
-//! The per-edge halves of the two box properties that carry one number per edge: `stroke_width` across the
-//! four sides, and `radius` across the four corners.
+//! The per-edge halves of the two box properties that carry one number per edge: `stroke_width` across the four sides, and `radius` across the four corners.
 //!
-//! One module for both, because an author asking for a rule under a header and an author asking for a panel
-//! rounded only at the top are asking the same question in the same grammar — a CSS shorthand, or a name per
-//! edge. Only which edge a name lands on differs, which is the one thing each caller passes in.
+//! One module for both, because an author asking for a rule under a header and an author asking for a panel rounded only at the top are asking the same question in the same grammar — a CSS shorthand, or a name per edge. Only which edge a name lands on differs, which is the one thing each caller passes in.
 
 use telar_parser::Attr;
 
-/// What an edge whose value the key cannot mean contributes, once `value_kind` has reported it on the
-/// attribute: the build stops before any of these edges reach a `BorderRadius`.
+/// What an edge whose value the key cannot mean contributes, once `value_kind` has reported it on the attribute: the build stops before any of these edges reach a `BorderRadius`.
 const ZERO: &str = "0.0";
 
 /// Where a suffixed attribute puts its value.
@@ -22,8 +18,7 @@ pub enum EdgeTarget {
 }
 
 impl EdgeTarget {
-    /// How specifically this name picks its edges. A name for one edge outranks a name for a pair, which
-    /// outranks the shorthand — so `radius:8 radius_top:0` is the same shape however the author ordered it.
+    /// How specifically this name picks its edges. A name for one edge outranks a name for a pair, which outranks the shorthand — so `radius:8 radius_top:0` is the same shape however the author ordered it.
     fn specificity(&self) -> u8 {
         match self {
             EdgeTarget::Slots(s) => 4 - s.len() as u8,
@@ -47,11 +42,9 @@ pub fn side_target(suffix: &str) -> Option<EdgeTarget> {
     })
 }
 
-/// The suffixes of `radius_*`, over corners ordered `[top_left, top_right, bottom_right, bottom_left]` — the
-/// order `BorderRadius` declares them in, and the one CSS writes its shorthand in.
+/// The suffixes of `radius_*`, over corners ordered `[top_left, top_right, bottom_right, bottom_left]` — the order `BorderRadius` declares them in, and the one CSS writes its shorthand in.
 ///
-/// `top`/`start` and their opposites name a *side* here rather than a corner, since that is the shape the
-/// property is actually asked for: a panel meeting a rail is rounded on the two corners facing away from it.
+/// `top`/`start` and their opposites name a *side* here rather than a corner, since that is the shape the property is actually asked for: a panel meeting a rail is rounded on the two corners facing away from it.
 pub fn corner_target(suffix: &str) -> Option<EdgeTarget> {
     Some(match suffix {
         "top" => EdgeTarget::Slots(&[0, 1]),
@@ -68,23 +61,19 @@ pub fn corner_target(suffix: &str) -> Option<EdgeTarget> {
     })
 }
 
-/// A property's four edges as the author left them, with the two the writing direction still has to resolve
-/// kept apart.
+/// A property's four edges as the author left them, with the two the writing direction still has to resolve kept apart.
 #[derive(Default)]
 pub struct Edges {
     /// The value expression for each slot, or `None` where the author named no edge.
     pub slots: [Option<String>; 4],
     pub start: Option<String>,
     pub end: Option<String>,
-    /// Set when the property still reduces to its one-value form — a bare shorthand of a single token and no
-    /// edge named separately. This is what keeps `radius:8` emitting `BorderRadius::all(8.0)` and a plain
-    /// `stroke_width:1` emitting no per-side data at all.
+    /// Set when the property still reduces to its one-value form — a bare shorthand of a single token and no edge named separately. This is what keeps `radius:8` emitting `BorderRadius::all(8.0)` and a plain `stroke_width:1` emitting no per-side data at all.
     pub uniform: Option<String>,
 }
 
 impl Edges {
-    /// Whether the author named any edge at all, so a property with nothing written can fall back to its
-    /// default rather than to four explicit zeroes.
+    /// Whether the author named any edge at all, so a property with nothing written can fall back to its default rather than to four explicit zeroes.
     pub fn is_empty(&self) -> bool {
         self.uniform.is_none()
             && self.start.is_none()
@@ -94,8 +83,7 @@ impl Edges {
 
     /// The four slots with `fallback` standing in for every edge the author did not name.
     ///
-    /// Zero is the right fallback for both properties, and it is what CSS resolves to as well: a
-    /// `border-bottom` on its own leaves the other three sides with no style and therefore no width.
+    /// Zero is the right fallback for both properties, and it is what CSS resolves to as well: a `border-bottom` on its own leaves the other three sides with no style and therefore no width.
     pub fn resolved(&self, fallback: &str) -> [String; 4] {
         std::array::from_fn(|i| {
             self.slots[i]
@@ -118,9 +106,7 @@ impl Edges {
     }
 }
 
-/// Expands a CSS-style shorthand into its four values, with CSS's own arities: one value for all four, two
-/// for the two axes, three with the last axis' pair split, four verbatim. `None` for no tokens or more than
-/// four, which leaves the value for the caller to reject.
+/// Expands a CSS-style shorthand into its four values, with CSS's own arities: one value for all four, two for the two axes, three with the last axis' pair split, four verbatim. `None` for no tokens or more than four, which leaves the value for the caller to reject.
 pub fn expand_shorthand(value: &str) -> Option<[&str; 4]> {
     match value.split_whitespace().collect::<Vec<_>>().as_slice() {
         [a] => Some([a, a, a, a]),
@@ -131,8 +117,7 @@ pub fn expand_shorthand(value: &str) -> Option<[&str; 4]> {
     }
 }
 
-/// Reads one property's edges out of an element's attributes: the bare shorthand under `base`, then every
-/// `prefix`-suffixed name `target` recognises, applied most-general first.
+/// Reads one property's edges out of an element's attributes: the bare shorthand under `base`, then every `prefix`-suffixed name `target` recognises, applied most-general first.
 pub fn collect(
     attrs: &[Attr],
     base: &str,
@@ -225,8 +210,7 @@ mod tests {
         );
     }
 
-    /// A plain width has to keep emitting nothing per-side, or every box in every existing app grows four
-    /// numbers it never asked for.
+    /// A plain width has to keep emitting nothing per-side, or every box in every existing app grows four numbers it never asked for.
     #[test]
     fn a_plain_width_stays_uniform() {
         let edges = collect(

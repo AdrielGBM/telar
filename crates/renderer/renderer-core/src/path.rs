@@ -1,9 +1,12 @@
+//! [`PathData`]: vector geometry as a verb list, with a lazily computed bounding box.
+
 use geometry_core::{Point, Rect};
 use std::sync::atomic::{AtomicU64, Ordering};
 
 static NEXT_PATH_ID: AtomicU64 = AtomicU64::new(1);
 
 #[derive(Debug, Clone, PartialEq)]
+/// One step of a path: a move, a line, a curve, or the close that returns to the subpath's start.
 pub enum PathVerb {
     MoveTo(Point),
     LineTo(Point),
@@ -20,6 +23,7 @@ pub enum PathVerb {
 }
 
 #[derive(Debug, Clone)]
+/// Vector geometry as a verb list, with a content-derived id and a lazily computed bounding box.
 pub struct PathData {
     pub id: u64,
     pub(crate) verbs: Vec<PathVerb>,
@@ -27,7 +31,7 @@ pub struct PathData {
     bounds_cache: std::sync::OnceLock<Option<Rect>>,
 }
 
-// Equal when the geometry (verbs) matches, ignoring the per-instance `id` and the lazily-filled bounds cache. Two structurally-identical paths rebuilt across frames must compare equal so dirty-tracking (scroll-blit, dirty-rect) treats them as unchanged — otherwise every rebuild's fresh `id` would force a full-screen repaint.
+// Equal when the verbs match, ignoring the per-instance id and the lazily filled bounds cache. Two structurally identical paths rebuilt across frames must compare equal, or every rebuild's fresh id would force a full-screen repaint.
 impl PartialEq for PathData {
     fn eq(&self, other: &Self) -> bool {
         self.verbs == other.verbs

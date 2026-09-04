@@ -1,3 +1,5 @@
+//! [`Lazy`]: a subtree held back until its condition is first true, then kept.
+
 use std::cell::RefCell;
 use std::rc::Rc;
 
@@ -22,16 +24,9 @@ struct LazyState {
 
 /// A subtree that is not built until the first time it would be shown — `lazy when:$cond { … }` in `.rsx`.
 ///
-/// This is the general form of what a [`NavHost`](../../navigate_core/struct.NavHost.html) does per route:
-/// pay for a screen when the user first reaches it, not at startup. Use it for anything expensive behind a
-/// condition the user may never satisfy — a settings panel, an inspector, a tab body, a chart that only some
-/// accounts see.
+/// This is the general form of what a [`NavHost`](../../navigate_core/struct.NavHost.html) does per route: pay for a screen when the user first reaches it, not at startup. Use it for anything expensive behind a condition the user may never satisfy — a settings panel, an inspector, a tab body, a chart that only some accounts see.
 ///
-/// It is deliberately *not* what a reactive `if $cond` does. That builds its branch whenever the condition
-/// turns true and disposes it when it turns false, so a repeatedly toggled panel is rebuilt every time and
-/// loses whatever state it held. This builds **once**, on the first `true`, and from then on only shows or
-/// hides the same subtree — so scroll position, form entry and in-flight work survive being closed and
-/// reopened. The cost is symmetric: a subtree shown once is held until the whole block is dropped.
+/// It is deliberately *not* what a reactive `if $cond` does. That builds its branch whenever the condition turns true and disposes it when it turns false, so a repeatedly toggled panel is rebuilt every time and loses whatever state it held. This builds **once**, on the first `true`, and from then on only shows or hides the same subtree — so scroll position, form entry and in-flight work survive being closed and reopened. The cost is symmetric: a subtree shown once is held until the whole block is dropped.
 pub struct Lazy {
     node: NodeId,
     rect: RwSignal<Rect>,
@@ -43,8 +38,7 @@ pub struct Lazy {
 }
 
 impl Lazy {
-    /// `visible` is the reactive condition; `build` constructs the children the first time it holds, against
-    /// the live layout tree from inside the tracking effect — the same way a reactive list builds its items.
+    /// `visible` is the reactive condition; `build` constructs the children the first time it holds, against the live layout tree from inside the tracking effect — the same way a reactive list builds its items.
     pub fn new(
         container_style: LayoutStyle,
         visible: impl Fn() -> bool + 'static,
@@ -63,7 +57,7 @@ impl Lazy {
         let eff_state = Rc::clone(&state);
         let eff_version = version;
         let eff_visible = Rc::clone(&visible);
-        // Runs once now — which is what makes an initially-false block cost nothing — and again on every change to a signal the condition reads.
+        // Runs once now, which is what makes an initially-false block cost nothing, and again on every change.
         let _effect = effect(move || {
             let show = eff_visible();
             if show && realize(&eff_state) {
@@ -89,14 +83,12 @@ impl Lazy {
     }
 }
 
-/// Builds the deferred children if this is the first showing, reporting whether it did any work. Taking the
-/// builder out of the cell is what makes it once-only: every later showing finds `None` and just toggles
-/// display.
+/// Builds the deferred children if this is the first showing, reporting whether it did any work. Taking the builder out of the cell is what makes it once-only: every later showing finds `None` and just toggles display.
 fn realize(state: &Rc<RefCell<LazyState>>) -> bool {
     let Some(build) = state.borrow_mut().build.take() else {
         return false;
     };
-    // Built outside the state borrow: constructing widgets reads and writes signals, whose effects can reach back into this same cell.
+    // Built outside the state borrow: constructing widgets reads and writes signals whose effects can reach back into this cell.
     let Ok(items) = build() else {
         return false;
     };
@@ -119,7 +111,7 @@ impl LayoutItem for Lazy {
 
 impl Component for Lazy {
     fn view(&self) -> RenderNode {
-        // Subscribe to both: the condition (so hiding re-renders without children) and the build (so the first showing re-emits with them).
+        // Both: the condition, so hiding re-renders without children, and the build, so the first showing re-emits.
         let show = (self.visible)();
         self.version.get();
         let _ = self.rect.get();
@@ -132,7 +124,7 @@ impl Component for Lazy {
     }
 
     fn on_event(&mut self, event: &Event) -> EventResult {
-        // A hidden block is inert: it takes no space, so it must not answer for the content shown over it.
+        // A hidden block takes no space, so it must not answer for the content shown over it.
         if !(self.visible)() {
             return EventResult::Ignored;
         }
@@ -189,8 +181,7 @@ mod tests {
         assert!(lazy.is_built());
     }
 
-    /// The difference from a reactive `if`: toggling off and on again shows the *same* subtree rather than
-    /// disposing and rebuilding it, so anything it held is still there.
+    /// The difference from a reactive `if`: toggling off and on again shows the *same* subtree rather than disposing and rebuilding it, so anything it held is still there.
     #[test]
     fn builds_once_and_only_toggles_afterwards() {
         reset_layout_runtime();

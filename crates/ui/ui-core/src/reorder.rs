@@ -1,20 +1,12 @@
 //! Where a dragged item lands in a strip of items, and how to put it there.
 //!
-//! The whole of drag-to-reorder that is not the caller's: given the laid-out rects of the items in display
-//! order and where the pointer is, which slot is this, and what does the list look like once the item goes
-//! there. Everything above it — which strip, what a chip looks like, whether a drop may cross into another
-//! window — stays with the widget that owns those questions.
+//! The whole of drag-to-reorder that is not the caller's: given the laid-out rects of the items in display order and where the pointer is, which slot is this, and what does the list look like once the item goes there. Everything above it — which strip, what a chip looks like, whether a drop may cross into another window — stays with the widget that owns those questions.
 //!
-//! The two rules here are the two that get written differently every time. A slot is decided by an item's
-//! **centre**, not by its edges, so passing the midpoint of a neighbour is what moves the gap rather than
-//! reaching its far edge. And a target slot counts positions in the list *before* the move, so moving an item
-//! rightwards has to account for the hole it leaves behind — the off-by-one that makes "drag one to the end"
-//! land one short.
+//! The two rules here are the two that get written differently every time. A slot is decided by an item's **centre**, not by its edges, so passing the midpoint of a neighbour is what moves the gap rather than reaching its far edge. And a target slot counts positions in the list *before* the move, so moving an item rightwards has to account for the hole it leaves behind — the off-by-one that makes "drag one to the end" land one short.
 
 use geometry_core::Rect;
 
-/// Which way a strip runs. Not [`layout_core::Direction`], which is text direction (LTR/RTL) and answers a
-/// different question.
+/// Which way a strip runs. Not [`layout_core::Direction`], which is text direction (LTR/RTL) and answers a different question.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Axis {
     Horizontal,
@@ -39,15 +31,11 @@ impl Axis {
     }
 }
 
-/// The slot a pointer at `point` names, given the items' laid-out `rects` in display order: the number of
-/// items whose centre it has passed.
+/// The slot a pointer at `point` names, given the items' laid-out `rects` in display order: the number of items whose centre it has passed.
 ///
-/// The result indexes the list *as displayed*, so it ranges over `0..=rects.len()` — `len()` meaning "past
-/// the last item". Feed it to [`apply_move`], which is what knows that a slot counted before the move is not
-/// the index the item ends up at.
+/// The result indexes the list *as displayed*, so it ranges over `0..=rects.len()` — `len()` meaning "past the last item". Feed it to [`apply_move`], which is what knows that a slot counted before the move is not the index the item ends up at.
 ///
-/// `rects` must be in display order; a strip that lays out its items in a different order than it stores them
-/// has to permute before calling, since nothing here can tell the two apart.
+/// `rects` must be in display order; a strip that lays out its items in a different order than it stores them has to permute before calling, since nothing here can tell the two apart.
 pub fn insertion_index(rects: &[Rect], point: (f32, f32), axis: Axis) -> usize {
     let along = axis.of(point);
     rects
@@ -57,12 +45,9 @@ pub fn insertion_index(rects: &[Rect], point: (f32, f32), axis: Axis) -> usize {
         .min(rects.len())
 }
 
-/// Moves the item at `from` into slot `to`, where `to` counts positions in `items` **as it is now** — the
-/// frame of reference [`insertion_index`] answers in. Returns whether anything moved.
+/// Moves the item at `from` into slot `to`, where `to` counts positions in `items` **as it is now** — the frame of reference [`insertion_index`] answers in. Returns whether anything moved.
 ///
-/// Dropping an item onto the slot it already occupies (or the one immediately after it, which is the same
-/// place once the item is lifted out) is not a move, and reports as such so a caller can skip writing a
-/// signal nothing changed.
+/// Dropping an item onto the slot it already occupies (or the one immediately after it, which is the same place once the item is lifted out) is not a move, and reports as such so a caller can skip writing a signal nothing changed.
 pub fn apply_move<T>(items: &mut Vec<T>, from: usize, to: usize) -> bool {
     if from >= items.len() {
         return false;
@@ -119,7 +104,6 @@ mod tests {
             })
             .collect();
         assert_eq!(insertion_index(&rects, (50.0, 21.0), Axis::Vertical), 1);
-        // The same point read along the other axis is a different answer, which is the point of the parameter.
         assert_eq!(insertion_index(&rects, (50.0, 21.0), Axis::Horizontal), 0);
     }
 
@@ -127,7 +111,6 @@ mod tests {
     #[test]
     fn moving_rightwards_accounts_for_the_hole_left_behind() {
         let mut items = vec!['a', 'b', 'c', 'd'];
-        // "past c" is slot 3 while `a` is still in the list; `a` must land between `c` and `d`.
         assert!(apply_move(&mut items, 0, 3));
         assert_eq!(items, vec!['b', 'c', 'a', 'd']);
     }
@@ -143,7 +126,6 @@ mod tests {
     fn dropping_where_it_already_is_moves_nothing() {
         let mut items = vec!['a', 'b', 'c'];
         assert!(!apply_move(&mut items, 1, 1));
-        // Slot 2 is the far side of `b` itself — still the same place once `b` is lifted out.
         assert!(!apply_move(&mut items, 1, 2));
         assert_eq!(items, vec!['a', 'b', 'c']);
     }

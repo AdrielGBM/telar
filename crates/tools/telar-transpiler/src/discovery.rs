@@ -41,14 +41,12 @@ pub fn collect_files_by_ext(
     result
 }
 
+/// Every `.rsx` under `dir`, recursively.
 pub fn find_rsx_files(dir: &Path) -> Vec<PathBuf> {
     collect_files_by_ext(dir, "rsx", &|_| true)
 }
 
-/// Every `.rsx` under a whole workspace, skipping what a build produced rather than a person: `target/` and any
-/// dot-directory (which is where the generated `.telar/` tree lives). [`find_rsx_files`] descends into
-/// everything, which is right for one crate's `src/` and ruinous one directory up — a workspace root holds a
-/// `target/` that dwarfs the sources, and this runs on every completion request.
+/// Every `.rsx` under a whole workspace, skipping what a build produced rather than a person: `target/` and any dot-directory (which is where the generated `.telar/` tree lives). [`find_rsx_files`] descends into everything, which is right for one crate's `src/` and ruinous one directory up — a workspace root holds a `target/` that dwarfs the sources, and this runs on every completion request.
 pub fn find_rsx_files_in_tree(root: &Path) -> Vec<PathBuf> {
     collect_files_by_ext(root, "rsx", &|name| {
         name != "target" && !name.starts_with('.')
@@ -66,17 +64,14 @@ pub(crate) fn read_rsx_section(package_root: &Path) -> Option<toml::Table> {
         .cloned()
 }
 
-/// Reads `[telar] auto_modules` from `telar.toml`. A missing file or key yields `false`, so filesystem
-/// module discovery is strictly opt-in.
+/// Reads `[telar] auto_modules` from `telar.toml`. A missing file or key yields `false`, so filesystem module discovery is strictly opt-in.
 pub fn auto_modules_enabled(package_root: &Path) -> bool {
     read_rsx_section(package_root)
         .and_then(|s| s.get("auto_modules")?.as_bool())
         .unwrap_or(false)
 }
 
-/// The directory that baked `src:"..."` asset paths resolve against: `[telar] assets` in `telar.toml`
-/// (default `"assets"`), joined onto the package root — so assets live in one place (e.g. `./assets`)
-/// regardless of which `.rsx` references them, instead of being tied to each `.rsx`'s own directory.
+/// The directory that baked `src:"..."` asset paths resolve against: `[telar] assets` in `telar.toml` (default `"assets"`), joined onto the package root — so assets live in one place (e.g. `./assets`) regardless of which `.rsx` references them, instead of being tied to each `.rsx`'s own directory.
 pub fn assets_root(package_root: &Path) -> PathBuf {
     let configured = read_rsx_section(package_root)
         .and_then(|s| s.get("assets")?.as_str().map(str::to_string))
@@ -84,30 +79,13 @@ pub fn assets_root(package_root: &Path) -> PathBuf {
     package_root.join(configured)
 }
 
-/// Declares `pub mod` for every hand-written `.rs` module mirroring the `src_dir` tree, so an app can rely
-/// on filesystem module discovery instead of hand-written `mod.rs`/`mod` statements. Returns the top-level
-/// declarations and, for each discovered subdirectory, writes a generated file under `modtree_dir` holding
-/// that directory's children. Skips the crate roots (`lib.rs`, `main.rs`) and directories with no `.rs` under
-/// them (asset- or markup-only dirs). A directory that has its own `mod.rs` is declared but not descended
-/// into, so it stays hand-managed — the escape hatch for opting a subtree out of discovery.
+/// Declares `pub mod` for every hand-written `.rs` module mirroring the `src_dir` tree, so an app can rely on filesystem module discovery instead of hand-written `mod.rs`/`mod` statements. Returns the top-level declarations and, for each discovered subdirectory, writes a generated file under `modtree_dir` holding that directory's children. Skips the crate roots (`lib.rs`, `main.rs`) and directories with no `.rs` under them (asset- or markup-only dirs). A directory that has its own `mod.rs` is declared but not descended into, so it stays hand-managed — the escape hatch for opting a subtree out of discovery.
 ///
-/// Every module — top-level file, subdirectory, and the children inside each generated file — is a *file-based*
-/// `#[path] pub mod` (the exact shape the `.rsx` build files use). It deliberately never emits an inline
-/// `mod dir { … }` block: rust-analyzer mis-resolves a `#[path]` attribute on a module nested inside an inline
-/// block produced by a proc macro, string-joining the inline module's name onto the child's already-absolute
-/// path (`core//abs/core/app.rs`) and failing to find it (E0583). rustc joins those pieces with real path
-/// semantics, so the absolute child path wins and it compiles — which is why the two disagreed. Routing every
-/// directory through a real generated file (`#[path = "…/core.rs"] pub mod core;`, its children flat inside
-/// that file) keeps the analyzer and the compiler in step.
+/// Every module — top-level file, subdirectory, and the children inside each generated file — is a *file-based* `#[path] pub mod` (the exact shape the `.rsx` build files use). It deliberately never emits an inline `mod dir { … }` block: rust-analyzer mis-resolves a `#[path]` attribute on a module nested inside an inline block produced by a proc macro, string-joining the inline module's name onto the child's already-absolute path (`core//abs/core/app.rs`) and failing to find it (E0583). rustc joins those pieces with real path semantics, so the absolute child path wins and it compiles — which is why the two disagreed. Routing every directory through a real generated file (`#[path = "…/core.rs"] pub mod core;`, its children flat inside that file) keeps the analyzer and the compiler in step.
 ///
-/// Returns the declarations alongside every generated file path it wrote under `modtree_dir`, so a caller that
-/// prunes stale build output can tell these apart from an orphaned directory's leftover file.
+/// Returns the declarations alongside every generated file path it wrote under `modtree_dir`, so a caller that prunes stale build output can tell these apart from an orphaned directory's leftover file.
 ///
-/// **`from_dir` is where the macro was invoked, which is not always `src_dir`.** A module declares its own
-/// children, so `rsx_modules!()` in `app/editor/mod.rs` places the `.rsx` files of `app/editor` — declaring
-/// `pub mod app;` there instead would name an ancestor of the file doing the declaring, which is a cycle.
-/// The generated `.rs` a `.rsx` compiles to still mirrors the whole `src` tree, so the walk carries the
-/// prefix from `src_dir` even when it starts below it.
+/// **`from_dir` is where the macro was invoked, which is not always `src_dir`.** A module declares its own children, so `rsx_modules!()` in `app/editor/mod.rs` places the `.rsx` files of `app/editor` — declaring `pub mod app;` there instead would name an ancestor of the file doing the declaring, which is a cycle. The generated `.rs` a `.rsx` compiles to still mirrors the whole `src` tree, so the walk carries the prefix from `src_dir` even when it starts below it.
 pub fn discover_rust_modules(
     src_dir: &Path,
     from_dir: &Path,
@@ -122,8 +100,7 @@ pub fn discover_rust_modules(
         .map(|c| c.as_os_str().to_string_lossy())
         .collect::<Vec<_>>()
         .join("__");
-    // Discovery is for a directory that has no `mod.rs`. A nested invocation is *in* one — the file wrote
-    // its own `mod` statements, and re-declaring them from inside it is a redefinition of each.
+    // A nested invocation is already inside a `mod.rs` that wrote its own `mod` statements, so re-declaring them here would redefine each.
     let discover = auto_modules && from_dir == src_dir;
     let mut out = String::new();
     let mut written = Vec::new();
@@ -139,9 +116,7 @@ pub fn discover_rust_modules(
     Ok((out, written))
 }
 
-/// Appends the `#[path] pub mod` declarations for the direct children of `dir` to `out`. A subdirectory's own
-/// children are written to a generated file under `modtree_dir` (named by the flattened module path, e.g.
-/// `core__widgets.rs`, so sibling directories never collide) that the emitted `pub mod` then points at.
+/// Appends the `#[path] pub mod` declarations for the direct children of `dir` to `out`. A subdirectory's own children are written to a generated file under `modtree_dir` (named by the flattened module path, e.g. `core__widgets.rs`, so sibling directories never collide) that the emitted `pub mod` then points at.
 fn emit_children(
     dir: &Path,
     flat_prefix: &str,
@@ -170,11 +145,7 @@ fn emit_children(
         if path.is_dir() {
             let mod_rs = path.join("mod.rs");
             if mod_rs.exists() {
-                // A directory with a `mod.rs` is a module the crate already declares unless it asked for
-                // discovery. Its `.rsx` children are that file's own business — it places them by invoking
-                // `rsx_modules!()` itself, which is the only place they *can* be declared from: an outside
-                // module cannot add items to one, so this says so instead of leaving the caller with a
-                // "cannot find" about a file that is plainly there.
+                // A `mod.rs` places its own `.rsx` children by invoking `rsx_modules!()`, the only place they can be declared from — an outside module cannot add items to one. Saying so beats a "cannot find" about a file that is plainly there.
                 if dir_has_rsx(&path) && !mod_rs_places_its_own(&mod_rs) {
                     let _ = write!(
                         out,
@@ -211,10 +182,7 @@ fn emit_children(
                 out.push_str(&mod_decl(name, &path));
             }
         } else if path.extension().and_then(|e| e.to_str()) == Some("rsx") {
-            // A `.rsx` is a module where the file sits, so `shared/components/card.rsx` is
-            // `crate::shared::components::card` — the path a reader would guess, and the one
-            // go-to-definition can follow. It used to be pulled to the crate root under a flattened name and
-            // re-exported by basename, which is why two files could not share one.
+            // A `.rsx` is a module where the file sits, so `shared/components/card.rsx` is `crate::shared::components::card`. Flattening to the crate root meant two files could not share a basename.
             out.push_str(&mod_decl(
                 name,
                 &rsx_output(generated_dir, flat_prefix, name),
@@ -224,11 +192,7 @@ fn emit_children(
     Ok(())
 }
 
-/// Deletes every `.rs` file under `output_dir` that `written` does not list — the leftovers of a renamed or
-/// deleted `.rsx`, an `auto_modules` directory that lost its last hand-written `.rs`, or a dropped i18n catalog.
-/// Only ever recurses through real subdirectories reached from `output_dir` itself (a symlink is skipped, not
-/// followed), so every path it can act on is provably inside the generated tree; it never removes a directory
-/// or a non-`.rs` file. Best-effort: a removal failure just leaves that orphan for next time.
+/// Deletes every `.rs` file under `output_dir` that `written` does not list — the leftovers of a renamed or deleted `.rsx`, an `auto_modules` directory that lost its last hand-written `.rs`, or a dropped i18n catalog. Only ever recurses through real subdirectories reached from `output_dir` itself (a symlink is skipped, not followed), so every path it can act on is provably inside the generated tree; it never removes a directory or a non-`.rs` file. Best-effort: a removal failure just leaves that orphan for next time.
 pub fn prune_stale_generated(output_dir: &Path, written: &HashSet<PathBuf>) {
     let Ok(entries) = std::fs::read_dir(output_dir) else {
         return;
@@ -279,8 +243,7 @@ fn is_rust_module_file(path: &Path) -> bool {
     )
 }
 
-/// Whether a directory earns a module node: it holds a declarable `.rs`, a `mod.rs`, or a `.rsx` — a
-/// directory of nothing but markup is still a module once its `.rsx` files live where they sit.
+/// Whether a directory earns a module node: it holds a declarable `.rs`, a `mod.rs`, or a `.rsx` — a directory of nothing but markup is still a module once its `.rsx` files live where they sit.
 fn dir_has_rust_module(dir: &Path) -> bool {
     collect_files_by_ext(dir, "rs", &|_| true)
         .iter()
@@ -295,14 +258,12 @@ fn mod_rs_places_its_own(mod_rs: &Path) -> bool {
         .unwrap_or(false)
 }
 
-/// Whether any `.rsx` sits under `dir`, which is what makes a directory with no `mod.rs` worth declaring
-/// even when hand-written modules are the crate's own business.
+/// Whether any `.rsx` sits under `dir`, which is what makes a directory with no `mod.rs` worth declaring even when hand-written modules are the crate's own business.
 fn dir_has_rsx(dir: &Path) -> bool {
     !collect_files_by_ext(dir, "rsx", &|_| true).is_empty()
 }
 
-/// Where the transpiler wrote a `.rsx`'s Rust. The generated tree mirrors the source tree, and
-/// `flat_prefix` is that same path with `__` between the segments, so the two agree by construction.
+/// Where the transpiler wrote a `.rsx`'s Rust. The generated tree mirrors the source tree, and `flat_prefix` is that same path with `__` between the segments, so the two agree by construction.
 fn rsx_output(generated_dir: &Path, flat_prefix: &str, name: &str) -> PathBuf {
     let mut out = generated_dir.to_path_buf();
     for segment in flat_prefix.split("__").filter(|s| !s.is_empty()) {
@@ -313,10 +274,7 @@ fn rsx_output(generated_dir: &Path, flat_prefix: &str, name: &str) -> PathBuf {
 
 /// The name the component in `path` is generated under: its file stem.
 ///
-/// A `.rsx` is a module where its file sits, so two files may share a basename — they are different modules,
-/// which is what a path-flattened name existed to work around. One function rather than each caller taking
-/// the stem itself: the editor and the golden harness both have to agree with the macro on this exactly, and
-/// they silently drifted apart when the flattening went.
+/// A `.rsx` is a module where its file sits, so two files may share a basename — they are different modules, which is what a path-flattened name existed to work around. One function rather than each caller taking the stem itself: the editor and the golden harness both have to agree with the macro on this exactly, and they silently drifted apart when the flattening went.
 pub fn component_name(path: &Path) -> String {
     path.file_stem()
         .map(|s| s.to_string_lossy().to_string())
@@ -336,8 +294,7 @@ pub fn relative_output_path(path: &Path, src_dir: &Path) -> Option<PathBuf> {
 mod tests {
     use super::*;
 
-    /// A workspace search must find every crate's `.rsx` and must not walk `target/` — the second half is what
-    /// makes it usable on every keystroke, since a workspace's build directory dwarfs its sources.
+    /// A workspace search must find every crate's `.rsx` and must not walk `target/` — the second half is what makes it usable on every keystroke, since a workspace's build directory dwarfs its sources.
     #[test]
     fn a_tree_search_crosses_crates_and_skips_what_a_build_wrote() {
         let root = std::env::temp_dir().join(format!("telar_tree_search_{}", std::process::id()));
@@ -364,14 +321,12 @@ mod tests {
             .iter()
             .filter_map(|p| p.file_name()?.to_str())
             .collect();
-        // Sorted by full path, so `crates/modules/…` precedes `crates/ui/…`.
         assert_eq!(
             names,
             vec!["clock.rsx", "card.rsx"],
             "a sibling crate's component is found; target/ and .telar/ are not"
         );
 
-        // The single-crate search is the one that descends into everything, and stays that way.
         assert_eq!(find_rsx_files(&root).len(), 4);
         let _ = std::fs::remove_dir_all(&root);
     }
@@ -382,10 +337,8 @@ mod tests {
         let _ = std::fs::remove_dir_all(&root);
         std::fs::create_dir_all(&root).unwrap();
 
-        // No telar.toml → default `assets`.
         assert_eq!(assets_root(&root), root.join("assets"));
 
-        // `[telar] assets = "..."` overrides the location (relative to the package root).
         std::fs::write(
             root.join("telar.toml"),
             "[telar]\nassets = \"src/shared/assets\"\n",
@@ -393,7 +346,6 @@ mod tests {
         .unwrap();
         assert_eq!(assets_root(&root), root.join("src/shared/assets"));
 
-        // A section without `assets` falls back to the default; `auto_modules` reads the same section.
         std::fs::write(root.join("telar.toml"), "[telar]\nauto_modules = true\n").unwrap();
         assert_eq!(assets_root(&root), root.join("assets"));
         assert!(auto_modules_enabled(&root));
@@ -401,9 +353,7 @@ mod tests {
         let _ = std::fs::remove_dir_all(&root);
     }
 
-    /// With `auto_modules` off the crate declares its own `.rs` modules, so the tree must place the `.rsx`
-    /// files and nothing else — declaring a hand-written one is a redefinition, and declaring a directory
-    /// whose `mod.rs` the crate already names is one too.
+    /// With `auto_modules` off the crate declares its own `.rs` modules, so the tree must place the `.rsx` files and nothing else — declaring a hand-written one is a redefinition, and declaring a directory whose `mod.rs` the crate already names is one too.
     #[test]
     fn without_auto_modules_only_the_rsx_files_are_placed() {
         let root = std::env::temp_dir().join(format!("rsx_opt_in_modules_{}", std::process::id()));
@@ -437,9 +387,7 @@ mod tests {
         let _ = std::fs::remove_dir_all(&root);
     }
 
-    /// A `.rsx` beside a hand-written `mod.rs` can only be placed by that file, because an outside module
-    /// cannot add items to one. Saying so beats the "cannot find `drawer_panel` in `drawer`" a reader gets
-    /// about a file that is plainly there.
+    /// A `.rsx` beside a hand-written `mod.rs` can only be placed by that file, because an outside module cannot add items to one. Saying so beats the "cannot find `drawer_panel` in `drawer`" a reader gets about a file that is plainly there.
     #[test]
     fn a_module_that_must_place_its_own_rsx_is_told_to() {
         let root = std::env::temp_dir().join(format!("rsx_owns_modules_{}", std::process::id()));
@@ -461,8 +409,7 @@ mod tests {
         let _ = std::fs::remove_dir_all(&root);
     }
 
-    /// A nested `rsx_modules!()` places its own directory. Rooting the walk at `src/` instead would declare
-    /// an ancestor of the file doing the declaring, which rustc reads as a circular module.
+    /// A nested `rsx_modules!()` places its own directory. Rooting the walk at `src/` instead would declare an ancestor of the file doing the declaring, which rustc reads as a circular module.
     #[test]
     fn a_nested_invocation_places_its_own_directory() {
         let root = std::env::temp_dir().join(format!("rsx_nested_modules_{}", std::process::id()));
@@ -533,9 +480,6 @@ mod tests {
         let features_rs = std::fs::read_to_string(modtree.join("features.rs")).unwrap_or_default();
         let _ = std::fs::remove_dir_all(&root);
 
-        // Every generated tree file it wrote is reported back, for a caller that prunes stale build output.
-        // A directory of nothing but markup earns a node too: a `.rsx` is a module where its file sits,
-        // which is what lets two files share a basename.
         assert_eq!(
             written,
             vec![
@@ -551,27 +495,22 @@ mod tests {
             "the markup is the module:\n{features_rs}"
         );
 
-        // Every module is a file-based `#[path] pub mod` — never an inline `mod dir { … }` block (which breaks rust-analyzer's `#[path]` resolution).
         assert!(!out.contains('{'), "no inline module blocks:\n{out}");
         assert!(out.contains("pub mod util;"), "{out}");
-        // A subdirectory is a file-based module pointing at its generated tree file; its children live inside that file.
         assert!(out.contains("pub mod core;"), "{out}");
         assert!(core_rs.contains("pub mod app;"), "{core_rs}");
         assert!(core_rs.contains("pub mod theme;"), "{core_rs}");
         assert!(out.contains("pub mod shared;"), "{out}");
         assert!(shared_rs.contains("pub mod demo;"), "{shared_rs}");
-        // Hand-managed dir (has mod.rs) is declared but not descended into.
         assert!(out.contains("pub mod hand;"), "{out}");
         assert!(
             !out.contains("nested") && !out.contains("inner") && !core_rs.contains("nested"),
             "{out}"
         );
-        // Markup earns a node, and it sits where the file does — `core/sidebar.rsx` is `core::sidebar`.
         assert!(
             core_rs.contains("pub mod sidebar;"),
             "{out}\n---\n{core_rs}"
         );
-        // An asset directory still produces nothing.
         assert!(!features_rs.contains("assets"), "{features_rs}");
         assert!(
             !out.contains("pub mod lib") && !out.contains("pub mod main"),

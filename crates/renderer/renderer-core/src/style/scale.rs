@@ -1,3 +1,5 @@
+//! [`Scale`]: turning a logical-pixel style into physical pixels, for backends that do not fold the scale factor into a shader.
+
 use geometry_core::{Point, Rect};
 
 use super::gradient::{Gradient, GradientKind};

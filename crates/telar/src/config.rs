@@ -1,7 +1,10 @@
+//! The renderer backend an app is built or configured for.
+
 use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, Clone, Copy, PartialEq, Eq, Default)]
 #[serde(rename_all = "lowercase")]
+/// Which renderer to build: `Auto` is hardware with a software fallback.
 pub enum RendererBackend {
     #[default]
     Auto,
@@ -9,7 +12,7 @@ pub enum RendererBackend {
     Software,
 }
 
-// Only the runtime runner reads this; gated so `rsx` compiled without `runtime` (e.g. as a cargo-telar dependency) doesn't warn it as dead code.
+// Gated so a build without `runtime` does not warn it as dead code.
 #[cfg(feature = "runtime")]
 pub(crate) fn compile_time_backend() -> RendererBackend {
     match option_env!("TELAR_RENDERER_BACKEND") {

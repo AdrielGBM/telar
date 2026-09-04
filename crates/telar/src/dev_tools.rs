@@ -1,3 +1,5 @@
+//! The dev overlay: an FPS counter, a node inspector and the build-error banner.
+
 use std::borrow::Cow;
 use std::collections::VecDeque;
 use std::time::Duration;
@@ -50,10 +52,10 @@ const WHITE: Color = Color::rgba(0.9, 0.9, 0.9, 1.0);
 const GRAY: Color = Color::rgba(0.5, 0.5, 0.5, 1.0);
 const GRAY_DIM: Color = Color::rgba(0.3, 0.3, 0.3, 1.0);
 
-// Rolling window duration — frames older than this are dropped from the count.
 const FPS_WINDOW: Duration = Duration::from_secs(1);
 const KEEPALIVE_INTERVAL: Duration = Duration::from_millis(1000);
 
+/// The dev overlay: an FPS counter, a node inspector and the build-error banner.
 pub struct DevTools {
     frame_times: VecDeque<Instant>,
     last_fps: u32,
@@ -128,7 +130,6 @@ impl DevPlugin for DevTools {
         cmds.extend_from_slice(base);
 
         if self.inspector_open {
-            // Selected node highlight drawn on the canvas, behind the inspector panel.
             if let Some(selected_id) = self.selected_node
                 && let Some(node) = self.nodes.iter().find(|n| n.id == selected_id)
                 && node.rect.width > 0.0
@@ -318,7 +319,6 @@ impl DevPlugin for DevTools {
             cmds.push(DrawCommand::PopClip);
         }
 
-        // Error banner — shown on top of everything when a build fails
         if let Some(ref error_msg) = self.build_error {
             const BANNER_PAD: f32 = 16.0;
             const BANNER_LINE_HEIGHT: f32 = 16.0;

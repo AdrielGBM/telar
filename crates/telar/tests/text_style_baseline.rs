@@ -1,13 +1,8 @@
 //! What a text style resolves to today, written down before anything resolves it differently.
 //!
-//! The inheritance work replaces four independent default systems with one initial-value table, and its whole
-//! job is to change nothing: an application that declares no style must draw exactly what it draws now. That
-//! is only checkable against a record of what it draws now, and this is it.
+//! The inheritance work replaces four independent default systems with one initial-value table, and its whole job is to change nothing: an application that declares no style must draw exactly what it draws now. That is only checkable against a record of what it draws now, and this is it.
 //!
-//! Asserted on `DrawCommand`s rather than pixels, which is the distinction that makes the net useful: a
-//! resolved `TextStyle` is directly comparable, where a screenshot answers "does this look right" and never
-//! "which weight did it decide on". Every number here is a *current* value, not a desired one — a change to
-//! any of them is either a regression or a decision, and both should have to be made on purpose.
+//! Asserted on `DrawCommand`s rather than pixels, which is the distinction that makes the net useful: a resolved `TextStyle` is directly comparable, where a screenshot answers "does this look right" and never "which weight did it decide on". Every number here is a *current* value, not a desired one — a change to any of them is either a regression or a decision, and both should have to be made on purpose.
 
 use renderer_core::TextWrap;
 use telar::testing::mount;
@@ -40,12 +35,9 @@ fn resolved(build: impl FnOnce() -> Box<dyn LayoutItem>) -> TextStyle {
     style.expect("the tree drew a text command")
 }
 
-/// Every field of a `TextStyle` nobody has said anything about — resolved through the cascade, so this is
-/// `Inherited::initial()` itself and not a copy of it written out beside it.
+/// Every field of a `TextStyle` nobody has said anything about — resolved through the cascade, so this is `Inherited::initial()` itself and not a copy of it written out beside it.
 ///
-/// The ink is the theme's rather than black: the initial row *is* the theme's answers now, and the built-in
-/// answer for ink follows the light/dark mode. A text that used to be black on a dark page is the bug that
-/// closes.
+/// The ink is the theme's rather than black: the initial row *is* the theme's answers now, and the built-in answer for ink follows the light/dark mode. A text that used to be black on a dark page is the bug that closes.
 #[test]
 fn an_undeclared_text_style_resolves_to_these_exact_values() {
     let style = resolved(|| {
@@ -69,8 +61,7 @@ fn an_undeclared_text_style_resolves_to_these_exact_values() {
     assert_eq!(style.text_shadow, telar::TextShadow::None);
 }
 
-/// A style declared on a leaf reaches the command unchanged. Nothing between the widget and the renderer may
-/// quietly amend it — which is exactly what a resolve pass inserted in the middle could start doing.
+/// A style declared on a leaf reaches the command unchanged. Nothing between the widget and the renderer may quietly amend it — which is exactly what a resolve pass inserted in the middle could start doing.
 #[test]
 fn a_declared_text_style_reaches_the_draw_command_intact() {
     let declared = TextStyle::new(11.0, Color::WHITE)
@@ -99,9 +90,7 @@ fn a_declared_text_style_reaches_the_draw_command_intact() {
     assert_eq!(style, expected);
 }
 
-/// **A nested text inherits nothing today**, and that is the point of recording it: a `col` cannot say
-/// anything about the text inside it, so a leaf two containers deep resolves to the same row as one at the
-/// root. When inheritance lands, a tree that declares nothing must still land here.
+/// **A nested text inherits nothing today**, and that is the point of recording it: a `col` cannot say anything about the text inside it, so a leaf two containers deep resolves to the same row as one at the root. When inheritance lands, a tree that declares nothing must still land here.
 #[test]
 fn nesting_changes_nothing_about_a_text_style() {
     let style = resolved(|| {
@@ -118,12 +107,9 @@ fn nesting_changes_nothing_about_a_text_style() {
     assert_eq!(style.raster, Raster::Smooth);
 }
 
-/// The §1.4 split, closed: a `text` naming no size and a catalogue widget now read the same number, because
-/// there is only one — the theme's, at the root of the tree. This test used to assert that they *differed*,
-/// and the assertion it makes now is the whole point of the inheritance work.
+/// The §1.4 split, closed: a `text` naming no size and a catalogue widget now read the same number, because there is only one — the theme's, at the root of the tree. This test used to assert that they *differed*, and the assertion it makes now is the whole point of the inheritance work.
 ///
-/// A theme is registered rather than relying on the built-in row, so a size nobody could have baked is the one
-/// both paths have to arrive at.
+/// A theme is registered rather than relying on the built-in row, so a size nobody could have baked is the one both paths have to arrive at.
 #[test]
 fn the_markup_default_and_the_catalogue_default_are_one_number() {
     #[derive(Clone)]
@@ -155,11 +141,9 @@ fn the_markup_default_and_the_catalogue_default_are_one_number() {
     );
 }
 
-/// The line the whole plan was written for, and the shape it takes in markup: a container names a size and a
-/// raster once, and a leaf that says nothing takes both.
+/// The line the whole plan was written for, and the shape it takes in markup: a container names a size and a raster once, and a leaf that says nothing takes both.
 ///
-/// Built the way generated code builds it — `Container::declaring` under a `Text::declaring` — because the
-/// transpiler's own tests can only prove it *emitted* the call.
+/// Built the way generated code builds it — `Container::declaring` under a `Text::declaring` — because the transpiler's own tests can only prove it *emitted* the call.
 #[test]
 fn a_container_declares_the_text_below_it() {
     let style = resolved(|| {
@@ -182,11 +166,7 @@ fn a_container_declares_the_text_below_it() {
     );
 }
 
-/// The headline case, and the one nothing could express before: an ancestor that draws no text of its own
-/// says what the text beneath it looks like. Asserted through a real frame rather than the cascade's own unit
-/// tests, because the thing being checked is that a `Text` built the ordinary way actually reads it — and
-/// re-reads it, since the declaration lands *after* the leaf has already rendered once, which is the order a
-/// tree is built in.
+/// The headline case, and the one nothing could express before: an ancestor that draws no text of its own says what the text beneath it looks like. Asserted through a real frame rather than the cascade's own unit tests, because the thing being checked is that a `Text` built the ordinary way actually reads it — and re-reads it, since the declaration lands *after* the leaf has already rendered once, which is the order a tree is built in.
 #[test]
 fn a_container_can_say_what_the_text_below_it_looks_like() {
     telar::install_default_text_metrics();
@@ -252,9 +232,7 @@ fn a_container_can_say_what_the_text_below_it_looks_like() {
 
 /// A theme's own row at the root, for the eight inherited properties that never had a token of their own.
 ///
-/// `font_size` and `ink` had one, so a theme could set two of the ten and had to write the other eight at
-/// every call site — which is the repetition the cascade exists to remove. What the row leaves unsaid still
-/// falls through to the tokens underneath it.
+/// `font_size` and `ink` had one, so a theme could set two of the ten and had to write the other eight at every call site — which is the repetition the cascade exists to remove. What the row leaves unsaid still falls through to the tokens underneath it.
 #[test]
 fn a_themes_root_row_reaches_a_text_that_declares_nothing() {
     #[derive(Clone)]

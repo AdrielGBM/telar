@@ -13,17 +13,13 @@ use ui_core::{
     box_item,
 };
 
-/// Scrim tone: a translucent black wash over the page. Kept as a *fill* on an opaque-subtree dialog (never
-/// an `opacity` layer over the whole overlay) so the dialog itself stays fully opaque — layering the scrim's
-/// alpha over the dialog would bleed the page through it.
+/// Scrim tone: a translucent black wash over the page. Kept as a *fill* on an opaque-subtree dialog (never an `opacity` layer over the whole overlay) so the dialog itself stays fully opaque — layering the scrim's alpha over the dialog would bleed the page through it.
 pub(crate) const SCRIM: Color = Color::rgba(0.0, 0.0, 0.0, 0.5);
 
-/// The dismiss handler the helper hands to each widget's scrim (and, for `modal`, its Close): shared so both
-/// affordances run the same "set `open = false`, then `on_close`" without rebuilding it per tap target.
+/// The dismiss handler the helper hands to each widget's scrim (and, for `modal`, its Close): shared so both affordances run the same "set `open = false`, then `on_close`" without rebuilding it per tap target.
 pub(crate) type DismissFn = Rc<dyn Fn()>;
 
-/// Carries the overlay subtree's effects alongside it, so the dismiss-stack registration and the focus
-/// handover live exactly as long as the overlay is mounted and are released with it.
+/// Carries the overlay subtree's effects alongside it, so the dismiss-stack registration and the focus handover live exactly as long as the overlay is mounted and are released with it.
 struct Dismissible {
     inner: Box<dyn LayoutItem>,
     _registration: Effect,
@@ -46,9 +42,7 @@ impl LayoutItem for Dismissible {
     }
 }
 
-/// Keeps the dismiss stack in step with `open`: on the transition into open the overlay becomes the stack's
-/// top, and on the way out it withdraws — including when it was closed by its own Close button rather than by
-/// a dismissal, which is why the entry is tracked by id instead of assumed to still be on top.
+/// Keeps the dismiss stack in step with `open`: on the transition into open the overlay becomes the stack's top, and on the way out it withdraws — including when it was closed by its own Close button rather than by a dismissal, which is why the entry is tracked by id instead of assumed to still be on top.
 fn track_dismissible(open: RwSignal<bool>, dismiss: DismissFn) -> Effect {
     let registered: Cell<Option<DismissId>> = Cell::new(None);
     effect(move || {
@@ -64,10 +58,7 @@ fn track_dismissible(open: RwSignal<bool>, dismiss: DismissFn) -> Effect {
 
 /// Hands the keyboard to the dialog on open and gives it back on close.
 ///
-/// Both halves matter and only together: now that a modal traps focus, opening one without moving the
-/// keyboard inside leaves Tab with nowhere to go, and closing one without putting the focus back leaves it on
-/// a widget the user can no longer see. The remembered id is checked before being restored, because the thing
-/// that opened the dialog may not have survived it.
+/// Both halves matter and only together: now that a modal traps focus, opening one without moving the keyboard inside leaves Tab with nowhere to go, and closing one without putting the focus back leaves it on a widget the user can no longer see. The remembered id is checked before being restored, because the thing that opened the dialog may not have survived it.
 fn track_focus_handover(open: RwSignal<bool>, content: layout_core::NodeId) -> Effect {
     let previous: Cell<Option<ui_core::focus::FocusId>> = Cell::new(None);
     let was_open = Cell::new(false);
@@ -96,16 +87,9 @@ fn collapsed() -> Result<Box<dyn LayoutItem>, LayoutError> {
     )?))
 }
 
-/// The portal-once toggleable-scrim scaffold shared by `modal` and `drawer`. Owns the unbound guard, the
-/// build latch, the take-once wrapper around `build_inner`, and the toggleable `Overlay`; `build_inner` gets
-/// the shared dismiss handler and returns its own scrim container (with the card/panel inside), which is kept
-/// mounted and shown/hidden via `open`.
+/// The portal-once toggleable-scrim scaffold shared by `modal` and `drawer`. Owns the unbound guard, the build latch, the take-once wrapper around `build_inner`, and the toggleable `Overlay`; `build_inner` gets the shared dismiss handler and returns its own scrim container (with the card/panel inside), which is kept mounted and shown/hidden via `open`.
 ///
-/// `open` `None` (unbound) can never open, so it renders nothing and drops the captured body. Otherwise the
-/// scrim is built ONCE — lazily on the first open, so the layout host exists and the portal attaches to the
-/// viewport — then kept mounted and shown/hidden via `open` (see `Overlay::toggleable`), preserving the body
-/// across close/reopen. The `ReactiveList` is keyed on a latch that flips true on the first open and stays
-/// true, so the built scrim is never disposed.
+/// `open` `None` (unbound) can never open, so it renders nothing and drops the captured body. Otherwise the scrim is built ONCE — lazily on the first open, so the layout host exists and the portal attaches to the viewport — then kept mounted and shown/hidden via `open` (see `Overlay::toggleable`), preserving the body across close/reopen. The `ReactiveList` is keyed on a latch that flips true on the first open and stays true, so the built scrim is never disposed.
 pub(crate) fn scrim_overlay(
     open: Option<RwSignal<bool>>,
     on_close: Option<Rc<dyn Fn()>>,
@@ -125,8 +109,7 @@ pub(crate) fn scrim_overlay(
         })
     };
 
-    // `build_inner` consumes the pre-built slot body, so it can run only once; the take-once cell lets the
-    // reusable `ReactiveList` build closure invoke it on the single latch-true build and never again.
+    // `build_inner` consumes the pre-built slot body, so the take-once cell lets the reusable build closure invoke it on the single latch-true build and never again.
     let build_inner = RefCell::new(Some(build_inner));
 
     let built = Rc::new(Cell::new(false));

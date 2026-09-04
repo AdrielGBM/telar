@@ -1,9 +1,6 @@
 //! Integration test for `spawn_task`: the background-work bridge, driven end-to-end through the real runner.
 //!
-//! The unit tests in reactive-core cover the queue itself. What this proves is the wiring around it — that the
-//! runner drains completions every frame, that the callback runs on the UI thread where it may write a signal
-//! the tree is subscribed to, and that the write reaches pixels. A `spawn_task` whose result never landed
-//! would leave the window on its initial color.
+//! The unit tests in reactive-core cover the queue itself. What this proves is the wiring around it — that the runner drains completions every frame, that the callback runs on the UI thread where it may write a signal the tree is subscribed to, and that the write reaches pixels. A `spawn_task` whose result never landed would leave the window on its initial color.
 
 mod common;
 
@@ -23,8 +20,7 @@ use telar::{
 const INITIAL: [u8; 3] = [200, 40, 40];
 const FROM_TASK: [u8; 3] = [40, 200, 40];
 
-// Enough frames (paced at 60fps by the headless platform) for a worker returning a constant to finish and be
-// drained several times over.
+// Enough frames (paced at 60fps by the headless platform) for a worker returning a constant to finish and be drained several times over.
 const FRAMES: u32 = 60;
 
 struct SignalFillRoot {
@@ -34,8 +30,7 @@ struct SignalFillRoot {
 
 impl SignalFillRoot {
     fn new(color: ReadSignal<Color>) -> Self {
-        // Read inside the style closure, which `view()` re-runs under the segment's effect: that subscription
-        // is what turns the task's signal write into a repaint.
+        // Read inside the style closure, which `view()` re-runs under the segment's effect: that subscription is what turns the task's signal write into a repaint.
         let rect = Rectangle::new(
             LayoutStyle::new()
                 .width(SizeDimension::Percent(1.0))

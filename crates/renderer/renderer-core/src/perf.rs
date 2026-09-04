@@ -1,8 +1,4 @@
-//! Lightweight per-phase frame timing, gated on the `TELAR_PERF` env var. When disabled every
-//! entry point is a single relaxed-atomic load or an early return, so it is safe to leave the
-//! instrumentation compiled into release builds. Enabled it accumulates per-phase durations
-//! across both the UI thread (command build/clone) and the render thread (interpret/gpu) and
-//! dumps rolling averages via `tracing` — stdout on desktop, logcat on Android.
+//! Lightweight per-phase frame timing, gated on the `TELAR_PERF` env var. When disabled every entry point is a single relaxed-atomic load or an early return, so it is safe to leave the instrumentation compiled into release builds. Enabled it accumulates per-phase durations across both the UI thread (command build/clone) and the render thread (interpret/gpu) and dumps rolling averages via `tracing` — stdout on desktop, logcat on Android.
 
 use std::sync::OnceLock;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -22,8 +18,7 @@ pub enum Phase {
     Gpu = 3,
     /// Whole render_frame (render thread) or whole SW render (UI thread).
     Frame = 4,
-    /// Render thread: `output.present()` alone — a subset of `gpu` that isolates swapchain/vsync
-    /// block (FIFO present on mobile) from the CPU-side command-buffer build + submit.
+    /// Render thread: `output.present()` alone — a subset of `gpu` that isolates swapchain/vsync block (FIFO present on mobile) from the CPU-side command-buffer build + submit.
     Present = 5,
 }
 
@@ -37,8 +32,7 @@ static SUMS: [AtomicU64; N] = [const { AtomicU64::new(0) }; N];
 static COUNTS: [AtomicU64; N] = [const { AtomicU64::new(0) }; N];
 static MAXES: [AtomicU64; N] = [const { AtomicU64::new(0) }; N];
 static FRAMES: AtomicU64 = AtomicU64::new(0);
-// Count of frames in the current window that took the F1 damage-tracking path, so the dump shows
-// whether damage is actually firing (vs falling back to a full repaint).
+// Count of frames in the current window that took the F1 damage-tracking path, so the dump shows whether damage is actually firing (vs falling back to a full repaint).
 static DAMAGE_FRAMES: AtomicU64 = AtomicU64::new(0);
 
 /// Record whether the frame being rendered used F1 damage tracking.
@@ -90,6 +84,7 @@ pub struct Span {
 }
 
 #[inline]
+/// Starts timing a phase, or returns `None` when profiling is off.
 pub fn span(phase: Phase) -> Option<Span> {
     if enabled() {
         Some(Span {
@@ -107,8 +102,7 @@ impl Drop for Span {
     }
 }
 
-/// Advance the frame counter and, every `DUMP_EVERY` frames, log rolling avg/max per phase and
-/// reset the accumulators. Call once per frame from the thread that owns the frame loop.
+/// Advance the frame counter and, every `DUMP_EVERY` frames, log rolling avg/max per phase and reset the accumulators. Call once per frame from the thread that owns the frame loop.
 pub fn tick() {
     if !enabled() {
         return;

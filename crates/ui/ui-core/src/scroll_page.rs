@@ -8,11 +8,9 @@ use crate::context::{compute_layout, mark_dirty, new_container};
 use crate::layout_item::LayoutItem;
 use crate::scroll_area::LayoutScrollArea;
 
-/// A window-sized root holding a [`LayoutScrollArea`] whose viewport is recomputed on resize, so content
-/// scrolls against the current window dimensions.
+/// A window-sized root holding a [`LayoutScrollArea`] whose viewport is recomputed on resize, so content scrolls against the current window dimensions.
 ///
-/// The shape any app whose whole window is one scrolling column needs, and which two of them — the preview
-/// runner and the landing page — had written out identically, down to the field names.
+/// The shape any app whose whole window is one scrolling column needs, and which two of them — the preview runner and the landing page — had written out identically, down to the field names.
 pub struct ScrollPage {
     root: NodeId,
     content_node: NodeId,
@@ -26,8 +24,7 @@ impl ScrollPage {
             LayoutStyle::new().flex_grow(1.0).align_self_stretch(),
             content,
         )?;
-        // Percent sizing so a `compute_layout` against `Definite(w, h)` yields a full-window viewport for the
-        // scroll-area leaf.
+        // Percent sizing, so a `compute_layout` against `Definite(w, h)` gives the leaf a full-window viewport.
         let root = new_container(
             LayoutStyle::new()
                 .flex_column()
@@ -42,8 +39,7 @@ impl ScrollPage {
         })
     }
 
-    /// Lays the page out against a window of `width`×`height`, then the content against that width at its own
-    /// natural height — which is what gives the scroll area something taller than itself to scroll.
+    /// Lays the page out against a window of `width`×`height`, then the content against that width at its own natural height — which is what gives the scroll area something taller than itself to scroll.
     pub fn relayout(&mut self, width: f32, height: f32) {
         mark_dirty(self.root).ok();
         compute_layout(

@@ -1,3 +1,5 @@
+//! The layout engine: a taffy tree behind an id-keyed API, plus the measure hooks and dirty tracking the reactive layer drives it with.
+
 use rustc_hash::{FxHashMap, FxHashSet};
 use taffy::{TaffyTree, TraversePartialTree};
 
@@ -5,22 +7,19 @@ use crate::direction::Direction;
 use crate::error::LayoutError;
 use crate::style::{AvailableSpace, LayoutStyle};
 
+/// A node in the layout tree. Ids are reused after a node is freed, so a stale one may name a live node.
 pub type NodeId = taffy::NodeId;
 
-/// Per-node measure callback: given the available main-axis width, returns the
-/// node's intrinsic (width, height). Used for text nodes whose height depends on
-/// how many lines the content wraps into at the resolved width.
+/// Per-node measure callback: given the available main-axis width, returns the node's intrinsic (width, height). Used for text nodes whose height depends on how many lines the content wraps into at the resolved width.
 pub type MeasureFn = Box<dyn FnMut(f32) -> (f32, f32)>;
 
+/// The layout tree: nodes, their styles, and the measure hooks for the leaves that size themselves.
 pub struct LayoutEngine {
     tree: TaffyTree<MeasureFn>,
     direction: Direction,
-    /// What every node was asked for, which every path pushing a style to taffy resolves from. See
-    /// [`current_style`](Self::current_style) for why it is every node and not only those needing it.
+    /// What every node was asked for, which every path pushing a style to taffy resolves from. See [`current_style`](Self::current_style) for why it is every node and not only those needing it.
     styles: FxHashMap<NodeId, LayoutStyle>,
-    /// Every node this engine currently owns. Kept because taffy has no total way to ask: `style()` indexes
-    /// its slot map and panics on a freed key rather than answering, so there is nothing to guard with. See
-    /// [`alive`](Self::alive) for why anything asks at all.
+    /// Every node this engine currently owns. Kept because taffy has no total way to ask: `style()` indexes its slot map and panics on a freed key rather than answering, so there is nothing to guard with. See [`alive`](Self::alive) for why anything asks at all.
     live: FxHashSet<NodeId>,
 }
 
@@ -39,11 +38,9 @@ impl LayoutEngine {
         self.direction
     }
 
-    /// Re-resolves every direction-dependent node against `direction`, returning whether anything changed.
-    /// The caller still has to mark the tree dirty and recompute — this only rewrites styles.
+    /// Re-resolves every direction-dependent node against `direction`, returning whether anything changed. The caller still has to mark the tree dirty and recompute — this only rewrites styles.
     ///
-    /// This is what lets one build serve both directions: rather than rebuilding the widget tree, each node
-    /// that was authored logically is resolved again from the intent recorded when it was created.
+    /// This is what lets one build serve both directions: rather than rebuilding the widget tree, each node that was authored logically is resolved again from the intent recorded when it was created.
     pub fn set_direction(&mut self, direction: Direction) -> bool {
         if self.direction == direction {
             return false;
@@ -65,11 +62,7 @@ impl LayoutEngine {
 
     /// The intent this node was built from.
     ///
-    /// Every node keeps one — including those needing nothing resolved — so this is exact rather than
-    /// reconstructed. It costs one style per node, which is what taffy already holds, and buys two things:
-    /// a direction flip re-resolves from what was written instead of trying to un-swap edges it can no
-    /// longer tell apart, and a backend whose output is a document can ask what a box was *asked* for
-    /// rather than only where it ended up.
+    /// Every node keeps one — including those needing nothing resolved — so this is exact rather than reconstructed. It costs one style per node, which is what taffy already holds, and buys two things: a direction flip re-resolves from what was written instead of trying to un-swap edges it can no longer tell apart, and a backend whose output is a document can ask what a box was *asked* for rather than only where it ended up.
     fn current_style(&self, node: NodeId) -> LayoutStyle {
         self.styles.get(&node).cloned().unwrap_or_default()
     }
@@ -148,9 +141,7 @@ impl LayoutEngine {
     pub fn set_style(&mut self, node: NodeId, mut style: LayoutStyle) -> Result<(), LayoutError> {
         self.alive(node)?;
         if let Some(previous) = self.styles.get(&node) {
-            // The out-of-band answer only: a fresh style cannot know it was ever given, so it is carried
-            // forward. What the style itself says about being shown is left alone, because the style is the
-            // one thing that does know — OR-ing the two made a node hidden once hidden for ever.
+            // The out-of-band answer only: a fresh style cannot know it was ever given, so it is carried forward. What the style says about being shown is left alone, since OR-ing the two made a node hidden once hidden forever.
             style.logical.display_override = style
                 .logical
                 .display_override
@@ -170,8 +161,7 @@ impl LayoutEngine {
         Ok(())
     }
 
-    /// Replaces `parent`'s children with `children`, in order. Used by reactive lists to insert, move,
-    /// and drop item nodes as their source collection changes.
+    /// Replaces `parent`'s children with `children`, in order. Used by reactive lists to insert, move, and drop item nodes as their source collection changes.
     pub fn set_children(&mut self, parent: NodeId, children: &[NodeId]) -> Result<(), LayoutError> {
         self.alive(parent)?;
         for &child in children {
@@ -182,8 +172,7 @@ impl LayoutEngine {
             .map_err(LayoutError::from)
     }
 
-    /// Appends `child` to `parent`'s existing children (unlike [`set_children`], which replaces them). Used
-    /// to attach an overlay's out-of-flow content to the layout root without touching the root's other children.
+    /// Appends `child` to `parent`'s existing children (unlike [`set_children`](Self::set_children), which replaces them). Used to attach an overlay's out-of-flow content to the layout root without touching the root's other children.
     pub fn add_child(&mut self, parent: NodeId, child: NodeId) -> Result<(), LayoutError> {
         self.alive(parent)?;
         self.alive(child)?;
@@ -192,7 +181,7 @@ impl LayoutEngine {
             .map_err(LayoutError::from)
     }
 
-    /// Detaches `child` from `parent` (does not free it — call [`remove`] afterwards to release the node).
+    /// Detaches `child` from `parent` (does not free it — call [`remove`](Self::remove) afterwards to release the node).
     pub fn remove_child(&mut self, parent: NodeId, child: NodeId) -> Result<(), LayoutError> {
         self.alive(parent)?;
         self.alive(child)?;
@@ -212,12 +201,7 @@ impl LayoutEngine {
 
     /// An error, rather than a panic, for a node that has been freed.
     ///
-    /// Every mutator goes through this because a widget can legitimately outlive its node: a `Segment` holds
-    /// the widget so a re-render mid-dispatch can still flatten it, so an effect the widget owns may fire
-    /// once after the list that held it dropped the node. Taffy indexes its slot map directly and would
-    /// panic on that id — and these all return `Result` already, so the honest answer to "attach a node that
-    /// is gone" is the error the signature promises. The read-only queries take the same view (`is_size_auto`
-    /// and friends already fall back rather than fail).
+    /// Every mutator goes through this because a widget can legitimately outlive its node: a `Segment` holds the widget so a re-render mid-dispatch can still flatten it, so an effect the widget owns may fire once after the list that held it dropped the node. Taffy indexes its slot map directly and would panic on that id — and these all return `Result` already, so the honest answer to "attach a node that is gone" is the error the signature promises. The read-only queries take the same view (`is_size_auto` and friends already fall back rather than fail).
     fn alive(&self, node: NodeId) -> Result<(), LayoutError> {
         if self.live.contains(&node) {
             Ok(())
@@ -228,13 +212,9 @@ impl LayoutEngine {
         }
     }
 
-    /// Frees a node (and its measure context) from the tree. The caller must have already detached it from
-    /// its parent (via [`set_children`]); a removed node id must not be used again.
+    /// Frees a node (and its measure context) from the tree. The caller must have already detached it from its parent (via [`set_children`](Self::set_children)); a removed node id must not be used again.
     ///
-    /// **Freeing one twice is a no-op, not a crash.** Two owners can reach the same node without seeing each
-    /// other — a `ReactiveList` reconciling away a row it no longer has, and the row's own owner being
-    /// disposed — and both are right to free what they held. Taffy panics on a key it has already handed
-    /// back (`invalid SlotMap key`), so the second free took the process down with it.
+    /// **Freeing one twice is a no-op, not a crash.** Two owners can reach the same node without seeing each other — a `ReactiveList` reconciling away a row it no longer has, and the row's own owner being disposed — and both are right to free what they held. Taffy panics on a key it has already handed back (`invalid SlotMap key`), so the second free took the process down with it.
     pub fn remove(&mut self, node: NodeId) {
         if self.alive(node).is_err() {
             return;
@@ -272,29 +252,23 @@ impl LayoutEngine {
         });
     }
 
-    /// Sets the node's minimum height to a definite length, or clears it (`auto`) when `None`. Lets a
-    /// content-measured leaf (e.g. a code editor's text area) fill a viewport it would otherwise underflow.
+    /// Sets the node's minimum height to a definite length, or clears it (`auto`) when `None`. Lets a content-measured leaf (e.g. a code editor's text area) fill a viewport it would otherwise underflow.
     pub fn set_min_height(&mut self, node: NodeId, height: Option<f32>) {
         self.mutate_style(node, |style| {
             style.logical.min_height_override = height;
         });
     }
 
-    /// Turns `node` into a flex row after construction, registering it as direction-following so a later
-    /// RTL flip reverses it like an authored `flex_row`. What a reconciling list calls when it learns —
-    /// from the container it is being attached to — that its items run horizontally.
+    /// Turns `node` into a flex row after construction, registering it as direction-following so a later RTL flip reverses it like an authored `flex_row`. What a reconciling list calls when it learns — from the container it is being attached to — that its items run horizontally.
     pub fn make_flex_row(&mut self, node: NodeId) {
         self.mutate_style(node, |style| {
             style.logical.row_forced = true;
         });
     }
 
-    /// Whether the node lays its children along the main (horizontal) axis — a flex row. A column, or any
-    /// non-row node (missing / errored), is `false`. A transparent fragment reads its host's axis to know
-    /// which margin edge a per-item gap sits on.
+    /// Whether the node lays its children along the main (horizontal) axis — a flex row. A column, or any non-row node (missing / errored), is `false`. A transparent fragment reads its host's axis to know which margin edge a per-item gap sits on.
     pub fn is_row(&self, node: NodeId) -> bool {
-        // Same guard every other read takes, and for the same reason: taffy panics on a freed key rather
-        // than reporting it, so a node removed since the caller last saw it has to be answered here.
+        // Same guard every other read takes, and for the same reason: taffy panics on a freed key rather than reporting it, so a node removed since the caller last saw it has to be answered here.
         if self.alive(node).is_err() {
             return false;
         }
@@ -309,10 +283,7 @@ impl LayoutEngine {
             .unwrap_or(false)
     }
 
-    /// Sets the node's leading margin on the host's main axis (`top` for a column; for a row, whichever
-    /// horizontal edge the host lays out from) to `px`, leaving the other edges untouched. A transparent
-    /// `for … gap:N` uses this to space its items by a gap without a container of its own: the item cell
-    /// carries the gap as a margin instead.
+    /// Sets the node's leading margin on the host's main axis (`top` for a column; for a row, whichever horizontal edge the host lays out from) to `px`, leaving the other edges untouched. A transparent `for … gap:N` uses this to space its items by a gap without a container of its own: the item cell carries the gap as a margin instead.
     pub fn set_leading_margin(&mut self, node: NodeId, is_row: bool, px: f32) {
         self.mutate_style(node, |style| {
             style.logical.leading_margin = Some((is_row, px));
@@ -331,8 +302,7 @@ impl LayoutEngine {
             .unwrap_or(false)
     }
 
-    /// Whether this node is itself out of layout flow. Says nothing about its ancestors — [`walk`](Self::walk)
-    /// carries that down as it descends, and a caller asking about one node has to climb for itself.
+    /// Whether this node is itself out of layout flow. Says nothing about its ancestors — [`walk`](Self::walk) carries that down as it descends, and a caller asking about one node has to climb for itself.
     pub fn is_display_none(&self, node: NodeId) -> bool {
         self.style_of(node)
             .map(|s| s.display == taffy::Display::None)
@@ -426,9 +396,7 @@ impl LayoutEngine {
             node: NodeId,
             offset_x: f32,
             offset_y: f32,
-            // `display:none` on an ancestor: taffy stops laying out the subtree, leaving stale layouts,
-            // so descendants keep their last visible size and widgets that draw at fixed coordinates
-            // (e.g. a Canvas) would still paint. Force the whole subtree to a zero size instead.
+            // Taffy stops laying out the subtree under a `display:none` ancestor, leaving stale layouts, so widgets drawing at fixed coordinates would still paint. Force the whole subtree to a zero size instead.
             hidden: bool,
         }
 
@@ -495,9 +463,7 @@ mod tests {
             .unwrap();
     }
 
-    /// Two owners can reach the same node without seeing each other — a list reconciling away a row it no
-    /// longer has, and that row's own owner being disposed — and both are right to free what they held.
-    /// Taffy panics on a key it has already handed back, so the second free took the process down with it.
+    /// Two owners can reach the same node without seeing each other — a list reconciling away a row it no longer has, and that row's own owner being disposed — and both are right to free what they held. Taffy panics on a key it has already handed back, so the second free took the process down with it.
     #[test]
     fn freeing_a_node_twice_is_a_no_op() {
         let mut engine = LayoutEngine::new();
@@ -509,10 +475,7 @@ mod tests {
 
     /// Every mutator answers for a freed node instead of taking the process down with it.
     ///
-    /// Taffy indexes its slot map directly — `style()` included, so there is nothing to guard with but our
-    /// own record — and a widget can outlive its node by design: a `Segment` holds it so a re-render
-    /// mid-dispatch can still flatten it, so an effect it owns may fire once after the node is gone. These
-    /// all return `Result`; an error is what the signature already promised.
+    /// Taffy indexes its slot map directly — `style()` included, so there is nothing to guard with but our own record — and a widget can outlive its node by design: a `Segment` holds it so a re-render mid-dispatch can still flatten it, so an effect it owns may fire once after the node is gone. These all return `Result`; an error is what the signature already promised.
     #[test]
     fn a_freed_node_is_an_error_and_never_a_panic() {
         let mut engine = LayoutEngine::new();

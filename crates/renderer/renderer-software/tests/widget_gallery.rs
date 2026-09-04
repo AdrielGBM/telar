@@ -1,6 +1,4 @@
-//! Headless render gallery for the ui-components catalogue: builds the inline form widgets in visible
-//! states and renders them to a PNG for eyeballing. Runs in CI (asserts it renders with content); pass
-//! TELAR_WIDGETS_OUT=/path.png to also dump the image.
+//! Headless render gallery for the ui-components catalogue: builds the inline form widgets in visible states and renders them to a PNG for eyeballing. Runs in CI (asserts it renders with content); pass TELAR_WIDGETS_OUT=/path.png to also dump the image.
 
 mod common;
 
@@ -27,7 +25,6 @@ fn form_widgets_render() {
     common::install_text_metrics();
     reset_layout_runtime();
 
-    // Each widget in a clearly-visible state so the PNG shows selected/checked/filled looks.
     let cb = checkbox(
         CheckboxProps::props()
             .checked(signal(true))
@@ -80,7 +77,6 @@ fn form_widgets_render() {
         Children::default(),
     )
     .unwrap();
-    // A SECOND field (like the demo's two): placeholder-only, its own signal. Both must render.
     let tf2 = text_field(
         TextFieldProps::props()
             .value(signal(String::new()))
@@ -186,7 +182,6 @@ fn modal_renders_over_a_page() {
         SoftwareRendererConfig::default(),
     );
     renderer.begin_frame(w, h, 1.0, 0).unwrap();
-    // Clear to a "page" colour so the translucent scrim + opaque dialog are visible.
     renderer
         .render_frame(&tree.commands(), Some(Color::from_rgb_u8(238, 240, 245)))
         .unwrap();
@@ -246,7 +241,6 @@ fn select_open_renders() {
 
     let mut tree = ComponentList::new(sel);
     let _ = tree.commands();
-    // Open the dropdown by tapping the trigger centre (route like the runner: overlays first, else tree).
     let r = trigger_rect.get();
     let (cx, cy) = ((r.x + r.width / 2.0) as f64, (r.y + r.height / 2.0) as f64);
     for ev in [
@@ -279,7 +273,7 @@ fn select_open_renders() {
         .render_frame(&tree.commands(), Some(Color::from_rgb_u8(244, 245, 248)))
         .unwrap();
     let rgba = renderer.read_rgba().expect("pixmap");
-    // The one thing this test can say that select.rs's unit tests cannot: an open panel is an *overlay*, composed from a different layer than the trigger, and its rows have to survive that trip to the pixels. Without an assertion it only proved the render did not panic.
+    // An open panel is an overlay composed from a different layer than the trigger, and its rows have to survive that trip to the pixels.
     let panel_rows = rgba
         .chunks_exact(4)
         .skip((w as usize) * 90 * 1)

@@ -23,8 +23,7 @@ impl CellRect {
         row1: 0,
     };
 
-    /// The cells a logical rect covers. Both edges are rounded independently, never the width — that is
-    /// what makes two boxes sharing an edge share a column instead of leaving a seam or overlapping by one.
+    /// The cells a logical rect covers. Both edges are rounded independently, never the width — that is what makes two boxes sharing an edge share a column instead of leaving a seam or overlapping by one.
     pub fn of(rect: Rect, cell: CellSize) -> Self {
         Self {
             col0: cell.col_at(rect.x),
@@ -59,9 +58,7 @@ impl CellRect {
 
 /// The colour a paint takes at a point, in the same space the point is given in.
 ///
-/// A gradient's stops live in the space its command was emitted in, so the caller hands over a paint whose
-/// geometry has already been mapped through the active matrix — which is exact for any affine transform,
-/// and the reason this takes a mapped `Paint` rather than a matrix of its own.
+/// A gradient's stops live in the space its command was emitted in, so the caller hands over a paint whose geometry has already been mapped through the active matrix — which is exact for any affine transform, and the reason this takes a mapped `Paint` rather than a matrix of its own.
 pub fn sample(paint: &Paint, x: f32, y: f32) -> Color {
     match paint {
         Paint::Solid(c) => *c,

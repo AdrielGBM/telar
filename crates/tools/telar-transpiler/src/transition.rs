@@ -13,13 +13,9 @@ pub(crate) struct TransitionSpec {
 
 /// Properties a `transition(…)` can animate (F5 in `docs/animations.md`).
 ///
-/// Paint and transform, and deliberately not the layout box. Both halves are read per frame from a closure the
-/// renderer already re-runs, so animating them costs a repaint and nothing else — the "no relayout" invariant
-/// (F5 in `docs/animations.md`) that the whole design rests on. Animating `width`/`height`/`x`/`y` would put a
-/// layout pass in every frame of every transition, which is a different decision and needs its own.
+/// Paint and transform, and deliberately not the layout box. Both halves are read per frame from a closure the renderer already re-runs, so animating them costs a repaint and nothing else — the "no relayout" invariant (F5 in `docs/animations.md`) that the whole design rests on. Animating `width`/`height`/`x`/`y` would put a layout pass in every frame of every transition, which is a different decision and needs its own.
 ///
-/// A transform is enough for the shape this was missing: an indicator that slides to the active item moves by
-/// `translate_x`, not by its box.
+/// A transform is enough for the shape this was missing: an indicator that slides to the active item moves by `translate_x`, not by its box.
 const SUPPORTED_PROPS: &[&str] = &[
     "opacity",
     "fill",

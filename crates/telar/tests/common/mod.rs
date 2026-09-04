@@ -1,5 +1,4 @@
-//! Shared helpers for the headless integration tests: a no-op paths provider and a minimal real app that
-//! fills its whole window with one solid color.
+//! Shared helpers for the headless integration tests: a no-op paths provider and a minimal real app that fills its whole window with one solid color.
 
 // Each test binary compiles this module whole but uses only the helpers it needs.
 #![allow(dead_code)]
@@ -36,8 +35,7 @@ impl App for FillApp {
     }
 }
 
-/// A fill app that can be told to panic during build, to exercise the multi-surface panic quarantine
-/// (T-4.2): a surface whose build panics must unmount without tumbling the other surfaces.
+/// A fill app that can be told to panic during build, to exercise the multi-surface panic quarantine (T-4.2): a surface whose build panics must unmount without tumbling the other surfaces.
 pub struct MaybePanicApp {
     pub color: Color,
     pub panic_on_build: bool,
@@ -58,8 +56,7 @@ impl App for MaybePanicApp {
     }
 }
 
-/// Assert the center pixel of a `w`×`h` premultiplied-RGBA8 buffer matches `expected` (R, G, B) within a small
-/// tolerance, and is not the black clear color.
+/// Assert the center pixel of a `w`×`h` premultiplied-RGBA8 buffer matches `expected` (R, G, B) within a small tolerance, and is not the black clear color.
 pub fn assert_center_rgb(pixels: &[u8], w: u32, h: u32, expected: [u8; 3], label: &str) {
     assert_eq!(
         pixels.len(),
@@ -83,12 +80,9 @@ pub fn assert_center_rgb(pixels: &[u8], w: u32, h: u32, expected: [u8; 3], label
     );
 }
 
-/// Reports that a GPU test is skipping for want of an adapter — and fails instead when `TELAR_REQUIRE_GPU`
-/// is set.
+/// Reports that a GPU test is skipping for want of an adapter — and fails instead when `TELAR_REQUIRE_GPU` is set.
 ///
-/// CI sets it on the leg that installs lavapipe, so a suite that quietly stopped covering the GPU reads as
-/// red there rather than as passing tests that never ran. Everywhere else the absence is a real answer and
-/// the test skips.
+/// CI sets it on the leg that installs lavapipe, so a suite that quietly stopped covering the GPU reads as red there rather than as passing tests that never ran. Everywhere else the absence is a real answer and the test skips.
 pub fn skip_without_gpu(what: &str) {
     telar::testing::require_gpu(what, "no adapter");
 }

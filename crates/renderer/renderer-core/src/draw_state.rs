@@ -1,3 +1,5 @@
+//! The clip and matrix stacks a backend carries while replaying commands.
+
 use geometry_core::{Point, Rect, Transform};
 
 use crate::DrawCommand;
@@ -48,33 +50,19 @@ impl DrawState {
 
     /// How much the accumulated matrix scales what is drawn under it.
     ///
-    /// The square root of the determinant, so a rotation counts as no scale at all and a squash
-    /// counts as the average of its two axes. Text is laid out at a size and not stretched from
-    /// one, so one number is what it can be given.
+    /// The square root of the determinant, so a rotation counts as no scale at all and a squash counts as the average of its two axes. Text is laid out at a size and not stretched from one, so one number is what it can be given.
     #[inline]
     pub fn scale(&self) -> f32 {
         let [a, b, c, d, _, _] = self.cumulative_matrix;
         (a * d - b * c).abs().sqrt()
     }
 
-    /// Pushes `rect` as a clip, intersected with whatever is already clipping, and returns the effective
-    /// scissor.
+    /// Pushes `rect` as a clip, intersected with whatever is already clipping, and returns the effective scissor.
     ///
-    /// A child clip that does *not* meet its parent clips away to nothing, and that case is worth spelling
-    /// out because getting it wrong is invisible in every test that does not scroll: `intersect` answers
-    /// `None` for two rects that do not overlap, and falling back to `rect` there hands the child its **own**
-    /// box as the scissor — outside everything that contains it. A widget that emits a clip of its own (an
-    /// image does, for a `Cover` overflow or a corner radius) therefore escaped the scroll area it lived in
-    /// the moment it scrolled out of view: it went on being drawn at its true position, outside the panel,
-    /// sliding as the content scrolled, and only looked right once its own box fell back inside the viewport.
-    /// Nothing *without* a clip of its own could show the bug, which is why the text and boxes beside it in
-    /// the same list were always clipped correctly.
+    /// A child clip that does *not* meet its parent clips away to nothing, and that case is worth spelling out because getting it wrong is invisible in every test that does not scroll: `intersect` answers `None` for two rects that do not overlap, and falling back to `rect` there hands the child its **own** box as the scissor — outside everything that contains it. A widget that emits a clip of its own (an image does, for a `Cover` overflow or a corner radius) therefore escaped the scroll area it lived in the moment it scrolled out of view: it went on being drawn at its true position, outside the panel, sliding as the content scrolled, and only looked right once its own box fell back inside the viewport. Nothing *without* a clip of its own could show the bug, which is why the text and boxes beside it in the same list were always clipped correctly.
     #[inline]
     pub fn push_clip(&mut self, rect: Rect) -> Rect {
-        // The empty rect is placed at the *parent's* origin rather than the child's. An empty clip has no
-        // position worth keeping, and a backend that cannot express one — wgpu rejects an empty scissor, so
-        // `physical_scissor` rounds it up to 1×1 — then draws that one pixel somewhere it was already allowed
-        // to draw, instead of leaving a stray dot outside the panel.
+        // At the parent's origin rather than the child's: an empty clip has no position worth keeping, and a backend that cannot express one — wgpu rejects an empty scissor, so it rounds up to 1×1 — then draws that pixel somewhere it was already allowed to, instead of leaving a stray dot outside the panel.
         let effective = match self.clip_stack.last() {
             Some(&current) => current
                 .intersect(rect)
@@ -151,14 +139,12 @@ where
 mod tests {
     use super::*;
 
-    // Guards the push_matrix compose argument order (cumulative ∘ matrix) against the pre-refactor
-    // hand-rolled `compose_matrix(parent, child)`; a swapped order silently corrupts nested transforms.
+    // Guards the push_matrix compose argument order (cumulative ∘ matrix) against the pre-refactor hand-rolled `compose_matrix(parent, child)`; a swapped order silently corrupts nested transforms.
     #[test]
     fn push_matrix_matches_legacy_compose_order() {
         let cumulative = [2.0, 0.1, -0.2, 2.0, 10.0, 20.0];
         let matrix = [1.0, 0.5, -0.5, 1.0, 5.0, 7.0];
 
-        // Old `compose_matrix(parent = cumulative, child = matrix)` computing parent(child(p)).
         let [a1, b1, c1, d1, e1, f1] = matrix;
         let [a2, b2, c2, d2, e2, f2] = cumulative;
         let expected = [
@@ -176,10 +162,7 @@ mod tests {
         assert_eq!(state.cumulative_matrix, expected);
     }
 
-    /// A clip nested inside one it does not touch must clip away to nothing. The failing case is a widget
-    /// that emits its own clip — an image with a `Cover` overflow or a corner radius — scrolled out of the
-    /// viewport containing it: falling back to the child's own rect scissors to a box outside the parent, and
-    /// the widget goes on being drawn there, over whatever the panel happens to be sitting on.
+    /// A clip nested inside one it does not touch must clip away to nothing. The failing case is a widget that emits its own clip — an image with a `Cover` overflow or a corner radius — scrolled out of the viewport containing it: falling back to the child's own rect scissors to a box outside the parent, and the widget goes on being drawn there, over whatever the panel happens to be sitting on.
     #[test]
     fn a_clip_outside_its_parent_clips_away_to_nothing() {
         let viewport = Rect::new(0.0, 0.0, 340.0, 300.0);
@@ -190,7 +173,6 @@ mod tests {
             "the outermost clip is itself"
         );
 
-        // An avatar 560px down a scrolling column: its own 56×56 clip is nowhere near the viewport.
         let escaped = state.push_clip(Rect::new(0.0, 560.0, 56.0, 56.0));
         assert_eq!(
             (escaped.width, escaped.height),
@@ -206,19 +188,15 @@ mod tests {
         );
 
         state.pop_clip();
-        // The same image scrolled back in is clipped to the part of it the viewport actually shows.
         let visible = state.push_clip(Rect::new(0.0, 280.0, 56.0, 56.0));
         assert_eq!(visible, Rect::new(0.0, 280.0, 56.0, 20.0));
 
-        // And a clip with nothing above it is still itself, which is what the scroll area's own one relies on.
         let mut fresh = DrawState::new();
         let alone = Rect::new(12.0, 34.0, 56.0, 78.0);
         assert_eq!(fresh.push_clip(alone), alone);
     }
 
-    /// What text is laid out at. The rect a matrix scales already grows; without one number saying
-    /// by how much, the letters inside it would not — which is a box of the right size holding text
-    /// of the wrong one.
+    /// What text is laid out at. The rect a matrix scales already grows; without one number saying by how much, the letters inside it would not — which is a box of the right size holding text of the wrong one.
     #[test]
     fn the_scale_of_a_matrix_is_what_it_makes_things() {
         let mut state = DrawState::new();
@@ -227,7 +205,6 @@ mod tests {
         state.push_matrix([2.0, 0.0, 0.0, 2.0, 0.0, 0.0]);
         assert_eq!(state.scale(), 2.0);
 
-        // And it accumulates, which is the whole reason it is read off the cumulative matrix.
         state.push_matrix([3.0, 0.0, 0.0, 3.0, 0.0, 0.0]);
         assert_eq!(state.scale(), 6.0);
 
@@ -235,8 +212,7 @@ mod tests {
         assert_eq!(state.scale(), 2.0);
     }
 
-    /// A translation moves things and does not make them bigger, so text under one is laid out at
-    /// the size it was written with. Every leaf in the tree sits under one of these.
+    /// A translation moves things and does not make them bigger, so text under one is laid out at the size it was written with. Every leaf in the tree sits under one of these.
     #[test]
     fn moving_something_is_not_scaling_it() {
         let mut state = DrawState::new();
@@ -244,8 +220,7 @@ mod tests {
         assert_eq!(state.scale(), 1.0);
     }
 
-    /// A rotation is not a scale either, and reading one axis rather than the determinant would say
-    /// it was.
+    /// A rotation is not a scale either, and reading one axis rather than the determinant would say it was.
     #[test]
     fn turning_something_is_not_scaling_it() {
         let mut state = DrawState::new();

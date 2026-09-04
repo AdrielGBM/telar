@@ -5,6 +5,7 @@
 use lsp_types::{DocumentSymbol, Position, Range, SymbolKind};
 use telar_parser::RsxDocument;
 
+/// The document's outline: its classes, its previews and the component it declares.
 pub fn document_symbols(doc: &RsxDocument, source: &str) -> Vec<DocumentSymbol> {
     let mut entries: Vec<(usize, DocumentSymbol)> = Vec::new();
 
@@ -87,7 +88,6 @@ mod tests {
             names.iter().any(|n| n.contains("Default")),
             "preview: {names:?}"
         );
-        // Ordered by source line: @card before the preview.
         let lines: Vec<u32> = syms.iter().map(|s| s.range.start.line).collect();
         assert!(lines.windows(2).all(|w| w[0] <= w[1]), "sorted: {lines:?}");
 

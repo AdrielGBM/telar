@@ -1,3 +1,5 @@
+//! The pipeline that draws a finished layer texture into its parent.
+
 pub(crate) struct LayerPipeline {
     target_format: wgpu::TextureFormat,
     msaa_samples: u32,

@@ -1,3 +1,5 @@
+//! [`stepper`]: a value between a minus and a plus button, clamped to its range.
+
 use std::rc::Rc;
 use telar_macros::Props;
 
@@ -33,9 +35,7 @@ fn button_box() -> LayoutStyle {
         .height(button_size())
 }
 
-/// A numeric stepper: `[−]  value  [+]`. High-level sugar over `button`-style pressable boxes (see
-/// `button.rs`) plus a reactive `Text::new` readout; lives in `ui-components`, not the kernel. `value` is
-/// `Option` so `Props` can derive `Default`: `None` is uncontrolled (the widget owns its own `signal(min)`).
+/// A numeric stepper: `[−]  value  [+]`. High-level sugar over `button`-style pressable boxes (see `button.rs`) plus a reactive `Text::new` readout; lives in `ui-components`, not the kernel. `value` is `Option` so `Props` can derive `Default`: `None` is uncontrolled (the widget owns its own `signal(min)`).
 #[derive(Props)]
 pub struct StepperProps {
     /// Bound value. `None` (the default) is uncontrolled — the widget makes its own `signal(min)`.
@@ -44,10 +44,7 @@ pub struct StepperProps {
     /// Lower bound. Default `0.0`.
     #[props(default)]
     pub min: f32,
-    /// Upper bound. `0.0` (the default) means "unset". Following the same `0.0 == unset` sentinel convention
-    /// as `slider`'s `width`/`step`: an unset (or degenerate, `max <= min`) upper bound falls back to
-    /// `f32::INFINITY` rather than the historical two-arg default, so an unset max never pins the value to
-    /// `min` (a fixed fallback range would clamp any caller-supplied starting value above it back down).
+    /// Upper bound. `0.0` (the default) means "unset". Following the same `0.0 == unset` sentinel convention as `slider`'s `width`/`step`: an unset (or degenerate, `max <= min`) upper bound falls back to `f32::INFINITY` rather than the historical two-arg default, so an unset max never pins the value to `min` (a fixed fallback range would clamp any caller-supplied starting value above it back down).
     #[props(default)]
     pub max: f32,
     /// Increment applied per press. `0.0` (the default) means "unset" — use `1.0`.
@@ -61,6 +58,7 @@ pub struct StepperProps {
     pub on_change: Option<Rc<dyn Fn(f32)>>,
 }
 
+/// A value between a minus and a plus button, clamped to its range.
 pub fn stepper(
     props: StepperProps,
     _children: Children,
@@ -77,8 +75,7 @@ pub fn stepper(
     let step = if step == 0.0 { 1.0 } else { step };
     // Uncontrolled: own the value so the stepper still works when the caller binds no signal.
     let value = value.unwrap_or_else(|| signal(min));
-    // Shared across the − and + buttons' fill closures (a `Rc<dyn Fn>` is not `Clone`, an `Rc` handle is).
-    // Re-erased to `Rc` so both buttons' `on_press` closures can hold a copy (the field itself is a one-shot `Box`).
+    // Shared across the − and + buttons' fill closures (a `Rc<dyn Fn>` is not `Clone`, an `Rc` handle is). Re-erased to `Rc` so both buttons' `on_press` closures can hold a copy (the field itself is a one-shot `Box`).
 
     let minus = stepper_button("−", color.clone(), {
         let value = value;
@@ -131,15 +128,13 @@ fn button_fill(color: &Reactive<Color>) -> Color {
     shared::resolve(color, shared::accent)
 }
 
-/// A small square pressable box with a centred glyph — the − / + buttons, built on the same
-/// box + on_press + centred-label shape as `button.rs`'s `ButtonProps` filled variant.
+/// A small square pressable box with a centred glyph — the − / + buttons, built on the same box + on_press + centred-label shape as `button.rs`'s `ButtonProps` filled variant.
 fn stepper_button(
     glyph: &'static str,
     color: Reactive<Color>,
     on_press: impl Fn() + 'static,
 ) -> Result<Box<dyn LayoutItem>, LayoutError> {
-    // The glyph reads the same fill the box paints, so a light accent (a neutral palette's `primary` in
-    // dark mode) gets a dark glyph instead of a white one lost in its own button.
+    // The glyph reads the same fill the box paints, so a light accent gets a dark glyph rather than a white one lost in its own button.
     let glyph_fill = color.clone();
     let glyph_widget = Text::declaring(
         move || glyph.to_string(),
@@ -173,8 +168,6 @@ mod tests {
     use super::*;
     use crate::harness::{press, release};
 
-    // Taps (press then release inside) − and + at their expected edge positions: the row has no padding, so
-    // the − button occupies its left button_size() px and the + button its right button_size() px.
     fn tap_minus(widget: &mut Box<dyn LayoutItem>, r: geometry_core::Rect) {
         let (x, y) = (
             (r.x + button_size() / 2.0) as f64,
@@ -214,7 +207,6 @@ mod tests {
         tap_plus(&mut widget, r);
         assert!((value.get() - 5.0).abs() < 1e-4, "got {}", value.get());
 
-        // Another press must clamp at max, not overshoot to 6.
         tap_plus(&mut widget, r);
         assert!(
             (value.get() - 5.0).abs() < 1e-4,
@@ -245,7 +237,6 @@ mod tests {
         tap_minus(&mut widget, r);
         assert!((value.get() - 0.0).abs() < 1e-4, "got {}", value.get());
 
-        // Another press must clamp at min, not undershoot to -1.
         tap_minus(&mut widget, r);
         assert!(
             (value.get() - 0.0).abs() < 1e-4,
@@ -282,7 +273,6 @@ mod tests {
         );
     }
 
-    // An unset `value` prop must fall back to a working internal signal (uncontrolled mode), not panic.
     #[test]
     fn uncontrolled_stepper_builds_with_default_value() {
         crate::test_support::fresh_layout_runtime();
@@ -290,7 +280,6 @@ mod tests {
         assert!(result.is_ok());
     }
 
-    // An unset (sentinel 0.0) max must not pin the value to min: pressing + repeatedly keeps climbing.
     #[test]
     fn unset_max_does_not_clamp_to_min() {
         crate::test_support::fresh_layout_runtime();

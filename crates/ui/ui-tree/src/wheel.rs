@@ -1,10 +1,8 @@
 //! Whether a wheel notch is worth animating on this surface.
 //!
-//! On by default, because a surface that draws in pixels can show the intermediate positions and every
-//! desktop platform does: a notch that lands in one frame gives no sense of which way the content went.
+//! On by default, because a surface that draws in pixels can show the intermediate positions and every desktop platform does: a notch that lands in one frame gives no sense of which way the content went.
 //!
-//! A terminal turns it off. Its smallest visible step is a whole cell, so easing across a notch would repaint
-//! the screen several times to show the same two or three rows — a stutter drawn at the cost of a glide.
+//! A terminal turns it off. Its smallest visible step is a whole cell, so easing across a notch would repaint the screen several times to show the same two or three rows — a stutter drawn at the cost of a glide.
 
 use std::cell::Cell;
 

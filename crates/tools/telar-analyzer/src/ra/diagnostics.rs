@@ -1,3 +1,5 @@
+//! Pulling diagnostics out of the embedded analyzer for one generated file.
+
 use std::path::Path;
 
 use lsp_types::{Diagnostic, InlayHintKind, NumberOrString, Range};

@@ -1,3 +1,5 @@
+//! The cache keys shaping, rasterization and COLR lookup are all addressed by.
+
 use renderer_core::{Color, FontFamily, LineHeight, Raster, TextStyle, TextWrap};
 use rustc_hash::FxHasher;
 use std::hash::{Hash, Hasher};
@@ -33,16 +35,18 @@ pub fn text_style_bits(style: &TextStyle) -> u32 {
 pub(super) type GlyphPositions = std::sync::Arc<Vec<(cosmic_text::CacheKey, i32, i32)>>;
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
+/// What a shaped paragraph is addressed by: its text, its style and the width it wrapped against.
 pub struct ShapingCacheKey {
     pub text_hash: u64,
     pub font_size_bits: u32,
     pub width: u32,
     pub scale_factor_bits: u32,
     pub style_bits: u32,
-    // shaping is height-independent: it depends only on wrap width, not container height
+    // Shaping is height-independent: it depends on wrap width, not container height.
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
+/// What a rasterized string is addressed by: its shaping key plus the colour and scale it was drawn at.
 pub struct TextCacheKey {
     pub text_hash: u64,
     pub font_size_bits: u32,
@@ -52,7 +56,7 @@ pub struct TextCacheKey {
     pub style_bits: u32,
 }
 
-// pub(super): hashed by layout/raster/colr submodules to build their respective cache keys.
+// `pub(super)`: hashed by the layout, raster and colr submodules to build their cache keys.
 pub(super) fn hash_text(text: &str) -> u64 {
     let mut h = FxHasher::default();
     text.hash(&mut h);
@@ -60,6 +64,7 @@ pub(super) fn hash_text(text: &str) -> u64 {
 }
 
 #[inline]
+/// Builds the raster cache key for a string at a given style, colour and scale.
 pub fn make_text_cache_key(
     text: &str,
     font_size: f32,

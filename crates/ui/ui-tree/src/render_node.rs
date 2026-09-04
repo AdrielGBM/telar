@@ -1,3 +1,5 @@
+//! [`RenderNode`]: what a `view()` returns, before it is flattened into draw commands.
+
 use std::cell::RefCell;
 use std::sync::Arc;
 
@@ -8,6 +10,7 @@ thread_local! {
     static NODE_VEC_POOL: RefCell<Vec<Vec<RenderNode>>> = const { RefCell::new(Vec::new()) };
 }
 
+/// A pooled `Vec<RenderNode>`, returned to the pool when it drops.
 pub struct NodeVec(Vec<RenderNode>);
 
 impl NodeVec {
@@ -43,13 +46,14 @@ impl IntoIterator for NodeVec {
     type Item = RenderNode;
     type IntoIter = std::vec::IntoIter<RenderNode>;
     fn into_iter(self) -> Self::IntoIter {
-        // ManuallyDrop suppresses NodeVec's Drop (which would return the vec to the pool) so we can move the inner vec out and iterate it instead.
+        // `ManuallyDrop` suppresses `NodeVec`'s `Drop`, which would return the vec to the pool.
         let mut md = std::mem::ManuallyDrop::new(self);
         let v = std::mem::take(&mut md.0);
         v.into_iter()
     }
 }
 
+/// What a `view()` returns: a draw command, a group of them, or a boundary the compositor treats specially.
 pub enum RenderNode {
     Empty,
     Primitive(DrawCommand),
@@ -72,20 +76,16 @@ pub enum RenderNode {
     },
     /// A box, for a backend whose output is a document: its identity, what it means, and what it holds.
     ///
-    /// Emitted only while [`element_capture`](crate::element_capture) is on. A rasteriser flattens straight
-    /// through it — the commands inside are already positioned — so the only cost where nobody reads it is
-    /// not building it at all.
+    /// Emitted only while [`element_capture`](crate::element_capture) is on. A rasteriser flattens straight through it — the commands inside are already positioned — so the only cost where nobody reads it is not building it at all.
     Element {
         element: std::sync::Arc<renderer_core::Element>,
         children: NodeVec,
     },
-    // A portal: its subtree is hoisted to the top layer at compose time (drawn last, above everything, and
-    // escaping any ancestor clip/transform/layer). Used for overlays — dropdowns, modals, drawers, toasts.
-    // Positioning is the caller's job (lay the content out where it should appear, e.g. an absolute-fill box).
+    // A portal: its subtree is hoisted to the top layer at compose time, drawn last and escaping any ancestor clip, transform or layer. Positioning is the caller's job.
     Overlay {
         children: NodeVec,
     },
-    // A reactive boundary: the child segment maintains its own flattened commands via its own effect, so the parent's view() references it without re-running the child's view(). Composed lazily at collect time (see segment.rs). Enables O(changed component) updates instead of O(tree).
+    // A reactive boundary: the child segment maintains its own flattened commands via its own effect.
     Boundary {
         child: std::rc::Rc<crate::segment::Segment>,
     },
@@ -146,10 +146,7 @@ impl RenderNode {
         }
     }
 
-    /// A pure translation, which is what almost every `Transform` in a widget is: a leaf drawing its
-    /// content in local coordinates and moving it to wherever the layout put it. Spelling it out as a
-    /// matrix is six numbers where two are meant, and four of them have to be read to see it is not a
-    /// scale or a rotation.
+    /// A pure translation, which is what almost every `Transform` in a widget is: a leaf drawing its content in local coordinates and moving it to wherever the layout put it. Spelling it out as a matrix is six numbers where two are meant, and four of them have to be read to see it is not a scale or a rotation.
     pub fn translate(dx: f32, dy: f32, children: impl IntoIterator<Item = RenderNode>) -> Self {
         Self::Transform {
             matrix: [1.0, 0.0, 0.0, 1.0, dx, dy],
@@ -157,8 +154,7 @@ impl RenderNode {
         }
     }
 
-    /// Cuts its subtree to `rect`, which the renderer maps through the active matrix — so a widget
-    /// clipping itself passes its own local box and the clip composes with whatever moved it there.
+    /// Cuts its subtree to `rect`, which the renderer maps through the active matrix — so a widget clipping itself passes its own local box and the clip composes with whatever moved it there.
     pub fn clip(
         rect: Rect,
         radius: BorderRadius,

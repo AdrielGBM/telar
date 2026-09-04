@@ -1,3 +1,5 @@
+//! The per-thread registry of live animations, and the single `tick` the runner drives them all from.
+
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::mem::ManuallyDrop;
@@ -6,10 +8,7 @@ use web_time::Instant;
 
 /// Something that advances with the frame clock, erased over whatever it is advancing.
 ///
-/// `Animated` is the usual one, and not the only kind there is: a value eased between two endpoints is one
-/// thing, and a velocity that decays until it runs out or meets a bound is another. A scroll fling is the
-/// second — it has no target until it stops — so the registry takes anything that can be told the time
-/// rather than only animations.
+/// `Animated` is the usual one, and not the only kind there is: a value eased between two endpoints is one thing, and a velocity that decays until it runs out or meets a bound is another. A scroll fling is the second — it has no target until it stops — so the registry takes anything that can be told the time rather than only animations.
 pub trait Tickable {
     /// Advance to `now`. `scale` is the global time scale: `0.0` means jump straight to the end.
     fn tick(&self, now: Instant, scale: f32);
@@ -23,7 +22,7 @@ struct Registry {
     next_id: u64,
     // Global time scale (D5): 1.0 normal, 0.0 = jump instantly to targets, in-between = slow motion.
     scale: f32,
-    // Live `Continuous` guards. Kept here rather than in their own registry because the runner asks the same question of both — "is anything still in flight?" — and this one already crosses the hot-reload FFI boundary that a second registry would have to duplicate.
+    // Here rather than in their own registry: the runner asks the same question of both, and this one already crosses the hot-reload FFI boundary a second registry would have to duplicate.
     continuous: u32,
 }
 
@@ -38,7 +37,7 @@ impl Registry {
     }
 }
 
-// ManuallyDrop keeps this TLS trivially-destructible: registering a TLS destructor from the app dylib would make dlclose unsafe during hot reload (mirrors reactive-core's runtime and rsx's hot_state). The map leaks per reload, which is fine for a dev-only path; `reset` clears it explicitly on teardown.
+// `ManuallyDrop` keeps this TLS trivially destructible: a destructor registered from the app dylib would make `dlclose` unsafe. The map leaks per reload, which is fine on a dev-only path.
 thread_local! {
     static REGISTRY: ManuallyDrop<RefCell<Registry>> = ManuallyDrop::new(RefCell::new(Registry::new()));
 }
@@ -55,9 +54,7 @@ pub fn next_id() -> u64 {
 
 /// Registers something to be advanced once per frame.
 ///
-/// Held weakly, so whatever registered it deregisters by being dropped and nothing has to remember to say
-/// so. Ticking is the frame's, and a value written from `tick` is a write like any other — the runner calls
-/// it outside the render, which is why an animation may publish into a signal from there at all.
+/// Held weakly, so whatever registered it deregisters by being dropped and nothing has to remember to say so. Ticking is the frame's, and a value written from `tick` is a write like any other — the runner calls it outside the render, which is why an animation may publish into a signal from there at all.
 pub fn register(id: u64, weak: Weak<dyn Tickable>) {
     REGISTRY.with(|r| {
         r.borrow_mut().entries.insert(id, weak);
@@ -93,11 +90,7 @@ pub fn has_active() -> bool {
 
 /// Keeps frames coming while it lives, for content Telar cannot see changing.
 ///
-/// An animation moves values Telar owns, so the tree reports itself dirty and the loop schedules the next
-/// frame on its own. A region filled from outside — a texture the application renders into
-/// (`telar::gpu::image`), a video decoding on another thread — changes no value here at all: the draw
-/// commands are identical every frame while the picture underneath is not. Nothing in the tree can
-/// notice that, which is why it has to be declared.
+/// An animation moves values Telar owns, so the tree reports itself dirty and the loop schedules the next frame on its own. A region filled from outside — a texture the application renders into (`telar::gpu::image`), a video decoding on another thread — changes no value here at all: the draw commands are identical every frame while the picture underneath is not. Nothing in the tree can notice that, which is why it has to be declared.
 ///
 /// Hold one for as long as the region is on screen; dropping it lets the loop go back to sleep.
 pub struct Continuous(());
@@ -124,8 +117,7 @@ impl Drop for Continuous {
     }
 }
 
-/// Whether any [`Continuous`] region is alive. The runner keeps scheduling frames while it is true, and
-/// moves the content generation so the renderer cannot mistake identical commands for an identical frame.
+/// Whether any [`Continuous`] region is alive. The runner keeps scheduling frames while it is true, and moves the content generation so the renderer cannot mistake identical commands for an identical frame.
 pub fn has_continuous() -> bool {
     REGISTRY.with(|r| r.borrow().continuous > 0)
 }
@@ -149,7 +141,6 @@ pub fn set_scale(scale: f32) {
 mod tests {
     use super::*;
 
-    // The registry is thread-local and libtest reuses threads; each test starts from a known state.
     fn fresh() {
         reset();
     }
@@ -164,7 +155,6 @@ mod tests {
         assert!(!has_continuous());
     }
 
-    // Two viewports on screen at once: the loop sleeps when the last one goes, not the first.
     #[test]
     fn the_loop_sleeps_only_when_the_last_region_goes() {
         fresh();

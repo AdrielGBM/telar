@@ -1,15 +1,8 @@
-//! The pieces a list-shaped control is made of — [`item`], [`separator`], [`group`] — and the [`ListContext`]
-//! their parent provides so they can be written as siblings instead of passed in as data.
+//! The pieces a list-shaped control is made of — [`item`], [`separator`], [`group`] — and the [`ListContext`] their parent provides so they can be written as siblings instead of passed in as data.
 //!
-//! This is the compound-component half of the catalogue. A `menu` used to take `items: Vec<&'static str>`,
-//! which is the whole of what a string can say: no row could be disabled, carry a shortcut, show a tick, or
-//! be anything but one line of text. Widening that prop would have meant a struct per feature and a call site
-//! written in Rust rather than in markup.
+//! This is the compound-component half of the catalogue. A `menu` used to take `items: Vec<&'static str>`, which is the whole of what a string can say: no row could be disabled, carry a shortcut, show a tick, or be anything but one line of text. Widening that prop would have meant a struct per feature and a call site written in Rust rather than in markup.
 //!
-//! What replaces it is the arrangement Radix reaches for: the parent publishes a context, and each piece
-//! reads it. The piece is then an ordinary component with ordinary props, and `disabled:$x` on a row means
-//! what it means on any other widget. See [`Children`] for the ordering problem this had to solve first —
-//! a child is an argument, so without it a row would be built before the menu it belongs to exists.
+//! What replaces it is the arrangement Radix reaches for: the parent publishes a context, and each piece reads it. The piece is then an ordinary component with ordinary props, and `disabled:$x` on a row means what it means on any other widget. See [`Children`] for the ordering problem this had to solve first — a child is an argument, so without it a row would be built before the menu it belongs to exists.
 
 use renderer_core::TextWrap;
 use std::cell::{Cell, RefCell};
@@ -26,16 +19,13 @@ use ui_core::{Children, Container, LayoutItem, StyledContainer, Text, box_item, 
 
 use crate::shared;
 
-/// A row's hint and a group's heading, as shares of the label they sit with, at the alpha that makes them
-/// read as secondary without becoming a second colour a theme has to answer for.
+/// A row's hint and a group's heading, as shares of the label they sit with, at the alpha that makes them read as secondary without becoming a second colour a theme has to answer for.
 const HINT_RATIO: f32 = 0.9;
 const HEADING_RATIO: f32 = 0.85;
 
 /// What a row needs to know about the list it is in, and what the list needs to learn from its rows.
 ///
-/// Both directions, and that is the point: the parent hands down how to commit and how to paint, and each row
-/// hands back whether the keyboard may stop on it. Neither half is expressible with props alone — the parent
-/// cannot write props for rows it has not seen, and a row cannot reach a parent it was built before.
+/// Both directions, and that is the point: the parent hands down how to commit and how to paint, and each row hands back whether the keyboard may stop on it. Neither half is expressible with props alone — the parent cannot write props for rows it has not seen, and a row cannot reach a parent it was built before.
 #[derive(Clone)]
 pub struct ListContext(Rc<ListState>);
 
@@ -47,27 +37,21 @@ struct ListState {
     selected: Option<RwSignal<u32>>,
     color: Reactive<Color>,
     rows: RefCell<Vec<Row>>,
-    /// A cursor asked for before there was anything to put it on. Opening with the down arrow happens in a
-    /// key handler, and the rows are built on the flush after it returns, so the request has to wait for them.
+    /// A cursor asked for before there was anything to put it on. Opening with the down arrow happens in a key handler, and the rows are built on the flush after it returns, so the request has to wait for them.
     seed: Cell<bool>,
     search: RefCell<Search>,
-    /// Set while the list is being walked for what its rows *say* rather than for the rows. See
-    /// [`ListContext::declare`].
+    /// Set while the list is being walked for what its rows *say* rather than for the rows. See [`ListContext::declare`].
     declaring: Cell<bool>,
 }
 
 struct Row {
-    /// Whether the keyboard cursor may land here — a closure, not a flag, so a row that becomes disabled
-    /// while the panel is open stops being a stop straight away instead of at the next rebuild.
+    /// Whether the keyboard cursor may land here — a closure, not a flag, so a row that becomes disabled while the panel is open stops being a stop straight away instead of at the next rebuild.
     reachable: Reactive<bool>,
-    /// What type-ahead matches against, for the same reason a closure: a row whose label tracks a signal is
-    /// findable by what it says now. Empty for a piece that is not a destination, and for a row written with
-    /// markup children instead of a label — there is no text to match, so nothing claims to match it.
+    /// What type-ahead matches against, for the same reason a closure: a row whose label tracks a signal is findable by what it says now. Empty for a piece that is not a destination, and for a row written with markup children instead of a label — there is no text to match, so nothing claims to match it.
     label: Reactive<String>,
 }
 
-/// How long a pause ends a type-ahead query. Past it the next character starts a fresh search rather than
-/// extending one the user has stopped thinking about — the same second every native list allows.
+/// How long a pause ends a type-ahead query. Past it the next character starts a fresh search rather than extending one the user has stopped thinking about — the same second every native list allows.
 const SEARCH_TIMEOUT: Duration = Duration::from_millis(1000);
 
 /// The type-ahead query and when it was last typed into.
@@ -96,20 +80,15 @@ impl ListContext {
         }))
     }
 
-    /// Walks `rows` for their metadata alone: every piece registers what it is and hands back a bare node
-    /// instead of building itself.
+    /// Walks `rows` for their metadata alone: every piece registers what it is and hands back a bare node instead of building itself.
     ///
-    /// This exists for one thing a bound list needs and a menu does not. A `select`'s trigger has to name the
-    /// current choice *before the panel has ever been opened*, and the rows only exist once it has — so the
-    /// labels could not be where that name came from, and the component kept a flat `options` prop instead.
-    /// Asking the rows what they say, without asking them to be rows, is what removes that.
+    /// This exists for one thing a bound list needs and a menu does not. A `select`'s trigger has to name the current choice *before the panel has ever been opened*, and the rows only exist once it has — so the labels could not be where that name came from, and the component kept a flat `options` prop instead. Asking the rows what they say, without asking them to be rows, is what removes that.
     pub(crate) fn declare(&self, rows: &ui_core::Children) -> Result<(), LayoutError> {
         self.begin();
         self.0.declaring.set(true);
         let declared = rows.build_with(self.clone());
         self.0.declaring.set(false);
-        // Nothing frees a layout node on drop, and `remove` does not reach descendants — which is exactly why
-        // the pieces hand back a childless node rather than a built row.
+        // Nothing frees a layout node on drop and `remove` does not reach descendants, which is why the pieces hand back a childless node rather than a built row.
         for item in declared?.take_default() {
             ui_core::remove_node(item.layout_node());
         }
@@ -122,8 +101,7 @@ impl ListContext {
 
     /// What the row at `index` says right now, for a trigger that names the chosen one.
     pub(crate) fn label_of(&self, index: u32) -> Option<String> {
-        // Cloned out of the borrow before it is called: a label may read a signal, and reading one can flush
-        // effects that come back through the registry.
+        // Cloned out of the borrow before it is called: a label may read a signal, and reading one can flush effects that come back through the registry.
         let label = self.0.rows.borrow().get(index as usize)?.label.clone();
         Some(label.get())
     }
@@ -133,17 +111,14 @@ impl ListContext {
         self.0.seed.set(true);
     }
 
-    /// Drops the row registry ahead of a rebuild. The panel is remade on every open, and rows that
-    /// accumulated across opens would leave the keyboard walking through positions that no longer exist.
+    /// Drops the row registry ahead of a rebuild. The panel is remade on every open, and rows that accumulated across opens would leave the keyboard walking through positions that no longer exist.
     pub(crate) fn begin(&self) {
         self.0.rows.borrow_mut().clear();
-        // A fresh open is a fresh search: a query left over from the last one would make the first keystroke
-        // land somewhere the user never typed towards.
+        // A fresh open is a fresh search: a query left over from the last one would make the first keystroke land somewhere the user never typed towards.
         *self.0.search.borrow_mut() = Search::default();
     }
 
-    /// Registers a row and hands it the index it will commit. Called by each piece as it builds itself, so
-    /// the order is the order they are written in.
+    /// Registers a row and hands it the index it will commit. Called by each piece as it builds itself, so the order is the order they are written in.
     fn claim(&self, reachable: Reactive<bool>, label: Reactive<String>) -> u32 {
         let index = {
             let mut rows = self.0.rows.borrow_mut();
@@ -161,8 +136,7 @@ impl ListContext {
         index
     }
 
-    /// Registers a piece that holds a position without being one — a rule, a heading. It takes an index so the
-    /// rows around it keep the ones they commit with, and the keyboard passes straight over it.
+    /// Registers a piece that holds a position without being one — a rule, a heading. It takes an index so the rows around it keep the ones they commit with, and the keyboard passes straight over it.
     fn claim_unreachable(&self) {
         self.claim(Reactive::of(|| false), Reactive::default());
     }
@@ -173,9 +147,7 @@ impl ListContext {
 
     /// Moves the cursor `delta` places, passing over rows it may not stop on and wrapping at the ends.
     ///
-    /// Skipping rather than stopping is what makes a disabled row and a separator the same thing to the
-    /// keyboard: both are in the list and neither is a destination. Returns `None` when nothing in the list
-    /// can be reached at all, which is the only case where an arrow key does nothing.
+    /// Skipping rather than stopping is what makes a disabled row and a separator the same thing to the keyboard: both are in the list and neither is a destination. Returns `None` when nothing in the list can be reached at all, which is the only case where an arrow key does nothing.
     pub(crate) fn step(&self, from: Option<u32>, delta: i64) -> Option<u32> {
         let n = self.len() as i64;
         if n == 0 {
@@ -183,8 +155,7 @@ impl ListContext {
         }
         let start = match from {
             Some(i) => i as i64,
-            // Downward starts above the top and upward below the bottom, so the first step lands on the end
-            // the user came from rather than one past it.
+            // Downward starts above the top and upward below the bottom, so the first step lands on the end the user came from rather than one past it.
             None if delta > 0 => -1,
             None => n,
         };
@@ -196,8 +167,7 @@ impl ListContext {
         })
     }
 
-    /// The first row the keyboard may stop on, from whichever end `delta` starts at. What Home and End mean,
-    /// and where a fresh cursor lands.
+    /// The first row the keyboard may stop on, from whichever end `delta` starts at. What Home and End mean, and where a fresh cursor lands.
     pub(crate) fn edge(&self, delta: i64) -> Option<u32> {
         self.step(None, delta)
     }
@@ -217,12 +187,7 @@ impl ListContext {
 
     /// Extends the type-ahead query with `c` and returns the row it now names, or `None` when nothing matches.
     ///
-    /// Two behaviours that look like special cases and are the whole feature. **A repeated character cycles**:
-    /// `d`, `d`, `d` walks the rows starting with *d* rather than searching for "ddd", which no label has, and
-    /// it is the only way to reach the second of two rows sharing a first letter. **A refined query holds
-    /// still**: typing `de` after `d` may keep the row `d` landed on, because the user is narrowing towards it
-    /// rather than asking for the next one. That is why a one-character needle skips the current row and a
-    /// longer one does not.
+    /// Two behaviours that look like special cases and are the whole feature. **A repeated character cycles**: `d`, `d`, `d` walks the rows starting with *d* rather than searching for "ddd", which no label has, and it is the only way to reach the second of two rows sharing a first letter. **A refined query holds still**: typing `de` after `d` may keep the row `d` landed on, because the user is narrowing towards it rather than asking for the next one. That is why a one-character needle skips the current row and a longer one does not.
     pub(crate) fn type_ahead(&self, c: char, from: Option<u32>) -> Option<u32> {
         let query = self.extend_query(c);
         // Read off the query rather than off `c`, which is still in the case the user typed it in.
@@ -240,8 +205,7 @@ impl ListContext {
         if n == 0 {
             return None;
         }
-        // From wherever the cursor is, once round: a search that found nothing must not spin, and one that
-        // wraps has to be able to reach the rows above where it started.
+        // From wherever the cursor is, once round: a search that found nothing must not spin, and one that wraps has to reach the rows above where it started.
         let start = from.unwrap_or(0) as usize;
         (0..n).find_map(|k| {
             let i = (start + k) % n;
@@ -254,8 +218,7 @@ impl ListContext {
         })
     }
 
-    /// Appends `c` to the query, starting a new one if the last keystroke has gone stale. Lowercased on the
-    /// way in so the match is case-insensitive without lowercasing the needle once per row.
+    /// Appends `c` to the query, starting a new one if the last keystroke has gone stale. Lowercased on the way in so the match is case-insensitive without lowercasing the needle once per row.
     fn extend_query(&self, c: char) -> String {
         let mut search = self.0.search.borrow_mut();
         if search
@@ -272,9 +235,7 @@ impl ListContext {
 
 /// One row of a list — an action in a menu, a choice in a select.
 ///
-/// Outside any list it still builds, as a plain row that fires its own `on_press`. That is deliberate: the
-/// mistake of writing an item somewhere it has no parent is made in markup, and a component that panicked on
-/// it would report a markup error as a crash in Rust nobody wrote.
+/// Outside any list it still builds, as a plain row that fires its own `on_press`. That is deliberate: the mistake of writing an item somewhere it has no parent is made in markup, and a component that panicked on it would report a markup error as a crash in Rust nobody wrote.
 #[derive(Props)]
 pub struct ItemProps {
     #[props(into, default)]
@@ -284,13 +245,10 @@ pub struct ItemProps {
     pub disabled: Reactive<bool>,
     /// Draws a tick on the row — for a menu of toggles, where the row is a *state* rather than an action.
     ///
-    /// `Option` rather than a closure defaulting to `false`, so the row can tell "no tick here" from "a tick
-    /// that is currently off". It reserves the column either way once it is written, because a tick column
-    /// that appeared with the first tick would shift every label beside it.
+    /// `Option` rather than a closure defaulting to `false`, so the row can tell "no tick here" from "a tick that is currently off". It reserves the column either way once it is written, because a tick column that appeared with the first tick would shift every label beside it.
     #[props(some, into, default)]
     pub checked: Option<Reactive<bool>>,
-    /// Trailing text, quiet: a keyboard shortcut, a count, a units suffix. `Option` for the same reason as
-    /// [`checked`](Self::checked).
+    /// Trailing text, quiet: a keyboard shortcut, a count, a units suffix. `Option` for the same reason as [`checked`](Self::checked).
     #[props(some, into, default)]
     pub hint: Option<Reactive<String>>,
     /// Fired when the row is committed, on top of whatever the enclosing list does with the index.
@@ -298,6 +256,7 @@ pub struct ItemProps {
     pub on_press: Option<Rc<dyn Fn()>>,
 }
 
+/// One row of a list: its content, and what a commit on it does.
 pub fn item(props: ItemProps, children: Children) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let children = children.build()?;
     let ItemProps {
@@ -330,8 +289,7 @@ pub fn item(props: ItemProps, children: Children) -> Result<Box<dyn LayoutItem>,
             |t| shared::control_text(t, 1.0),
         )?));
     }
-    // Markup children are the row's content when there are any: an icon beside a label, two lines, a swatch.
-    // The `label` prop is the one-line shorthand for exactly the case that needs nothing else.
+    // Markup children are the row's content when there are any; `label` is the shorthand for the case that needs nothing else.
     let mut given = children;
     let supplied = given.take_default();
     if supplied.is_empty() {
@@ -381,8 +339,7 @@ pub fn item(props: ItemProps, children: Children) -> Result<Box<dyn LayoutItem>,
         .hover_style(hover_style)
         .disabled(move || disabled.get())
         .on_press(commit);
-    // Announced without becoming a Tab stop: the list is driven by arrows and type-ahead from the trigger, so
-    // a reader has to be able to describe the open panel while Tab keeps treating it as one control.
+    // Announced without becoming a Tab stop: the list is driven by arrows from the trigger, so a reader can describe the open panel while Tab keeps treating it as one control.
     if list.is_some() {
         ui_core::focus::register_presented(
             ui_core::focus::next_id(),
@@ -393,11 +350,11 @@ pub fn item(props: ItemProps, children: Children) -> Result<Box<dyn LayoutItem>,
     Ok(box_item(row))
 }
 
-/// A rule between groups of rows. Registered like a row so it takes a position in the list, and unreachable
-/// so the keyboard passes straight over it.
+/// A rule between groups of rows. Registered like a row so it takes a position in the list, and unreachable so the keyboard passes straight over it.
 #[derive(Props)]
 pub struct SeparatorProps {}
 
+/// A rule between groups of rows. Never takes the keyboard cursor.
 pub fn separator(
     _props: SeparatorProps,
     _children: Children,
@@ -426,6 +383,7 @@ pub struct GroupProps {
     pub label: Reactive<String>,
 }
 
+/// A heading over the rows beneath it. Never takes the keyboard cursor.
 pub fn group(props: GroupProps, _children: Children) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let list = use_context::<ListContext>();
     if let Some(ctx) = &list {
@@ -450,8 +408,7 @@ pub fn group(props: GroupProps, _children: Children) -> Result<Box<dyn LayoutIte
     Ok(box_item(heading))
 }
 
-/// What a piece returns during [`ListContext::declare`]: a childless node and nothing else — no text shaped,
-/// no styles resolved, no focus or hit region registered. `None` when this is a real build.
+/// What a piece returns during [`ListContext::declare`]: a childless node and nothing else — no text shaped, no styles resolved, no focus or hit region registered. `None` when this is a real build.
 fn declared_placeholder(
     list: &Option<ListContext>,
 ) -> Option<Result<Box<dyn LayoutItem>, LayoutError>> {
@@ -472,8 +429,7 @@ fn row_layout() -> LayoutStyle {
 
 impl ListContext {
     fn row_style(&self, index: u32) -> RectStyle {
-        // The keyboard cursor wears the hover paint on purpose: it says the same thing — this is the row a
-        // commit would take — and a look of its own would have the list report two different places at once.
+        // The keyboard cursor wears the hover paint on purpose: it says the same thing, and a look of its own would have the list report two different places at once.
         if self.0.highlighted.get() == Some(index) {
             return self.hover_style();
         }
@@ -494,9 +450,7 @@ mod tests {
 
     use super::*;
 
-    /// A row's hint is quieter than the label beside it — which means quieter than whatever that label is
-    /// written in, not a fixed fraction of the theme's own ink. A menu in a region that declared its colour
-    /// used to get a hint in the theme's near-black however light the rest of the region was.
+    /// A row's hint is quieter than the label beside it — which means quieter than whatever that label is written in, not a fixed fraction of the theme's own ink. A menu in a region that declared its colour used to get a hint in the theme's near-black however light the rest of the region was.
     #[test]
     fn a_hint_fades_the_ink_of_the_row_it_trails() {
         crate::test_support::fresh_layout_runtime();

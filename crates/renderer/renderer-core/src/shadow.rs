@@ -1,5 +1,8 @@
+//! How much room a blurred shadow needs around the shape that casts it.
+
 use crate::preprocess::{blur_padding, blur_sigma};
 
+/// The texture size and offset a blurred shadow needs, derived from its shape and sigma.
 pub struct ShadowLayout {
     pub sigma: f32,
     pub padding: i32,

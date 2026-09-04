@@ -1,3 +1,5 @@
+//! Packaging a Windows NSIS installer.
+
 use std::path::Path;
 use std::process::Command;
 

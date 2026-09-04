@@ -1,3 +1,5 @@
+//! [`spinner`]: an indeterminate ring, for work with no bound value to show.
+
 use reactive_core::Reactive;
 use std::time::Duration;
 use telar_macros::Props;
@@ -15,19 +17,7 @@ const HEAD_FRACTION: f32 = 0.22;
 /// One full rotation's duration — fast enough to read as "busy", slow enough not to strobe.
 const ROTATION: Duration = Duration::from_millis(900);
 
-/// An indeterminate spinner: a static ring (the track) with a small accent dot orbiting it forever. Unlike
-/// `progress`, there is no bound value to visualize, only "work is happening" — and a *uniformly*-stroked
-/// ring looks identical at every rotation angle, which would make spinning it pointless. A swept-colour stroke
-/// (transparent -> accent) was the first idea, but `Stroke`'s paint has no true angular/conic gradient, and a
-/// linear `Gradient` stroke on a rect silently degrades to its first stop's flat colour on the hardware
-/// renderer backend (`RectInstance` only carries `stroke_color: [f32; 4]`, taken via `Paint::solid_color()` —
-/// see `renderer-hardware/src/primitives/rect.rs`), so that would render as an invisible fully-transparent
-/// ring there. Orbiting a small solid-filled dot instead only needs primitives already proven correct on both
-/// renderer backends: a plain `RectStyle` fill plus `box_transform`'s rotation, which pivots on the box's own
-/// centre — rotating the dot's parent by an ever-advancing angle carries the dot around the ring with no
-/// per-frame trigonometry. Rotation is driven by `motion_core::Keyframes` under `Repeat::Loop`: the same
-/// self-driving, indefinitely-repeating primitive `motion.rsx`'s equalizer bars use with `Repeat::PingPong`,
-/// here a single 0 -> 360 degree leg instead.
+/// An indeterminate spinner: a static ring (the track) with a small accent dot orbiting it forever. Unlike `progress`, there is no bound value to visualize, only "work is happening" — and a *uniformly*-stroked ring looks identical at every rotation angle, which would make spinning it pointless. A swept-colour stroke (transparent -> accent) was the first idea, but `Stroke`'s paint has no true angular/conic gradient, and a linear `Gradient` stroke on a rect silently degrades to its first stop's flat colour on the hardware renderer backend (`RectInstance` only carries `stroke_color: [f32; 4]`, taken via `Paint::solid_color()` — see `renderer-hardware/src/primitives/rect.rs`), so that would render as an invisible fully-transparent ring there. Orbiting a small solid-filled dot instead only needs primitives already proven correct on both renderer backends: a plain `RectStyle` fill plus `box_transform`'s rotation, which pivots on the box's own centre — rotating the dot's parent by an ever-advancing angle carries the dot around the ring with no per-frame trigonometry. Rotation is driven by `motion_core::Keyframes` under `Repeat::Loop`: the same self-driving, indefinitely-repeating primitive `motion.rsx`'s equalizer bars use with `Repeat::PingPong`, here a single 0 -> 360 degree leg instead.
 #[derive(Props)]
 pub struct SpinnerProps {
     /// Head (orbiting dot) accent. `Color::TRANSPARENT` (the default) means "unset": fall back to the theme accent.
@@ -38,6 +28,7 @@ pub struct SpinnerProps {
     pub size: f32,
 }
 
+/// An indeterminate ring, for work with no bound value to show.
 pub fn spinner(
     props: SpinnerProps,
     _children: Children,
@@ -46,14 +37,12 @@ pub fn spinner(
     let size = if size > 0.0 { size } else { 24.0 };
     let head_size = size * HEAD_FRACTION;
 
-    // Continuous 0 -> 360 loop; `box_transform` turns each frame's angle into a rotation pivoted on the
-    // rotor's own centre, which lands on the ring's centre (the rotor is sized to exactly overlay it below).
+    // `box_transform` turns each frame's angle into a rotation pivoted on the rotor's centre, which lands on the ring's centre since the rotor exactly overlays it.
     let angle = Keyframes::<f32>::new(0.0)
         .then(360.0, ROTATION, Easing::Linear)
         .start(Repeat::Loop);
 
-    // `color` is only needed by this one style closure, so it moves in directly — no `Rc` re-erasure needed
-    // (that's only for props shared across several closures, e.g. `slider`'s fill + thumb).
+    // Needed by this one style closure, so it moves in directly; `Rc` re-erasure is only for shared props.
     let head = StyledContainer::new(
         LayoutStyle::new().width(head_size).height(head_size),
         move |_r| {
@@ -65,8 +54,7 @@ pub fn spinner(
         vec![],
     )?;
 
-    // The rotor exactly overlays the track (`absolute_fill`) and centres the head against its top edge;
-    // rotating the whole rotor carries the head around the circle as `angle` advances.
+    // The rotor overlays the track and centres the head against its top edge, so rotating it carries the head around the circle.
     let rotor = StyledContainer::new(
         LayoutStyle::new()
             .absolute_fill()
@@ -96,12 +84,10 @@ pub fn spinner(
 
 #[cfg(test)]
 mod tests {
-
     use ui_core::NodeId;
 
     use super::*;
 
-    // Lays `node` out inside a 100×100 root, mirroring `slider`'s test harness.
     fn lay_out(node: NodeId) {
         crate::harness::lay_out(node, 100.0, 100.0);
     }

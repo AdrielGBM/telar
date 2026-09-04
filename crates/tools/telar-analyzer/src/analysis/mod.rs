@@ -1,3 +1,5 @@
+//! The native `.rsx` language features, answered from the parsed document rather than from rust-analyzer.
+
 pub mod code_action;
 pub mod color;
 pub mod completions;

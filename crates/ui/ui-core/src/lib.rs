@@ -1,3 +1,5 @@
+//! The widget catalogue's foundation: the primitives every component is built from, and the ambient state they share — focus, pointer, overlays, the cascade and the per-surface worlds all of it lives in.
+
 pub mod accessibility;
 #[cfg(feature = "async-assets")]
 mod async_asset;
@@ -99,13 +101,9 @@ pub use window_root::WindowRoot;
 
 /// Routes an event to the overlay layer before the widget tree sees it.
 ///
-/// Wraps `ui_tree`'s pointer routing with the keyboard half it cannot do: the dismiss stack and the focus
-/// state both live in this crate, so Escape is resolved here. Every caller (the runner, the plugin bridge)
-/// already goes through `ui_core`, so this is the single choke point either way.
+/// Wraps `ui_tree`'s pointer routing with the keyboard half it cannot do: the dismiss stack and the focus state both live in this crate, so Escape is resolved here. Every caller (the runner, the plugin bridge) already goes through `ui_core`, so this is the single choke point either way.
 pub fn dispatch_overlays(event: &platform_core::Event) -> EventResult {
-    // Escape closes the frontmost dialog only when nothing holds focus: a focused editor gets first refusal
-    // and blurs itself (see `Input`'s Escape), so a second press then closes the dialog around it. Dismissing
-    // ahead of the focused widget would make Escape unable to leave a field without also tearing down its form.
+    // Only when nothing holds focus: a focused editor gets first refusal and blurs itself, so a second press closes the dialog. Dismissing first would make Escape unable to leave a field without tearing down its form.
     if let platform_core::Event::KeyPressed {
         key: platform_core::Key::Named(platform_core::NamedKey::Escape),
         ..

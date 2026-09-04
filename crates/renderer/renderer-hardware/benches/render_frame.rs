@@ -1,11 +1,6 @@
-//! Baseline benchmark for the hardware `render_frame` before its planned decomposition.
-//! Builds a headless (offscreen, no window/surface) `HardwareRenderer` and times a single
-//! representative "dense UI" frame: filled+shadowed rounded cards, text, vector paths, and a
-//! translucent overlay layer with a backdrop blur. Each iteration blocks on the GPU (`wait_idle`)
-//! so the measurement reflects real render work, not just queue submission.
+//! Baseline benchmark for the hardware `render_frame` before its planned decomposition. Builds a headless (offscreen, no window/surface) `HardwareRenderer` and times a single representative "dense UI" frame: filled+shadowed rounded cards, text, vector paths, and a translucent overlay layer with a backdrop blur. Each iteration blocks on the GPU (`wait_idle`) so the measurement reflects real render work, not just queue submission.
 //!
-//! Requires a usable GPU adapter; if headless init fails (no GPU in the environment) the bench
-//! prints the error and skips rather than reporting fabricated numbers.
+//! Requires a usable GPU adapter; if headless init fails (no GPU in the environment) the bench prints the error and skips rather than reporting fabricated numbers.
 
 use std::hint::black_box;
 use std::sync::Arc;
@@ -27,13 +22,11 @@ const HEIGHT: u32 = 800;
 fn dense_ui() -> Vec<DrawCommand> {
     let mut cmds = Vec::new();
 
-    // Opaque background fill.
     cmds.push(DrawCommand::Rect {
         rect: Rect::new(0.0, 0.0, WIDTH as f32, HEIGHT as f32),
         style: Arc::new(RectStyle::filled(Color::from_rgb_u8(24, 24, 32), 0.0)),
     });
 
-    // Grid of shadowed rounded cards, each with a text label — a handful of shared style Arcs.
     let card_style = Arc::new(
         RectStyle::filled(Color::from_rgb_u8(52, 58, 74), 8.0).with_shadow(Shadow::new(
             0.0,
@@ -65,7 +58,6 @@ fn dense_ui() -> Vec<DrawCommand> {
         }
     }
 
-    // A row of filled triangles to exercise path tessellation.
     let path_style = Arc::new(PathStyle::default().with_fill(Color::from_rgb_u8(120, 200, 255)));
     for i in 0..24 {
         let cx = 40.0 + i as f32 * 50.0;
@@ -80,7 +72,6 @@ fn dense_ui() -> Vec<DrawCommand> {
         });
     }
 
-    // Translucent overlay panel with a backdrop blur: exercises layer capture, blur, and composite.
     cmds.push(DrawCommand::PushLayer {
         opacity: 0.85,
         backdrop_blur: 12.0,

@@ -1,3 +1,5 @@
+//! The documentation shell: the rail, the top bar, and the per-section navigation stacks behind them.
+
 use crate::core::theme::theme;
 use telar::{
     AlignItems, App, AvailableSpace, BorderRadius, Children, Color, Component, Container, Event,
@@ -19,8 +21,7 @@ const MOBILE_BREAKPOINT: f32 = 600.0;
 /// Builds one doc section into its content pane. Every `.rsx` feature transpiles to a fn of this shape.
 type SectionBuild = fn() -> Result<Box<dyn LayoutItem>, LayoutError>;
 
-/// One doc section: its nav label, its content builder, and the `.rsx` file behind it (name plus the source
-/// text itself, baked in at compile time for the source detail page).
+/// One doc section: its nav label, its content builder, and the `.rsx` file behind it (name plus the source text itself, baked in at compile time for the source detail page).
 struct SectionDef {
     title: &'static str,
     build: SectionBuild,
@@ -28,23 +29,19 @@ struct SectionDef {
     source: &'static str,
 }
 
-/// A destination *within* a section. The section itself is not part of this: each rail item is a tab with its
-/// own stack, so the route only has to say how deep into that section you are — the overview a reader lands
-/// on, or the source listing pushed over it. Back returns to the overview at the scroll position it had.
+/// A destination *within* a section. The section itself is not part of this: each rail item is a tab with its own stack, so the route only has to say how deep into that section you are — the overview a reader lands on, or the source listing pushed over it. Back returns to the overview at the scroll position it had.
 #[derive(Clone, Copy, PartialEq, Eq, Debug, serde::Serialize, serde::Deserialize)]
 enum SectionRoute {
     Overview,
     Source,
 }
 
-/// Builds the [`SECTIONS`] table, baking each entry's `.rsx` source in beside its builder so a section stays a
-/// one-line edit. `include_str!` needs a literal path, which is why the file name is spelled out per entry.
+/// Builds the [`SECTIONS`] table, baking each entry's `.rsx` source in beside its builder so a section stays a one-line edit. `include_str!` needs a literal path, which is why the file name is spelled out per entry.
 macro_rules! sections {
     ($(($title:literal, $build:path, $props:ty, $file:literal)),* $(,)?) => {
         &[$(SectionDef {
             title: $title,
-            // A section is a component that names no props and places no children, so it is called like one.
-            // The closure captures nothing, which is what lets it stand where a `fn` pointer is wanted.
+            // A section is a component that names no props and places no children, so it is called like one. The closure captures nothing, which is what lets it stand where a `fn` pointer is wanted.
             build: || $build(<$props>::props().build(), Children::default()),
             file: $file,
             source: include_str!(concat!("../features/", $file)),
@@ -52,9 +49,7 @@ macro_rules! sections {
     };
 }
 
-/// Every doc section in display order. The index is the section id, and this is the single source of truth the
-/// sidebar nav and the content pane both derive from: adding or reordering a section is a one-line edit here,
-/// not three in sync.
+/// Every doc section in display order. The index is the section id, and this is the single source of truth the sidebar nav and the content pane both derive from: adding or reordering a section is a one-line edit here, not three in sync.
 const SECTIONS: &[SectionDef] = sections![
     ("Overview", crate::features::overview::overview, crate::features::overview::OverviewProps, "overview.rsx"),
     ("Layout", crate::features::layout::layout, crate::features::layout::LayoutProps, "layout.rsx"),
@@ -117,9 +112,7 @@ fn section_def(section: usize) -> &'static SectionDef {
     &SECTIONS[section.min(SECTIONS.len() - 1)]
 }
 
-/// One doc section as a navigable page: the section's content in a reading column, inside its own scroll
-/// viewport. Each page scrolling itself is what lets a section keep its reading position while another is
-/// on screen — navigating back returns to where you were, as a page stack should.
+/// One doc section as a navigable page: the section's content in a reading column, inside its own scroll viewport. Each page scrolling itself is what lets a section keep its reading position while another is on screen — navigating back returns to where you were, as a page stack should.
 struct SectionPage {
     scroll: LayoutScrollArea,
 }
@@ -127,7 +120,6 @@ struct SectionPage {
 impl SectionPage {
     fn new(nav: Navigator<SectionRoute>, section: usize) -> Result<Self, LayoutError> {
         let def = section_def(section);
-        // Reading column: fills the width it is given but never past a legible line length.
         let column = Container::new(
             LayoutStyle::new()
                 .flex_column()
@@ -139,7 +131,6 @@ impl SectionPage {
         )?
         // The one region this screen is *for*. What a reader jumps to first and a document writes as `<main>`.
         .role(Role::Main);
-        // Outer wrapper fills the scroll viewport and centers the capped column on wide windows.
         let centered = Container::new(
             LayoutStyle::new()
                 .flex_column()
@@ -176,9 +167,7 @@ impl NavPage for SectionPage {
     }
 }
 
-/// Footer of a section page: pushes that section's `.rsx` source as a detail page. A push rather than an
-/// overlay because the listing is long — its scroll position is state the stack should remember, and Back is
-/// the way out.
+/// Footer of a section page: pushes that section's `.rsx` source as a detail page. A push rather than an overlay because the listing is long — its scroll position is state the stack should remember, and Back is the way out.
 fn build_source_link(
     nav: Navigator<SectionRoute>,
     section: usize,
@@ -208,19 +197,15 @@ fn build_source_link(
             .with_radius(BorderRadius::all(8.0))
     })
     .on_press(move || nav.push(SectionRoute::Source));
-    // A row so the button hugs its label instead of stretching across the reading column.
     Ok(Box::new(Container::new(
         LayoutStyle::new().flex_row(),
         vec![Box::new(btn)],
     )?))
 }
 
-/// The `.rsx` source behind a section, as a pushed detail page: the file name above the listing, in its own
-/// scroll viewport.
+/// The `.rsx` source behind a section, as a pushed detail page: the file name above the listing, in its own scroll viewport.
 ///
-/// The listing is one wrapped text block rather than a [`LineGutter`](telar::LineGutter) column: a gutter numbers
-/// *logical* lines, and with no monospace or no-wrap in `TextStyle` a long line soft-wraps, which would slide
-/// the numbers out of step with the code.
+/// The listing is one wrapped text block rather than a [`LineGutter`](telar::LineGutter) column: a gutter numbers *logical* lines, and with no monospace or no-wrap in `TextStyle` a long line soft-wraps, which would slide the numbers out of step with the code.
 struct SourcePage {
     scroll: LayoutScrollArea,
 }
@@ -296,9 +281,7 @@ impl NavPage for SourcePage {
     }
 }
 
-/// Builds whichever page a route names inside `section` — the [`TabHost`]'s factory, called on a route's first
-/// visit to that section's own stack. The stack handed to the overview is that section's, so its source link
-/// pushes onto the section it belongs to rather than onto whatever tab happens to be active.
+/// Builds whichever page a route names inside `section` — the [`TabHost`]'s factory, called on a route's first visit to that section's own stack. The stack handed to the overview is that section's, so its source link pushes onto the section it belongs to rather than onto whatever tab happens to be active.
 fn build_page(
     stacks: &TabStacks<usize, SectionRoute>,
     section: usize,
@@ -315,8 +298,7 @@ fn build_page(
     })
 }
 
-/// Base paint for a nav item: the active section is filled with the accent; the rest blend into the rail
-/// (its `surface_alt` panel), so an inactive item reads as flat until hovered.
+/// Base paint for a nav item: the active section is filled with the accent; the rest blend into the rail (its `surface_alt` panel), so an inactive item reads as flat until hovered.
 fn nav_rect(active: bool) -> RectStyle {
     let t = theme();
     let radius = BorderRadius::all(8.0);
@@ -332,10 +314,7 @@ fn nav_rect_hover(active: bool) -> RectStyle {
     RectStyle::default().with_fill(fill).with_radius(radius)
 }
 
-/// Back control: closes an open dialog if there is one, else pops the current section's own stack (out of a
-/// source listing, back to its overview), else returns to the section read before this one. Always present,
-/// but it dims to `muted` once there is nothing left to go back to, so it reads as unavailable without the
-/// layout shifting when history appears.
+/// Back control: closes an open dialog if there is one, else pops the current section's own stack (out of a source listing, back to its overview), else returns to the section read before this one. Always present, but it dims to `muted` once there is nothing left to go back to, so it reads as unavailable without the layout shifting when history appears.
 fn build_back(stacks: TabStacks<usize, SectionRoute>) -> Result<Box<dyn LayoutItem>, LayoutError> {
     // Live when there is either a dialog to close or a page to pop; both reads are reactive, so the control lights up the moment a modal opens even at the root of a section's stack.
     let live =
@@ -365,7 +344,6 @@ fn build_back(stacks: TabStacks<usize, SectionRoute>) -> Result<Box<dyn LayoutIt
         },
         vec![Box::new(label)],
     )?
-    // Only lifts on hover when there is something to go back to, so the dimmed state stays inert.
     .hover_style(move |_r| {
         nav_rect(false).with_fill(if live(&on_hover) {
             theme().border
@@ -379,10 +357,7 @@ fn build_back(stacks: TabStacks<usize, SectionRoute>) -> Result<Box<dyn LayoutIt
     Ok(Box::new(btn))
 }
 
-/// Contents nav: one full-width button per section, above a back control. The active one is highlighted.
-/// Each item is a *tab*, not a history entry: selecting one switches to that section's own stack, leaving the
-/// one you came from standing exactly where it was — a source listing still open, scrolled where you left it.
-/// Pressing the section you are already reading pops it back to its overview, so an item is never inert.
+/// Contents nav: one full-width button per section, above a back control. The active one is highlighted. Each item is a *tab*, not a history entry: selecting one switches to that section's own stack, leaving the one you came from standing exactly where it was — a source listing still open, scrolled where you left it. Pressing the section you are already reading pops it back to its overview, so an item is never inert.
 fn build_nav(stacks: TabStacks<usize, SectionRoute>) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let mut buttons: Vec<Box<dyn LayoutItem>> = Vec::with_capacity(SECTIONS.len());
     for (i, def) in SECTIONS.iter().enumerate() {
@@ -404,16 +379,12 @@ fn build_nav(stacks: TabStacks<usize, SectionRoute>) -> Result<Box<dyn LayoutIte
         let on_base = stacks.clone();
         let on_hover = stacks.clone();
         let on_press = stacks.clone();
-        // A row: the parent column stretches the item to full width, and `justify_content:center` centres
-        // the measured `Text::auto` label within it (a column would collapse the label's stretched cross axis).
         let btn = StyledContainer::new(
             LayoutStyle::new()
                 .flex_row()
                 .align_items(AlignItems::CENTER)
                 .justify_content(JustifyContent::CENTER)
                 .padding_horizontal(14.0)
-                // Light vertical padding keeps each item near its old height (`Text::auto` already reserves a
-                // full line box), so the tall nav still fits the rail and every section stays reachable.
                 .padding_vertical(3.0),
             move |_r| nav_rect(on_base.active() == i),
             vec![Box::new(label)],
@@ -450,8 +421,7 @@ fn build_sidebar(
             .gap(22.0),
         vec![header_theme, nav],
     )?
-    // Supporting content beside the section being read, which is what a rail of links to other sections
-    // is. A reader can jump straight past it; a document writes it as an `<aside>`.
+    // Supporting content beside the section being read, which is what a rail of links to other sections is. A reader can jump straight past it; a document writes it as an `<aside>`.
     .role(Role::Complementary)))
 }
 
@@ -464,7 +434,6 @@ fn build_topbar(menu_open: RwSignal<bool>) -> Result<Box<dyn LayoutItem>, Layout
         || TextStyle::new(20.0, theme().ink),
     )?;
     let burger = StyledContainer::new(
-        // Padding content-sizes the icon to ~40x40; a row keeps the measured glyph from collapsing.
         LayoutStyle::new()
             .flex_row()
             .align_items(AlignItems::CENTER)
@@ -505,21 +474,14 @@ fn build_topbar(menu_open: RwSignal<bool>) -> Result<Box<dyn LayoutItem>, Layout
     Ok(Box::new(bar))
 }
 
-/// Responsive application shell. Desktop (≥ breakpoint): the sidebar is a fixed rail whose width is
-/// reserved by an empty `spacer` and painted as an always-on overlay at the window's left edge.
-/// Mobile (< breakpoint): the rail collapses — a top bar appears, and the sidebar becomes a drawer
-/// that slides over a dimming scrim when `menu_open` is set. The sidebar is laid out on its own so it
-/// can overlay content in either mode.
+/// Responsive application shell. Desktop (≥ breakpoint): the sidebar is a fixed rail whose width is reserved by an empty `spacer` and painted as an always-on overlay at the window's left edge. Mobile (< breakpoint): the rail collapses — a top bar appears, and the sidebar becomes a drawer that slides over a dimming scrim when `menu_open` is set. The sidebar is laid out on its own so it can overlay content in either mode.
 ///
-/// The content pane is a [`TabHost`]: every rail item is a tab with its own page stack, built the first time
-/// it is visited, so opening the app costs one section rather than all 26.
+/// The content pane is a [`TabHost`]: every rail item is a tab with its own page stack, built the first time it is visited, so opening the app costs one section rather than all 26.
 struct ShellPage {
     root: NodeId,
-    // Empty leaf that reserves the rail's width on desktop; hidden on mobile so content spans full width.
     spacer: NodeId,
     topbar_node: NodeId,
     topbar: Box<dyn LayoutItem>,
-    // The sidebar overlay is itself a scroll area so a tall nav can scroll on short screens.
     sidebar_scroll: LayoutScrollArea,
     sidebar_scroll_node: NodeId,
     sidebar_content_node: NodeId,
@@ -540,12 +502,10 @@ impl ShellPage {
         let nav_host = TabHost::new(stacks, move |section: &usize, route: &SectionRoute| {
             build_page(&factory_stacks, *section, *route)
         })?
-        // Every page is a stack entry now: a section survives being left because its *stack* stays alive while another tab is on screen, not because the host pins it by route. So a source listing is fresh on each push and released on the way back, and two visits to the same file never share a scroll.
+        // Every page is a stack entry: a section survives being left because its stack stays alive, not because the host pins it by route. So a source listing is fresh on each push and two visits never share a scroll.
         .with_policy(PagePolicy::Transient)
         .with_transition(NavTransition::Fade)
-        // The rail reads as a table of contents rather than a tab bar, so switching sections gets the same fade as drilling into one. A real tab bar would leave this off and swap instantly.
         .with_tab_transition(NavTransition::Fade);
-        // Wrap the sidebar so it scrolls when the nav is taller than the window; laid out as an overlay.
         let sidebar_scroll = LayoutScrollArea::new(
             LayoutStyle::new()
                 .width(SIDEBAR_W)
@@ -561,13 +521,11 @@ impl ShellPage {
                 .width(SIDEBAR_W)
                 .height(SizeDimension::Percent(1.0)),
         )?;
-        // The host's own container is `width: 100%`, which as a flex-basis beside the 248px spacer would
-        // overflow the row; this wrapper gives it the remaining width to be 100% of instead.
+        // The host's own container is `width: 100%`, which as a flex-basis beside the 248px spacer would overflow the row; this wrapper gives it the remaining width to be 100% of instead.
         let content = new_container(
             LayoutStyle::new().flex_row().flex_grow(1.0),
             &[nav_host.layout_node()],
         )?;
-        // Body row: the spacer reserves the rail on desktop, the content grows into the rest.
         let body = new_container(
             LayoutStyle::new()
                 .flex_row()
@@ -575,7 +533,6 @@ impl ShellPage {
                 .width(SizeDimension::Percent(1.0)),
             &[spacer, content],
         )?;
-        // Root column: an optional top bar above the body.
         let root = new_container(
             LayoutStyle::new()
                 .flex_column()
@@ -599,8 +556,7 @@ impl ShellPage {
         })
     }
 
-    /// The rail's left edge. The rail is painted as an overlay at a position this shell picks, not laid out
-    /// in the body row, so mirroring it under RTL is the app's job — layout cannot move a hand-placed node.
+    /// The rail's left edge. The rail is painted as an overlay at a position this shell picks, not laid out in the body row, so mirroring it under RTL is the app's job — layout cannot move a hand-placed node.
     fn rail_x(&self) -> f32 {
         if use_direction().is_rtl() {
             self.win_w - SIDEBAR_W
@@ -609,8 +565,7 @@ impl ShellPage {
         }
     }
 
-    /// Dispatches into the rail through the same transform `view` paints it under, so a press lands where the
-    /// user sees the button rather than 248px away once the rail has mirrored.
+    /// Dispatches into the rail through the same transform `view` paints it under, so a press lands where the user sees the button rather than 248px away once the rail has mirrored.
     fn sidebar_on_event(&mut self, event: &Event) -> EventResult {
         let rail_x = self.rail_x();
         if rail_x == 0.0 {
@@ -622,10 +577,7 @@ impl ShellPage {
         }
     }
 
-    /// Reconciles the content pane after the sidebar handled a press. The host only reconciles from events
-    /// dispatched into it, and the rail sits outside its subtree — so a tab press has to be pushed in here.
-    /// Only a press that actually moved the user closes the mobile drawer, leaving the theme switcher (also in
-    /// the rail) free to keep it open.
+    /// Reconciles the content pane after the sidebar handled a press. The host only reconciles from events dispatched into it, and the rail sits outside its subtree — so a tab press has to be pushed in here. Only a press that actually moved the user closes the mobile drawer, leaving the theme switcher (also in the rail) free to keep it open.
     fn after_sidebar_press(&mut self) {
         if self.nav_host.sync() && self.mobile {
             self.menu_open.set(false);
@@ -637,11 +589,9 @@ impl ShellPage {
         self.win_h = height;
         let mobile = width < MOBILE_BREAKPOINT;
         self.mobile = mobile;
-        // Leaving mobile turns the drawer back into the always-on rail; drop any stale open state.
         if !mobile {
             self.menu_open.set(false);
         }
-        // Top bar only on mobile; the desktop rail is reserved by the spacer instead.
         set_display(self.topbar_node, mobile);
         set_display(self.spacer, !mobile);
         mark_dirty(self.root).ok();
@@ -651,14 +601,9 @@ impl ShellPage {
             AvailableSpace::Definite(height),
         )
         .ok();
-        // Pin the window-spanning root as the overlay host: the sidebar is computed as its own parent-less
-        // root below, and auto-detection would otherwise make it (the 248px sidebar) the host — so
-        // modals/drawers/menus would portal over the sidebar instead of the viewport.
+        // Pin the window-spanning root as the overlay host: the sidebar is computed as its own parent-less root below, and auto-detection would otherwise make that 248px sidebar the host, portaling modals over it.
         set_overlay_host(self.root);
-        // The active page re-lays its own content: its scroll viewport now has the width the pass above gave it.
         self.nav_host.relayout();
-        // Sidebar overlay at the window's left edge: the viewport is a fixed-width, full-height column;
-        // its content is measured at natural height so a tall nav overflows into a scroll instead of clipping.
         compute_layout(
             self.sidebar_scroll_node,
             AvailableSpace::Definite(SIDEBAR_W),
@@ -684,7 +629,6 @@ impl Component for ShellPage {
         }
         if !self.mobile || open {
             let mut overlay = Vec::new();
-            // On mobile the drawer is modal: dim the content behind it. On desktop the sidebar is always the rail.
             if self.mobile && open {
                 overlay.push(RenderNode::rect(
                     Rect {
@@ -696,7 +640,6 @@ impl Component for ShellPage {
                     RectStyle::default().with_fill(Color::rgba(0.0, 0.0, 0.0, 0.45)),
                 ));
             }
-            // Paint the panel background first so it fills the full height even when the nav is shorter than the window.
             let rail = RenderNode::transform_with(
                 [1.0, 0.0, 0.0, 1.0, self.rail_x(), 0.0],
                 [
@@ -713,9 +656,7 @@ impl Component for ShellPage {
                 ],
             );
             overlay.push(rail);
-            // Wrap the overlay in a clip: besides bounding it to the window, the clip is a structural
-            // boundary that stops the hardware batcher (merge_opaque_batches) from reordering the top
-            // bar's text above the drawer background — otherwise the hamburger icon floats over the drawer.
+            // Besides bounding the overlay to the window, the clip is a structural boundary that stops the hardware batcher reordering the top bar's text above the drawer background.
             nodes.push(RenderNode::Clip {
                 rect: Rect {
                     x: 0.0,
@@ -735,7 +676,6 @@ impl Component for ShellPage {
             self.relayout(*width as f32, *height as f32);
             return EventResult::Handled;
         }
-        // Every positioned event says where it is, the wheel included: a pane claims what is over it.
         let rail_x = self.rail_x();
         let over_sidebar = match event {
             Event::PointerMoved { x, .. }
@@ -748,13 +688,11 @@ impl Component for ShellPage {
         if self.mobile {
             if self.menu_open.get() {
                 if let Event::Scrolled { .. } = event {
-                    // Only the drawer scrolls while it is open; a scroll over the scrim is swallowed.
                     if over_sidebar {
                         self.sidebar_on_event(event);
                     }
                     return EventResult::Handled;
                 }
-                // Drawer open: the sidebar (theme + nav buttons) hit-tests first; a press off the drawer closes it.
                 if self.sidebar_on_event(event) == EventResult::Handled {
                     self.after_sidebar_press();
                     return EventResult::Handled;
@@ -764,16 +702,13 @@ impl Component for ShellPage {
                         self.menu_open.set(false);
                     }
                 }
-                // Swallow everything else so the dimmed content underneath stays inert.
                 return EventResult::Handled;
             }
-            // Drawer closed: the hamburger toggles it, otherwise the content scrolls.
             if self.topbar.on_event(event) == EventResult::Handled {
                 return EventResult::Handled;
             }
             return self.nav_host.on_event(event);
         }
-        // Desktop: scroll goes to whichever pane the pointer is over; the rail never eats the content's scroll.
         if let Event::Scrolled { .. } = event {
             return if over_sidebar {
                 self.sidebar_on_event(event)
@@ -781,7 +716,6 @@ impl Component for ShellPage {
                 self.nav_host.on_event(event)
             };
         }
-        // Other events: the sidebar rail hit-tests first (by coords), then the content pane.
         if self.sidebar_on_event(event) == EventResult::Handled {
             self.after_sidebar_press();
             return EventResult::Handled;
@@ -790,6 +724,7 @@ impl Component for ShellPage {
     }
 }
 
+/// The documentation shell's root component.
 pub struct SandboxRoot;
 
 impl App for SandboxRoot {
@@ -810,7 +745,7 @@ impl App for SandboxRoot {
                 )
             },
         )
-        // The rail is a table of contents, so Back means "what I was just reading": it walks out of a source listing first, then back through the sections visited to get here. Without this a section's Back is inert the moment its own stack is at its root, which for a docs shell reads as broken.
+        // The rail is a table of contents, so Back means "what I was just reading". Without this a section's Back is inert the moment its own stack is at its root, which for a docs shell reads as broken.
         .with_tab_history();
         let sidebar = build_sidebar(stacks.clone()).expect("sidebar build failed");
         let page = ShellPage::new(sidebar, stacks).expect("shell layout failed");
@@ -826,8 +761,7 @@ impl App for SandboxRoot {
 mod tests {
     use super::*;
 
-    // Every entry's `.rsx` file must exist and carry a view — the macro table pairs a builder with a file name
-    // by hand, so a renamed or moved feature would otherwise bake in the wrong source.
+    // Every entry's `.rsx` file must exist and carry a view — the macro table pairs a builder with a file name by hand, so a renamed or moved feature would otherwise bake in the wrong source.
     #[test]
     fn every_section_bakes_the_source_of_its_own_feature() {
         for def in SECTIONS {
@@ -858,7 +792,6 @@ mod tests {
         (host, stacks)
     }
 
-    // The source listing is a pushed page, not an overlay: navigating in deepens that section's own stack, Back returns to the overview, and a Back at the root reports "nothing to do" so a hardware back can fall through to the OS.
     #[test]
     fn source_detail_pushes_a_page_and_back_returns_to_the_section() {
         let (mut host, stacks) = shell_stacks();
@@ -877,7 +810,6 @@ mod tests {
         );
     }
 
-    // The point of one stack per section: switching away from a section you had drilled into and coming back finds it still drilled in, without any keep-alive policy holding the page up by route.
     #[test]
     fn a_section_keeps_its_own_depth_while_you_read_another() {
         let (mut host, stacks) = shell_stacks();
@@ -902,7 +834,6 @@ mod tests {
         );
     }
 
-    // Pressing the rail item you are already reading is the way back out of its source listing, which is what keeps every item live instead of inert on the section you are on.
     #[test]
     fn reselecting_the_current_section_returns_to_its_overview() {
         let (mut host, stacks) = shell_stacks();

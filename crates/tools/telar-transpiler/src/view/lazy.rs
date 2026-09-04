@@ -16,7 +16,7 @@ impl ViewGen<'_> {
         let pad = self.indent_str();
         let style = self.make_layout_style("lazy", &el.classes, &el.attributes);
 
-        // `Lazy::new` takes a plain child vec, so a reactive `for`/`if` here stays a boxed `ReactiveList` rather than a transparent fragment: cap the mode at `Vec`, never `Slots` — same as `overlay`.
+        // `Lazy::new` takes a plain child vec, so a reactive region here stays a boxed `ReactiveList`.
         let mode = if el.children.iter().any(forces_child_vec) {
             ChildMode::Vec
         } else {
@@ -35,12 +35,11 @@ impl ViewGen<'_> {
         let cond = el.attributes.iter().find(|a| a.key == "when");
         let visible = match cond {
             Some(attr) => {
-                // The parens a condition needs to hold its spaces are the value's delimiters, not part of it: emitted, they warn `unused_parens` in code the author cannot edit.
                 let raw = attr.value.text();
                 let raw = super::redundant_parens(raw.trim()).unwrap_or(raw.trim());
                 wrap_signal_clones(&[raw], format!("move || {}", substitute_reads(raw)))
             }
-            // Without a condition there is nothing to defer *until*, which is almost certainly a mistake rather than a request to build immediately.
+            // Without a condition there is nothing to defer until, which is a mistake rather than a request to build now.
             None => format!(
                 "move || compile_error!({})",
                 rust_str(
@@ -49,7 +48,7 @@ impl ViewGen<'_> {
             ),
         };
 
-        // Each closure clones what it captures inside its own block, so neither moves a binding the rest of the view still needs — including the condition signal, which the two closures both read.
+        // Each closure clones inside its own block, so neither moves a binding the rest of the view needs — including the condition signal, which both read.
         let mut body = String::new();
         let _ = writeln!(
             body,

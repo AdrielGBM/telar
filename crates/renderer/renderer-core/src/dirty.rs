@@ -1,3 +1,5 @@
+//! Diffing two frames into the regions that actually changed, and recognising a scroll as a blit.
+
 use geometry_core::{Rect, Transform};
 use smallvec::{SmallVec, smallvec};
 
@@ -26,7 +28,7 @@ fn rects_adjacent_or_overlapping(a: Rect, b: Rect, slop: f32) -> bool {
         && b.y <= a.y + a.height + slop
 }
 
-// Merges `r` into the accumulated dirty list. If `r` is adjacent to or overlaps an existing rect, the two are unioned (which can cascade-merge further); otherwise `r` is added separately. Once the list would exceed MAX_DIRTY_RECTS distinct regions it collapses to a single union to bound growth.
+// An adjacent or overlapping rect is unioned in, which can cascade. Past `MAX_DIRTY_RECTS` distinct regions the list collapses to a single union, to bound growth.
 fn push_dirty_rect(rects: &mut DirtyRects, r: Rect) {
     // Merge slop in pixels: regions separated by a thin gap are cheaper to repaint as one than to track separately.
     const SLOP: f32 = 1.0;
@@ -86,7 +88,7 @@ fn matrix_as_translation(m: &[f32; 6]) -> Option<(f32, f32)> {
     }
 }
 
-// The region to repaint for an element the scroll blit displaced: its current position (`new_r`) unioned with the "ghost" — its previous pixels shifted by the blit delta (`old_r` translated by (dx, dy)). Repainting it redraws the element at rest and the scrolled content the ghost overlaps. Returns None when the element has no visual footprint in either frame.
+// The element's current position unioned with its ghost — the previous pixels shifted by the blit delta — so both the element at rest and the scrolled content the ghost overlaps are redrawn. `None` when it has no visual footprint in either frame.
 fn displaced_region(new_r: Option<Rect>, old_r: Option<Rect>, dx: f32, dy: f32) -> Option<Rect> {
     let ghost = old_r.map(|r| Rect::new(r.x + dx, r.y + dy, r.width, r.height));
     match (new_r, ghost) {
@@ -119,7 +121,7 @@ pub fn compute_dirty_rect(
         let old_matrix = old_state.cumulative_matrix;
 
         if new_cmd != old_cmd {
-            // A changed clip boundary cannot be expressed as a bounded dirty rect: elements that just became visible or invisible due to the new clip require a full re-render. Same for a changed layer: its opacity/blur re-tints every command inside it (which all compare equal and would contribute nothing), so an animating layer would otherwise never repaint.
+            // A changed clip boundary cannot be expressed as a bounded dirty rect: elements that just became visible or invisible need a full re-render. Same for a changed layer, whose opacity re-tints every command inside it — all of which compare equal, so an animating layer would otherwise never repaint.
             if matches!(
                 new_cmd,
                 DrawCommand::PushClip { .. } | DrawCommand::PushLayer { .. }
@@ -214,7 +216,7 @@ pub fn detect_scroll_blit(
     // Regions the blit displaced that must be repainted in place (see ScrollBlit::extra_dirty).
     let mut extra_dirty: SmallVec<[Rect; 8]> = SmallVec::new();
 
-    // Static visuals drawn BEFORE the scroll PushTransform (fixed headers, separators) sit inside scroll_clip, so the blit shifts their pixels. They are unchanged (scroll_idx is the first diff), so repaint each in place (plus its ghost) instead of bailing.
+    // Static visuals drawn before the scroll transform sit inside its clip, so the blit shifts their pixels. They are unchanged, so repaint each in place plus its ghost rather than bailing.
     for c in &new_cmds[..scroll_idx] {
         let r = culling::command_visual_rect(
             c,
@@ -293,7 +295,7 @@ pub fn detect_scroll_blit(
         advance_matrix(&mut state, cmd);
     }
 
-    // Repaint overlays and static elements after the scroll block (scrollbar, fixed footers, dev overlays): redraw each at its current position and repaint the scrolled content under the ghost the blit shifted its previous pixels to. Unchanged elements here used to force a full re-render.
+    // Overlays and static elements after the scroll block: redraw each at its current position and repaint the scrolled content under the ghost the blit shifted its previous pixels to.
     for j in (pop_idx + 1)..n {
         advance_matrix(&mut state, &new_cmds[j]);
         let cmd_matrix = state.cumulative_matrix;
@@ -344,7 +346,7 @@ mod tests {
         );
     }
 
-    // Regression: an opacity-only PushLayer change must force a full re-render (None). The layer has no geometry and its inner commands compare equal, so treating it like a normal changed command yields an empty dirty list and the animating layer never repaints.
+    // Regression: an opacity-only layer change must force a full re-render. The layer has no geometry and its inner commands compare equal, so treating it as a normal change yields an empty dirty list.
     #[test]
     fn changed_push_layer_opacity_forces_full_render() {
         let inner = rect_cmd(10.0, 10.0, 50.0, 50.0);
@@ -396,7 +398,6 @@ mod tests {
             culling::command_visual_rect(cmd, m, &FontMetrics::default())
         })
         .unwrap();
-        // overlapping old/new positions merge into a single region covering both
         let dirty = rects.iter().copied().reduce(Rect::union).unwrap();
         assert!(dirty.x <= 0.0);
         assert!(dirty.x + dirty.width >= 15.0);
@@ -404,7 +405,6 @@ mod tests {
 
     #[test]
     fn compute_dirty_rect_disjoint_changes_stay_separate() {
-        // A change at the top-left and a far-away change at the bottom-right must remain two disjoint regions, not collapse into a viewport-spanning union.
         let old = vec![
             rect_cmd(0.0, 0.0, 10.0, 10.0),
             rect_cmd(500.0, 500.0, 10.0, 10.0),
@@ -418,7 +418,6 @@ mod tests {
         })
         .unwrap();
         assert_eq!(rects.len(), 2);
-        // Neither region should span the gap between the two corners.
         for r in &rects {
             assert!(r.width < 100.0 && r.height < 100.0);
         }
@@ -445,7 +444,6 @@ mod tests {
         })
         .unwrap();
         let dirty = rects.iter().copied().reduce(Rect::union).unwrap();
-        // must cover both positions
         assert!(dirty.x <= 0.0);
         assert!(dirty.y <= 0.0);
         assert!(dirty.x + dirty.width >= 15.0);
@@ -500,7 +498,7 @@ mod tests {
 
     #[test]
     fn detect_scroll_blit_repaints_static_visual_before_scroll() {
-        // A static element before the scroll PushTransform (e.g. a header) lives inside scroll_clip, so the blit shifts its pixels. detect_scroll_blit keeps the blit and repaints the header (plus its ghost) via extra_dirty instead of bailing to a full re-render.
+        // A static element before the scroll transform lives inside its clip, so the blit shifts its pixels and it is repainted with its ghost rather than bailing to a full re-render.
         let old = vec![
             DrawCommand::PushClip {
                 rect: Rect::new(0.0, 0.0, 100.0, 200.0),
@@ -528,7 +526,6 @@ mod tests {
             DrawCommand::PopClip,
         ];
         let sb = detect_scroll_blit(&new, &old).expect("blit should apply with a static header");
-        // The header at (0,0,100,30) must fall inside an extra-dirty region so it is repainted in place.
         let covers_header = sb
             .extra_dirty
             .iter()
@@ -538,7 +535,6 @@ mod tests {
 
     #[test]
     fn detect_scroll_blit_repaints_static_visual_after_scroll() {
-        // A static element after the scroll PopMatrix (e.g. a footer or dev overlay) is inside scroll_clip and gets shifted by the blit. detect_scroll_blit repaints it (plus its ghost) via extra_dirty instead of bailing.
         let old = vec![
             DrawCommand::PushClip {
                 rect: Rect::new(0.0, 0.0, 100.0, 200.0),
@@ -566,7 +562,6 @@ mod tests {
             DrawCommand::PopClip,
         ];
         let sb = detect_scroll_blit(&new, &old).expect("blit should apply with a static footer");
-        // The footer at (0,170,100,30) must fall inside an extra-dirty region so it is repainted in place.
         let covers_footer = sb.extra_dirty.iter().any(|r| {
             r.x <= 50.0 && r.x + r.width >= 50.0 && r.y <= 185.0 && r.y + r.height >= 185.0
         });
@@ -596,7 +591,6 @@ mod tests {
         })
         .unwrap();
         let dirty = rects.iter().copied().reduce(Rect::union).unwrap();
-        // Inner rect composes to (10, 10) in old and (10, 60) in new.
         assert!(dirty.y <= 10.0);
         assert!(dirty.y + dirty.height >= 70.0);
     }
@@ -629,7 +623,6 @@ mod tests {
         ];
         let blit = detect_scroll_blit(&new, &old).unwrap();
         assert_eq!(blit.delta_y, -10);
-        // bottom band exposed when scrolling down
         assert_eq!(blit.exposed_band.y, 190.0);
         assert_eq!(blit.exposed_band.height, 10.0);
     }

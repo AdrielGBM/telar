@@ -1,3 +1,5 @@
+//! How sized content is scaled into the box it was given, mirroring CSS `object-fit`.
+
 use crate::Rect;
 
 /// How a sized piece of content (an image or SVG) is scaled into its layout box, mirroring CSS `object-fit`.
@@ -12,20 +14,15 @@ pub enum ObjectFit {
     Cover,
     /// Like [`Contain`](Self::Contain) but by a whole number, centered.
     ///
-    /// The variant CSS has no name for, and the only one a pixel-art image can use: at a fractional scale
-    /// some source pixels land on four screen pixels and their neighbours on five, so the grid the artist
-    /// drew stops being a grid. Flooring the scale keeps every pixel the same size and spends the remainder
-    /// on a wider letterbox.
+    /// The variant CSS has no name for, and the only one a pixel-art image can use: at a fractional scale some source pixels land on four screen pixels and their neighbours on five, so the grid the artist drew stops being a grid. Flooring the scale keeps every pixel the same size and spends the remainder on a wider letterbox.
     ///
-    /// Falls back to `Contain` when the content does not fit even once, since there is no whole number
-    /// below one to floor to.
+    /// Falls back to `Contain` when the content does not fit even once, since there is no whole number below one to floor to.
     ContainInteger,
 }
 
 /// Places `intrinsic`-sized content into `container` per `fit`.
 ///
-/// Returns the content rect (in `container`'s coordinate space) and whether the caller must clip
-/// it to `container` — true only for `Cover`, whose content deliberately overflows.
+/// Returns the content rect (in `container`'s coordinate space) and whether the caller must clip it to `container` — true only for `Cover`, whose content deliberately overflows.
 pub fn fit_rect(intrinsic: (f32, f32), container: Rect, fit: ObjectFit) -> (Rect, bool) {
     let (iw, ih) = intrinsic;
     // A zero-area intrinsic or container has no defined aspect ratio to preserve; fall back to filling the box.
@@ -65,7 +62,6 @@ mod tests {
 
     #[test]
     fn contain_letterboxes_wide_box() {
-        // 10x10 into 120x60: uniform scale = min(12, 6) = 6, fitted 60x60, centered horizontally.
         let c = Rect::new(0.0, 0.0, 120.0, 60.0);
         let (rect, clip) = fit_rect((10.0, 10.0), c, ObjectFit::Contain);
         assert_eq!(rect, Rect::new(30.0, 0.0, 60.0, 60.0));
@@ -74,7 +70,6 @@ mod tests {
 
     #[test]
     fn cover_overflows_and_clips() {
-        // 10x10 into 120x60: uniform scale = max(12, 6) = 12, fitted 120x120, centered (overflows top/bottom).
         let c = Rect::new(0.0, 0.0, 120.0, 60.0);
         let (rect, clip) = fit_rect((10.0, 10.0), c, ObjectFit::Cover);
         assert_eq!(rect, Rect::new(0.0, -30.0, 120.0, 120.0));
@@ -101,8 +96,7 @@ mod tests {
         assert_eq!(ObjectFit::default(), ObjectFit::Contain);
     }
 
-    /// The case `Contain` gets wrong for pixel art: at a fractional scale the source grid stops being a
-    /// grid, because some pixels round to one screen pixel more than their neighbours.
+    /// The case `Contain` gets wrong for pixel art: at a fractional scale the source grid stops being a grid, because some pixels round to one screen pixel more than their neighbours.
     #[test]
     fn contain_integer_floors_the_scale_and_widens_the_letterbox() {
         // 320x180 into 1300x740: Contain would take min(4.06, 4.11) and smear the grid; flooring to 4 gives 1280x720 centred, spending the remainder on the border instead.

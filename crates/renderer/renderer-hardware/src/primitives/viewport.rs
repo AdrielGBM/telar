@@ -1,3 +1,5 @@
+//! The viewport uniform: the NDC transform every pipeline binds, plus the rounded-clip SDF params.
+
 use wgpu::util::DeviceExt;
 
 #[repr(C)]
@@ -6,9 +8,9 @@ pub(crate) struct Viewport {
     pub size: [f32; 2],
     pub offset: [f32; 2],
     pub scale: f32,
-    // Pads to 16 bytes so clip_rect (a vec4 with 16-byte alignment in std140 uniform layout) starts at offset 32, matching the WGSL struct.
+    // Pads to 16 bytes so `clip_rect` starts at offset 32, matching the WGSL struct's std140 alignment.
     pub _pad: [f32; 3],
-    // Active rounded-clip rect in logical/world space; [0,0,0,0] disables the SDF clip.
+    // In logical world space; `[0,0,0,0]` disables the SDF clip.
     pub clip_rect: [f32; 4],
     pub clip_radius: f32,
     pub _clip_pad: [f32; 3],
@@ -28,7 +30,7 @@ impl Viewport {
     }
 }
 
-// Locks the GPU/CPU uniform contract: the WGSL Viewport places clip_rect at offset 32 (vec4 std140 alignment) and is 64 bytes; the Rust struct must match byte-for-byte.
+// Locks the GPU/CPU contract: the WGSL `Viewport` places `clip_rect` at offset 32 and is 64 bytes.
 const _: () = {
     assert!(std::mem::size_of::<Viewport>() == 64);
     assert!(std::mem::offset_of!(Viewport, clip_rect) == 32);

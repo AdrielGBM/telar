@@ -1,21 +1,12 @@
 //! rustc's diagnostics, re-pointed at the `.rsx` that produced them.
 //!
-//! A `.rsx` compiles to `<crate>/.telar/build/<rel>.rs` (or `build-hot` under `cargo telar dev`), so every
-//! rustc error past the parse stage names a file the author never wrote and a line they never typed. The
-//! transpiler writes a per-line source map beside each generated file; this reads it back.
+//! A `.rsx` compiles to `<crate>/.telar/build/<rel>.rs` (or `build-hot` under `cargo telar dev`), so every rustc error past the parse stage names a file the author never wrote and a line they never typed. The transpiler writes a per-line source map beside each generated file; this reads it back.
 //!
-//! Parse errors do not need any of this: the macro reports them as `compile_error!("<file>:<line>: …")`, so
-//! the text already names the `.rsx`. It is the errors *after* transpiling — a wrong type, an unresolved
-//! name, a component called with the wrong arity — that lose their origin, and those are exactly the ones a
-//! person writing `.rsx` hits most.
+//! Parse errors do not need any of this: the macro reports them as `compile_error!("<file>:<line>: …")`, so the text already names the `.rsx`. It is the errors *after* transpiling — a wrong type, an unresolved name, a component called with the wrong arity — that lose their origin, and those are exactly the ones a person writing `.rsx` hits most.
 //!
-//! Shared by `cargo telar check` and the `cargo telar dev` rebuild loop, which is the point: the mapping was
-//! built, tested and then wired only into the command almost nobody runs, while the loop everybody lives in
-//! printed raw paths into `.telar/`.
+//! Shared by `cargo telar check` and the `cargo telar dev` rebuild loop, which is the point: the mapping was built, tested and then wired only into the command almost nobody runs, while the loop everybody lives in printed raw paths into `.telar/`.
 //!
-//! The columns come from the same [`SourceMap::locate`] the editor uses, so the terminal and the editor
-//! cannot reach two conclusions about one error. Where it says a column cannot be trusted — a `[view]` line
-//! the transpiler rewrote into something else — the frame underlines nothing rather than the wrong thing.
+//! The columns come from the same [`SourceMap::locate`] the editor uses, so the terminal and the editor cannot reach two conclusions about one error. Where it says a column cannot be trusted — a `[view]` line the transpiler rewrote into something else — the frame underlines nothing rather than the wrong thing.
 
 use std::collections::HashMap;
 use std::io::BufRead;
@@ -23,8 +14,7 @@ use std::path::{Component, Path, PathBuf};
 
 use telar_transpiler::{RsxSpan, SourceMap};
 
-/// A `help:`/`note:` rustc hung off a diagnostic. Dropping these used to cost the half of a type error that
-/// says what to do about it.
+/// A `help:`/`note:` rustc hung off a diagnostic. Dropping these used to cost the half of a type error that says what to do about it.
 pub(crate) struct Note {
     level: String,
     message: String,
@@ -35,8 +25,7 @@ pub(crate) struct Projected {
     source: PathBuf,
     /// 1-based, for display.
     line: usize,
-    /// Character offsets within [`Self::line`] to underline, or `None` when the transpiler rewrote this line
-    /// and its columns mean nothing. Characters and not bytes because this is for drawing.
+    /// Character offsets within [`Self::line`] to underline, or `None` when the transpiler rewrote this line and its columns mean nothing. Characters and not bytes because this is for drawing.
     underline: Option<(usize, usize)>,
     level: String,
     message: String,
@@ -47,8 +36,7 @@ pub(crate) struct Projected {
 #[derive(Default)]
 pub(crate) struct Report {
     projected: Vec<Projected>,
-    /// Diagnostics about hand-written Rust, kept in rustc's own rendering — it is already pointing at a file
-    /// the author can open, and re-drawing it would only make it look less like the compiler they know.
+    /// Diagnostics about hand-written Rust, kept in rustc's own rendering — it is already pointing at a file the author can open, and re-drawing it would only make it look less like the compiler they know.
     passthrough: Vec<String>,
 }
 
@@ -61,8 +49,7 @@ impl Report {
         self.projected.iter().any(|p| p.level == "error")
     }
 
-    /// The whole report as text. `color` off strips the ANSI rustc baked into its own renderings, for the
-    /// in-window banner, which draws glyphs and would otherwise print the escape sequences.
+    /// The whole report as text. `color` off strips the ANSI rustc baked into its own renderings, for the in-window banner, which draws glyphs and would otherwise print the escape sequences.
     pub(crate) fn render(&self, color: bool) -> String {
         let mut out = String::new();
         let mut sources: HashMap<PathBuf, Option<Vec<String>>> = HashMap::new();
@@ -106,7 +93,7 @@ impl Projected {
             display(&self.source),
             self.line
         ));
-        // Why rustc's own `rendered` is not reused: its `-->` header and its quoted snippet both name the generated file, because that is the only file rustc saw.
+        // rustc's own `rendered` is not reused: its `-->` header and quoted snippet both name the generated file, the only file rustc saw.
         if let Some(text) = source_lines.and_then(|lines| lines.get(self.line - 1)) {
             let bar = paint("1;34", "|");
             out.push_str(&format!("{gutter} {bar}\n"));
@@ -125,7 +112,7 @@ impl Projected {
             }
         }
         for note in &self.notes {
-            // rustc packs whole tables into one `help` (every impl of a trait, say), and without the indent the continuation reads as further diagnostics.
+            // rustc packs whole tables into one `help`, and without the indent the continuation reads as further diagnostics.
             let mut lines = note.message.lines();
             out.push_str(&format!(
                 "{gutter} {} {}: {}\n",
@@ -215,10 +202,7 @@ fn str_field(message: &serde_json::Value, key: &str) -> String {
 
 /// Replaces rustc's advice on a move-out-of-closure error with the one that applies in `.rsx`.
 ///
-/// rustc says "consider cloning the value", which is right for Rust and wrong here: writing `held.clone()`
-/// in markup is the bookkeeping the sigil exists to remove, and it clones on every call rather than once per
-/// closure. `$held` is the answer — the transpiler emits one clone per capturing closure and leaves the
-/// binding usable. The diagnostic already knew *where*; this is what to write.
+/// rustc says "consider cloning the value", which is right for Rust and wrong here: writing `held.clone()` in markup is the bookkeeping the sigil exists to remove, and it clones on every call rather than once per closure. `$held` is the answer — the transpiler emits one clone per capturing closure and leaves the binding usable. The diagnostic already knew *where*; this is what to write.
 fn sigil_advice(message: &serde_json::Value, notes: Vec<Note>) -> Vec<Note> {
     let code = message
         .get("code")
@@ -241,9 +225,7 @@ fn sigil_advice(message: &serde_json::Value, notes: Vec<Note>) -> Vec<Note> {
     notes
 }
 
-/// The `help`/`note` children, flattened to their text. Nested children are not followed: rustc uses those
-/// for suggestion machinery whose value is in the span rendering, which is exactly what does not survive the
-/// hop to another file.
+/// The `help`/`note` children, flattened to their text. Nested children are not followed: rustc uses those for suggestion machinery whose value is in the span rendering, which is exactly what does not survive the hop to another file.
 fn notes_of(message: &serde_json::Value) -> Vec<Note> {
     message
         .get("children")
@@ -316,8 +298,7 @@ fn generated_to_source(generated: &Path) -> Option<PathBuf> {
     Some(source.with_extension("rsx"))
 }
 
-/// One generated file, everything needed to place a diagnostic in it, read once. A single broken component
-/// usually produces a run of diagnostics, so this is cached for the length of the stream.
+/// One generated file, everything needed to place a diagnostic in it, read once. A single broken component usually produces a run of diagnostics, so this is cached for the length of the stream.
 struct Origin {
     rsx_path: PathBuf,
     rsx_source: String,
@@ -338,8 +319,7 @@ impl Origin {
         })
     }
 
-    /// Places one rustc span in the `.rsx`: its 1-based line, and the characters to underline when the
-    /// columns can be trusted.
+    /// Places one rustc span in the `.rsx`: its 1-based line, and the characters to underline when the columns can be trusted.
     fn locate(
         &self,
         span: &serde_json::Value,
@@ -350,9 +330,7 @@ impl Origin {
         let Some((byte_start, byte_end)) = span_bytes(span) else {
             return by_line((*self.map.lines.get(line_start as usize - 1)?)?);
         };
-        // The generated file is read back from disk after rustc compiled it, so an edit in between would
-        // leave these offsets pointing at other text entirely. rustc's own line number is the check: if it
-        // disagrees with where the offset lands, the columns are not about this file any more.
+        // The generated file is read back from disk after rustc compiled it, so an edit in between would leave these offsets pointing at other text. rustc's own line number is the check.
         if line_of(&self.generated, byte_start) != Some(line_start as usize - 1) {
             return by_line((*self.map.lines.get(line_start as usize - 1)?)?);
         }
@@ -411,9 +389,7 @@ fn display(path: &Path) -> String {
         .to_string()
 }
 
-/// Removes SGR escape sequences. rustc's `rendered` carries them because the build asks for `--color=always`
-/// — which is what keeps a terminal's diagnostics looking like cargo's own, and what the in-window banner
-/// must not be handed, since it draws glyphs rather than interpreting escapes.
+/// Removes SGR escape sequences. rustc's `rendered` carries them because the build asks for `--color=always` — which is what keeps a terminal's diagnostics looking like cargo's own, and what the in-window banner must not be handed, since it draws glyphs rather than interpreting escapes.
 fn strip_ansi(text: &str) -> String {
     let mut out = String::with_capacity(text.len());
     let mut chars = text.chars();
@@ -465,9 +441,7 @@ mod tests {
         assert!(!is_generated(Path::new("/w/crates/ui/.telar/other/x.rs")));
     }
 
-    /// The `help:` line is where rustc puts what to actually do, and it used to be read off the wire and
-    /// dropped — leaving the half of a type error that says there is a problem without the half that says
-    /// what the fix is.
+    /// The `help:` line is where rustc puts what to actually do, and it used to be read off the wire and dropped — leaving the half of a type error that says there is a problem without the half that says what the fix is.
     #[test]
     fn help_and_note_children_survive_the_remap() {
         let message = serde_json::json!({
@@ -493,15 +467,12 @@ mod tests {
         );
     }
 
-    /// Whether the report points at `suffix`, written with `/` whatever the platform spells it with. A frame
-    /// carries a real mapped path, so on Windows it arrives with backslashes and a literal `src/home.rsx`
-    /// never matches — which is a fact about the separator and not about the mapping under test.
+    /// Whether the report points at `suffix`, written with `/` whatever the platform spells it with. A frame carries a real mapped path, so on Windows it arrives with backslashes and a literal `src/home.rsx` never matches — which is a fact about the separator and not about the mapping under test.
     fn points_at(text: &str, suffix: &str) -> bool {
         text.replace('\\', "/").contains(suffix)
     }
 
-    /// Lays out a package the way a hot-reload build leaves one: the `.rsx` the author wrote, the generated
-    /// `.rs` nobody wrote, and the map between them. Returns the package root.
+    /// Lays out a package the way a hot-reload build leaves one: the `.rsx` the author wrote, the generated `.rs` nobody wrote, and the map between them. Returns the package root.
     fn fake_package(tag: &str, rsx: &str, generated: &str, map: SourceMap) -> PathBuf {
         let root = std::env::temp_dir().join(format!("telar_diag_{tag}_{}", std::process::id()));
         let build = root.join(".telar/build-hot");
@@ -517,8 +488,7 @@ mod tests {
         message_span(root, level, message, line, None)
     }
 
-    /// `bytes` is what rustc puts in every real span; `None` stands for the spans that arrive without one,
-    /// which fall back to the line.
+    /// `bytes` is what rustc puts in every real span; `None` stands for the spans that arrive without one, which fall back to the line.
     fn message_span(
         root: &Path,
         level: &str,
@@ -547,16 +517,13 @@ mod tests {
         .to_string()
     }
 
-    /// The whole point. A type error in a `.rsx` used to be reported against `.telar/build-hot/….rs:LINE` —
-    /// a file the author never opened, at a line they never typed — for the entire length of a
-    /// `cargo telar dev` session, while the mapping that fixes it sat in a command almost nobody runs.
+    /// The whole point. A type error in a `.rsx` used to be reported against `.telar/build-hot/….rs:LINE` — a file the author never opened, at a line they never typed — for the entire length of a `cargo telar dev` session, while the mapping that fixes it sat in a command almost nobody runs.
     #[test]
     fn a_type_error_is_reported_against_the_rsx_line_not_the_generated_one() {
         let root = fake_package(
             "err",
             "[logic]\nlet n = signal(0);\n\n[view]\ntext \"{n}\"\n",
             "1\n2\n3\n4\n5\n    let n = signal(0);\n",
-            // Generated line 6 came from `.rsx` line 2 (both 0-based in the map).
             SourceMap::new(vec![None, None, None, None, None, Some(1)], vec![]),
         );
         let report = collect(message_line(&root, "error", "mismatched types", 6).as_bytes());
@@ -575,9 +542,7 @@ mod tests {
         std::fs::remove_dir_all(&root).ok();
     }
 
-    /// Warnings used to be captured into a `String` that only the failure path ever read, so a whole
-    /// development session could pass without one ever reaching the terminal. They travel the same route as
-    /// errors now, which is what makes them visible on the builds that succeed.
+    /// Warnings used to be captured into a `String` that only the failure path ever read, so a whole development session could pass without one ever reaching the terminal. They travel the same route as errors now, which is what makes them visible on the builds that succeed.
     #[test]
     fn a_warning_is_not_silently_swallowed() {
         let root = fake_package(
@@ -597,8 +562,7 @@ mod tests {
         std::fs::remove_dir_all(&root).ok();
     }
 
-    /// A diagnostic about hand-written Rust keeps rustc's own rendering, which is already pointing at a file
-    /// the author can open.
+    /// A diagnostic about hand-written Rust keeps rustc's own rendering, which is already pointing at a file the author can open.
     #[test]
     fn a_diagnostic_about_hand_written_rust_is_passed_through_untouched() {
         let message = serde_json::json!({
@@ -615,8 +579,7 @@ mod tests {
         assert_eq!(text, "error: cannot find value `x`\n --> src/state.rs:9\n");
     }
 
-    /// A `.rsx` that cannot be read still reports the diagnostic — losing the quoted line is a worse frame,
-    /// not a lost error.
+    /// A `.rsx` that cannot be read still reports the diagnostic — losing the quoted line is a worse frame, not a lost error.
     #[test]
     fn a_missing_source_file_still_reports_the_diagnostic() {
         let report = Report {
@@ -635,8 +598,7 @@ mod tests {
         assert!(text.contains("/nowhere/home.rsx:4"), "{text}");
     }
 
-    /// A `[logic]` line is transpiled 1:1 under a fixed indent, so rustc's columns come back by subtracting
-    /// it — and the frame can point at the identifier rather than at the line it happens to sit on.
+    /// A `[logic]` line is transpiled 1:1 under a fixed indent, so rustc's columns come back by subtracting it — and the frame can point at the identifier rather than at the line it happens to sit on.
     #[test]
     fn a_logic_error_underlines_the_columns_rustc_gave_it() {
         let generated = "fn home() {\n    let count = signal(0);\n}\n";
@@ -661,9 +623,7 @@ mod tests {
         std::fs::remove_dir_all(&root).ok();
     }
 
-    /// The case that was unreachable until the expression spans reached the sidecar: a verbatim `[view]`
-    /// fragment is the same bytes in both files, so an error inside it underlines exactly it. With only the
-    /// line map on disk, the CLI could say nothing narrower than the whole `text "{…}"` line.
+    /// The case that was unreachable until the expression spans reached the sidecar: a verbatim `[view]` fragment is the same bytes in both files, so an error inside it underlines exactly it. With only the line map on disk, the CLI could say nothing narrower than the whole `text "{…}"` line.
     #[test]
     fn a_verbatim_view_expression_is_underlined_exactly() {
         let rsx = "[view]\ncolumn\n    text \"{missing}\"\n";
@@ -703,8 +663,7 @@ mod tests {
         std::fs::remove_dir_all(&root).ok();
     }
 
-    /// And the case that has to stay wide. A `[view]` line the transpiler rewrote into something else has no
-    /// column correspondence, so underlining *something* would point at text unrelated to the error.
+    /// And the case that has to stay wide. A `[view]` line the transpiler rewrote into something else has no column correspondence, so underlining *something* would point at text unrelated to the error.
     #[test]
     fn a_rewritten_view_line_is_not_underlined_at_all() {
         let generated = "fn home() {\n    Text::new(\"hi\")\n}\n";

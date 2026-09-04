@@ -1,7 +1,4 @@
-//! Smoke test for the headless (offscreen) rendering path: build a windowless renderer, render a
-//! simple frame, and confirm `read_rgba` returns a tightly-packed, non-zero RGBA buffer with the
-//! drawn rect distinguishable from the cleared background. Skips when no GPU adapter is available,
-//! unless `TELAR_REQUIRE_GPU` says one was expected — see [`common::skip_without_gpu`].
+//! Smoke test for the headless (offscreen) rendering path: build a windowless renderer, render a simple frame, and confirm `read_rgba` returns a tightly-packed, non-zero RGBA buffer with the drawn rect distinguishable from the cleared background. Skips when no GPU adapter is available, unless `TELAR_REQUIRE_GPU` says one was expected — see [`common::skip_without_gpu`].
 
 mod common;
 
@@ -56,7 +53,6 @@ fn headless_renders_non_empty_frame() {
         "rendered frame is entirely zero — nothing was drawn"
     );
 
-    // The rect (8,8 .. 48,38) covers the center; the (0,0) corner is background clear color.
     let center = (((h / 2) * w + (w / 2)) * 4) as usize;
     assert_ne!(
         &pixels[center..center + 3],
@@ -67,10 +63,7 @@ fn headless_renders_non_empty_frame() {
 
 /// A gradient-painted stroke must vary along the trace, not flatten to its first stop.
 ///
-/// The hardware backend used to resolve a stroke's paint with `solid_color()`, which returns stop 0 — so a
-/// red→blue stroke came out uniformly red on GPU while the software backend painted the real ramp. Asserted
-/// as "each end leans toward its own stop" rather than on exact values, so it does not encode llvmpipe's
-/// rounding; before the fix both ends read red and the second assertion fails.
+/// The hardware backend used to resolve a stroke's paint with `solid_color()`, which returns stop 0 — so a red→blue stroke came out uniformly red on GPU while the software backend painted the real ramp. Asserted as "each end leans toward its own stop" rather than on exact values, so it does not encode llvmpipe's rounding; before the fix both ends read red and the second assertion fails.
 #[test]
 fn a_gradient_stroke_varies_along_the_path() {
     let (w, h) = (64u32, 32u32);
@@ -143,9 +136,7 @@ fn red_to_blue(x0: f32, x1: f32, y: f32) -> Paint {
     ))
 }
 
-/// A rect's border is drawn by the same SDF shader as its fill, from its own paint slots — so a gradient
-/// stroke ramps across the border instead of painting stop 0 all the way round. The two sampled points sit on
-/// the top edge, inside the stroke band, near each end.
+/// A rect's border is drawn by the same SDF shader as its fill, from its own paint slots — so a gradient stroke ramps across the border instead of painting stop 0 all the way round. The two sampled points sit on the top edge, inside the stroke band, near each end.
 #[test]
 fn a_gradient_stroke_varies_along_a_rect_border() {
     let (w, h) = (64u32, 40u32);
@@ -222,8 +213,7 @@ fn a_gradient_line_varies_along_its_length() {
     );
 }
 
-// A layer-free grid of solid cells over an opaque background; `highlight` recolors exactly one cell
-// so two renders differing only in `highlight` produce a single-cell dirty rect — the F1 scenario.
+// `highlight` recolors exactly one cell, so two renders differing only in it produce a single-cell dirty rect.
 fn grid_scene(highlight: Option<usize>) -> Vec<DrawCommand> {
     const W: f32 = 800.0;
     const H: f32 = 600.0;
@@ -255,12 +245,7 @@ fn grid_scene(highlight: Option<usize>) -> Vec<DrawCommand> {
     cmds
 }
 
-/// F1 correctness: rendering frame B *after* frame A (so B goes through the damage-prime path —
-/// prime the retained frame A, repaint only the changed cell) must produce the same pixels as
-/// rendering B from scratch (a full repaint). A missing or ghosted cell would leave a whole cell
-/// (~1.6% of the surface) diverging, far above the MSAA-edge tolerance. Skips without a GPU, and is
-/// only exercised on the MSAA path (`msaa_samples > 1`); on single-sample GPUs F1 no-ops and the two
-/// renders are trivially equal.
+/// F1 correctness: rendering frame B *after* frame A (so B goes through the damage-prime path — prime the retained frame A, repaint only the changed cell) must produce the same pixels as rendering B from scratch (a full repaint). A missing or ghosted cell would leave a whole cell (~1.6% of the surface) diverging, far above the MSAA-edge tolerance. Skips without a GPU, and is only exercised on the MSAA path (`msaa_samples > 1`); on single-sample GPUs F1 no-ops and the two renders are trivially equal.
 #[test]
 fn damage_prime_matches_full_repaint() {
     const W: u32 = 800;
@@ -286,14 +271,13 @@ fn damage_prime_matches_full_repaint() {
             return;
         }
     };
-    // Frame A establishes prev_commands + the retained texture, then B triggers the damage prime.
+    // Frame A establishes `prev_commands` and the retained texture; B triggers the damage prime.
     r1.begin_frame(W, H, 1.0, 1).expect("begin_frame a");
     r1.render_frame(&scene_a, clear).expect("render a");
     r1.begin_frame(W, H, 1.0, 2).expect("begin_frame b");
     r1.render_frame(&scene_b, clear).expect("render b");
     let f1 = r1.read_rgba().expect("read_rgba f1");
 
-    // Fresh renderer: B as a full repaint, the ground truth.
     let mut r2 = make().expect("second headless renderer");
     r2.begin_frame(W, H, 1.0, 1).expect("begin_frame full");
     r2.render_frame(&scene_b, clear).expect("render full");
@@ -319,12 +303,7 @@ fn damage_prime_matches_full_repaint() {
     );
 }
 
-// One LARGE semi-transparent rounded panel (which `expand_fill_layers` turns into a synthetic opacity
-// layer spanning most of the surface) plus a small opaque indicator that changes between frames. The
-// panel is much bigger than the indicator's dirty rect, so if F1 damage-tracks this frame the panel's
-// unconfined layer composite double-applies opacity everywhere outside the dirty rect — the exact
-// scenario F1 must skip. (A grid of small translucent cells does NOT reproduce it: cells outside the
-// dirty rect are culled to empty layers whose composite is a no-op.)
+// The panel is much bigger than the indicator's dirty rect, so an unconfined layer composite would double-apply opacity everywhere outside it — the case damage tracking must skip. A grid of small translucent cells does not reproduce it: cells outside the dirty rect are culled to empty layers.
 fn translucent_panel_scene(indicator: Color) -> Vec<DrawCommand> {
     const W: f32 = 800.0;
     const H: f32 = 600.0;
@@ -333,12 +312,10 @@ fn translucent_panel_scene(indicator: Color) -> Vec<DrawCommand> {
             rect: Rect::new(0.0, 0.0, W, H),
             style: Arc::new(RectStyle::filled(Color::from_rgb_u8(20, 20, 28), 0.0)),
         },
-        // radius > 0 + 0 < a < 1 + solid fill + no shadow → fill-layer expansion into a PushLayer.
         DrawCommand::Rect {
             rect: Rect::new(100.0, 80.0, 600.0, 440.0),
             style: Arc::new(RectStyle::filled(Color::rgba(0.4, 0.5, 0.7, 0.5), 20.0)),
         },
-        // Small opaque indicator over the panel; only this changes between the two scenes.
         DrawCommand::Rect {
             rect: Rect::new(360.0, 280.0, 80.0, 40.0),
             style: Arc::new(RectStyle::filled(indicator, 4.0)),
@@ -346,10 +323,7 @@ fn translucent_panel_scene(indicator: Color) -> Vec<DrawCommand> {
     ]
 }
 
-/// F1 damage tracking of a frame containing a fill-layer-expanded translucent panel must match a full
-/// repaint — this exercises `confine_to_dirty`, which clips the panel's opacity composite to the dirty
-/// rect. Without confinement the composite double-applies opacity outside the dirty rect and B-after-A
-/// diverges from a full repaint of B by ~54% (measured); confined, it matches.
+/// F1 damage tracking of a frame containing a fill-layer-expanded translucent panel must match a full repaint — this exercises `confine_to_dirty`, which clips the panel's opacity composite to the dirty rect. Without confinement the composite double-applies opacity outside the dirty rect and B-after-A diverges from a full repaint of B by ~54% (measured); confined, it matches.
 #[test]
 fn damage_confines_translucent_layer_composite() {
     const W: u32 = 800;
@@ -405,8 +379,7 @@ fn damage_confines_translucent_layer_composite() {
     );
 }
 
-// A large explicit opacity PushLayer over the surface plus a small opaque indicator that changes. Same
-// shape as the translucent-panel case but via a real `PushLayer{opacity}` rather than fill expansion.
+// The same shape as the translucent-panel case, but via a real `PushLayer{opacity}` rather than fill expansion.
 fn opacity_layer_scene(indicator: Color) -> Vec<DrawCommand> {
     const W: f32 = 800.0;
     const H: f32 = 600.0;
@@ -431,9 +404,7 @@ fn opacity_layer_scene(indicator: Color) -> Vec<DrawCommand> {
     ]
 }
 
-/// Same confinement check as the fill-layer test but through an explicit `PushLayer{opacity}`: the
-/// layer spans far beyond the indicator's dirty rect, so its opacity composite must be clipped to the
-/// dirty rect to match a full repaint.
+/// Same confinement check as the fill-layer test but through an explicit `PushLayer{opacity}`: the layer spans far beyond the indicator's dirty rect, so its opacity composite must be clipped to the dirty rect to match a full repaint.
 #[test]
 fn damage_confines_opacity_layer() {
     const W: u32 = 800;
@@ -488,7 +459,7 @@ fn damage_confines_opacity_layer() {
     );
 }
 
-// FNV-1a 64-bit over the raw RGBA bytes; a stable, allocation-free content hash for the golden check.
+// FNV-1a 64-bit over the raw RGBA bytes: a stable, allocation-free content hash for the golden check.
 fn fnv1a_64(bytes: &[u8]) -> u64 {
     let mut hash: u64 = 0xcbf2_9ce4_8422_2325;
     for &b in bytes {
@@ -498,21 +469,17 @@ fn fnv1a_64(bytes: &[u8]) -> u64 {
     hash
 }
 
-// A fixed, representative "dense UI" scene exercising every major primitive path plus shadow resolve
-// (text + path) and a translucent backdrop-blur overlay layer. Mirrors benches/render_frame.rs but
-// adds an explicitly shadowed text and path so ShadowKind::Text and ShadowKind::Path both fire.
+// A representative dense-UI scene exercising every major primitive path, both shadow resolve kinds and a translucent backdrop-blur overlay layer.
 fn golden_scene() -> Vec<DrawCommand> {
     const W: f32 = 1280.0;
     const H: f32 = 800.0;
     let mut cmds = Vec::new();
 
-    // Opaque background fill.
     cmds.push(DrawCommand::Rect {
         rect: Rect::new(0.0, 0.0, W, H),
         style: Arc::new(RectStyle::filled(Color::from_rgb_u8(24, 24, 32), 0.0)),
     });
 
-    // Grid of shadowed rounded cards, each with a text label.
     let card_style = Arc::new(
         RectStyle::filled(Color::from_rgb_u8(52, 58, 74), 8.0).with_shadow(Shadow::new(
             0.0,
@@ -544,7 +511,6 @@ fn golden_scene() -> Vec<DrawCommand> {
         }
     }
 
-    // A shadowed heading: exercises the ShadowKind::Text resolve path.
     let heading_style = Arc::new(TextStyle {
         text_shadow: TextShadow::Cast(Shadow::new(1.0, 2.0, 4.0, Color::rgba(0.0, 0.0, 0.0, 0.7))),
         ..TextStyle::new(22.0, Color::WHITE)
@@ -556,7 +522,6 @@ fn golden_scene() -> Vec<DrawCommand> {
         style: heading_style,
     });
 
-    // A row of filled triangles to exercise path tessellation.
     let path_style = Arc::new(PathStyle::default().with_fill(Color::from_rgb_u8(120, 200, 255)));
     for i in 0..24 {
         let cx = 40.0 + i as f32 * 50.0;
@@ -571,7 +536,6 @@ fn golden_scene() -> Vec<DrawCommand> {
         });
     }
 
-    // A shadowed path: exercises the ShadowKind::Path resolve path.
     let shadow_path_style = Arc::new(
         PathStyle::default()
             .with_fill(Color::from_rgb_u8(255, 180, 80))
@@ -589,7 +553,6 @@ fn golden_scene() -> Vec<DrawCommand> {
         style: shadow_path_style,
     });
 
-    // Translucent overlay panel with a backdrop blur: exercises layer capture, blur, and composite.
     cmds.push(DrawCommand::PushLayer {
         opacity: 0.85,
         backdrop_blur: 12.0,
@@ -611,10 +574,7 @@ fn golden_scene() -> Vec<DrawCommand> {
     cmds
 }
 
-/// Smoke test for the `render_frame` decomposition: renders a fixed scene headless and checks it succeeds
-/// with a tightly-packed readback. It also hashes the pixels against a baked constant, but that hash is
-/// GPU/platform-specific (see below), so it is enforced only under `TELAR_HARDWARE_GOLDEN` on the baseline
-/// machine — cross-platform CI relies on the smoke checks and the software renderer's deterministic golden.
+/// Smoke test for the `render_frame` decomposition: renders a fixed scene headless and checks it succeeds with a tightly-packed readback. It also hashes the pixels against a baked constant, but that hash is GPU/platform-specific (see below), so it is enforced only under `TELAR_HARDWARE_GOLDEN` on the baseline machine — cross-platform CI relies on the smoke checks and the software renderer's deterministic golden.
 #[test]
 fn render_frame_pixel_golden() {
     const WIDTH: u32 = 1280;
@@ -652,11 +612,7 @@ fn render_frame_pixel_golden() {
     );
 
     let hash = fnv1a_64(&pixels);
-    // GPU rasterisation (text hinting, antialiasing, subpixel coverage) is driver- and platform-specific,
-    // so this exact hash only reproduces on the machine EXPECTED was baked on. Enforce it strictly only when
-    // opted in (that machine); everywhere else — cross-platform CI — the assertions above (renders without
-    // error, tightly-packed readback of the right size) are the portable smoke test, and a hash mismatch is
-    // reported but not fatal. The deterministic cross-platform guard is `axis_aligned_scene_is_pixel_exact_on_every_platform` in renderer-software: no text and integer-aligned edges, so nothing is left for a driver or an architecture to round differently.
+    // GPU rasterisation is driver- and platform-specific, so this hash only reproduces on the machine EXPECTED was baked on, and is enforced strictly only when opted in. Elsewhere the assertions above are the portable smoke test. The deterministic cross-platform guard lives in renderer-software, where a scene with no text and integer-aligned edges leaves nothing for a driver to round differently.
     if std::env::var_os("TELAR_HARDWARE_GOLDEN").is_some() {
         assert_eq!(
             hash, EXPECTED,
@@ -670,10 +626,7 @@ fn render_frame_pixel_golden() {
     }
 }
 
-/// A clip nested inside a layer may name pixels outside that layer's texture: the layer is sized to the
-/// bounds of what it draws, while the clip carries window coordinates. Scissors are clamped to the bound
-/// attachment, so this must stay in-bounds — clamping to the surface instead made wgpu reject the scissor as
-/// a fatal validation error the moment a scrolling page was wrapped in an opacity/transition layer.
+/// A clip nested inside a layer may name pixels outside that layer's texture: the layer is sized to the bounds of what it draws, while the clip carries window coordinates. Scissors are clamped to the bound attachment, so this must stay in-bounds — clamping to the surface instead made wgpu reject the scissor as a fatal validation error the moment a scrolling page was wrapped in an opacity/transition layer.
 #[test]
 fn clip_below_a_layers_bounds_stays_in_the_attachment() {
     const W: u32 = 640;
@@ -693,7 +646,7 @@ fn clip_below_a_layers_bounds_stays_in_the_attachment() {
         }
     };
 
-    // The layer draws only near the top, so its texture is a fraction of the 1080px surface...
+    // The layer draws only near the top, so its texture is a fraction of the 1080px surface.
     let cmds = vec![
         DrawCommand::PushLayer {
             opacity: 0.5,
@@ -703,9 +656,7 @@ fn clip_below_a_layers_bounds_stays_in_the_attachment() {
             rect: Rect::new(0.0, 0.0, 640.0, 192.0),
             style: Arc::new(RectStyle::filled(Color::rgb(0.2, 0.6, 0.9), 0.0)),
         },
-        // ...while this clip sits near the bottom of the window, far past the layer's texture height. It
-        // emits its scissor unconditionally, and the draw inside falls outside it — so the draw is culled and
-        // never grows the layer's bounds, leaving the scissor pointing well outside the layer's texture.
+        // This clip sits far past the layer's texture height. It emits its scissor unconditionally and the draw inside falls outside it, so the draw is culled and never grows the layer's bounds — leaving the scissor pointing well outside the layer's texture.
         DrawCommand::PushClip {
             rect: Rect::new(48.0, 1063.0, 604.0, 1.0),
             radius: Default::default(),
@@ -726,14 +677,9 @@ fn clip_below_a_layers_bounds_stays_in_the_attachment() {
     assert_eq!(pixels.len(), (W * H * 4) as usize);
 }
 
-/// The GPU's half of the per-side border, asserted on the same box and the same four points the rasterizer's
-/// `border_sides` test uses.
+/// The GPU's half of the per-side border, asserted on the same box and the same four points the rasterizer's `border_sides` test uses.
 ///
-/// Written twice on purpose. The two backends derive their border from one shared function
-/// (`renderer_core::border_inner_shape`), but only the rasterizer *calls* it — the shader re-derives the same
-/// inner shape in WGSL, because an SDF cannot be handed a path. So the guarantee that a rule under a header
-/// lands in the same place on both is exactly a guarantee that these two tests agree, and nothing else
-/// enforces it.
+/// Written twice on purpose. The two backends derive their border from one shared function (`renderer_core::border_inner_shape`), but only the rasterizer *calls* it — the shader re-derives the same inner shape in WGSL, because an SDF cannot be handed a path. So the guarantee that a rule under a header lands in the same place on both is exactly a guarantee that these two tests agree, and nothing else enforces it.
 #[test]
 fn a_bottom_border_paints_only_the_bottom_edge_on_the_gpu() {
     let (w, h) = (40u32, 40u32);
@@ -775,8 +721,7 @@ fn a_bottom_border_paints_only_the_bottom_edge_on_the_gpu() {
     }
 }
 
-/// Sides keep their own thicknesses on the GPU too — the shader's inner rect is off-centre when they differ,
-/// which is the part an offset of the outer SDF could not have expressed.
+/// Sides keep their own thicknesses on the GPU too — the shader's inner rect is off-centre when they differ, which is the part an offset of the outer SDF could not have expressed.
 #[test]
 fn sides_keep_their_own_thicknesses_on_the_gpu() {
     let (w, h) = (40u32, 40u32);
@@ -810,8 +755,7 @@ fn sides_keep_their_own_thicknesses_on_the_gpu() {
     assert!(red_at(20, 36) < 40, "which does not reach four rows up");
 }
 
-/// The clip stack's own invariants, which the golden scene never touches: what a `PopClip` restores and what
-/// a nested clip intersects to.
+/// The clip stack's own invariants, which the golden scene never touches: what a `PopClip` restores and what a nested clip intersects to.
 fn clip_scene() -> Vec<DrawCommand> {
     let red = Arc::new(RectStyle::filled(Color::rgb(0.9, 0.1, 0.1), 0.0));
     let green = Arc::new(RectStyle::filled(Color::rgb(0.1, 0.9, 0.1), 0.0));
@@ -835,13 +779,13 @@ fn clip_scene() -> Vec<DrawCommand> {
             style: green.clone(),
         },
         DrawCommand::PopClip,
-        // Reaches y=150, which the nested clip forbade — it can only paint once that clip is gone.
+        // Reaches y=150, which the nested clip forbade: it can only paint once that clip is gone.
         DrawCommand::Rect {
             rect: Rect::new(0.0, 150.0, 200.0, 20.0),
             style: blue.clone(),
         },
         DrawCommand::PopClip,
-        // Outside every clip: proves the stack emptied rather than leaking the last scissor.
+        // Outside every clip, proving the stack emptied rather than leaking the last scissor.
         DrawCommand::Rect {
             rect: Rect::new(150.0, 150.0, 40.0, 40.0),
             style: red,

@@ -11,13 +11,9 @@ use super::signals::{
 use super::{ChildEmit, ChildMode, ViewGen, expr_marker};
 
 impl ViewGen<'_> {
-    /// The clone prelude a `move` closure holding `body` needs: one `let x = x.clone();` per `$signal` (and
-    /// per in-scope loop variable) the subtree reads.
+    /// The clone prelude a `move` closure holding `body` needs: one `let x = x.clone();` per `$signal` (and per in-scope loop variable) the subtree reads.
     ///
-    /// Without it the closure *moves* those bindings, so a signal read inside a reactive branch stops being
-    /// available to the rest of the view — a trap the author never wrote and cannot see in their `.rsx`.
-    /// Computed before this block's own pattern idents enter `loop_variables`, since those are the closure's
-    /// parameters and exist only inside it.
+    /// Without it the closure *moves* those bindings, so a signal read inside a reactive branch stops being available to the rest of the view — a trap the author never wrote and cannot see in their `.rsx`. Computed before this block's own pattern idents enter `loop_variables`, since those are the closure's parameters and exist only inside it.
     fn wrap_branch_closure(&self, body: &[ViewNode], closure: String, pad: &str) -> String {
         let raw = subtree_snippets(body);
         let raw_refs: Vec<&str> = raw.iter().map(String::as_str).collect();
@@ -25,8 +21,7 @@ impl ViewGen<'_> {
         clone_block_multiline(&idents, closure, pad)
     }
 
-    /// `match <expr> [as <name>] [key <expr>]`. A `$` in the scrutinee makes it reactive; without one the arm is
-    /// chosen once at construction and this is an ordinary Rust `match`.
+    /// `match <expr> [as <name>] [key <expr>]`. A `$` in the scrutinee makes it reactive; without one the arm is chosen once at construction and this is an ordinary Rust `match`.
     pub(super) fn emit_match(&mut self, block: &MatchBlock) -> ChildEmit {
         if block.scrutinee.contains('$') {
             return self.emit_reactive_match(block);
@@ -51,10 +46,7 @@ impl ViewGen<'_> {
         ChildEmit::Dynamic { code }
     }
 
-    /// A reactive `match $expr`: a one-item reconciled list whose key decides when an arm rebuilds. Unlike a
-    /// reactive `if`, the key is not the selector — a variant carries a payload, and keying on that payload's
-    /// own identity is what lets an arm keep its widget while its contents change. Without a `key` clause it
-    /// reconciles on the variant alone, which rebuilds when the shape changes and not when the payload does.
+    /// A reactive `match $expr`: a one-item reconciled list whose key decides when an arm rebuilds. Unlike a reactive `if`, the key is not the selector — a variant carries a payload, and keying on that payload's own identity is what lets an arm keep its widget while its contents change. Without a `key` clause it reconciles on the variant alone, which rebuilds when the shape changes and not when the payload does.
     fn emit_reactive_match(&mut self, block: &MatchBlock) -> ChildEmit {
         let boxed = !self.in_slot_host();
         let var = self.next_variable_name("node");
@@ -70,7 +62,7 @@ impl ViewGen<'_> {
             Some(key) if !key.is_empty() => {
                 format!("|{binding}: &_| {}", substitute_reads(key))
             }
-            // The variant alone. `discriminant` is `Hash` whether or not the item's own type is.
+            // The variant alone: `discriminant` is `Hash` whether or not the item's own type is.
             _ => "|__value: &_| ::std::mem::discriminant(__value)".to_string(),
         };
 
@@ -127,14 +119,12 @@ impl ViewGen<'_> {
     }
 
     pub(super) fn emit_if(&mut self, block: &IfBlock) -> ChildEmit {
-        // A `$`-signal in the condition makes this a reactive conditional: the shown branch swaps when the
-        // condition changes. A plain condition stays a one-shot construction `if` (branch chosen at build).
+        // A `$` in the condition makes this reactive; a plain condition stays a one-shot construction `if`.
         if block.condition.contains('$') {
             return self.emit_reactive_if(block);
         }
         let pad = self.indent_str();
         let mut code = String::new();
-        // The condition is already trimmed by the parser and emitted verbatim, so its span maps directly.
         let cond = block.condition.trim();
         let marker = expr_marker(block.condition_start, cond.len());
         let _ = writeln!(code, "{pad}if {marker}{cond} {{");
@@ -152,17 +142,13 @@ impl ViewGen<'_> {
         ChildEmit::Dynamic { code }
     }
 
-    /// A reactive `if $cond`, keyed on the condition boolean: the old branch's nodes are disposed and the new
-    /// branch built when it flips. Inside a slot host it is a transparent fragment (the shown branch's nodes
-    /// are real siblings inheriting the parent's flex direction); where a fragment cannot attach —
-    /// component-slot children, a bare root, overlay/scroll — it is a single-item `ReactiveList` owning a node
-    /// of its own.
+    /// A reactive `if $cond`, keyed on the condition boolean: the old branch's nodes are disposed and the new branch built when it flips. Inside a slot host it is a transparent fragment (the shown branch's nodes are real siblings inheriting the parent's flex direction); where a fragment cannot attach — component-slot children, a bare root, overlay/scroll — it is a single-item `ReactiveList` owning a node of its own.
     fn emit_reactive_if(&mut self, block: &IfBlock) -> ChildEmit {
         let boxed = !self.in_slot_host();
         let var = self.next_variable_name("node");
         let pad = self.indent_str();
         let cond = block.condition.trim();
-        // Source yields a one-element `vec![<bool>]`; the element is the reconciliation key and branch selector.
+        // A one-element `vec![<bool>]`: the element is both reconciliation key and branch selector.
         let source =
             wrap_signal_clones(&[cond], format!("move || vec![{}]", substitute_reads(cond)));
 
@@ -198,9 +184,7 @@ impl ViewGen<'_> {
         }
     }
 
-    /// Both branches of an `if` as one node list — what the branch closure actually contains, and so what its
-    /// clone prelude has to be computed from. The condition is deliberately excluded: it lives in the source
-    /// closure, which clones it separately.
+    /// Both branches of an `if` as one node list — what the branch closure actually contains, and so what its clone prelude has to be computed from. The condition is deliberately excluded: it lives in the source closure, which clones it separately.
     fn branch_nodes(block: &IfBlock) -> Vec<ViewNode> {
         let mut nodes = block.then_branch.clone();
         if let Some(else_branch) = &block.else_branch {
@@ -209,8 +193,7 @@ impl ViewGen<'_> {
         nodes
     }
 
-    /// Emits a reactive `if`'s branches as per-branch returns, each collapsed by [`Self::emit_content_cell`].
-    /// A missing `else` yields an empty column.
+    /// Emits a reactive `if`'s branches as per-branch returns, each collapsed by [`Self::emit_content_cell`]. A missing `else` yields an empty column.
     fn emit_branch_returns(&mut self, block: &IfBlock, code: &mut String) {
         let pad = self.indent_str();
         let _ = writeln!(code, "{pad}if __cond {{");
@@ -236,8 +219,7 @@ impl ViewGen<'_> {
     }
 
     pub(super) fn emit_for(&mut self, block: &ForBlock) -> ChildEmit {
-        // A `$`-prefixed source is a reactive list: build a keyed, reconciling `ReactiveList` widget
-        // instead of a one-shot construction loop.
+        // A `$`-prefixed source builds a keyed, reconciling `ReactiveList` instead of a construction loop.
         if block.iterable.trim_start().starts_with('$') {
             if let Some(height) = block
                 .virtual_row_height
@@ -252,7 +234,7 @@ impl ViewGen<'_> {
         let pad = self.indent_str();
         let mut code = String::new();
         let iterable = block.iterable.trim();
-        // A plain `for` that reads a signal builds its rows once and never hears about the next value; the clauses below cannot catch it because a bare `for` carries none of them.
+        // A plain `for` reading a signal builds its rows once and never hears the next value, and carries none of the clauses below that would catch it.
         if let Some(signal) = self.signal_named_in(iterable) {
             let _ = writeln!(
                 code,
@@ -262,9 +244,7 @@ impl ViewGen<'_> {
                 ))
             );
         }
-        // Both clauses parse on any `for`, and neither means anything here: a construction loop runs once, so it
-        // reconciles nothing to key and lays out no reconciled items to space. They used to be read and dropped
-        // in silence, which reads as "my key is being honoured" right up until a row goes wrong.
+        // Both clauses parse on any `for` and neither means anything to a construction loop. Dropping them in silence read as "my key is being honoured" right up until a row went wrong.
         for (clause, why) in [
             (
                 block.key_expr.as_ref().map(|_| "key"),
@@ -289,7 +269,7 @@ impl ViewGen<'_> {
         }
         let _ = writeln!(code, "{pad}for {} in {iterable} {{", block.pattern.trim());
         self.indent += 1;
-        // Loop variables are often borrowed (`items.iter()`), but widget closures require `'static` captures; bind owned copies so they can be moved in.
+        // Loop variables are often borrowed, but widget closures need `'static` captures, so bind owned copies.
         let body_pad = self.indent_str();
         let idents = pattern_idents(&block.pattern);
         for ident in &idents {
@@ -305,10 +285,7 @@ impl ViewGen<'_> {
         ChildEmit::Dynamic { code }
     }
 
-    /// A reactive `for x in $items [key <expr>] [gap:N]`. Inside a slot host it is a transparent fragment: its
-    /// items reconcile into the host's node as real siblings, flowing in its flex direction (a `for` in a `row`
-    /// is horizontal), with `gap:` as a per-item margin. Elsewhere it is a boxed `ReactiveList` owning its own
-    /// container node.
+    /// A reactive `for x in $items [key <expr>] [gap:N]`. Inside a slot host it is a transparent fragment: its items reconcile into the host's node as real siblings, flowing in its flex direction (a `for` in a `row` is horizontal), with `gap:` as a per-item margin. Elsewhere it is a boxed `ReactiveList` owning its own container node.
     fn emit_reactive_for(&mut self, block: &ForBlock) -> ChildEmit {
         let boxed = !self.in_slot_host();
         let var = self.next_variable_name("node");
@@ -360,11 +337,9 @@ impl ViewGen<'_> {
         }
     }
 
-    /// The `move |params| -> Result<…>` row closure a reactive `for` hands its list constructor, with the
-    /// clone prelude its body reads.
+    /// The `move |params| -> Result<…>` row closure a reactive `for` hands its list constructor, with the clone prelude its body reads.
     ///
-    /// The prelude is computed before this loop's own pattern idents go into scope: those are the closure's
-    /// parameters, so cloning them above it would name bindings that do not exist there.
+    /// The prelude is computed before this loop's own pattern idents go into scope: those are the closure's parameters, so cloning them above it would name bindings that do not exist there.
     fn emit_item_closure(&mut self, block: &ForBlock, params: &str, pad: &str) -> String {
         let mut body = String::new();
         let _ = writeln!(
@@ -387,9 +362,7 @@ impl ViewGen<'_> {
 
     /// A `virtual` loop: only the rows the enclosing scroll shows get built, instead of every row up front.
     ///
-    /// Always boxed — a `VirtualList` owns the container its rows scroll inside, so it cannot be a transparent
-    /// fragment. The row height is fixed by construction: measuring rows that have not been built is the
-    /// circular problem virtualisation exists to solve, and `VirtualList` says as much in its own doc.
+    /// Always boxed — a `VirtualList` owns the container its rows scroll inside, so it cannot be a transparent fragment. The row height is fixed by construction: measuring rows that have not been built is the circular problem virtualisation exists to solve, and `VirtualList` says as much in its own doc.
     fn emit_virtual_for(&mut self, block: &ForBlock, row_height: &str) -> ChildEmit {
         let pad = self.indent_str();
         let Some(viewport) = self.scroll_viewport.clone() else {
@@ -418,8 +391,7 @@ impl ViewGen<'_> {
             format!("move || {}", substitute_reads(iterable)),
         );
 
-        // `VirtualList` hands a row its index alongside the item, since a virtualised row often wants to know
-        // where it sits. The author's pattern binds the item; `__index` is the index.
+        // `VirtualList` hands a row its index alongside the item; the author's pattern binds the item, `__index` the index.
         let item_builder =
             self.emit_item_closure(block, &format!("__index: usize, {pattern}"), &pad);
 
@@ -428,8 +400,7 @@ impl ViewGen<'_> {
         let _ = writeln!(code, "{pad}    LayoutStyle::new().flex_column(),");
         let _ = writeln!(code, "{pad}    {viewport}.clone(),");
         let _ = writeln!(code, "{pad}    ({row_height}) as f32,");
-        // Rows built beyond the viewport on each side, so a fast scroll does not show a blank band before the
-        // next build catches up.
+        // Rows built beyond the viewport on each side, so a fast scroll shows no blank band.
         let _ = writeln!(code, "{pad}    2,");
         let _ = writeln!(code, "{pad}    {source},");
         let _ = writeln!(code, "{pad}    |{pattern}| {key_expr},");
@@ -438,10 +409,7 @@ impl ViewGen<'_> {
         ChildEmit::Simple { name: var, code }
     }
 
-    /// The tail that closes a reactive list constructor. A fragment attaches to its host and just ends; a
-    /// boxed `ReactiveList` returns a `Result` and turns into a row when it sits inside one — every
-    /// constructor builds a column, which is right everywhere except here, since a reactive region that owns
-    /// a node of its own inherits nothing from the container it is about to be attached to.
+    /// The tail that closes a reactive list constructor. A fragment attaches to its host and just ends; a boxed `ReactiveList` returns a `Result` and turns into a row when it sits inside one — every constructor builds a column, which is right everywhere except here, since a reactive region that owns a node of its own inherits nothing from the container it is about to be attached to.
     fn boxed_list_closer(&self, boxed: bool) -> String {
         match boxed {
             true if self.host_is_row() => ")?.as_row();".to_string(),
@@ -450,9 +418,7 @@ impl ViewGen<'_> {
         }
     }
 
-    /// Emits `body` as one content item. A single plain widget is returned bare so its parent (not an
-    /// injected `flex_column`, which would trap it at content size on the main axis) decides how it fills;
-    /// otherwise the children are grouped in a flex-column cell. Loop variables must already be in scope.
+    /// Emits `body` as one content item. A single plain widget is returned bare so its parent (not an injected `flex_column`, which would trap it at content size on the main axis) decides how it fills; otherwise the children are grouped in a flex-column cell. Loop variables must already be in scope.
     pub(super) fn emit_content_cell(&mut self, body: &[ViewNode], code: &mut String) -> String {
         let pad = self.indent_str();
         let mode = Self::child_mode(body);
@@ -468,8 +434,7 @@ impl ViewGen<'_> {
         } else {
             "new"
         };
-        // The cell runs the way its host does. A branch with several children inside a `row` used to be
-        // wrapped in a hard-coded column, so the items stacked and overflowed the row they were written in.
+        // A branch with several children inside a `row` used to be wrapped in a hard-coded column, so the items stacked and overflowed the row.
         let axis = if self.host_is_row() {
             "flex_row"
         } else {
@@ -478,9 +443,7 @@ impl ViewGen<'_> {
         format!("Container::{ctor}(LayoutStyle::new().{axis}(), {expr})?")
     }
 
-    /// Emits a control-flow branch's nodes, pushing each into the child accumulator in scope (its shape —
-    /// `box_item` vs `ChildSlot::stat` — chosen by the current sink). A nested reactive fragment pushes as a
-    /// `ChildSlot::Dynamic`.
+    /// Emits a control-flow branch's nodes, pushing each into the child accumulator in scope (its shape — `box_item` vs `ChildSlot::stat` — chosen by the current sink). A nested reactive fragment pushes as a `ChildSlot::Dynamic`.
     fn emit_branch_into_children(&mut self, nodes: &[ViewNode], code: &mut String) {
         let pad = self.indent_str();
         for node in nodes {

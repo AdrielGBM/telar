@@ -11,8 +11,7 @@ use crate::style::{PropCall, layout_prop_call, number_or};
 use super::signals::{captured_idents, emit_transition_prelude, rust_str, wrap_signal_clones};
 use super::{ChildEmit, ChildMode, ViewGen};
 
-/// The size a `font_size:` value falls back to when it cannot be resolved. A `text` naming no size takes the
-/// inherited one instead, so this only ever stands in for a value already reported as an error.
+/// The size a `font_size:` value falls back to when it cannot be resolved. A `text` naming no size takes the inherited one instead, so this only ever stands in for a value already reported as an error.
 const DEFAULT_SIZE: &str = "14.0";
 
 impl ViewGen<'_> {
@@ -28,9 +27,7 @@ impl ViewGen<'_> {
         let (specs, errors) = self.parse_transitions(el);
         let transitions: HashMap<String, String> = specs.into_iter().collect();
         let mut hoists: Vec<String> = Vec::new();
-        // A `text @caption` takes the class's properties too — its size and its colour as much as its width.
-        // The class used to reach a container and stop there, so `@heading { font_size: 22 }` compiled and
-        // did nothing at all.
+        // Regression: the class reached a container and stopped there, so `@heading { font_size: 22 }` compiled and did nothing.
         let attrs = self.effective_attrs(el);
         let style = self.text_style(&attrs, &transitions, &mut hoists);
 
@@ -58,7 +55,7 @@ impl ViewGen<'_> {
                 extra.push_str(&call);
             }
         }
-        // A leaf measures its own height from the wrapped content, so multi-line text reserves real space; an explicit `height:` pins the box over that, which is all the second constructor ever did.
+        // A leaf measures its own height from the wrapped content; an explicit `height:` pins the box over that.
         let explicit_height = attrs
             .iter()
             .find(|a| a.key == "height")
@@ -69,7 +66,7 @@ impl ViewGen<'_> {
             .unwrap_or_default();
         let layout_style = format!("LayoutStyle::new(){explicit_height}{extra}");
 
-        // Each `move` closure consumes its captures; clone the signals they use into block locals so both closures can capture independently. Scan the raw `content` (still carrying `$`), not the substituted `content_fn`.
+        // Each `move` closure consumes its captures, so clone into block locals. Scan the raw `content`, still carrying `$`, not the substituted `content_fn`.
         let clones = self.clone_bindings(&[content, style.as_str()], &pad, "    ");
         let inner_pad = format!("{pad}    ");
         let prelude = {
@@ -92,13 +89,7 @@ impl ViewGen<'_> {
         ChildEmit::Simple { name: var, code }
     }
 
-    /// Emits the children of a container-like element into `code` and returns the expression to pass as the
-    /// constructor's children argument. `seed` names are prepended (e.g. a `section`'s heading). The `mode`
-    /// (from [`ViewGen::child_mode`]) picks the shape: [`ChildMode::Slots`] builds a `Vec<ChildSlot>`
-    /// (`__slots`, for `from_slots`) when a reactive fragment is present, [`ChildMode::Vec`] a
-    /// `Vec<Box<dyn LayoutItem>>` (`__children`, for `new`) for static control flow, and
-    /// [`ChildMode::Literal`] a `children![...]`. The caller must have wrapped child emission in the
-    /// matching [`ViewGen::with_child_sink`] so any `if`/`for` bodies pushed the same shape.
+    /// Emits the children of a container-like element into `code` and returns the expression to pass as the constructor's children argument. `seed` names are prepended (e.g. a `section`'s heading). The `mode` (from [`ViewGen::child_mode`]) picks the shape: [`ChildMode::Slots`] builds a `Vec<ChildSlot>` (`__slots`, for `from_slots`) when a reactive fragment is present, [`ChildMode::Vec`] a `Vec<Box<dyn LayoutItem>>` (`__children`, for `new`) for static control flow, and [`ChildMode::Literal`] a `children![...]`. The caller must have wrapped child emission in the matching [`ViewGen::with_child_sink`] so any `if`/`for` bodies pushed the same shape.
     pub(super) fn emit_children_collection(
         &self,
         code: &mut String,
@@ -156,7 +147,6 @@ impl ViewGen<'_> {
                         ChildEmit::Dynamic { code: c } => {
                             let _ = writeln!(code, "{c}");
                         }
-                        // A reactive fragment forces `ChildMode::Slots`, so it never reaches vec mode.
                         ChildEmit::Fragment { code: c, .. } => {
                             let _ = writeln!(code, "{c}");
                         }
@@ -198,11 +188,8 @@ impl ViewGen<'_> {
         hoists: &mut Vec<String>,
     ) -> String {
         let mut modifiers = self.inheritable_modifiers(attrs, transitions, hoists);
-        // A bare flag is the assertion itself, and now the only spelling of it.
         let asserted = |key: &str| attrs.iter().any(|a| a.key == key && a.value.is_flag());
-        // One call, because they are one decision: `ellipsis` without `lines` used to be accepted and do
-        // nothing at all, since the clamp returns before ever reaching it. Not inheritable, and cannot be:
-        // clamping a *subtree* to two lines means nothing.
+        // One call, because they are one decision: `ellipsis` without `lines` did nothing, the clamp returning first. Not inheritable — clamping a subtree to two lines means nothing.
         if let Some(lines) = attrs
             .iter()
             .find(|a| a.key == "lines")
@@ -217,20 +204,18 @@ impl ViewGen<'_> {
         }
 
         let closure = format!("move |__inherited: TextStyle| __inherited{modifiers}");
-        // `color`'s raw value (not the substituted expression) is scanned for `$ident` so a signal-backed colour clones itself into this closure, leaving the outer binding usable by sibling widgets.
+        // The raw value, not the substituted expression, so a signal-backed colour clones itself into this closure.
         wrap_signal_clones(&[raw_color_value(attrs)], closure)
     }
 
-    /// The builder calls for the text properties that flow down a tree, in the spelling both
-    /// `TextStyle` and `Declared` answer to — which is what lets a `text` and the container above it be
-    /// written the same way and mean the same thing at different reaches.
+    /// The builder calls for the text properties that flow down a tree, in the spelling both `TextStyle` and `Declared` answer to — which is what lets a `text` and the container above it be written the same way and mean the same thing at different reaches.
     pub(super) fn inheritable_modifiers(
         &mut self,
         attrs: &[Attr],
         transitions: &HashMap<String, String>,
         hoists: &mut Vec<String>,
     ) -> String {
-        // `font_size:` and `color:` amend what the tree declared rather than building a style from nothing. Each used to bake a literal here, which is why "make the body text 11px" was not a thing a theme could say.
+        // Amends what the tree declared rather than building a style from nothing; baking a literal here is why a theme could not say "make the body text 11px".
         let mut modifiers = String::new();
         if let Some(size) = attrs.iter().find(|a| a.key == "font_size") {
             let _ = write!(
@@ -323,9 +308,7 @@ impl ViewGen<'_> {
     }
 }
 
-/// A `color:`'s value as the author wrote it, before `color_expr` substitutes it — scanned for `$ident` so a
-/// signal-backed colour clones itself into the closure that reads it, leaving the outer binding usable by
-/// sibling widgets.
+/// A `color:`'s value as the author wrote it, before `color_expr` substitutes it — scanned for `$ident` so a signal-backed colour clones itself into the closure that reads it, leaving the outer binding usable by sibling widgets.
 pub(super) fn raw_color_value(attrs: &[Attr]) -> &str {
     attrs
         .iter()
@@ -336,9 +319,7 @@ pub(super) fn raw_color_value(attrs: &[Attr]) -> &str {
 
 /// The family a `font_family:` names, as an expression `TextStyle::with_font_family` accepts.
 ///
-/// A quoted literal is the common case; anything else is the author's own Rust — a `theme.font()` read, a
-/// `[logic]` binding — carried through, because the families an application has are its own vocabulary and
-/// not one the DSL can enumerate.
+/// A quoted literal is the common case; anything else is the author's own Rust — a `theme.font()` read, a `[logic]` binding — carried through, because the families an application has are its own vocabulary and not one the DSL can enumerate.
 pub(super) fn font_family_expr(attr: &Attr) -> String {
     match &attr.value {
         Value::Quoted(name) => rust_str(name),

@@ -1,14 +1,8 @@
 //! Canonical formatter for `.rsx` documents.
 //!
 //! A `.rsx` file is reformatted section by section:
-//! - `[logic]` runs through `rustfmt`, so imports get reordered and long
-//!   statements wrap exactly like a `.rs` file. The zone is statement-level Rust
-//!   (`let` bindings live at its top level), which is not a valid item on its
-//!   own, so it is wrapped in a synthetic `fn { ... }` before formatting and
-//!   unwrapped afterwards.
-//! - `[style]` and `[view]` are re-emitted from the parsed AST in a
-//!   canonical shape: 4-space indentation, single-space token separators, and
-//!   one blank line between style classes.
+//! - `[logic]` runs through `rustfmt`, so imports get reordered and long statements wrap exactly like a `.rs` file. The zone is statement-level Rust (`let` bindings live at its top level), which is not a valid item on its own, so it is wrapped in a synthetic `fn { ... }` before formatting and unwrapped afterwards.
+//! - `[style]` and `[view]` are re-emitted from the parsed AST in a canonical shape: 4-space indentation, single-space token separators, and one blank line between style classes.
 //!
 //! Formatting is whole-document: the parsed AST is re-serialized and the backend returns it as a single replacement edit, so it never has to map edits back through the section line offsets.
 
@@ -67,8 +61,6 @@ fn present_sections(source: &str) -> Vec<Section> {
     present
 }
 
-// === [logic] ===============================================================
-
 fn format_logic_section(logic: &str) -> String {
     let body = run_rustfmt_on_logic(logic).unwrap_or_else(|| logic.trim_end().to_string());
     let body = body.trim_end();
@@ -104,7 +96,7 @@ fn unwrap_logic(formatted: &str) -> Option<String> {
         return None;
     }
 
-    // rustfmt exits 0 having only *partly* reformatted a body it could not fully parse: the inline prop-default sugar (`field: Type = expr`) is not valid Rust, so a `Props` struct using it comes back with the wrapper's indent on the lines around it and none on its own fields. There is then no right amount to strip — taking one level walks the author's struct to the left on every `cargo telar fmt`, and taking none leaves the wrapper's indent behind. Keep the source verbatim instead.
+    // rustfmt exits 0 having only partly reformatted a body it could not fully parse: the inline prop-default sugar is not valid Rust, so a `Props` struct using it comes back with the wrapper's indent on the lines around it and none on its own fields. There is then no right amount to strip, so keep the source verbatim.
     let body = &lines[1..close];
     if !body
         .iter()
@@ -165,8 +157,6 @@ fn find_rustfmt() -> Option<PathBuf> {
     cargo_bin.exists().then_some(cargo_bin)
 }
 
-// === [style] ===============================================================
-
 enum StyleEntry<'a> {
     Class(&'a StyleClass),
 }
@@ -204,8 +194,6 @@ fn format_style_section(doc: &RsxDocument) -> String {
     out
 }
 
-// === [view] ================================================================
-
 fn format_view_section(nodes: &[ViewNode]) -> String {
     let mut body = String::new();
     for node in nodes {
@@ -237,7 +225,7 @@ fn emit_node(node: &ViewNode, depth: usize, out: &mut String) {
                 emit_node(child, depth + 1, out);
             }
             if let Some(else_branch) = &block.else_branch {
-                // An else-branch holding exactly one `if` is what `else if` parses to, so it re-emits as the chain rather than as the nesting — formatting a file must not rewrite the spelling its author chose.
+                // An else-branch holding exactly one `if` is what `else if` parses to, so it re-emits as the chain: formatting a file must not rewrite the spelling its author chose.
                 if let [ViewNode::IfBlock(chained)] = else_branch.as_slice() {
                     out.push_str(&pad);
                     out.push_str("else ");
@@ -280,9 +268,7 @@ fn emit_node(node: &ViewNode, depth: usize, out: &mut String) {
         ViewNode::ForBlock(block) => {
             out.push_str(&pad);
             out.push_str(&format!("for {} in {}", block.pattern, block.iterable));
-            // Both clauses are optional and must survive a round-trip: dropping `gap:N` silently changes a
-            // reactive row's spacing (and, since the transpiler keys the transparent gap fragment off it, its
-            // whole layout path) on the next save.
+            // Both clauses are optional and must survive a round-trip: dropping `gap:N` silently changes a reactive row's spacing and, since the transpiler keys the transparent gap fragment off it, its whole layout path.
             if let Some(key) = block
                 .key_expr
                 .as_deref()
@@ -341,10 +327,7 @@ fn format_element_header(element: &Element) -> String {
     parts.join(" ")
 }
 
-/// Escapes a string value for re-emission inside `"…"`. Parsed content is stored unescaped (the parser
-/// interprets `\n`/`\"`/… and raw `r"…"` keeps backslashes literal), so re-emitting verbatim would corrupt
-/// any value containing a quote, backslash, or control char on the next save. Always emits the escaped
-/// form; raw literals normalize to it (same content).
+/// Escapes a string value for re-emission inside `"…"`. Parsed content is stored unescaped (the parser interprets `\n`/`\"`/… and raw `r"…"` keeps backslashes literal), so re-emitting verbatim would corrupt any value containing a quote, backslash, or control char on the next save. Always emits the escaped form; raw literals normalize to it (same content).
 fn escape_rsx_string(s: &str) -> String {
     let mut out = String::with_capacity(s.len());
     for c in s.chars() {
@@ -361,9 +344,7 @@ fn escape_rsx_string(s: &str) -> String {
     out
 }
 
-/// Re-emits an attribute in the form it was written in. One arm per [`Value`] variant, because the variant is
-/// the whole of what decides the spelling: guessing it back from the text is what used to turn a `t"…"` key
-/// into a plain literal and a `transition(…)` into a colon the parser reads as one token.
+/// Re-emits an attribute in the form it was written in. One arm per [`Value`] variant, because the variant is the whole of what decides the spelling: guessing it back from the text is what used to turn a `t"…"` key into a plain literal and a `transition(…)` into a colon the parser reads as one token.
 fn format_attr(attr: &Attr) -> String {
     match &attr.value {
         Value::Flag => attr.key.clone(),
@@ -372,8 +353,6 @@ fn format_attr(attr: &Attr) -> String {
         Value::Directive(text) => format!("{}({text})", attr.key),
     }
 }
-
-// === [preview] =============================================================
 
 /// Re-emits a `[preview "Name" key:value flag …]` section: the header (name plus options) followed by its body, formatted like a `[view]` tree.
 fn format_preview_section(preview: &Preview) -> String {
@@ -411,10 +390,7 @@ mod tests {
         assert_eq!(out, expected);
     }
 
-    // Formatting a reactive `for` must preserve its `key <expr>` clause — dropping it turns a reactive
-    // list into a compile error on the next save.
-    // A backslash (e.g. from a raw string) must be escaped on re-emit, and formatting must be idempotent —
-    // otherwise every save mangles the value.
+    // Dropping the `key <expr>` clause turns a reactive list into a compile error on the next save. A backslash must be escaped on re-emit, and formatting must be idempotent, or every save mangles the value.
     #[test]
     fn escapes_string_values_and_is_idempotent() {
         let out = format_document("[view]\ntext r\"a\\b\"\n").unwrap();
@@ -442,15 +418,13 @@ mod tests {
 
     #[test]
     fn preserves_reactive_for_gap_clause() {
-        // Dropping `gap:N` on format silently changes a reactive row's spacing and layout path — it must
-        // round-trip alongside `key`.
+        // Round-trips alongside `key`.
         let src = "[view]\nrow\n    for id in $ids key *id gap:6\n        text \"{id}\"\n";
         let out = format_document(src).unwrap();
         assert!(
             out.contains("for id in $ids key *id gap:6"),
             "the gap clause must survive formatting:\n{out}"
         );
-        // A gap without a key clause also round-trips.
         let keyless =
             format_document("[view]\nrow\n    for id in $ids gap:4\n        text \"{id}\"\n")
                 .unwrap();
@@ -492,8 +466,7 @@ mod tests {
         assert_eq!(once, twice);
     }
 
-    /// A value is one token of the AST, so the formatter re-emits it byte for byte — it never reaches inside
-    /// an expression to wrap, re-space or re-order it, which would move the span a diagnostic points at.
+    /// A value is one token of the AST, so the formatter re-emits it byte for byte — it never reaches inside an expression to wrap, re-space or re-order it, which would move the span a diagnostic points at.
     #[test]
     fn an_expression_survives_formatting_byte_for_byte() {
         let src = concat!(
@@ -511,7 +484,6 @@ mod tests {
 
     #[test]
     fn invalid_document_is_left_untouched() {
-        // Content before [logic] is a parse error, so no formatting is offered.
         assert!(format_document("stray text\n[view]\ncol\n").is_none());
     }
 
@@ -522,13 +494,10 @@ mod tests {
         }
         let src = "[logic]\nuse telar::widgets::Button;\nuse telar::prelude::*;\nlet count = signal(0i32);\n[view]\ncol\n\n[preview \"Default\"]\ncounter\n";
         let out = format_document(src).unwrap();
-        // Imports are sorted...
         let prelude = out.find("use telar::prelude::*;").unwrap();
         let button = out.find("use telar::widgets::Button;").unwrap();
         assert!(prelude < button, "imports should be reordered:\n{out}");
-        // ...the let binding survives...
         assert!(out.contains("let count = signal(0i32);"));
-        // ...and the trailing `[preview …]` section is re-emitted with its body.
         assert!(
             out.contains("[preview \"Default\"]"),
             "preview section should survive:\n{out}"
@@ -536,8 +505,7 @@ mod tests {
         assert!(out.contains("counter"));
     }
 
-    /// The colon form rejects a closure — it runs to end of line and swallows whatever follows — so re-emitting
-    /// one with a colon does not merely reformat the file, it breaks the file it just formatted.
+    /// The colon form rejects a closure — it runs to end of line and swallows whatever follows — so re-emitting one with a colon does not merely reformat the file, it breaks the file it just formatted.
     #[test]
     fn a_move_closure_attribute_keeps_its_parens() {
         let src = "[view]\nicon name:(move || label()) tint:(|| fg()) size:16\n";
@@ -549,10 +517,7 @@ mod tests {
         assert_eq!(format_document(&out).unwrap(), out, "and it is idempotent");
     }
 
-    /// An attribute must come back in the form it was written in, because the form is what it means: a `t"…"`
-    /// re-emitted with a colon becomes one attribute followed by a run of stray flags, and a catalogue
-    /// lookup re-emitted as a plain literal turns into its own key. Both were possible while the spelling
-    /// was guessed from the text rather than read off the value.
+    /// An attribute must come back in the form it was written in, because the form is what it means: a `t"…"` re-emitted with a colon becomes one attribute followed by a run of stray flags, and a catalogue lookup re-emitted as a plain literal turns into its own key. Both were possible while the spelling was guessed from the text rather than read off the value.
     #[test]
     fn a_directive_and_a_lookup_survive_a_round_trip() {
         let src =
@@ -562,8 +527,7 @@ mod tests {
         assert_eq!(format_document(&out).unwrap(), out, "and it is idempotent");
     }
 
-    /// Losing the `virtual` clause would turn a list that builds ten rows into one that builds ten thousand,
-    /// silently, on the next format.
+    /// Losing the `virtual` clause would turn a list that builds ten rows into one that builds ten thousand, silently, on the next format.
     #[test]
     fn a_virtual_for_keeps_its_clause() {
         let src = "[view]\nscroll\n    for row in $rows key row.id virtual row_height:32\n        text \"a\"\n";
@@ -575,8 +539,7 @@ mod tests {
         assert_eq!(format_document(&out).unwrap(), out, "and it is idempotent");
     }
 
-    /// Both `for` clauses change behaviour, so neither may be lost on a round trip: `key` decides what
-    /// reconciles, and `gap` is what the transparent fragment spaces its items by.
+    /// Both `for` clauses change behaviour, so neither may be lost on a round trip: `key` decides what reconciles, and `gap` is what the transparent fragment spaces its items by.
     #[test]
     fn a_for_keeps_its_key_and_gap_clauses() {
         let src = "[view]\ncol\n    for x in $items key x.id gap:8\n        text \"a\"\n";
@@ -588,8 +551,7 @@ mod tests {
         assert_eq!(format_document(&out).unwrap(), out, "and it is idempotent");
     }
 
-    /// A `match` header carries two optional clauses, and both change behaviour: dropping `key` silently
-    /// downgrades reconciliation to the variant, dropping `as` breaks the key that reads the binding.
+    /// A `match` header carries two optional clauses, and both change behaviour: dropping `key` silently downgrades reconciliation to the variant, dropping `as` breaks the key that reads the binding.
     #[test]
     fn a_match_header_survives_a_round_trip() {
         let src = "[view]\ncol\n    match $state as s key s.id()\n        Ready(svg)\n            text \"ok\"\n        _\n            text \"…\"\n";
@@ -605,8 +567,7 @@ mod tests {
         assert_eq!(format_document(&out).unwrap(), out, "and it is idempotent");
     }
 
-    /// An `else if` chain parses to a nested `if` inside the else-branch, and re-emitting it as that nesting
-    /// would rewrite the author's spelling on every format.
+    /// An `else if` chain parses to a nested `if` inside the else-branch, and re-emitting it as that nesting would rewrite the author's spelling on every format.
     #[test]
     fn an_else_if_chain_survives_a_round_trip() {
         let src = "[view]\ncol\n    if n > 1\n        text \"many\"\n    else if n > 0\n        text \"one\"\n    else\n        text \"none\"\n";
@@ -618,9 +579,7 @@ mod tests {
         assert_eq!(format_document(&out).unwrap(), out, "and is idempotent");
     }
 
-    /// The inline prop-default sugar (`field: Type = expr`) is not valid Rust, so rustfmt echoes the struct
-    /// untouched and exits 0. Formatting must leave it exactly as written rather than unindent it — the fault
-    /// compounds, so a file formatted twice loses two levels and eventually reads as a flat block.
+    /// The inline prop-default sugar (`field: Type = expr`) is not valid Rust, so rustfmt echoes the struct untouched and exits 0. Formatting must leave it exactly as written rather than unindent it — the fault compounds, so a file formatted twice loses two levels and eventually reads as a flat block.
     #[test]
     fn a_props_struct_with_inline_defaults_keeps_its_indentation() {
         if find_rustfmt().is_none() {

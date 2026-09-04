@@ -1,3 +1,5 @@
+//! [`progress`]: a determinate bar filled to a bound value.
+
 use geometry_core::Transform;
 use layout_core::{LayoutError, LayoutStyle};
 use reactive_core::Reactive;
@@ -7,18 +9,12 @@ use ui_core::{Children, LayoutItem, StyledContainer, box_item};
 
 use crate::shared;
 
-/// A determinate 0.0..=1.0 progress bar: a rounded track with an accent fill scaled by `value`. Sibling of
-/// `slider` minus the drag/thumb — the fill reuses the same "absolute_fill child, scaled from the left edge"
-/// technique (see `slider`'s fill) since a progress bar is a slider whose value the app drives instead of the
-/// pointer. `value` is a closure so a reading derived from several services can drive it, and so an unbound
-/// bar reads a flat zero rather than owning a signal nobody can write.
+/// A determinate 0.0..=1.0 progress bar: a rounded track with an accent fill scaled by `value`. Sibling of `slider` minus the drag/thumb — the fill reuses the same "absolute_fill child, scaled from the left edge" technique (see `slider`'s fill) since a progress bar is a slider whose value the app drives instead of the pointer. `value` is a closure so a reading derived from several services can drive it, and so an unbound bar reads a flat zero rather than owning a signal nobody can write.
 #[derive(Props)]
 pub struct ProgressProps {
     /// Progress, normalized to 0.0..=1.0 (out-of-range inputs are clamped on read, not here).
     ///
-    /// A closure rather than a signal, like [`color`](Self::color) beside it: a bar *reports* a reading, it
-    /// never writes one, and a caller whose reading is derived from two services has no signal to hand over.
-    /// Insisting on one is what makes a shell reimplement this widget next to the catalogue.
+    /// A closure rather than a signal, like [`color`](Self::color) beside it: a bar *reports* a reading, it never writes one, and a caller whose reading is derived from two services has no signal to hand over. Insisting on one is what makes a shell reimplement this widget next to the catalogue.
     #[props(into, default)]
     pub value: Reactive<f32>,
     /// Fill accent. `Color::TRANSPARENT` (the default) means "unset": fall back to the theme accent.
@@ -27,12 +23,10 @@ pub struct ProgressProps {
     /// Track (rail) colour; `Color::TRANSPARENT` (the default) means "unset": fall back to the theme's muted token.
     #[props(into, default = Reactive::of(|| Color::TRANSPARENT))]
     pub track_color: Reactive<Color>,
-    /// Track width in px. `0.0` (the default) means "unset" — the bar uses `220.0`. Ignored under
-    /// [`stretch`](Self::stretch).
+    /// Track width in px. `0.0` (the default) means "unset" — the bar uses `220.0`. Ignored under [`stretch`](Self::stretch).
     #[props(default)]
     pub width: f32,
-    /// Fill the parent's width instead of taking a fixed one — what a bar inside a card wants, where a px
-    /// track is either short of the card or past its edge.
+    /// Fill the parent's width instead of taking a fixed one — what a bar inside a card wants, where a px track is either short of the card or past its edge.
     #[props(default)]
     pub stretch: bool,
     /// Track height in px. `0.0` (the default) means "unset" — the bar uses `8.0`.
@@ -40,6 +34,7 @@ pub struct ProgressProps {
     pub height: f32,
 }
 
+/// A determinate bar filled to a bound value.
 pub fn progress(
     props: ProgressProps,
     _children: Children,
@@ -56,13 +51,9 @@ pub fn progress(
     let scale_value = value.clone();
     let width = if width > 0.0 { width } else { 220.0 };
     let height = if height > 0.0 { height } else { 8.0 };
-    // Unlike `slider`, `color` is only needed by this one style closure, so it moves in directly — no `Rc`
-    // re-erasure needed (that's only for props shared across several closures, e.g. fill + thumb).
+    // Needed by this one style closure, so it moves in directly; `Rc` re-erasure is only for props shared across several closures.
 
-    // The fill: an `absolute_fill` child (so it exactly overlays the track) scaled horizontally from the left
-    // edge by `value` — cheaper than relaying out a narrower box on every update. See `slider`'s fill for the
-    // same technique; `box_transform` only pivots scale on the rect centre, so the raw matrix is needed here
-    // too to pin the left edge and grow rightward.
+    // An `absolute_fill` child, so it exactly overlays the track, scaled horizontally from the left edge — cheaper than relaying out a narrower box on every update. `box_transform` only pivots scale on the rect centre, so the raw matrix is needed to pin the left edge.
 
     let fill = StyledContainer::new(
         LayoutStyle::new().absolute_fill(),
@@ -80,8 +71,7 @@ pub fn progress(
     });
 
     let track = StyledContainer::new(
-        // A stretched bar takes the parent's width: a px track inside a card is either short of it or
-        // past its edge, and the card is what decides how wide a reading should read.
+        // A stretched bar takes the parent's width: a px track inside a card is either short of its edge or past it, and the card is what decides how wide a reading should read.
         LayoutStyle::new()
             .width(if stretch {
                 layout_core::SizeDimension::Percent(1.0)
@@ -102,18 +92,15 @@ pub fn progress(
 
 #[cfg(test)]
 mod tests {
-
     use reactive_core::signal;
     use ui_core::NodeId;
 
     use super::*;
 
-    // Lays `node` out inside a 300×100 root, mirroring `slider`'s test harness.
     fn lay_out(node: NodeId) {
         crate::harness::lay_out(node, 300.0, 100.0);
     }
 
-    // An unset `value` prop must fall back to a working internal signal (uncontrolled mode), not panic.
     #[test]
     fn uncontrolled_progress_builds_with_default_value() {
         crate::test_support::fresh_layout_runtime();
@@ -121,7 +108,6 @@ mod tests {
         assert!(result.is_ok());
     }
 
-    // A caller-bound signal must build, layout, and keep reporting the value it was given.
     #[test]
     fn controlled_progress_builds_and_layouts() {
         crate::test_support::fresh_layout_runtime();
@@ -139,8 +125,6 @@ mod tests {
         assert_eq!(value.get(), 0.3);
     }
 
-    // Updating a bound value after the widget is built and laid out must not panic, including out-of-range
-    // inputs (clamped where the fill's transform reads it, not on the signal itself).
     #[test]
     fn setting_value_after_build_does_not_panic() {
         crate::test_support::fresh_layout_runtime();
@@ -156,8 +140,7 @@ mod tests {
         assert_eq!(value.get(), 1.5);
     }
 
-    /// The reason this prop is a closure. A reading derived from two services has no signal behind it, and a
-    /// bar that insisted on one is a bar an application reimplements next to the catalogue.
+    /// The reason this prop is a closure. A reading derived from two services has no signal behind it, and a bar that insisted on one is a bar an application reimplements next to the catalogue.
     #[test]
     fn a_derived_reading_can_drive_the_bar() {
         reactive_core::reset_runtime();

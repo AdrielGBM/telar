@@ -1,17 +1,8 @@
 //! Typing, from an input method that will not talk to a canvas.
 //!
-//! Telar owns the text: the field is its widget, the caret is its own, and the value lives in a signal. What
-//! it does not own is *how characters are produced*. A browser gives that job to an editable element, and
-//! only to an editable element — a soft keyboard rises for one, an input method composes into one, a password
-//! manager fills one, dictation writes into one. A page that draws its fields itself gets none of that, and
-//! there is no key event to substitute for it: an IME reports `keydown` with a key that means "ask the input
-//! method", and the text arrives later, as a composition, addressed to a field.
+//! Telar owns the text: the field is its widget, the caret is its own, and the value lives in a signal. What it does not own is *how characters are produced*. A browser gives that job to an editable element, and only to an editable element — a soft keyboard rises for one, an input method composes into one, a password manager fills one, dictation writes into one. A page that draws its fields itself gets none of that, and there is no key event to substitute for it: an IME reports `keydown` with a key that means "ask the input method", and the text arrives later, as a composition, addressed to a field.
 //!
-//! So there is one, parked over whichever field holds the keyboard and invisible on top of it. It never shows
-//! what was typed — Telar draws that — and it is emptied after every insertion, so it accumulates nothing and
-//! has no state to keep in step. What it produces goes back through the platform's own event queue as the
-//! keys the field would have received anyway, which is what lets the whole editing path — selection, undo,
-//! the caret — stay exactly where it was.
+//! So there is one, parked over whichever field holds the keyboard and invisible on top of it. It never shows what was typed — Telar draws that — and it is emptied after every insertion, so it accumulates nothing and has no state to keep in step. What it produces goes back through the platform's own event queue as the keys the field would have received anyway, which is what lets the whole editing path — selection, undo, the caret — stay exactly where it was.
 
 use platform_core::{Event, Key, ModifiersState, NamedKey};
 use wasm_bindgen::JsCast;
@@ -19,12 +10,12 @@ use wasm_bindgen::prelude::Closure;
 
 use crate::paint;
 
-/// Off the page, not `display:none`: a hidden element cannot be focused, and one with no size gives an input
-/// method nowhere to put its candidate window. It is over the field and invisible instead.
+/// Off the page, not `display:none`: a hidden element cannot be focused, and one with no size gives an input method nowhere to put its candidate window. It is over the field and invisible instead.
 const HIDDEN: &str = "position:absolute;padding:0;border:0;outline:none;background:transparent;\
 color:transparent;caret-color:transparent;font:inherit;resize:none;overflow:hidden;\
 -webkit-user-select:text;user-select:text;";
 
+/// The hidden editable element the browser types into, placed over whichever field holds the keyboard.
 pub struct TextEntry {
     node: web_sys::HtmlElement,
     /// Kept alive for as long as the entry: dropping a `Closure` unregisters the listener behind it.
@@ -46,12 +37,9 @@ impl TextEntry {
         let _ = node.set_attribute("autocapitalize", "off");
         let _ = node.set_attribute("autocorrect", "off");
         let _ = node.set_attribute("spellcheck", "false");
-        // A single line as far as the browser is concerned; `Enter` is Telar's to interpret, and a textarea
-        // is what lets an input method compose without the element submitting anything.
+        // A single line as far as the browser is concerned; `Enter` is Telar's to interpret, and a textarea lets an input method compose without the element submitting anything.
         let _ = node.set_attribute("rows", "1");
-        // Deliberately *not* `aria-hidden`: this is where the keyboard actually is, and a focused element a
-        // reader has been told to ignore is worse than an unnamed one. What it lacks is a name — the field
-        // beside it has that — which is the half of this still to do.
+        // Deliberately not `aria-hidden`: this is where the keyboard actually is, and a focused element a reader has been told to ignore is worse than an unnamed one. What it lacks is a name.
         let _ = node.set_attribute("tabindex", "-1");
         host.append_child(node.as_ref()).ok()?;
 
@@ -70,8 +58,7 @@ impl TextEntry {
 
     /// Parks the entry over the field that holds the keyboard, and takes the keyboard with it.
     ///
-    /// Focus goes here rather than to the field's own element, and that is the point: the element a person
-    /// sees is not one a browser will type into, and the one it will type into must not be seen.
+    /// Focus goes here rather than to the field's own element, and that is the point: the element a person sees is not one a browser will type into, and the one it will type into must not be seen.
     pub fn park(&mut self, rect: geometry_core::Rect, multiline: bool) {
         let mut style = String::from(HIDDEN);
         paint::declare(&mut style, "left", &paint::px(rect.x));
@@ -93,8 +80,7 @@ impl TextEntry {
 
     /// Takes the entry out of the way, for a frame where no field holds the keyboard.
     ///
-    /// Only ever *releases*: blurring would be taking focus away from whatever just claimed it, and by the
-    /// time this runs that is exactly what has happened.
+    /// Only ever *releases*: blurring would be taking focus away from whatever just claimed it, and by the time this runs that is exactly what has happened.
     pub fn release(&mut self) {
         if !std::mem::take(&mut self.active) {
             return;
@@ -103,9 +89,7 @@ impl TextEntry {
         self.placed.clear();
     }
 
-    /// Puts the entry back where the reconcile expects it, after a frame that swept the host of anything past
-    /// the boxes it placed. It is a child of the host and not of the page so that the coordinates it is
-    /// parked at are the ones every other box uses.
+    /// Puts the entry back where the reconcile expects it, after a frame that swept the host of anything past the boxes it placed. It is a child of the host and not of the page so that the coordinates it is parked at are the ones every other box uses.
     pub fn settle(&self, host: &web_sys::HtmlElement, at: u32) {
         let node: &web_sys::Node = self.node.as_ref();
         let current = host.child_nodes().item(at);
@@ -140,15 +124,12 @@ fn listen(
 
 /// The edits a browser reports before making them, as the keys the field would have received.
 ///
-/// `beforeinput` rather than `keydown` because this is where the ones a key never named arrive: a deletion
-/// from a soft keyboard, a word replaced by autocorrect, a line dictated. The default is prevented in every
-/// case — the element must stay empty, or the next composition would start on top of the last one.
+/// `beforeinput` rather than `keydown` because this is where the ones a key never named arrive: a deletion from a soft keyboard, a word replaced by autocorrect, a line dictated. The default is prevented in every case — the element must stay empty, or the next composition would start on top of the last one.
 fn on_before_input(event: &web_sys::Event) {
     let Some(event) = event.dyn_ref::<web_sys::InputEvent>() else {
         return;
     };
-    // A composition in progress is not an edit yet: the input method is still deciding, and the characters it
-    // is showing are its own. It reports the result as one `insertText` when it is done.
+    // A composition in progress is not an edit yet: the input method is still deciding, and reports the result as one `insertText` when it is done.
     if event.is_composing() {
         return;
     }
@@ -175,17 +156,14 @@ fn on_before_input(event: &web_sys::Event) {
             event.prevent_default();
             post_key(Key::Named(NamedKey::Delete));
         }
-        // Everything else is an edit this field has no key for. Prevented rather than let through, because
-        // letting it through would put text in an element nobody is going to read.
+        // Everything else is an edit this field has no key for. Prevented rather than let through, which would put text in an element nobody is going to read.
         _ => event.prevent_default(),
     }
 }
 
 /// The empty it has to go back to.
 ///
-/// `beforeinput` prevents every edit, so in principle nothing lands here — except what an input method wrote
-/// directly, which no `beforeinput` precedes on every browser. Clearing unconditionally costs nothing and
-/// means a composition can never start on top of the last one.
+/// `beforeinput` prevents every edit, so in principle nothing lands here — except what an input method wrote directly, which no `beforeinput` precedes on every browser. Clearing unconditionally costs nothing and means a composition can never start on top of the last one.
 fn on_input(event: &web_sys::Event) {
     let Some(target) = event
         .target()
@@ -205,8 +183,7 @@ fn on_input(event: &web_sys::Event) {
 
 /// One key, pressed and released, as the field would have seen it.
 ///
-/// Both halves because a widget is entitled to expect them in pairs: one that tracked a held key would
-/// otherwise believe every character typed here is still down.
+/// Both halves because a widget is entitled to expect them in pairs: one that tracked a held key would otherwise believe every character typed here is still down.
 fn post_key(key: Key) {
     let modifiers = ModifiersState::default();
     platform_core::post_event(Event::KeyPressed {
@@ -218,14 +195,9 @@ fn post_key(key: Key) {
 
 /// Keeps a character from being typed twice.
 ///
-/// While the entry holds the keyboard there are two ways for one keystroke to become text: the platform's own
-/// `keydown` listener on the host, and the `beforeinput` this element reports. Both fire, and the field
-/// received every letter twice.
+/// While the entry holds the keyboard there are two ways for one keystroke to become text: the platform's own `keydown` listener on the host, and the `beforeinput` this element reports. Both fire, and the field received every letter twice.
 ///
-/// The split is by what the two can each see. A printable character is exactly what `beforeinput` describes
-/// better — it is the same event whether it came from a key, a soft keyboard, an input method or dictation —
-/// so it stops here. Everything else, arrows and Escape and every shortcut, produces no input event at all,
-/// and goes on up to the platform as it always did.
+/// The split is by what the two can each see. A printable character is exactly what `beforeinput` describes better — it is the same event whether it came from a key, a soft keyboard, an input method or dictation — so it stops here. Everything else, arrows and Escape and every shortcut, produces no input event at all, and goes on up to the platform as it always did.
 fn on_key_down(event: &web_sys::Event) {
     let Some(event) = event.dyn_ref::<web_sys::KeyboardEvent>() else {
         return;
@@ -235,7 +207,7 @@ fn on_key_down(event: &web_sys::Event) {
         event.stop_propagation();
         return;
     }
-    // A modifier held is a command, not a character, and commands stay the platform's — `Ctrl+A` selects.
+    // A modifier held is a command, not a character, and commands stay the platform's.
     if event.ctrl_key() || event.meta_key() {
         return;
     }

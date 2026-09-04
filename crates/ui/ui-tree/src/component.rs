@@ -1,8 +1,11 @@
+//! [`Component`]: the one trait every widget implements — render a view, answer an event.
+
 use platform_core::Event;
 
 use crate::render_node::RenderNode;
 
 #[derive(Debug, PartialEq)]
+/// Whether a widget consumed an event, or let it carry on to whatever is behind it.
 pub enum EventResult {
     Handled,
     Ignored,

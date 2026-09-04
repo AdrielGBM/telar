@@ -1,3 +1,5 @@
+//! [`WinitWindow`]: a winit window behind the [`Window`](platform_core::Window) trait.
+
 use std::sync::Arc;
 
 use platform_core::Window as PlatformWindow;
@@ -7,6 +9,7 @@ use raw_window_handle::{
 use winit::window::Window as WinitInnerWindow;
 
 #[derive(Clone)]
+/// A winit window behind the [`Window`](platform_core::Window) trait, cloneable as a cheap `Arc` bump.
 pub struct WinitWindow(pub Arc<WinitInnerWindow>);
 
 impl HasWindowHandle for WinitWindow {
@@ -43,8 +46,7 @@ impl PlatformWindow for WinitWindow {
     }
 
     fn prefers_dark(&self) -> Option<bool> {
-        // winit reports the OS theme natively on Windows/macOS; on Linux it is always `None` (winit has no
-        // color-scheme integration there) — the desktop adapter supplies the freedesktop-portal fallback.
+        // winit reports the OS theme natively on Windows/macOS; on Linux it is always `None` (winit has no color-scheme integration there) — the desktop adapter supplies the freedesktop-portal fallback.
         self.0.theme().map(|t| t == winit::window::Theme::Dark)
     }
 

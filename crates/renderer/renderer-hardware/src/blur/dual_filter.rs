@@ -1,9 +1,11 @@
+//! Kawase dual-filter blur, for the radii a separable Gaussian would sample too widely.
+
 use wgpu::Device;
 
 use super::{BlurParams, BlurPipeline};
 
 impl BlurPipeline {
-    // Kawase dual-filter blur: alternate down-sample and up-sample passes across progressively smaller textures, matching the Gaussian's perceptual radius with far fewer full-resolution fetches.
+    // Kawase dual-filter: alternating down- and up-sample passes across progressively smaller textures, matching the Gaussian's perceptual radius with far fewer full-resolution fetches.
     pub(super) fn apply_dual_filter(
         &mut self,
         device: &Device,
@@ -15,14 +17,14 @@ impl BlurPipeline {
     ) -> (wgpu::Texture, wgpu::TextureView) {
         let iterations = ((sigma / 4.0).ceil() as u32).clamp(1, 4);
 
-        // Clone the Arc-backed GPU handles so the down/up-sample loops can keep using them while take_pooled_texture borrows &mut self.intermediate_pool.
+        // Clone the Arc-backed handles, so the loops keep using them while `take_pooled_texture` borrows `&mut self`.
         let downsample_pipeline = self.downsample_pipeline.clone();
         let upsample_pipeline = self.upsample_pipeline.clone();
         let bind_group_layout = self.bind_group_layout.clone();
         let sampler = self.sampler.clone();
         let use_immediates = self.use_immediates;
 
-        // Down-sample chain. Each entry owns the texture written at that level plus the (w, h) of the level it was produced *from* (its source), needed to size up-sample outputs symmetrically.
+        // Each entry owns the texture written at that level plus the size of the level it was produced from, needed to size up-sample outputs symmetrically.
         let mut down_levels: Vec<(wgpu::Texture, wgpu::TextureView, u32, u32)> =
             Vec::with_capacity(iterations as usize);
         let mut src_w = width;
@@ -57,18 +59,18 @@ impl BlurPipeline {
                     "telar-blur-downsample-pass",
                 );
             }
-            // Store the source dimensions so the matching up-sample pass can recreate the symmetric output size.
+            // So the matching up-sample pass can recreate the symmetric output size.
             down_levels.push((tex, view, src_w, src_h));
             src_w = dst_w;
             src_h = dst_h;
         }
 
-        // Up-sample chain. `current` is the smallest level produced above; each pass reads it and writes to the next-larger level's source dimensions until reaching full resolution.
+        // `current` is the smallest level produced above; each pass reads it and writes to the next-larger level's source dimensions until reaching full resolution.
         let mut current_w = src_w;
         let mut current_h = src_h;
         let mut current_view = down_levels.last().map(|l| l.1.clone());
 
-        // Hold up-sample intermediates here until the whole chain finishes, so a texture still being read as a source can never be re-acquired from the pool as the next pass's write target.
+        // Held until the whole chain finishes, so a texture still being read as a source can never be re-acquired from the pool as the next pass's write target.
         let mut up_intermediates: Vec<(wgpu::Texture, wgpu::TextureView)> = Vec::new();
         let mut output: Option<(wgpu::Texture, wgpu::TextureView)> = None;
         for i in (0..iterations).rev() {
@@ -98,7 +100,7 @@ impl BlurPipeline {
             current_view = Some(out_view.clone());
             current_w = out_w;
             current_h = out_h;
-            // The final iteration (i == 0) lands at full resolution; keep that texture as the result and pool everything else.
+            // The final iteration lands at full resolution; keep that texture and pool everything else.
             if i == 0 {
                 output = Some((out_tex, out_view));
             } else {
@@ -106,7 +108,7 @@ impl BlurPipeline {
             }
         }
 
-        // Return all scratch textures (down-sample levels and intermediate up-sample targets) to the pool for reuse on the next call, now that nothing reads them.
+        // Nothing reads them now, so they can be reused on the next call.
         for (tex, view, _, _) in down_levels {
             let (w, h) = (tex.size().width, tex.size().height);
             self.intermediate_pool.push((tex, view, w, h));
@@ -119,7 +121,7 @@ impl BlurPipeline {
         output.expect("dual-filter always runs at least one iteration")
     }
 
-    // Acquire a (width, height) texture from the pool or create a fresh one. Callers always render with LoadOp::Clear, so stale pooled contents are harmless.
+    // Callers always render with `LoadOp::Clear`, so stale pooled contents are harmless.
     fn take_pooled_texture(
         &mut self,
         device: &Device,

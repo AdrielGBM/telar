@@ -1,3 +1,5 @@
+//! The wgpu backend: instanced pipelines per primitive, layers rendered into pooled textures, and a per-frame damage path that repaints only what changed.
+
 mod blur;
 mod caches;
 mod composite;

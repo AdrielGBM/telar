@@ -2,10 +2,7 @@
 
 use crate::color::Rgb;
 
-/// A grapheme cluster stored inline. Long enough for every cluster a UI realistically renders — a
-/// four-person family emoji is 25 bytes and fits — so a cell never allocates and a buffer is one flat
-/// `Vec`. A longer cluster keeps its base character and drops the rest, which is what a terminal that
-/// cannot compose it would show anyway.
+/// A grapheme cluster stored inline. Long enough for every cluster a UI realistically renders — a four-person family emoji is 25 bytes and fits — so a cell never allocates and a buffer is one flat `Vec`. A longer cluster keeps its base character and drops the rest, which is what a terminal that cannot compose it would show anyway.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub struct Grapheme {
     buf: [u8; 27],
@@ -61,8 +58,7 @@ impl From<char> for Grapheme {
     }
 }
 
-/// The text attributes a terminal can carry that Telar's text style can ask for. Deliberately not the
-/// terminal's full SGR vocabulary: an attribute nothing upstream can express is one nothing can test.
+/// The text attributes a terminal can carry that Telar's text style can ask for. Deliberately not the terminal's full SGR vocabulary: an attribute nothing upstream can express is one nothing can test.
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Default)]
 pub struct Attrs(u8);
 
@@ -70,8 +66,7 @@ impl Attrs {
     pub const BOLD: Self = Self(1 << 0);
     pub const ITALIC: Self = Self(1 << 1);
     pub const DIM: Self = Self(1 << 2);
-    /// The trailing column of a double-width grapheme. It draws nothing: the wide cell to its left already
-    /// covers it, and writing anything here would push the row out of alignment.
+    /// The trailing column of a double-width grapheme. It draws nothing: the wide cell to its left already covers it, and writing anything here would push the row out of alignment.
     pub const WIDE_TAIL: Self = Self(1 << 3);
 
     pub const NONE: Self = Self(0);
@@ -101,6 +96,7 @@ impl std::ops::BitOr for Attrs {
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
+/// One terminal cell: its grapheme, its colours and its attributes.
 pub struct Cell {
     pub glyph: Grapheme,
     pub fg: Rgb,
@@ -118,8 +114,7 @@ impl Cell {
         }
     }
 
-    /// Whether this cell draws nothing but its background — so a writer can skip its foreground colour
-    /// entirely, which is most of a UI.
+    /// Whether this cell draws nothing but its background — so a writer can skip its foreground colour entirely, which is most of a UI.
     pub fn is_blank(&self) -> bool {
         self.attrs.contains(Attrs::WIDE_TAIL) || self.glyph == Grapheme::SPACE
     }

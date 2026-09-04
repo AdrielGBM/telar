@@ -1,3 +1,5 @@
+//! [`Path`]: a vector-geometry leaf that lays itself out and paints its own fill and stroke.
+
 use std::sync::Arc;
 
 use layout_core::{LayoutError, LayoutStyle};
@@ -10,10 +12,7 @@ use crate::layout_leaf::LayoutLeaf;
 
 /// Vector artwork as a widget: a shape a `col` can hold, size and place like anything else.
 ///
-/// The path's own coordinates are local to the box it is given, and the box's position is applied over them
-/// — so a shape drawn from `0,0` lands where layout put it. It had to be wrapped in a [`Canvas`](crate::Canvas)
-/// to reach a layout at all, which is a wrapper the caller had to know to write and the transpiler emitted
-/// around every `path` in markup.
+/// The path's own coordinates are local to the box it is given, and the box's position is applied over them — so a shape drawn from `0,0` lands where layout put it. It had to be wrapped in a [`Canvas`](crate::Canvas) to reach a layout at all, which is a wrapper the caller had to know to write and the transpiler emitted around every `path` in markup.
 pub struct Path {
     leaf: LayoutLeaf,
     data: Box<dyn Fn() -> Arc<PathData>>,
@@ -48,8 +47,7 @@ impl_leaf_widget!(Path);
 impl Component for Path {
     fn view(&self) -> RenderNode {
         let rect = self.leaf.rect.get();
-        // A collapsed box draws nothing: the geometry is in its own coordinates and would otherwise paint
-        // over whatever a `display:none` was meant to make room for.
+        // The geometry is in its own coordinates, so a collapsed box would paint over whatever made room for it.
         if rect.width <= 0.0 || rect.height <= 0.0 {
             return RenderNode::Empty;
         }

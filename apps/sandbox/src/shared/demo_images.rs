@@ -1,5 +1,8 @@
+//! Bitmaps generated in code, so the sandbox carries no image assets it does not need.
+
 use telar::ImageData;
 
+/// A horizontal gradient, generated at the requested size.
 pub fn make_gradient(width: u32, height: u32) -> ImageData {
     let mut pixels = Vec::with_capacity((width * height * 4) as usize);
     for _y in 0..height {
@@ -14,6 +17,7 @@ pub fn make_gradient(width: u32, height: u32) -> ImageData {
     ImageData::new(pixels, width, height)
 }
 
+/// A checkerboard of `cell`-sized squares.
 pub fn make_checker(width: u32, height: u32, cell: u32) -> ImageData {
     let mut pixels = Vec::with_capacity((width * height * 4) as usize);
     for y in 0..height {
@@ -29,6 +33,7 @@ pub fn make_checker(width: u32, height: u32, cell: u32) -> ImageData {
     ImageData::new(pixels, width, height)
 }
 
+/// A radial fade from opaque centre to transparent edge.
 pub fn make_radial_alpha(width: u32, height: u32) -> ImageData {
     let cx = width as f32 / 2.0;
     let cy = height as f32 / 2.0;

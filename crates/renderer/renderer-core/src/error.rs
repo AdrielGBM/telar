@@ -1,4 +1,7 @@
+//! What a renderer reports when it cannot be built or cannot draw.
+
 #[derive(Debug, thiserror::Error)]
+/// A renderer could not be built, or could not draw a frame.
 pub enum RendererError {
     #[error("surface creation failed: {0}")]
     Surface(String),

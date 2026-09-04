@@ -1,7 +1,4 @@
-//! Factory functions (`signal`, `effect`, `memo`) create
-//! nodes in the reactive graph. Struct constructors (`Runtime::new`, etc.) own
-//! their state. Free functions (`batch`, `set_flush_notify`) operate on the
-//! thread-local runtime.
+//! Factory functions (`signal`, `effect`, `memo`) create nodes in the reactive graph. Struct constructors (`Runtime::new`, etc.) own their state. Free functions (`batch`, `set_flush_notify`) operate on the thread-local runtime.
 
 mod effect;
 mod memo;
@@ -47,9 +44,7 @@ mod tests {
         assert_eq!(count.get(), 42);
     }
 
-    // M3 owner-scope: the shared runtime stamps each effect with the surface active at registration, and the
-    // flush re-enters that surface before running the effect — even when the write that scheduled it happened
-    // under a different active surface. Here the enter hook records which surface each run resolved against.
+    // The shared runtime stamps each effect with the surface active at registration, and the flush re-enters that surface before running it, even when the write that scheduled it happened under another.
     #[test]
     fn effect_runs_under_its_own_surface_context() {
         use std::cell::RefCell;
@@ -65,7 +60,6 @@ mod tests {
             })
         });
 
-        // Build an effect "owned by" surface A: A is active while it registers, so it captures A.
         let trigger = signal(0i32);
         let read = trigger.read_only();
         let _guard_a = SurfaceHandle(1).enter();
@@ -74,12 +68,8 @@ mod tests {
         });
         drop(_guard_a);
 
-        // Back on the ambient surface, no A entry has been recorded beyond the build itself; clear the log so
-        // we observe only what the *flush-triggered* run enters.
         entered.borrow_mut().clear();
 
-        // Write the signal while surface B is active. The scheduled effect belongs to A, so the flush must
-        // enter A (1), not B (2), before running it.
         let _guard_b = SurfaceHandle(2).enter();
         trigger.set(1);
         drop(_guard_b);
@@ -91,8 +81,7 @@ mod tests {
         );
     }
 
-    // A panic inside `batch` must leave the shared runtime consistent (batch_depth/flushing reset), so a
-    // later write still schedules and flushes effects. Without the RAII guards this would wedge the runtime.
+    // A panic inside `batch` must leave the shared runtime consistent, so a later write still schedules and flushes. Without the RAII guards this would wedge the runtime.
     #[test]
     fn runtime_recovers_after_panic_in_batch() {
         use std::cell::RefCell;
@@ -123,18 +112,13 @@ mod tests {
         );
     }
 
-    // A cascade inside one flush: `writer` runs after `reader` and writes the signal `reader` depends on, so
-    // `reader` has to run again. It is scheduled either way — the regression was the flush-wide epoch stamp,
-    // which turned that second run into a no-op with nothing left to reschedule it, so the reader kept the
-    // stale value until some later, unrelated write opened a fresh flush.
+    // Regression: the flush-wide epoch stamp turned the reader's second run into a no-op with nothing left to reschedule it, so it kept the stale value until some later, unrelated write opened a fresh flush.
     #[test]
     fn an_effect_reruns_when_a_later_effect_in_the_same_flush_writes_its_source() {
         let trigger = signal(0i32);
         let source = signal(0i32);
         let seen: Rc<RefCell<Vec<i32>>> = Rc::new(RefCell::new(Vec::new()));
 
-        // The reader is scheduled by the same write as the writer, and runs first — so by the time the writer
-        // moves `source`, the reader has already run once in this flush.
         let read_trigger = trigger.read_only();
         let read_source = source.read_only();
         let seen_c = Rc::clone(&seen);
@@ -256,7 +240,7 @@ mod tests {
         assert_eq!(*log.borrow(), vec![0, 6]);
     }
 
-    // Regression: an effect tracking BOTH a signal and a memo must re-run when only the memo's source changes — run_effect's signal-version shortcut used to skip it because memo deps are invisible to `sources` (the sandbox counter's frozen "Double:" text).
+    // Regression: `run_effect`'s signal-version shortcut skipped an effect tracking both a signal and a memo, because memo deps are invisible to `sources`.
     #[test]
     fn effect_with_signal_and_memo_sources_reruns_on_memo_change() {
         let unrelated = signal(0i32);
@@ -330,7 +314,7 @@ mod tests {
 
     #[test]
     fn disposing_one_subscriber_keeps_others_consistent() {
-        // Three effects subscribe to the same signal. Disposing the middle one's owner and then writing repeatedly must keep the survivors firing and must not panic — exercising the in-place subscriber-list cleanup that runs alongside notify_signal's reused scratch buffer (the cleanup must stay correct now that subscribers are no longer cloned per write).
+        // Disposing the middle owner and then writing repeatedly must keep the survivors firing, exercising the in-place subscriber-list cleanup that runs alongside the reused scratch buffer.
         let count = signal(0i32);
         let a = Rc::new(RefCell::new(0i32));
         let b = Rc::new(RefCell::new(0i32));
@@ -357,18 +341,12 @@ mod tests {
         count.set(2);
         count.set(3);
 
-        // Survivors tracked every write; the disposed one is frozen at its last value, with no panic and no lost survivor.
         assert_eq!(*a.borrow(), 3);
         assert_eq!(*c.borrow(), 3);
         assert_eq!(*b.borrow(), 1);
     }
 
-    // Disposal frees a signal's storage under the runtime borrow and drops the value after releasing it. The
-    // value can be anything, including something whose own `Drop` reads a signal — and doing that while the
-    // borrow was held would abort rather than panic, mid-teardown, with nothing to catch it.
-    //
-    // This used to be about signal handles specifically, which owned a refcount and re-entered `drop_signal`.
-    // They have no destructor now, so the hazard is a user type's rather than the runtime's own.
+    // Disposal frees a signal's storage under the runtime borrow and drops the value after releasing it. The value can be anything, including something whose own `Drop` reads a signal, which under the borrow would abort rather than panic. It used to be about signal handles specifically; they have no destructor now, so the hazard is a user type's.
     #[test]
     fn disposing_a_signal_whose_value_touches_the_runtime_does_not_double_borrow() {
         struct Reads(ReadSignal<i32>);
@@ -385,7 +363,6 @@ mod tests {
         drop(scope);
         dispose_owner(owner);
 
-        // Reaching here without aborting is the assertion; the runtime is still usable afterwards.
         let after = signal(5i32);
         assert_eq!(after.get(), 5);
     }

@@ -1,3 +1,5 @@
+//! [`LayoutItem`]: a component that also owns a layout node, and the clipping and boxing helpers around one.
+
 use std::cell::RefCell;
 use std::rc::Rc;
 
@@ -11,32 +13,19 @@ use crate::context::{new_container, track_layout};
 use crate::disposal::retire;
 use crate::layout_leaf::LayoutLeaf;
 
-/// A container child. The boxed widget is shared (`Rc<RefCell<…>>`) between event dispatch (which
-/// borrows it mutably) and its render `segment` (which borrows it immutably to flatten its `view()`)
-/// — they never overlap because dispatch is batched. `rect` is the child's layout signal for hit-testing.
-/// `Clone` is a cheap handle copy (all fields are `Rc`/signal): a reactive list clones a `Child` to move
-/// a reused item to its new position without rebuilding it.
+/// A container child. The boxed widget is shared (`Rc<RefCell<…>>`) between event dispatch (which borrows it mutably) and its render `segment` (which borrows it immutably to flatten its `view()`) — they never overlap because dispatch is batched. `rect` is the child's layout signal for hit-testing. `Clone` is a cheap handle copy (all fields are `Rc`/signal): a reactive list clones a `Child` to move a reused item to its new position without rebuilding it.
 #[derive(Clone)]
 pub(crate) struct Child {
     pub(crate) item: Rc<RefCell<Box<dyn LayoutItem>>>,
     pub(crate) rect: Option<RwSignal<Rect>>,
     pub(crate) segment: Rc<Segment>,
-    /// Copied at construction rather than read back through `item`. A widget's layout node never changes, and
-    /// asking the widget for it would borrow a `RefCell` that is already held mutably whenever a reconcile
-    /// runs from inside one of these children's own event handlers — a row deleting itself, a strip
-    /// committing a reorder.
+    /// Copied at construction rather than read back through `item`. A widget's layout node never changes, and asking the widget for it would borrow a `RefCell` that is already held mutably whenever a reconcile runs from inside one of these children's own event handlers — a row deleting itself, a strip committing a reorder.
     node: layout_core::NodeId,
-    /// The owner everything this child's build created belongs to, for the children whose lifetime is their
-    /// own. `None` for a child handed in already built, whose lifetime is somebody else's.
+    /// The owner everything this child's build created belongs to, for the children whose lifetime is their own. `None` for a child handed in already built, whose lifetime is somebody else's.
     owner: Option<OwnerId>,
-    /// The owner that was active while this child was built — which is not the same question as [`owner`],
-    /// and conflating them was a bug.
+    /// The owner that was active while this child was built — which is not the same question as [`owner`], and conflating them was a bug.
     ///
-    /// [`owner`] answers *what do I dispose*, and only a child with a lifetime of its own has one. This
-    /// answers *what do I run under*, and every child has one: a static child built inside a component
-    /// belongs to that component's scope even though it disposes nothing. A handler needs the second, or a
-    /// static child resolves its ambient reads against the surface root instead of the component it is part
-    /// of. For a reactive row the two are the same owner, which is why one field looked like enough.
+    /// [`owner`] answers *what do I dispose*, and only a child with a lifetime of its own has one. This answers *what do I run under*, and every child has one: a static child built inside a component belongs to that component's scope even though it disposes nothing. A handler needs the second, or a static child resolves its ambient reads against the surface root instead of the component it is part of. For a reactive row the two are the same owner, which is why one field looked like enough.
     ///
     /// [`owner`]: Self::owner
     built_under: Option<OwnerId>,
@@ -53,9 +42,7 @@ impl Child {
     }
 }
 
-/// Registers an already-built widget as a container child: tracks its layout rect and mounts its render
-/// segment. Used by reactive lists to fold a freshly-built item into the child set (the per-item half of
-/// [`register_container`]).
+/// Registers an already-built widget as a container child: tracks its layout rect and mounts its render segment. Used by reactive lists to fold a freshly-built item into the child set (the per-item half of [`register_container`]).
 pub(crate) fn make_child(widget: Box<dyn LayoutItem>) -> Child {
     let node = widget.layout_node();
     let rect = track_layout(node);
@@ -71,11 +58,9 @@ pub(crate) fn make_child(widget: Box<dyn LayoutItem>) -> Child {
     }
 }
 
-/// Builds a child that owns its own lifetime — a reactive list's row, an `if` branch — under a fresh owner,
-/// so [`dispose_child`] frees everything the build made rather than waiting for the last handle to drop.
+/// Builds a child that owns its own lifetime — a reactive list's row, an `if` branch — under a fresh owner, so [`dispose_child`] frees everything the build made rather than waiting for the last handle to drop.
 ///
-/// The scope covers `make_child` as well as the build: the rect signal and the render segment's effect are
-/// per-item too, and an item that leaves has no more use for either.
+/// The scope covers `make_child` as well as the build: the rect signal and the render segment's effect are per-item too, and an item that leaves has no more use for either.
 pub(crate) fn build_child(build: impl FnOnce() -> Box<dyn LayoutItem>) -> Child {
     let scope = owner_scope();
     let owner = scope.id();
@@ -92,9 +77,7 @@ pub(crate) fn dispose_child(child: &Child) {
 
 pub(crate) type TrackedChildren = Vec<Child>;
 
-/// Mounts a reactive segment that renders a shared boxed item via its `view()`. Uses `try_borrow`
-/// so a re-entrant render while the item is mid event-dispatch (mutably borrowed) keeps the previous
-/// frame instead of panicking; a later flush re-runs it.
+/// Mounts a reactive segment that renders a shared boxed item via its `view()`. Uses `try_borrow` so a re-entrant render while the item is mid event-dispatch (mutably borrowed) keeps the previous frame instead of panicking; a later flush re-runs it.
 pub(crate) fn mount_item_segment(item: Rc<RefCell<Box<dyn LayoutItem>>>) -> Rc<Segment> {
     let name = item
         .try_borrow()
@@ -107,61 +90,42 @@ pub(crate) trait LeafWidget {
     fn layout_leaf(&self) -> &LayoutLeaf;
 }
 
+/// A component that also owns a layout node, which is what lets it be placed among siblings.
 pub trait LayoutItem: Component {
     fn layout_node(&self) -> NodeId;
 
-    /// Whether this widget stands in front of whatever its siblings drew underneath it, for a pointer event
-    /// its parent is hit-testing.
+    /// Whether this widget stands in front of whatever its siblings drew underneath it, for a pointer event its parent is hit-testing.
     ///
-    /// True for anything that occupies its box, which is everything that draws: the topmost child under the
-    /// pointer takes the event whether or not it wants it, exactly as a browser hit-tests — otherwise a
-    /// floating panel lets the wheel through to the pane it covers. The one thing that is not there for this
-    /// purpose is an [`Overlay`](crate::Overlay): the registry routes positioned events to it *before* the
-    /// tree walk, so its in-tree node must not shadow the siblings it was portaled away from.
+    /// True for anything that occupies its box, which is everything that draws: the topmost child under the pointer takes the event whether or not it wants it, exactly as a browser hit-tests — otherwise a floating panel lets the wheel through to the pane it covers. The one thing that is not there for this purpose is an [`Overlay`](crate::Overlay): the registry routes positioned events to it *before* the tree walk, so its in-tree node must not shadow the siblings it was portaled away from.
     fn pointer_opaque(&self) -> bool {
         true
     }
 }
 
-/// Wraps a child so its rendered output is clipped to the child's own layout rect. When the child
-/// collapses to a zero rect (e.g. a section hidden via `display:none`), the clip is empty, so nothing
-/// inside draws — even a widget left with a stale rect or one that paints at fixed coordinates. Layout
-/// is unchanged: `layout_node` passes through to the wrapped child.
+/// Wraps a child so its rendered output is clipped to the child's own layout rect. When the child collapses to a zero rect (e.g. a section hidden via `display:none`), the clip is empty, so nothing inside draws — even a widget left with a stale rect or one that paints at fixed coordinates. Layout is unchanged: `layout_node` passes through to the wrapped child.
 ///
-/// The pointer stops at the same edge. A press or a move landing outside the clip never reaches the subtree,
-/// so a widget cut off by the clip cannot take the click that visually belongs to whatever is drawn over it —
-/// clipped away is *gone*, not merely invisible. Everything else passes through: a release or a `CursorLeft`
-/// is how a widget that was pressed or hovered inside the clip settles again, and swallowing those would leave
-/// it stuck in a state the pointer has already left.
+/// The pointer stops at the same edge. A press or a move landing outside the clip never reaches the subtree, so a widget cut off by the clip cannot take the click that visually belongs to whatever is drawn over it — clipped away is *gone*, not merely invisible. Everything else passes through: a release or a `CursorLeft` is how a widget that was pressed or hovered inside the clip settles again, and swallowing those would leave it stuck in a state the pointer has already left.
 pub struct ClippedItem {
     inner: Box<dyn LayoutItem>,
     rect: RwSignal<Rect>,
     clip: Clip,
 }
 
-/// The shape a [`ClippedItem`] cuts to: which edges do the cutting, how round the corners are, and how far in
-/// from the edge the cut sits.
+/// The shape a [`ClippedItem`] cuts to: which edges do the cutting, how round the corners are, and how far in from the edge the cut sits.
 ///
-/// One value rather than three arguments, and a *shape* rather than an axis, because the renderer's clip node
-/// has always taken a radius and the markup had no way to ask for one — so a rounded box with a clipped child
-/// cut its corners square, and the only remedy was to not clip.
+/// One value rather than three arguments, and a *shape* rather than an axis, because the renderer's clip node has always taken a radius and the markup had no way to ask for one — so a rounded box with a clipped child cut its corners square, and the only remedy was to not clip.
 #[derive(Clone, Copy, PartialEq, Debug, Default)]
 pub struct Clip {
     pub axis: ClipAxis,
     pub radius: BorderRadius,
-    /// Pulled in from every cutting edge. What a stroked box wants: cut inside the border rather than under
-    /// it, so the border stays whole and the content stops at its inner edge.
+    /// Pulled in from every cutting edge. What a stroked box wants: cut inside the border rather than under it, so the border stays whole and the content stops at its inner edge.
     pub inset: f32,
     pub pointer: ClipPointer,
 }
 
 /// Whether a cut edge stops the pointer as well as the paint.
 ///
-/// [`Stop`](ClipPointer::Stop) is what a viewport wants and the default: clipped away is *gone*, so a widget
-/// cut off cannot take the click that visually belongs to whatever is drawn over it.
-/// [`Through`](ClipPointer::Through) is for a clip that is only about paint — a rounded frame over a canvas,
-/// where a node dragged out past the edge has to keep following the hand, and a clip that swallowed the
-/// moves would drop it at the border.
+/// [`Stop`](ClipPointer::Stop) is what a viewport wants and the default: clipped away is *gone*, so a widget cut off cannot take the click that visually belongs to whatever is drawn over it. [`Through`](ClipPointer::Through) is for a clip that is only about paint — a rounded frame over a canvas, where a node dragged out past the edge has to keep following the hand, and a clip that swallowed the moves would drop it at the border.
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Default)]
 pub enum ClipPointer {
     #[default]
@@ -223,19 +187,13 @@ pub enum ClipAxis {
     Vertical,
 }
 
-/// Half the extent of the free axis of a one-way clip: past any window a platform hands out, and small enough
-/// to stay exact in an `f32`, so the axis bounds nothing without being an infinity the renderer has to
-/// special-case.
+/// Half the extent of the free axis of a one-way clip: past any window a platform hands out, and small enough to stay exact in an `f32`, so the axis bounds nothing without being an infinity the renderer has to special-case.
 const UNBOUNDED: f32 = 1.0e6;
 
 impl ClippedItem {
     /// A clip cutting to `clip`.
     ///
-    /// A one-way clip is what a strip of items wants when it has to stop at its ends but not across its
-    /// thickness: a tab bar or a toolbar cut where the room runs out, whose items still carry a focus ring, a
-    /// badge or a shadow past the strip's own edge. CSS cannot express this — one axis set to `hidden` forces
-    /// the other out of `visible` — so a row that only wanted its ends cut has to clip the overflow it meant
-    /// to keep.
+    /// A one-way clip is what a strip of items wants when it has to stop at its ends but not across its thickness: a tab bar or a toolbar cut where the room runs out, whose items still carry a focus ring, a badge or a shadow past the strip's own edge. CSS cannot express this — one axis set to `hidden` forces the other out of `visible` — so a row that only wanted its ends cut has to clip the overflow it meant to keep.
     pub fn new(inner: Box<dyn LayoutItem>, clip: Clip) -> Self {
         let rect = track_layout(inner.layout_node()).expect("clipped item's node not registered");
         Self { inner, rect, clip }
@@ -304,14 +262,9 @@ impl Component for ClippedItem {
 
 /// Wraps a widget so that dropping the widget drops a set of [`Effect`](reactive_core::Effect)s with it.
 ///
-/// An `Effect` deregisters on drop, so one bound to a `let` inside a function that returns a widget stops
-/// the moment that function returns — the closure runs exactly once and then never again, which reads as a
-/// working binding right up until the value it derives is expected to move. A widget that owns its effects
-/// ([`Container::keeping`](crate::Container::keeping)) solves that for itself, and this solves it for
-/// anything else: a leaf, a boxed component, whatever a `.rsx` happens to have at its root.
+/// An `Effect` deregisters on drop, so one bound to a `let` inside a function that returns a widget stops the moment that function returns — the closure runs exactly once and then never again, which reads as a working binding right up until the value it derives is expected to move. A widget that owns its effects (`Container::keeping`) solves that for itself, and this solves it for anything else: a leaf, a boxed component, whatever a `.rsx` happens to have at its root.
 ///
-/// Unrelated to [`kept`](crate::kept), which keeps a *value* across rebuilds of a surface. This keeps a
-/// subscription alive for as long as a widget lives.
+/// Unrelated to [`kept`](crate::kept), which keeps a *value* across rebuilds of a surface. This keeps a subscription alive for as long as a widget lives.
 ///
 impl<T: LeafWidget + Component> LayoutItem for T {
     fn layout_node(&self) -> NodeId {
@@ -319,7 +272,7 @@ impl<T: LeafWidget + Component> LayoutItem for T {
     }
 }
 
-// Lets an already-boxed child (e.g. the `Box<dyn LayoutItem>` returned by a transpiled `.rsx` component) pass back through `box_item`/`children!` without a second manual wrap, so components compose as `[view]` children.
+// Lets an already-boxed child pass back through `box_item`/`children!` without a second wrap, so a transpiled component composes as a `[view]` child.
 impl Component for Box<dyn LayoutItem> {
     fn view(&self) -> RenderNode {
         (**self).view()
@@ -344,7 +297,8 @@ impl LayoutItem for Box<dyn LayoutItem> {
     }
 }
 
-// pub so the `children!` macro can call it from any crate without naming the module
+// `pub` so the `children!` macro can call it from any crate without naming the module.
+/// Boxes a widget as a `dyn LayoutItem`, so a heterogeneous child list can hold it.
 pub fn box_item(item: impl LayoutItem + 'static) -> Box<dyn LayoutItem> {
     Box::new(item)
 }
@@ -403,16 +357,12 @@ mod tests {
 
     /// A press outside the clip does not reach the subtree, and one inside it still does.
     ///
-    /// The case this exists for: a row of items wider than the box it is clipped to. The overflow is not drawn,
-    /// so whatever is painted over that strip looks like the only thing there — and a hidden item that still
-    /// answered a click there would be stealing it from the visible one.
+    /// The case this exists for: a row of items wider than the box it is clipped to. The overflow is not drawn, so whatever is painted over that strip looks like the only thing there — and a hidden item that still answered a click there would be stealing it from the visible one.
     #[test]
     fn a_press_outside_the_clip_never_reaches_what_it_hides() {
         let pressed = Rc::new(Cell::new(false));
         let sink = Rc::clone(&pressed);
         reset_layout_runtime();
-        // `flex_shrink(0)` so the child really overflows the 40px window instead of being squeezed into it:
-        // without it the press lands outside the child's own rect and the clip is never what stopped it.
         let inner = StyledContainer::new(
             LayoutStyle::new()
                 .flex_row()
@@ -424,7 +374,6 @@ mod tests {
         )
         .unwrap()
         .on_press(move || sink.set(true));
-        // The clip is the child's own rect, so it is cut to a 40px window by laying it out in one.
         let mut clipped = ClippedItem::new(
             Box::new(
                 StyledContainer::new(
@@ -458,8 +407,7 @@ mod tests {
         );
     }
 
-    /// A clip is a shape, not an axis: the renderer's clip node has always taken a radius, and an inset is
-    /// what a stroked box wants so the cut sits inside the border rather than under it.
+    /// A clip is a shape, not an axis: the renderer's clip node has always taken a radius, and an inset is what a stroked box wants so the cut sits inside the border rather than under it.
     #[test]
     fn a_rounded_inset_clip_cuts_the_shape_it_names() {
         reset_layout_runtime();
@@ -488,15 +436,12 @@ mod tests {
         assert_eq!(radius, BorderRadius::all(6.0));
     }
 
-    /// A frame drawn over a canvas cuts the paint and nothing else: a node dragged out past the edge has to
-    /// keep following the hand, and a clip that swallowed the moves would drop it at the border. This is what
-    /// a project had a hand-written widget for, beside the one that stops the pointer.
+    /// A frame drawn over a canvas cuts the paint and nothing else: a node dragged out past the edge has to keep following the hand, and a clip that swallowed the moves would drop it at the border. This is what a project had a hand-written widget for, beside the one that stops the pointer.
     #[test]
     fn a_paint_only_clip_lets_the_pointer_through() {
         let pressed = Rc::new(Cell::new(false));
         let sink = Rc::clone(&pressed);
         reset_layout_runtime();
-        // `flex_shrink(0)` so the child really overflows the 40px window instead of being squeezed into it.
         let inner = StyledContainer::new(
             LayoutStyle::new()
                 .flex_row()
@@ -534,8 +479,7 @@ mod tests {
         );
     }
 
-    /// One axis cut, the other left free — the thing CSS cannot say. The inset applies to the cutting edges
-    /// only, since the free axis has no edge to pull in from.
+    /// One axis cut, the other left free — the thing CSS cannot say. The inset applies to the cutting edges only, since the free axis has no edge to pull in from.
     #[test]
     fn a_one_way_clip_leaves_the_other_axis_unbounded() {
         reset_layout_runtime();

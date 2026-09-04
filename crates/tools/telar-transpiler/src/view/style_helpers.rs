@@ -16,12 +16,9 @@ use super::signals::{
 impl ViewGen<'_> {
     /// Every attribute in force on an element: its inline attrs followed by its classes' props.
     ///
-    /// Inline wins, because every reader takes the first `.find()` match and inline attrs come first; among
-    /// several classes a later one overrides an earlier one, so classes are appended in REVERSE order and the
-    /// last class's props land ahead of the first's.
+    /// Inline wins, because every reader takes the first `.find()` match and inline attrs come first; among several classes a later one overrides an earlier one, so classes are appended in REVERSE order and the last class's props land ahead of the first's.
     ///
-    /// A class carries whatever it was written with. It used to be gated to the paint keys, which is why
-    /// `@heading { font_size: 22 }` compiled and did nothing at all.
+    /// A class carries whatever it was written with. It used to be gated to the paint keys, which is why `@heading { font_size: 22 }` compiled and did nothing at all.
     pub(super) fn effective_attrs(&self, el: &Element) -> Vec<Attr> {
         let mut attrs = el.attributes.clone();
         for name in el.classes.iter().rev() {
@@ -38,8 +35,7 @@ impl ViewGen<'_> {
         attrs
     }
 
-    /// Builds the `(styling closure, .with_opacity(..) suffix)` for a styled container from paint attributes. The closure's param is `r` only when a gradient needs the rendered bounds. `transitions` maps an animated property to its `motion::` curve; any `fill`/`stroke`/`opacity` it names is wrapped in the animation retarget+get block and its `Animated` handle appended to `hoists`. Any `$ident` among the paint attrs (see `color_attr_keys`) is cloned into the closure (`wrap_signal_clones`) so the outer signal binding stays usable elsewhere.
-    /// Extracts `shadow-*` attrs and produces a `Some(Shadow::new(...))` expression, or `None` when no shadow attrs are present.
+    /// Builds the `(styling closure, .with_opacity(..) suffix)` for a styled container from paint attributes. The closure's param is `r` only when a gradient needs the rendered bounds. `transitions` maps an animated property to its `motion::` curve; any `fill`/`stroke`/`opacity` it names is wrapped in the animation retarget+get block and its `Animated` handle appended to `hoists`. Any `$ident` among the paint attrs (see `color_attr_keys`) is cloned into the closure (`wrap_signal_clones`) so the outer signal binding stays usable elsewhere. Extracts `shadow-*` attrs and produces a `Some(Shadow::new(...))` expression, or `None` when no shadow attrs are present.
     fn shadow_expr(&self, attrs: &[Attr]) -> Option<String> {
         if !attrs.iter().any(|a| a.key.starts_with("shadow")) {
             return None;
@@ -124,9 +120,7 @@ impl ViewGen<'_> {
             ),
             None => String::new(),
         };
-        // Every paint value, not just the colours: a `$signal` reaching the closure through a radius or a
-        // border side has to be cloned into it for the same reason a fill does, or the `move` takes the
-        // author's binding with it and the next use of the signal will not compile.
+        // Every paint value, not just colours: a `$signal` reaching the closure through a radius or a border side has to be cloned in for the same reason a fill does.
         let raw_values: Vec<&str> = pattrs
             .iter()
             .filter(|a| is_paint_key(&a.key))
@@ -138,8 +132,7 @@ impl ViewGen<'_> {
 
     /// The four border thicknesses for a box, or `None` when the plain `stroke_width` says all it needs to.
     ///
-    /// `None` is not "no border": it is that one width on every side. Only a box that named an edge carries
-    /// four of its own.
+    /// `None` is not "no border": it is that one width on every side. Only a box that named an edge carries four of its own.
     pub(super) fn border_widths_expr(&self, pattrs: &[Attr]) -> Option<String> {
         let edges =
             crate::edges::collect(pattrs, "stroke_width", "stroke_", crate::edges::side_target);
@@ -155,8 +148,7 @@ impl ViewGen<'_> {
         })
     }
 
-    /// The `BorderRadius` for a box: the one-value form while that is all the author wrote, and the four
-    /// corners `BorderRadius` has always had as soon as one of them is named on its own.
+    /// The `BorderRadius` for a box: the one-value form while that is all the author wrote, and the four corners `BorderRadius` has always had as soon as one of them is named on its own.
     pub(super) fn radius_expr(&self, pattrs: &[Attr]) -> String {
         let edges = crate::edges::collect(pattrs, "radius", "radius_", crate::edges::corner_target);
         if let Some(all) = edges.uniform {
@@ -194,7 +186,7 @@ impl ViewGen<'_> {
         } else {
             value.to_string()
         };
-        // Signals (and any in-scope loop variables) read by the closure are cloned into it so it owns 'static handles, independent of any sibling closure on the same widget. Deduped and loop-var-aware via the shared `captured_idents`; empty for a static/number value, whose branches emit no `move` closure.
+        // Cloned in so the closure owns `'static` handles independent of any sibling closure on the same widget. Empty for a static value, whose branches emit no `move` closure.
         let clone_prefix: String = captured_idents(&[value], &self.loop_variables)
             .iter()
             .map(|s| format!("let {s} = {s}.clone(); "))
@@ -244,8 +236,7 @@ impl ViewGen<'_> {
         if !has_transition {
             return (specs, errors);
         }
-        // No loop-depth gate: a `for` here is a construction loop that runs once per component instance, so the `Animated` hoisted per iteration is already a distinct, persistent handle (see `emit_for`) — identity-by-key would only matter if loops ever gained reactive reconciliation.
-        // A `fill`/`stroke`/`opacity` value may come from the element's class, not only an inline attribute (see `effective_attrs`).
+        // No loop-depth gate: a `for` here is a construction loop, so the `Animated` hoisted per iteration is already a distinct handle. The value may come from the element's class, not only an inline attribute.
         let attrs = self.effective_attrs(el);
         let has_value = |prop: &str| {
             el.attributes.iter().any(|a| a.key == prop) || attrs.iter().any(|a| a.key == prop)
@@ -275,9 +266,7 @@ impl ViewGen<'_> {
         attrs: &[Attr],
     ) -> String {
         let mut expr = if let Some((first, rest)) = classes.split_first() {
-            // The first class provides the base style (from its generated `style_*()` fn); further classes
-            // compose on top by inlining their layout props as chained calls, so a later class overrides an
-            // earlier one. A single class is byte-identical to before (the `rest` loop is empty).
+            // The first class is the base; further classes inline their layout props as chained calls, so a later one overrides an earlier one.
             let mut base = format!("{}()", style_function_name(first));
             for name in rest {
                 if let Some(class) = self.classes.iter().find(|c| &c.name == name) {
@@ -288,10 +277,7 @@ impl ViewGen<'_> {
                     }
                 }
             }
-            // Apply the tag's flex direction only when NO class declares one, so a styled `row @card` still
-            // lays out horizontally. `box` is included (like the no-class branch): a `LayoutStyle::new()`
-            // class fn defaults to `display:block`, where `align`/`justify` are no-ops, so a classed `box`
-            // needs `.flex_column()` to be a flex container and actually centre its children.
+            // Only when no class declares one, so a styled `row @card` still lays out horizontally. `box` is included: a `LayoutStyle::new()` class fn defaults to `display:block`, where `align`/`justify` are no-ops.
             if !classes.iter().any(|c| self.class_has_direction(c)) {
                 match tag {
                     "row" | "grid" => base.push_str(".flex_row()"),
@@ -303,13 +289,11 @@ impl ViewGen<'_> {
         } else {
             match tag {
                 "row" => "LayoutStyle::new().flex_row()".to_string(),
-                // `lazy` is a container like the others: it used to become flex only as a side effect of
-                // `set_display(true)` forcing `Display::Flex`, which stopped once that call started restoring
-                // the node's own declared display.
+                // Regression: `lazy` became flex only as a side effect of `set_display(true)` forcing `Display::Flex`, which stopped once that call began restoring the node's declared display.
                 "col" | "box" | "overlay" | "lazy" => {
                     "LayoutStyle::new().flex_column()".to_string()
                 }
-                // `cols:` adds `.display_grid()`, so start neutral; fall back to flex_row when no cols are declared (legacy behaviour).
+                // `cols:` adds `.display_grid()`, so start neutral and fall back to flex_row when no cols are declared.
                 "grid" => {
                     if attrs.iter().any(|a| a.key == "cols") {
                         "LayoutStyle::new()".to_string()
@@ -321,8 +305,7 @@ impl ViewGen<'_> {
             }
         };
 
-        // Inline attributes are applied on top of the base style and take precedence.
-        // A value the key cannot mean is dropped here and reported by `value_errors` instead.
+        // Applied on top of the base style and taking precedence. A value the key cannot mean is dropped here and reported by `value_errors` instead.
         for attr in attrs {
             if let PropCall::Call(call) = layout_prop_call(&attr.key, attr.value.text()) {
                 expr.push_str(&call);
@@ -331,13 +314,9 @@ impl ViewGen<'_> {
         expr
     }
 
-    /// The raw values of this element's layout attributes that are not literals, so the caller can wrap the
-    /// style expression in an effect. Empty means the style is a constant and the node needs none.
+    /// The raw values of this element's layout attributes that are not literals, so the caller can wrap the style expression in an effect. Empty means the style is a constant and the node needs none.
     ///
-    /// **A literal is the only thing that cannot change**, and that is the whole of the test. It used to be
-    /// `contains('$')`, which made the sigil the reactivity rule rather than sugar — so `pad:$theme.gutter`
-    /// followed a theme switch and `pad:gutter()` silently did not, from one expression to the next. The
-    /// runtime already tracks what a closure reads; the closure is all it needs to be given.
+    /// **A literal is the only thing that cannot change**, and that is the whole of the test. It used to be `contains('$')`, which made the sigil the reactivity rule rather than sugar — so `pad:$theme.gutter` followed a theme switch and `pad:gutter()` silently did not, from one expression to the next. The runtime already tracks what a closure reads; the closure is all it needs to be given.
     pub(super) fn reactive_layout_values(&self, tag: &str, attrs: &[Attr]) -> Vec<String> {
         attrs
             .iter()
@@ -347,9 +326,7 @@ impl ViewGen<'_> {
             .collect()
     }
 
-    /// Whether this container lays its children out horizontally, resolved the same way
-    /// [`Self::make_layout_style`] resolves the direction: an inline or class `direction:` wins, then the
-    /// tag's own default.
+    /// Whether this container lays its children out horizontally, resolved the same way [`Self::make_layout_style`] resolves the direction: an inline or class `direction:` wins, then the tag's own default.
     pub(super) fn container_is_row(&self, tag: &str, classes: &[String], attrs: &[Attr]) -> bool {
         let from_direction = |value: &str| match value {
             "row" => Some(true),
@@ -387,8 +364,7 @@ impl ViewGen<'_> {
     }
 }
 
-/// Whether `value` under `key` is a literal — a number, a percentage, or a spelling from the key's own
-/// closed set. Everything else names something, and a name can answer differently the next time it is asked.
+/// Whether `value` under `key` is a literal — a number, a percentage, or a spelling from the key's own closed set. Everything else names something, and a name can answer differently the next time it is asked.
 fn is_literal_value(tag: &str, key: &str, value: &str) -> bool {
     let v = value.trim();
     let number = |s: &str| {
@@ -405,8 +381,7 @@ fn is_literal_value(tag: &str, key: &str, value: &str) -> bool {
         // The three spellings that cannot change; anything else is read, and a style that reads follows.
         Some(ValueKind::Boolean) => v.is_empty() || v == "true" || v == "false",
         Some(ValueKind::Edges) => v.split_whitespace().all(number),
-        // A colour is paint, and paint is already a closure the renderer re-runs; anything else is a key
-        // with no schema, which is a key this style does not build from.
+        // A colour is paint, already a closure the renderer re-runs; anything else is a key with no schema.
         Some(ValueKind::Color) | None => true,
     }
 }

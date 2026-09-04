@@ -1,3 +1,5 @@
+//! The command-line surface: subcommands, flags and what each one dispatches to.
+
 use clap::{Parser, Subcommand, ValueEnum};
 
 use crate::runner::config::RendererBackend;
@@ -33,8 +35,7 @@ pub(crate) enum TelarCommand {
     Migrate(MigrateArgs),
 }
 
-/// Idempotent by construction: a file already in the new grammar comes out byte-identical, so running it
-/// twice is safe and `--check` is how a CI says a project is migrated.
+/// Idempotent by construction: a file already in the new grammar comes out byte-identical, so running it twice is safe and `--check` is how a CI says a project is migrated.
 #[derive(clap::Args)]
 pub(crate) struct MigrateArgs {
     /// Report which files would change and exit non-zero, without writing
@@ -44,9 +45,7 @@ pub(crate) struct MigrateArgs {
     pub(crate) paths: Vec<std::path::PathBuf>,
 }
 
-/// `cargo fmt` cannot do this job: it never sees a `.rsx` file, and the `.rs` modules an `auto_modules` crate
-/// declares come out of a macro it does not expand, so it walks into `lib.rs` and stops there — reporting a
-/// clean tree it never looked at.
+/// `cargo fmt` cannot do this job: it never sees a `.rsx` file, and the `.rs` modules an `auto_modules` crate declares come out of a macro it does not expand, so it walks into `lib.rs` and stops there — reporting a clean tree it never looked at.
 #[derive(clap::Args)]
 pub(crate) struct FmtArgs {
     /// Report which files would change and exit non-zero, without writing
@@ -112,9 +111,7 @@ pub(crate) struct PreviewArgs {
     pub(crate) list: bool,
 }
 
-/// `cargo check` cannot do this job: a `.rsx` compiles to a generated file under `.telar/build/`, so every error
-/// past the parse stage names a file the author never wrote. The per-line source map beside each generated file
-/// is what puts them back, and nothing outside the VS Code extension read it before this.
+/// `cargo check` cannot do this job: a `.rsx` compiles to a generated file under `.telar/build/`, so every error past the parse stage names a file the author never wrote. The per-line source map beside each generated file is what puts them back, and nothing outside the VS Code extension read it before this.
 #[derive(clap::Args)]
 pub(crate) struct CheckArgs {
     #[command(flatten)]
@@ -152,9 +149,7 @@ pub(crate) enum Target {
     Web,
 }
 
-/// How a browser build draws. Not a fallback order: a document is the other way of drawing an interface,
-/// and this is the build saying which one it wants. The page can still say otherwise at load time with
-/// `?telar-renderer=`.
+/// How a browser build draws. Not a fallback order: a document is the other way of drawing an interface, and this is the build saying which one it wants. The page can still say otherwise at load time with `?telar-renderer=`.
 #[derive(Clone, Copy, ValueEnum)]
 pub(crate) enum WebRenderer {
     /// Pixels where the browser offers a GPU adapter, a document where it does not.

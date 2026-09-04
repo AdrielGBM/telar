@@ -1,3 +1,5 @@
+//! Native file pickers, behind the shared service trait.
+
 use std::path::PathBuf;
 use std::sync::Arc;
 

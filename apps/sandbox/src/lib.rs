@@ -1,10 +1,11 @@
+//! Telar's documentation app: one section per feature, each rendered from its own `.rsx`.
+
 // Module tree (core/, shared/) is auto-declared by `telar::app!` — see `auto_modules` in telar.toml.
 telar::app!(
     core::theme::SandboxTheme,
     {
         core::theme::register_modes();
-        // Open following the OS light/dark preference (modern for light, midnight for dark); the sidebar
-        // buttons still override manually until the next OS change.
+        // Open following the OS light/dark preference (modern for light, midnight for dark); the sidebar buttons still override manually until the next OS change.
         telar::follow_system(core::theme::DEFAULT_MODE, "midnight");
         telar::follow_locale_direction();
     },
@@ -14,8 +15,7 @@ telar::app!(
 
 /// The faces this app shapes its text in.
 ///
-/// A browser build has to bring its own: there is no font directory behind a page, so a shaper handed
-/// nothing finds nothing and every string measures to zero. Every other target reads the system's.
+/// A browser build has to bring its own: there is no font directory behind a page, so a shaper handed nothing finds nothing and every string measures to zero. Every other target reads the system's.
 fn app_config() -> telar::AppConfig {
     #[allow(unused_mut)]
     let mut config = telar::AppConfig::default();
@@ -33,8 +33,6 @@ fn app_config() -> telar::AppConfig {
 mod smoke {
     use telar::{App, AvailableSpace, Event, compute_layout};
 
-    // The whole documentation app must build and lay out without panicking, and every section fn
-    // must produce a tree — a regression guard over the two-pane shell and all `.rsx` sections.
     #[test]
     fn app_root_builds_and_lays_out() {
         telar::set_theme(crate::core::theme::SandboxTheme::modern());
@@ -43,11 +41,9 @@ mod smoke {
             width: 1200,
             height: 900,
         });
-        // Flatten once to make sure every section's view() runs.
         let _ = tree.commands();
     }
 
-    // Exercises the whole path against the real shell — locale signal → follow effect → engine → layout pass — on the same tree, which is re-laid-out rather than rebuilt.
     #[test]
     fn an_rtl_locale_mirrors_the_shell() {
         telar::set_theme(crate::core::theme::SandboxTheme::modern());
@@ -96,8 +92,6 @@ mod smoke {
             .1
     }
 
-    // The responsive shell must survive both breakpoints and the transition between them: desktop rail,
-    // mobile hamburger top bar, and back. A regression guard over the set_display collapse + drawer overlay.
     #[test]
     fn shell_survives_breakpoint_transition() {
         telar::set_theme(crate::core::theme::SandboxTheme::modern());
@@ -108,8 +102,6 @@ mod smoke {
         }
     }
 
-    // Clicking a sidebar nav item switches the visible section — a guard over the whole
-    // select → toggle-display → relayout path (desktop layout, so the sidebar rail is hit-testable).
     #[test]
     fn nav_click_switches_section() {
         use platform_core::{PointerButton, PointerSource};
@@ -146,16 +138,11 @@ mod smoke {
         );
     }
 
-    // Regression for the reported theme-freeze: after navigating in one theme then switching themes, no
-    // nav button may stay "frozen" at a stale theme's color. Replays the runner loop faithfully — the exact
-    // batch bracketing (`new_events`/`about_to_wait`), dev force-ticks, hover moves, and theme switches driven
-    // as real dispatched button clicks — then asserts every inactive nav button tracks the current theme's
-    // `surface_alt` and the active one its `primary`, across the user's full modern→pastel→midnight sequence.
+    // Regression for the reported theme-freeze: after navigating in one theme then switching, no nav button may stay frozen at a stale theme's colour. Replays the runner loop faithfully — the exact batch bracketing, dev force-ticks, hover moves and theme switches driven as real dispatched clicks.
     #[test]
     fn nav_tracks_theme_after_navigation() {
         use platform_core::{PointerButton, PointerSource};
 
-        // This ran twice, once with the dev force-tick and once without, because the tick could hide a missing subscription. There is only one mode now.
         run_theme_tracking_scenario();
 
         fn run_theme_tracking_scenario() {
@@ -163,7 +150,6 @@ mod smoke {
             fn nav_rects(tree: &telar::ComponentList) -> Vec<(f32, f32, telar::Color)> {
                 collect_button_rects(tree, |w, _cy| (190.0..230.0).contains(&w))
             }
-            // The three theme buttons: content-sized primary rects near the top of the sidebar.
             fn theme_button_centers(tree: &telar::ComponentList) -> Vec<(f32, f32)> {
                 collect_button_rects(tree, |w, cy| (40.0..140.0).contains(&w) && cy < 220.0)
                     .into_iter()
@@ -180,7 +166,6 @@ mod smoke {
                 telar::for_each_with_matrix(&cmds, |c, m| {
                     if let telar::DrawCommand::Rect { rect, style } = c {
                         let cy = m[5] + rect.y + rect.height / 2.0;
-                        // Button-shaped: tall enough to be a control, short enough not to be the panel behind them. Deliberately loose — the exact height is padding plus a line box, and the line box moves with the face the machine resolves.
                         if (18.0..45.0).contains(&rect.height)
                             && keep(rect.width, cy)
                             && let Some(p) = style.fill.as_ref()
@@ -193,7 +178,6 @@ mod smoke {
                 out
             }
 
-            // One runner cycle for a single event: begin (new_events), dispatch, end (flush).
             let feed = move |tree: &mut telar::ComponentList, ev: &Event| {
                 telar::begin_batch();
                 let _ = tree.on_event(ev);
@@ -218,12 +202,8 @@ mod smoke {
             };
 
             telar::set_theme(crate::core::theme::SandboxTheme::modern());
-            // The sidebar theme buttons now call `set_mode(id)`; register the appliers so a click installs the variant.
             crate::core::theme::register_modes();
-            // Tall enough that every nav button this test clicks stays well inside the viewport. At 900 the
-            // deepest target sat 13px above the bottom edge, so a platform whose font metrics pushed the rail
-            // down (Windows did, by 14px) dropped the click outside the window and left the previous section
-            // selected — which surfaced as a stale-looking fill rather than as a missed click.
+            // Tall enough that every nav button stays well inside the viewport. At 900 the deepest target sat 13px above the bottom edge, so a platform whose font metrics pushed the rail down dropped the click outside the window and left the previous section selected.
             const WINDOW_H: u32 = 1200;
             let mut tree = telar::ComponentList::new(crate::core::app::SandboxRoot.root());
             feed(
@@ -235,7 +215,6 @@ mod smoke {
             );
             assert!(nav_rects(&tree).len() >= 16, "need nav buttons laid out");
 
-            // Navigate to `target`: mouse travels down over the buttons above it (hover churn), then clicks it.
             let nav_to = |tree: &mut telar::ComponentList, target: usize| {
                 let rects = nav_rects(tree);
                 let (tx, ty, _) = rects[target];
@@ -250,7 +229,6 @@ mod smoke {
                 feed(tree, &rl(tx, ty));
                 let _ = tree.commands();
             };
-            // Switch theme by clicking its button (dispatched event — button borrowed mid-dispatch, the real path).
             let switch_theme = |tree: &mut telar::ComponentList, idx: usize| {
                 let btns = theme_button_centers(tree);
                 assert_eq!(btns.len(), 3, "expected 3 theme buttons, found {btns:?}");
@@ -265,15 +243,12 @@ mod smoke {
                 (a.r - b.r).abs() < 0.02 && (a.g - b.g).abs() < 0.02 && (a.b - b.b).abs() < 0.02
             };
 
-            // The user's exact sequence: modern→click4, pastel→click8, midnight→click15.
             nav_to(&mut tree, 4);
             switch_theme(&mut tree, 1); // pastel
             nav_to(&mut tree, 8);
             switch_theme(&mut tree, 2); // midnight
             nav_to(&mut tree, 15);
 
-            // Now sweep the themes: every inactive nav button must show the CURRENT theme's surface_alt, and
-            // the active one (idx 15) its primary — none frozen at a stale theme.
             let themes = [
                 (0usize, crate::core::theme::SandboxTheme::modern()),
                 (1, crate::core::theme::SandboxTheme::pastel()),
@@ -301,8 +276,6 @@ mod smoke {
         }
     }
 
-    // The active sidebar item is highlighted (one primary-blue nav button) and the highlight follows the
-    // selection — verified through the real interaction sequence (hover, press, release, move away).
     #[test]
     fn nav_highlight_follows_selection() {
         use platform_core::{PointerButton, PointerSource};
@@ -374,9 +347,7 @@ mod smoke {
         );
     }
 
-    // A hidden section (Transforms/Paths/Motion use a Canvas that paints at fixed coordinates) must not
-    // bleed its vector art over the visible section. After building, only one primary-blue rect from a
-    // Canvas-free source should sit in the content region; the strays are gone.
+    // A hidden section using a Canvas that paints at fixed coordinates must not bleed its vector art over the visible one.
     #[test]
     fn hidden_canvas_sections_do_not_bleed() {
         telar::set_theme(crate::core::theme::SandboxTheme::modern());
@@ -385,8 +356,6 @@ mod smoke {
             width: 1200,
             height: 900,
         });
-        // Overview (the initial section) has no primary-blue fills; any blue rect that composes to the
-        // content region (effective x ≳ 248) with a non-zero size is leaked Canvas art from a hidden section.
         let cmds = tree.commands();
         let mut leaked = 0;
         telar::for_each_with_matrix(&cmds, |c, cur| {
@@ -409,7 +378,6 @@ mod smoke {
         );
     }
 
-    // Each themed variant must resolve without a missing-token panic.
     #[test]
     fn all_theme_variants_build() {
         for make in [

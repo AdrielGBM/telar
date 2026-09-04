@@ -1,4 +1,4 @@
-//! RSX transpiler: converts a parsed [`RsxDocument`] AST into compilable Rust source code that depends on `telar::*`.
+//! RSX transpiler: converts a parsed [`RsxDocument`](telar_parser::RsxDocument) AST into compilable Rust source code that depends on `telar::*`.
 
 mod codegen;
 mod discovery;
@@ -41,14 +41,9 @@ mod tests {
 
     /// A class on a component call used to compile to nothing.
     ///
-    /// `[style]` is the DSL's vocabulary for paint, and until now it stopped at the component boundary: a
-    /// `box @squared` came out square and a `menu @squared` came out exactly as the catalogue drew it, with
-    /// no diagnostic to say the class had been read and thrown away. The only remaining lever was the theme's
-    /// radius, which moves every rounded thing in the application — so an app wanting one square trigger
-    /// either restyled everything or edited the catalogue.
+    /// `[style]` is the DSL's vocabulary for paint, and until now it stopped at the component boundary: a `box @squared` came out square and a `menu @squared` came out exactly as the catalogue drew it, with no diagnostic to say the class had been read and thrown away. The only remaining lever was the theme's radius, which moves every rounded thing in the application — so an app wanting one square trigger either restyled everything or edited the catalogue.
     ///
-    /// The class now lands on the callee's principal surface, and only the properties it names: what it does
-    /// not mention, the component still decides for itself.
+    /// The class now lands on the callee's principal surface, and only the properties it names: what it does not mention, the component still decides for itself.
     #[test]
     fn a_class_on_a_component_call_reaches_the_surface_it_paints() {
         let out = transpile_source(
@@ -69,9 +64,6 @@ mod tests {
             out.rust_code
         );
 
-        // A callee with no principal surface has nothing the class could honestly mean. It used to be
-        // dropped there in silence, on the word of a table; the setter is emitted now and rustc answers —
-        // "no method named `style`", on the author's own line.
         let plain = transpile_source(
             "[style]\n@squared\n    radius: 0\n\n[view]\nspinner @squared\n",
             "demo",
@@ -86,9 +78,7 @@ mod tests {
         );
     }
 
-    /// `keep:` is what turns a viewport into one whose position survives its tree being rebuilt; without it
-    /// the emission must not change at all, since every scroll that never asked to be kept is one whose
-    /// position belongs to the tree it was built with.
+    /// `keep:` is what turns a viewport into one whose position survives its tree being rebuilt; without it the emission must not change at all, since every scroll that never asked to be kept is one whose position belongs to the tree it was built with.
     #[test]
     fn a_scroll_keeps_its_position_only_when_it_is_asked_to() {
         let plain =
@@ -115,9 +105,7 @@ mod tests {
         );
     }
 
-    /// A bare name is the author's own binding, whatever a theme happens to call a field of its own — a
-    /// theme used to make every bare lowercase name a candidate token, so a `let` three lines above was
-    /// unreachable from the view and a binding named after a real token read the theme instead of itself.
+    /// A bare name is the author's own binding, whatever a theme happens to call a field of its own — a theme used to make every bare lowercase name a candidate token, so a `let` three lines above was unreachable from the view and a binding named after a real token read the theme instead of itself.
     #[test]
     fn a_bare_name_is_the_binding_not_a_theme_token() {
         let logic = "let muted = telar::Color::WHITE;\nlet size = 16.0;\n";
@@ -146,11 +134,10 @@ mod tests {
         );
     }
 
-    /// Only the zone's own bindings are in scope where the view is emitted: a `let` inside a nested `fn` body
-    /// is not, and claiming it would shadow a token the author does mean.
+    /// Only the zone's own bindings are in scope where the view is emitted: a `let` inside a nested `fn` body is not, and claiming it would shadow a token the author does mean.
     #[test]
     fn a_binding_nested_inside_a_fn_is_not_in_view_scope() {
-        // `props` is always first: the generated scope binds it whether `[logic]` says anything or not.
+        // `props` is always bound first, whether or not `[logic]` declares anything.
         let locals = scan_locals("let outer = 1.0;\nfn helper() {\n    let inner = 2.0;\n}\n");
         assert_eq!(locals, vec!["props".to_string(), "outer".to_string()]);
         assert_eq!(
@@ -165,9 +152,7 @@ mod tests {
         );
     }
 
-    /// An unrecognised first word in the view is a component call, so a `//` note used to compile into a call
-    /// to a component named `//`, with the words after it read as its attributes. It builds nothing now, and
-    /// it is carried into the generated file — which is what a diagnostic points at.
+    /// An unrecognised first word in the view is a component call, so a `//` note used to compile into a call to a component named `//`, with the words after it read as its attributes. It builds nothing now, and it is carried into the generated file — which is what a diagnostic points at.
     #[test]
     fn a_note_in_the_view_builds_nothing_and_is_carried_through() {
         let src = "[view]\ncol\n    // why this box is here\n    text \"hi\"\n";
@@ -190,7 +175,6 @@ mod tests {
 
     #[test]
     fn i18n_markup_text_emits_catalog_lookup() {
-        // A `t"key"` text node compiles to a reactive catalog lookup, not a literal string.
         let out = transpile_source("[view]\ntext t\"nav.title\"\n", "demo", None, None).unwrap();
         assert!(
             out.rust_code.contains("telar::i18n::translate"),
@@ -203,7 +187,6 @@ mod tests {
             out.rust_code
         );
         assert!(out.rust_code.contains("\"nav.title\""), "{}", out.rust_code);
-        // A plain (non-`t`) text node stays a literal, unaffected.
         let plain = transpile_source("[view]\ntext \"Hi\"\n", "demo", None, None).unwrap();
         assert!(
             !plain.rust_code.contains("i18n::translate"),
@@ -212,8 +195,7 @@ mod tests {
         );
     }
 
-    /// A catalogue lookup in a value position is the `t!` macro, spliced like any other Rust — the macro
-    /// validates its own key and reads the locale signal, so nothing here has to know it is a lookup at all.
+    /// A catalogue lookup in a value position is the `t!` macro, spliced like any other Rust — the macro validates its own key and reads the locale signal, so nothing here has to know it is a lookup at all.
     #[test]
     fn a_lookup_in_a_value_is_the_macro_spliced_verbatim() {
         let out = transpile_source(
@@ -239,27 +221,23 @@ mod tests {
 
     #[test]
     fn source_map_points_generated_logic_back_to_rsx() {
-        // rsx lines (1-based): 1 [logic], 2 derive, 3 struct, 4 body field, 5 close, 6 let, 8 [view], 9 col.
         let src = "[logic]\n#[derive(Props)]\npub struct Props {\n    pub body: &'static st,\n}\nlet count = signal(0i32);\n\n[view]\ncol\n";
         let result = transpile_source(src, "demo", None, None).unwrap();
         let lines: Vec<&str> = result.rust_code.lines().collect();
         assert_eq!(lines.len(), result.source_map.len());
 
-        // The field with the `st` typo maps back to its `.rsx` line (4 -> 0-based 3).
         let body_idx = lines
             .iter()
             .position(|l| l.contains("&'static st"))
             .expect("generated struct field");
         assert_eq!(result.source_map[body_idx], Some(3));
 
-        // The logic binding maps back to its `.rsx` line (6 -> 0-based 5).
         let let_idx = lines
             .iter()
             .position(|l| l.contains("signal"))
             .expect("generated logic line");
         assert_eq!(result.source_map[let_idx], Some(5));
 
-        // Boilerplate (the prelude `use`) has no source line.
         let use_idx = lines
             .iter()
             .position(|l| l.contains("use telar::*"))
@@ -269,31 +247,26 @@ mod tests {
 
     #[test]
     fn source_map_points_generated_view_back_to_rsx() {
-        // rsx lines (1-based): 1 [view], 2 col, 3 text, 4 row, 5 button (with closure).
         let src =
             "[view]\ncol\n    text \"hi\"\n    row\n        button on_press:(|| missing.set(1))\n";
         let result = transpile_source(src, "demo", None, None).unwrap();
         let lines: Vec<&str> = result.rust_code.lines().collect();
         assert_eq!(lines.len(), result.source_map.len());
 
-        // No source marker leaks into the generated output.
         assert!(!result.rust_code.contains("@RSX@"));
 
-        // The button's closure line (where `missing` would error) maps to the `btn` line (5 -> 4).
         let btn_idx = lines
             .iter()
             .position(|l| l.contains("missing.set(1)"))
             .expect("generated button closure");
         assert_eq!(result.source_map[btn_idx], Some(4));
 
-        // The text leaf maps to its own line (3 -> 2).
         let text_idx = lines
             .iter()
             .position(|l| l.contains("\"hi\""))
             .expect("generated text leaf");
         assert_eq!(result.source_map[text_idx], Some(2));
 
-        // A container's own closing constructor maps back to the container, not its last child: the row's `Container::new` resolves to the `row` line (4 -> 3) even though the btn nested inside.
         let row_ctor = lines
             .iter()
             .position(|l| l.contains("flex_row()"))
@@ -321,28 +294,22 @@ col @card
     #[test]
     fn relative_output_path_mirrors_tree_and_rejects_out_of_src() {
         let src = Path::new("/proj/src");
-        // Nested file mirrors its location relative to src/.
         assert_eq!(
             relative_output_path(Path::new("/proj/src/sections/cards.rsx"), src),
             Some(PathBuf::from("sections/cards.rs"))
         );
-        // Root-level file stays at the output root.
         assert_eq!(
             relative_output_path(Path::new("/proj/src/counter.rsx"), src),
             Some(PathBuf::from("counter.rs"))
         );
-        // Out-of-src files have no mirror — flattening their absolute path would escape the output root.
         assert_eq!(
             relative_output_path(Path::new("/proj/examples/foo.rsx"), src),
             None
         );
-        // src/ itself is not a file.
         assert_eq!(relative_output_path(src, src), None);
     }
 
-    /// A prop that carries both `#[props(into)]` and an inline `= expr` keeps them both. The derive reads
-    /// one `#[props]` per field, so dropping the default made the prop required and every call site that
-    /// left it off stopped building — with an error naming the prop, but never the declaration that lost it.
+    /// A prop that carries both `#[props(into)]` and an inline `= expr` keeps them both. The derive reads one `#[props]` per field, so dropping the default made the prop required and every call site that left it off stopped building — with an error naming the prop, but never the declaration that lost it.
     #[test]
     fn an_inline_default_survives_the_attribute_beside_it() {
         let src = "[logic]\npub struct Props {\n    #[props(into)]\n    pub tint: Reactive<Color> = Reactive::of(|| Color::WHITE),\n}\n\n[view]\ncol\n";
@@ -360,10 +327,8 @@ col @card
         assert!(code.contains("pub fn counter(props: CounterProps, children: Children)"));
         assert!(code.contains("fn style_card() -> LayoutStyle"));
         assert!(code.contains("move || format!(\"Count: {}\", { count.get() })"));
-        // `button` is now a widget component call, not the removed `Button::new` builtin.
         assert!(code.contains("button(ButtonProps::props()"));
         assert!(code.contains(".label(\"Increment\")"));
-        // Its `fill` is a reactive colour closure, so a theme switch repaints it.
         assert!(
             code.contains(
                 ".fill(Reactive::of({ let theme = theme.clone(); move || theme.get().primary }))"
@@ -375,7 +340,7 @@ col @card
         assert!(code.contains("Ok(Box::new(__col_0))"));
     }
 
-    // Regression for the F13 fix: a type-annotated `let count: RwSignal<i32> = signal(...)` was skipped by the old `let count =` prefix match, so the later `move` closure's clone was never emitted and it captured `count` by move instead — breaking any later use of `count` in the view.
+    // Regression: a type-annotated `let count: RwSignal<i32>` was missed by the old `let count =` prefix match, so no clone was emitted and the closure captured `count` by move.
     #[test]
     fn move_clone_emitted_for_type_annotated_signal() {
         let src = "[logic]\nlet count: RwSignal<i32> = signal(0i32);\nlet doubled = memo(move || count.get() * 2);\n[view]\ntext \"hi\"\n";
@@ -385,9 +350,7 @@ col @card
         assert!(code.contains("let doubled = memo(move || count_rsx_mv.get() * 2);"));
     }
 
-    // A `move` closure that is a call argument on a continuation line (inside an unclosed `(`) must have its
-    // signal clone wrapped in a block, NOT injected as a preceding `let` — that would land inside the argument
-    // list and be invalid Rust (regression from the hyprshell `watch(..)` migration).
+    // Regression: inside an unclosed call argument the clone must be block-wrapped, not emitted as a preceding `let` — that would land in the argument list and not parse.
     #[test]
     fn move_clone_in_call_arg_closure_is_block_wrapped() {
         let src = "[logic]\nlet s = signal(0i32);\nsetup(\n    move || s.set(1),\n);\n[view]\ntext \"x\"\n";
@@ -402,10 +365,7 @@ col @card
         );
     }
 
-    // Regression (hyprshell battery module): a `move` closure whose line contains a signal's name ONLY
-    // inside a string literal must not trip the `[logic]` clone pass — no spurious clone (which would
-    // borrow a value already moved into an earlier closure), and the string left byte-for-byte intact
-    // (the old textual rewrite corrupted `"battery-charging"` into `"battery-charging_rsx_mv"`).
+    // Regression: a signal name appearing only inside a string literal must not trip the clone pass, and the literal must survive byte-for-byte (it was corrupted into `"battery-charging_rsx_mv"`).
     #[test]
     fn logic_clone_pass_ignores_signal_names_inside_string_literals() {
         let src = "[logic]\nlet charging = signal(false);\nlet view = charging.read_only();\nlet glyph = memo(move || if view.get() { \"battery-charging\" } else { \"battery\" });\n[view]\ntext \"{$glyph}\" size:12\n";
@@ -420,8 +380,6 @@ col @card
         );
     }
 
-    // `self:center|start|end|stretch` maps to the matching per-child cross-axis override, so a fixed-size
-    // child (e.g. a square icon chip) can stay centered instead of stretching to the parent's cross size.
     #[test]
     fn self_alignment_maps_to_align_self() {
         let src = "[view]\ncol\n    box self:center width:20 height:20\n    box self:stretch\n    text \"x\"\n";
@@ -436,8 +394,7 @@ col @card
         );
     }
 
-    /// A preview of a component that reads ambient state needs that state seeded first, and the seeding is not
-    /// the same for every preview of the same component — that is the whole point of naming one per block.
+    /// A preview of a component that reads ambient state needs that state seeded first, and the seeding is not the same for every preview of the same component — that is the whole point of naming one per block.
     #[test]
     fn a_preview_fixture_runs_before_the_component_is_built() {
         let src = "[view]\ntext \"x\"\n\n[preview \"Charging\" fixture:mock_battery]\ndemo\n\n[preview \"Plain\"]\ndemo\n";
@@ -457,10 +414,7 @@ col @card
         );
     }
 
-    /// `surface:WxH` turns a preview from a tree into a window: the entry carries the size the compositor would
-    /// give it and, with `animate`, the enter transition its root plays. A size that does not parse is named
-    /// where it was written rather than quietly falling back to a tree, which would answer a question the
-    /// author never asked.
+    /// `surface:WxH` turns a preview from a tree into a window: the entry carries the size the compositor would give it and, with `animate`, the enter transition its root plays. A size that does not parse is named where it was written rather than quietly falling back to a tree, which would answer a question the author never asked.
     #[test]
     fn a_preview_can_declare_the_surface_it_is() {
         let src = "[view]\ntext \"x\"\n\n[preview \"Float\" surface:360x240 animate]\ndemo\n\n[preview \"Tree\"]\ndemo\n";
@@ -486,23 +440,18 @@ col @card
 
     #[test]
     fn section_and_heading_resolve_as_widget_components() {
-        // `section`/`heading` are no longer built-in tags: they resolve as component calls into the
-        // component catalogue (their bodies live in `ui-components`, not the transpiler).
         let src = "[view]\nsection title:\"Cards\"\n    heading text:\"Subtitle\"\n    text \"Body\" size:14 color:dark\n";
         let code = transpile_source(src, "cards", None, None)
             .unwrap()
             .rust_code;
-        // No inlined library components remain.
         assert!(
             !code.contains("Section::new") && !code.contains("Heading::new"),
             "section/heading must not reference removed components in:\n{code}"
         );
-        // `section` is a slotted component call carrying its title...
         assert!(
             code.contains("section(SectionProps::props().title(\"Cards\").build()"),
             "expected section component call in:\n{code}"
         );
-        // ...and `heading` a plain component call carrying its text.
         assert!(
             code.contains(
                 "heading(HeadingProps::props().text(\"Subtitle\").build(), Children::default())"
@@ -516,7 +465,6 @@ col @card
         let src = "[logic]\n#[derive(Props)]\npub struct Props { pub title: &'static str }\n[view]\ntext \"hi\"\n";
         let out = transpile_source(src, "card", None, None).unwrap();
         let code = &out.rust_code;
-        // Props struct is renamed and lifted before the fn declaration.
         assert!(
             code.contains("pub struct CardProps"),
             "struct should be renamed CardProps"
@@ -525,24 +473,19 @@ col @card
             code.contains("pub fn card(props: CardProps, children: Children)"),
             "fn signature must use CardProps"
         );
-        // The struct must appear before the fn, not inside it.
         let struct_pos = code.find("pub struct CardProps").unwrap();
         let fn_pos = code.find("pub fn card").unwrap();
         assert!(
             struct_pos < fn_pos,
             "Props struct must precede the function"
         );
-        // The derive attribute is preserved as-is (it references the macro, not the struct name).
         assert!(
             code.contains("#[derive(Props)]"),
             "derive attribute must be preserved"
         );
     }
 
-    /// A props struct is emitted as a sibling of the component function, so everything it needs has to reach
-    /// file scope with it: the imports its field types name, and the comment that says what it is. Both used to
-    /// stay behind in the function body — the first as a compile error at the struct, the second as a doc
-    /// comment describing whichever statement happened to follow it.
+    /// A props struct is emitted as a sibling of the component function, so everything it needs has to reach file scope with it: the imports its field types name, and the comment that says what it is. Both used to stay behind in the function body — the first as a compile error at the struct, the second as a doc comment describing whichever statement happened to follow it.
     #[test]
     fn a_props_struct_takes_its_imports_and_its_comment_with_it() {
         let src = "[logic]\nuse crate::model::Item;\n\n/// What the card shows.\npub struct Props {\n    pub item: Option<Item> = None,\n}\n\nlet item = props.item;\n[view]\ntext \"hi\"\n";
@@ -563,9 +506,7 @@ col @card
         );
     }
 
-    /// A field's own comment is prose, and prose has commas in it. Splitting the struct body on every comma
-    /// tore such a field away from its type and dropped it silently — the first sign was a missing field at a
-    /// call site, nowhere near the comment that caused it.
+    /// A field's own comment is prose, and prose has commas in it. Splitting the struct body on every comma tore such a field away from its type and dropped it silently — the first sign was a missing field at a call site, nowhere near the comment that caused it.
     #[test]
     fn a_comma_inside_a_comment_or_string_does_not_split_a_props_field() {
         let src = "[logic]\npub struct Props {\n    // One meter, never two, because a card is a glance.\n    pub meter: Option<f32> = None,\n    pub label: String = \"a, b\".to_string(),\n    pub tail: bool = false,\n}\n[view]\ntext \"hi\"\n";
@@ -581,22 +522,17 @@ col @card
 
     #[test]
     fn expr_spans_map_interpolation_verbatim() {
-        // `[logic]` line 2 declares `count`; `[view]` line 4 interpolates it.
         let src = "[logic]\nlet count = signal(0i32);\n[view]\ntext \"Count: {count}\"\n";
         let out = transpile_source(src, "demo", None, None).unwrap();
 
-        // No marker leaks into the generated Rust.
         assert!(!out.rust_code.contains("@RSX@"), "markers must be stripped");
 
-        // One span, for the `{count}` interpolation.
         assert_eq!(out.expr_spans.len(), 1, "expected one expression span");
         let span = &out.expr_spans[0];
 
-        // The span's source range is exactly `count` in the original `.rsx`.
         let rsx_frag = &src[span.rsx_start as usize..(span.rsx_start + span.len) as usize];
         assert_eq!(rsx_frag, "count");
 
-        // It maps byte-for-byte onto `count` in the generated Rust (char-boundary safe).
         let gen_frag =
             &out.rust_code[span.gen_start as usize..(span.gen_start + span.len) as usize];
         assert_eq!(gen_frag, "count");
@@ -605,7 +541,6 @@ col @card
 
     #[test]
     fn expr_spans_are_char_boundary_safe_with_multibyte() {
-        // A multi-byte literal precedes the interpolation; the span must still land on char boundaries in both source and generated (the byte-wise affine map would otherwise mis-slice / panic).
         let src = "[logic]\nlet count = signal(0i32);\n[view]\ntext \"caf\u{e9} {count}\"\n";
         let out = transpile_source(src, "demo", None, None).unwrap();
         assert_eq!(out.expr_spans.len(), 1);
@@ -630,7 +565,6 @@ col @card
         let out = transpile_source(src, "demo", None, None).unwrap();
         assert!(!out.rust_code.contains("@RSX@"));
 
-        // Each span must point at the identical fragment in both source and generated output.
         for span in &out.expr_spans {
             let rsx_frag = &src[span.rsx_start as usize..(span.rsx_start + span.len) as usize];
             let gen_frag =
@@ -658,7 +592,6 @@ col @card
             code.contains("my_widget(MyWidgetProps::props()"),
             "should call component fn with Props"
         );
-        // `my_widget` is unregistered (no sig), so its `label` is not a known text prop and stays a literal.
         assert!(
             code.contains(".label(\"hello\")"),
             "an unknown component's quoted attr stays a string literal"
@@ -671,17 +604,14 @@ col @card
         let src = "[logic]\n[view]\ncol\n    text \"x\"\n\n[preview \"Default\"]\ncounter\n";
         let out = transpile_source(src, "demo", None, None).unwrap();
         let code = &out.rust_code;
-        // A dedicated build fn per preview (so prop-taking components can be previewed)...
         assert!(
             code.contains("pub fn demo_preview_0() -> Result<Box<dyn LayoutItem>, LayoutError>"),
             "missing preview build fn:\n{code}"
         );
-        // ...whose body builds the preview's markup (here a bare component call)...
         assert!(
             code.contains("counter(CounterProps::props().build(), Children::default())?"),
             "preview body should call the component:\n{code}"
         );
-        // ...and a PreviewEntry pointing at that fn, not the component fn.
         assert!(
             code.contains("build: demo_preview_0"),
             "entry should point at the preview fn:\n{code}"
@@ -695,23 +625,19 @@ col @card
         let src = "[logic]\nlet count = signal(0i32);\n[view]\ncol\n    text \"{$count}\"\n    button on_press:(|| $count.update(|n| *n += 1))\n";
         let out = transpile_source(src, "demo", None, None).unwrap();
         let code = &out.rust_code;
-        // `$count` in interpolation is a read.
         assert!(
             code.contains("count.get()"),
             "interpolation read missing:\n{code}"
         );
-        // `$count` in a closure is the handle (the `$` is stripped).
         assert!(
             code.contains("count.update(|n| *n += 1)"),
             "closure handle missing:\n{code}"
         );
-        // The text and the button each clone `count`, so the two `move` closures own it independently.
         assert_eq!(
             code.matches("let count = count.clone();").count(),
             2,
             "expected one clone per capturing closure:\n{code}"
         );
-        // No `$` sigil leaks into the generated Rust.
         assert!(
             !code.contains('$'),
             "the `$` marker must not reach output:\n{code}"
@@ -720,7 +646,6 @@ col @card
 
     #[test]
     fn img_src_value_carries_an_expr_span() {
-        // The `src` attr is a verbatim Rust expression, so the analyzer must get an expr-span that maps back onto the `hero` identifier in source (this is what makes refs/rename precise in `[view]`).
         let src = "[logic]\nlet hero = 1i32;\n[view]\ncol\n    img src:hero width:100\n";
         let out = transpile_source(src, "demo", None, None).unwrap();
         let spans: Vec<&str> = out
@@ -732,7 +657,6 @@ col @card
             spans.contains(&"hero"),
             "img src value should map back to `hero`; got spans {spans:?}"
         );
-        // And the matching span must point at byte-identical text in the generated code.
         let span = out
             .expr_spans
             .iter()
@@ -768,7 +692,6 @@ col @card
 
     #[test]
     fn svg_color_signal_reads_reactively_and_clones_into_the_closure() {
-        // `color:$accent` must share `fill`/`stroke`'s `$ident` resolution (via `color_expr`) and clone the signal into the colour closure so the outer binding stays usable elsewhere, matching `box fill:$sig`.
         let src = "[logic]\nlet accent = signal(Color::WHITE);\n[view]\ncol\n    svg src:props.icon color:$accent width:24 height:24\n";
         let code = transpile_source(src, "demo", None, None).unwrap().rust_code;
         assert!(
@@ -781,9 +704,7 @@ col @card
         );
     }
 
-    /// `VirtualList` was built, exported, and referenced by nothing in the toolchain, so every `.rsx` list built
-    /// a widget per row up front and long lists were capped instead. It is opt-in rather than inferred: it needs
-    /// a fixed row height and an enclosing viewport, and neither is safe to assume of a loop.
+    /// `VirtualList` was built, exported, and referenced by nothing in the toolchain, so every `.rsx` list built a widget per row up front and long lists were capped instead. It is opt-in rather than inferred: it needs a fixed row height and an enclosing viewport, and neither is safe to assume of a loop.
     #[test]
     fn a_virtual_loop_builds_only_the_rows_its_scroll_shows() {
         let src = "[logic]\nlet rows = signal(Vec::<Row>::new());\n[view]\nscroll height:400\n    for row in $rows key row.id virtual row_height:32\n        text \"{row.name}\"\n";
@@ -803,8 +724,7 @@ col @card
         );
     }
 
-    /// A scroll with no virtual loop under it keeps the cheaper constructor: the viewport is handed over only
-    /// where something asked for it.
+    /// A scroll with no virtual loop under it keeps the cheaper constructor: the viewport is handed over only where something asked for it.
     #[test]
     fn an_ordinary_scroll_does_not_expose_a_viewport() {
         let src = "[logic]\nlet rows = signal(Vec::<Row>::new());\n[view]\nscroll height:400\n    for row in $rows\n        text \"{row.name}\"\n";
@@ -816,8 +736,7 @@ col @card
         );
     }
 
-    /// Outside a scroll there is no viewport to ask what is visible, so this is refused where it is written
-    /// rather than quietly building every row.
+    /// Outside a scroll there is no viewport to ask what is visible, so this is refused where it is written rather than quietly building every row.
     #[test]
     fn a_virtual_loop_outside_a_scroll_is_refused() {
         let src = "[logic]\nlet rows = signal(Vec::<Row>::new());\n[view]\ncol\n    for row in $rows virtual row_height:32\n        text \"x\"\n";
@@ -829,9 +748,7 @@ col @card
         );
     }
 
-    /// A reactive branch with several children was wrapped in a hard-coded `flex_column`, so a tab strip
-    /// written as `row > if $ws > icon icon icon` stacked its icons and overflowed the 30px row it lived in.
-    /// The cell now runs the way its host does.
+    /// A reactive branch with several children was wrapped in a hard-coded `flex_column`, so a tab strip written as `row > if $ws > icon icon icon` stacked its icons and overflowed the 30px row it lived in. The cell now runs the way its host does.
     #[test]
     fn a_reactive_branch_cell_inherits_its_host_axis() {
         let body = "\n    if $open\n        text \"a\"\n        text \"b\"\n";
@@ -852,9 +769,7 @@ col @card
         );
     }
 
-    /// A layout prop reading a signal makes the whole style reactive: the node keeps an effect that
-    /// re-resolves it, because a `LayoutStyle` is a value handed to the tree once — unlike paint, which is a
-    /// closure the renderer re-runs. Without this a dragged panel width changed the signal and nothing moved.
+    /// A layout prop reading a signal makes the whole style reactive: the node keeps an effect that re-resolves it, because a `LayoutStyle` is a value handed to the tree once — unlike paint, which is a closure the renderer re-runs. Without this a dragged panel width changed the signal and nothing moved.
     #[test]
     fn a_signal_sized_container_follows_its_signal() {
         let out = transpile_source(
@@ -889,9 +804,7 @@ col @card
         );
     }
 
-    /// An attribute a tag does not accept used to map to a builder call that did nothing, or to nothing at all —
-    /// `cols:` on a plain `box` compiled and had no effect. The table it checks is the one the analyzer completes
-    /// from, so what the editor never suggests is what the build now refuses.
+    /// An attribute a tag does not accept used to map to a builder call that did nothing, or to nothing at all — `cols:` on a plain `box` compiled and had no effect. The table it checks is the one the analyzer completes from, so what the editor never suggests is what the build now refuses.
     #[test]
     fn an_attribute_a_tag_does_not_take_is_named() {
         let out =
@@ -903,7 +816,6 @@ col @card
             out.rust_code
         );
 
-        // A component's keys are its `Props` fields, which rustc checks — the gate must not guess at them.
         let component =
             transpile_source("[view]\nmy_widget anything:4\n", "demo", None, None).unwrap();
         assert!(
@@ -913,13 +825,9 @@ col @card
         );
     }
 
-    /// The idiom `track_layout` is used for in Rust, reachable from the view: read where a node ended up so a
-    /// sibling can be drawn from it. With a transform transition it is the whole of a sliding indicator, which
-    /// is why the two landed together.
+    /// The idiom `track_layout` is used for in Rust, reachable from the view: read where a node ended up so a sibling can be drawn from it. With a transform transition it is the whole of a sliding indicator, which is why the two landed together.
     ///
-    /// **The copy is guarded**, and that is the difference between a rect somebody can build on and one
-    /// nothing can afford to read: the layout runs on every frame something moves and a signal notifies on
-    /// every write, so an unguarded mirror wakes each of its readers whether or not the rectangle moved.
+    /// **The copy is guarded**, and that is the difference between a rect somebody can build on and one nothing can afford to read: the layout runs on every frame something moves and a signal notifies on every write, so an unguarded mirror wakes each of its readers whether or not the rectangle moved.
     #[test]
     fn track_rect_mirrors_a_node_into_a_signal_and_keeps_the_effect() {
         let src = "[logic]\nlet active = signal(Rect::ZERO);\n[view]\ncol\n    box track_rect:$active width:20\n";
@@ -943,9 +851,7 @@ col @card
         );
     }
 
-    /// `cursor:` names a variant or works one out, because a box's shape is as often picked as it is written:
-    /// a strip that could run either way would otherwise have to be two components with one attribute between
-    /// them.
+    /// `cursor:` names a variant or works one out, because a box's shape is as often picked as it is written: a strip that could run either way would otherwise have to be two components with one attribute between them.
     #[test]
     fn a_cursor_is_a_keyword_or_the_expression_that_answers_with_one() {
         let named =
@@ -964,8 +870,7 @@ col @card
         );
     }
 
-    /// And a shape that reads something follows it, like a colour: the box takes a `Reactive<Cursor>`, so what
-    /// is written once is written once and what is read is read again.
+    /// And a shape that reads something follows it, like a colour: the box takes a `Reactive<Cursor>`, so what is written once is written once and what is read is read again.
     #[test]
     fn a_cursor_that_reads_a_signal_keeps_reading_it() {
         let out = transpile_source(
@@ -983,8 +888,7 @@ col @card
         );
     }
 
-    /// A number that is not a literal used to be dropped where it stood — no cursor call, no threshold, no
-    /// diagnostic — which is the one failure a value grammar must not have.
+    /// A number that is not a literal used to be dropped where it stood — no cursor call, no threshold, no diagnostic — which is the one failure a value grammar must not have.
     #[test]
     fn a_computed_number_reaches_the_property_it_was_written_on() {
         let out = transpile_source(
@@ -1009,8 +913,7 @@ col @card
         );
     }
 
-    /// The parens a `when:` needs to hold its spaces are the markup's delimiters, like everywhere else: left
-    /// on, they warn `unused_parens` in generated code the author cannot edit.
+    /// The parens a `when:` needs to hold its spaces are the markup's delimiters, like everywhere else: left on, they warn `unused_parens` in generated code the author cannot edit.
     #[test]
     fn a_lazy_condition_leaves_its_delimiters_behind() {
         let out = transpile_source(
@@ -1027,9 +930,7 @@ col @card
         );
     }
 
-    /// `shown:` is a layout property and not a block, which is the whole point of it: the subtree it takes out
-    /// of flow is still there, with its scroll where it was and its canvas measured — and it comes back
-    /// because the style says so, where a `display_none` written once could never be undone.
+    /// `shown:` is a layout property and not a block, which is the whole point of it: the subtree it takes out of flow is still there, with its scroll where it was and its canvas measured — and it comes back because the style says so, where a `display_none` written once could never be undone.
     #[test]
     fn shown_is_a_layout_value_that_re_resolves() {
         let out = transpile_source(
@@ -1050,9 +951,7 @@ col @card
         );
     }
 
-    /// A field that opens holding the keyboard, says who holds it, and can be given up — the three things a
-    /// field that stands in for something else needs, and the three that used to keep one in hand-written
-    /// Rust. `focus_id:` in particular is not something `[logic]` could do: it runs before the widget exists.
+    /// A field that opens holding the keyboard, says who holds it, and can be given up — the three things a field that stands in for something else needs, and the three that used to keep one in hand-written Rust. `focus_id:` in particular is not something `[logic]` could do: it runs before the widget exists.
     #[test]
     fn a_field_can_open_focused_say_so_and_be_given_up() {
         let out = transpile_source(
@@ -1078,9 +977,7 @@ col @card
         );
     }
 
-    /// A transform is read per frame from a closure the renderer already re-runs, so animating one costs a
-    /// repaint and no relayout — which is what lets `transition(…)` reach past paint without breaking the
-    /// invariant the whole design rests on. It is also the half of a sliding indicator that is not `track_rect`.
+    /// A transform is read per frame from a closure the renderer already re-runs, so animating one costs a repaint and no relayout — which is what lets `transition(…)` reach past paint without breaking the invariant the whole design rests on. It is also the half of a sliding indicator that is not `track_rect`.
     #[test]
     fn a_transform_can_be_transitioned() {
         let src = "[logic]\nlet x = signal(0.0f32);\n[view]\nbox translate_x:$x transition(translate_x 200ms)\n";
@@ -1096,8 +993,7 @@ col @card
         );
     }
 
-    /// The layout box stays out: animating it would put a layout pass in every frame of every transition, which
-    /// is a separate decision from this one.
+    /// The layout box stays out: animating it would put a layout pass in every frame of every transition, which is a separate decision from this one.
     #[test]
     fn transitioning_the_layout_box_is_still_refused() {
         let src = "[view]\nbox width:40 transition(width 200ms)\n";
@@ -1109,9 +1005,7 @@ col @card
         );
     }
 
-    /// The shape `if` could never express, and the reason 14 of hyprshell's 16 `widget "…"` escapes are icons:
-    /// three arms of different structure, a payload bound out of the matched variant, and a key that is the
-    /// payload's own identity rather than the variant — so re-arriving at the same picture does not rebuild.
+    /// The shape `if` could never express, and the reason 14 of hyprshell's 16 `widget "…"` escapes are icons: three arms of different structure, a payload bound out of the matched variant, and a key that is the payload's own identity rather than the variant — so re-arriving at the same picture does not rebuild.
     #[test]
     fn a_reactive_match_extracts_a_payload_and_keys_on_it() {
         let src = "[logic]\nlet state = signal(AssetState::Loading);\n[view]\ncol\n    match $state as s key s.as_ready().map(|svg| svg.id())\n        AssetState::Ready(svg)\n            svg src:svg\n        AssetState::Failed\n            box width:16 height:16\n        _\n            text \"…\"\n";
@@ -1131,8 +1025,7 @@ col @card
         );
     }
 
-    /// Without a key the fallback must be hashable whatever the matched type is, so it reconciles on the variant
-    /// — rebuilding when the shape changes and not when the payload does.
+    /// Without a key the fallback must be hashable whatever the matched type is, so it reconciles on the variant — rebuilding when the shape changes and not when the payload does.
     #[test]
     fn a_keyless_reactive_match_reconciles_on_the_variant() {
         let src = "[logic]\nlet state = signal(Mode::A);\n[view]\ncol\n    match $state\n        Mode::A\n            text \"a\"\n        _\n            text \"b\"\n";
@@ -1144,8 +1037,7 @@ col @card
         );
     }
 
-    /// A scrutinee with no `$` chooses its arm once, so it stays an ordinary Rust `match` — the same split `if`
-    /// and `for` already make between a construction-time branch and a reconciled one.
+    /// A scrutinee with no `$` chooses its arm once, so it stays an ordinary Rust `match` — the same split `if` and `for` already make between a construction-time branch and a reconciled one.
     #[test]
     fn a_match_without_a_signal_stays_a_construction_time_branch() {
         let src = "[view]\ncol\n    match props.kind\n        Kind::One\n            text \"one\"\n        _\n            text \"other\"\n";
@@ -1158,8 +1050,7 @@ col @card
         );
     }
 
-    /// `Svg::with_stroke` is how a theme draws every icon at one weight without editing the assets, and it was
-    /// reachable only from Rust — which is one of the two reasons a themed icon could not be a `.rsx` component.
+    /// `Svg::with_stroke` is how a theme draws every icon at one weight without editing the assets, and it was reachable only from Rust — which is one of the two reasons a themed icon could not be a `.rsx` component.
     #[test]
     fn svg_stroke_overrides_the_documents_own_weight() {
         let literal = transpile_source(
@@ -1220,7 +1111,6 @@ col @card
             code.contains("{ let show = show.clone(); move || show.get() }"),
             "the condition must read the signal through its own clone:\n{code}"
         );
-        // The build closure is `move`, so every signal its subtree reads has to be cloned in above it or the outer binding would be moved out of the rest of the view.
         assert!(
             code.contains("let count = count.clone();"),
             "the deferred subtree's signals must be cloned into the build closure:\n{code}"
@@ -1231,7 +1121,7 @@ col @card
         );
     }
 
-    // A signal read INSIDE a reactive branch used to be moved into the branch closure, so the same signal stopped being usable in the rest of the view — a move error in generated code the author never wrote.
+    // Regression: a signal read inside a reactive branch was moved into the branch closure, breaking later reads.
     #[test]
     fn a_reactive_if_clones_the_signals_its_branches_read() {
         let src = "[logic]\nlet show = signal(true);\nlet count = signal(0i32);\n[view]\ncol\n    if $show\n        text \"in branch {$count}\"\n    text \"outside {$count}\"\n";
@@ -1241,7 +1131,6 @@ col @card
             code.contains("let count = count.clone();"),
             "the branch closure must clone the signal it reads, not move it:\n{code}"
         );
-        // The condition keeps its own clone in the source closure; the two must not be conflated.
         assert!(
             code.contains("{ let show = show.clone(); move || vec![show.get()] }"),
             "the condition still clones separately:\n{code}"
@@ -1259,12 +1148,12 @@ col @card
         );
     }
 
-    // The loop variable is the closure's own parameter, so it must never appear in the prelude above it — that would name a binding which does not exist in the enclosing scope.
+    // The loop variable is the closure parameter, so a prelude clone would name a binding that does not exist.
     #[test]
     fn a_reactive_for_never_clones_its_own_loop_variable() {
         let src = "[logic]\nlet items = signal(vec![1i32, 2]);\n[view]\ncol\n    for n in $items\n        text \"{n}\"\n";
         let code = transpile_source(src, "demo", None, None).unwrap().rust_code;
-        // Only the line directly above the builder matters: `let n = n.clone();` *inside* it is the leaf emitter cloning the parameter into its own reactive closure, which is correct and long-standing.
+        // Only the line above the builder matters; the clone inside it is the leaf emitter cloning the parameter.
         let lines: Vec<&str> = code.lines().collect();
         let builder = lines
             .iter()
@@ -1276,7 +1165,6 @@ col @card
         );
     }
 
-    // A branch reading no signal needs no prelude at all, so the common case stays unwrapped.
     #[test]
     fn a_signal_free_reactive_branch_gets_no_clone_prelude() {
         let src = "[logic]\nlet show = signal(true);\n[view]\ncol\n    if $show\n        text \"static\"\n";
@@ -1303,7 +1191,6 @@ col @card
 
     #[test]
     fn svg_missing_src_falls_back_to_undefined_placeholder() {
-        // No `src` attr: falls back to an undefined `__svg_data` identifier, so rustc's "cannot find value" error lands on this `.rsx` line via the source map — the same diagnostic strategy `img` uses for a missing `src`.
         let src = "[view]\ncol\n    svg width:24 height:24\n";
         let out = transpile_source(src, "demo", None, None).unwrap();
         assert!(
@@ -1330,9 +1217,6 @@ col @card
 
     #[test]
     fn svg_color_token_resolves_through_theme() {
-        // `color:accent` must resolve the bare token through `use_theme` exactly like `color:`/`fill:`, so
-        // an icon tints from a theme token without a verbose `use_theme::<T>()` expression — and re-reads
-        // it each frame so a runtime theme switch recolors the glyph.
         let src = "[view]\ncol\n    svg src:props.icon color:$theme.accent width:18 height:18\n";
         let code = transpile_source(src, "demo", Some("NordTheme"), None)
             .unwrap()
@@ -1345,8 +1229,6 @@ col @card
 
     #[test]
     fn svg_src_signal_is_reactive_and_clones_the_handle() {
-        // `src:$glyph` must re-read the signal on every `view()` so an adaptive icon swaps its glyph when
-        // the bound state changes — not freeze the handle captured at construction (`let __src = …`).
         let src = "[logic]\nlet glyph = signal(props.icon.clone());\n[view]\ncol\n    svg src:$glyph color:theme.accent width:18 height:18\n";
         let code = transpile_source(src, "demo", Some("NordTheme"), None)
             .unwrap()
@@ -1363,8 +1245,6 @@ col @card
 
     #[test]
     fn svg_src_constant_expr_is_still_captured_once() {
-        // Regression: a `$`-free `src:expr` (a constant handle like `icon("bell")`) keeps the
-        // capture-once path so a plain asset is not needlessly re-read.
         let src = "[view]\ncol\n    svg src:icon(\"bell\") width:18 height:18\n";
         let code = transpile_source(src, "demo", None, None).unwrap().rust_code;
         assert!(
@@ -1376,7 +1256,6 @@ col @card
 
     #[test]
     fn transition_opacity_hoists_animated_and_wraps_reactive_read() {
-        // A `transition(opacity …)` over a reactive `opacity:$sig`: the Animated is hoisted into setup (built once), and the opacity closure re-targets it to the current value and reads it.
         let src = "[logic]\nlet fade = signal(1.0f32);\n[view]\nbox opacity:$fade transition(opacity 200ms ease-out)\n    text \"hi\"\n";
         let code = transpile_source(src, "demo", None, None).unwrap().rust_code;
         assert!(
@@ -1425,21 +1304,18 @@ col @card
     fn transition_multiple_properties_comma_separated() {
         let src = "[logic]\nlet fade = signal(1.0f32);\n[view]\nbox fill:#3d78fa opacity:$fade transition(opacity 200ms, fill 150ms linear)\n";
         let code = transpile_source(src, "demo", None, None).unwrap().rust_code;
-        // The fill transition uses linear...
         assert!(
             code.contains(
                 "motion::tween(std::time::Duration::from_millis(150), motion::Easing::Linear)"
             ),
             "missing fill linear tween:\n{code}"
         );
-        // ...and the opacity transition uses the default ease-out (no easing given).
         assert!(
             code.contains(
                 "motion::tween(std::time::Duration::from_millis(200), motion::Easing::EaseOut)"
             ),
             "missing opacity default-easing tween:\n{code}"
         );
-        // Two distinct Animated handles are hoisted.
         assert!(
             code.contains("let __transition_0 =") && code.contains("let __transition_1 ="),
             "expected two hoisted animations:\n{code}"
@@ -1468,7 +1344,6 @@ col @card
 
     #[test]
     fn transition_inside_for_loop_hoists_animated_per_iteration() {
-        // `for` is a construction loop (runs once per component instance, pushing one widget per item into `__children`), not a reactive list needing key-based identity; the `Animated` for a `transition(…)` inside its body must sit inside the loop's own per-iteration `let __sbox_N = { .. }` block, so a fresh, persistent handle is installed for every item.
         let src = "[logic]\nlet items = vec![1,2,3];\n[view]\ncol\n    for item in items.iter()\n        box fill:#3d78fa transition(fill 200ms)\n";
         let code = transpile_source(src, "demo", None, None).unwrap().rust_code;
         assert!(
@@ -1479,7 +1354,6 @@ col @card
             code.contains("let __transition_0 = motion::Animated::new(Color::rgba(61.0 / 255.0, 120.0 / 255.0, 250.0 / 255.0, 255.0 / 255.0), motion::tween(std::time::Duration::from_millis(200), motion::Easing::EaseOut));"),
             "missing hoisted Animated:\n{code}"
         );
-        // The hoist must be textually nested inside the `for` body (between the loop header and its own widget's `StyledContainer::new`), so it re-installs once per iteration at runtime.
         let for_pos = code
             .find("for item in items.iter() {")
             .expect("for loop emitted");
@@ -1497,7 +1371,6 @@ col @card
 
     #[test]
     fn transition_inside_for_loop_uses_distinct_counters_per_element() {
-        // Two elements with `transition(…)` in the same loop body are two distinct code sites, so the global `transition_count` must still hand out unique names for each — not one shared name reused per iteration.
         let src = "[logic]\nlet items = vec![1,2,3];\n[view]\ncol\n    for item in items.iter()\n        box fill:#3d78fa transition(fill 150ms)\n        box stroke:#111111 transition(stroke 150ms)\n";
         let code = transpile_source(src, "demo", None, None).unwrap().rust_code;
         assert!(
@@ -1526,7 +1399,6 @@ col @card
 
     #[test]
     fn static_opacity_still_supported_as_closure() {
-        // T-3.1: opacity is now a closure; a static value becomes a capture-free `|| 0.5`.
         let src = "[view]\nbox fill:#3d78fa opacity:0.5\n";
         let code = transpile_source(src, "demo", None, None).unwrap().rust_code;
         assert!(
@@ -1537,7 +1409,6 @@ col @card
 
     #[test]
     fn transition_fill_from_class_is_wired_without_false_error() {
-        // The fill comes from the `@card` class, not an inline attribute; it must still be animatable (no spurious "no matching value").
         let src = "[style]\n@card\n    fill: #3d78fa\n    radius: 12\n[view]\ncol @card transition(fill 150ms)\n    text \"x\"\n";
         let code = transpile_source(src, "demo", None, None).unwrap().rust_code;
         assert!(
@@ -1552,7 +1423,6 @@ col @card
 
     #[test]
     fn dynamic_radius_forwards_the_expression_not_zero() {
-        // A variable radius must reach the RectStyle (like fill/pad do), not silently collapse to zero.
         let code = transpile_source(
             "[logic]\nlet accent = signal(Color::WHITE);\n[view]\nbox fill:$accent radius:rad\n",
             "demo",
@@ -1565,7 +1435,6 @@ col @card
             code.contains("with_radius(BorderRadius::all(rad))"),
             "a variable radius should forward verbatim:\n{code}"
         );
-        // A numeric literal still renders as a float.
         let lit = transpile_source(
             "[logic]\nlet accent = signal(Color::WHITE);\n[view]\nbox fill:$accent radius:8\n",
             "demo",
@@ -1596,8 +1465,7 @@ col @card
         );
     }
 
-    /// The other 22 components' worth of existing markup: a plain width still emits nothing per-side, so the
-    /// stroke keeps deciding its own thickness.
+    /// The other 22 components' worth of existing markup: a plain width still emits nothing per-side, so the stroke keeps deciding its own thickness.
     #[test]
     fn a_plain_stroke_width_stays_uniform() {
         let code = paint_code("box stroke:#ff0000 stroke_width:2");
@@ -1607,9 +1475,7 @@ col @card
         );
     }
 
-    /// `key(…)` is the only spelling left that admits a space, so every value needing one has to arrive
-    /// through it. A consumer that only ever saw the quoted or comma-joined spelling would drop the
-    /// parenthesized one silently, which is the one failure this grammar cannot afford.
+    /// `key(…)` is the only spelling left that admits a space, so every value needing one has to arrive through it. A consumer that only ever saw the quoted or comma-joined spelling would drop the parenthesized one silently, which is the one failure this grammar cannot afford.
     #[test]
     fn the_parenthesized_form_reaches_every_multi_token_value() {
         let stroke = paint_code("box stroke:#ff0000 stroke_width(0 0 1 0)");
@@ -1640,8 +1506,7 @@ col @card
         );
     }
 
-    /// A logical side cannot be resolved here — which edge it lands on is a runtime question — so it goes out
-    /// through the helper that reads the writing direction inside the paint closure.
+    /// A logical side cannot be resolved here — which edge it lands on is a runtime question — so it goes out through the helper that reads the writing direction inside the paint closure.
     #[test]
     fn a_logical_side_defers_to_the_writing_direction() {
         let code = paint_code("box stroke:#ff0000 stroke_end:1");
@@ -1684,8 +1549,7 @@ col @card
         );
     }
 
-    /// A picture rounds its corners through the same resolver a box does, rather than through a narrower
-    /// parser that would emit `.with_radius(8 8 0 0)` and not compile.
+    /// A picture rounds its corners through the same resolver a box does, rather than through a narrower parser that would emit `.with_radius(8 8 0 0)` and not compile.
     #[test]
     fn a_picture_takes_the_same_radius_forms_a_box_does() {
         let code = paint_code("img src:\"a.png\" radius:\"8 8 0 0\"");
@@ -1713,8 +1577,7 @@ col @card
         );
     }
 
-    /// A compound callee gets the *recipe* for its children, not the children: they are built inside its
-    /// context, which is the whole reason a row can ask which menu it is in.
+    /// A compound callee gets the *recipe* for its children, not the children: they are built inside its context, which is the whole reason a row can ask which menu it is in.
     #[test]
     fn a_compound_component_receives_its_children_as_a_recipe() {
         let code = paint_code("menu label:\"Edit\"\n    item label:\"Undo\"\n    separator");
@@ -1728,9 +1591,7 @@ col @card
         );
     }
 
-    /// A `.rsx` can be compound too, and the markup names its context type by declaring one: a `Context`
-    /// struct in `[logic]` is what turns the component's children from arguments into a recipe. It was the
-    /// last thing keeping compound components to the built-in catalogue.
+    /// A `.rsx` can be compound too, and the markup names its context type by declaring one: a `Context` struct in `[logic]` is what turns the component's children from arguments into a recipe. It was the last thing keeping compound components to the built-in catalogue.
     #[test]
     fn a_context_struct_makes_an_rsx_component_compound() {
         let src = "[logic]\n#[derive(Clone)]\npub struct Context {\n    pub pick: u32,\n}\n\nlet ctx = Context { pick: 1 };\n\n[view]\ncol\n    children in:ctx\n";
@@ -1750,9 +1611,7 @@ col @card
             code.contains("let mut __slots = children.build_with(ctx)?;"),
             "run inside the context `[logic]` built, before the view drains it:\n{code}"
         );
-        // The body keeps the author's own bytes — an alias, not a rewrite. `[logic]` diagnostics land on the
-        // columns rustc gave them only because it is transpiled 1:1, and renaming in place would shift every
-        // column on the line by the length difference.
+        // An alias is rewritten, not renamed: renaming in place would shift every column rustc reports for the line.
         assert!(
             code.contains("use PickerContext as Context;")
                 && code.contains("    let ctx = Context { pick: 1 };"),
@@ -1760,8 +1619,7 @@ col @card
         );
     }
 
-    /// The recipe runs again on every open, so a signal it reads is cloned into it rather than moved — the
-    /// same treatment a reactive `if`/`for` branch gets, and for the same reason.
+    /// The recipe runs again on every open, so a signal it reads is cloned into it rather than moved — the same treatment a reactive `if`/`for` branch gets, and for the same reason.
     #[test]
     fn a_recipe_clones_the_signals_it_reads_instead_of_moving_them() {
         let code = transpile_source(
@@ -1793,7 +1651,6 @@ col @card
 
     #[test]
     fn fill_signal_reads_reactively_and_clones_into_the_closure() {
-        // No `transition(…)`: `fill:$accent` must still re-evaluate every time the styling closure runs, and must clone `accent` into that closure so the outer binding (declared in `[logic]`) stays usable elsewhere.
         let src = "[logic]\nlet accent = signal(Color::WHITE);\n[view]\nbox fill:$accent\n";
         let code = transpile_source(src, "demo", None, None).unwrap().rust_code;
         assert!(
@@ -1808,7 +1665,6 @@ col @card
 
     #[test]
     fn fill_signal_with_spring_transition_seeds_and_retargets_from_the_same_read() {
-        // The `Animated`'s initial value and every `retarget` call must both read through the same `accent.get()` expression — the transition mechanism wraps a `$signal` fill exactly like it already does theme colors.
         let src = "[logic]\nlet accent = signal(Color::WHITE);\n[view]\nbox fill:$accent transition(fill spring(170, 26))\n";
         let code = transpile_source(src, "demo", None, None).unwrap().rust_code;
         assert!(
@@ -1827,7 +1683,6 @@ col @card
 
     #[test]
     fn stroke_signal_reads_reactively_and_clones_into_the_closure() {
-        // `stroke:` shares `color_expr`/`rect_style_pieces` with `fill:`, so `$ident` must work identically.
         let src = "[logic]\nlet accent = signal(Color::WHITE);\n[view]\nbox stroke:$accent\n";
         let code = transpile_source(src, "demo", None, None).unwrap().rust_code;
         assert!(
@@ -1840,7 +1695,6 @@ col @card
 
     #[test]
     fn text_color_signal_reads_reactively_and_clones_into_the_closure() {
-        // `text`'s `color:` also shares `color_expr` (via `text_style`), confirming the `$ident` branch and its clone-wrapping generalize beyond fill/stroke.
         let src =
             "[logic]\nlet accent = signal(Color::WHITE);\n[view]\ntext \"hi\" color:$accent\n";
         let code = transpile_source(src, "demo", None, None).unwrap().rust_code;
@@ -1854,7 +1708,6 @@ col @card
 
     #[test]
     fn hex_theme_and_keyword_colors_are_unaffected_by_signal_support() {
-        // Regression guard: adding the `$ident` branch to `color_expr` must not touch the pre-existing hex/theme/keyword paths.
         let src =
             "[view]\nbox fill:#3d78fa stroke:transparent\n    text \"x\" color:$theme.primary\n";
         let code = transpile_source(src, "demo", Some("SandboxTheme"), None)
@@ -1869,19 +1722,16 @@ col @card
 
     #[test]
     fn quoted_svg_src_bakes_static_asset_at_build_time() {
-        // A quoted `src:"path"` resolves against `base_dir` and bakes the SVG into a shared `static LazyLock<Arc<SvgData>>`; `tint` still flows through its own dynamic closure.
         let base = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures");
         let src = "[view]\ncol\n    svg src:\"icon.svg\" color:Color::WHITE width:24 height:24\n";
         let code = transpile_source(src, "demo", None, Some(base.as_path()))
             .unwrap()
             .rust_code;
 
-        // The fixture is a solid-fill path, so it bakes to a vector display list, not a raster.
         assert!(
             code.contains("SvgData::from_baked_vector("),
             "quoted src should bake to a vector SvgData:\n{code}"
         );
-        // Baked once into a shared static, cloned per reactive call.
         assert!(
             code.contains(
                 "static BAKED_SVG_0: std::sync::LazyLock<std::sync::Arc<SvgData>> = std::sync::LazyLock::new(|| std::sync::Arc::new("
@@ -1892,17 +1742,14 @@ col @card
             code.contains("move || std::sync::Arc::clone(&BAKED_SVG_0)"),
             "data_fn should clone the shared Arc:\n{code}"
         );
-        // The baked expression uses bare type names (resolved via `use telar::*`), never qualified paths.
         assert!(
             !code.contains("::renderer_core::") && !code.contains("::geometry_core::"),
             "baked expression must use bare type names:\n{code}"
         );
-        // `tint` keeps its dynamic path.
         assert!(
             code.contains("move || Some(Color::WHITE)"),
             "tint should stay on its dynamic closure path:\n{code}"
         );
-        // No dynamic `__src` hoist for a baked asset.
         assert!(
             !code.contains("let __src ="),
             "baked asset must not hoist a dynamic __src:\n{code}"
@@ -1924,8 +1771,6 @@ col @card
         );
     }
 
-    // `for … key … gap:N` inside a container is a transparent gap fragment (spacing via a per-item margin),
-    // not a boxed list — the gap is the fragment's trailing `f32` arg.
     #[test]
     fn reactive_for_key_and_gap_is_transparent_gap_fragment() {
         let src = "[logic]\nlet items = signal(vec![1i32, 2, 3]);\n[view]\ncol\n    for n in $items key *n gap:8\n        text \"x\"\n";
@@ -1943,8 +1788,6 @@ col @card
         );
     }
 
-    // A keyless reactive `for` (no `key` clause) compiles by reconciling positionally instead of erroring.
-    // Inside a container with no `gap:`, it is a transparent fragment (`fragment_positional`).
     #[test]
     fn reactive_for_without_key_compiles_positionally() {
         let src = "[logic]\nlet items = signal(vec![1i32, 2, 3]);\n[view]\ncol\n    for n in $items\n        text \"x\"\n";
@@ -1959,7 +1802,6 @@ col @card
         );
     }
 
-    // A keyless reactive `for` with a `gap:N` clause inside a container is a transparent positional gap fragment.
     #[test]
     fn reactive_for_without_key_with_gap_is_transparent_positional_gap_fragment() {
         let src = "[logic]\nlet items = signal(vec![1i32, 2, 3]);\n[view]\ncol\n    for n in $items gap:8\n        text \"x\"\n";
@@ -1974,9 +1816,6 @@ col @card
         );
     }
 
-    // Outside a slot host — here inside an `overlay`, which takes a plain child vec — a reactive `for … gap:N`
-    // can't attach as a transparent fragment, so it falls back to the boxed `ReactiveList` that carries the gap
-    // on its own node (keyed or positional). This keeps the boxed gap path covered.
     #[test]
     fn reactive_for_gap_outside_slot_host_falls_back_to_a_boxed_list() {
         let keyed = "[logic]\nlet items = signal(vec![1i32, 2, 3]);\n[view]\noverlay\n    for n in $items key *n gap:8\n        text \"x\"\n";
@@ -1998,7 +1837,6 @@ col @card
         );
     }
 
-    // `line_height:N` and `letter_spacing:N` become the matching TextStyle builder calls.
     #[test]
     fn text_line_height_and_letter_spacing() {
         let src = "[view]\ntext \"Hi\" line_height:1.5 letter_spacing:2\n";
@@ -2013,7 +1851,6 @@ col @card
         );
     }
 
-    // `raster:pixel` reaches the style as the `Raster` axis, so a UI drawn on a pixel grid is writable in the DSL rather than only from Rust. An unknown value is ignored, like every other keyword attribute.
     #[test]
     fn text_raster_selects_the_glyph_grid() {
         let code = transpile_source("[view]\ntext \"Hi\" raster:pixel\n", "demo", None, None)
@@ -2032,8 +1869,6 @@ col @card
         );
     }
 
-    // A declarative `path d:"…"` compiles its SVG path-data into a `PathData` builder chain and draws it
-    // as a `Path` inside a sized `Canvas` (the layout wrapper, since `Path` is not a `LayoutItem`).
     #[test]
     fn path_tag_emits_pathdata_builder_and_widget() {
         let src = "[view]\npath d:\"M0,0 L10,0 Z\" fill:#ff0000 stroke:#000000 stroke_width:2 width:10 height:10\n";
@@ -2046,8 +1881,6 @@ col @card
             code.contains("Path::static_data(LayoutStyle::new()"),
             "draws a Path widget from the baked path data:\n{code}"
         );
-        // A path lays itself out now. It used to be wrapped in a `Canvas` to reach a layout at all — a
-        // primitive that could not be a child of a `col` without a widget in between.
         assert!(!code.contains("Canvas::new("), "{code}");
         assert!(
             code.contains("fill: Some(Paint::Solid(")
@@ -2061,7 +1894,6 @@ col @card
         );
     }
 
-    // Relative commands and Bézier curves resolve to absolute `PathData` builder calls at compile time.
     #[test]
     fn path_tag_relative_and_curves() {
         let src = "[view]\npath d:\"m10,10 l10,0 q5,-5 10,0 c1,1 2,2 3,0\" stroke:#111111 width:40 height:40\n";
@@ -2080,14 +1912,12 @@ col @card
             ),
             "relative cubic resolves to absolute:\n{code}"
         );
-        // A stroke with no fill leaves the fill None.
         assert!(
             code.contains("fill: None"),
             "no fill attr means PathStyle.fill is None:\n{code}"
         );
     }
 
-    // A `$signal` path fill is cloned into the reactive style closure so the outer handle stays usable.
     #[test]
     fn path_tag_signal_fill_is_cloned() {
         let src = "[logic]\nlet c = signal(Color::WHITE);\n[view]\npath d:\"M0,0 L10,10 Z\" fill:$c width:10 height:10\n";
@@ -2102,7 +1932,6 @@ col @card
         );
     }
 
-    // A malformed `d:` surfaces a compile_error! on the path's line rather than emitting broken code.
     #[test]
     fn path_tag_invalid_d_is_compile_error() {
         let src = "[view]\npath d:\"L10,10\" width:10 height:10\n";
@@ -2113,12 +1942,9 @@ col @card
         );
     }
 
-    /// The `for` that reads reactive state without the sigil that makes the loop follow it. It compiles to a
-    /// one-shot Rust loop, so the rows are built from whatever the memo held at construction and never hear
-    /// about the next value — a list that silently stops updating, with nothing in the source to point at.
+    /// The `for` that reads reactive state without the sigil that makes the loop follow it. It compiles to a one-shot Rust loop, so the rows are built from whatever the memo held at construction and never hear about the next value — a list that silently stops updating, with nothing in the source to point at.
     ///
-    /// The clause diagnostics next to this one did not catch it: they need a `key`/`gap`/`virtual` to fire,
-    /// and this shape carries none.
+    /// The clause diagnostics next to this one did not catch it: they need a `key`/`gap`/`virtual` to fire, and this shape carries none.
     #[test]
     fn a_for_that_reads_a_signal_without_the_sigil_is_a_compile_error() {
         let src = "[logic]\nlet rows = memo(move || vec![1, 2]);\n\n[view]\ncolumn\n    for r in rows.get().to_vec()\n        text \"{r}\"\n";
@@ -2129,8 +1955,7 @@ col @card
         );
     }
 
-    /// The counterweight, and the reason this cannot simply reject every `for` without a `$`: a loop over a
-    /// genuine constant is correctly non-reactive and must stay silent.
+    /// The counterweight, and the reason this cannot simply reject every `for` without a `$`: a loop over a genuine constant is correctly non-reactive and must stay silent.
     #[test]
     fn a_for_over_a_static_iterable_is_left_alone() {
         let src = "[logic]\nconst HINTS: [&str; 2] = [\"a\", \"b\"];\nlet rows = memo(move || vec![1]);\n\n[view]\ncolumn\n    for h in HINTS\n        text \"{h}\"\n";
@@ -2141,9 +1966,7 @@ col @card
         );
     }
 
-    /// `disabled:$signal` is threaded as a closure, not as a layout value: `width:$sig` re-runs the whole
-    /// `LayoutStyle` through `styled_by`, and whether a control is usable is not a layout property. The
-    /// closure is what lets the box re-read the flag instead of sampling it once at construction.
+    /// `disabled:$signal` is threaded as a closure, not as a layout value: `width:$sig` re-runs the whole `LayoutStyle` through `styled_by`, and whether a control is usable is not a layout property. The closure is what lets the box re-read the flag instead of sampling it once at construction.
     #[test]
     fn a_reactive_disabled_flag_is_re_read_rather_than_sampled() {
         let src = "[logic]\nlet ready = signal(false);\n\n[view]\nbox width:20 disabled:$ready on_press:(|| ())\n";
@@ -2162,8 +1985,7 @@ col @card
         );
     }
 
-    /// The HTML spelling: an attribute with no value is the assertion itself, as `absolute` and
-    /// `click_through` already are.
+    /// The HTML spelling: an attribute with no value is the assertion itself, as `absolute` and `click_through` already are.
     #[test]
     fn a_bare_disabled_flag_means_always() {
         let src = "[view]\nbox width:20 disabled on_press:(|| ())\n";
@@ -2191,9 +2013,7 @@ col @card
         assert!(code.contains(".maybe_on_alt_press("), "{code}");
     }
 
-    /// The one escape hatch a 1069-line application needed: a node paints wherever its commands say, so
-    /// without a clip an axis line runs straight over the header. `ClippedItem` existed the whole time; the
-    /// markup had no way to ask for it, so the `.rsx` dropped into Rust and spliced the widget back in.
+    /// The one escape hatch a 1069-line application needed: a node paints wherever its commands say, so without a clip an axis line runs straight over the header. `ClippedItem` existed the whole time; the markup had no way to ask for it, so the `.rsx` dropped into Rust and spliced the widget back in.
     #[test]
     fn a_clip_attribute_cuts_a_node_to_its_own_rect() {
         let src = "[view]\ncol\n    box width:100 height:100 clip\n";
@@ -2204,9 +2024,7 @@ col @card
         );
     }
 
-    /// A clip is a shape, and the shape is a Rust value: the one-way cut CSS cannot say (`overflow: hidden`
-    /// on one axis forces the other out of `visible`), and the radius the renderer's clip node always took
-    /// while the markup had no word for it.
+    /// A clip is a shape, and the shape is a Rust value: the one-way cut CSS cannot say (`overflow: hidden` on one axis forces the other out of `visible`), and the radius the renderer's clip node always took while the markup had no word for it.
     #[test]
     fn a_clip_is_the_shape_its_value_names() {
         let code = transpile_source(
@@ -2233,8 +2051,7 @@ col @card
         );
     }
 
-    /// The ring, spelled like the state paints beside it but composed rather than swapped — and declaring one
-    /// is what makes the box focusable, or it would be a style nothing could ever satisfy.
+    /// The ring, spelled like the state paints beside it but composed rather than swapped — and declaring one is what makes the box focusable, or it would be a style nothing could ever satisfy.
     #[test]
     fn a_focus_style_reaches_the_box() {
         let src = "[view]\nbox width:20 fill:#ffffff focus_style(stroke:#0066ff)\n";
@@ -2250,9 +2067,7 @@ col @card
         assert!(code.contains(".disabled_style("), "{code}");
     }
 
-    /// An effect bound in `[logic]` used to need the root widget to hold its handle, or it deregistered when
-    /// the component function returned. It belongs to an owner now, so the wrapper that did the holding is
-    /// gone — and so is the `compile_error!` that refused an effect nobody bound.
+    /// An effect bound in `[logic]` used to need the root widget to hold its handle, or it deregistered when the component function returned. It belongs to an owner now, so the wrapper that did the holding is gone — and so is the `compile_error!` that refused an effect nobody bound.
     #[test]
     fn an_effect_in_logic_needs_nothing_kept_for_it() {
         let src = "[logic]\nlet count = signal(0);\neffect(move || { let _ = count.get(); });\n\n[view]\ntext \"hi\"\n";
@@ -2261,10 +2076,7 @@ col @card
         assert!(!code.contains("compile_error!"), "{code}");
     }
 
-    /// A prop takes its value by ownership, so a `[logic]` binding named at two call sites used to be moved
-    /// by the first and unavailable to the second — answered, in every `.rsx` that hit it, by the author
-    /// writing `.clone()` at each one. The `$signal` arm has always done this for them; a binding without the
-    /// sigil is the same situation and now gets the same answer.
+    /// A prop takes its value by ownership, so a `[logic]` binding named at two call sites used to be moved by the first and unavailable to the second — answered, in every `.rsx` that hit it, by the author writing `.clone()` at each one. The `$signal` arm has always done this for them; a binding without the sigil is the same situation and now gets the same answer.
     #[test]
     fn a_logic_binding_passed_to_a_component_is_cloned_for_the_author() {
         let src = "[logic]\nlet items = vec![\"a\"];\n\n[view]\ncolumn\n    menu label:\"File\" items:items\n    menu label:\"Edit\" items:items\n";
@@ -2276,14 +2088,9 @@ col @card
         );
     }
 
-    /// The call site itself still moves: a binding named once is handed over once, and cloning there would
-    /// demand `Clone` of everything a `.rsx` forwards.
+    /// The call site itself still moves: a binding named once is handed over once, and cloning there would demand `Clone` of everything a `.rsx` forwards.
     ///
-    /// **What now clones is the region around it.** A component's children are a recipe that may run again,
-    /// so the recipe takes its own copy of every binding its subtree names — the one at the call site is
-    /// still a move, out of the recipe's copy. The consequence is worth stating: a binding that is not
-    /// `Clone` cannot be forwarded through a component's children at all, and must become an `Rc` or a
-    /// `Reactive` to cross that line.
+    /// **What now clones is the region around it.** A component's children are a recipe that may run again, so the recipe takes its own copy of every binding its subtree names — the one at the call site is still a move, out of the recipe's copy. The consequence is worth stating: a binding that is not `Clone` cannot be forwarded through a component's children at all, and must become an `Rc` or a `Reactive` to cross that line.
     #[test]
     fn a_logic_binding_is_moved_at_the_call_site_and_cloned_by_the_region() {
         let src = "[logic]\nlet save: Box<dyn Fn()> = Box::new(|| {});\n\n[view]\ncolumn\n    save_row on_press:save\n";
@@ -2298,9 +2105,7 @@ col @card
         );
     }
 
-    /// Inside one it must still be cloned: the builder closure runs again on every re-render and cannot
-    /// consume its capture. `captured_idents` does not cover a plain binding — it collects `$signal`s and
-    /// loop variables — so nothing else keeps it alive.
+    /// Inside one it must still be cloned: the builder closure runs again on every re-render and cannot consume its capture. `captured_idents` does not cover a plain binding — it collects `$signal`s and loop variables — so nothing else keeps it alive.
     #[test]
     fn a_logic_binding_inside_a_reactive_branch_is_still_cloned() {
         let src = "[logic]\nlet open = signal(true);\nlet save: Box<dyn Fn()> = Box::new(|| {});\n\n[view]\ncolumn\n    if $open\n        save_row on_press:save\n";
@@ -2311,8 +2116,7 @@ col @card
         );
     }
 
-    /// And only bindings: a name the logic zone never bound is a path, a constant or an ambient token, and
-    /// cloning it would be inventing a value rather than copying one.
+    /// And only bindings: a name the logic zone never bound is a path, a constant or an ambient token, and cloning it would be inventing a value rather than copying one.
     #[test]
     fn a_name_the_logic_zone_never_bound_is_still_passed_verbatim() {
         let src = "[logic]\nconst ITEMS: [&str; 1] = [\"a\"];\n\n[view]\ncolumn\n    menu label:\"File\" items:ITEMS\n";

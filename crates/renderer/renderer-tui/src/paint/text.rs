@@ -23,9 +23,7 @@ impl Painter<'_> {
         }
         let cols = cells.cols();
 
-        // The painter re-wraps rather than trusting what layout measured, at the cell width of the box it
-        // actually got. The two can differ by a column when a box was sized in pixels rather than by its
-        // content, and a paragraph laid out one column wider than it is drawn loses its last word.
+        // The painter re-wraps rather than trusting what layout measured, at the cell width of the box it actually got. The two can differ by a column when a box was sized in pixels, and a paragraph laid out one column wider than it is drawn loses its last word.
         let mut lines = std::mem::take(&mut self.lines);
         self.metrics
             .lines(text, cols as f32 * self.cell.width, style, &mut lines);
@@ -85,9 +83,7 @@ impl Painter<'_> {
         self.put_glyph(col, row, Grapheme::new(grapheme), color, attrs)
     }
 
-    /// Cells for a rect, mapped but *not* cut to the clip: alignment is measured against the box the text
-    /// was given, not against the part of it that happens to be visible. Individual cells are clip-tested
-    /// as they are written.
+    /// Cells for a rect, mapped but *not* cut to the clip: alignment is measured against the box the text was given, not against the part of it that happens to be visible. Individual cells are clip-tested as they are written.
     fn cells_of_unclipped(&self, rect: Rect) -> super::CellRect {
         let mapped = renderer_core::transform_clip_rect(self.matrix(), rect);
         super::CellRect::of(mapped, self.cell)
@@ -109,8 +105,7 @@ fn attrs_of(style: &TextStyle) -> Attrs {
     attrs
 }
 
-/// Walks a paragraph's span overrides in step with the graphemes being drawn, so each one costs a range
-/// check rather than a search.
+/// Walks a paragraph's span overrides in step with the graphemes being drawn, so each one costs a range check rather than a search.
 struct SpanCursor<'a> {
     spans: &'a [Span],
     base: (Paint, Attrs),

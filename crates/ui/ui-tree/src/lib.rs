@@ -1,3 +1,5 @@
+//! The widget tree: components, the render nodes they emit, and the reactive segments that keep a frame's command list up to date without re-rendering what did not change.
+
 mod component;
 mod element;
 mod overlay_dispatch;

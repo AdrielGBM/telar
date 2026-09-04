@@ -1,3 +1,5 @@
+//! A window with no window behind it: a size, a scale factor and nothing to present to.
+
 use std::sync::Arc;
 
 use platform_core::Window;
@@ -5,15 +7,9 @@ use raw_window_handle::{
     DisplayHandle, HandleError, HasDisplayHandle, HasWindowHandle, WindowHandle,
 };
 
-/// The one canonical offscreen window marker. It implements [`platform_core::Window`], so a single type
-/// satisfies both the renderer bound (which needs only the raw-window-handle traits) and the platform bound
-/// (`Window`). Its handles are always [`HandleError::Unavailable`] — there is no surface — so a renderer built
-/// against it must use its `new_headless` constructor, and `AppHandler` detects the unavailable handle to
-/// build an offscreen renderer. `request_redraw` is a no-op: [`crate::HeadlessPlatform`] drives frames
-/// explicitly rather than through a windowing system's redraw queue.
+/// The one canonical offscreen window marker. It implements [`platform_core::Window`], so a single type satisfies both the renderer bound (which needs only the raw-window-handle traits) and the platform bound (`Window`). Its handles are always [`HandleError::Unavailable`] — there is no surface — so a renderer built against it must use its `new_headless` constructor, and `AppHandler` detects the unavailable handle to build an offscreen renderer. `request_redraw` is a no-op: [`crate::HeadlessPlatform`] drives frames explicitly rather than through a windowing system's redraw queue.
 ///
-/// This replaces the ad-hoc `HeadlessWindow` that lived in `renderer-hardware` and the per-test `struct Fake;`
-/// markers that renderer tests each defined for themselves.
+/// This replaces the ad-hoc `HeadlessWindow` that lived in `renderer-hardware` and the per-test `struct Fake;` markers that renderer tests each defined for themselves.
 #[derive(Clone)]
 pub struct HeadlessWindow {
     inner: Arc<Inner>,

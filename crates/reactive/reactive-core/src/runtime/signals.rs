@@ -110,7 +110,6 @@ pub(crate) fn track_signal(id: SignalId) {
         if !rt.effects.contains_key(observer_id) {
             return;
         }
-        // Already subscribed during this run.
         if rt.effects[observer_id].sources.contains(&id) {
             return;
         }
@@ -136,7 +135,7 @@ pub(crate) fn notify_signal(id: SignalId) {
             return false;
         }
         rt.signals[id].version += 1;
-        // Copy subscriber ids into a reused scratch buffer rather than cloning a fresh Vec per write. We deliberately copy out (not mem::take) so the dead-subscriber cleanup below can still swap_remove from `subscribers` in place; taking it would make that cleanup operate on an empty Vec and the swap-back would clobber the removals.
+        // Copied into a reused scratch buffer rather than cloning a fresh Vec per write. Deliberately copied, not `mem::take`n, so the dead-subscriber cleanup below can still `swap_remove` in place.
         let mut subs = std::mem::take(&mut rt.subscriber_scratch);
         subs.clear();
         subs.extend_from_slice(&rt.signals[id].subscribers);
@@ -163,7 +162,6 @@ pub(crate) fn notify_signal(id: SignalId) {
             }
         }
 
-        // Drop dead subscribers inline; we already hold the runtime borrow.
         if !dead.is_empty() && rt.signals.contains_key(id) {
             let sig = &mut rt.signals[id];
             let mut i = 0;
@@ -178,7 +176,6 @@ pub(crate) fn notify_signal(id: SignalId) {
         }
 
         let should_flush = any_scheduled && rt.batch_depth == 0 && !rt.flushing;
-        // Return the buffer (with its grown capacity) for the next write to reuse.
         rt.subscriber_scratch = subs;
         should_flush
     });
@@ -195,9 +192,7 @@ mod tests {
 
     use super::*;
 
-    /// The hazard versioned keys exist for, written down. The arena hands the freed slot straight back, so
-    /// under a raw index the id that freed it addressed whatever moved in — and when that was the same type,
-    /// `with_signal_value` downcast cleanly and returned the wrong signal's value with nothing to notice.
+    /// The hazard versioned keys exist for, written down. The arena hands the freed slot straight back, so under a raw index the id that freed it addressed whatever moved in — and when that was the same type, `with_signal_value` downcast cleanly and returned the wrong signal's value with nothing to notice.
     #[test]
     fn the_id_that_freed_a_slot_cannot_read_what_moves_into_it() {
         let scope = crate::owner_scope();

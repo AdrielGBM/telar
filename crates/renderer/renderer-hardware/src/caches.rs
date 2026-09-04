@@ -1,24 +1,12 @@
 //! The caches and GPU resources every surface draws from, held once per thread rather than once per renderer.
 //!
-//! The same rule the CPU backend follows: what is addressed by *content* — a glyph, a tessellated path, a blurred
-//! shadow — answers the same question for every surface, so one copy serves all of them. What is addressed by
-//! *surface* — the swapchain, the per-frame instance buffers, the render pipelines that bake in a surface format
-//! and a sample count — stays on the renderer.
+//! The same rule the CPU backend follows: what is addressed by *content* — a glyph, a tessellated path, a blurred shadow — answers the same question for every surface, so one copy serves all of them. What is addressed by *surface* — the swapchain, the per-frame instance buffers, the render pipelines that bake in a surface format and a sample count — stays on the renderer.
 //!
-//! The GPU backend never got this treatment when the CPU one did, and the glyph atlas is where it showed: a
-//! `TextPipeline` per renderer meant a 2048×2048 RGBA atlas texture per renderer, **16 MiB of VRAM each**. A shell
-//! with nine surfaces held nine of them for the same few hundred glyphs. Unlike the CPU-side plane — `mmap`'d zero
-//! pages that cost nothing until written — a `wgpu::Texture` is a real allocation the moment it is created, and it
-//! never appears in RSS, which is why every measurement taken from `/proc` missed it entirely.
+//! The GPU backend never got this treatment when the CPU one did, and the glyph atlas is where it showed: a `TextPipeline` per renderer meant a 2048×2048 RGBA atlas texture per renderer, **16 MiB of VRAM each**. A shell with nine surfaces held nine of them for the same few hundred glyphs. Unlike the CPU-side plane — `mmap`'d zero pages that cost nothing until written — a `wgpu::Texture` is a real allocation the moment it is created, and it never appears in RSS, which is why every measurement taken from `/proc` missed it entirely.
 //!
-//! Sharing is safe because the device is: `SHARED_GPU` hands every renderer in the process the same `wgpu::Device`,
-//! so a texture or bind group made by one is valid for all.
+//! Sharing is safe because the device is: `SHARED_GPU` hands every renderer in the process the same `wgpu::Device`, so a texture or bind group made by one is valid for all.
 //!
-//! Process-global behind a lock, where the CPU backend gets away with a thread-local, because the GPU backend does
-//! not render where it was built: the runtime hands each surface a `telar-render` thread of its own, and a frame
-//! arrives on a thread that never ran the constructor. A thread-local there is not a cache — it is a per-thread
-//! copy, which is the duplication this module exists to remove, and reaching for one that was never initialised on
-//! this thread is a panic.
+//! Process-global behind a lock, where the CPU backend gets away with a thread-local, because the GPU backend does not render where it was built: the runtime hands each surface a `telar-render` thread of its own, and a frame arrives on a thread that never ran the constructor. A thread-local there is not a cache — it is a per-thread copy, which is the duplication this module exists to remove, and reaching for one that was never initialised on this thread is a panic.
 
 use renderer_cache::{Cache, Policy};
 use renderer_text::{ATLAS_SIZE, GlyphAtlas, TextShaper};
@@ -36,9 +24,7 @@ fn resolved_shadow_bytes(resolved: &(wgpu::Texture, wgpu::TextureView)) -> usize
 
 /// The one glyph atlas texture, its layout and the bind group that binds it.
 ///
-/// Every renderer holds clones of the layout and bind group — `wgpu`'s resources are `Arc` handles, so a clone is
-/// another name for the same GPU object, not another copy of it — and builds its own render pipeline against that
-/// layout, because a pipeline bakes in the surface format and sample count and those differ between surfaces.
+/// Every renderer holds clones of the layout and bind group — `wgpu`'s resources are `Arc` handles, so a clone is another name for the same GPU object, not another copy of it — and builds its own render pipeline against that layout, because a pipeline bakes in the surface format and sample count and those differ between surfaces.
 pub(crate) struct SharedAtlas {
     texture: wgpu::Texture,
     pub(crate) bind_group_layout: wgpu::BindGroupLayout,
@@ -120,17 +106,15 @@ impl SharedAtlas {
 
     /// Uploads the glyphs packed since the last call.
     ///
-    /// Draining the atlas's dirty rects is correct precisely because the texture is shared: whichever renderer
-    /// syncs first writes them into the one texture every other renderer samples. With a texture per renderer it
-    /// would not have been — the first to sync would have taken the rects and left the rest without the glyph.
+    /// Draining the atlas's dirty rects is correct precisely because the texture is shared: whichever renderer syncs first writes them into the one texture every other renderer samples. With a texture per renderer it would not have been — the first to sync would have taken the rects and left the rest without the glyph.
     pub(crate) fn sync(&self, queue: &Queue, atlas: &mut GlyphAtlas) {
-        // Collect the dirty rects into a local vec so the mutable borrow from `drain_dirty_rects()` is released before we read `atlas.pixels`.
+        // Collected locally so the mutable borrow from `drain_dirty_rects()` is released before reading `atlas.pixels`.
         let dirty: Vec<[u32; 4]> = atlas.drain_dirty_rects().collect();
         for [x, y, w, h] in dirty {
             if w == 0 || h == 0 {
                 continue;
             }
-            // Upload only the dirty sub-rectangle. By providing the source slice starting at the (x, y) pixel and using the FULL atlas row stride for bytes_per_row, wgpu reads `w` pixels per row for `h` rows starting at (x, y) — the correct sub-rect upload pattern.
+            // Only the dirty sub-rectangle: a source slice starting at (x, y) with the full atlas row stride makes wgpu read `w` pixels per row for `h` rows.
             let offset = ((y as usize * ATLAS_SIZE as usize) + x as usize) * 4;
             queue.write_texture(
                 wgpu::TexelCopyTextureInfo {
@@ -157,30 +141,21 @@ impl SharedAtlas {
 
 /// Uploaded image textures, their bind groups, and the layout and samplers those are built against.
 ///
-/// The layout and samplers move here with the cache because a bind group is only usable with the layout it was
-/// made from: sharing the entries without sharing what they were built against would hand one renderer a group
-/// belonging to another's pipeline. Together they are one set, so a wallpaper decoded once is uploaded once
-/// instead of once per surface — the same duplication the atlas had, a level down.
+/// The layout and samplers move here with the cache because a bind group is only usable with the layout it was made from: sharing the entries without sharing what they were built against would hand one renderer a group belonging to another's pipeline. Together they are one set, so a wallpaper decoded once is uploaded once instead of once per surface — the same duplication the atlas had, a level down.
 pub(crate) struct SharedImages {
     pub(crate) bind_group_layout: wgpu::BindGroupLayout,
     sampler_nearest: wgpu::Sampler,
     sampler_linear: wgpu::Sampler,
     textures: Cache<(u64, renderer_core::Raster), GpuImage>,
-    /// Bind groups over textures the application owns, kept apart from `textures` because neither of that
-    /// cache's rules holds here: it evicts by the bytes it is holding, and an app-owned texture costs it
-    /// none, while its entries keep their texture alive by RAII, which is not ours to do. A bind group does
-    /// keep the view it was built from alive, so an entry stays valid even if the application drops its
-    /// handle — leaving a plain count as the only bound needed. A `None` entry remembers a handle this
-    /// backend cannot read, so the refusal is decided and reported once rather than every frame.
+    /// Bind groups over textures the application owns, kept apart from `textures` because neither of that cache's rules holds here: it evicts by the bytes it is holding, and an app-owned texture costs it none, while its entries keep their texture alive by RAII, which is not ours to do. A bind group does keep the view it was built from alive, so an entry stays valid even if the application drops its handle — leaving a plain count as the only bound needed. A `None` entry remembers a handle this backend cannot read, so the refusal is decided and reported once rather than every frame.
     external: lru::LruCache<(u64, renderer_core::Raster), Option<wgpu::BindGroup>>,
 }
 
-/// How many app-owned handles are remembered at once, drawable or not. A window shows one or two
-/// viewports, not dozens; the cap exists so an application that mints a fresh id every frame leaks nothing.
+/// How many app-owned handles are remembered at once, drawable or not. A window shows one or two viewports, not dozens; the cap exists so an application that mints a fresh id every frame leaks nothing.
 const EXTERNAL_BIND_GROUPS: usize = 8;
 
 pub(crate) struct GpuImage {
-    // Keeps the GPU texture alive via RAII; held to ensure the texture is not dropped while the image is in use.
+    // Held so the GPU texture is not dropped while the image is in use.
     texture: wgpu::Texture,
     bind_group: wgpu::BindGroup,
 }
@@ -240,7 +215,7 @@ impl SharedImages {
             }
             let bind_group = match handle.as_any().downcast_ref::<crate::gpu::AppTexture>() {
                 Some(app) => Some(self.view_bind_group(device, &app.view, filter)),
-                // Built elsewhere and handed to a backend that cannot read it — another renderer's handle, or a hand-rolled `ExternalTexture`. Drawing nothing is the honest outcome, but doing it quietly is not: the command is well-formed and the region simply stays empty.
+                // Built elsewhere and handed to a backend that cannot read it. Drawing nothing is the honest outcome, but doing it quietly is not: the command is well-formed and the region simply stays empty.
                 None => {
                     tracing::warn!(
                         image_id = image.id,
@@ -249,7 +224,7 @@ impl SharedImages {
                     None
                 }
             };
-            // The failure is cached too, which is what keeps the warning to once per handle instead of once per frame, and leaves the LRU's cap as the bound on both.
+            // The failure is cached too, which keeps the warning to once per handle rather than once per frame.
             self.external.put(key, bind_group.clone());
             return bind_group;
         }
@@ -259,7 +234,7 @@ impl SharedImages {
 
         let gpu_image = self.upload(device, queue, image, filter);
         let bind_group = gpu_image.bind_group.clone();
-        // The bind group borrows the texture `gpu_image` owns, so a value the budget refused would be dropped here and leave the group pointing at nothing. Ratcheting the budget up to fit keeps correctness from depending on it.
+        // The bind group borrows the texture `gpu_image` owns, so a value the budget refused would be dropped here and leave the group pointing at nothing.
         self.textures
             .grow_to(texture_bytes(&gpu_image).saturating_mul(2));
         self.textures.insert(key, gpu_image);
@@ -389,12 +364,9 @@ impl SharedCaches {
 
 static CACHES: std::sync::OnceLock<std::sync::Mutex<SharedCaches>> = std::sync::OnceLock::new();
 
-/// Builds this thread's shared caches if no renderer has yet, and hands back the handles a renderer needs to draw
-/// from the shared atlas: its layout, to build a pipeline against, and its bind group, to bind at draw time.
+/// Builds this thread's shared caches if no renderer has yet, and hands back the handles a renderer needs to draw from the shared atlas: its layout, to build a pipeline against, and its bind group, to bind at draw time.
 ///
-/// Handles rather than a borrow because the text pipeline is built on a spawned thread, alongside the others, and
-/// a `RefCell` borrow cannot cross that. Both are `Arc`s inside, so the clones name the one atlas rather than
-/// copying it.
+/// Handles rather than a borrow because the text pipeline is built on a spawned thread, alongside the others, and a `RefCell` borrow cannot cross that. Both are `Arc`s inside, so the clones name the one atlas rather than copying it.
 pub(crate) fn atlas_handles(
     device: &Device,
     font: renderer_core::FontConfig,
@@ -434,16 +406,14 @@ fn with_caches<R>(f: impl FnOnce(&mut SharedCaches) -> R) -> Option<R> {
 
 /// Opens the shared caches for the duration of `f`.
 ///
-/// A no-op before the first renderer has built them, which no frame path can reach — every renderer takes its atlas
-/// handles at construction, and that is what builds the set. Returning rather than panicking keeps a stray caller
-/// from taking the process down over a census.
+/// A no-op before the first renderer has built them, which no frame path can reach — every renderer takes its atlas handles at construction, and that is what builds the set. Returning rather than panicking keeps a stray caller from taking the process down over a census.
 pub(crate) fn with_shared<R>(f: impl FnOnce(&mut SharedCaches) -> R) -> Option<R> {
     with_caches(f)
 }
 
 #[cfg(test)]
 mod send_probe {
-    // Can the shared set cross threads at all? A global behind a Mutex needs `Send`.
+    // A global behind a Mutex needs `Send`.
     #[test]
     fn shared_caches_is_send() {
         fn assert_send<T: Send>() {}

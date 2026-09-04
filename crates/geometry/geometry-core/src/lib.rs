@@ -1,3 +1,7 @@
+//! The plain geometric values every other crate speaks in: points, rects, colours, corner radii and affine transforms.
+//!
+//! Deliberately dependency-free, so layout, rendering and the widget tree can all name the same types without any of them depending on each other.
+
 mod border_radius;
 mod color;
 mod object_fit;

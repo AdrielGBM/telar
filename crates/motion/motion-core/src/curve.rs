@@ -1,3 +1,5 @@
+//! The two ways a value can travel: a [`Tween`] over a fixed duration, or a [`Spring`] under its own physics.
+
 use std::time::Duration;
 
 use crate::easing::Easing;

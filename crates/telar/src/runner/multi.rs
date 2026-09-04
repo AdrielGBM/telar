@@ -1,3 +1,5 @@
+//! The multi-surface runner: several windows on one UI thread, each with its own surface world.
+
 use std::collections::HashMap;
 use std::sync::Arc;
 
@@ -11,20 +13,14 @@ use crate::prefs::UserPrefs;
 
 use super::handler::build_app_handler;
 
-/// One surface's fonts, split out of its [`AppConfig`] until its handler is built: the faces to load, and the
-/// family among them its text shapes in.
+/// One surface's fonts, split out of its [`AppConfig`] until its handler is built: the faces to load, and the family among them its text shapes in.
 type SurfaceFonts = (Vec<std::path::PathBuf>, Vec<Vec<u8>>, Option<String>);
 
-/// Drive **N** independent rsx apps on a [`MultiSurfacePlatform`] backend — one reactive tree per surface, the
-/// shape a multi-window app or a desktop shell (a bar/OSD/notification per monitor) needs.
+/// Drive **N** independent rsx apps on a [`MultiSurfacePlatform`] backend — one reactive tree per surface, the shape a multi-window app or a desktop shell (a bar/OSD/notification per monitor) needs.
 ///
-/// Each surface `(id, config)` gets a fresh app from `app_factory(id)` and a paths provider from
-/// `paths_factory(id)`; the backend builds and drives that surface's handler. On the headless and out-of-tree
-/// backends each surface runs on its own thread, so it gets a fully isolated reactive/theme/overlay/focus world
-/// with no cross-talk. Blocks until all surfaces close.
+/// Each surface `(id, config)` gets a fresh app from `app_factory(id)` and a paths provider from `paths_factory(id)`; the backend builds and drives that surface's handler. On the headless and out-of-tree backends each surface runs on its own thread, so it gets a fully isolated reactive/theme/overlay/focus world with no cross-talk. Blocks until all surfaces close.
 ///
-/// This is the multi-surface analogue of [`crate::run_with_platform`]. It always uses the no-op dev plugin
-/// (`()`): the per-window devtools overlay is a single-surface concern.
+/// This is the multi-surface analogue of [`crate::run_with_platform`]. It always uses the no-op dev plugin (`()`): the per-window devtools overlay is a single-surface concern.
 pub fn run_multi_with_platform<P, A, PF, AF>(
     platform: P,
     surfaces: Vec<(SurfaceId, AppConfig)>,
@@ -39,8 +35,7 @@ where
     PF: Fn(SurfaceId) -> Arc<dyn AppPathsProvider> + 'static,
     AF: Fn(SurfaceId) -> A + 'static,
 {
-    // Split each surface's AppConfig into the WindowConfig the platform needs and the fonts the handler factory
-    // needs (keyed by SurfaceId, shared read-only across the surface threads).
+    // Split into the `WindowConfig` the platform needs and the fonts the handler factory needs, keyed by `SurfaceId` and shared read-only across the surface threads.
     let mut window_configs = Vec::with_capacity(surfaces.len());
     let mut fonts: HashMap<SurfaceId, SurfaceFonts> = HashMap::new();
     for (id, cfg) in surfaces {
@@ -73,19 +68,13 @@ where
             app_name.clone(),
             super::host::SurfaceRenderer::builtin(),
         );
-        // Single-thread multi-surface (M3): every surface shares this UI thread and the one reactive runtime,
-        // so each needs its own `Surface` world (layout/overlay/focus/...). The handler activates it around
-        // each lifecycle call (`AppHandler::enter_surface`). Built here, on the thread that drives the handler.
+        // Every surface shares this UI thread and the one reactive runtime, so each needs its own `Surface` world. Built here, on the thread that drives the handler.
         handler.surface = Some(ui_core::Surface::new());
         handler
     })
 }
 
-/// Build a driven-ready [`EventHandler`] for a **secondary surface** from an [`App`], boxed so a multi-surface
-/// backend can hold it alongside its statically-declared handlers. Mirrors what [`run_multi_with_platform`]'s
-/// factory produces — a handler carrying its own `ui_core::Surface` world — but for surfaces opened at runtime
-/// (via a `SurfaceHost`), so the backend can enqueue the handler into its single UI-thread loop instead of
-/// spawning a thread. Builds no renderer and touches no thread-local reactive state; the loop drives it.
+/// Build a driven-ready [`EventHandler`] for a **secondary surface** from an [`App`], boxed so a multi-surface backend can hold it alongside its statically-declared handlers. Mirrors what [`run_multi_with_platform`]'s factory produces — a handler carrying its own `ui_core::Surface` world — but for surfaces opened at runtime (via a `SurfaceHost`), so the backend can enqueue the handler into its single UI-thread loop instead of spawning a thread. Builds no renderer and touches no thread-local reactive state; the loop drives it.
 pub fn build_surface_handler<W, A>(
     app: A,
     paths: Arc<dyn AppPathsProvider>,
@@ -98,8 +87,7 @@ where
 {
     let prefs = UserPrefs::load(app_name, paths.as_ref());
     let backend = prefs.backend.unwrap_or_else(config::compile_time_backend);
-    // A surface opened at runtime carries its own font configuration like any other. It used to be handed
-    // none at all, which was survivable only while a process-wide global named the family behind its back.
+    // A surface opened at runtime carries its own font configuration like any other. It used to be handed none, which was survivable only while a process-wide global named the family behind its back.
     let AppConfig {
         window: _,
         font_paths,

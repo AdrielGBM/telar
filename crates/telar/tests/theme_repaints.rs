@@ -1,9 +1,6 @@
 //! Whether a theme change reaches a tree that is already mounted.
 //!
-//! The claim the whole theme design rests on: a widget reads a token inside its own `view`, so switching the
-//! theme re-runs exactly the segments that read it. Checked on both shapes of backend, because only one of
-//! them was ever exercised — a document wraps every box in an element, and an element subscribes to more than
-//! a rasterised box does.
+//! The claim the whole theme design rests on: a widget reads a token inside its own `view`, so switching the theme re-runs exactly the segments that read it. Checked on both shapes of backend, because only one of them was ever exercised — a document wraps every box in an element, and an element subscribes to more than a rasterised box does.
 
 use telar::{
     Color, Component, DrawCommand, EventResult, LayoutItem, LayoutStyle, LocalTree, RectStyle,
@@ -109,11 +106,7 @@ fn a_theme_change_repaints_a_tree_of_elements() {
     assert_eq!(after, Night.surface_alt(), "and follows the system");
 }
 
-/// The runner's own shape, which is where the ordering actually bites: a backend that can read the OS
-/// preference reports it *before* the tree mounts, so the first layout is already in the right theme — and it
-/// reports it inside the batch `new_events` opened, so nothing flushes until `about_to_wait` closes it. The
-/// tree is therefore built while the theme is still the default one, and only the flush afterwards switches
-/// it. Every box has to follow that.
+/// The runner's own shape, which is where the ordering actually bites: a backend that can read the OS preference reports it *before* the tree mounts, so the first layout is already in the right theme — and it reports it inside the batch `new_events` opened, so nothing flushes until `about_to_wait` closes it. The tree is therefore built while the theme is still the default one, and only the flush afterwards switches it. Every box has to follow that.
 #[test]
 fn a_tree_mounted_before_the_flush_still_takes_the_theme_the_flush_installs() {
     reset_layout_runtime();

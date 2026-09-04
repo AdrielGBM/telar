@@ -1,3 +1,5 @@
+//! [`SurfaceScaffold`]: a surface's own chrome — its scrim, its dismissal, and the content it frames.
+
 use std::rc::Rc;
 use std::time::Duration;
 
@@ -14,15 +16,12 @@ use ui_tree::{Component, EventResult, RenderNode};
 use crate::context::{compute_layout, mark_dirty, new_container, track_layout};
 use crate::layout_item::LayoutItem;
 
-/// The default scrim wash: ~35 % black over the content behind a drawer/modal. Rendered as a fill (not an
-/// opacity layer) so the panel above it stays fully opaque. Kept as the value a caller reaches for rather
-/// than being folded into the scaffold, because [`SurfaceScaffold`] now takes the colour itself.
+/// The default scrim wash: ~35 % black over the content behind a drawer/modal. Rendered as a fill (not an opacity layer) so the panel above it stays fully opaque. Kept as the value a caller reaches for rather than being folded into the scaffold, because [`SurfaceScaffold`] now takes the colour itself.
 pub const DEFAULT_SCRIM: Color = Color::rgba(0.0, 0.0, 0.0, 0.35);
 
 /// Which side of the viewport a [`SurfaceScaffold`] pins its panel to, and the direction it slides in from.
 ///
-/// [`Center`](Self::Edge::Center) is not an edge: it means the panel is centred on both axes and arrives by
-/// fading rather than sliding, which is what a launcher or a command palette wants.
+/// [`Center`](Edge::Center) is not an edge: it means the panel is centred on both axes and arrives by fading rather than sliding, which is what a launcher or a command palette wants.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Edge {
     Top,
@@ -43,8 +42,7 @@ pub(crate) enum EnterMotion {
     Fade,
 }
 
-/// The transform matrix and opacity for an enter animation at `progress` (0 = just opened, 1 = settled).
-/// A slide starts `SLIDE_DISTANCE` off its edge and eases to rest; both forms fade in.
+/// The transform matrix and opacity for an enter animation at `progress` (0 = just opened, 1 = settled). A slide starts `SLIDE_DISTANCE` off its edge and eases to rest; both forms fade in.
 pub(crate) fn enter_transform(motion: EnterMotion, progress: f32) -> ([f32; 6], f32) {
     let p = progress.clamp(0.0, 1.0);
     let opacity = p;
@@ -77,12 +75,9 @@ pub(crate) fn apply_enter(node: RenderNode, matrix: [f32; 6], opacity: f32) -> R
     }
 }
 
-/// The one progress value a surface's arrival and departure share: 0 is off its edge and transparent, 1 is
-/// settled. Opening runs it to 1; [`leave`](Self::leave) runs it back to 0, so the exit is the entrance
-/// reversed rather than a second animation that has to be kept in step with the first.
+/// The one progress value a surface's arrival and departure share: 0 is off its edge and transparent, 1 is settled. Opening runs it to 1; [`leave`](Self::leave) runs it back to 0, so the exit is the entrance reversed rather than a second animation that has to be kept in step with the first.
 ///
-/// A backend that can hold a closing surface on screen for [`duration`](Self::duration) is what makes the exit
-/// half visible; one that cannot simply never calls `leave`, and the surface disappears as it always did.
+/// A backend that can hold a closing surface on screen for [`duration`](Self::duration) is what makes the exit half visible; one that cannot simply never calls `leave`, and the surface disappears as it always did.
 #[derive(Clone)]
 pub struct SurfaceTransition {
     progress: Animated<f32>,
@@ -90,9 +85,7 @@ pub struct SurfaceTransition {
 }
 
 impl SurfaceTransition {
-    /// A transition already on its way in. Constructed away from its goal and retargeted at once, never *at*
-    /// it: an `Animated` born settled registers with no ticker, so nothing would schedule the frames that carry
-    /// it in.
+    /// A transition already on its way in. Constructed away from its goal and retargeted at once, never *at* it: an `Animated` born settled registers with no ticker, so nothing would schedule the frames that carry it in.
     pub fn enter() -> Self {
         let duration = Duration::from_millis(ENTER_MS);
         let progress = Animated::new(0.0, tween(duration, Easing::EaseOut));
@@ -100,8 +93,7 @@ impl SurfaceTransition {
         Self { progress, duration }
     }
 
-    /// Sends the surface back the way it came. The caller is responsible for keeping it on screen for
-    /// [`duration`](Self::duration) — otherwise this animates a surface that has already been torn down.
+    /// Sends the surface back the way it came. The caller is responsible for keeping it on screen for [`duration`](Self::duration) — otherwise this animates a surface that has already been torn down.
     pub fn leave(&self) {
         self.progress.retarget(0.0);
     }
@@ -116,13 +108,9 @@ impl SurfaceTransition {
     }
 }
 
-/// A full-viewport scaffold that positions a panel against a screen edge, optionally dims the area behind
-/// it, and dismisses on a press outside the panel. It is the reusable body of a drawer/modal: a shell
-/// mounts it as the root of a full-screen layer-shell surface, and a windowed app can mount it in-tree as
-/// an in-window portal — both get the same positioning and dismiss behaviour.
+/// A full-viewport scaffold that positions a panel against a screen edge, optionally dims the area behind it, and dismisses on a press outside the panel. It is the reusable body of a drawer/modal: a shell mounts it as the root of a full-screen layer-shell surface, and a windowed app can mount it in-tree as an in-window portal — both get the same positioning and dismiss behaviour.
 ///
-/// Like other full-surface roots it (re)computes its own layout on `WindowResized`; the runner synthesizes
-/// an initial one on resume, so the scaffold is laid out before its first frame.
+/// Like other full-surface roots it (re)computes its own layout on `WindowResized`; the runner synthesizes an initial one on resume, so the scaffold is laid out before its first frame.
 pub struct SurfaceScaffold {
     root: NodeId,
     panel_rect: Option<RwSignal<Rect>>,
@@ -135,10 +123,7 @@ pub struct SurfaceScaffold {
 }
 
 impl SurfaceScaffold {
-    /// `margin` is `(top, right, bottom, left)` and becomes padding on all four sides, so the panel floats off
-    /// every viewport edge rather than only the one it is pinned to. `scrim` paints behind the panel when set
-    /// (see [`DEFAULT_SCRIM`]); `dismiss` fires on a press outside it, and `None` means outside presses fall
-    /// through.
+    /// `margin` is `(top, right, bottom, left)` and becomes padding on all four sides, so the panel floats off every viewport edge rather than only the one it is pinned to. `scrim` paints behind the panel when set (see [`DEFAULT_SCRIM`]); `dismiss` fires on a press outside it, and `None` means outside presses fall through.
     pub fn new(
         edge: Edge,
         align: AlignItems,
@@ -197,8 +182,7 @@ impl SurfaceScaffold {
         self.animate(SurfaceTransition::enter())
     }
 
-    /// Drives the scaffold from a transition the *caller* owns, so it can also send the surface back out — see
-    /// [`SurfaceTransition::leave`].
+    /// Drives the scaffold from a transition the *caller* owns, so it can also send the surface back out — see [`SurfaceTransition::leave`].
     pub fn animate(mut self, transition: SurfaceTransition) -> Self {
         self.transition = Some(transition);
         self
@@ -263,10 +247,7 @@ impl Component for SurfaceScaffold {
                     _ => self.content.on_event(event),
                 }
             }
-            // Escape is the keyboard's version of a press outside, so a surface that answers to one answers to
-            // the other. Same rule as the in-window dismiss stack (see `dispatch_overlays`): the content gets
-            // first refusal, so a focused field blurs on the first press and the surface closes on the second,
-            // and backing out of an armed confirmation never takes the surface with it.
+            // Escape is the keyboard's press-outside, so a surface answering one answers the other. The content gets first refusal, so a focused field blurs on the first press and the surface closes on the second.
             Event::KeyPressed {
                 key: Key::Named(NamedKey::Escape),
                 ..
@@ -344,9 +325,7 @@ mod tests {
         assert_eq!(fired.get(), 1, "a press outside the panel dismisses");
     }
 
-    /// Escape is the keyboard's way out of a surface that a press outside would also close, and it only reaches
-    /// the surface when nothing inside wanted it: a focused field, an armed confirmation and an open dropdown
-    /// all cancel themselves first, and taking the whole surface down with them is the bug this guards.
+    /// Escape is the keyboard's way out of a surface that a press outside would also close, and it only reaches the surface when nothing inside wanted it: a focused field, an armed confirmation and an open dropdown all cancel themselves first, and taking the whole surface down with them is the bug this guards.
     #[test]
     fn escape_dismisses_only_what_the_panel_left_alone() {
         reset_layout_runtime();
@@ -414,7 +393,6 @@ mod tests {
         reset_layout_runtime();
         let fired = Rc::new(Cell::new(0u32));
         let f = fired.clone();
-        // Start-aligned top drawer, floated 10px off every edge: the 100-wide panel sits at x in [10, 110].
         let mut scaffold = SurfaceScaffold::new(
             Edge::Top,
             AlignItems::START,
@@ -450,7 +428,6 @@ mod tests {
         reset_layout_runtime();
         let fired = Rc::new(Cell::new(0u32));
         let f = fired.clone();
-        // Scrim but no dismiss handler: the surface dims what is behind it and swallows the press anyway.
         let mut scaffold = SurfaceScaffold::new(
             Edge::Top,
             AlignItems::CENTER,

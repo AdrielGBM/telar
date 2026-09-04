@@ -1,6 +1,4 @@
-//! The baked message model. Every type here is `const`-constructible so the build-time catalog baker can
-//! emit a whole catalog as a single `static CATALOG: Catalog = Catalog { .. };` — pure `&'static` data with
-//! no runtime parsing and no heap, mirroring how the svg baker emits `&'static` draw commands.
+//! The baked message model. Every type here is `const`-constructible so the build-time catalog baker can emit a whole catalog as a single `static CATALOG: Catalog = Catalog { .. };` — pure `&'static` data with no runtime parsing and no heap, mirroring how the svg baker emits `&'static` draw commands.
 
 use crate::plural::{PluralCategory, plural_category};
 
@@ -10,23 +8,18 @@ pub enum Part {
     Arg(&'static str),
 }
 
-/// A single translated string. `Plain` is the common placeholder-free case; `Format` carries the ordered
-/// literal/placeholder parts so parameters substitute by *name*, letting a translation reorder them freely
-/// relative to the source language.
+/// A single translated string. `Plain` is the common placeholder-free case; `Format` carries the ordered literal/placeholder parts so parameters substitute by *name*, letting a translation reorder them freely relative to the source language.
 pub enum Message {
     Plain(&'static str),
     Format(&'static [Part]),
-    /// One message per plural category. The baker guarantees [`PluralCategory::Other`] is present, so
-    /// selection always has a branch to land on however exotic the active locale's rules are.
+    /// One message per plural category. The baker guarantees [`PluralCategory::Other`] is present, so selection always has a branch to land on however exotic the active locale's rules are.
     Plural(&'static [(PluralCategory, Message)]),
 }
 
 impl Message {
-    /// Resolves a plural to the branch `locale` selects for the `count` argument; a non-plural message is
-    /// returned unchanged.
+    /// Resolves a plural to the branch `locale` selects for the `count` argument; a non-plural message is returned unchanged.
     ///
-    /// Selection lives here rather than in [`render`](Self::render) because it needs the active locale —
-    /// which category a count falls into is a property of the *language*, not of the message.
+    /// Selection lives here rather than in [`render`](Self::render) because it needs the active locale — which category a count falls into is a property of the *language*, not of the message.
     pub fn select(&self, locale: &str, args: &[(&str, &str)]) -> &Message {
         let Message::Plural(branches) = self else {
             return self;
@@ -43,9 +36,7 @@ impl Message {
             .unwrap_or(self)
     }
 
-    /// Renders the message, substituting each `Arg(name)` with the matching value from `args`. An argument
-    /// with no matching placeholder is ignored; a placeholder with no matching argument is left visible as
-    /// `{name}` so the gap surfaces instead of silently vanishing.
+    /// Renders the message, substituting each `Arg(name)` with the matching value from `args`. An argument with no matching placeholder is ignored; a placeholder with no matching argument is left visible as `{name}` so the gap surfaces instead of silently vanishing.
     pub fn render(&self, args: &[(&str, &str)]) -> String {
         match self {
             // Only the direct-call path: `translate` selects first. With no locale to choose with, `Other` is the honest fallback.
@@ -71,8 +62,7 @@ impl Message {
         }
     }
 
-    /// The placeholder names this message expects, in source order. Used by the build-time validator to
-    /// diagnose a `t!` call whose arguments don't match the message's placeholders.
+    /// The placeholder names this message expects, in source order. Used by the build-time validator to diagnose a `t!` call whose arguments don't match the message's placeholders.
     pub fn arg_names(&self) -> Vec<&'static str> {
         match self {
             Message::Plain(_) => Vec::new(),
@@ -99,19 +89,15 @@ impl Message {
     }
 }
 
-/// One key's translations: the message for every available locale. `messages` is kept sorted by locale so
-/// lookup can binary-search it.
+/// One key's translations: the message for every available locale. `messages` is kept sorted by locale so lookup can binary-search it.
 pub struct Entry {
     pub key: &'static str,
     pub messages: &'static [(&'static str, Message)],
 }
 
-/// A project's baked catalog: every translatable key with its per-locale messages, the set of available
-/// locales, and the fallback locale used when the active locale lacks a given key.
+/// A project's baked catalog: every translatable key with its per-locale messages, the set of available locales, and the fallback locale used when the active locale lacks a given key.
 ///
-/// The whole value is immutable `&'static` data, so it is `Sync` and every `t!`/markup call site references
-/// it by path — there is no global install step and nothing outlives the dylib it was baked into, keeping
-/// hot reload safe (the same reason the svg baker references its `BAKED_SVG_N` statics by path).
+/// The whole value is immutable `&'static` data, so it is `Sync` and every `t!`/markup call site references it by path — there is no global install step and nothing outlives the dylib it was baked into, keeping hot reload safe (the same reason the svg baker references its `BAKED_SVG_N` statics by path).
 pub struct Catalog {
     pub locales: &'static [&'static str],
     pub default_locale: &'static str,
@@ -120,8 +106,7 @@ pub struct Catalog {
 }
 
 impl Catalog {
-    /// Resolves `key` for `locale`, falling back to [`Catalog::default_locale`] when the key exists but has no
-    /// message for the active locale. `None` only when the key is absent entirely.
+    /// Resolves `key` for `locale`, falling back to [`Catalog::default_locale`] when the key exists but has no message for the active locale. `None` only when the key is absent entirely.
     pub fn message(&self, key: &str, locale: &str) -> Option<&Message> {
         let entry = self
             .entries
@@ -185,7 +170,6 @@ mod tests {
             CATALOG.message("settings.title", "es").unwrap().render(&[]),
             "Ajustes"
         );
-        // A locale with no entry for the key falls back to the default locale.
         assert_eq!(
             CATALOG.message("settings.title", "fr").unwrap().render(&[]),
             "Settings"
@@ -198,7 +182,6 @@ mod tests {
         let en = CATALOG.message("battery.remaining", "en").unwrap();
         let es = CATALOG.message("battery.remaining", "es").unwrap();
         assert_eq!(en.render(&[("time", "5m")]), "5m remaining");
-        // Spanish reorders the placeholder relative to the literal — named substitution handles it.
         assert_eq!(es.render(&[("time", "5m")]), "quedan 5m");
     }
 

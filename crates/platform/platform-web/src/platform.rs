@@ -10,9 +10,7 @@ use crate::dom;
 use crate::map;
 use crate::window::WebWindow;
 
-// The queue is separate from the running app on purpose: a listener must be able to record an event while a
-// frame is running, and the browser can dispatch one synchronously from inside our own code — focusing an
-// element, for one. Sharing a cell with the running handler would make that a panic.
+// Separate from the running app on purpose: a listener must be able to record an event while a frame is running, and the browser can dispatch one synchronously from inside our own code. Sharing a cell with the running handler would make that a panic.
 thread_local! {
     static QUEUE: RefCell<Vec<Event>> = const { RefCell::new(Vec::new()) };
     static APP: RefCell<Option<App>> = const { RefCell::new(None) };
@@ -48,8 +46,7 @@ impl Drop for Listener {
 
 /// Asks for a frame. Idempotent within one turn of the browser's loop, so a burst of events costs one frame.
 ///
-/// This is what [`WebWindow::request_redraw`] and the process-global loop waker both reach, and the reason
-/// neither needs to hold anything: the scheduler is thread-local, and on this target there is one thread.
+/// This is what [`WebWindow::request_redraw`] and the process-global loop waker both reach, and the reason neither needs to hold anything: the scheduler is thread-local, and on this target there is one thread.
 pub fn request_frame() {
     FRAME.with(|frame| {
         let mut frame = frame.borrow_mut();
@@ -74,25 +71,21 @@ fn push(events: impl IntoIterator<Item = Event>) {
 }
 
 #[derive(Clone, Debug)]
+/// Which element the surface is hosted in, and how it is sized.
 pub struct WebPlatformConfig {
     /// A CSS selector for the element the app fills. `None` mounts on `<body>`.
     pub host: Option<String>,
-    /// Whether to give the host element keyboard focus once it is mounted. On by default: an app that
-    /// occupies the page expects to be typed into without being clicked first.
+    /// Whether to give the host element keyboard focus once it is mounted. On by default: an app that occupies the page expects to be typed into without being clicked first.
     pub autofocus: bool,
-    /// Whether to set the host's `touch-action` and `overscroll-behavior` so a drag inside the app does not
-    /// scroll or bounce the page. On by default; an app embedded in a scrolling document turns it off.
+    /// Whether to set the host's `touch-action` and `overscroll-behavior` so a drag inside the app does not scroll or bounce the page. On by default; an app embedded in a scrolling document turns it off.
     pub owns_gestures: bool,
     /// Whether the *surface* scrolls its own regions, rather than the app scrolling them by redrawing.
     ///
-    /// Set where the app is drawn as a document: the boxes that scroll are real scroll containers, and a
-    /// wheel the platform claimed for the app would be a wheel the compositor never sees.
+    /// Set where the app is drawn as a document: the boxes that scroll are real scroll containers, and a wheel the platform claimed for the app would be a wheel the compositor never sees.
     pub owns_scroll: bool,
     /// Whether a right-click belongs to the app rather than to the browser.
     ///
-    /// Set where the app draws pixels: there is nothing on a canvas the browser's own menu could act on — no
-    /// text to copy, no link to open, no image to save — so the only menu worth showing is the app's. A
-    /// document is the other case entirely, and taking that menu away there takes away the page.
+    /// Set where the app draws pixels: there is nothing on a canvas the browser's own menu could act on — no text to copy, no link to open, no image to save — so the only menu worth showing is the app's. A document is the other case entirely, and taking that menu away there takes away the page.
     pub owns_context_menu: bool,
 }
 
@@ -108,11 +101,10 @@ impl Default for WebPlatformConfig {
     }
 }
 
+/// The browser backend: a canvas, DOM listeners, and frames driven by `requestAnimationFrame`.
 pub struct WebPlatform {
     config: WebPlatformConfig,
-    /// The element to mount on, when the caller already resolved it. Whoever builds the renderer has to put
-    /// its canvas somewhere, so it resolves the host first and hands the same one over rather than letting
-    /// the two look it up independently and disagree.
+    /// The element to mount on, when the caller already resolved it. Whoever builds the renderer has to put its canvas somewhere, so it resolves the host first and hands the same one over rather than letting the two look it up independently and disagree.
     host: Option<web_sys::HtmlElement>,
 }
 
@@ -140,9 +132,7 @@ impl Platform for WebPlatform {
 
     /// Mounts the app and returns, leaving it running on the browser's loop.
     ///
-    /// Every other platform blocks here until the app closes. A browser has one thread and owns the loop, so
-    /// blocking would freeze the page: the app is handed to `requestAnimationFrame` and the listeners, and
-    /// this returns to whatever called `main`.
+    /// Every other platform blocks here until the app closes. A browser has one thread and owns the loop, so blocking would freeze the page: the app is handed to `requestAnimationFrame` and the listeners, and this returns to whatever called `main`.
     fn run<H: EventHandler<WebWindow> + 'static>(
         self,
         config: WindowConfig,
@@ -158,19 +148,15 @@ impl Platform for WebPlatform {
         let window = WebWindow::new(host.clone());
         let listeners = install_listeners(&host, &window, &self.config);
 
-        // A capture-free closure, so it satisfies the `Send + Sync` the waker is declared with. It reaches a
-        // thread-local, which on a target with one thread is the same thing as reaching the loop.
+        // A capture-free closure, so it satisfies the `Send + Sync` the waker is declared with. It reaches a thread-local, which on a target with one thread is the same thing as reaching the loop.
         platform_core::set_loop_waker(std::sync::Arc::new(request_frame));
-        // The other half: a document backend creates elements that notice things the platform cannot, and
-        // this is the way in for what they notice.
+        // The other half: a document backend creates elements that notice things the platform cannot, and this is the way in for what they notice.
         platform_core::set_event_sink(std::sync::Arc::new(|event| push([event])));
 
         install_frame_callback();
 
         handler.new_events();
-        // Delivered before the tree mounts, so its first layout is already in the right theme. The media
-        // query installed above reports only *changes*, and a page opened by someone whose system is already
-        // dark has no change to report — it drew light until they went and toggled the setting.
+        // Delivered before the tree mounts, so its first layout is already in the right theme. The media query reports only changes, and a page opened by someone already in dark mode has no change to report.
         if let Some(dark) = window.prefers_dark() {
             handler.on_event(Event::ColorSchemeChanged { dark }, &window);
         }
@@ -197,13 +183,11 @@ impl Platform for WebPlatform {
 fn prepare_host(host: &web_sys::HtmlElement, config: &WebPlatformConfig) {
     let style = host.style();
     if config.owns_gestures {
-        // Without these a drag inside the app pans the page under it, and a fling at the edge triggers the
-        // browser's own overscroll — both of which read as the app losing the gesture.
+        // Without these a drag inside the app pans the page under it, and a fling at the edge triggers the browser's own overscroll — both of which read as the app losing the gesture.
         let _ = style.set_property("touch-action", "none");
         let _ = style.set_property("overscroll-behavior", "contain");
     }
-    // Focusable but not in the tab order: the app manages focus within itself, and a page that embeds it
-    // should not gain a stop that lands on an opaque box.
+    // Focusable but not in the tab order: the app manages focus within itself, and a page that embeds it should not gain a stop that lands on an opaque box.
     if host.get_attribute("tabindex").is_none() {
         let _ = host.set_attribute("tabindex", "-1");
     }
@@ -261,15 +245,12 @@ fn install_listeners(
     {
         let window = window.clone();
         let owns_scroll = config.owns_scroll;
-        // Passive where the surface scrolls: a listener that might prevent the default is a listener the
-        // compositor has to wait for, which is exactly what takes a scroll off the fast path.
+        // Passive where the surface scrolls: a listener that might prevent the default is a listener the compositor has to wait for, which is exactly what takes a scroll off the fast path.
         listeners.push(listen(target, "wheel", owns_scroll, move |event| {
             let Ok(event) = event.dyn_into::<web_sys::WheelEvent>() else {
                 return;
             };
-            // The app scrolls its own panes, so the page must not scroll underneath them — unless the boxes
-            // that scroll are the surface's own, in which case the wheel is the surface's and claiming it
-            // here would mean nothing scrolled at all.
+            // The app scrolls its own panes, so the page must not scroll underneath them — unless the boxes that scroll are the surface's own, in which case the wheel is the surface's and claiming it here would mean nothing scrolled at all.
             if !owns_scroll {
                 event.prevent_default();
             }
@@ -294,11 +275,7 @@ fn install_listeners(
     for (name, focused) in [("focusin", true), ("focusout", false)] {
         let host = host.clone();
         listeners.push(listen(target, name, true, move |event| {
-            // Both bubble, so the host is told about every focus move *inside* it — and a backend whose
-            // output is a document fills it with real buttons and fields for focus to move between. Only
-            // focus crossing the host's own border is the window gaining or losing it: reporting the rest
-            // told the app the window had gone away, and every widget dutifully ended the gesture the click
-            // that moved the focus had just begun.
+            // Both bubble, so the host is told about every focus move inside it. Only focus crossing the host's own border is the window gaining or losing it: reporting the rest told the app the window had gone away, and every widget ended the gesture the click that moved focus had just begun.
             if let Some(event) = event.dyn_ref::<web_sys::FocusEvent>()
                 && let Some(other) = event.related_target()
                 && let Some(node) = other.dyn_ref::<web_sys::Node>()
@@ -319,8 +296,7 @@ fn install_listeners(
         push([Event::CursorLeft]);
     }));
 
-    // Only where the app has a menu of its own to show instead — see `owns_context_menu`. Swallowed
-    // everywhere, it left a page without the one thing every other page offers on a right-click.
+    // Only where the app has a menu of its own to show instead — see `owns_context_menu`. Swallowed everywhere, it left a page without the one thing every other page offers on a right-click.
     if config.owns_context_menu {
         listeners.push(listen(target, "contextmenu", false, move |event| {
             event.prevent_default();
@@ -372,12 +348,9 @@ fn on_pointer(
             let Some(button) = map::button_of(event.button()) else {
                 return;
             };
-            // Capture, so a drag that leaves the element keeps arriving — which is what a slider or a
-            // resize handle needs, and what the browser otherwise stops at the boundary.
+            // Capture, so a drag that leaves the element keeps arriving — which is what a slider or a resize handle needs, and what the browser otherwise stops at the boundary.
             let _ = host.set_pointer_capture(event.pointer_id());
-            // Only where the keyboard is somewhere else entirely. A document backend gives focus to the
-            // element the press landed on, and taking it straight back would leave the app focused and the
-            // box it just focused not.
+            // Only where the keyboard is somewhere else entirely. A document backend gives focus to the element the press landed on, and taking it straight back would leave the app focused and the box it just focused not.
             if !focus_is_inside(host) {
                 let _ = host.focus();
             }
@@ -395,8 +368,7 @@ fn on_pointer(
                 source,
             });
         }
-        // A cancelled pointer never comes back up, so the press is released where it was last seen rather
-        // than left held — a finger the browser took for a system gesture must not stick a button down.
+        // A cancelled pointer never comes back up, so the press is released where it was last seen rather than left held — a finger the browser took for a system gesture must not stick a button down.
         PointerKind::Cancel => {
             let _ = host.release_pointer_capture(event.pointer_id());
             events.push(Event::PointerReleased {
@@ -438,8 +410,7 @@ fn install_frame_callback() {
 
 /// One pass of the loop: drain what arrived, draw, and decide whether another is due.
 ///
-/// The app is taken out of its cell for the duration, so a listener the browser dispatches synchronously
-/// from inside a frame finds nothing to re-enter and simply queues its event for the next one.
+/// The app is taken out of its cell for the duration, so a listener the browser dispatches synchronously from inside a frame finds nothing to re-enter and simply queues its event for the next one.
 fn turn() {
     let Some(mut app) = APP.with(|app| app.borrow_mut().take()) else {
         return;

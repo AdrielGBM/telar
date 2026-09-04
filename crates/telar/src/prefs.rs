@@ -1,3 +1,5 @@
+//! User preferences persisted between runs: the chosen renderer, and the window's last geometry.
+
 use serde::{Deserialize, Serialize};
 use services_core::AppPathsProvider;
 use std::path::PathBuf;
@@ -5,6 +7,7 @@ use std::path::PathBuf;
 use crate::config::RendererBackend;
 
 #[derive(Serialize, Deserialize, Clone, Default)]
+/// What is remembered between runs: the chosen renderer, and the window's last geometry.
 pub struct UserPrefs {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub backend: Option<RendererBackend>,

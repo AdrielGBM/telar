@@ -1,3 +1,5 @@
+//! The runners: what turns a mounted tree, a platform and a renderer into a running application.
+
 #[cfg(target_os = "android")]
 mod android;
 #[cfg(all(
@@ -35,8 +37,7 @@ mod tui;
 #[cfg(all(feature = "web", target_arch = "wasm32"))]
 mod web;
 
-/// The window an app opens with: `App::window_config` outright replaces whatever the caller passed,
-/// including the `[telar.dev.window]` overrides. See [`dev_window::with_dev_overrides`] for why that order.
+/// The window an app opens with: `App::window_config` outright replaces whatever the caller passed, including the `[telar.dev.window]` overrides. See [`dev_window::with_dev_overrides`] for why that order.
 fn resolved_window<A: crate::app::App + ?Sized>(
     from_config: platform_core::WindowConfig,
     app: &A,
@@ -46,19 +47,13 @@ fn resolved_window<A: crate::app::App + ?Sized>(
 
 const FRAME_BUDGET: std::time::Duration = std::time::Duration::from_nanos(1_000_000_000 / 60);
 
-// How long after the last input the HW backend keeps issuing 1fps keepalive blits before letting the GPU
-// sleep, on top of the window still being focused. Long, because what it guards against is somebody walking
-// away from a window they left open, and what it must not do is punish somebody who paused to read: a screen
-// being read produces no frames at all, so timing this from the last *frame* slept while they were still
-// there and made the next key press wait for the GPU to clock back up.
+// Long, because what it guards against is somebody walking away from a window they left open, and what it must not do is punish somebody who paused to read: a screen being read produces no frames, so timing this from the last frame slept while they were still there.
 const IDLE_GRACE: std::time::Duration = std::time::Duration::from_secs(60);
 
-// The cadence of those keepalive blits. Enforced in `on_redraw` as well as reported by `about_to_wait`, because a platform may call `on_redraw` on every loop turn rather than only when a frame is due.
+// Enforced in `on_redraw` as well as reported by `about_to_wait`, because a platform may call `on_redraw` on every loop turn rather than only when a frame is due.
 const HW_KEEPALIVE_INTERVAL: std::time::Duration = std::time::Duration::from_secs(1);
 
-// F2: how many command buffers the UI thread keeps to refill instead of allocating a fresh Vec per frame.
-// Only the in-flight frame plus the one the render thread is consuming are ever live, so the free-list
-// stays tiny; a larger cap would only hold memory.
+// Only the in-flight frame and the one the render thread is consuming are ever live, so the free-list stays tiny; a larger cap would only hold memory.
 const COMMAND_BUF_POOL_CAP: usize = 3;
 
 #[cfg(target_os = "android")]

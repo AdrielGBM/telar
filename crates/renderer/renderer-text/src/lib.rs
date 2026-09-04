@@ -1,3 +1,5 @@
+//! Text: font resolution, shaping through cosmic-text, and the glyph atlas both backends sample.
+
 pub mod colr;
 pub mod fonts;
 mod measure;

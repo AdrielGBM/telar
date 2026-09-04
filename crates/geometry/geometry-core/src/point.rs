@@ -1,3 +1,6 @@
+//! A 2D point, and the arithmetic a transform needs on one.
+
+/// A 2D point in logical pixels.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Point {
     pub x: f32,

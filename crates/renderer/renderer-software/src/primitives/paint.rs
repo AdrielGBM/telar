@@ -1,3 +1,5 @@
+//! The blend helpers the glyph and shadow blits are written in.
+
 #[inline(always)]
 pub(crate) fn to_skia_color(color: renderer_core::Color) -> tiny_skia::Color {
     tiny_skia::Color::from_rgba(

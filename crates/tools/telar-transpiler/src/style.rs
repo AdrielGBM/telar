@@ -7,15 +7,12 @@ use telar_parser::{StyleClass, StyleSection};
 use crate::naming::style_function_name;
 use crate::registry;
 
-/// A number for a key [`crate::registry::value_kind`] describes, where a value the key cannot mean has
-/// already been reported on the attribute itself. What stands in its place only has to be *something*: the
-/// build stops before anything reads it.
+/// A number for a key [`crate::registry::value_kind`] describes, where a value the key cannot mean has already been reported on the attribute itself. What stands in its place only has to be *something*: the build stops before anything reads it.
 pub fn number_or(value: &str, fallback: &str) -> String {
     format_number(value).unwrap_or_else(|_| fallback.to_string())
 }
 
-/// A number in a position with no attribute of its own to carry a diagnostic — a nested `hover_style(…)`
-/// property — where the error has to travel inside the expression or not at all.
+/// A number in a position with no attribute of its own to carry a diagnostic — a nested `hover_style(…)` property — where the error has to travel inside the expression or not at all.
 pub fn number_or_error(value: &str) -> String {
     format_number(value)
         .unwrap_or_else(|message| format!("compile_error!({})", crate::view::rust_str(&message)))
@@ -27,8 +24,7 @@ pub enum PropCall {
     Call(String),
     /// Not a layout property — a paint or behaviour key its own emitter handles.
     Other,
-    /// A value this key cannot mean, and why. Reported on the attribute rather than dropped, which is the
-    /// whole difference between a misspelled key and a misspelled value having a diagnostic.
+    /// A value this key cannot mean, and why. Reported on the attribute rather than dropped, which is the whole difference between a misspelled key and a misspelled value having a diagnostic.
     Invalid(String),
 }
 
@@ -45,8 +41,7 @@ pub fn generate_style_section(section: &StyleSection, theme: Option<&str>) -> St
     out
 }
 
-/// What a class may carry beyond the layout keys: what a box paints with, and what flows down to the text
-/// below it. Anything else is a typo, and used to be dropped on the floor.
+/// What a class may carry beyond the layout keys: what a box paints with, and what flows down to the text below it. Anything else is a typo, and used to be dropped on the floor.
 fn is_style_key(key: &str) -> bool {
     crate::view::is_paint_key(key)
         || crate::registry::INHERITABLE_TEXT_KEYS.contains(&key)
@@ -55,11 +50,7 @@ fn is_style_key(key: &str) -> bool {
 
 fn generate_class_function(class: &StyleClass, theme: Option<&str>) -> String {
     let mut out = String::new();
-    // A class property has no element and so no attribute line; naming the class is what locates it.
-    //
-    // The *key* is checked here as well as the value, which an element's attributes get from
-    // `unknown_attr_errors` and a class never did: a class property nobody recognises is dropped on the
-    // floor, so a renamed key goes on compiling and quietly stops laying the class out.
+    // A class property has no attribute line, so the class name is what locates it. The key is checked here as well as the value: an unrecognised one is otherwise dropped, and a renamed key silently stops laying out.
     for prop in &class.props {
         let message = match layout_prop_call(&prop.key, &prop.value) {
             PropCall::Invalid(message) => Some(message),
@@ -76,9 +67,7 @@ fn generate_class_function(class: &StyleClass, theme: Option<&str>) -> String {
             );
         }
     }
-    // A paint-only class (or one only ever used as a non-first, composed class) never has its layout fn
-    // called — its paint reaches the RectStyle and its layout props are inlined at the call site — so the
-    // generated fn can be dead. It's machine-generated, so silence the lint rather than special-casing it.
+    // A paint-only class never has its layout fn called, so the generated fn can be dead.
     out.push_str("#[allow(dead_code)]\n");
     let _ = writeln!(
         out,
@@ -101,8 +90,7 @@ fn generate_class_function(class: &StyleClass, theme: Option<&str>) -> String {
     out
 }
 
-/// Maps a style property to the `LayoutStyle` builder call it contributes — or reports the value as one this
-/// key cannot mean, which is what stops a misspelling from being a property that silently does nothing.
+/// Maps a style property to the `LayoutStyle` builder call it contributes — or reports the value as one this key cannot mean, which is what stops a misspelling from being a property that silently does nothing.
 pub fn layout_prop_call(key: &str, value: &str) -> PropCall {
     match layout_call(key, value.trim()) {
         Ok(Some(call)) => PropCall::Call(call),
@@ -122,13 +110,11 @@ fn layout_call(key: &str, value: &str) -> Result<Option<String>, String> {
         "basis" | "flex_basis" => format!(".flex_basis({})", format_number(value)?),
         "aspect" | "aspect_ratio" => format!(".aspect_ratio({})", format_number(value)?),
         "wrap" => format!(".{}()", keyword(key, value, registry::WRAP_VALUES)?),
-        // Per-child cross-axis alignment override, e.g. `self:stretch` over a parent `align:center`, or
-        // `self:center` to keep a fixed-size child centered instead of stretched.
         "self" => format!(".{}()", keyword(key, value, registry::SELF_VALUES)?),
         "padding" | "pad" => format!(".padding_all({})", format_number(value)?),
         "padding_x" | "pad_x" => format!(".padding_horizontal({})", format_number(value)?),
         "padding_y" | "pad_y" => format!(".padding_vertical({})", format_number(value)?),
-        // Logical edges: resolved to left/right against the active writing direction at layout time, so one build serves LTR and RTL.
+        // Resolved against the writing direction at layout time, so one build serves LTR and RTL.
         "padding_start" | "pad_start" => {
             format!(".padding_start({})", format_number(value)?)
         }
@@ -139,12 +125,9 @@ fn layout_call(key: &str, value: &str) -> Result<Option<String>, String> {
         "inset_end" => format!(".inset_end({})", format_number(value)?),
         "inset_top" => format!(".inset_top({})", format_number(value)?),
         "inset_bottom" => format!(".inset_bottom({})", format_number(value)?),
-        // Out of flow, pinned only by the insets the author names. `absolute_fill` is the all-four-at-zero
-        // shorthand `overlay` uses; a floating panel wants three edges and its own size on the fourth.
+        // `absolute_fill` is the all-four-at-zero shorthand `overlay` uses; a floating panel wants three edges and its own size on the fourth.
         "absolute" => format!(".{}()", keyword(key, value, registry::ABSOLUTE_VALUES)?),
-        // Whether the node is in flow at all, re-resolved like every other layout value: `shown:$open` keeps
-        // the subtree it hides — its scroll, its measurements, whatever a canvas was looking at — where an
-        // `if` builds it again from nothing. A bare `shown` is the assertion itself.
+        // `shown:$open` keeps the subtree it hides — its scroll, its measurements — where an `if` rebuilds it.
         "shown" => match value.is_empty() {
             true => ".shown(true)".to_string(),
             false => format!(".shown({})", crate::view::substitute_reads(value)),
@@ -237,8 +220,7 @@ fn parse_grid_template(value: &str) -> Option<String> {
     tracks.map(|v| v.join(", "))
 }
 
-/// One track of a `cols(…)` list. `fr` earns its suffix — it is a real unit with no other spelling — where
-/// `px` was the implicit unit everywhere else in the language and a second spelling of a bare number here.
+/// One track of a `cols(…)` list. `fr` earns its suffix — it is a real unit with no other spelling — where `px` was the implicit unit everywhere else in the language and a second spelling of a bare number here.
 fn parse_track_token(s: &str) -> Option<String> {
     if let Some(rest) = s.strip_suffix("fr") {
         let n: f32 = rest.parse().ok()?;
@@ -253,18 +235,14 @@ fn parse_track_token(s: &str) -> Option<String> {
 
 /// Whether `value` names a colour this file can resolve, or the message naming what a colour may be.
 ///
-/// A bare name is a `[style]` constant and nothing else. It used to be three namespaces under one spelling,
-/// resolved by precedence — a constant, then a token of the theme trait, then *any* remaining name as a field
-/// on the theme — so a typo compiled to a field access and failed in rustc against code the author never
-/// wrote. `theme.x` is the theme's own spelling and now its only one.
+/// A bare name is a `[style]` constant and nothing else. It used to be three namespaces under one spelling, resolved by precedence — a constant, then a token of the theme trait, then *any* remaining name as a field on the theme — so a typo compiled to a field access and failed in rustc against code the author never wrote. `theme.x` is the theme's own spelling and now its only one.
 pub fn color(value: &str) -> Result<(), String> {
     let v = value.trim();
     let v = crate::view::redundant_parens(v).unwrap_or(v);
     if v.is_empty() {
         return Err("`color` needs a value: a hex literal, `transparent`, a `$` read, or any Rust expression that yields a `Color`".to_string());
     }
-    // A gradient is a paint and not a colour, and the one place its stops can be checked is here — inside
-    // `linear(…)` there is no attribute for a bad one to be reported against.
+    // The only place a gradient's stops can be checked: inside `linear(…)` there is no attribute to report against.
     if let Some((kind, args)) = crate::gradient::split_call(v) {
         return match crate::gradient::parse(kind, args) {
             Some(gradient) => gradient.stops.iter().try_for_each(|(_, stop)| color(stop)),
@@ -273,49 +251,34 @@ pub fn color(value: &str) -> Result<(), String> {
             )),
         };
     }
-    // Everything else is a Rust expression and only rustc can judge it. There used to be a list here of the
-    // spellings the markup could resolve on its own, and a bare name outside it was rejected — because a
-    // bare name *was* a `[style]` constant, and letting an unknown one through made a typo a rustc error
-    // against generated code. A name is the author's own Rust now, so it fails on their line or not at all.
     Ok(())
 }
 
 /// Resolves a numeric value to the Rust expression it stands for.
 ///
-/// Two token shapes resolve here — `50%` and a `$` read — and a plain literal is normalised so `12` reaches
-/// an `f32` parameter. Everything else is the author's own Rust, spliced as written for rustc to judge
-/// against this attribute's own line.
+/// Two token shapes resolve here — `50%` and a `$` read — and a plain literal is normalised so `12` reaches an `f32` parameter. Everything else is the author's own Rust, spliced as written for rustc to judge against this attribute's own line.
 pub fn format_number(value: &str) -> Result<String, String> {
-    // The parens a value needs to hold a space are the markup's delimiters, not part of the expression, so
-    // they come off before it is spliced — emitted, they warn `unused_parens` in code the author cannot edit.
+    // Emitted, the markup's delimiting parens warn `unused_parens` in code the author cannot edit.
     let v = value.trim();
     let v = crate::view::redundant_parens(v).unwrap_or(v);
-    // `50%` is a token shape, not a key's private grammar: it expands wherever it is written, and rustc
-    // rejects it under a key that is not a length. Resolving it per key made the same three characters mean
-    // a percentage under `width` and a verbatim splice under `grow`.
+    // A token shape rather than a key's private grammar, so it expands wherever written and rustc rejects it under a key that is not a length.
     if let Some(pct) = v.strip_suffix('%') {
         return match pct.trim().parse::<f32>() {
             Ok(n) => Ok(format!("SizeDimension::Percent({})", format_f32(n / 100.0))),
             Err(_) => Err(format!("`{v}` is not a percentage")),
         };
     }
-    // A `$` read sizes the node from reactive state — a signal, or the `theme` handle the view binds. The
-    // read is emitted inline, which is correct in both places the style expression lands: once at
-    // construction, and again inside the `styled_by` effect the container grows when a layout prop reads.
+    // Emitted inline, which is correct in both places the style expression lands: at construction, and again inside the `styled_by` effect a reactive layout prop grows.
     if v.contains('$') {
         return Ok(crate::view::substitute_reads(v));
     }
     if let Ok(n) = v.parse::<f32>() {
         return Ok(format_f32(n));
     }
-    // Everything else is a Rust expression, spliced as written. The ladder that used to sit here — a
-    // `[style]` constant, then a theme field, then a name in scope, then a rejection — is what made a
-    // number's meaning depend on which of three namespaces answered to it first.
     Ok(v.to_string())
 }
 
-/// The integer twin of [`format_number`], for the one property that counts rather than measures: `lines:2`
-/// feeds a `u16`, so it stays `2` where a length would become `2.0`.
+/// The integer twin of [`format_number`], for the one property that counts rather than measures: `lines:2` feeds a `u16`, so it stays `2` where a length would become `2.0`.
 pub fn format_integer(value: &str) -> String {
     let v = value.trim();
     let v = crate::view::redundant_parens(v).unwrap_or(v);
@@ -335,9 +298,7 @@ pub fn format_f32(n: f32) -> String {
     }
 }
 
-/// Builds a `Color::rgba(...)` const expression from a hex string, at any length
-/// [`telar_parser::parse_hex`] accepts. Anything else falls back to opaque black, which the parser has
-/// already rejected before a value reaches here.
+/// Builds a `Color::rgba(...)` const expression from a hex string, at any length [`telar_parser::parse_hex`] accepts. Anything else falls back to opaque black, which the parser has already rejected before a value reaches here.
 pub fn hex_to_color_expr(hex: &str) -> String {
     let [r, g, b, a] = telar_parser::parse_hex(hex).unwrap_or([0, 0, 0, 255]);
     format!("Color::rgba({r}.0 / 255.0, {g}.0 / 255.0, {b}.0 / 255.0, {a}.0 / 255.0)")
@@ -437,9 +398,7 @@ mod tests {
         );
     }
 
-    /// A value the transpiler cannot resolve is the author's own Rust and reaches rustc, which names it
-    /// against this `.rsx` line through the source map. There used to be a rejection here for anything that
-    /// was not name-shaped, which is a judgement about Rust made by something that does not parse Rust.
+    /// A value the transpiler cannot resolve is the author's own Rust and reaches rustc, which names it against this `.rsx` line through the source map. There used to be a rejection here for anything that was not name-shaped, which is a judgement about Rust made by something that does not parse Rust.
     #[test]
     fn a_name_the_author_has_in_scope_is_carried_through() {
         for value in ["side", "props.pad", "crate::scale::md()", "TRACK_H"] {
@@ -450,8 +409,7 @@ mod tests {
         }
     }
 
-    /// A percentage resolves against the containing block wherever CSS says it does — every length, not the
-    /// six size keys that happened to call the parser that knew about `%`.
+    /// A percentage resolves against the containing block wherever CSS says it does — every length, not the six size keys that happened to call the parser that knew about `%`.
     #[test]
     fn a_percentage_is_a_length_wherever_a_length_is() {
         for key in [
@@ -469,8 +427,6 @@ mod tests {
                 "`{key}:50%` should resolve"
             );
         }
-        // A ratio is not a length, and `%` is a token shape rather than a key's private grammar: it expands
-        // under `grow` too, and rustc rejects the `SizeDimension` a ratio cannot be.
         for key in ["grow", "aspect"] {
             assert!(
                 call(key, "50%")
@@ -481,8 +437,7 @@ mod tests {
         }
     }
 
-    /// S3: a value outside a closed keyword set now says what the set is, on the attribute, instead of the
-    /// property being dropped and the layout coming out subtly wrong.
+    /// S3: a value outside a closed keyword set now says what the set is, on the attribute, instead of the property being dropped and the layout coming out subtly wrong.
     #[test]
     fn an_unknown_keyword_names_the_set_it_is_not_in() {
         let message = invalid("align", "centre").expect("`align:centre` should not compile");
@@ -506,8 +461,7 @@ mod tests {
         assert!(message.contains("the bare flag"), "{message}");
     }
 
-    /// A class property is written where no element is, so it has no attribute line — but it is the same
-    /// misspelling, and it used to be dropped just as silently.
+    /// A class property is written where no element is, so it has no attribute line — but it is the same misspelling, and it used to be dropped just as silently.
     #[test]
     fn a_class_property_reports_its_own_bad_value() {
         let section = StyleSection {
@@ -525,9 +479,7 @@ mod tests {
         assert!(out.contains("in `@card`"), "{out}");
     }
 
-    /// A class property nobody recognises used to be dropped on the floor, which is how a renamed key goes
-    /// on compiling and quietly stops laying the class out. Element attributes have been checked this way
-    /// since keys were checked at all; classes never were.
+    /// A class property nobody recognises used to be dropped on the floor, which is how a renamed key goes on compiling and quietly stops laying the class out. Element attributes have been checked this way since keys were checked at all; classes never were.
     #[test]
     fn a_class_property_with_an_unknown_key_is_rejected() {
         let section = StyleSection {
@@ -544,8 +496,7 @@ mod tests {
         assert!(out.contains("`direction` is not a style property"), "{out}");
     }
 
-    /// A paint key is not a layout property and must not be mistaken for an unknown one: it reaches the
-    /// `RectStyle` by another path entirely.
+    /// A paint key is not a layout property and must not be mistaken for an unknown one: it reaches the `RectStyle` by another path entirely.
     #[test]
     fn a_paint_property_in_a_class_is_not_mistaken_for_an_unknown_key() {
         let section = StyleSection {

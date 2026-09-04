@@ -21,6 +21,7 @@ const TAG_COMPONENT: u32 = 1;
 const CLASS: u32 = 2;
 const SIGNAL: u32 = 3;
 
+/// The document's tokens, delta-encoded as the LSP wants them.
 pub fn semantic_tokens(source: &str) -> Vec<SemanticToken> {
     let raw = raw_tokens(source);
     // LSP wants position-sorted, delta-encoded 5-tuples.
@@ -135,7 +136,6 @@ mod tests {
 
     #[test]
     fn classifies_tags_classes_and_signals() {
-        // 0:[style] 1:@card 2:[view] 3:col @card 4:  text "{$count}" 5:  feature_card icon:"x"
         let src = "[style]\n@card\n[view]\ncol @card\n    text \"{$count}\"\n    feature_card icon:\"x\"\n";
         let raw = raw_tokens(src);
 
@@ -144,9 +144,7 @@ mod tests {
                 .any(|&(l, c, _, t)| l == line && c == col && t == ty)
         };
 
-        // `@card` def in [style] (line 1, col 0) → class.
         assert!(has(1, 0, CLASS), "style class def: {raw:?}");
-        // `col` builtin tag (line 3, col 0) → keyword.
         assert!(has(3, 0, TAG_BUILTIN), "builtin tag: {raw:?}");
         // `@card` ref in the view (line 3, col 4) → class.
         assert!(has(3, 4, CLASS), "class ref: {raw:?}");

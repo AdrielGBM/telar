@@ -1,9 +1,6 @@
 //! Where an application's files go, asked rather than re-derived.
 //!
-//! [`AppPathsProvider`](crate::paths::AppPathsProvider) is the seam a platform adapter implements; this is the
-//! side an *application* uses. The runner installs the platform's provider and the app's name once at startup,
-//! so a caller asks `paths::cache()` instead of resolving `$XDG_CACHE_HOME` for itself and getting a different
-//! answer than the runtime it is embedded in.
+//! [`AppPathsProvider`] is the seam a platform adapter implements; this is the side an *application* uses. The runner installs the platform's provider and the app's name once at startup, so a caller asks `paths::cache()` instead of resolving `$XDG_CACHE_HOME` for itself and getting a different answer than the runtime it is embedded in.
 
 use std::ffi::OsString;
 use std::path::{Path, PathBuf};
@@ -18,8 +15,7 @@ struct Installed {
 
 static INSTALLED: OnceLock<Installed> = OnceLock::new();
 
-/// Installs the platform's provider and the name every app-scoped directory is nested under. Called by the
-/// runner; a second call is ignored, so an embedded surface cannot repoint a host's directories.
+/// Installs the platform's provider and the name every app-scoped directory is nested under. Called by the runner; a second call is ignored, so an embedded surface cannot repoint a host's directories.
 pub fn install(name: impl Into<String>, provider: std::sync::Arc<dyn AppPathsProvider>) {
     let _ = INSTALLED.set(Installed {
         name: name.into(),
@@ -32,8 +28,7 @@ fn scoped(base: impl Fn(&dyn AppPathsProvider) -> Option<PathBuf>) -> Option<Pat
     Some(base(installed.provider.as_ref())?.join(&installed.name))
 }
 
-/// The app's own directory under the platform's config root, or `None` before a runner has installed one —
-/// which is also what a preview window and a headless test get, so neither touches a real XDG path.
+/// The app's own directory under the platform's config root, or `None` before a runner has installed one — which is also what a preview window and a headless test get, so neither touches a real XDG path.
 pub fn config() -> Option<PathBuf> {
     scoped(|p| p.config_dir())
 }
@@ -58,8 +53,7 @@ pub fn runtime() -> Option<PathBuf> {
     scoped(|p| p.runtime_dir())
 }
 
-/// The user's home directory, or `None` where `$HOME` names nothing — which is how a process started without an
-/// environment presents, and a reason to fall back rather than to build a path rooted at `/`.
+/// The user's home directory, or `None` where `$HOME` names nothing — which is how a process started without an environment presents, and a reason to fall back rather than to build a path rooted at `/`.
 pub fn home() -> Option<PathBuf> {
     std::env::var_os("HOME")
         .filter(|home| !home.is_empty())
@@ -89,10 +83,7 @@ pub fn ensure_dir(dir: PathBuf) -> PathBuf {
 
 /// A well-known user directory (`XDG_PICTURES_DIR`, `XDG_VIDEOS_DIR`, …), else `$HOME/<fallback>`.
 ///
-/// These are not environment variables on most sessions: `xdg-user-dirs` writes them to
-/// `user-dirs.dirs` in the config root as a shell fragment that a login script sources, so a process started
-/// any other way never sees them. Reading the file directly is what makes a screenshot land in the user's own
-/// pictures directory on a localised system, where it is called `Imágenes` and no fallback would find it.
+/// These are not environment variables on most sessions: `xdg-user-dirs` writes them to `user-dirs.dirs` in the config root as a shell fragment that a login script sources, so a process started any other way never sees them. Reading the file directly is what makes a screenshot land in the user's own pictures directory on a localised system, where it is called `Imágenes` and no fallback would find it.
 pub fn user_dir(name: &str, fallback: &str) -> PathBuf {
     let home = home();
     let default = || match &home {
@@ -125,8 +116,7 @@ pub fn user_dir(name: &str, fallback: &str) -> PathBuf {
         .unwrap_or_else(default)
 }
 
-/// Reads one `NAME="value"` assignment out of `user-dirs.dirs`, ignoring comments. `$HOME` is left in the value
-/// for the caller to expand, since only it knows what home is.
+/// Reads one `NAME="value"` assignment out of `user-dirs.dirs`, ignoring comments. `$HOME` is left in the value for the caller to expand, since only it knows what home is.
 fn parse_user_dirs(text: &str, name: &str) -> Option<String> {
     for line in text.lines() {
         let line = line.trim();
@@ -147,11 +137,9 @@ fn parse_user_dirs(text: &str, name: &str) -> Option<String> {
     None
 }
 
-/// The XDG resolution rule over values rather than the environment: the variable when it names a non-empty
-/// path, else `$HOME` joined with `fallback`, else `fallback` relative.
+/// The XDG resolution rule over values rather than the environment: the variable when it names a non-empty path, else `$HOME` joined with `fallback`, else `fallback` relative.
 ///
-/// Taking the values as arguments keeps it testable without mutating process-wide environment, which would race
-/// every other test in the binary.
+/// Taking the values as arguments keeps it testable without mutating process-wide environment, which would race every other test in the binary.
 pub fn resolve_base(var: Option<OsString>, home: Option<OsString>, fallback: &str) -> PathBuf {
     var.map(PathBuf::from)
         .filter(|p| !p.as_os_str().is_empty())

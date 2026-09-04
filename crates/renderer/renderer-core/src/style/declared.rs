@@ -1,20 +1,14 @@
+//! [`Declared`]: a partial style — every field optional — which is what a node saying "bold from here down" needs, and what a byte range of a paragraph restyles itself with.
+
 use super::{
     FontFamily, FontStyle, LineHeight, Paint, Raster, TextAlign, TextShadow, TextStyle, TextWrap,
 };
 
 /// What one place says about the text style around it, each field `None` where it says nothing.
 ///
-/// A *partial* style, and the only honest way to express "bold from here to there" or "this subtree is 11px":
-/// a whole `TextStyle` cannot, because every field it does not mean to change still holds a value that would
-/// overwrite one. Two callers want exactly this and would otherwise invent it twice — a span of a paragraph
-/// overriding the paragraph, and (next) a node overriding what it inherits. They are the same operation on
-/// the same data, so they are one type: a span is a cascade child whose extent is a byte range instead of a
-/// subtree.
+/// A *partial* style, and the only honest way to express "bold from here to there" or "this subtree is 11px": a whole `TextStyle` cannot, because every field it does not mean to change still holds a value that would overwrite one. Two callers want exactly this and would otherwise invent it twice — a span of a paragraph overriding the paragraph, and (next) a node overriding what it inherits. They are the same operation on the same data, so they are one type: a span is a cascade child whose extent is a byte range instead of a subtree.
 ///
-/// Every field is an `Option` of a type that already carries its own absence where it has one — `LineHeight`
-/// rather than `Option<f32>`, `TextShadow` rather than `Option<Shadow>`. Without that the two would nest into
-/// an `Option<Option<T>>` whose layers mean entirely different things: "this node says nothing" and "this
-/// node says: none".
+/// Every field is an `Option` of a type that already carries its own absence where it has one — `LineHeight` rather than `Option<f32>`, `TextShadow` rather than `Option<Shadow>`. Without that the two would nest into an `Option<Option<T>>` whose layers mean entirely different things: "this node says nothing" and "this node says: none".
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct Declared {
     pub font_family: Option<FontFamily>,
@@ -127,8 +121,7 @@ impl Declared {
 
 /// A byte range of a paragraph that styles itself differently from the paragraph.
 ///
-/// `range` indexes the paragraph's own text, so the text stays one string — which is what lets a clamp
-/// re-shape it with an ellipsis. Runs that each owned their slice could not be cut across.
+/// `range` indexes the paragraph's own text, so the text stays one string — which is what lets a clamp re-shape it with an ellipsis. Runs that each owned their slice could not be cut across.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Span {
     pub range: std::ops::Range<u32>,

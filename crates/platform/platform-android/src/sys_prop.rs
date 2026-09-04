@@ -1,4 +1,7 @@
+//! Reading `debug.telar.*` system properties, since an app process inherits no shell environment.
+
 // Reads an Android system property, returning None when unset or on error.
+/// Reads an Android system property, returning `None` when it is unset.
 pub fn read_sys_prop(name: &str) -> Option<String> {
     let cname = std::ffi::CString::new(name).ok()?;
     // PROP_VALUE_MAX is 92; keep headroom for the NUL terminator.

@@ -1,3 +1,5 @@
+//! [`RwSignal`] and [`ReadSignal`]: `Copy` handles into the runtime's signal arena.
+
 use std::marker::PhantomData;
 
 use crate::runtime::{self, SignalId};
@@ -18,17 +20,13 @@ fn try_read_with<T: 'static, R>(id: SignalId, f: impl FnOnce(&T) -> R) -> Option
 
 /// A read handle on a signal.
 ///
-/// `Copy`, and the reason is the whole of [`crate::runtime::owner`]: the handle is an id, the *owner* is what
-/// frees the storage, and nothing has to be moved or cloned to be read twice. What that trades away is a
-/// compile-time guarantee for a runtime one — a handle outliving its owner used to be impossible to write and
-/// is now a checked failure against the version in the key. Leptos and Dioxus each made the same trade, both
-/// after trying the other road.
+/// `Copy`, and the reason is the whole of the owner tree: the handle is an id, the *owner* is what frees the storage, and nothing has to be moved or cloned to be read twice. What that trades away is a compile-time guarantee for a runtime one — a handle outliving its owner used to be impossible to write and is now a checked failure against the version in the key. Leptos and Dioxus each made the same trade, both after trying the other road.
 pub struct ReadSignal<T: 'static> {
     pub(crate) id: SignalId,
     _marker: PhantomData<T>,
 }
 
-// Hand-written, because `#[derive]` would bound these on `T` — `RwSignal<String>` would not be `Copy`, which is most of the point. The parameter names what the signal holds, never what the handle stores.
+// Hand-written, because `#[derive]` would bound these on `T` and `RwSignal<String>` would not be `Copy`. The parameter names what the signal holds, never what the handle stores.
 impl<T: 'static> Clone for ReadSignal<T> {
     fn clone(&self) -> Self {
         *self
@@ -99,8 +97,7 @@ impl<T: 'static> RwSignal<T> {
         read_with::<T, R>(self.id, f)
     }
 
-    /// As [`with`](Self::with), but does not subscribe the caller — for reads from an event handler, where
-    /// tracking would attach the value to whatever effect happens to be running.
+    /// As [`with`](Self::with), but does not subscribe the caller — for reads from an event handler, where tracking would attach the value to whatever effect happens to be running.
     pub fn peek_with<R>(&self, f: impl FnOnce(&T) -> R) -> R {
         peek_with::<T, R>(self.id, f)
     }
@@ -147,6 +144,7 @@ impl RwSignal<bool> {
     }
 }
 
+/// Creates a signal holding `value`, owned by whatever scope is active.
 pub fn signal<T: 'static>(value: T) -> RwSignal<T> {
     RwSignal {
         id: runtime::create_signal_storage(value),

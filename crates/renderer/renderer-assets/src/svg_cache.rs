@@ -1,8 +1,6 @@
 //! Parsing a runtime-chosen SVG once instead of once per render.
 //!
-//! `svg src:"literal"` is baked at build time, but an icon picked at runtime — a tool table, a feature kind, a
-//! themed glyph set — cannot be a literal, and `SvgData::from_str` on every render is a full parse per frame.
-//! Every application that needed this wrote the same thread-local memo; this is that memo, once.
+//! `svg src:"literal"` is baked at build time, but an icon picked at runtime — a tool table, a feature kind, a themed glyph set — cannot be a literal, and `SvgData::from_str` on every render is a full parse per frame. Every application that needed this wrote the same thread-local memo; this is that memo, once.
 
 use std::cell::RefCell;
 use std::collections::HashMap;
@@ -14,13 +12,9 @@ thread_local! {
     static PARSED: RefCell<HashMap<u64, Option<Arc<SvgData>>>> = RefCell::new(HashMap::new());
 }
 
-/// The parsed form of `key`'s SVG, parsing it on the first ask and handing back the same `Arc` after that.
-/// `None` for a source that does not parse — remembered too, so a broken glyph is not re-parsed every frame.
+/// The parsed form of `key`'s SVG, parsing it on the first ask and handing back the same `Arc` after that. `None` for a source that does not parse — remembered too, so a broken glyph is not re-parsed every frame.
 ///
-/// `key` identifies the *source*, not the call site. Two natural spellings: the pointer of a `&'static [u8]`
-/// or `&'static str` that a baked table hands back (stable for the life of the process, and free), or a hash
-/// of the icon's name. Anything that collides will hand back the wrong glyph, so it must identify the source
-/// exactly.
+/// `key` identifies the *source*, not the call site. Two natural spellings: the pointer of a `&'static [u8]` or `&'static str` that a baked table hands back (stable for the life of the process, and free), or a hash of the icon's name. Anything that collides will hand back the wrong glyph, so it must identify the source exactly.
 ///
 /// Thread-local because `SvgData` is what a widget draws with, and widgets live on one thread.
 pub fn svg_cached(key: u64, source: impl FnOnce() -> Option<String>) -> Option<Arc<SvgData>> {
@@ -67,8 +61,7 @@ mod tests {
         );
     }
 
-    /// A glyph that does not parse is remembered as such: re-parsing broken input every frame is the failure
-    /// this cache exists to avoid, and it is the case that would keep hitting the parser.
+    /// A glyph that does not parse is remembered as such: re-parsing broken input every frame is the failure this cache exists to avoid, and it is the case that would keep hitting the parser.
     #[test]
     fn a_source_that_does_not_parse_is_remembered_too() {
         let mut parses = 0;

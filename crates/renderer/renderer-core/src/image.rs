@@ -1,15 +1,13 @@
+//! [`ImageData`]: premultiplied RGBA pixels addressed by content, plus the seam for a texture the application owns.
+
 use wide::u32x4;
 use xxhash_rust::xxh3::xxh3_64_with_seed;
 
 /// A texture an application rendered itself, handed to Telar to place in the frame.
 ///
-/// Deliberately opaque here: this crate is the vocabulary the CPU rasterizer shares with the GPU one, and
-/// naming a `wgpu` type would drag the whole GPU stack into builds that never touch one. The backend that
-/// can use the handle downcasts it; the one that cannot ignores the command.
+/// Deliberately opaque here: this crate is the vocabulary the CPU rasterizer shares with the GPU one, and naming a `wgpu` type would drag the whole GPU stack into builds that never touch one. The backend that can use the handle downcasts it; the one that cannot ignores the command.
 ///
-/// Which means the trait is public for the backends, not for applications: a handle only draws through the
-/// backend that made it, so an implementation written outside one is recognised by nobody and its image
-/// comes out empty (with a warning). Applications build these with `telar::gpu::image`.
+/// Which means the trait is public for the backends, not for applications: a handle only draws through the backend that made it, so an implementation written outside one is recognised by nobody and its image comes out empty (with a warning). Applications build these with `telar::gpu::image`.
 pub trait ExternalTexture: std::fmt::Debug + Send + Sync {
     fn as_any(&self) -> &dyn std::any::Any;
 }
@@ -21,13 +19,13 @@ enum ImageSource {
 }
 
 #[derive(Debug, Clone)]
+/// A bitmap in premultiplied RGBA, addressed by the content hash of its pixels and dimensions.
 pub struct ImageData {
     /// Content address: equal pixels at equal dimensions give equal ids, whoever built them and whenever.
     ///
     /// The renderers key their texture caches on this and nothing else, so the id has to identify the *image*. A per-construction counter identified the allocation instead: a caller that rebuilt the same image each frame — which is what building an `ImageData` inside a widget body does — minted a fresh key every time, and every entry behind it became unreachable weight the cache could only shed by hitting its byte budget.
     ///
-    /// An external texture cannot be hashed, so its owner supplies the id and carries the same duty: keep it
-    /// stable while the texture is, and change it when the texture object is replaced.
+    /// An external texture cannot be hashed, so its owner supplies the id and carries the same duty: keep it stable while the texture is, and change it when the texture object is replaced.
     pub id: u64,
     source: ImageSource,
     pub width: u32,
@@ -58,9 +56,7 @@ impl ImageData {
 
     /// Refers to a texture the application owns and keeps filling, rather than pixels Telar uploads.
     ///
-    /// `id` addresses the texture *object*, not its contents: the whole point is that the contents change
-    /// every frame without Telar being told. Bump it only when the texture itself is replaced — a resize,
-    /// a format change — so the bind group built against the old one is dropped.
+    /// `id` addresses the texture *object*, not its contents: the whole point is that the contents change every frame without Telar being told. Bump it only when the texture itself is replaced — a resize, a format change — so the bind group built against the old one is dropped.
     pub fn external(
         texture: std::sync::Arc<dyn ExternalTexture>,
         id: u64,
@@ -77,9 +73,7 @@ impl ImageData {
 
     /// The premultiplied RGBA8 bytes; empty when the picture lives in a texture Telar does not own.
     ///
-    /// Empty rather than `Option` so a backend that cannot use an external texture needs no special case:
-    /// every path that turns these bytes into a raster already has to reject a buffer too short for the
-    /// dimensions, and an empty one takes that branch.
+    /// Empty rather than `Option` so a backend that cannot use an external texture needs no special case: every path that turns these bytes into a raster already has to reject a buffer too short for the dimensions, and an empty one takes that branch.
     pub fn pixels(&self) -> &[u8] {
         match &self.source {
             ImageSource::Pixels(p) => p,
@@ -94,7 +88,7 @@ impl ImageData {
         }
     }
 
-    // Hashed after premultiplication so both constructors address the same finished image alike. The dimensions ride in as the seed rather than as leading bytes: one buffer can be several images (a 4x1 and a 2x2 share their bytes), and seeding keeps that distinction while leaving the pixels a single one-shot pass.
+    // Hashed after premultiplication, so both constructors address the same finished image alike. The dimensions ride in as the seed rather than leading bytes: one buffer can be several images, and seeding keeps that distinction while leaving the pixels a single one-shot pass.
     fn addressed(pixels: Vec<u8>, width: u32, height: u32) -> Self {
         let seed = ((width as u64) << 32) | height as u64;
         Self {
@@ -107,6 +101,7 @@ impl ImageData {
 }
 
 #[inline]
+/// Premultiplies straight-alpha RGBA bytes in place.
 pub fn premultiply_rgba(pixels: &mut [u8]) {
     let mut iter = pixels.chunks_exact_mut(16);
     for chunk in iter.by_ref() {
@@ -174,7 +169,6 @@ mod tests {
             .collect()
     }
 
-    // The property the texture caches depend on: a widget body that rebuilds its image every frame must land on the entry it filled last frame, not mint a new one.
     #[test]
     fn the_same_image_built_twice_gets_the_same_id() {
         let once = ImageData::new(opaque(&[[10, 20, 30], [40, 50, 60]]), 2, 1);

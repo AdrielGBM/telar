@@ -1,18 +1,18 @@
+//! One frame: acquiring the surface, planning damage, splitting the command list into passes, and executing them.
+
 use super::*;
 
 use super::pool::{bucket_size, return_pooled_texture, take_layer_textures, take_pooled_texture};
 use super::shadow::{ShadowCacheKind, ShadowKind};
 use super::steps::{Boundary, LayerAccum};
 
-// A layer-boundary-split render segment: a run of draw steps, or the boundary that ended it. Lifted to module scope so it can appear in the phase-method signatures that build and execute segments.
+// A run of draw steps, or the layer boundary that ended it. At module scope so it can appear in the phase-method signatures that build and execute segments.
 pub(super) enum Segment {
     Draw { start: usize, end: usize },
     Boundary(Boundary),
 }
 
-// A layer currently being rendered into: its two textures and views, the viewport bind group its draws bind,
-// and the bucket size the textures were allocated at. Was a seven-element tuple read by index, with the
-// meaning of each position written out again at every use.
+// A layer currently being rendered into: its two textures and views, the viewport bind group its draws bind, and the bucket size the textures were allocated at.
 struct LayerTarget {
     msaa_texture: wgpu::Texture,
     msaa_view: wgpu::TextureView,
@@ -23,50 +23,43 @@ struct LayerTarget {
     height: u32,
 }
 
-// What asking the surface for this frame's texture left us with.
 enum Acquired {
     Texture(wgpu::SurfaceTexture),
-    // Nothing to render into, and nothing wrong: the surface was lost, timed out or is occluded. Any
-    // reconfigure has already happened and the pending state is cleared; the caller drops the frame.
+    // Nothing to render into, and nothing wrong: the surface was lost, timed out or is occluded. Any reconfigure has already happened, so the caller just drops the frame.
     SkipFrame,
 }
 
-// One entry of the clip stack, shaped as what its `PopClip` has to undo. The three forms used to be three
-// parallel stacks plus three renderer fields, and nothing but arithmetic on their lengths said which entry a
-// `PopClip` was closing.
+// One entry of the clip stack, shaped as what its `PopClip` has to undo.
 enum ClipEntry {
-    // A plain scissor rect: the draw-state clip stack is the only thing to unwind.
+    // A plain scissor rect: only the draw-state clip stack unwinds.
     Scissor,
     // A rounded clip masked in-shader by the viewport SDF, carrying the scissor it displaced.
     Shader {
         outer_scissor: Option<Rect>,
     },
-    // A rounded clip nested inside another one: drawn into a mini-layer, composited by this bind group.
+    // A rounded clip nested inside another: drawn into a mini-layer, composited by this bind group.
     Layer {
         composite: wgpu::BindGroup,
         outer_scissor: Option<Rect>,
     },
 }
 
-// The three views a frame renders through. One value because they are created together and read together;
-// as three `Option` fields, every later phase re-stated the invariant with its own `.expect`.
+// Created together and read together. As three `Option` fields, every later phase re-stated the invariant with its own `.expect`.
 pub(super) struct FrameTargets {
     surface_view: wgpu::TextureView,
     msaa_view: wgpu::TextureView,
     retained_view: wgpu::TextureView,
 }
 
-// Owned per-frame state threaded through the render_frame phase methods. Holds only owned values (never borrows of `self`) so it survives across the `&mut self` phase calls; `retained_view` in particular is a cheap Arc-backed clone of `self.retained_view` for exactly that reason.
+// Owned values only, never borrows of `self`, so it survives across the `&mut self` phase calls.
 pub(super) struct FrameCtx {
     direct_to_surface: bool,
-    // Seed the offscreen with the retained previous frame shifted by prime_delta before the main
-    // pass Loads it: scroll-blit-with-clear (delta = scroll) or F1 damage priming (delta = 0).
+    // Seeds the offscreen with the retained previous frame shifted by `prime_delta` before the main pass Loads it: scroll-blit-with-clear, or damage priming with a zero delta.
     prime: bool,
     prime_delta: (f32, f32),
     dirty_scissor: Option<Rect>,
     load_op: wgpu::LoadOp<wgpu::Color>,
     output: Option<wgpu::SurfaceTexture>,
-    // The three views the frame renders through, created together once the surface is acquired.
     targets: Option<FrameTargets>,
     frame_scratch_textures: Vec<(
         u32,
@@ -79,11 +72,7 @@ pub(super) struct FrameCtx {
 
 /// A text style as it should be laid out under a matrix that scales.
 ///
-/// The size and the shadow, which are lengths; not the line height, which is a factor of the size
-/// and follows it on its own. Untouched at scale one, so nothing that is not inside a scaled
-/// subtree pays anything for this.
-/// A paragraph's spans at the same matrix scale as its style, so a span with a size of its own is not left
-/// at the unscaled one inside a zoomed subtree.
+/// The size and the shadow, which are lengths; not the line height, which is a factor of the size and follows it on its own. Untouched at scale one, so nothing that is not inside a scaled subtree pays anything for this. A paragraph's spans at the same matrix scale as its style, so a span with a size of its own is not left at the unscaled one inside a zoomed subtree.
 fn spans_at_scale(
     spans: &Option<std::sync::Arc<[renderer_core::Span]>>,
     scale: f32,
@@ -138,7 +127,7 @@ fn at_scale(style: renderer_core::TextStyle, scale: f32) -> renderer_core::TextS
         ..style
     }
 }
-// The frame's opening load: a clear to the application background, or a Load when it asked for none.
+// A clear to the application background, or a Load when it asked for none.
 fn frame_load_op(clear_color: Option<Color>) -> wgpu::LoadOp<wgpu::Color> {
     match clear_color {
         Some(c) => {
@@ -154,13 +143,7 @@ fn frame_load_op(clear_color: Option<Color>) -> wgpu::LoadOp<wgpu::Color> {
     }
 }
 
-// F1: confine a top-level layer composite to the dirty rect. A layer's mini-layer can be larger than
-// the dirty region (e.g. a translucent panel), and its composite blends at opacity over the parent —
-// so without confinement it re-blends over the preserved previous frame outside the dirty rect and
-// accumulates opacity every frame. Intersecting with the dirty scissor keeps the composite inside the
-// region that was reset to the clear color, matching a full repaint. `None` dirty scissor = no damage,
-// so the composite keeps its own clip; a layer fully outside the dirty rect has empty (culled) content,
-// so falling back to the dirty rect there composites nothing.
+// A layer's mini-layer can be larger than the dirty region and composites at opacity over the parent, so without confinement it re-blends over the preserved previous frame and accumulates opacity every frame. A `None` dirty scissor means no damage, so the composite keeps its own clip.
 fn confine_to_dirty(scissor: Option<Rect>, dirty: Option<Rect>) -> Option<Rect> {
     match dirty {
         None => scissor,
@@ -171,8 +154,7 @@ fn confine_to_dirty(scissor: Option<Rect>, dirty: Option<Rect>) -> Option<Rect> 
 impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBackend
     for HardwareRenderer<W>
 {
-    // Scaling is folded into the shader's transform, so this path wants logical-pixel commands and must not
-    // be handed the CPU-scaled ones the software rasteriser needs.
+    // Scaling is folded into the shader transform, so this path wants logical-pixel commands and must not be handed the CPU-scaled ones the software rasteriser needs.
     fn applies_scale_factor(&self) -> bool {
         true
     }
@@ -184,17 +166,16 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
         scale_factor: f32,
         generation: u64,
     ) -> Result<(), RendererError> {
-        // Shared with other render threads, exclusive against surface lifecycle: reconfigure (swapchain
-        // recreation) must not overlap another window's surface teardown (see renderer_core::gpu_sync).
+        // Shared with other render threads, exclusive against surface lifecycle: swapchain recreation must not overlap another window's surface teardown.
         let _gpu = renderer_core::gpu_sync::render_guard();
         self.scale_factor = scale_factor;
         self.incoming_generation = generation;
         if width != self.width || height != self.height || self.config.is_none() {
-            // Pooled layer textures are sized to the previous surface dimensions and would be unusable at the new size; drop them so we don't leak GPU memory for textures we will never reuse.
+            // Pooled layer textures are sized to the previous surface and unusable at the new size.
             self.layer_texture_pool.clear();
-            // Backdrop-blur scratch textures are sized to the old surface; drop them on resize for the same reason.
+            // Backdrop-blur scratch textures are sized to the old surface.
             self.texture_pool.clear();
-            // Cached layer textures are sized to the old surface; their hashes also encode the old dimensions, so drop them on resize.
+            // Cached layer textures are sized to the old surface, and their hashes encode the old dimensions.
             self.layer_resolved_cache.clear();
             self.layer_resolved_cache_order.clear();
             self.width = width;
@@ -218,7 +199,7 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
         self.layer_cache_pixel_budget = 4 * self.width as u64 * self.height as u64;
         self.clear_pending();
         self.publish_cache_stats();
-        // Reclaim the previous frame's composite uniform buffers; the previous frame was already submitted/presented so they are no longer referenced by in-flight GPU work.
+        // The previous frame was already submitted and presented, so its uniform buffers are no longer referenced by in-flight GPU work.
         self.composite_pipeline.recycle_params_buffers();
         self.retained_blit_pipeline.recycle_params_buffers();
         self.viewport_buffer_pool_index = 0;
@@ -230,9 +211,7 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
         commands: &[DrawCommand],
         clear_color: Option<Color>,
     ) -> Result<(), RendererError> {
-        // Shared with other render threads, exclusive against surface lifecycle: the acquire / present in this
-        // frame must not overlap another window's surface teardown, which corrupts the shared driver and
-        // segfaults inside vkAcquireNextImageKHR (see renderer_core::gpu_sync).
+        // Shared with other render threads, exclusive against surface lifecycle: an acquire or present overlapping another window's surface teardown corrupts the shared driver and segfaults inside `vkAcquireNextImageKHR`.
         let _gpu = renderer_core::gpu_sync::render_guard();
         tracing::debug!(
             "hw render_frame: {} commands, clear={}",
@@ -241,15 +220,11 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
         );
         renderer_core::perf::tick();
         let _frame_span = renderer_core::perf::span(renderer_core::perf::Phase::Frame);
-        // Direct-to-swapchain fast path: when the frame clears (so there is no cross-frame scroll-blit that needs LoadOp::Load) and nothing samples the top-level target (no backdrop blur), render straight into the swapchain texture on the single-sample (Android) path. This drops the offscreen render target and its per-frame full-screen copy to the surface. MSAA (desktop, samples>1) still needs the offscreen to resolve, and a backdrop-blur layer needs a sampleable parent, so both fall back to the offscreen path.
+        // Direct-to-swapchain: when the frame clears and nothing samples the top-level target, render straight into the swapchain and drop the offscreen plus its full-screen copy. MSAA needs the offscreen to resolve, and a backdrop-blur layer needs a sampleable parent, so both fall back.
         let frame_has_backdrop_blur = commands.iter().any(
             |c| matches!(c, DrawCommand::PushLayer { backdrop_blur, .. } if *backdrop_blur > 0.0),
         );
-        // F1 on the single-sample (mobile) path damage-tracks by Loading the persistent msaa_texture,
-        // which requires rendering through the offscreen rather than straight into the rotating
-        // swapchain — so direct-to-surface is disabled whenever damage tracking is on. (TELAR_HW_DAMAGE=0
-        // restores direct-to-surface + full repaints.)
-        // An app-owned target is never drawn into directly: the frame has to arrive there through a blend, and a direct draw would replace what the application put in the texture instead.
+        // The single-sample damage path Loads the persistent `msaa_texture`, which requires rendering through the offscreen rather than into the rotating swapchain. An app-owned target is never drawn into directly: the frame must arrive through a blend, or a direct draw would replace what the application put in the texture.
         let direct_to_surface = self.msaa_samples == 1
             && clear_color.is_some()
             && !frame_has_backdrop_blur
@@ -267,8 +242,7 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
             self.analyze_frame(commands, clear_color, frame_has_backdrop_blur);
 
         renderer_core::perf::note_damage(damage);
-        // F1: when damage tracking, repaint the app background (clear_color) inside the dirty scissor
-        // so ghosts of moved/removed content left behind by the preserved previous frame are erased.
+        // Repaint the app background inside the dirty scissor, so ghosts of moved or removed content left by the preserved previous frame are erased.
         let damage_bg = match (damage, dirty_scissor, clear_color) {
             (true, Some(ds), Some(c)) => Some((ds, c)),
             _ => None,
@@ -292,14 +266,12 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
             return Ok(());
         }
 
-        // Single-sample damage: msaa_texture already holds the previous frame, so Load it (preserving
-        // everything outside the dirty scissor) instead of clearing — the injected background rect
-        // repaints clear_color only inside the dirty rect. (No effect on the MSAA prime-quad path.)
+        // `msaa_texture` already holds the previous frame, so Load it and preserve everything outside the dirty scissor; the injected background rect repaints the clear colour only inside it.
         if damage && self.msaa_samples == 1 {
             ctx.load_op = wgpu::LoadOp::Load;
         }
 
-        // Single encoder for both the shadow pre-passes and the main pass; wgpu inserts the necessary barriers between render passes, so a separate pre-encoder and extra queue.submit are unnecessary.
+        // One encoder for the shadow pre-passes and the main pass: wgpu inserts the barriers between render passes, so a separate pre-encoder and extra submit are unnecessary.
         let mut encoder = self
             .device
             .create_command_encoder(&wgpu::CommandEncoderDescriptor {
@@ -320,7 +292,7 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
 
 impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRenderer<W> {
     fn try_idle_blit(&mut self, direct_to_surface: bool) -> Result<bool, RendererError> {
-        // Idle-frame fast path: skip full pipeline and blit retained texture when content generation and viewport are unchanged. Disabled under direct-to-surface (nothing retains the last frame to blit from); idle frames simply re-render at the keepalive cadence instead. Also disabled headless (surface None): there is no swapchain to present into and read_rgba wants each render_frame to leave a freshly-composited frame in offscreen_output, so headless always takes the main path.
+        // Blit the retained texture when the content generation and viewport are unchanged. Disabled under direct-to-surface, where nothing retains the last frame, and headless, where `read_rgba` needs each call to leave a freshly composited frame in `offscreen_output`.
         if !direct_to_surface
             && self.surface.is_some()
             && self.incoming_generation == self.prev_generation
@@ -338,7 +310,7 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
                 .texture
                 .create_view(&wgpu::TextureViewDescriptor::default());
             {
-                // Idle-blit source: on the msaa_samples==1 (Android) path, sample msaa_texture directly — it still holds the last active frame (its render pass stores and idle frames never write it), so the per-frame msaa→retained copy is gone. On MSAA>1 msaa_texture is multisampled and unsamplable, so use the resolved retained texture.
+                // On the single-sample path `msaa_texture` still holds the last active frame, since its render pass stores and idle frames never write it. On MSAA it is multisampled and unsamplable, so use the resolved texture.
                 let idle_source_view = match (self.msaa_samples, self.msaa_texture.as_ref()) {
                     (1, Some(t)) => t.create_view(&wgpu::TextureViewDescriptor::default()),
                     _ => self.retained_view.clone().unwrap(), // safe: outer if checks is_some()
@@ -400,7 +372,7 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
         Option<Rect>,
         bool,
     ) {
-        // scroll_blit normally requires LoadOp::Load (clear_color forces LoadOp::Clear). The experimental scroll-blit-with-clear path keeps the optimization for a cleared frame by priming the offscreen with the previous frame shifted by the scroll delta (so only the exposed band needs redrawing); restricted to the MSAA (desktop, explicit-init-pass) path with a retained previous frame and no backdrop blur.
+        // `scroll_blit` normally requires `LoadOp::Load`, which a clear colour forces off. Priming the offscreen with the previous frame shifted by the scroll delta keeps the optimisation for a cleared frame, leaving only the exposed band to redraw.
         let allow_scroll_with_clear = hw_scroll_blit_enabled()
             && clear_color.is_some()
             && self.retained_view.is_some()
@@ -411,45 +383,20 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
         } else {
             None
         };
-        // When priming, the offscreen is seeded with the shifted previous frame instead of a plain clear, and only the exposed band is redrawn.
+        // The offscreen is seeded with the shifted previous frame instead of a plain clear, so only the exposed band is redrawn.
         let scroll_prime = allow_scroll_with_clear && scroll_blit.is_some();
         let prime_delta = scroll_blit
             .as_ref()
             .map(|sb| (sb.delta_x as f32, sb.delta_y as f32))
             .unwrap_or((0.0, 0.0));
-        // F1: damage-track an opaque-clear frame like scroll-with-clear but for an arbitrary dirty rect
-        // and zero delta (prime the previous frame, repaint only the dirty scissor). Same gates as
-        // scroll-with-clear, plus no PushLayer (an opacity/blur layer re-composited from only its dirty
-        // slice over the primed frame is wrong — deferred), and only when the dirty region is small
-        // enough to beat a plain full clear+repaint.
-        // Two damage substrates for the previous frame: MSAA desktop resolves into retained_view and
-        // re-seeds the multisample target with a prime quad; single-sample mobile keeps the previous
-        // frame in msaa_texture itself (it persists — its render pass stores and idle frames never
-        // write it), so its damage path Loads msaa_texture directly (see render_frame's load_op).
-        // Requires an OPAQUE clear: the injected background rect draws through the premultiplied-alpha
-        // rect pipeline, so a translucent clear_color would blend over (not replace) the primed frame
-        // inside the dirty rect and accumulate error each frame, diverging from a full LoadOp::Clear.
-        // Top-level layer composites are confined to the dirty rect (see confine_to_dirty), so priming is
-        // correct for opacity PushLayers, fill-layer-expanded translucent rounded rects and nested rounded
-        // PushClips. Only a backdrop-blur layer still blocks damage: it samples the parent frame, which
-        // outside the dirty rect is the primed *previous* frame, so the blur near the dirty boundary would
-        // pull in stale content.
+        // Damage tracking for an arbitrary dirty rect with a zero delta. Gated like scroll-with-clear, plus no `PushLayer` (a layer re-composited from only its dirty slice would be wrong) and only when the dirty region is small enough to beat a full clear and repaint. It requires an opaque clear: the injected background rect draws through the premultiplied-alpha pipeline, so a translucent colour would blend over the primed frame and accumulate error. Only a backdrop-blur layer still blocks damage, since it samples the primed previous frame outside the dirty rect and would pull in stale content.
         let allow_damage_with_clear = hw_damage_with_clear_enabled()
             && clear_color.is_some_and(|c| c.a >= 1.0)
             && !frame_has_backdrop_blur
             && ((self.msaa_samples > 1 && self.retained_view.is_some()) || self.msaa_samples == 1);
-        // A transparent frame Loads instead of Clearing, which assumes the target still holds the previous
-        // frame. That holds on the single-sample path, where the offscreen persists across frames (see the
-        // note above), and NOT on the multisample one: there the frame is resolved out to `retained_view`
-        // and the multisample target is left with no dependable copy of what was last presented. Repainting
-        // only the dirty rect over that dropped everything that had not changed this frame — on a
-        // transparent bar the chips blinked out one at a time, and hovering, which dirties the rect under
-        // the cursor, brought one back for a single frame. The opaque path is immune because it re-seeds
-        // with a prime quad from `retained_view` first; giving the transparent path the same prime needs an
-        // erase-to-transparent inside the dirty rect (the primed pixels are not overwritten by a background
-        // fill, so a moved element would leave a ghost), which is why this refuses rather than primes.
+        // A transparent frame Loads rather than Clears, assuming the target still holds the previous frame. That holds on the single-sample path and not on the multisample one, where the frame resolves out to `retained_view` and the multisample target keeps no dependable copy: repainting only the dirty rect there blinked out everything unchanged this frame. Priming it would need an erase-to-transparent inside the dirty rect, since primed pixels are not overwritten by a background fill, so this refuses instead.
         let allow_damage_transparent = clear_color.is_none() && self.msaa_samples == 1;
-        // Multiple dirty rects are collapsed to their bounding union because GPUs support only a single scissor rect per pass (hardware limitation asymmetry vs. software backend which can clip per-rect).
+        // GPUs support a single scissor rect per pass, unlike the software backend, which can clip per rect.
         let dirty_scissor: Option<Rect> = if scroll_blit.is_none()
             && !self.prev_commands.is_empty()
             && (allow_damage_transparent || allow_damage_with_clear)
@@ -463,14 +410,12 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
             None
         };
         let damage = allow_damage_with_clear && dirty_scissor.is_some();
-        // The prime quad only serves the multisample (desktop) target; the single-sample damage path
-        // Loads its persistent msaa_texture instead, so it primes without a quad.
+        // The prime quad only serves the multisample target; the single-sample path Loads its persistent `msaa_texture` and primes without a quad.
         let prime = scroll_prime || (damage && self.msaa_samples > 1);
         (scroll_blit, prime, prime_delta, dirty_scissor, damage)
     }
 
-    // A near-full-surface dirty rect costs more to damage-prime (retained quad + repaint) than a plain
-    // full clear+repaint, so only prime when the dirty region stays under a fraction of the surface.
+    // A near-full-surface dirty rect costs more to prime than a plain full clear and repaint.
     fn damage_worth_priming(&self, ds: Rect) -> bool {
         let logical_w = self.width as f32 / self.scale_factor;
         let logical_h = self.height as f32 / self.scale_factor;
@@ -481,8 +426,7 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
 
     /// This frame's swapchain texture, or [`Acquired::SkipFrame`] when the surface has none to give.
     ///
-    /// Lost/Outdated reconfigures and drops the frame; Timeout and Occluded just drop it. `what` names the
-    /// caller in the logs, which is the only thing that ever differed between the two copies of this.
+    /// Lost/Outdated reconfigures and drops the frame; Timeout and Occluded just drop it. `what` names the caller in the logs, which is the only thing that ever differed between the two copies of this.
     fn acquire_surface_texture(&mut self, what: &str) -> Result<Acquired, RendererError> {
         let acquired = {
             let _swapchain = super::swapchain_lock();
@@ -529,9 +473,7 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
 
     /// Closes the layer a `PopLayer` ends, and hands back the scissor now in force.
     ///
-    /// A layer that drew nothing composites nothing and is rewound entirely; one that drew folds its bounds
-    /// into its parent's; one without a backdrop blur is hashed so an unchanged layer can be re-presented
-    /// rather than re-rendered. `commands` and `cmd_idx` are what that hash is taken over.
+    /// A layer that drew nothing composites nothing and is rewound entirely; one that drew folds its bounds into its parent's; one without a backdrop blur is hashed so an unchanged layer can be re-presented rather than re-rendered. `commands` and `cmd_idx` are what that hash is taken over.
     fn close_layer(
         &mut self,
         scissor_layer_stack: &mut Vec<Option<Rect>>,
@@ -543,7 +485,7 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
         self.flush_all();
         let current_scissor = scissor_layer_stack.pop().flatten();
         if let Some(accum) = layer_accum_stack.pop() {
-            // Fully-culled opacity layer: all of its content was culled (e.g. it scrolled outside the dirty band, or is off-screen), so it composites nothing — emit no layer passes at all instead of an empty full-screen layer texture + render/resolve/composite passes. Mirrors the software renderer's skip_layer_depth. Authoritative emptiness check is "produced no draw steps" (the flush_all above already flushed this layer's instances into steps); a drawn primitive always emits a step even when its bounds are absent. Backdrop-blur layers are kept (they sample the framebuffer even without their own content).
+            // A fully culled opacity layer composites nothing, so emit no layer passes rather than an empty full-screen texture plus render, resolve and composite passes. Emptiness is judged by "produced no draw steps"; backdrop-blur layers are kept, since they sample the framebuffer without content of their own.
             if self.pending_steps.len() == accum.begin_step_index && accum.backdrop_blur == 0.0 {
                 self.pending_instances
                     .truncate(accum.instance_start as usize);
@@ -553,8 +495,6 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
                     .truncate(accum.line_instance_start as usize);
                 self.pending_image_instances
                     .truncate(accum.image_instance_start as usize);
-                // Was a `continue` in the loop this came out of, which skipped the rest of the arm and moved
-                // to the next command — the same thing this return does, since the caller only assigns.
                 return current_scissor;
             }
             let (
@@ -577,7 +517,7 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
                 let hl = (self.height as f32 / self.scale_factor).ceil() as u32;
                 (0.0, 0.0, self.width.max(1), self.height.max(1), wl, hl)
             };
-            // Propagate this layer's visual footprint to the parent layer so nested layers are included in the parent's bounds (and thus its texture size).
+            // So nested layers are included in the parent's bounds, and therefore its texture size.
             if let Some(parent) = layer_accum_stack.last_mut() {
                 let footprint = Rect::new(
                     offset_x,
@@ -595,7 +535,7 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
                 let mut h = FxHasher::default();
                 base.hash(&mut h);
                 accum.opacity.to_bits().hash(&mut h);
-                // Use the unclamped floored world bounds (not offset_x/y which are max'd to 0) so that different scroll positions with the same clamped offset don't alias to the same cache entry and produce stale composites.
+                // Unclamped floored world bounds, not the offsets max'd to 0, so different scroll positions with the same clamped offset do not alias to one cache entry and produce stale composites.
                 let (hash_bx, hash_by) = accum
                     .bounds
                     .map_or((0.0f32, 0.0f32), |b| (b.x.floor(), b.y.floor()));
@@ -603,7 +543,7 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
                 hash_by.to_bits().hash(&mut h);
                 texture_width.hash(&mut h);
                 texture_height.hash(&mut h);
-                // Text shaping and rasterization depend on the scale factor; mix it in so a scale change without a resize invalidates stale entries.
+                // Text shaping depends on the scale factor, so a scale change without a resize invalidates stale entries.
                 self.scale_factor.to_bits().hash(&mut h);
                 Some(h.finish())
             } else {
@@ -635,7 +575,7 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
                         uv_scale,
                     )
                 };
-                // Refresh LRU position so reused layers are not evicted first.
+                // Refresh the LRU position so reused layers are not evicted first.
                 if let Some(pos) = self
                     .layer_resolved_cache_order
                     .iter()
@@ -644,7 +584,7 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
                     self.layer_resolved_cache_order.remove(pos);
                 }
                 self.layer_resolved_cache_order.push_back(hash);
-                // The layer content emitted DrawSteps and instance data we no longer need; drop them so they neither render nor leave dangling instance ranges.
+                // Dropped so they neither render nor leave dangling instance ranges.
                 self.pending_steps.truncate(accum.begin_step_index);
                 self.pending_instances
                     .truncate(accum.instance_start as usize);
@@ -659,7 +599,7 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
                         bind_group,
                         scissor: current_scissor,
                     }));
-                // Re-apply the outer scissor after the segment boundary. Skip when None: emitting (0,0,w,h) inside the nested layer render pass would use window dimensions on a smaller texture and fail validation.
+                // Skip when `None`: emitting (0,0,w,h) inside the nested layer pass would use window dimensions on a smaller texture and fail validation.
                 if let Some(s) = current_scissor {
                     self.pending_steps
                         .push(DrawStep::SetScissor { rect: Some(s) });
@@ -672,7 +612,7 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
                     bucket_w,
                     bucket_h,
                 );
-                // Physical bucket dimensions: to_ndc multiplies logical coords by scale_factor, so using physical size correctly maps logical content into the physical texture.
+                // Physical bucket dimensions: `to_ndc` multiplies logical coords by the scale factor.
                 let layer_vp = Viewport::new(
                     [bucket_w as f32, bucket_h as f32],
                     [offset_x * self.scale_factor, offset_y * self.scale_factor],
@@ -683,7 +623,7 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
                     texture_width as f32 / bucket_w as f32,
                     texture_height as f32 / bucket_h as f32,
                 ];
-                // Composite bind group uses window-absolute dest rect in logical pixels; parent viewport (set 0) converts it to NDC.
+                // The composite bind group uses a window-absolute dest rect in logical pixels; the parent viewport converts it to NDC.
                 let composite_bg = self.composite_pipeline.create_bind_group(
                     &self.device,
                     &self.queue,
@@ -716,7 +656,7 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
                 self.pending_steps
                     .push(DrawStep::Boundary(Boundary::EndLayerComposite {
                         bind_group: composite_bg,
-                        // Only cache when no dirty-scissor is active; otherwise the layer's draws may be clipped to the dirty region, leaving a partially-rendered texture.
+                        // Only when no dirty scissor is active; otherwise the layer's draws may be clipped to the dirty region, leaving a partially rendered texture.
                         cache_hash: if dirty_scissor.is_none() {
                             layer_hash
                         } else {
@@ -724,7 +664,7 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
                         },
                         scissor: current_scissor,
                     }));
-                // Re-apply the outer scissor after the segment boundary. Skip when None: emitting (0,0,w,h) inside the nested layer render pass would use window dimensions on a smaller texture and fail validation.
+                // Skip when `None`: emitting (0,0,w,h) inside the nested layer pass would use window dimensions on a smaller texture and fail validation.
                 if let Some(s) = current_scissor {
                     self.pending_steps
                         .push(DrawStep::SetScissor { rect: Some(s) });
@@ -736,9 +676,7 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
 
     /// Opens a clip and hands back the scissor now in force, pushing the entry [`close_clip`] will read.
     ///
-    /// Three shapes, decided here and nowhere else: a square clip is a scissor; a rounded one masks its
-    /// corners in-shader; a rounded one *inside* another rounded one cannot — the SDF holds one viewport —
-    /// so it falls back to a mini-layer composited at the pop.
+    /// Three shapes, decided here and nowhere else: a square clip is a scissor; a rounded one masks its corners in-shader; a rounded one *inside* another rounded one cannot — the SDF holds one viewport — so it falls back to a mini-layer composited at the pop.
     fn open_clip(
         &mut self,
         clip_stack: &mut Vec<ClipEntry>,
@@ -747,7 +685,7 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
         radius: &renderer_core::BorderRadius,
     ) -> Option<Rect> {
         self.flush_all();
-        // Clip rects arrive in the emitting widget's local space; map through the active matrix so scissors and rounded mini-layers land in window space (composes with scroll/layout transforms).
+        // Clip rects arrive in the emitting widget's local space, so map through the active matrix to land scissors and rounded mini-layers in window space.
         let rect = &renderer_core::transform_clip_rect(self.draw_state.cumulative_matrix, *rect);
         let shader_clip_active = clip_stack
             .iter()
@@ -761,7 +699,7 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
             return Some(effective);
         }
         if !shader_clip_active {
-            // Non-nested rounded clip: mask corners in-shader via the viewport SDF, no mini-layer. A scissor to the clip rect still bounds the cheap pixels. TODO(sprint3-t8): a PushLayer nested inside this shader clip renders into its own pass without the SDF mask, so the layer's corners are not rounded; such cases still need the mini-layer fallback.
+            // Non-nested rounded clip: mask corners in-shader via the viewport SDF, with a scissor still bounding the cheap pixels. A `PushLayer` nested inside renders without the SDF mask, so its corners are not rounded — such cases still need the mini-layer fallback.
             let effective = self.draw_state.push_clip(*rect);
             clip_stack.push(ClipEntry::Shader {
                 outer_scissor: current_scissor,
@@ -775,7 +713,7 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
             });
             return Some(effective);
         }
-        // Nested rounded clip: fall back to a mini-layer, draw into it, composite with SDF mask at PopClip.
+        // Nested rounded clip: draw into a mini-layer and composite with an SDF mask at `PopClip`.
         let outer_scissor = current_scissor;
         self.draw_state.push_clip(*rect);
         let ox = rect.x.floor().max(0.0);
@@ -795,7 +733,7 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
             bucket_w,
             bucket_h,
         );
-        // Use physical bucket dimensions: to_ndc scales logical coords by scale_factor, so size must be physical to map [0, logical_w] correctly to NDC [-1, 1].
+        // Physical bucket dimensions: `to_ndc` scales logical coords, so the size must be physical to map onto NDC.
         let layer_vp = Viewport::new(
             [bucket_w as f32, bucket_h as f32],
             [ox * self.scale_factor, oy * self.scale_factor],
@@ -806,7 +744,7 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
             texture_width as f32 / bucket_w as f32,
             texture_height as f32 / bucket_h as f32,
         ];
-        // composite_bg borrows resolve_view before it moves into BeginLayer
+        // `composite_bg` borrows `resolve_view` before it moves into `BeginLayer`.
         let composite_bg = self.composite_pipeline.create_bind_group(
             &self.device,
             &self.queue,
@@ -834,7 +772,7 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
                 offset_y: oy,
                 backdrop_blur: 0.0,
             }));
-        // Pool return for clip layer textures is handled by the EndLayerComposite execution path.
+        // Pool return for clip layer textures is handled by the `EndLayerComposite` path.
         clip_stack.push(ClipEntry::Layer {
             composite: composite_bg,
             outer_scissor,
@@ -844,9 +782,7 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
 
     /// Unwinds one clip and hands back the scissor now in force.
     ///
-    /// Which of the three shapes a `PushClip` took is not knowable from the `PopClip` — a plain scissor, an
-    /// in-shader rounded mask, or a mini-layer composite — so the entry it pushed carries the answer and this
-    /// is where it is read.
+    /// Which of the three shapes a `PushClip` took is not knowable from the `PopClip` — a plain scissor, an in-shader rounded mask, or a mini-layer composite — so the entry it pushed carries the answer and this is where it is read.
     fn close_clip(
         &mut self,
         clip_stack: &mut Vec<ClipEntry>,
@@ -871,7 +807,7 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
                 });
                 outer_scissor
             }
-            // Matching PopClip for the in-shader rounded clip: restore the unclipped viewport and the outer scissor.
+            // The matching `PopClip` for the in-shader rounded clip: restore the unclipped viewport and outer scissor.
             Some(ClipEntry::Shader { outer_scissor }) => {
                 self.draw_state.pop_clip();
                 let base_vp_bg =
@@ -890,7 +826,7 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
                     .push(DrawStep::SetScissor { rect: effective });
                 effective
             }
-            // A `PopClip` with nothing to pop: the draw state still unwinds, exactly as before.
+            // A `PopClip` with nothing to pop still unwinds the draw state.
             None => {
                 let effective = self.draw_state.pop_clip();
                 self.pending_steps
@@ -911,18 +847,15 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
         let mut current_scissor: Option<Rect> = None;
         let mut scissor_layer_stack: Vec<Option<Rect>> = Vec::new(); // saves/restores current_scissor across PushLayer/PopLayer; layers disable frustum culling inside their bounds
         let mut layer_accum_stack: Vec<LayerAccum> = Vec::new();
-        // Parallel to the draw_state clip stack, and what each `PopClip` reads to know what it closes.
+        // Parallel to the draw-state clip stack, and what each `PopClip` reads to know what it closes.
         let mut clip_stack: Vec<ClipEntry> = Vec::new();
         let expanded_commands = expand_fill_layers(commands);
         let commands: &[DrawCommand] = expanded_commands.as_deref().unwrap_or(commands);
 
-        // F1 damage prime: the init pass seeded the whole target with the previous frame. Confine the
-        // main pass to the dirty scissor (a leading SetScissor{None} resolves to dirty_scissor in
-        // execute_segments) and repaint the app background there so ghosts of moved/removed content
-        // are erased before the changed + overlapping-unchanged commands redraw on top.
+        // The init pass seeded the whole target with the previous frame, so confine the main pass to the dirty scissor and repaint the app background there, erasing ghosts before the changed commands redraw on top.
         if let Some((dirty_rect, clear_col)) = damage_bg {
             self.pending_steps.push(DrawStep::SetScissor { rect: None });
-            // Inflate 1px so the physical scissor (which floors/ceils) is fully covered by the fill.
+            // Inflate 1px so the physical scissor, which floors and ceils, is fully covered by the fill.
             let bg_rect = Rect::new(
                 dirty_rect.x - 1.0,
                 dirty_rect.y - 1.0,
@@ -945,8 +878,7 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
         }
 
         for (cmd_idx, cmd) in commands.iter().enumerate() {
-            // Ahead of the bounds below, and that order is the point: a rect that draws nothing would otherwise
-            // union into the layer accumulator and grow the layer texture to cover it.
+            // Ahead of the bounds below, and that order is the point: a rect that draws nothing would otherwise union into the layer accumulator and grow the layer texture to cover it.
             if let DrawCommand::Rect { rect, style } = cmd
                 && (rect.width <= 0.0
                     || rect.height <= 0.0
@@ -955,8 +887,7 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
                 continue;
             }
 
-            // One set of bounds for the whole body: every drawing arm asked the same question of the same
-            // command. `None` for the state commands (clip/matrix/layer), which must never be culled.
+            // One set of bounds for the whole body. `None` for the state commands, which must never be culled.
             if let Some(bounds) = renderer_core::culling::command_visual_rect(
                 cmd,
                 self.draw_state.cumulative_matrix,
@@ -995,10 +926,7 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
                 } => {
                     let rect = *rect;
                     let spans = spans_at_scale(spans, self.draw_state.scale());
-                    // Laid out at the size the matrix makes it, not at the size it was written with.
-                    // The rect already goes through the matrix below; without this the box grows and
-                    // the letters do not, so a zoomed subtree — a canvas, a thumbnail, a transition
-                    // — comes out with text of the wrong size in a box of the right one.
+                    // Laid out at the size the matrix makes it. The rect already goes through the matrix below; without this the box grows and the letters do not, so a zoomed subtree comes out with text of the wrong size.
                     let style = at_scale((**style).clone(), self.draw_state.scale());
                     self.flush_rect();
                     self.flush_line();
@@ -1298,7 +1226,7 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
                     backdrop_blur,
                 } => {
                     self.flush_all();
-                    // Disable frustum culling inside the layer to avoid incorrect culling by an outer PushClip; save scissor for restore at PopLayer.
+                    // Disable frustum culling inside the layer, to avoid incorrect culling by an outer `PushClip`.
                     scissor_layer_stack.push(current_scissor);
                     current_scissor = None;
                     layer_accum_stack.push(LayerAccum {
@@ -1322,8 +1250,7 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
                         dirty_scissor,
                     );
                 }
-                // Structure, for a backend whose output is a document. Every command inside carries the
-                // position it was laid out at, so skipping the markers draws the same frame.
+                // Structure, for a backend whose output is a document. Every command inside carries the position it was laid out at, so skipping the markers draws the same frame.
                 DrawCommand::PushElement { .. } | DrawCommand::PopElement => {}
             }
         }
@@ -1343,7 +1270,7 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
             return Ok(true);
         }
 
-        // Windowed: acquire the swapchain texture to present into. Headless (surface None): `output` stays None and every draw targets `offscreen_output` instead.
+        // Headless has no surface, so `output` stays `None` and every draw targets `offscreen_output`.
         let output: Option<wgpu::SurfaceTexture> = if self.surface.is_some() {
             match self.acquire_surface_texture("hw render_frame")? {
                 Acquired::Texture(t) => Some(t),
@@ -1447,7 +1374,7 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
             return;
         }
 
-        // Reuse the retained shadow instance buffer + bind group when the instance data is unchanged; otherwise (re)create and cache them. This avoids a create_buffer_init + create_bind_group round-trip every frame for static shadows.
+        // Reuse the retained shadow buffer and bind group when the instance data is unchanged, avoiding a create-and-bind round trip every frame for static shadows.
         let shadow_instances_bg_opt = if has_text_shadows {
             let instances_hash = hash_pod_slice(&self.pending_shadow_instances);
             let cache_valid = self
@@ -1472,7 +1399,7 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
                 });
                 self.shadow_instances_cache = Some((instances_hash, buf, bg));
             }
-            // create_bind_group returns an owned Arc-backed handle, so clone to hand a copy to the draw loop while keeping the cached one.
+            // `create_bind_group` returns an owned Arc-backed handle, so clone to hand a copy to the draw loop.
             self.shadow_instances_cache
                 .as_ref()
                 .map(|(_, _, bg)| bg.clone())
@@ -1528,7 +1455,7 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
         let mut results: Vec<Option<wgpu::BindGroup>> =
             Vec::with_capacity(self.pending_shadows.len());
 
-        // Hoist the shared geometry bind groups/buffers out of the loop so both shadow kinds can read them. They are only created when the corresponding shadow kind is present.
+        // Hoisted so both shadow kinds can read them; created only when the corresponding kind is present.
         let shadow_instances_bg = shadow_instances_bg_opt;
         let shadow_path_vb = shadow_path_vb_opt;
         let shadow_path_ib = shadow_path_ib_opt;
@@ -1584,9 +1511,7 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
                 }
             };
 
-            // Cloned out of the cache — a `TextureView` is an `Arc` handle, so this names the same GPU object —
-            // because the bind group is built from `self.composite_pipeline`, and the cache's borrow cannot be
-            // held across that.
+            // Cloned out of the cache — a `TextureView` is an `Arc` handle naming the same GPU object — because the bind group is built from `self.composite_pipeline` and the cache's borrow cannot be held across that.
             let cached_view = crate::caches::with_shared(|caches| {
                 caches
                     .shadow_resolved
@@ -1624,7 +1549,7 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
                     cap_bucket_h,
                 );
 
-            // Use bucket dimensions: shadow-texture vertices are 0-based local coords, so the viewport size must match the physical texture, not the logical one.
+            // Bucket dimensions: shadow-texture vertices are 0-based local coords, so the viewport must match the physical texture rather than the logical one.
             let vp_data = Viewport::new(
                 [cap_bucket_w as f32, cap_bucket_h as f32],
                 [0.0, 0.0],
@@ -1735,7 +1660,7 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
             });
         }
 
-        // Shadow passes are recorded into the shared `encoder` and submitted with the main pass; no separate submit here.
+        // Recorded into the shared encoder and submitted with the main pass.
         let mut shadow_results = results;
         for step in &mut self.pending_steps {
             if let DrawStep::ShadowPlaceholder { op_index } = step {
@@ -1752,7 +1677,7 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
         &mut self,
         ctx: &mut FrameCtx,
     ) -> Result<(Vec<DrawStep>, Vec<Segment>), RendererError> {
-        // Image-batching pre-pass: stable-sort each run of consecutive ImageBatch steps by (id, filter) so non-adjacent draws of the same image become adjacent. This is safe for z-order because the reorder is confined to a single run with no intervening non-image steps.
+        // Stable-sort each run of consecutive `ImageBatch` steps so non-adjacent draws of one image become adjacent. Safe for z-order, because the reorder stays inside a run with no intervening non-image steps.
         {
             let steps = &mut self.pending_steps;
             let mut i = 0;
@@ -1763,7 +1688,7 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
                         j += 1;
                     }
                     if j - i > 1 {
-                        // Raster is not Ord; map it to a u8 for sorting.
+                        // `Raster` is not `Ord`; map it to a u8 for sorting.
                         let filter_ord = |f: Raster| match f {
                             Raster::Pixel => 0u8,
                             Raster::Smooth => 1u8,
@@ -1788,7 +1713,7 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
 
         self.merge_opaque_batches();
 
-        // Windowed: the swapchain texture. Headless: the persistent offscreen target that read_rgba later copies from.
+        // Windowed: the swapchain texture. Headless: the persistent offscreen target `read_rgba` copies from.
         let surface_view = match ctx.output.as_ref() {
             Some(o) => o
                 .texture
@@ -1802,7 +1727,7 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
                 .create_view(&wgpu::TextureViewDescriptor::default()),
         };
 
-        // Under direct-to-surface the main target IS the presentation texture (swapchain windowed, offscreen headless), so every existing `msaa_view` reference (top-level draw passes and layer composites) renders straight to it; the trailing copy/resolve is then skipped.
+        // Under direct-to-surface the main target is the presentation texture, so every `msaa_view` reference renders straight to it and the trailing copy or resolve is skipped.
         let msaa_view = if ctx.direct_to_surface {
             match ctx.output.as_ref() {
                 Some(o) => o
@@ -1838,7 +1763,7 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
 
         let mut steps = std::mem::take(&mut self.pending_steps);
         let mut segments: Vec<Segment> = Vec::new();
-        // Walk steps emitting Segment::Draw with index ranges; extract layer-boundary steps in place via std::mem::replace to avoid moving ownership-bearing variants.
+        // Layer-boundary steps are extracted in place via `mem::replace`, to avoid moving ownership-bearing variants.
         let mut current_start: usize = 0;
         for i in 0..steps.len() {
             if !matches!(steps[i], DrawStep::Boundary(_)) {
@@ -1866,8 +1791,7 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
         Ok((steps, segments))
     }
 
-    /// Runs one segment's draw steps into `render_pass`, the same way for every kind of pass — the main one,
-    /// a layer's, a capture's.
+    /// Runs one segment's draw steps into `render_pass`, the same way for every kind of pass — the main one, a layer's, a capture's.
     fn run_draw_steps<'a>(
         &'a self,
         render_pass: &mut wgpu::RenderPass<'a>,
@@ -1971,8 +1895,7 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
 
     /// Fills a layer's texture with the blurred framebuffer behind it, before its own content draws over it.
     ///
-    /// Always sampled from the root MSAA, never from whatever layer is currently on the stack: a rounded-clip
-    /// mini-layer above this point is transparent at this moment, so blurring it would yield nothing.
+    /// Always sampled from the root MSAA, never from whatever layer is currently on the stack: a rounded-clip mini-layer above this point is transparent at this moment, so blurring it would yield nothing.
     #[allow(clippy::too_many_arguments)]
     fn fill_layer_backdrop(
         &mut self,
@@ -1988,11 +1911,11 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
         layer_msaa_view: &wgpu::TextureView,
         viewport_bind_group: &wgpu::BindGroup,
     ) {
-        // Always sample from the root (main) MSAA for backdrop blur. Any layers above this point in the stack (e.g. a rounded-clip mini-layer) are transparent at this moment — blurring their content would yield nothing. The root MSAA has the fully-rendered app content that the blur should sample.
+        // Always from the root MSAA: layers above this point are transparent right now, so blurring their content would yield nothing, while the root holds the fully rendered app content.
         let (parent_w, parent_h) = (self.width, self.height);
         let parent_msaa_view: &wgpu::TextureView = msaa_view;
 
-        // Superset usage so any pooled texture of this size/format can serve as either the resolve target or the crop destination interchangeably.
+        // Superset usage, so any pooled texture of this size and format can serve as either the resolve target or the crop destination.
         let scratch_usage = wgpu::TextureUsages::RENDER_ATTACHMENT
             | wgpu::TextureUsages::COPY_SRC
             | wgpu::TextureUsages::COPY_DST
@@ -2017,7 +1940,7 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
                 Some(temp_resolve_view),
                 wgpu::Operations {
                     load: wgpu::LoadOp::Load,
-                    // Store: the parent MSAA is still needed after this resolve so EndLayerComposite can load it to composite the layer on top. Discard here caused a black screen on immediate-mode GPUs (desktop).
+                    // Store, not Discard: the parent MSAA is still needed so `EndLayerComposite` can load it. Discarding here caused a black screen on immediate-mode GPUs.
                     store: wgpu::StoreOp::Store,
                 },
             );
@@ -2122,7 +2045,7 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
             backdrop_pass.set_bind_group(1, &backdrop_bg, &[]);
             backdrop_pass.draw(0..6, 0..1);
         }
-        // Hold these scratch textures until after submit; returning them to the pool now would let a later layer in this same encoder reuse and overwrite them before the GPU reads them.
+        // Held until after submit: returning them to the pool now would let a later layer in this same encoder reuse and overwrite them before the GPU reads them.
         ctx.frame_scratch_textures.push(temp_resolve_entry);
         ctx.frame_scratch_textures.push(cropped_entry);
     }
@@ -2134,9 +2057,8 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
         steps: &[DrawStep],
         segments: Vec<Segment>,
     ) -> Result<(), RendererError> {
-        // Views are owned clones (cheap Arc bumps) so no borrow of `ctx` is held across the `ctx.frame_scratch_textures` writes below.
+        // Owned clones (cheap Arc bumps), so no borrow of `ctx` is held across the writes below.
         let targets = ctx.targets.as_ref().expect("targets set in build_segments");
-        // Owned clones (cheap Arc bumps) so no borrow of `ctx` is held across the `ctx.frame_scratch_textures` writes below.
         let msaa_view = targets.msaa_view.clone();
         let retained_view = targets.retained_view.clone();
         let load_op = ctx.load_op;
@@ -2144,8 +2066,7 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
         let prime = ctx.prime;
         let prime_delta = ctx.prime_delta;
 
-        // The top-level target needs `load_op` (usually a full-screen Clear) applied once before anything Loads it. A dedicated no-draw init pass costs a full-screen tile store+load every frame on tiled mobile GPUs; when the first segment is itself a top-level Draw, fold the clear into that pass instead. Gated to the single-sample (mobile tiler) path: immediate-mode desktop GPUs gain little and keep the simpler explicit-init pass. Falls back to the standalone init pass when the frame opens with a layer (nothing draws to the top-level target first).
-        // Prime the offscreen with the retained previous frame translated by prime_delta before the main pass Loads it: scroll-blit-with-clear (delta = scroll, redraw only the exposed band) or F1 damage priming (delta = 0, redraw only the dirty scissor). The clear (load_op) is fully covered by the full-screen quad, so its value is irrelevant on primed frames.
+        // The top-level target needs `load_op` applied once before anything Loads it. A dedicated no-draw init pass costs a full-screen tile store and load every frame on tiled mobile GPUs, so when the first segment is a top-level Draw the clear folds into that pass instead. Gated to the single-sample path, and falling back to the standalone init pass when the frame opens with a layer. Priming translates the retained previous frame by `prime_delta` before the main pass Loads it. The clear is fully covered by the full-screen quad, so its value is irrelevant on primed frames.
         let prime_bind_group = if prime {
             let logical_w = self.width as f32 / self.scale_factor;
             let logical_h = self.height as f32 / self.scale_factor;
@@ -2184,7 +2105,7 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
         }
 
         let mut layer_stack: Vec<LayerTarget> = Vec::new();
-        // Marks draw segments preceding EndLayerComposite to inline MSAA resolve into the drawing pass, skipping the dedicated resolve pass.
+        // Marks draw segments preceding `EndLayerComposite` to inline the MSAA resolve into the drawing pass.
         let mut inline_resolve_targets: Vec<bool> = vec![false; segments.len()];
         for i in 0..segments.len() {
             if let (
@@ -2228,15 +2149,13 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
                         } else {
                             None
                         };
-                    // Scissors must be clamped to the attachment actually bound below, which inside a layer is
-                    // that layer's texture — smaller than the surface. Clamping to the surface instead lets a
-                    // clip nested in a layer name pixels outside the attachment, which wgpu rejects as fatal.
+                    // Scissors must be clamped to the attachment actually bound below, which inside a layer is that layer's texture. Clamping to the surface lets a nested clip name pixels outside the attachment, which wgpu rejects as fatal.
                     let (target_w, target_h) = layer_stack
                         .last()
                         .map(|layer| (layer.width, layer.height))
                         .unwrap_or((self.width, self.height));
 
-                    // When the init pass was folded away (first segment is this top-level Draw), apply the frame's clear here instead of Loading an uninitialised target.
+                    // When the init pass was folded away, apply the frame's clear here rather than Loading an uninitialised target.
                     let pass_load = if seg_idx == 0 && fold_init_clear {
                         load_op
                     } else {
@@ -2344,7 +2263,7 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
                         .pop()
                         .expect("layer_stack underflow on EndLayerComposite");
 
-                    // When msaa_samples==1, draws already targeted resolve_view directly so no resolve pass is needed.
+                    // At one sample, draws already targeted `resolve_view` directly.
                     if !endlayer_resolve_done[seg_idx] && self.msaa_samples > 1 {
                         let _resolve = crate::pass::color_pass(
                             encoder,
@@ -2358,7 +2277,7 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
                         );
                     }
 
-                    // When msaa_samples==1 (Android) draws target the resolve view, not the MSAA view; the wrong one lands composited content on a texture the outer layer never reads, making nested layers disappear.
+                    // At one sample, draws target the resolve view rather than the MSAA view; the wrong one lands composited content on a texture the outer layer never reads, making nested layers disappear.
                     let parent_view: &wgpu::TextureView = if let Some(layer) = layer_stack.last() {
                         if self.msaa_samples > 1 {
                             &layer.msaa_view
@@ -2369,14 +2288,13 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
                         &msaa_view
                     };
 
-                    // composite_pipeline must be used here (not layer_pipeline): its BGL expects viewport at set 0 and composite params at set 1, incompatible with layer_pipeline's single-set layout.
+                    // Not `layer_pipeline`: its BGL expects the viewport at set 0 and composite params at set 1, incompatible with the single-set layout.
                     let parent_vp_bg: &wgpu::BindGroup = if let Some(layer) = layer_stack.last() {
                         &layer.viewport_bind_group
                     } else {
                         &self.viewport_bind_group
                     };
-                    // The layer being composited is already popped, so this is the PARENT — the attachment the
-                    // blit writes into, and therefore what its scissor must be clamped against.
+                    // The layer being composited is already popped, so this is the parent — the attachment the blit writes into, and what its scissor must be clamped against.
                     let (parent_w, parent_h) = layer_stack
                         .last()
                         .map(|layer| (layer.width, layer.height))
@@ -2393,9 +2311,7 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
                         blit.set_pipeline(&self.composite_pipeline.pipeline);
                         blit.set_bind_group(0, parent_vp_bg, &[]);
                         blit.set_bind_group(1, &bind_group, &[]);
-                        // Confine only a TOP-LEVEL composite (parent is the main target) to the dirty
-                        // rect; a nested composite writes into a parent layer in that layer's own
-                        // coordinate space, where the window-space dirty rect does not apply.
+                        // Only a top-level composite: a nested one writes into a parent layer in that layer's coordinate space, where the window-space dirty rect does not apply.
                         let composite_scissor = if layer_stack.is_empty() {
                             confine_to_dirty(scissor, dirty_scissor)
                         } else {
@@ -2410,7 +2326,7 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
                     }
 
                     if let Some(hash) = cache_hash {
-                        // Retain the resolved texture so the next frame can composite it directly. The MSAA half is not cacheable (it is consumed by the resolve), so it drops instead of returning to the pool.
+                        // Retained so the next frame can composite it directly. The MSAA half is consumed by the resolve, so it drops rather than returning to the pool.
                         let pixel_count = layer.width as u64 * layer.height as u64;
                         self.layer_resolved_cache.insert(
                             hash,
@@ -2425,7 +2341,7 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
                         while total_pixels > self.layer_cache_pixel_budget {
                             match self.layer_resolved_cache_order.pop_front() {
                                 Some(oldest) if oldest == hash => {
-                                    // Never evict the entry we just inserted; if it alone exceeds the budget keep it for this frame.
+                                    // Never evict the entry just inserted; if it alone exceeds the budget, keep it for this frame.
                                     self.layer_resolved_cache_order.push_front(oldest);
                                     break;
                                 }
@@ -2455,7 +2371,6 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
                     bind_group,
                     scissor,
                 }) => {
-                    // Composite the cached layer texture onto the current target (parent layer or surface) without rendering the layer content.
                     let parent_view: &wgpu::TextureView = if let Some(layer) = layer_stack.last() {
                         if self.msaa_samples > 1 {
                             &layer.msaa_view
@@ -2470,8 +2385,7 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
                     } else {
                         &self.viewport_bind_group
                     };
-                    // The layer being composited is already popped, so this is the PARENT — the attachment the
-                    // blit writes into, and therefore what its scissor must be clamped against.
+                    // The layer being composited is already popped, so this is the parent — the attachment the blit writes into, and what its scissor must be clamped against.
                     let (parent_w, parent_h) = layer_stack
                         .last()
                         .map(|layer| (layer.width, layer.height))
@@ -2505,10 +2419,7 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
 
     /// Draws the composed frame onto the presentation target.
     ///
-    /// Clears first when the target is Telar's — a swapchain image is recycled and whatever the last
-    /// frame left in it is not this frame's background — and loads when it belongs to the application,
-    /// which is what makes composing *into* its picture different from replacing it. The pipeline blends
-    /// premultiplied-alpha over either way, so the two differ only in what is underneath.
+    /// Clears first when the target is Telar's — a swapchain image is recycled and whatever the last frame left in it is not this frame's background — and loads when it belongs to the application, which is what makes composing *into* its picture different from replacing it. The pipeline blends premultiplied-alpha over either way, so the two differ only in what is underneath.
     fn blit_to_target(
         &self,
         encoder: &mut wgpu::CommandEncoder,
@@ -2555,9 +2466,9 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
         } = targets.expect("targets set in build_segments");
 
         if direct_to_surface {
-            // Already rendered straight into the swapchain texture; no copy/resolve to the surface needed.
+            // Already rendered straight into the swapchain texture.
         } else if self.msaa_samples > 1 {
-            // Resolve MSAA into retained_view so the idle-blit path has valid content next frame.
+            // Resolve into `retained_view`, so the idle-blit path has valid content next frame.
             {
                 let _final = crate::pass::color_pass(
                     &mut encoder,
@@ -2586,7 +2497,7 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
             );
             self.blit_to_target(&mut encoder, &surface_view, &retained_bg);
         } else if self.app_owned_target {
-            // The copy below would replace what the application drew in its texture; blend the frame over it instead. `msaa_texture` carries TEXTURE_BINDING on this single-sample path (see `reconfigure`), so it is sampleable without the resolve step the MSAA branch needs.
+            // The copy below would replace what the application drew, so blend over it instead. `msaa_texture` carries `TEXTURE_BINDING` on this single-sample path, so it is sampleable without a resolve.
             let msaa_source = self
                 .msaa_texture
                 .as_ref()
@@ -2608,12 +2519,12 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
             );
             self.blit_to_target(&mut encoder, &surface_view, &source_bg);
         } else {
-            // Android (msaa_samples==1): copy directly to surface to avoid alpha-compositing artifacts on Adreno drivers.
+            // Copy directly to the surface, to avoid alpha-compositing artifacts on Adreno drivers.
             let msaa_tex = self
                 .msaa_texture
                 .as_ref()
                 .ok_or_else(|| RendererError::Backend("msaa_texture missing for copy".into()))?;
-            // Windowed: copy into the swapchain texture. Headless: into the offscreen target read_rgba reads.
+            // Windowed: the swapchain texture. Headless: the offscreen target `read_rgba` reads.
             let dest_texture: &wgpu::Texture = match output.as_ref() {
                 Some(o) => &o.texture,
                 None => self.offscreen_output.as_ref().ok_or_else(|| {
@@ -2639,11 +2550,11 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
                     depth_or_array_layers: 1,
                 },
             );
-            // The former second full-screen copy (msaa_texture → retained_texture, to feed the idle-blit) is gone: the idle-blit now samples msaa_texture directly, halving the per-active-frame copy_texture_to_texture traffic on Android. retained_texture stays allocated but unused on this path — it is shared with the MSAA>1 (Desktop) branch.
+            // The idle-blit samples `msaa_texture` directly, so no second full-screen copy is needed here. `retained_texture` stays allocated but unused on this path, being shared with the MSAA branch.
         }
 
         self.queue.submit(std::iter::once(encoder.finish()));
-        // Safe to recycle now: the encoder is submitted, so no in-flight pass within this frame can alias these textures.
+        // The encoder is submitted, so no in-flight pass within this frame can alias these textures.
         for entry in frame_scratch_textures.drain(..) {
             return_pooled_texture(
                 &mut self.texture_pool,
@@ -2652,7 +2563,7 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
             );
         }
 
-        // Headless has no swapchain: the frame already lives in offscreen_output, so present is a windowed-only no-op.
+        // Headless has no swapchain: the frame already lives in `offscreen_output`.
         if let Some(output) = output {
             tracing::debug!("hw render_frame: presenting {}x{}", self.width, self.height);
             let present_start = renderer_core::perf::now_if_enabled();
@@ -2662,9 +2573,9 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
             }
             renderer_core::perf::record_since(renderer_core::perf::Phase::Present, present_start);
         }
-        // generation already bumps iff content changed (same invariant the idle-blit fast path relies on), so it replaces the per-frame O(n) hash_draw_commands here; the is_empty() guard repopulates prev_commands after a resize cleared it without a content change.
+        // `generation` already bumps if and only if content changed, so it replaces a per-frame hash of the draw commands. The `is_empty` guard repopulates `prev_commands` after a resize cleared it without a change.
         if self.incoming_generation != self.prev_generation || self.prev_commands.is_empty() {
-            // F2: reuse the existing allocation (clear + refill) instead of allocating a fresh Vec each content frame.
+            // Reuse the existing allocation instead of allocating a fresh Vec each content frame.
             self.prev_commands.clear();
             self.prev_commands.extend_from_slice(orig_commands);
         }

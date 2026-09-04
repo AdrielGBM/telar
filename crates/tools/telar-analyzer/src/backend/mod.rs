@@ -1,3 +1,5 @@
+//! The LSP backend: the server state, and the request handlers that split work between the native `.rsx` analysis and the embedded rust-analyzer.
+
 use std::path::{Path, PathBuf};
 use std::sync::atomic::AtomicU64;
 use std::sync::{Arc, Mutex};
@@ -31,7 +33,7 @@ mod query;
 mod rename;
 
 /// Lifecycle of the embedded rust-analyzer: loaded lazily on the first `[logic]` query because `load()` is slow (cargo metadata + crate graph).
-// Always lives behind `Arc<Mutex<…>>` and is only ever written in place, so the large `Ready` variant is never moved by value — the size disparity clippy flags is irrelevant here.
+// Always lives behind `Arc<Mutex<…>>` and is only written in place, so the large `Ready` variant is never moved by value and the size disparity clippy flags is irrelevant.
 #[allow(clippy::large_enum_variant)]
 enum AnalyzerState {
     Idle,
@@ -62,15 +64,16 @@ struct CompletionCache {
     docs: Vec<Option<Documentation>>,
 }
 
+/// The server's state: the open documents, the workspace index, and the embedded analyzer behind them.
 pub struct Backend {
     outgoing: OutgoingSender,
     store: Arc<RwLock<Store>>,
     analyzer: Arc<Mutex<AnalyzerState>>,
-    // Persistent `.rsx` symbol index (components, `@classes`, component tag usages) backing `workspace/symbol` and cross-file component references/rename. Built lazily on the first query, refreshed per-file on edits and watched-file events. `None` until the first query builds it.
+    // Backs `workspace/symbol` and cross-file component references. Built lazily on the first query and refreshed per file on edits; `None` until then.
     index: Arc<Mutex<Option<WorkspaceIndex>>>,
     // Deferred documentation for the last rust-analyzer completion batch (see [`CompletionCache`]).
     completion_cache: Arc<Mutex<CompletionCache>>,
-    // Monotonic edit counter, bumped on every reparse. A spawned diagnostics task captures the value it was queued for and bails before the expensive rust-analyzer query if a newer edit superseded it, so keystroke-rate edits don't pile up redundant `full_diagnostics` runs behind the lock.
+    // A spawned diagnostics task captures the value it was queued for and bails before the expensive query if a newer edit superseded it, so keystroke-rate edits do not pile up behind the lock.
     revision: Arc<AtomicU64>,
     reload_at: Arc<Mutex<Option<Instant>>>,
 }
@@ -114,7 +117,7 @@ impl Backend {
                         " ".to_string(),
                         "\"".to_string(),
                     ]),
-                    // Docs are deferred to `completionItem/resolve` so the list stays lean on the wire.
+                    // Deferred to `completionItem/resolve`, so the list stays lean on the wire.
                     resolve_provider: Some(true),
                     ..Default::default()
                 }),
@@ -176,7 +179,7 @@ impl Backend {
         let text = params.text_document.text.clone();
         let diagnostics = self.reparse_and_diagnose(uri.clone(), text).await;
         self.outgoing.publish_diagnostics(uri.clone(), diagnostics);
-        // Warm the embedded analyzer as soon as a `.rsx` opens, so the slow workspace load overlaps with reading the file instead of stalling the first completion.
+        // As soon as a `.rsx` opens, so the slow workspace load overlaps with reading the file rather than stalling the first completion.
         if let Some(rsx_path) = crate::uri::to_path(&uri)
             && let Some(root) = crate::build_sync::crate_root(&rsx_path)
         {
@@ -213,13 +216,13 @@ impl Backend {
             let name = path.file_name().and_then(|n| n.to_str()).unwrap_or("");
             let ext = path.extension().and_then(|e| e.to_str());
             if ext == Some("rsx") {
-                // Index maintenance only — `.rsx` modules are overlaid live, never read by the crate graph, so they don't force an analyzer reload.
+                // Index maintenance only: `.rsx` modules are overlaid live and never read by the crate graph.
                 rsx_changes.push((path, change.typ == FileChangeType::DELETED));
                 continue;
             }
             if name == "Cargo.toml" || name == "Cargo.lock" || change.typ != FileChangeType::CHANGED
             {
-                // A manifest/lockfile edit, or a created/deleted file, changes the crate graph → full reload.
+                // A manifest edit, or a created or deleted file, changes the crate graph.
                 needs_reload = true;
             } else if ext == Some("rs") {
                 to_refresh.push(path);
@@ -256,7 +259,7 @@ impl Backend {
         }
         let analyzer = self.analyzer.clone();
         let reload_at = self.reload_at.clone();
-        // Off the read loop: locking the analyzer can contend with an in-flight RA query.
+        // Off the read loop: locking the analyzer can contend with an in-flight query.
         tokio::task::spawn_blocking(move || {
             let Ok(mut state) = analyzer.lock() else {
                 return;
@@ -264,7 +267,7 @@ impl Backend {
             if let AnalyzerState::Ready(a) = &mut *state {
                 for path in &to_refresh {
                     if !a.refresh_from_disk(path) {
-                        // A `.rs` the loaded graph doesn't know (e.g. newly created) → reload to pick it up.
+                        // A `.rs` the loaded graph does not know, so reload to pick it up.
                         mark_reload(&reload_at);
                         break;
                     }
@@ -283,9 +286,7 @@ impl Backend {
             let parsed = store.get(uri)?;
             let project = file_path.as_deref().and_then(ProjectInfo::discover);
             let context = completion_context(&parsed.source, pos.line, pos.character);
-            // A component's props are the props struct's own business, so the key position there is a
-            // question for rust-analyzer — which answers with names, types *and* doc comments, from the
-            // definition. The registry can only answer for the tags it defines.
+            // A component's props are the props struct's own business, so the key position is a question for rust-analyzer, which answers with names, types and doc comments. The registry can only answer for the tags it defines.
             let component_props =
                 matches!(&context, Some(CompletionKind::AttributeKey(tag)) if !is_builtin_tag(tag));
             let native = context.filter(|_| !component_props).map(|kind| match kind {
@@ -308,7 +309,7 @@ impl Backend {
         if let Some(items) = native {
             return Some(CompletionResponse::Array(items));
         }
-        // Outside a native `.rsx` zone: delegate Rust completion to the embedded rust-analyzer over the generated module — line-mapped for `[logic]`, expression-span-mapped for `[view]`, and props-builder-mapped for a component's attribute keys.
+        // Line-mapped for `[logic]`, expression-span-mapped for `[view]`, and props-builder-mapped for a component's attribute keys.
         let rsx_path = file_path?;
         let locate = match component_props {
             true => query::props_builder_offset,
@@ -364,7 +365,7 @@ impl Backend {
                 item.documentation = Some(docs.clone());
             }
         }
-        // The client echoes `data` back on resolve; it has served its purpose, so drop it from the committed item.
+        // The client echoes `data` back on resolve, so it is dropped from the committed item.
         item.data = None;
         item
     }
@@ -501,7 +502,7 @@ impl Backend {
     pub async fn formatting(&self, params: DocumentFormattingParams) -> Option<Vec<TextEdit>> {
         let uri = &params.text_document.uri;
 
-        // Format the live buffer, not the last good parse: if the current text does not parse, `format_document` returns `None` below and we emit no edit, leaving the file untouched.
+        // The live buffer, not the last good parse: if the current text does not parse, no edit is emitted and the file is left untouched.
         let source = {
             let store = self.store.read().await;
             store.latest_source(uri).cloned()
@@ -585,7 +586,7 @@ impl Backend {
     pub async fn document_link(&self, params: DocumentLinkParams) -> Option<Vec<DocumentLink>> {
         let uri = &params.text_document.uri;
         let path = crate::uri::to_path(uri)?;
-        // Resolve links against the project asset root (matching the baker), falling back to the file's dir when there is no telar.toml.
+        // Against the project asset root, matching the baker, falling back to the file's dir with no telar.toml.
         let assets_dir = telar_transpiler::find_telar_root(&path)
             .map(|root| telar_transpiler::assets_root(&root))
             .or_else(|| path.parent().map(|p| p.to_path_buf()))?;
@@ -740,7 +741,7 @@ impl Backend {
             crate::analysis::occurrences::component_at(&source, pos.line, pos.character)
         {
             let path = crate::uri::to_path(uri)?;
-            // Workspace first: a component is referenced from wherever it is used, which in a multi-crate project is not the crate that defines it. The nearest `telar.toml` is the narrower answer and is only right when there is no workspace above it.
+            // Workspace first: a component is referenced from wherever it is used, which in a multi-crate project is not the crate defining it. The nearest `telar.toml` is only right when there is no workspace above it.
             let root = telar_transpiler::find_workspace_root(&path)
                 .or_else(|| telar_transpiler::find_telar_root(&path))?;
             let locations = self
@@ -859,7 +860,7 @@ impl Backend {
             if locations.is_empty() {
                 return None;
             }
-            // A partial rename would leave the code uncompilable. If any reference couldn't be precisely located (a non-verbatim `[view]` use, or another component's generated module), refuse the whole rename rather than half-apply it.
+            // A partial rename would leave the code uncompilable, so a reference that could not be precisely located refuses the whole rename rather than half-applying it.
             if unmapped > 0 {
                 self.outgoing.log_message(
                     MessageType::INFO,
@@ -897,7 +898,7 @@ impl Backend {
             let store = self.store.read().await;
             let uri = store.any_uri()?;
             let path = crate::uri::to_path(uri)?;
-            // The Cargo workspace root, so a `workspace/symbol` query answers for the whole workspace rather than for whichever crate happened to have a file open; the nearest `telar.toml` is the fallback for a project that is not in one.
+            // The Cargo workspace root, so `workspace/symbol` answers for the whole workspace rather than whichever crate happened to have a file open.
             telar_transpiler::find_workspace_root(&path)
                 .or_else(|| telar_transpiler::find_telar_root(&path))?
         };
@@ -922,9 +923,7 @@ impl Backend {
     }
 }
 
-/// The props builder's setters, as attribute keys. `build` and `props` are the builder's own machinery, and
-/// an inherited method (`clone`, `into`) is not a prop — what the key position is asking for is the list the
-/// props struct declares.
+/// The props builder's setters, as attribute keys. `build` and `props` are the builder's own machinery, and an inherited method (`clone`, `into`) is not a prop — what the key position is asking for is the list the props struct declares.
 fn props_setter_items(items: Vec<CompletionItem>) -> Vec<CompletionItem> {
     items
         .into_iter()

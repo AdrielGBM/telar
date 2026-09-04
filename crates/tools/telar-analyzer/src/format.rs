@@ -1,12 +1,8 @@
 //! Range formatting for the language server.
 //!
-//! The formatter itself is [`telar_parser::format`] — whole-document, and shared with `cargo telar fmt` so the
-//! editor and the command line cannot disagree. What is left here is the LSP-shaped half: turning that whole
-//! document into the line hunks "Format Selection" and format-on-paste ask for.
+//! The formatter itself is [`telar_parser::format`] — whole-document, and shared with `cargo telar fmt` so the editor and the command line cannot disagree. What is left here is the LSP-shaped half: turning that whole document into the line hunks "Format Selection" and format-on-paste ask for.
 
 pub use telar_parser::format::format_document;
-
-// === range formatting ======================================================
 
 /// Whole-line edits that turn `source` into its formatted form, restricted to the hunks overlapping `range`. The formatter is whole-document, so "Format Selection" / format-on-paste reuse it: we diff the formatted output against the source line-by-line and emit only the changed hunks that touch the requested range, leaving the rest of the file untouched.
 pub fn range_edits(
@@ -145,11 +141,9 @@ mod tests {
 
     #[test]
     fn range_edits_only_touch_hunks_in_the_requested_range() {
-        // Two independent changes — line 1 and line 3 — formatting fixes both.
         let src = "a\nXX\nb\nYY\nc\n";
         let formatted = "a\nxx\nb\nyy\nc\n";
         let edits = range_edits(src, formatted, point(1));
-        // Only the line-1 hunk is emitted; the line-3 change is left for a separate request.
         assert_eq!(edits.len(), 1);
         assert_eq!(edits[0].range.start.line, 1);
         assert_eq!(edits[0].range.end.line, 2);
@@ -160,18 +154,15 @@ mod tests {
     fn range_edits_are_empty_when_the_range_has_no_change() {
         let src = "a\nXX\nb\n";
         let formatted = "a\nxx\nb\n";
-        // Line 0 (`a`) is unchanged; its range yields no edits even though the document differs.
         assert!(range_edits(src, formatted, point(0)).is_empty());
     }
 
     #[test]
     fn range_edits_handle_an_insertion_hunk() {
-        // The formatter added a blank line between two classes; request the seam.
         let src = "@a\n@b\n";
         let formatted = "@a\n\n@b\n";
         let edits = range_edits(src, formatted, point(1));
         assert_eq!(edits.len(), 1);
-        // A pure insertion is a zero-width edit at the start of line 1.
         assert_eq!(edits[0].range.start, edits[0].range.end);
         assert_eq!(edits[0].new_text, "\n");
     }

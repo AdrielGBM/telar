@@ -1,15 +1,12 @@
 //! Where a browser build's log lines go.
 //!
-//! `tracing` with no subscriber discards everything, and the default `fmt` subscriber writes to stdout,
-//! which a page does not have. Without this a device that fails to open, or a frame that fails to present,
-//! reports itself into nothing — which is the one situation where the log is the only thing there is.
+//! `tracing` with no subscriber discards everything, and the default `fmt` subscriber writes to stdout, which a page does not have. Without this a device that fails to open, or a frame that fails to present, reports itself into nothing — which is the one situation where the log is the only thing there is.
 
 use std::io::Write;
 
 use tracing_subscriber::fmt::MakeWriter;
 
-/// Buffers one formatted event and hands it to the browser console when the writer is dropped, because that
-/// is the granularity the console shows: a partial write would appear as its own line.
+/// Buffers one formatted event and hands it to the browser console when the writer is dropped, because that is the granularity the console shows: a partial write would appear as its own line.
 struct ConsoleWriter {
     line: Vec<u8>,
 }

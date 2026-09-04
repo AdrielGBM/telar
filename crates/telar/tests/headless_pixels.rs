@@ -1,7 +1,4 @@
-//! Integration test for the headless `Platform` backend (Sprint B): drive a real rsx app end-to-end through
-//! `run_with_platform` + `HeadlessPlatform` and assert on the read-back pixels. This exercises the full
-//! pipeline (event → reactive → layout → software render → pixels) through the *same* `EventHandler` seam the
-//! winit backend uses — the headless backend only swaps the window/loop.
+//! Integration test for the headless `Platform` backend (Sprint B): drive a real rsx app end-to-end through `run_with_platform` + `HeadlessPlatform` and assert on the read-back pixels. This exercises the full pipeline (event → reactive → layout → software render → pixels) through the *same* `EventHandler` seam the winit backend uses — the headless backend only swaps the window/loop.
 
 mod common;
 

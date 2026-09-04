@@ -1,11 +1,11 @@
+//! Reading a project's configuration: `telar.toml`, `[package.metadata.telar]` and the manifest fields the bundlers need.
+
 use std::path::{Path, PathBuf};
 
 use clap::ValueEnum;
 use serde::Deserialize;
 
-/// Which renderer the built app selects at startup. Declared here rather than imported from `telar` because
-/// the value never crosses the boundary: [`backend_as_str`] lowers it to the `TELAR_RENDERER_BACKEND` env
-/// var, which the runtime re-parses from `option_env!` — so importing it cost the CLI the whole facade.
+/// Which renderer the built app selects at startup. Declared here rather than imported from `telar` because the value never crosses the boundary: [`backend_as_str`] lowers it to the `TELAR_RENDERER_BACKEND` env var, which the runtime re-parses from `option_env!` — so importing it cost the CLI the whole facade.
 #[derive(Deserialize, Clone, Copy, PartialEq, Eq, Default, ValueEnum)]
 #[serde(rename_all = "lowercase")]
 pub(crate) enum RendererBackend {
@@ -43,10 +43,10 @@ pub(crate) struct TelarConfig {
     pub backend: Option<RendererBackend>,
     #[serde(default)]
     pub dev: Option<DevConfig>,
-    // Note: `[telar] auto_modules` is read directly by the `telar::app!` macro, not by cargo-telar; serde ignores the unknown key here so it needs no field.
+    // `[telar] auto_modules` is read directly by the `telar::app!` macro, and serde ignores the unknown key here.
 }
 
-// The field name is the table name in telar.toml. It was `rsx` before the rename and nothing caught it: the table is `#[serde(default)]`, so a file writing `[telar]` parsed clean and handed back a default config — every key in it silently ignored.
+// The field name is the table name in telar.toml. It was `rsx` before the rename and nothing caught it: the table is `#[serde(default)]`, so a file writing `[telar]` parsed clean and every key in it was ignored.
 #[derive(Deserialize, Default)]
 #[serde(deny_unknown_fields)]
 struct TelarToml {
@@ -93,7 +93,7 @@ pub(crate) struct CargoPackage {
     pub(crate) metadata: Option<CargoPackageMetadata>,
 }
 
-// A `[package]` field is written out, inherited from `[workspace.package]` (`version.workspace = true`), or absent. Inherited is kept apart from absent because only the inherited case has an answer in the workspace manifest; collapsing the two is what let a member's real version reach a `.deb` as the hardcoded fallback.
+// Inherited is kept apart from absent because only the inherited case has an answer in the workspace manifest; collapsing the two let a member's real version reach a `.deb` as the hardcoded fallback.
 #[derive(Default, Debug, PartialEq)]
 pub(crate) enum Inheritable<T> {
     #[default]
@@ -137,8 +137,7 @@ pub(crate) struct AndroidMetadata {
     pub(crate) package: Option<String>,
 }
 
-// A `*` in any segment, not just a trailing one: a workspace that nests its members two levels deep
-// (`crates/*/*`) expanded to nothing, leaving every crate under it unwatched and unfindable by name.
+// A `*` in any segment, not just a trailing one: a workspace nesting its members two levels deep expanded to nothing, leaving every crate under it unwatched and unfindable by name.
 pub(crate) fn expand_member(workspace_root: &Path, pattern: &str) -> Vec<PathBuf> {
     let mut paths = vec![workspace_root.to_path_buf()];
     for segment in pattern.split('/') {
@@ -220,9 +219,9 @@ pub(crate) fn read_package_manifest(args: &[String]) -> Option<CargoPackage> {
 pub(crate) struct ResolvedPackage {
     pub(crate) workspace_root: PathBuf,
     pub(crate) package: Option<CargoPackage>,
-    // What `field.workspace = true` resolves against. Read once here rather than per getter, since a member that inherits one field usually inherits several.
+    // Read once here rather than per getter, since a member that inherits one field usually inherits several.
     pub(crate) workspace_package: Option<CargoWorkspacePackage>,
-    // Hot reload dlopens the package's own cdylib. Without `crate-type = ["cdylib", ..]` cargo never emits one, so the dylib build is dead weight and the runner has to fall back to process restart.
+    // Hot reload dlopens the package's own cdylib, and without `crate-type = ["cdylib", ..]` cargo never emits one, so the dylib build is dead weight and the runner falls back to process restart.
     pub(crate) produces_cdylib: bool,
 }
 
@@ -245,7 +244,7 @@ impl ResolvedPackage {
             .unwrap_or_else(|| "0.1.0".to_string())
     }
 
-    // Debian's `Maintainer` and Cargo's `authors` share the `Name <email>` shape, so the manifest is the one source. There is no honest default: a placeholder address ships inside the package and only surfaces when someone tries to report a bug.
+    // Debian's `Maintainer` and Cargo's `authors` share the `Name <email>` shape, so the manifest is the one source. There is no honest default: a placeholder address ships inside the package.
     pub(crate) fn maintainer(&self) -> Option<String> {
         self.package
             .as_ref()
@@ -265,8 +264,7 @@ impl ResolvedPackage {
     }
 }
 
-// dpkg reads the maintainer from `DEBFULLNAME`/`DEBEMAIL`, so honour the same pair: cargo stopped emitting
-// `authors` years ago, and refusing every manifest without it would rule out most projects.
+// dpkg reads the maintainer from `DEBFULLNAME`/`DEBEMAIL`, so honour the same pair: cargo stopped emitting `authors` years ago, and refusing every manifest without it would rule out most projects.
 fn maintainer_from_env() -> Option<String> {
     maintainer_from(
         std::env::var("DEBFULLNAME").ok(),
@@ -286,7 +284,7 @@ fn maintainer_from(name: Option<String>, email: Option<String>) -> Option<String
     }
 }
 
-// Resolves the target package's workspace root and parsed manifest in a single pass so the packaging paths stop re-deriving them (and re-reading Cargo.toml) at each call site.
+// Resolved in a single pass, so the packaging paths stop re-deriving them at each call site.
 pub(crate) fn resolve_package(args: &[String]) -> ResolvedPackage {
     let dir = find_package_dir(args);
     let workspace_root = telar_transpiler::find_workspace_root(&dir).unwrap_or_else(|| dir.clone());
@@ -312,7 +310,7 @@ pub(crate) fn resolve_package(args: &[String]) -> ResolvedPackage {
     }
 }
 
-// Default reverse-DNS app id for demo/tooling builds that set no vendor prefix; shared by the Android package id and macOS bundle id defaults, which are otherwise distinct.
+// Shared by the Android package id and macOS bundle id defaults, which are otherwise distinct.
 pub(crate) fn default_app_id(name: &str) -> String {
     format!("com.example.{name}")
 }
@@ -330,7 +328,7 @@ fn read_manifest_config(dir: &Path) -> TelarConfig {
         .unwrap_or_default()
 }
 
-// Presence check for `[package.metadata.telar]`; read_manifest_config erases the present/absent distinction via unwrap_or_default, so presence needs its own read.
+// `read_manifest_config` erases the present/absent distinction via `unwrap_or_default`, so presence needs its own read.
 pub(crate) fn manifest_has_telar(dir: &Path) -> bool {
     std::fs::read_to_string(dir.join("Cargo.toml"))
         .ok()
@@ -360,7 +358,7 @@ fn read_toml_config(dir: &Path) -> TelarConfig {
     }
 }
 
-// Config precedence, lowest to highest: built-in defaults < `[package.metadata.telar]` (Cargo.toml) < `telar.toml` < CLI flags. CLI flags are layered on by each command after this returns.
+// Lowest to highest: built-in defaults, `[package.metadata.telar]`, `telar.toml`, CLI flags. The flags are layered on by each command after this returns.
 pub(crate) fn load_config(args: &[String]) -> TelarConfig {
     let dir = find_package_dir(args);
     merge_config(read_manifest_config(&dir), read_toml_config(&dir))
@@ -435,7 +433,6 @@ mod tests {
         let file = TelarConfig {
             backend: Some(RendererBackend::Hardware),
             dev: Some(DevConfig {
-                // telar.toml sets width + position but omits height/fullscreen/devtools.
                 window: Some(WindowConfig {
                     width: Some(1024),
                     position: Some("10,20".to_string()),
@@ -467,7 +464,7 @@ mod tests {
         ));
     }
 
-    // The rename that named this table `telar` left the field called `rsx`, and a `#[serde(default)]` table means a file writing `[telar]` still parsed clean — backend, dev window and devtools all dropped in silence. Rejecting the wrong name is what turns that into something a user can see.
+    // The rename that named this table `telar` left the field called `rsx`, and a `#[serde(default)]` table means a file writing `[telar]` still parsed clean — backend, dev window and devtools dropped in silence.
     #[test]
     fn a_top_level_table_that_is_not_telar_is_rejected_rather_than_ignored() {
         assert!(toml::from_str::<TelarToml>("[rsx]\nbackend = \"software\"\n").is_err());
@@ -564,7 +561,7 @@ mod tests {
 
     #[test]
     fn an_inherited_field_is_answered_by_the_workspace_not_the_fallback() {
-        // The regression this exists for: a member inheriting its version used to report the hardcoded "0.1.0", so every bundle carried the wrong version the moment the workspace moved off it.
+        // Regression: a member inheriting its version reported the hardcoded "0.1.0", so every bundle carried the wrong version the moment the workspace moved off it.
         let manifest: CargoManifest = toml::from_str(
             "[package]\nname = \"demo\"\nversion.workspace = true\nauthors.workspace = true\n",
         )

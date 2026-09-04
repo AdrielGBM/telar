@@ -1,10 +1,11 @@
+//! What a command paints, in window space — the one answer both dirty tracking and layer sizing ask for.
+
 use geometry_core::{Rect, Transform};
 
 use crate::DrawCommand;
 use crate::transform_clip_rect;
 
-/// Font ascender/line-height metrics expressed as ratios relative to `font_size`.
-/// Default values are conservative approximations that hold for most common fonts.
+/// Font ascender/line-height metrics expressed as ratios relative to `font_size`. Default values are conservative approximations that hold for most common fonts.
 #[derive(Clone, Copy)]
 pub struct FontMetrics {
     /// Multiplier for line height: `font_size * line_height_factor` gives the full line height.
@@ -22,6 +23,7 @@ impl Default for FontMetrics {
     }
 }
 
+/// Whether a rect intersects `clip`. A `None` clip clips nothing, so everything overlaps it.
 pub fn overlaps(x: f32, y: f32, w: f32, h: f32, clip: Option<Rect>) -> bool {
     match clip {
         None => true,
@@ -29,6 +31,7 @@ pub fn overlaps(x: f32, y: f32, w: f32, h: f32, clip: Option<Rect>) -> bool {
     }
 }
 
+/// Grows a rect by the room a shadow needs around it, offset included.
 pub fn expand_for_shadow(
     rect: Rect,
     blur_radius: f32,
@@ -54,6 +57,7 @@ pub fn expand_for_shadow(
     rect.union(shifted)
 }
 
+/// What a command paints, in window space, or `None` for one that paints nothing.
 pub fn command_visual_rect(
     cmd: &DrawCommand,
     matrix: [f32; 6],
@@ -104,10 +108,7 @@ pub fn command_visual_rect(
         DrawCommand::Path { data, style } => {
             let base = data.bounds()?;
             let r = transform_clip_rect(matrix, base);
-            // A stroke straddles the path, so it reaches half its width past the geometry on every
-            // side — the same half `Line` above already accounts for. Left out, the damage rect is
-            // short by that half and the outer edge of a moving stroke is never repainted, which
-            // leaves a trail behind it.
+            // A stroke straddles the path, reaching half its width past the geometry on every side. Left out, the damage rect is short by that half and a moving stroke's outer edge is never repainted, leaving a trail.
             let r = match style.stroke {
                 Some(stroke) => {
                     let half = stroke.width / 2.0;
@@ -136,6 +137,7 @@ pub fn command_visual_rect(
     }
 }
 
+/// Unions `new_rect` into `current`, starting the accumulation when it is `None`.
 pub fn extend_bounds(current: Option<Rect>, new_rect: Rect) -> Option<Rect> {
     Some(current.map_or(new_rect, |b| b.union(new_rect)))
 }
@@ -193,9 +195,7 @@ mod tests {
         assert!((r.height - 20.0).abs() < 1e-4);
     }
 
-    /// A stroke straddles its path, so the visual rect has to reach half the width past the geometry
-    /// — as `Line` already does. Without it the damage rect is short by that half, and the outer edge
-    /// of a stroke that moves is never repainted: it leaves a trail behind it.
+    /// A stroke straddles its path, so the visual rect has to reach half the width past the geometry — as `Line` already does. Without it the damage rect is short by that half, and the outer edge of a stroke that moves is never repainted: it leaves a trail behind it.
     #[test]
     fn a_stroked_path_reaches_half_its_width_past_its_geometry() {
         use crate::{Color, PathData, PathStyle, Stroke};

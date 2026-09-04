@@ -1,9 +1,6 @@
 //! Titled, closable window chrome with an optional resize grip.
 //!
-//! It lived in `ui-core` while that crate was the only place a full-surface root could be assembled, and it
-//! never belonged there: it is `Text` plus two `StyledContainer`s plus a closure over `track_layout` — a
-//! composed widget using nothing the primitive layer has that the catalogue lacks. "Titled closable window
-//! chrome" is a catalogue entry, not a layout primitive.
+//! It lived in `ui-core` while that crate was the only place a full-surface root could be assembled, and it never belonged there: it is `Text` plus two `StyledContainer`s plus a closure over `track_layout` — a composed widget using nothing the primitive layer has that the catalogue lacks. "Titled closable window chrome" is a catalogue entry, not a layout primitive.
 
 use std::cell::{Cell, RefCell};
 use std::rc::Rc;
@@ -16,8 +13,7 @@ use ui_core::{LayoutItem, StyledContainer, Text, box_item, track_layout};
 
 /// Which window-management controls a frame draws, beside the close button it always has.
 ///
-/// Off by default: a layer-shell panel has no top-level window to minimize, and drawing a control that does
-/// nothing is worse than not drawing it. A windowed backend turns on what its platform can honour.
+/// Off by default: a layer-shell panel has no top-level window to minimize, and drawing a control that does nothing is worse than not drawing it. A windowed backend turns on what its platform can honour.
 #[derive(Debug, Clone, Copy, Default)]
 pub struct WindowControls {
     /// Dragging the title strip asks the platform for an interactive move.
@@ -27,6 +23,7 @@ pub struct WindowControls {
 }
 
 #[derive(Debug, Clone, Copy)]
+/// How a window frame is painted: its card, its title strip and its resize grip.
 pub struct SurfaceFrameStyle {
     pub background: Color,
     pub title_bar: Color,
@@ -36,39 +33,27 @@ pub struct SurfaceFrameStyle {
     pub font_size: f32,
     /// The controls beside close. Default is none, which is the frame as it was.
     pub controls: WindowControls,
-    /// The inset around `body`. A floating panel wants its content off the edges; an application window
-    /// whose content owns the whole area below the title strip wants `0.0`, and would otherwise get a
-    /// border of background colour it never asked for.
+    /// The inset around `body`. A floating panel wants its content off the edges; an application window whose content owns the whole area below the title strip wants `0.0`, and would otherwise get a border of background colour it never asked for.
     pub body_inset: f32,
-    /// Fill behind minimize/maximize under the pointer, and behind close — which is usually the louder of the
-    /// two, since closing is the one control that cannot be undone.
+    /// Fill behind minimize/maximize under the pointer, and behind close — which is usually the louder of the two, since closing is the one control that cannot be undone.
     ///
-    /// Both default to transparent, i.e. no hover feedback, because a panel whose only control is a ✕ in the
-    /// corner of a translucent surface has nothing to highlight against. A real window title bar sets them.
+    /// Both default to transparent, i.e. no hover feedback, because a panel whose only control is a ✕ in the corner of a translucent surface has nothing to highlight against. A real window title bar sets them.
     pub control_hover: Color,
     pub close_hover: Color,
 }
 
-/// The smallest a frame will ask to become. A window dragged to nothing is a window the user cannot get hold of
-/// again — its own grip goes with it.
+/// The smallest a frame will ask to become. A window dragged to nothing is a window the user cannot get hold of again — its own grip goes with it.
 pub const MIN_FRAME_SIZE: (f32, f32) = (180.0, 120.0);
 
-/// The corner grip's side, in logical pixels. Big enough to hit without aiming, small enough not to read as
-/// content.
+/// The corner grip's side, in logical pixels. Big enough to hit without aiming, small enough not to read as content.
 const GRIP_SIZE: f32 = 14.0;
 
-/// The rect a grip measures the frame against. It is a cell rather than a signal because the grip has to exist
-/// before the row that holds it, and that row before the card that holds *both* — so the one rect the grip needs
-/// is the one thing it cannot be handed at construction. Filled in as soon as the card exists.
+/// The rect a grip measures the frame against. It is a cell rather than a signal because the grip has to exist before the row that holds it, and that row before the card that holds *both* — so the one rect the grip needs is the one thing it cannot be handed at construction. Filled in as soon as the card exists.
 type DeferredRect = Rc<RefCell<Option<RwSignal<Rect>>>>;
 
 /// A resize grip for the bottom-right corner of a frame, reporting the size the *surface* should become.
 ///
-/// The arithmetic is the whole of it. `on_drag` reports where the pointer is **inside the grip**, so the grip's
-/// own laid-out origin has to be added back to reach surface space — and then the grab offset, the distance from
-/// the pointer to the corner when the drag began, has to come off it, or the corner jumps to the cursor the
-/// instant it is touched. The offset is latched once per drag rather than recomputed, because the card it was
-/// measured against is resizing underneath the gesture.
+/// The arithmetic is the whole of it. `on_drag` reports where the pointer is **inside the grip**, so the grip's own laid-out origin has to be added back to reach surface space — and then the grab offset, the distance from the pointer to the corner when the drag began, has to come off it, or the corner jumps to the cursor the instant it is touched. The offset is latched once per drag rather than recomputed, because the card it was measured against is resizing underneath the gesture.
 fn resize_grip(
     color: Color,
     card_rect: DeferredRect,
@@ -108,12 +93,9 @@ fn resize_grip(
 
 /// A titled, closable window frame around `body`.
 ///
-/// `leading` is drawn before the title — an application icon, a back arrow, a status dot. `None` for a frame
-/// that is only a title, which is every panel.
+/// `leading` is drawn before the title — an application icon, a back arrow, a status dot. `None` for a frame that is only a title, which is every panel.
 ///
-/// `resize` opts the frame into a corner grip: it is handed the size the surface should take, in logical
-/// pixels, on every move of that grip. A backend that can renegotiate a surface's size wires it up; one that
-/// cannot passes `None` and the grip is not drawn, rather than drawn and inert.
+/// `resize` opts the frame into a corner grip: it is handed the size the surface should take, in logical pixels, on every move of that grip. A backend that can renegotiate a surface's size wires it up; one that cannot passes `None` and the grip is not drawn, rather than drawn and inert.
 pub fn window_frame(
     title: impl Into<String>,
     leading: Option<Box<dyn LayoutItem>>,
@@ -152,8 +134,7 @@ pub fn window_frame(
         .on_press(move || close()),
     );
 
-    // Minimize and maximize, when the platform can honour them. Same shape as the close button beside them, so
-    // a frame with three controls reads as one strip rather than as a button and two additions.
+    // The same shape as the close button beside them, so a frame with three controls reads as one strip rather than a button and two additions.
     let control_hover = style.control_hover;
     let control_button = |glyph: &'static str,
                           command: platform_core::WindowCommand|
@@ -200,8 +181,7 @@ pub fn window_frame(
         controls,
     )?);
 
-    // The leading item and the title travel together as one group, so SPACE_BETWEEN still pushes the controls
-    // to the far edge rather than spreading three things across the strip.
+    // One group, so `SPACE_BETWEEN` pushes the controls to the far edge rather than spreading three things across the strip.
     let label_group = box_item(StyledContainer::new(
         LayoutStyle::new()
             .flex_row()
@@ -227,8 +207,7 @@ pub fn window_frame(
         move |_| RectStyle::filled(title_bar_color, 0.0),
         vec![label_group, controls],
     )?;
-    // The strip is what a user grabs to move the window, which is why the drag lives here and not on the card:
-    // the body is content, and dragging content is a selection everywhere else.
+    // The strip is what a user grabs to move the window, so the drag lives here and not on the card: the body is content, and dragging content is a selection everywhere else.
     let title_bar = box_item(if drag_moves {
         title_strip
             .on_drag(|_, _| platform_core::push_window_command(platform_core::WindowCommand::Drag))
@@ -236,7 +215,7 @@ pub fn window_frame(
         title_strip
     });
 
-    // A flex item may not shrink below its content unless you say so, and an application body sized to fill the window (the settings page area is a scroll leaf with a definite height) otherwise refuses to give up a single pixel and pushes the grip row off the bottom of the surface — a resize affordance that exists, lays out, and is never on screen.
+    // A flex item may not shrink below its content unless told to, and an application body sized to fill the window otherwise pushes the grip row off the bottom of the surface.
     let body_area = box_item(StyledContainer::new(
         LayoutStyle::new()
             .flex_column()
@@ -280,8 +259,7 @@ pub fn window_frame(
     Ok(box_item(card))
 }
 
-/// A frame with no colours of its own and no controls — what a caller fills in. Exists so adding a field to
-/// this struct does not break every construction of it.
+/// A frame with no colours of its own and no controls — what a caller fills in. Exists so adding a field to this struct does not break every construction of it.
 impl Default for SurfaceFrameStyle {
     fn default() -> Self {
         Self {
@@ -320,10 +298,7 @@ mod tests {
 
     /// The grip's whole job is arithmetic, and every part of it is invisible until it is wrong.
     ///
-    /// `on_drag` reports a position *local to the grip*, so a grip that forgot to add its own origin back would
-    /// resize the window to about 14×14 the moment it was touched. And the grab offset — the distance from the
-    /// pointer to the corner when the drag began — is what stops the corner teleporting to the cursor on the
-    /// first event: press the middle of the grip and the window must not change size at all.
+    /// `on_drag` reports a position *local to the grip*, so a grip that forgot to add its own origin back would resize the window to about 14×14 the moment it was touched. And the grab offset — the distance from the pointer to the corner when the drag began — is what stops the corner teleporting to the cursor on the first event: press the middle of the grip and the window must not change size at all.
     #[test]
     fn the_grip_resizes_by_the_distance_dragged_not_to_the_pointer() {
         use std::cell::RefCell;
@@ -359,7 +334,6 @@ mod tests {
         )
         .unwrap();
 
-        // The grip sits at the card's bottom-right, inset by the row's padding.
         let grip = Rect {
             x: 400.0 - 4.0 - GRIP_SIZE,
             y: 300.0 - 4.0 - GRIP_SIZE,
@@ -389,10 +363,7 @@ mod tests {
 
     /// The grip has to be *on screen*, and a frame around an application is where it stops being.
     ///
-    /// A settings-sized float hands `surface_frame` a body sized to fill the window — its page area is a scroll
-    /// leaf with a definite height, computed from the surface height less the chrome that existed before there
-    /// was a grip. A body that will not shrink below its content pushes the grip row past the bottom edge, and
-    /// the affordance builds, lays out, and is never visible. Which is exactly what happened.
+    /// A settings-sized float hands `surface_frame` a body sized to fill the window — its page area is a scroll leaf with a definite height, computed from the surface height less the chrome that existed before there was a grip. A body that will not shrink below its content pushes the grip row past the bottom edge, and the affordance builds, lays out, and is never visible. Which is exactly what happened.
     #[test]
     fn the_grip_stays_inside_a_window_whose_body_wants_all_of_it() {
         crate::test_support::fresh_layout_runtime();
@@ -410,7 +381,6 @@ mod tests {
             control_hover: Color::TRANSPARENT,
             close_hover: Color::TRANSPARENT,
         };
-        // Taller than the surface, the way an application body is once its own chrome is added on top.
         let hungry = box_item(
             StyledContainer::new(
                 LayoutStyle::new().width(600.0).height(SURFACE.1),
@@ -438,7 +408,7 @@ mod tests {
         )
         .unwrap();
 
-        // Pressing the bottom-right corner and dragging is the property the user actually has: a grip laid out past the bottom edge receives nothing, so nothing resizes.
+        // A grip laid out past the bottom edge receives nothing, so nothing resizes.
         let (x, y) = (
             SURFACE.0 - 4.0 - GRIP_SIZE / 2.0,
             SURFACE.1 - 4.0 - GRIP_SIZE / 2.0,
@@ -478,17 +448,13 @@ mod tests {
             control_hover: Color::TRANSPARENT,
             close_hover: Color::TRANSPARENT,
         };
-        // A grip a backend cannot act on must be absent rather than present and inert — an affordance that does nothing is worse than none.
+        // A grip a backend cannot act on must be absent rather than present and inert.
         assert!(window_frame("Clock", None, style, Rc::new(|| {}), panel(), None).is_ok());
     }
 
-    /// A leading item takes room in the strip without pushing the title out of it, and a zero body inset
-    /// gives the body the full width below. Both exist so an application window — an icon beside its title,
-    /// content owning everything under the strip — is this frame rather than a second one.
+    /// A leading item takes room in the strip without pushing the title out of it, and a zero body inset gives the body the full width below. Both exist so an application window — an icon beside its title, content owning everything under the strip — is this frame rather than a second one.
     #[test]
     fn a_leading_item_and_a_zero_inset_reshape_the_frame_without_replacing_it() {
-        // A body that fills, which is what an application window's content is — and what makes the inset the
-        // only thing between it and the card's edge.
         let filling = || {
             box_item(
                 StyledContainer::new(
@@ -501,8 +467,7 @@ mod tests {
                 .unwrap(),
             )
         };
-        // Everything is built *inside* the closure: `fresh_layout_runtime` empties the tree, so a widget made
-        // before it names a node that no longer exists — and, once ids are handed out again, someone else's.
+        // Everything is built inside the closure: `fresh_layout_runtime` empties the tree, so a widget made before it names a node that no longer exists — and, once ids are handed out again, someone else's.
         let laid_out = |inset: f32, with_icon: bool| {
             crate::test_support::fresh_layout_runtime();
             let body = filling();

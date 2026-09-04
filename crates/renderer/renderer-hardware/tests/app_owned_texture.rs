@@ -1,11 +1,8 @@
 //! An application draws into a texture of its own and Telar composes it into the frame.
 //!
-//! The device comes from Telar, which is the only direction that exists: it opens the window, picks the
-//! backend and negotiates the features, and the application asks for what it is already drawing with. That
-//! is what makes the texture shareable at all — two devices cannot exchange one.
+//! The device comes from Telar, which is the only direction that exists: it opens the window, picks the backend and negotiates the features, and the application asks for what it is already drawing with. That is what makes the texture shareable at all — two devices cannot exchange one.
 //!
-//! Its own test binary because the shared device is a process-wide `OnceLock`, and this one wants to be the
-//! renderer that populates it.
+//! Its own test binary because the shared device is a process-wide `OnceLock`, and this one wants to be the renderer that populates it.
 
 mod common;
 

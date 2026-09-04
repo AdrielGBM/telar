@@ -1,3 +1,5 @@
+//! Mapping a position in the generated Rust back onto the `.rsx` line and column it came from.
+
 use lsp_types::*;
 
 use crate::ra::{DefinitionTarget, RefTarget};
@@ -89,13 +91,9 @@ pub(crate) fn reverse_map_rust_refs(
     (out, unmapped)
 }
 
-/// Reverse-maps a diagnostic's generated-file range onto the `.rsx`, narrowing it to the exact columns when
-/// they can be trusted and widening it to the whole line when they cannot.
+/// Reverse-maps a diagnostic's generated-file range onto the `.rsx`, narrowing it to the exact columns when they can be trusted and widening it to the whole line when they cannot.
 ///
-/// The exact mapping was built for go-to-definition and rename, and was never wired here — so every
-/// diagnostic underlined its whole line, however precise rustc had been. Which columns can be trusted is
-/// [`SourceMap::locate`]'s answer, shared with `cargo telar check` so the terminal and the editor cannot
-/// come to two different conclusions about the same error.
+/// The exact mapping was built for go-to-definition and rename, and was never wired here — so every diagnostic underlined its whole line, however precise rustc had been. Which columns can be trusted is [`SourceMap::locate`]'s answer, shared with `cargo telar check` so the terminal and the editor cannot come to two different conclusions about the same error.
 pub(crate) fn diagnostic_range(
     gen_range: Range,
     gen_code: &str,
@@ -117,10 +115,7 @@ pub(crate) fn diagnostic_range(
     }
 }
 
-/// Reverse-maps one generated-file reference span back onto the current `.rsx`. Returns `None` for anything
-/// whose columns cannot be trusted — a `[view]` fragment the transpiler rewrote, or a generated line with no
-/// `.rsx` origin at all. A diagnostic widens to the line in those cases; a rename must not, because a bogus
-/// range here would edit the wrong text.
+/// Reverse-maps one generated-file reference span back onto the current `.rsx`. Returns `None` for anything whose columns cannot be trusted — a `[view]` fragment the transpiler rewrote, or a generated line with no `.rsx` origin at all. A diagnostic widens to the line in those cases; a rename must not, because a bogus range here would edit the wrong text.
 fn reverse_map_current_file(
     target: &RefTarget,
     gen_code: &str,
@@ -136,8 +131,7 @@ fn reverse_map_current_file(
     }
 }
 
-/// [`SourceMap::locate`] against an LSP range, which carries UTF-16 columns rather than the byte offsets the
-/// map is written in. A range whose start does not convert falls back to its line.
+/// [`SourceMap::locate`] against an LSP range, which carries UTF-16 columns rather than the byte offsets the map is written in. A range whose start does not convert falls back to its line.
 fn locate(map: &SourceMap, gen_range: Range, gen_code: &str, rsx_source: &str) -> Option<RsxSpan> {
     let Some(byte_start) =
         crate::text::byte_offset(gen_code, gen_range.start.line, gen_range.start.character)
@@ -152,9 +146,7 @@ fn locate(map: &SourceMap, gen_range: Range, gen_code: &str, rsx_source: &str) -
     map.locate(gen_code, byte_start as u32, byte_end as u32, rsx_source)
 }
 
-/// The `n`-th line of `text` (0-based), without its trailing newline.
-/// Width (UTF-16 code units) of the leading space/tab run of `line`. Used by the inlay-hint path, which
-/// carries a bare position rather than a range and so cannot go through [`SourceMap::locate`].
+/// The `n`-th line of `text` (0-based), without its trailing newline. Width (UTF-16 code units) of the leading space/tab run of `line`. Used by the inlay-hint path, which carries a bare position rather than a range and so cannot go through [`SourceMap::locate`].
 pub(crate) fn leading_ws_utf16(line: &str) -> u32 {
     line.chars()
         .take_while(|c| *c == ' ' || *c == '\t')
@@ -331,9 +323,7 @@ mod tests {
         assert_eq!(unmapped, 1);
     }
 
-    /// A diagnostic in `[logic]` lands on the columns rustc named, shifted by the indent the transpiler adds.
-    /// Before this, every diagnostic underlined its whole line however precise rustc had been — the exact
-    /// mapping existed, but only go-to-definition and rename ever used it.
+    /// A diagnostic in `[logic]` lands on the columns rustc named, shifted by the indent the transpiler adds. Before this, every diagnostic underlined its whole line however precise rustc had been — the exact mapping existed, but only go-to-definition and rename ever used it.
     #[test]
     fn a_logic_diagnostic_keeps_the_columns_rustc_gave_it() {
         let rsx = "[logic]\nlet count = signal(0);\n\n[view]\ncolumn\n";
@@ -360,8 +350,7 @@ mod tests {
         );
     }
 
-    /// And the case that has to stay wide: a `[view]` line the transpiler rewrote has no column
-    /// correspondence at all, so a narrowed range would underline text that has nothing to do with the error.
+    /// And the case that has to stay wide: a `[view]` line the transpiler rewrote has no column correspondence at all, so a narrowed range would underline text that has nothing to do with the error.
     #[test]
     fn a_view_diagnostic_still_takes_the_whole_line() {
         let rsx = "[logic]\nlet x = 1;\n\n[view]\ntext \"hi\"\n";

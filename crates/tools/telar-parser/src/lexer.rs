@@ -1,25 +1,23 @@
 //! Line-oriented lexer for `.rsx` source.
 //!
-//! `.rsx` is whitespace-sensitive, so the lexer keeps working at the line level
-//! instead of producing a flat token stream. It splits the source into three
-//! kinds of lines depending on the active section:
+//! `.rsx` is whitespace-sensitive, so the lexer keeps working at the line level instead of producing a flat token stream. It splits the source into three kinds of lines depending on the active section:
 //!
 //! - Logic lines are captured verbatim (Rust source).
-//! - Style and View lines carry their original text plus the leading indentation
-//!   width, which the parser uses to reconstruct the view hierarchy.
+//! - Style and View lines carry their original text plus the leading indentation width, which the parser uses to reconstruct the view hierarchy.
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// Which zone of a `.rsx` a line belongs to.
 pub enum Section {
     Unknown,
     Logic,
     Style,
     View,
-    /// A `[preview "Name" …]` header line. Its body is lexed as [`Section::View`] (the preview body
-    /// is view markup), so the parser reuses the whole view machinery for it.
+    /// A `[preview "Name" …]` header line. Its body is lexed as [`Section::View`] (the preview body is view markup), so the parser reuses the whole view machinery for it.
     Preview,
 }
 
 #[derive(Debug, Clone)]
+/// One lexed line: its section, its indentation, its content and the bytes it came from.
 pub struct Line {
     pub section: Section,
     /// 1-based line number in the original source.
@@ -28,9 +26,7 @@ pub struct Line {
     pub indent: usize,
     /// The line content with leading indentation stripped (trailing whitespace trimmed too).
     pub content: String,
-    /// Absolute byte offset in the original source where `content` begins (line byte start +
-    /// leading-whitespace bytes). Lets the parser turn intra-line char positions into source byte
-    /// offsets so the transpiler can map `[view]` Rust expressions back to the `.rsx` precisely.
+    /// Absolute byte offset in the original source where `content` begins (line byte start + leading-whitespace bytes). Lets the parser turn intra-line char positions into source byte offsets so the transpiler can map `[view]` Rust expressions back to the `.rsx` precisely.
     pub content_start: usize,
     /// The raw, untouched line (used to preserve the logic zone exactly).
     pub raw: String,
@@ -42,8 +38,7 @@ impl Line {
     }
 }
 
-/// Returns the [`Section`] a `[...]` header line switches into, or `None` for a
-/// non-header line. `trimmed` must already have surrounding whitespace removed.
+/// Returns the [`Section`] a `[...]` header line switches into, or `None` for a non-header line. `trimmed` must already have surrounding whitespace removed.
 pub fn header_section(trimmed: &str) -> Option<Section> {
     match trimmed {
         "[logic]" => Some(Section::Logic),
@@ -53,9 +48,7 @@ pub fn header_section(trimmed: &str) -> Option<Section> {
     }
 }
 
-/// The [`Section`] a 0-based line of `source` belongs to. For tooling that has a line number and needs to
-/// know what kind of source is on it — which is a different question from lexing, since the caller is holding
-/// a coordinate rather than the text.
+/// The [`Section`] a 0-based line of `source` belongs to. For tooling that has a line number and needs to know what kind of source is on it — which is a different question from lexing, since the caller is holding a coordinate rather than the text.
 pub fn find_section_at(source: &str, line: u32) -> Section {
     let target = line as usize;
     let mut current = Section::Unknown;
@@ -82,7 +75,7 @@ pub fn lex(source: &str) -> Vec<Line> {
         byte_offset += chunk.len();
 
         let number = idx + 1;
-        // Mirror `str::lines()`: drop the trailing `\n` and any `\r` so `raw` stays unchanged.
+        // Mirrors `str::lines()`: drop the trailing `\n` and any `\r`, so `raw` stays unchanged.
         let raw = chunk.strip_suffix('\n').unwrap_or(chunk);
         let raw = raw.strip_suffix('\r').unwrap_or(raw);
         let trimmed = raw.trim();
@@ -96,9 +89,7 @@ pub fn lex(source: &str) -> Vec<Line> {
         let content_start = line_byte_start + (raw.len() - raw.trim_start().len());
         let content = trimmed.to_string();
 
-        // `[preview "Name" …]` is a repeatable, parameterized header that `header_section`'s exact
-        // table can't match: emit it as a `Section::Preview` line (so the parser reads its
-        // name/options) and lex the lines that follow as `Section::View` markup.
+        // A repeatable, parameterized header the exact table cannot match: emitted as a `Section::Preview` line so the parser reads its name and options, with the lines after it lexed as `Section::View` markup.
         let line_section = if is_preview_header(trimmed) {
             Section::Preview
         } else {
@@ -122,10 +113,7 @@ pub fn lex(source: &str) -> Vec<Line> {
     lines
 }
 
-/// Strips a `[preview …]` header down to its name+options remainder, or `None` when `trimmed` is not
-/// a bracketed `preview` header. `preview` must be a whole word, so `[previewish]` is rejected. This is
-/// the single home of the bracket/keyword rule: the lexer classifies via [`is_preview_header`] and the
-/// preview parser consumes the returned remainder, so the two can no longer drift apart.
+/// Strips a `[preview …]` header down to its name+options remainder, or `None` when `trimmed` is not a bracketed `preview` header. `preview` must be a whole word, so `[previewish]` is rejected. This is the single home of the bracket/keyword rule: the lexer classifies via [`is_preview_header`] and the preview parser consumes the returned remainder, so the two can no longer drift apart.
 pub(crate) fn strip_preview_header(trimmed: &str) -> Option<&str> {
     let inner = trimmed
         .strip_prefix('[')
@@ -138,9 +126,7 @@ pub(crate) fn strip_preview_header(trimmed: &str) -> Option<&str> {
     }
 }
 
-/// Whether `trimmed` is a `[preview …]` header. Parameterized (carries a name/options), so it is
-/// matched here rather than in [`header_section`]'s exact table. Public so tooling that walks sections
-/// (e.g. selection ranges) can treat a preview header as a section boundary like the fixed headers.
+/// Whether `trimmed` is a `[preview …]` header. Parameterized (carries a name/options), so it is matched here rather than in [`header_section`]'s exact table. Public so tooling that walks sections (e.g. selection ranges) can treat a preview header as a section boundary like the fixed headers.
 pub fn is_preview_header(trimmed: &str) -> bool {
     strip_preview_header(trimmed).is_some()
 }

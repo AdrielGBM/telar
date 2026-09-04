@@ -1,3 +1,5 @@
+//! [`radio`]: one option of a group, selecting into a shared bound value.
+
 use std::rc::Rc;
 
 use telar_macros::Props;
@@ -10,12 +12,7 @@ use ui_core::{Children, LayoutItem, StyledContainer, box_item};
 
 use crate::shared;
 
-/// One radio button in a group: an 18px ring that fills its centre dot (and accents its border) while the
-/// bound `selected` signal equals this button's `value`; tapping the row sets `selected` to `value` (and fires
-/// `on_select`). A radio *group* is several `radio`s sharing one `selected` signal with different `value`s.
-/// High-level sugar over the primitives (`box` + `on_press` + a reactive fill); lives in `ui-components`, not
-/// the kernel. `selected` is `Option` so `Props` can derive `Default`: `None` is uncontrolled (the widget owns
-/// its own signal, so it never matches — a lone default radio), `Some` is the shared group signal.
+/// One radio button in a group: an 18px ring that fills its centre dot (and accents its border) while the bound `selected` signal equals this button's `value`; tapping the row sets `selected` to `value` (and fires `on_select`). A radio *group* is several `radio`s sharing one `selected` signal with different `value`s. High-level sugar over the primitives (`box` + `on_press` + a reactive fill); lives in `ui-components`, not the kernel. `selected` is `Option` so `Props` can derive `Default`: `None` is uncontrolled (the widget owns its own signal, so it never matches — a lone default radio), `Some` is the shared group signal.
 #[derive(Props)]
 pub struct RadioProps {
     /// The group's bound selection. `None` (the default) is uncontrolled — the widget makes its own `signal(0)`.
@@ -34,6 +31,7 @@ pub struct RadioProps {
     pub on_select: Option<Rc<dyn Fn(u32)>>,
 }
 
+/// One option of a group, selecting into a shared bound value.
 pub fn radio(props: RadioProps, _children: Children) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let RadioProps {
         selected,
@@ -64,7 +62,6 @@ pub fn radio(props: RadioProps, _children: Children) -> Result<Box<dyn LayoutIte
         vec![],
     )?;
 
-    // The 18px ring: white with an accent border when selected, a neutral border otherwise, dot centred inside.
     let ring_selected = selected;
     let ring_color = color.clone();
     let ring = StyledContainer::new(
@@ -88,7 +85,6 @@ pub fn radio(props: RadioProps, _children: Children) -> Result<Box<dyn LayoutIte
         vec![box_item(dot)],
     )?;
 
-    // The whole row is the tap target (ring + label); a tap selects this value and reports it.
     let select = selected;
     let announced = selected;
     shared::labelled_control(

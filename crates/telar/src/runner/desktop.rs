@@ -1,3 +1,5 @@
+//! Starting a desktop app, and opening a second window on the running loop.
+
 use std::cell::RefCell;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -31,6 +33,7 @@ fn run_desktop_with_plugin<A: App, D: DevPlugin>(config: AppConfig, app: A, app_
     }
 }
 
+/// Starts an application on the desktop backend.
 pub fn run_desktop_app_with_name<A: App>(config: AppConfig, app: A, app_name: &str) {
     #[cfg(feature = "dev")]
     {
@@ -58,20 +61,14 @@ impl SurfaceControl for WinitSurfaceControl {
     }
 }
 
-/// Opens a **full `App`** in its own top-level window on the already-running single-thread multi-surface
-/// runner — the app is moved in (so it may be `!Send`, e.g. hold `Rc` state), keeps the one shared reactive
-/// runtime, and gets its own `Surface` world and `on_frame` driven. Unlike `open_surface` (which hosts a
-/// content closure), this hosts a real `App`, so a caller can move a live sub-app (a detached tab, with its
-/// state and background work) into a window. Returns a token; dropping it, or the window's own close, tears
-/// the window down. Only meaningful while `run_app_windowed`/the multi-surface runner is running.
+/// Opens a **full `App`** in its own top-level window on the already-running single-thread multi-surface runner — the app is moved in (so it may be `!Send`, e.g. hold `Rc` state), keeps the one shared reactive runtime, and gets its own `Surface` world and `on_frame` driven. Unlike `open_surface` (which hosts a content closure), this hosts a real `App`, so a caller can move a live sub-app (a detached tab, with its state and background work) into a window. Returns a token; dropping it, or the window's own close, tears the window down. Only meaningful while `run_app_windowed`/the multi-surface runner is running.
 pub fn open_window<A: App>(app: A) -> SurfaceToken {
     let window_config = app.window_config().unwrap_or_default();
     let paths: Arc<dyn AppPathsProvider> = Arc::new(DesktopPathsProvider);
     platform_desktop::DesktopFileDialogs::install();
     platform_desktop::DesktopClipboard::install();
     let prefs = crate::prefs::UserPrefs::load("telar-window", paths.as_ref());
-    // Same backend convention as the primary window (resolved preference, else the compile-time default —
-    // `Auto` = hardware with a software fallback): a secondary window is a first-class window.
+    // The same convention as the primary window — resolved preference, else the compile-time default — because a secondary window is a first-class window.
     let backend = prefs
         .backend
         .unwrap_or_else(crate::config::compile_time_backend);
@@ -92,9 +89,7 @@ pub fn open_window<A: App>(app: A) -> SurfaceToken {
     SurfaceToken::new(Box::new(WinitSurfaceControl { close }))
 }
 
-/// Runs one app in a native window (like [`run_app_with_name`]) but under the single-thread multi-surface
-/// runner — so the app can call [`open_window`] to move a live sub-app into a further top-level window that
-/// shares its one reactive runtime (e.g. a detached tab). The app may be `!Send`.
+/// Runs one app in a native window (like [`run_app_with_name`](crate::run_app_with_name)) but under the single-thread multi-surface runner — so the app can call [`open_window`] to move a live sub-app into a further top-level window that shares its one reactive runtime (e.g. a detached tab). The app may be `!Send`.
 pub fn run_app_windowed<A: App>(config: AppConfig, app: A, app_name: &str) {
     let platform = match WinitPlatform::try_new() {
         Ok(p) => p,

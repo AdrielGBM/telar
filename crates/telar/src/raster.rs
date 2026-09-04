@@ -1,3 +1,5 @@
+//! Rasterizing a widget tree into pixels off-screen, for a drag preview or an exported image.
+
 use std::cell::RefCell;
 
 use platform_headless::HeadlessWindow;
@@ -7,27 +9,18 @@ use renderer_software::{SoftwareRenderer, SoftwareRendererConfig};
 use crate::{Color, DrawCommand};
 
 thread_local! {
-    // Constructing a renderer builds a text shaper and its caches, so without this every repeat caller would need its own reuse scheme to avoid paying that per call.
+    // Constructing a renderer builds a text shaper and its caches, so every repeat caller would otherwise need its own reuse scheme.
     static RASTERIZER: RefCell<Option<SoftwareRenderer<HeadlessWindow, HeadlessWindow>>> =
         const { RefCell::new(None) };
 }
 
-/// Draws `commands` into an offscreen buffer and hands back the pixels as premultiplied RGBA8888
-/// (`[R, G, B, A]` per pixel, row-major, `width * height * 4` bytes), or `None` if the size is empty or the
-/// frame failed to render.
+/// Draws `commands` into an offscreen buffer and hands back the pixels as premultiplied RGBA8888 (`[R, G, B, A]` per pixel, row-major, `width * height * 4` bytes), or `None` if the size is empty or the frame failed to render.
 ///
-/// The fourth answer alongside [`crate::try_run_test`], the preview window and
-/// [`crate::run_preview_png`], and the lowest-level one: no [`crate::App`], no layout pass, no platform event
-/// loop — just draw commands in, pixels out. For the caller that has already composed a few
-/// [`DrawCommand`]s and needs a raw buffer to hand to something else: a compositor drag icon, a tray or
-/// notification image, a texture atlas, a golden-image assertion over hand-built commands.
+/// The fourth answer alongside [`crate::try_run_test`], the preview window and [`crate::run_preview_png`], and the lowest-level one: no [`crate::App`], no layout pass, no platform event loop — just draw commands in, pixels out. For the caller that has already composed a few [`DrawCommand`]s and needs a raw buffer to hand to something else: a compositor drag icon, a tray or notification image, a texture atlas, a golden-image assertion over hand-built commands.
 ///
-/// `commands` are expected pre-scaled, exactly as the software backend takes them on screen; `scale` is
-/// reported to the backend but does not transform them. `clear_color` of `None` leaves the background fully
-/// transparent.
+/// `commands` are expected pre-scaled, exactly as the software backend takes them on screen; `scale` is reported to the backend but does not transform them. `clear_color` of `None` leaves the background fully transparent.
 ///
-/// The backing renderer is cached per thread and resized as needed, so calling this in a loop pays for the
-/// text shaper once.
+/// The backing renderer is cached per thread and resized as needed, so calling this in a loop pays for the text shaper once.
 pub fn rasterize(
     commands: &[DrawCommand],
     width: u32,
@@ -63,8 +56,6 @@ mod tests {
         }]
     }
 
-    // hogar's drag preview and trinity's export both go through this, and neither could have told you it
-    // still worked: the whole path had no test at all.
     #[test]
     fn it_draws_the_commands_it_is_given() {
         let pixels = rasterize(&red_square(8.0), 8, 8, 1.0, None).expect("pixels");
@@ -77,8 +68,7 @@ mod tests {
         );
     }
 
-    // `None` is documented as fully transparent, which is what a drag icon or a tray image needs: the
-    // compositor blends it, so a black background would be a black box following the cursor.
+    // `None` is documented as fully transparent, which is what a drag icon needs: the compositor blends it, so a black background would be a black box following the cursor.
     fn transparent_corner(pixels: &[u8]) -> u8 {
         pixels[pixels.len() - 1]
     }
@@ -93,15 +83,13 @@ mod tests {
         );
     }
 
-    // The size guard is the difference between `None` and a panic inside the backend.
     #[test]
     fn an_empty_size_is_none_rather_than_a_failure() {
         assert!(rasterize(&red_square(4.0), 0, 8, 1.0, None).is_none());
         assert!(rasterize(&red_square(4.0), 8, 0, 1.0, None).is_none());
     }
 
-    // The renderer is cached per thread and resized as needed; a second call at a different size has to
-    // produce a buffer for THAT size, not the one the cached renderer was built at.
+    // The renderer is cached per thread and resized as needed, so a second call at a different size must produce a buffer for that size.
     #[test]
     fn a_cached_renderer_still_resizes_between_calls() {
         let small = rasterize(&red_square(4.0), 8, 8, 1.0, None).expect("small");

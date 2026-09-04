@@ -1,11 +1,6 @@
 //! COLR v1 color-glyph rasterization (skrifa + tiny-skia).
 //!
-//! COLR v1 is a general color-glyph format — commonly emoji, but also colored icons and
-//! decorative glyphs. swash 0.2.x returns `None` (or an empty placement) for these glyphs
-//! (e.g. Android's NotoColorEmoji.ttf), so cosmic-text silently drops them. Both renderers
-//! re-rasterize them here with skrifa (COLR v1 paint traversal) into a tiny-skia pixmap and
-//! return straight-alpha RGBA so callers can blit (software) or upload to the glyph atlas
-//! (hardware) using the same correct baseline placement.
+//! COLR v1 is a general color-glyph format — commonly emoji, but also colored icons and decorative glyphs. swash 0.2.x returns `None` (or an empty placement) for these glyphs (e.g. Android's NotoColorEmoji.ttf), so cosmic-text silently drops them. Both renderers re-rasterize them here with skrifa (COLR v1 paint traversal) into a tiny-skia pixmap and return straight-alpha RGBA so callers can blit (software) or upload to the glyph atlas (hardware) using the same correct baseline placement.
 
 use skrifa::{
     FontRef, GlyphId, MetadataProvider,
@@ -23,9 +18,7 @@ use tiny_skia::{
     Point as TsPoint, RadialGradient, Shader, SpreadMode, Transform,
 };
 
-/// A rasterized COLR glyph with straight (non-premultiplied) RGBA8 pixels and swash-style
-/// placement: `placement_left` is the horizontal offset from the pen to the bitmap's left edge,
-/// `placement_top` the distance from the baseline up to the bitmap's top edge (both in pixels).
+/// A rasterized COLR glyph with straight (non-premultiplied) RGBA8 pixels and swash-style placement: `placement_left` is the horizontal offset from the pen to the bitmap's left edge, `placement_top` the distance from the baseline up to the bitmap's top edge (both in pixels).
 pub struct ColrGlyphBitmap {
     pub rgba: Vec<u8>,
     pub width: u32,
@@ -34,8 +27,7 @@ pub struct ColrGlyphBitmap {
     pub placement_top: i32,
 }
 
-/// Collects an outline glyph into a tiny-skia path. Wrapped in an `Option` because skrifa may
-/// emit no contours for empty glyphs, in which case there is no path to build.
+/// Collects an outline glyph into a tiny-skia path. Wrapped in an `Option` because skrifa may emit no contours for empty glyphs, in which case there is no path to build.
 struct PathBuilderPen(Option<PathBuilder>);
 
 impl OutlinePen for PathBuilderPen {
@@ -297,7 +289,7 @@ impl ColorPainter for TinySkiaPainter<'_> {
         let transform = self.current_transform();
         let width = self.width;
         let height = self.height;
-        // The clip restricts where the fill lands; without a clip the whole layer is painted.
+        // The clip restricts where the fill lands; without one the whole layer is painted.
         let clip = self.current_clip().cloned();
 
         let mut paint = tiny_skia::Paint::default();
@@ -347,7 +339,7 @@ impl ColorPainter for TinySkiaPainter<'_> {
                 // tiny-skia supports the COLR two-circle radial model directly.
                 let (x0, y0) = map_point(&transform, c0.x, c0.y);
                 let (x1, y1) = map_point(&transform, c1.x, c1.y);
-                // Approximate the radius scale via the transform's average axis scale.
+                // Approximated via the transform's average axis scale.
                 let sx = (transform.sx * transform.sx + transform.ky * transform.ky).sqrt();
                 let sy = (transform.kx * transform.kx + transform.sy * transform.sy).sqrt();
                 let radius_scale = (sx + sy) * 0.5;
@@ -372,7 +364,7 @@ impl ColorPainter for TinySkiaPainter<'_> {
                 }
             }
             SkrifaBrush::SweepGradient { color_stops, .. } => {
-                // tiny-skia has no sweep gradient; approximate with the first stop's solid color.
+                // tiny-skia has no sweep gradient, so approximate with the first stop's solid colour.
                 if let Some(first) = color_stops.first() {
                     let rgba = self.resolve_color(first.palette_index, first.alpha);
                     paint.shader = Shader::SolidColor(Self::to_tiny_skia_color(rgba));
@@ -434,9 +426,7 @@ impl TinySkiaPainter<'_> {
     }
 }
 
-/// Rasterizes a single COLR v1 color glyph at `physical_font_size` pixels. Returns straight-alpha
-/// RGBA8 plus swash-style placement, or `None` if the glyph has no COLR v1 record or the font is
-/// unusable. `foreground` resolves COLR paints that reference the text (foreground) palette index.
+/// Rasterizes a single COLR v1 color glyph at `physical_font_size` pixels. Returns straight-alpha RGBA8 plus swash-style placement, or `None` if the glyph has no COLR v1 record or the font is unusable. `foreground` resolves COLR paints that reference the text (foreground) palette index.
 pub fn rasterize_colr_glyph(
     font_bytes: &[u8],
     face_index: u32,
@@ -459,7 +449,7 @@ pub fn rasterize_colr_glyph(
 
     let scale = physical_font_size / upem;
 
-    // Use font-level glyph bounds (in pixels at the physical size) to size the pixmap so that glyphs with large descenders or horizontal overhangs are never clipped.
+    // Font-level glyph bounds, so glyphs with large descenders or horizontal overhangs are never clipped.
     let font_metrics = SkrifaMetrics::new(
         &font_ref,
         SkrifaSize::new(physical_font_size),
@@ -478,7 +468,7 @@ pub fn rasterize_colr_glyph(
     let dim_h = (baseline_in_pixmap + descent_depth_px.ceil() as u32 + 2).max(1);
     let dim_w = (width_px.ceil() as u32 + 2).max(1);
 
-    // Initial transform: font-units → pixels with Y-flip. Baseline sits at y=baseline_in_pixmap.
+    // Font units to pixels with a Y-flip; the baseline sits at `baseline_in_pixmap`.
     let initial = Transform::from_row(scale, 0.0, 0.0, -scale, 0.0, baseline_in_pixmap as f32);
 
     let outlines = font_ref.outline_glyphs();
@@ -492,7 +482,7 @@ pub fn rasterize_colr_glyph(
 
     let pixmap = painter.layers.into_iter().next().unwrap().pixmap;
 
-    // tiny-skia pixels are premultiplied; the glyph atlas / blit path expects straight alpha.
+    // tiny-skia pixels are premultiplied; the glyph atlas expects straight alpha.
     let mut rgba = Vec::with_capacity((dim_w * dim_h * 4) as usize);
     for px in pixmap.pixels() {
         let c = px.demultiply();

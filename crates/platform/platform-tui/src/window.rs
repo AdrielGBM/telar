@@ -16,9 +16,7 @@ struct Inner {
 
 /// A terminal, presented as a window whose size is expressed in the logical pixels layout works in.
 ///
-/// The exchange rate is the cell size the renderer was built with: an 80×24 terminal at the default 8×16
-/// is a 640×384 window. Nothing above this learns that a cell exists, which is what lets the same widget
-/// tree lay out here and on a desktop.
+/// The exchange rate is the cell size the renderer was built with: an 80×24 terminal at the default 8×16 is a 640×384 window. Nothing above this learns that a cell exists, which is what lets the same widget tree lay out here and on a desktop.
 #[derive(Clone)]
 pub struct TuiWindow {
     inner: Arc<Inner>,
@@ -77,24 +75,20 @@ impl Window for TuiWindow {
         self.inner.redraw.store(true, Ordering::Relaxed);
     }
 
-    /// One, always. A cell is the smallest thing a terminal can address, and the window already reports its
-    /// size in the units layout uses — there is no second grid underneath to scale into.
+    /// One, always. A cell is the smallest thing a terminal can address, and the window already reports its size in the units layout uses — there is no second grid underneath to scale into.
     fn scale_factor(&self) -> f64 {
         1.0
     }
 
     fn set_title(&self, title: &str) {
-        // OSC 0 sets both the icon name and the window title, which is what a terminal emulator shows in
-        // its tab. A terminal that does not understand it ignores the sequence rather than printing it.
+        // OSC 0 sets both the icon name and the window title, which is what a terminal emulator shows in its tab. A terminal that does not understand it ignores the sequence rather than printing it.
         use std::io::Write;
         let mut out = std::io::stdout();
         let _ = write!(out, "\x1b]0;{title}\x07");
         let _ = out.flush();
     }
 
-    /// What `COLORFGBG` says, which is the only light/dark signal a terminal offers without a round trip.
-    /// Its second field is the background's palette index: the dark half of the 16 colours, plus 8 (grey),
-    /// means a dark background.
+    /// What `COLORFGBG` says, which is the only light/dark signal a terminal offers without a round trip. Its second field is the background's palette index: the dark half of the 16 colours, plus 8 (grey), means a dark background.
     fn prefers_dark(&self) -> Option<bool> {
         let value = std::env::var("COLORFGBG").ok()?;
         let background = value.rsplit(';').next()?.trim();

@@ -1,3 +1,5 @@
+//! Separable Gaussian blur: a horizontal pass and a vertical one through a scratch texture.
+
 use wgpu::Device;
 
 use super::{BlurParams, BlurPipeline};
@@ -15,7 +17,7 @@ impl BlurPipeline {
         let texture_usage =
             wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::TEXTURE_BINDING;
 
-        // Extract field references before the closure so rustc counts them as reads.
+        // Extracted before the closure so rustc counts them as reads.
         let pipeline = &self.pipeline;
         let bind_group_layout = &self.bind_group_layout;
         let sampler = &self.sampler;
@@ -155,7 +157,7 @@ impl BlurPipeline {
             pass.draw(0..6, 0..1);
         }
 
-        // Return the intermediate texture to the pool for reuse on the next blur call. The horizontal pass uses Clear on load, so any stale contents from a previous call are overwritten.
+        // The horizontal pass loads with Clear, so stale contents from a previous call are overwritten.
         self.intermediate_pool
             .push((intermediate, intermediate_view, width, height));
 

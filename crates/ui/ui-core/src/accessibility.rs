@@ -1,15 +1,8 @@
 //! What a screen reader is told about the window right now.
 //!
-//! Telar had the whole of *operating* an interface without a mouse — a tab order scoped to what is genuinely
-//! reachable, arrow keys and type-ahead in every list, a focus ring that knows a tap from a Tab — and none of
-//! it reaches someone who cannot see the screen. That is a different question: not *where do the keys go* but
-//! *what is this and what state is it in*.
+//! Telar had the whole of *operating* an interface without a mouse — a tab order scoped to what is genuinely reachable, arrow keys and type-ahead in every list, a focus ring that knows a tap from a Tab — and none of it reaches someone who cannot see the screen. That is a different question: not *where do the keys go* but *what is this and what state is it in*.
 //!
-//! Nothing here is authored per widget, and that is the design. The set of controls is the focus registry's
-//! own tab order, so the reader and the keyboard cannot come to different conclusions about what is on screen.
-//! The name is taken from **the text the widget actually draws inside itself**, which is how it reads to
-//! everyone else and needs no second copy that can fall out of step with the first. Only the role is declared,
-//! and only where the default of "a thing you activate" is wrong.
+//! Nothing here is authored per widget, and that is the design. The set of controls is the focus registry's own tab order, so the reader and the keyboard cannot come to different conclusions about what is on screen. The name is taken from **the text the widget actually draws inside itself**, which is how it reads to everyone else and needs no second copy that can fall out of step with the first. Only the role is declared, and only where the default of "a thing you activate" is wrong.
 
 use geometry_core::Rect;
 use platform_core::{AccessNode, Role};
@@ -19,8 +12,7 @@ use crate::focus;
 
 /// Everything the platform's accessibility layer needs to describe the window, in reading order.
 ///
-/// `commands` is the frame the renderer is about to draw — the same list, so what is announced and what is
-/// painted are the same picture by construction rather than by agreement.
+/// `commands` is the frame the renderer is about to draw — the same list, so what is announced and what is painted are the same picture by construction rather than by agreement.
 pub fn snapshot(commands: &[DrawCommand]) -> Vec<AccessNode> {
     let controls: Vec<(focus::Exposed, Rect)> = focus::exposed()
         .into_iter()
@@ -43,8 +35,7 @@ pub fn snapshot(commands: &[DrawCommand]) -> Vec<AccessNode> {
         .collect();
 
     for (text, rect) in drawn_text(commands) {
-        // The smallest control containing it, so a button inside a card is named by its own label rather than
-        // by everything the card happens to hold.
+        // The smallest control containing it, so a button inside a card is named by its own label.
         let owner = controls
             .iter()
             .enumerate()
@@ -52,8 +43,7 @@ pub fn snapshot(commands: &[DrawCommand]) -> Vec<AccessNode> {
             .min_by(|(_, (_, a)), (_, (_, b))| area(*a).total_cmp(&area(*b)));
         match owner {
             Some((i, _)) => append(&mut nodes[i].name, &text),
-            // Text belonging to no control is still content: a heading, a caption, the paragraph a dialog is
-            // asking about. A reader given only the buttons cannot tell you what the buttons are for.
+            // Text belonging to no control is still content: a heading, a caption, the paragraph a dialog asks about.
             None => nodes.push(AccessNode {
                 id: None,
                 role: Role::Label,
@@ -67,8 +57,7 @@ pub fn snapshot(commands: &[DrawCommand]) -> Vec<AccessNode> {
         }
     }
 
-    // Reading order rather than tab order: a label sits between the controls it explains, and it has no place
-    // in a list built from registration. Tab order stays the focus registry's answer, where it belongs.
+    // Reading order rather than tab order: a label sits between the controls it explains. Tab order stays the focus registry's answer.
     nodes.sort_by(|a, b| {
         a.rect
             .y
@@ -91,8 +80,7 @@ fn drawn_text(commands: &[DrawCommand]) -> Vec<(String, Rect)> {
         .collect()
 }
 
-/// Whether `inner`'s centre lies in `outer`. The centre and not the whole rect: a label clipped by its own
-/// control — a long menu item, a cell in a narrow column — still belongs to it.
+/// Whether `inner`'s centre lies in `outer`. The centre and not the whole rect: a label clipped by its own control — a long menu item, a cell in a narrow column — still belongs to it.
 fn contains(outer: Rect, inner: Rect) -> bool {
     let (x, y) = (inner.x + inner.width / 2.0, inner.y + inner.height / 2.0);
     x >= outer.x && x <= outer.x + outer.width && y >= outer.y && y <= outer.y + outer.height
@@ -136,8 +124,7 @@ mod tests {
         Rect::new(x, y, w, h)
     }
 
-    /// A button built the ordinary way is announced with the label it draws — nobody wrote an accessible name
-    /// for it, and that is the point: a second copy of the text is a second thing to keep true.
+    /// A button built the ordinary way is announced with the label it draws — nobody wrote an accessible name for it, and that is the point: a second copy of the text is a second thing to keep true.
     #[test]
     fn a_control_is_named_by_the_text_it_draws() {
         reset_layout_runtime();
@@ -175,8 +162,7 @@ mod tests {
         assert!(button.enabled);
     }
 
-    /// Text belonging to no control is content, not noise. A reader handed only the buttons cannot say what
-    /// the buttons are for.
+    /// Text belonging to no control is content, not noise. A reader handed only the buttons cannot say what the buttons are for.
     #[test]
     fn text_outside_any_control_is_still_announced() {
         reset_layout_runtime();
@@ -188,8 +174,7 @@ mod tests {
         assert_eq!(nodes[0].id, None);
     }
 
-    /// Nesting: the label goes to the smallest control that contains it, so a button inside a card is named by
-    /// its own text rather than by everything the card happens to hold.
+    /// Nesting: the label goes to the smallest control that contains it, so a button inside a card is named by its own text rather than by everything the card happens to hold.
     #[test]
     fn a_label_belongs_to_the_smallest_control_around_it() {
         let outer = rect(0.0, 0.0, 200.0, 100.0);
@@ -200,8 +185,7 @@ mod tests {
         assert!(area(inner) < area(outer));
     }
 
-    /// A value control that reports only its role has not said the one thing it exists to report: a slider
-    /// announced as "Volume, slider" leaves the number — the whole content of the control — unsaid.
+    /// A value control that reports only its role has not said the one thing it exists to report: a slider announced as "Volume, slider" leaves the number — the whole content of the control — unsaid.
     #[test]
     fn a_valued_control_reports_where_it_stands() {
         reset_layout_runtime();
@@ -259,8 +243,7 @@ mod tests {
         assert_eq!(tab.toggled, Some(true));
     }
 
-    /// The reading order a reader walks is the order things sit on screen, not the order they were built —
-    /// which is what tab order is, and stays.
+    /// The reading order a reader walks is the order things sit on screen, not the order they were built — which is what tab order is, and stays.
     #[test]
     fn nodes_come_back_in_reading_order() {
         reset_layout_runtime();

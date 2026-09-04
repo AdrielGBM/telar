@@ -11,24 +11,14 @@
 //!
 //! Two rules, and no exceptions to them:
 //!
-//! - **`key:value`** is one token. Parentheses may nest inside it, so `fill:chip(a, b)` and
-//!   `fill:linear(horizontal, a, b)` read whole; a space at depth 0 ends the value.
-//! - **`key(…)`** is anything that needs a space: `cols(240 1fr)`, `stroke_width(0 0 1 0)`,
-//!   `transition(fill 250ms ease-out)`, `drag_button(secondary auxiliary)`.
+//! - **`key:value`** is one token. Parentheses may nest inside it, so `fill:chip(a, b)` and `fill:linear(horizontal, a, b)` read whole; a space at depth 0 ends the value.
+//! - **`key(…)`** is anything that needs a space: `cols(240 1fr)`, `stroke_width(0 0 1 0)`, `transition(fill 250ms ease-out)`, `drag_button(secondary auxiliary)`.
 //!
-//! The parser records *which of the five forms* it read — bare, quoted, `t"…"` for a lookup, a closure, a
-//! parenthesised spec — in [`Value`], and does not learn what any of them mean. Meaning belongs to the key
-//! schema in `telar-transpiler`'s `registry`, which also holds the closed keyword sets: a value outside one
-//! is a build error on the attribute's own line rather than a property silently dropped.
+//! The parser records *which of the five forms* it read — bare, quoted, `t"…"` for a lookup, a closure, a parenthesised spec — in [`Value`], and does not learn what any of them mean. Meaning belongs to the key schema in `telar-transpiler`'s `registry`, which also holds the closed keyword sets: a value outside one is a build error on the attribute's own line rather than a property silently dropped.
 //!
-//! Values used to arrive here as bare strings and have their form re-derived downstream — by the transpiler,
-//! the analyzer and the formatter separately, each with its own `starts_with('#')` and `contains('(')`. Four
-//! unit dialects, three behaviours for a bad value and one run-to-end-of-line parser exception grew in the
-//! gap between those re-derivations.
+//! Values used to arrive here as bare strings and have their form re-derived downstream — by the transpiler, the analyzer and the formatter separately, each with its own `starts_with('#')` and `contains('(')`. Four unit dialects, three behaviours for a bad value and one run-to-end-of-line parser exception grew in the gap between those re-derivations.
 //!
-//! [`format::format_document`] is the inverse: it re-serializes that AST into canonical source. It lives beside
-//! the parser rather than with the language server so anything holding a `.rsx` file can reach it — the editor
-//! through the LSP, `cargo telar fmt` from a terminal — and both give the same answer by construction.
+//! [`format::format_document`] is the inverse: it re-serializes that AST into canonical source. It lives beside the parser rather than with the language server so anything holding a `.rsx` file can reach it — the editor through the LSP, `cargo telar fmt` from a terminal — and both give the same answer by construction.
 
 pub mod format;
 
@@ -95,7 +85,7 @@ col @card
 
     #[test]
     fn closure_attribute_requires_parenthesized_form() {
-        // The colon form (`on_press:|| …`) ran to end of line and swallowed the attributes after it, so it is rejected outright.
+        // The colon form ran to end of line and swallowed the attributes after it, so it is rejected outright.
         let err = parse("[view]\nbtn \"x\" on_press:|| f() foo:bar\n").unwrap_err();
         assert!(err.message.contains("parenthesise it"), "{}", err.message);
         // The parenthesized form is delimited, so a trailing attribute can follow it on the same line.
@@ -245,7 +235,7 @@ col @card
 
     #[test]
     fn a_parenthesized_value_keeps_its_spaces_and_commas() {
-        // `key(…)` is the one form that admits a space at depth 0, so a multi-clause spec survives tokenization and the attributes on either side of it still parse as their own.
+        // `key(…)` is the one form admitting a space at depth 0, so a multi-clause spec survives tokenization and the attributes either side of it still parse.
         let doc = parse(
             "[view]\nbox fill:primary transition(opacity 200ms ease-out, fill 150ms linear) radius:6\n",
         )
@@ -266,8 +256,7 @@ col @card
 
     #[test]
     fn colon_value_keeps_spaces_inside_parens() {
-        // A computed colon value balances parens: `fill:chip_fill($snap, id)` is read whole (the space after
-        // the comma is nested inside `(...)`), and a following attribute on the same line still parses.
+        // A computed colon value balances parens, so `fill:chip_fill($snap, id)` is read whole and a following attribute on the same line still parses.
         let doc = parse(
             "[view]\nbox fill:chip_fill($snap, id) radius:6\n    text \"x\" color:text_color($snap, id) font_size:13\n",
         )
@@ -292,9 +281,7 @@ col @card
         assert_eq!(size.value, Value::Expr("13".into()));
     }
 
-    /// `transition:` was the one key whose colon value ran to end of line, which is also why it needed a
-    /// bespoke check for the attributes that run swallowed. It obeys the one rule now, so nothing is
-    /// swallowed and nothing has to be last.
+    /// `transition:` was the one key whose colon value ran to end of line, which is also why it needed a bespoke check for the attributes that run swallowed. It obeys the one rule now, so nothing is swallowed and nothing has to be last.
     #[test]
     fn a_colon_value_ends_at_the_first_space() {
         let doc = parse("[view]\nbox transition:opacity align:center\n").unwrap();
@@ -319,7 +306,6 @@ col @card
         let ViewNode::Element(reset) = &row.children[2] else {
             panic!();
         };
-        // `ghost` is a bare flag attribute with an empty value.
         assert!(
             reset
                 .attributes
@@ -350,9 +336,7 @@ col @card
         assert_eq!(else_branch.len(), 1);
     }
 
-    /// `else if` used to match the plain-`else` check and have the rest of its line thrown away, silently — the
-    /// branch ran unconditionally and nothing said so. It chains now, and the absence of this test is why the
-    /// fault survived.
+    /// `else if` used to match the plain-`else` check and have the rest of its line thrown away, silently — the branch ran unconditionally and nothing said so. It chains now, and the absence of this test is why the fault survived.
     #[test]
     fn parses_an_else_if_chain() {
         let src = "[logic]\n[view]\ncol\n    if n > 1\n        text \"many\"\n    else if n > 0\n        text \"one\"\n    else\n        text \"none\"\n";
@@ -375,7 +359,6 @@ col @card
             1,
             "and the trailing else belongs to the innermost if"
         );
-        // The condition still points at its own bytes, so a diagnostic on it lands on the right column.
         assert_eq!(&src[inner.condition_start..][.."n > 0".len()], "n > 0");
     }
 
@@ -468,11 +451,8 @@ col @card
 
     #[test]
     fn inconsistent_indentation_errors_instead_of_dropping_nodes() {
-        // The first child sets the child indent (5); the next two siblings sit at 4, which lines up
-        // with no enclosing block. This used to parse Ok while silently discarding them.
         let src = "[view]\nbox\n     text \"a\"\n    text \"b\"\n    text \"c\"\n";
         let err = parse(src).unwrap_err();
-        // The error points at the first stranded line so the editor can flag it.
         assert_eq!(err.line, 4);
         assert!(err.message.contains("indentation"));
     }
@@ -492,19 +472,15 @@ col @card
         let err = parse("[view]\nbox fill:#zz\n").unwrap_err();
         assert_eq!(err.line, 2);
         assert!(err.message.contains("invalid hex"));
-        // An 8-digit hex (as real files use for shadow_color) is accepted.
         assert!(parse("[view]\nbox shadow_color:#00000040\n").is_ok());
-        // A quoted value that happens to start with `#` is a string, not a color — not validated.
         assert!(parse("[view]\ntext label:\"#hashtag\"\n").is_ok());
     }
 
     #[test]
     fn style_class_prop_empty_or_bad_hex_errors() {
-        // Empty value in a multi-line class prop.
         let err = parse("[style]\n@card\n    width:\n[view]\ncol\n").unwrap_err();
         assert_eq!(err.line, 3);
         assert!(err.message.contains("missing a value"));
-        // Bad hex in an inline class prop.
         let err = parse("[style]\n@card: bg:#zz\n[view]\ncol\n").unwrap_err();
         assert_eq!(err.line, 2);
         assert!(err.message.contains("invalid hex"));
@@ -520,8 +496,7 @@ col @card
                 "expected reject of {bad}"
             );
         }
-        // `#abcd` is the four-digit form `Color::from_hex` has always accepted at runtime; rejecting it here
-        // made a legal colour a parse error.
+        // `#abcd` is the four-digit form `Color::from_hex` has always accepted at runtime; rejecting it here made a legal colour a parse error.
         for good in ["#abc", "#abcd", "#3d78fa", "#3d78fa80"] {
             let src = format!("[style]\n@card\n    fill: {good}\n[view]\ncol\n");
             assert!(parse(&src).is_ok(), "expected accept of {good}");
@@ -550,11 +525,9 @@ col @card
     fn parses_preview_sections() {
         let src = "[logic]\n[view]\ncol\n    text \"x\"\n\n[preview \"Default\"]\ncounter\n\n[preview \"Tall\" width:360 dark]\nbox\n    text \"hi\"\n";
         let doc = parse(src).unwrap();
-        // The `[view]` section is unaffected by the trailing previews.
         assert_eq!(doc.view.nodes.len(), 1);
         assert_eq!(doc.previews.len(), 2);
 
-        // A preview body is ordinary view markup (here, a bare component call).
         assert_eq!(doc.previews[0].name, "Default");
         assert!(doc.previews[0].options.is_empty());
         let ViewNode::Element(comp) = &doc.previews[0].body[0] else {
@@ -562,7 +535,6 @@ col @card
         };
         assert_eq!(comp.tag, "counter");
 
-        // Options parse as `key:value` pairs and bare flags (empty value).
         assert_eq!(doc.previews[1].name, "Tall");
         assert_eq!(
             doc.previews[1].options,
@@ -583,9 +555,7 @@ col @card
         assert_eq!(b.tag, "box");
         assert_eq!(b.children.len(), 1);
     }
-    /// A value whose delimiters are still open at end of line continues onto the next, so a closure can be
-    /// written where it is used instead of being bound in `[logic]` and referred to by name. Without this a
-    /// `canvas` could never carry its own drawing, and the only way to place one was the `widget` escape.
+    /// A value whose delimiters are still open at end of line continues onto the next, so a closure can be written where it is used instead of being bound in `[logic]` and referred to by name. Without this a `canvas` could never carry its own drawing, and the only way to place one was the `widget` escape.
     #[test]
     fn a_value_with_open_delimiters_continues_onto_the_next_line() {
         let src = "[view]\ncol\n    canvas paint:(|rect| {\n        let a = 1;\n        draw(rect, a)\n    }) width:10\n";

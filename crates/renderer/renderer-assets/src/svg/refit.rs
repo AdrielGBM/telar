@@ -1,3 +1,5 @@
+//! Re-fitting a baked display list to the box it is actually drawn in.
+
 use std::sync::Arc;
 
 use geometry_core::{Point, Rect};
@@ -24,7 +26,7 @@ pub(super) fn refit_vector(
         .collect()
 }
 
-// A stroke width / gradient radius is a single scalar with no anisotropic form, so under a non-uniform (fill) scale it takes the geometric-mean scale. This equals `sqrt(det)` of the fit, which is exactly what the dynamic path's `uniform_scale` computes — so baked and dynamic stay bit-exact even for fill. For uniform fits it reduces to `s`.
+// A stroke width or gradient radius is a scalar with no anisotropic form, so under a non-uniform scale it takes the geometric-mean scale. That equals `sqrt(det)` of the fit, which is what the dynamic path computes, so baked and dynamic stay bit-exact even for `fill`.
 fn mean_scale(sx: f32, sy: f32) -> f32 {
     (sx * sy).abs().sqrt()
 }
@@ -79,7 +81,7 @@ fn refit_stroke(stroke: Stroke, sx: f32, sy: f32, dx: f32, dy: f32, tint: Option
 
 fn refit_paint(paint: Paint, sx: f32, sy: f32, dx: f32, dy: f32, tint: Option<Color>) -> Paint {
     if let Some(tint) = tint {
-        // srcIn tint mirrors `vector::convert_paint`: replace the paint with a solid whose alpha is the paint's effective opacity times the tint alpha. For a baked solid, that opacity is exactly its alpha; for a gradient (which the dynamic path also flattens under tint) we take the first stop's alpha, exact when stop opacities are 1 (the common case and all baked inputs here).
+        // Mirrors `vector::convert_paint`: replace the paint with a solid whose alpha is its effective opacity times the tint alpha. For a gradient that is the first stop's alpha, exact when stop opacities are 1.
         let opacity = match paint {
             Paint::Solid(c) => c.a,
             Paint::Gradient(g) => g.stops.active().first().map_or(1.0, |st| st.color.a),

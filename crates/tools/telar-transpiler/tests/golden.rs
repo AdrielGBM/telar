@@ -1,9 +1,6 @@
-//! The safety net: every `.rsx` in the workspace transpiled into a committed snapshot of the generated Rust
-//! *and* of its source map, so a refactor of the transpiler has to declare what it changed.
+//! The safety net: every `.rsx` in the workspace transpiled into a committed snapshot of the generated Rust *and* of its source map, so a refactor of the transpiler has to declare what it changed.
 //!
-//! The map is snapshotted beside the code because a refactor can leave the output byte-identical and still
-//! ruin the column mapping — and a wrong column is a diagnostic pointing at the wrong text, which is worse
-//! than none. Snapshotting only the Rust would let that through silently.
+//! The map is snapshotted beside the code because a refactor can leave the output byte-identical and still ruin the column mapping — and a wrong column is a diagnostic pointing at the wrong text, which is worse than none. Snapshotting only the Rust would let that through silently.
 //!
 //! Run with `UPDATE_GOLDEN=1` to rewrite the snapshots after a deliberate change, then read the diff.
 
@@ -11,8 +8,7 @@ use std::path::{Path, PathBuf};
 
 use telar_transpiler::{RsxSpan, SourceMap, TranspiledSource};
 
-/// One package whose `src/` tree the harness transpiles, with the theme type its `app!` invocation names —
-/// `use_theme::<T>()` is typed by it, so the wrong one here would snapshot code the build never emits.
+/// One package whose `src/` tree the harness transpiles, with the theme type its `app!` invocation names — `use_theme::<T>()` is typed by it, so the wrong one here would snapshot code the build never emits.
 struct Project {
     name: &'static str,
     manifest: &'static str,
@@ -44,8 +40,7 @@ fn golden_dir() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/golden")
 }
 
-/// Transpiles one package exactly the way `app!` does: the same component name (the file stem),
-/// the same asset root. There is no pre-pass to match any more — a file transpiles knowing only itself.
+/// Transpiles one package exactly the way `app!` does: the same component name (the file stem), the same asset root. There is no pre-pass to match any more — a file transpiles knowing only itself.
 fn transpile_project(project: &Project) -> Vec<(PathBuf, TranspiledSource)> {
     let manifest = workspace_root().join(project.manifest);
     let src_dir = manifest.join("src");
@@ -78,12 +73,9 @@ fn transpile_project(project: &Project) -> Vec<(PathBuf, TranspiledSource)> {
         .collect()
 }
 
-/// The source map as a reviewable snapshot: one line per generated line, and the verbatim expression spans
-/// with the `.rsx` text they claim to cover.
+/// The source map as a reviewable snapshot: one line per generated line, and the verbatim expression spans with the `.rsx` text they claim to cover.
 ///
-/// Deliberately not the JSON the `.rs.map` sidecar carries. That form is one line, so a diff over it says
-/// only "the map changed" — and the whole reason for snapshotting the map is to be told *which* line stopped
-/// pointing where it did. Quoting the covered source text is what makes a shifted span self-evident.
+/// Deliberately not the JSON the `.rs.map` sidecar carries. That form is one line, so a diff over it says only "the map changed" — and the whole reason for snapshotting the map is to be told *which* line stopped pointing where it did. Quoting the covered source text is what makes a shifted span self-evident.
 fn render_map(out: &TranspiledSource, rsx_source: &str) -> String {
     let mut text = String::new();
     text.push_str("# generated line -> rsx line (1-based; '.' means transpiler-injected)\n");
@@ -106,8 +98,7 @@ fn render_map(out: &TranspiledSource, rsx_source: &str) -> String {
     text
 }
 
-/// Compares `actual` against the snapshot at `path`, or rewrites it under `UPDATE_GOLDEN=1`. Collects the
-/// failure instead of panicking so one run reports every drifted file rather than the first.
+/// Compares `actual` against the snapshot at `path`, or rewrites it under `UPDATE_GOLDEN=1`. Collects the failure instead of panicking so one run reports every drifted file rather than the first.
 fn check(path: &Path, actual: &str, failures: &mut Vec<String>) {
     if std::env::var_os("UPDATE_GOLDEN").is_some() {
         if let Some(parent) = path.parent() {
@@ -133,9 +124,7 @@ fn check(path: &Path, actual: &str, failures: &mut Vec<String>) {
     }
 }
 
-/// The first differing line with a little context, which is what a reader needs to judge a drift. The full
-/// diff is one `UPDATE_GOLDEN=1` and a `git diff` away, and reproducing a diff engine here would be a second
-/// implementation of something the reader already has.
+/// The first differing line with a little context, which is what a reader needs to judge a drift. The full diff is one `UPDATE_GOLDEN=1` and a `git diff` away, and reproducing a diff engine here would be a second implementation of something the reader already has.
 fn first_diff(expected: &str, actual: &str) -> String {
     let (want, got): (Vec<_>, Vec<_>) = (expected.lines().collect(), actual.lines().collect());
     for (i, (w, g)) in want.iter().zip(got.iter()).enumerate() {
@@ -183,12 +172,9 @@ fn generated_rust_and_source_maps_match_the_snapshots() {
     );
 }
 
-/// What `cargo telar check` and the editor both rest on: a span of generated Rust, handed back through
-/// [`SourceMap::locate`], names the `.rsx` text it actually came from.
+/// What `cargo telar check` and the editor both rest on: a span of generated Rust, handed back through [`SourceMap::locate`], names the `.rsx` text it actually came from.
 ///
-/// The snapshots above freeze the map's *contents*; this exercises the *lookup* over the whole corpus. The
-/// two fail apart — a refactor can leave every byte of both output and map identical and still break
-/// `locate`, and that shows up as a diagnostic underlining the wrong words rather than as a diff.
+/// The snapshots above freeze the map's *contents*; this exercises the *lookup* over the whole corpus. The two fail apart — a refactor can leave every byte of both output and map identical and still break `locate`, and that shows up as a diagnostic underlining the wrong words rather than as a diff.
 #[test]
 fn every_verbatim_span_locates_back_to_the_text_it_came_from() {
     let mut checked = 0usize;
@@ -238,9 +224,7 @@ fn every_verbatim_span_locates_back_to_the_text_it_came_from() {
         }
     }
 
-    // 66 today, across the corpus's 39 files — the rest get no column precision at all, since a span is
-    // only emitted for text copied through byte-for-byte. A floor, not a target: it should climb as more of
-    // the grammar passes values through verbatim, and this catches it collapsing instead.
+    // A floor, not a target: a span is only emitted for text copied through byte-for-byte, so this should climb as more of the grammar passes values through verbatim. It catches the count collapsing instead.
     assert!(
         checked >= 50,
         "only {checked} verbatim spans checked — the corpus stopped producing them, which is itself the regression"

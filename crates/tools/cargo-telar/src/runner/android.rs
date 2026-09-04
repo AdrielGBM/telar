@@ -1,3 +1,5 @@
+//! Building, installing and launching on an Android device.
+
 use std::path::{Path, PathBuf};
 use std::process::Command;
 

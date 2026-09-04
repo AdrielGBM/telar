@@ -8,8 +8,7 @@ use platform_core::{
     Event, Key, ModifiersState, NamedKey, PointerButton, PointerSource, ScrollDelta,
 };
 
-/// Where a cell sits in the logical pixel space layout works in — its centre, so a click lands
-/// unambiguously inside the cell the user aimed at rather than on its boundary.
+/// Where a cell sits in the logical pixel space layout works in — its centre, so a click lands unambiguously inside the cell the user aimed at rather than on its boundary.
 pub fn cell_to_logical(col: u16, row: u16, cell_width: f32, cell_height: f32) -> (f64, f64) {
     (
         ((col as f32 + 0.5) * cell_width) as f64,
@@ -17,6 +16,7 @@ pub fn cell_to_logical(col: u16, row: u16, cell_width: f32, cell_height: f32) ->
     )
 }
 
+/// Translates crossterm's modifier flags into Telar's.
 pub fn map_modifiers(m: KeyModifiers) -> ModifiersState {
     ModifiersState {
         is_shift: m.contains(KeyModifiers::SHIFT),
@@ -26,6 +26,7 @@ pub fn map_modifiers(m: KeyModifiers) -> ModifiersState {
     }
 }
 
+/// Translates a crossterm key code, returning `None` for one Telar has no spelling for.
 pub fn map_key(code: KeyCode) -> Option<Key> {
     let named = |k| Some(Key::Named(k));
     match code {
@@ -92,17 +93,14 @@ fn map_button(button: MouseButton) -> PointerButton {
 
 /// What one terminal event means, as zero or more Telar events.
 ///
-/// More than one because a terminal folds things Telar keeps apart: a key event also carries the current
-/// modifiers, and a paste is a run of characters. Zero because a terminal reports events — a key nothing
-/// maps to, a mouse kind with no equivalent — that are not worth inventing a meaning for.
+/// More than one because a terminal folds things Telar keeps apart: a key event also carries the current modifiers, and a paste is a run of characters. Zero because a terminal reports events — a key nothing maps to, a mouse kind with no equivalent — that are not worth inventing a meaning for.
 pub struct Mapper {
     modifiers: ModifiersState,
     cell_width: f32,
     cell_height: f32,
     /// Where the pointer was last seen, so a scroll can carry a position the way every other backend's does.
     pointer: (f64, f64),
-    /// Whether the terminal reports key releases. When it does not, a press is synthesised into a matching
-    /// release immediately, so nothing upstream is left holding a key that will never come up.
+    /// Whether the terminal reports key releases. When it does not, a press is synthesised into a matching release immediately, so nothing upstream is left holding a key that will never come up.
     synthesises_releases: bool,
 }
 
@@ -193,8 +191,7 @@ impl Mapper {
                 source: PointerSource::Mouse,
             }),
             MouseEventKind::Down(button) => {
-                // A terminal reports the press at its cell without a preceding move, so a widget that has
-                // never seen the pointer would take a click it never highlighted for.
+                // A terminal reports the press at its cell without a preceding move, so a widget that has never seen the pointer would take a click it never highlighted for.
                 out.push(Event::PointerMoved {
                     x,
                     y,

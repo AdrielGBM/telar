@@ -1,3 +1,5 @@
+//! Helpers shared by the software backend's test binaries.
+
 #![allow(dead_code)]
 
 /// Installs the glyph measurer layout sizes text with, which a gallery test has no runner to do for it.
@@ -14,8 +16,7 @@ pub fn save_png(path: &str, w: u32, h: u32, rgba: &[u8]) {
     eprintln!("wrote {path}");
 }
 
-/// [`save_png`] to whatever `env_key` names, or nothing when it is unset — for a real test that also wants
-/// to dump what it rendered.
+/// [`save_png`] to whatever `env_key` names, or nothing when it is unset — for a real test that also wants to dump what it rendered.
 pub fn save_png_if_requested(env_key: &str, w: u32, h: u32, rgba: &[u8]) {
     if let Ok(path) = std::env::var(env_key) {
         save_png(&path, w, h, rgba);

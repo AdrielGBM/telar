@@ -10,27 +10,21 @@ use crate::measure::ShaperMetrics;
 
 /// The faces every shaper in this process shapes and measures in.
 ///
-/// One database, handed out as an `Arc` and cloned into each shaper's `FontSystem`, is what makes measuring and
-/// drawing agree by construction: the same faces, the same `fontdb::ID`s, the same resolved sans-serif family.
-/// Two shapers is fine — the renderer's may live on a render thread — but two databases means layout can reserve
-/// room in one font while the frame is drawn in another, and where the platform keeps its fonts somewhere a bare
-/// scan does not look, it means no fonts at all.
+/// One database, handed out as an `Arc` and cloned into each shaper's `FontSystem`, is what makes measuring and drawing agree by construction: the same faces, the same `fontdb::ID`s, the same resolved sans-serif family. Two shapers is fine — the renderer's may live on a render thread — but two databases means layout can reserve room in one font while the frame is drawn in another, and where the platform keeps its fonts somewhere a bare scan does not look, it means no fonts at all.
 pub struct Fonts {
     locale: String,
     /// As loaded, before any family is routed to `sans-serif` — see [`Fonts::font_system`].
     db: fontdb::Database,
-    /// Everything every configuration so far has named, not the last one alone: what is already here is what a
-    /// later one does not have to load.
+    /// Everything every configuration so far has named, not the last one alone: what is already here is what a later one does not have to load.
     sources: FaceSources,
     families: Vec<String>,
 }
 
 impl Fonts {
-    /// A `FontSystem` over these faces — a clone of the loaded database rather than a second scan, because
-    /// `fontdb` holds every face as a path or a shared buffer, so what is copied is the index and not the fonts.
+    /// A `FontSystem` over these faces — a clone of the loaded database rather than a second scan, because `fontdb` holds every face as a path or a shared buffer, so what is copied is the index and not the fonts.
     pub(crate) fn font_system(&self) -> FontSystem {
         let mut db = self.db.clone();
-        // Route the default (`Family::SansSerif`) face to the first candidate that resolves — the theme's chosen font family, or an OEM stack. Into the copy rather than into the stored database, so a configuration naming a family nothing has falls back to the face a fresh load would leave in place instead of to whichever family the configuration before it chose.
+        // Routes the default face to the first candidate that resolves. Into the copy rather than the stored database, so a configuration naming a family nothing has falls back to what a fresh load would leave rather than to whichever family the configuration before it chose.
         for name in &self.families {
             if db
                 .query(&fontdb::Query {
@@ -51,16 +45,9 @@ static INSTALLED: RwLock<Option<Arc<Fonts>>> = RwLock::new(None);
 
 /// Loads the faces `config` names and makes them the ones every shaper in this process uses.
 ///
-/// Every [`TextShaper`](crate::TextShaper) calls this as it is built, so the fonts a renderer is configured with
-/// are the fonts layout measures in without anyone having to say so twice. What `config` names is *added* to the
-/// faces already loaded — a shaper built earlier keeps every face it was built from, so no later surface can pull
-/// one out from under it. Three cases, cheapest first: a config naming nothing of its own keeps what is installed
-/// exactly, because a default-configured shaper built after the application's must not throw the application's
-/// fonts away; a config whose faces are all loaded already changes only the family routed in front of them, which
-/// is what makes a family change and a surface rebuild cost no load at all; and one naming faces nobody has read
-/// yet reads those, and only those, into a copy of the database.
+/// Every [`TextShaper`](crate::TextShaper) calls this as it is built, so the fonts a renderer is configured with are the fonts layout measures in without anyone having to say so twice. What `config` names is *added* to the faces already loaded — a shaper built earlier keeps every face it was built from, so no later surface can pull one out from under it. Three cases, cheapest first: a config naming nothing of its own keeps what is installed exactly, because a default-configured shaper built after the application's must not throw the application's fonts away; a config whose faces are all loaded already changes only the family routed in front of them, which is what makes a family change and a surface rebuild cost no load at all; and one naming faces nobody has read yet reads those, and only those, into a copy of the database.
 pub fn install(config: FontConfig) -> Arc<Fonts> {
-    // Configuring the fonts a raster surface measures in says which measurer you want, so install it here rather than leave every runtime a second call to remember. It yields to a frontend that installed its own.
+    // Configuring the fonts a raster surface measures in says which measurer you want, so it is installed here rather than left to every runtime to remember. It yields to a frontend that installed its own.
     renderer_core::set_default_text_metrics(ShaperMetrics);
     let FontConfig {
         extra_font_paths,
@@ -106,8 +93,7 @@ pub fn install(config: FontConfig) -> Arc<Fonts> {
 
 /// The faces in force, loading the platform's own the first time nothing has installed any.
 ///
-/// Asked on every measurement, so the common answer is one lock read: a shaper that finds the same `Arc` it was
-/// built from is still shaping in the right faces, and one that does not rebuilds itself.
+/// Asked on every measurement, so the common answer is one lock read: a shaper that finds the same `Arc` it was built from is still shaping in the right faces, and one that does not rebuilds itself.
 pub fn installed() -> Arc<Fonts> {
     if let Some(fonts) = INSTALLED.read().expect("font database lock").as_ref() {
         return fonts.clone();
@@ -135,15 +121,14 @@ fn replace(slot: &mut Option<Arc<Fonts>>, fonts: Fonts) -> Arc<Fonts> {
     fonts
 }
 
-// Where a database's faces came from, kept beside it so a shaper naming faces already read clones what is loaded instead of reading them again.
+// Kept beside the database, so a shaper naming faces already read clones what is loaded instead of reading them again.
 #[derive(Clone, PartialEq)]
 struct FaceSources {
-    /// Whether the platform's own font directories have been walked. At most once in a process: it is the only
-    /// one of these that costs a scan.
+    /// Whether the platform's own font directories have been walked. At most once in a process: it is the only one of these that costs a scan.
     system_scan: bool,
     dirs: Vec<PathBuf>,
     files: Vec<PathBuf>,
-    // Shared with the database they were loaded into rather than copied into it: an embedded face is megabytes, and this outlives every shaper built from it.
+    // Shared with the database rather than copied into it: an embedded face is megabytes, and this outlives every shaper built from it.
     data: Vec<Arc<Vec<u8>>>,
 }
 
@@ -164,8 +149,7 @@ impl FaceSources {
         }
     }
 
-    /// What a shaper naming no faces of its own gets, spelled out rather than left to `fontdb`, because on one
-    /// platform "the fonts this system has" is not a place `fontdb` scans.
+    /// What a shaper naming no faces of its own gets, spelled out rather than left to `fontdb`, because on one platform "the fonts this system has" is not a place `fontdb` scans.
     fn platform() -> Self {
         let mut sources = Self {
             system_scan: true,
@@ -174,15 +158,14 @@ impl FaceSources {
             data: Vec::new(),
         };
         if cfg!(target_os = "android") {
-            // Android keeps its faces outside every directory `load_system_fonts` looks in, and a database with no faces aborts cosmic-text with "no default font found" the first time anything is measured.
+            // Android keeps its faces outside every directory `load_system_fonts` looks in, and a database with no faces aborts cosmic-text the first time anything is measured.
             sources.system_scan = false;
             sources.dirs.push(PathBuf::from("/system/fonts"));
         }
         sources
     }
 
-    /// What `wanted` names and these do not, in the order `wanted` gave it — `fontdb` resolves a face by the order
-    /// it was read in, so the caller's order is the caller's business.
+    /// What `wanted` names and these do not, in the order `wanted` gave it — `fontdb` resolves a face by the order it was read in, so the caller's order is the caller's business.
     fn missing(&self, wanted: Self) -> Self {
         Self {
             system_scan: wanted.system_scan && !self.system_scan,
@@ -218,7 +201,7 @@ impl FaceSources {
     fn load(&self) -> (String, fontdb::Database) {
         if self.system_scan && self.dirs.is_empty() && self.files.is_empty() && self.data.is_empty()
         {
-            // cosmic-text's own default database, taken from a `FontSystem` rather than rebuilt here: it is a system scan plus the families it resolves `serif`, `sans-serif` and `monospace` to, and a hand-rolled copy of those choices would drift from the ones every other cosmic-text consumer gets.
+            // cosmic-text's own default database, taken from a `FontSystem` rather than rebuilt here: a hand-rolled copy of its system scan and generic-family choices would drift from every other consumer's.
             return FontSystem::new().into_locale_and_db();
         }
         let mut db = fontdb::Database::new();
@@ -247,10 +230,10 @@ impl FaceSources {
 mod tests {
     use super::*;
 
-    // One test rather than four: the installed database is process-wide, so separate tests would race over it.
+    // One test rather than four: the installed database is process-wide, so separate tests would race.
     #[test]
     fn installing_adds_to_the_faces_in_force_and_never_takes_any_away() {
-        // A family nothing resolves to and faces nothing can read, so every install here changes which `Fonts` is in force without changing a single face — the tests measuring text beside this one keep measuring the same widths.
+        // A family nothing resolves to and faces nothing can read, so every install changes which `Fonts` is in force without changing a face — the tests measuring text beside this keep measuring the same widths.
         let named = FontConfig {
             sans_serif_family_candidates: vec!["a family no system has".to_string()],
             ..FontConfig::default()

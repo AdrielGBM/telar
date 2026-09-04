@@ -1,21 +1,15 @@
 //! Whether this browser can open a GPU device at all, asked before wgpu is.
 //!
-//! wgpu already translates "no adapter" into an error, but the translation is broken in the version this
-//! builds against: `JsOption::into_option` treats only `undefined` as absent, and `requestAdapter()` answers
-//! **`null`**. So a browser with no adapter hands wgpu an `Adapter` wrapping `null`, and the first property
-//! read on it throws a `TypeError` out of the generated glue — a stack trace about `features` where the real
-//! answer is "this browser has no WebGPU".
+//! wgpu already translates "no adapter" into an error, but the translation is broken in the version this builds against: `JsOption::into_option` treats only `undefined` as absent, and `requestAdapter()` answers **`null`**. So a browser with no adapter hands wgpu an `Adapter` wrapping `null`, and the first property read on it throws a `TypeError` out of the generated glue — a stack trace about `features` where the real answer is "this browser has no WebGPU".
 //!
-//! Asking first is not a workaround for that alone. A browser that cannot draw is a thing an application has
-//! to be *told*, in words, whichever library noticed.
+//! Asking first is not a workaround for that alone. A browser that cannot draw is a thing an application has to be *told*, in words, whichever library noticed.
 
 use wasm_bindgen::{JsCast, JsValue};
 use wasm_bindgen_futures::JsFuture;
 
 /// Why a device could not be opened.
 pub enum NoGpu {
-    /// `navigator.gpu` is absent: the browser does not implement WebGPU, or the page is not a secure
-    /// context (WebGPU is unavailable over plain `http` other than to `localhost`).
+    /// `navigator.gpu` is absent: the browser does not implement WebGPU, or the page is not a secure context (WebGPU is unavailable over plain `http` other than to `localhost`).
     Unsupported,
     /// WebGPU is there, but it offered no adapter — no compatible GPU, or one the browser has blocklisted.
     NoAdapter,
@@ -42,9 +36,7 @@ impl NoGpu {
 
 /// Asks the browser for an adapter, and reports whether one came back.
 ///
-/// Goes through `Reflect` rather than `web-sys`'s WebGPU bindings, which are behind an unstable-API cfg: the
-/// question is two property reads and a call, and answering it should not make the whole crate opt into an
-/// unstable surface.
+/// Goes through `Reflect` rather than `web-sys`'s WebGPU bindings, which are behind an unstable-API cfg: the question is two property reads and a call, and answering it should not make the whole crate opt into an unstable surface.
 pub async fn webgpu_available() -> Result<(), NoGpu> {
     let navigator = crate::dom_window().navigator();
     let gpu = js_sys::Reflect::get(&navigator, &JsValue::from_str("gpu"))

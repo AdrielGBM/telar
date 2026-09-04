@@ -1,12 +1,8 @@
 //! Who builds a surface's renderer, and what keeps it running.
 //!
-//! The frame loop needs a renderer without being allowed to know what one is made of: the two Telar ships need a
-//! window that hands out `raw-window-handle` handles, and an installed one may be drawing to a terminal that has
-//! none. So [`AppHandler`](super::handler::AppHandler) holds a `dyn RendererHost` built by whichever entry point
-//! started the app — the one place where the window type is still concrete enough to say what it can do.
+//! The frame loop needs a renderer without being allowed to know what one is made of: the two Telar ships need a window that hands out `raw-window-handle` handles, and an installed one may be drawing to a terminal that has none. So [`AppHandler`](super::handler::AppHandler) holds a `dyn RendererHost` built by whichever entry point started the app — the one place where the window type is still concrete enough to say what it can do.
 //!
-//! The whole renderer lifecycle lives here too: the background build, the device kept warm across a suspend and
-//! the render thread are all answers a *particular* renderer gives.
+//! The whole renderer lifecycle lives here too: the background build, the device kept warm across a suspend and the render thread are all answers a *particular* renderer gives.
 
 mod builtin;
 
@@ -23,9 +19,7 @@ pub(super) use builtin::BuiltinHost;
 
 /// A window the renderers Telar ships can draw on.
 ///
-/// They ask for `raw-window-handle` handles and hold the window from the render thread, which is more than
-/// [`platform_core::Window`] promises. Stating it here keeps the requirement with the renderers that have it,
-/// rather than on every backend that implements a window.
+/// They ask for `raw-window-handle` handles and hold the window from the render thread, which is more than [`platform_core::Window`] promises. Stating it here keeps the requirement with the renderers that have it, rather than on every backend that implements a window.
 pub trait SurfaceWindow:
     platform_core::Window + Clone + Send + Sync + HasWindowHandle + HasDisplayHandle + 'static
 {
@@ -36,8 +30,7 @@ impl<W> SurfaceWindow for W where
 {
 }
 
-/// How a surface answers "what are your OS handles", for an app that embeds native content beside Telar's own
-/// frames. Captured as a function pointer by the entry point that knows the window type has any.
+/// How a surface answers "what are your OS handles", for an app that embeds native content beside Telar's own frames. Captured as a function pointer by the entry point that knows the window type has any.
 pub(super) type RawHandles<W> = fn(&W) -> (Option<RawWindowHandle>, Option<RawDisplayHandle>);
 
 fn raw_handles_of<W: HasWindowHandle + HasDisplayHandle>(
@@ -99,13 +92,11 @@ pub(super) struct RendererRequest<'a> {
 /// What came of asking a host to bring a renderer up.
 pub(super) enum RendererStart {
     Started {
-        /// Whether to keep submitting frames while the screen is idle. Hardware does, to hold the GPU in an active
-        /// power state; re-rasterising an unchanged frame on the CPU buys nothing.
+        /// Whether to keep submitting frames while the screen is idle. Hardware does, to hold the GPU in an active power state; re-rasterising an unchanged frame on the CPU buys nothing.
         keepalive: bool,
         label: &'static str,
     },
-    /// A build is in flight; until it lands there is no renderer and frames are dropped. Only wgpu takes long
-    /// enough to be worth building in the background.
+    /// A build is in flight; until it lands there is no renderer and frames are dropped. Only wgpu takes long enough to be worth building in the background.
     #[cfg_attr(not(feature = "hardware"), allow(dead_code))]
     Building,
     Failed(RendererError),
@@ -116,8 +107,7 @@ pub(super) trait RendererHost<W>: 'static {
     /// Brings a renderer up for `window` and puts it on its own thread.
     fn start(&mut self, window: &W, req: &RendererRequest<'_>) -> RendererStart;
 
-    /// Collects a build left running in the background. `None` while there is none or it is still going —
-    /// [`is_building`](Self::is_building) tells those apart, because the second has to keep frames coming.
+    /// Collects a build left running in the background. `None` while there is none or it is still going — [`is_building`](Self::is_building) tells those apart, because the second has to keep frames coming.
     fn poll(&mut self) -> Option<RendererStart> {
         None
     }
@@ -131,8 +121,7 @@ pub(super) trait RendererHost<W>: 'static {
         true
     }
 
-    /// The renderer [`start`](Self::start) built that cannot leave the calling thread, for the handler to
-    /// drive inline. `None` for a host whose renderer went to a thread of its own, which is every native one.
+    /// The renderer [`start`](Self::start) built that cannot leave the calling thread, for the handler to drive inline. `None` for a host whose renderer went to a thread of its own, which is every native one.
     fn take_inline(&mut self) -> Option<Box<dyn RenderBackend>> {
         None
     }
@@ -140,16 +129,13 @@ pub(super) trait RendererHost<W>: 'static {
     /// The channels of the running renderer, or `None` when there is none to send to.
     fn channels(&self) -> Option<&RenderChannels>;
 
-    /// Retires the render thread, keeping what makes the next [`start`](Self::start) cheap — for hardware, the
-    /// device with its pipelines and warm caches.
+    /// Retires the render thread, keeping what makes the next [`start`](Self::start) cheap — for hardware, the device with its pipelines and warm caches.
     fn suspend(&mut self);
 
-    /// Retires the render thread and keeps nothing, for a rebuild: transparency and the backend choice are baked
-    /// into a renderer, so an app that changed its mind must not be handed the old one back.
+    /// Retires the render thread and keeps nothing, for a rebuild: transparency and the backend choice are baked into a renderer, so an app that changed its mind must not be handed the old one back.
     fn retire(&mut self);
 
-    /// The renderer for an offscreen surface, driven inline because whoever asked for the frame reads its pixels
-    /// back in the same call. `None` when this host cannot draw without a surface.
+    /// The renderer for an offscreen surface, driven inline because whoever asked for the frame reads its pixels back in the same call. `None` when this host cannot draw without a surface.
     fn build_offscreen(
         &mut self,
         _window: &W,
@@ -161,8 +147,7 @@ pub(super) trait RendererHost<W>: 'static {
 
 /// Drives an installed [`RendererFactory`] — the host for a frontend Telar knows nothing about.
 ///
-/// Builds inline where the built-in host goes off-thread: a factory's build is its own business, and there is no
-/// `Auto` to fall back from and no device worth keeping warm.
+/// Builds inline where the built-in host goes off-thread: a factory's build is its own business, and there is no `Auto` to fall back from and no device worth keeping warm.
 pub(super) struct FactoryHost<W, F> {
     factory: F,
     channels: Option<RenderChannels>,

@@ -1,10 +1,8 @@
+//! 2D affine transforms, and composing them without multiplying matrices by hand.
+
 use crate::point::Point;
 
-/// A 2D affine transform stored as a 2×3 matrix `[a, b, c, d, e, f]`, mapping a
-/// point `(x, y)` to `(a*x + c*y + e, b*x + d*y + f)`. This is the same `[f32; 6]`
-/// layout consumed by `RenderNode::transform_with`, so `to_array()` plugs in
-/// directly. Compose with [`Transform::then`] instead of multiplying matrices by
-/// hand.
+/// A 2D affine transform stored as a 2×3 matrix `[a, b, c, d, e, f]`, mapping a point `(x, y)` to `(a*x + c*y + e, b*x + d*y + f)`. This is the same `[f32; 6]` layout consumed by `RenderNode::transform_with`, so `to_array()` plugs in directly. Compose with [`Transform::then`] instead of multiplying matrices by hand.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Transform {
     pub a: f32,
@@ -70,8 +68,7 @@ impl Transform {
         }
     }
 
-    /// Returns the transform that applies `self` first and then `next`
-    /// (`next ∘ self`), so `a.then(b).apply(p) == b.apply(a.apply(p))`.
+    /// Returns the transform that applies `self` first and then `next` (`next ∘ self`), so `a.then(b).apply(p) == b.apply(a.apply(p))`.
     pub fn then(self, next: Transform) -> Transform {
         Transform {
             a: next.a * self.a + next.c * self.b,

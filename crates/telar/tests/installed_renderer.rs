@@ -1,9 +1,6 @@
-//! An app driven end to end on a window with no OS handles at all, drawing through a renderer installed from
-//! outside the runtime.
+//! An app driven end to end on a window with no OS handles at all, drawing through a renderer installed from outside the runtime.
 //!
-//! The shape a terminal frontend has, and unreachable twice over before these seams: `Window` demanded
-//! `raw-window-handle` handles a terminal cannot produce, and the runner named its renderers outright. Both halves
-//! are asserted here on the real frame pipeline — render thread, stale-frame gate, buffer recycling and all.
+//! The shape a terminal frontend has, and unreachable twice over before these seams: `Window` demanded `raw-window-handle` handles a terminal cannot produce, and the runner named its renderers outright. Both halves are asserted here on the real frame pipeline — render thread, stale-frame gate, buffer recycling and all.
 
 use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::sync::{Arc, Mutex};
@@ -18,8 +15,7 @@ use telar::{
 // The handler paces the frame pass at 60fps off a wall clock, so a faster loop is declined and draws nothing.
 const FRAME_BUDGET: Duration = Duration::from_nanos(1_000_000_000 / 60);
 
-/// A window with no `raw-window-handle` impls whatsoever. It implements [`Window`] and stops there, which is the
-/// point: nothing about hosting an app requires a surface a GPU could bind to.
+/// A window with no `raw-window-handle` impls whatsoever. It implements [`Window`] and stops there, which is the point: nothing about hosting an app requires a surface a GPU could bind to.
 #[derive(Clone)]
 struct CellWindow {
     redraws: Arc<AtomicU32>,
@@ -39,8 +35,7 @@ impl Window for CellWindow {
     }
 }
 
-/// Drives the handler through one resume, a few frames and a suspend, in the iteration shape the winit and headless
-/// backends use, so the reactive batching brackets stay balanced.
+/// Drives the handler through one resume, a few frames and a suspend, in the iteration shape the winit and headless backends use, so the reactive batching brackets stay balanced.
 struct CellPlatform {
     frames: u32,
 }

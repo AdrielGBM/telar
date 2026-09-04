@@ -1,3 +1,5 @@
+//! [`toggle`]: a switch flipping a bound boolean.
+
 use std::rc::Rc;
 
 use layout_core::{AlignItems, LayoutError, LayoutStyle};
@@ -13,17 +15,12 @@ use crate::shared;
 /// How far the knob slides between off (left inset) and on (right inset): track 40 − knob 16 − 3px each side.
 const KNOB_TRAVEL: f32 = 18.0;
 
-/// The off track is the strongest of the three highlight washes: a switch has to read as a *track*
-/// against the surface it sits on, whichever end of the ramp that surface is.
+/// The off track is the strongest of the three highlight washes: a switch has to read as a *track* against the surface it sits on, whichever end of the ramp that surface is.
 fn off_track() -> Color {
     use_theme_tokens().highlight_high()
 }
 
-/// A labelled switch: a 40×22 pill whose knob sits left (off) / right (on) and whose track fills with the
-/// accent while on; tapping the row toggles its bound `checked` signal (and fires `on_toggle`). High-level
-/// sugar over the primitives (`box` + `on_press` + a reactive fill + a `translate`); lives in `ui-components`,
-/// not the kernel. `checked` is `Option` so `Props` can derive `Default`: `None` is uncontrolled (the widget
-/// owns its own signal), `Some` is caller-bound.
+/// A labelled switch: a 40×22 pill whose knob sits left (off) / right (on) and whose track fills with the accent while on; tapping the row toggles its bound `checked` signal (and fires `on_toggle`). High-level sugar over the primitives (`box` + `on_press` + a reactive fill + a `translate`); lives in `ui-components`, not the kernel. `checked` is `Option` so `Props` can derive `Default`: `None` is uncontrolled (the widget owns its own signal), `Some` is caller-bound.
 #[derive(Props)]
 pub struct ToggleProps {
     /// Bound on/off state. `None` (the default) is uncontrolled — the widget makes its own `signal(false)`.
@@ -39,6 +36,7 @@ pub struct ToggleProps {
     pub on_toggle: Option<Rc<dyn Fn(bool)>>,
 }
 
+/// A switch flipping a bound boolean.
 pub fn toggle(props: ToggleProps, _children: Children) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let ToggleProps {
         checked,
@@ -65,7 +63,6 @@ pub fn toggle(props: ToggleProps, _children: Children) -> Result<Box<dyn LayoutI
         box_transform(r, 0.0, 1.0, 1.0, tx, 0.0)
     });
 
-    // The 40×22 pill: an accent fill when on, a neutral grey when off; the 3px padding insets the knob.
     let track_on = checked;
     let track = StyledContainer::new(
         LayoutStyle::new()
@@ -87,7 +84,6 @@ pub fn toggle(props: ToggleProps, _children: Children) -> Result<Box<dyn LayoutI
         vec![box_item(knob)],
     )?;
 
-    // The whole row is the tap target (switch + label); a tap flips the bound signal and reports the new state.
     let toggle_on = checked;
     let announced = checked;
     shared::labelled_control(

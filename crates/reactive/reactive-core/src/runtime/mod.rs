@@ -1,3 +1,5 @@
+//! The runtime itself: the arenas holding signals, effects and owners, and the thread-local cell they live in.
+
 use std::cell::{Cell, Ref, RefCell, RefMut};
 use std::cmp::Reverse;
 use std::collections::BinaryHeap;
@@ -30,7 +32,7 @@ pub use surface::{
     SurfaceEnterGuard, SurfaceHandle, current_surface, set_current_surface, set_surface_enter_hook,
 };
 
-// Versioned, not raw arena indices: a freed slot is handed straight back, so under a plain index a handle outliving its signal addressed whatever moved in — and `with_signal_value` only noticed when the new value had a different type. Same type, same index, wrong signal, no panic. The version is what turns that read into a miss.
+// Versioned, not raw arena indices: a freed slot is handed straight back, so under a plain index a handle outliving its signal addressed whatever moved in — same type, same index, wrong signal, no panic.
 slotmap::new_key_type! {
     pub(crate) struct EffectId;
     pub(crate) struct SignalId;
@@ -38,20 +40,18 @@ slotmap::new_key_type! {
 
 pub(crate) struct EffectEntry {
     pub(crate) callback: Box<dyn Fn()>,
-    // The surface active when this effect was registered; the flush re-enters it before running the
-    // callback so a cross-surface signal write resolves the effect against its own surface's world.
+    // The surface active when this effect was registered; the flush re-enters it before running the callback, so a cross-surface write resolves the effect against its own surface's world.
     pub(crate) surface: SurfaceHandle,
-    /// The owner active at registration, re-entered for each run so a re-run creates and registers under the
-    /// scope that built it rather than under whatever the flush happens to be inside.
+    /// The owner active at registration, re-entered for each run so a re-run creates and registers under the scope that built it rather than under whatever the flush happens to be inside.
     pub(crate) owner: Option<OwnerId>,
     pub(crate) is_pure: bool,
     pub(crate) last_run_epoch: u64,
     pub(crate) sources: Vec<SignalId>,
     pub(crate) source_slots: Vec<usize>,
     pub(crate) source_versions: Vec<u64>,
-    // Topological height; 0 = leaf (no tracked sources).
+    // Topological height; 0 is a leaf with no tracked sources.
     pub(crate) height: u32,
-    // Set when a memo schedules this effect. Memo dependencies are invisible to `sources` (they live in MemoInner.subscribers, not in a SignalStorage), so run_effect's version check must be bypassed once or an effect that also tracks an unchanged signal would be skipped forever.
+    // Set when a memo schedules this effect. Memo dependencies are invisible to `sources`, so `run_effect`'s version check must be bypassed once or an effect also tracking an unchanged signal would never run.
     pub(crate) memo_dirty: bool,
 }
 
@@ -59,7 +59,7 @@ pub(crate) struct SignalStorage {
     pub(crate) value: Box<dyn std::any::Any>,
     pub(crate) version: u64,
     pub(crate) subscribers: Vec<EffectId>,
-    // For each subscriber: the index in that effect's `source_slots` vec that records this signal.
+    // For each subscriber, the index in that effect's `source_slots` recording this signal.
     pub(crate) observer_slots: Vec<usize>,
 }
 
@@ -75,7 +75,7 @@ pub(crate) struct Runtime {
     pub(crate) pending: Vec<EffectId>,
     pub(crate) memo_pending: BinaryHeap<(Reverse<u32>, EffectId)>,
     pub(crate) pending_set: FxHashSet<EffectId>,
-    // Reused by notify_signal to copy a signal's subscribers out before scheduling, instead of allocating a fresh Vec per write.
+    // Reused to copy a signal's subscribers out before scheduling, instead of allocating per write.
     subscriber_scratch: Vec<EffectId>,
     flush_callbacks: Vec<(u64, Rc<dyn Fn()>)>,
     next_flush_callback_id: u64,
@@ -108,12 +108,10 @@ impl Runtime {
     }
 }
 
-// RuntimeCell stores the runtime as a heap-allocated Box behind a raw pointer. Because *mut T has no Drop, Cell<*mut T> has no Drop, and this struct has no Drop either. That means thread_local! won't register a TLS destructor for RUNTIME — so dlclosing the dylib during hot reload no longer causes "double free or corruption" when the thread exits.
+// The runtime is a heap Box behind a raw pointer. `*mut T` has no `Drop`, so neither does this, and `thread_local!` registers no TLS destructor — which is what makes dlclosing a hot-reload dylib safe.
 struct RuntimeCell {
     ptr: Cell<*mut RefCell<Runtime>>,
-    /// Where the last borrow to succeed was taken, so a collision can name what it collided with rather than
-    /// only itself. See [`crate::reentry`]. `Option<&'static Location>` has no `Drop`, so this keeps the cell
-    /// free of a TLS destructor.
+    /// Where the last borrow to succeed was taken, so a collision can name what it collided with rather than only itself. See [`crate::reentry`]. `Option<&'static Location>` has no `Drop`, so this keeps the cell free of a TLS destructor.
     last_borrow: Cell<Option<&'static Location<'static>>>,
 }
 
@@ -128,8 +126,7 @@ impl RuntimeCell {
         self.enter(unsafe { (*self.ptr.get()).try_borrow() }.ok())
     }
 
-    /// Swaps in a fresh runtime and hands back the old pointer for the caller to drop. The recorded borrow
-    /// site goes with it: it names a call into a runtime that no longer exists.
+    /// Swaps in a fresh runtime and hands back the old pointer for the caller to drop. The recorded borrow site goes with it: it names a call into a runtime that no longer exists.
     fn take_ptr(&self) -> *mut RefCell<Runtime> {
         self.last_borrow.set(None);
         self.ptr
@@ -156,6 +153,7 @@ thread_local! {
     };
 }
 
+/// Holds the installed flush callback; dropping it removes the callback.
 pub struct FlushNotifyHandle {
     id: u64,
 }
@@ -178,10 +176,7 @@ fn deregister_flush_notify(id: u64) {
 mod tests {
     use super::*;
 
-    /// What a reentrant borrow used to say was `already borrowed: BorrowMutError`, over a backtrace of the
-    /// runtime's own frames: the call that collided is in there somewhere, the call it collided *with* never
-    /// is — and that second one is the whole of the diagnosis, because it is the operation still on the stack
-    /// that came back round.
+    /// What a reentrant borrow used to say was `already borrowed: BorrowMutError`, over a backtrace of the runtime's own frames: the call that collided is in there somewhere, the call it collided *with* never is — and that second one is the whole of the diagnosis, because it is the operation still on the stack that came back round.
     #[test]
     fn a_reentrant_runtime_borrow_names_both_call_sites() {
         let quiet = std::panic::take_hook();

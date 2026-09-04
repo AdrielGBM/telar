@@ -1,9 +1,12 @@
+//! Hover: what a tag, a colour or a class says about itself.
+
 use crate::analysis::color::{hex_string, parse_hex, rgba};
 use crate::analysis::util::{ViewToken, view_token_at};
 use crate::project::ProjectInfo;
 use lsp_types::{Hover, HoverContents, MarkupContent, MarkupKind};
 use telar_transpiler::keyword_color_rgba;
 
+/// What the token under the cursor says about itself, for tags, colours and classes.
 pub fn hover_info(
     source: &str,
     line: u32,
@@ -69,7 +72,6 @@ mod tests {
 
     #[test]
     fn keyword_color_hovers_a_swatch() {
-        // `fill:transparent` is a completion candidate and a swatch, so it must hover consistently too.
         let src = "[view]\nbox fill:transparent\n";
         let text = hover_text(src, 1, 11).expect("hover over the `transparent` keyword");
         assert_eq!(text, "■ #00000000 — transparent");

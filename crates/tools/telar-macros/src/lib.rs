@@ -1,3 +1,5 @@
+//! The proc macros: `app!` and `rsx_modules!`, which transpile a project's `.rsx` at build time, plus the `Props` and `ThemeTokens` derives and the `t!` catalogue lookup.
+
 use proc_macro::TokenStream;
 use proc_macro2::{Ident, Span, TokenStream as TokenStream2};
 use quote::{ToTokens, quote};
@@ -10,8 +12,7 @@ mod t_macro;
 mod theme_tokens;
 use app_input::{AppInput, preview_const_ident};
 
-/// Reads a function of named arguments as a tag: the arguments are the props, and the body is what the
-/// component builds.
+/// Reads a function of named arguments as a tag: the arguments are the props, and the body is what the component builds.
 ///
 /// ```ignore
 /// #[telar::component]
@@ -20,13 +21,9 @@ use app_input::{AppInput, preview_const_ident};
 /// }
 /// ```
 ///
-/// **For the widget a `[view]` cannot build itself** — one that owns a canvas, a register, a document — which
-/// reaches the markup as a component with named props, the shape the child position took when the `widget`
-/// escape went. Written out by hand that is a struct, a `derive`, a destructuring `let` and a signature nobody
-/// reads; the arguments already say all four, and saying them twice is how the two drift apart.
+/// **For the widget a `[view]` cannot build itself** — one that owns a canvas, a register, a document — which reaches the markup as a component with named props, the shape the child position took when the `widget` escape went. Written out by hand that is a struct, a `derive`, a destructuring `let` and a signature nobody reads; the arguments already say all four, and saying them twice is how the two drift apart.
 ///
-/// Each argument carries the same `#[props(…)]` attributes a field of the struct would, and its doc comment.
-/// An argument named `children` is bound to the children the call site nested instead of becoming a prop.
+/// Each argument carries the same `#[props(…)]` attributes a field of the struct would, and its doc comment. An argument named `children` is bound to the children the call site nested instead of becoming a prop.
 #[proc_macro_attribute]
 pub fn component(_attr: TokenStream, item: TokenStream) -> TokenStream {
     match component::expand(item.into()) {
@@ -37,19 +34,14 @@ pub fn component(_attr: TokenStream, item: TokenStream) -> TokenStream {
 
 /// Generates a typed builder for a component's props: `Props::props()`, one setter per prop, `.build()`.
 ///
-/// **What it removes.** A call site used to need a table describing the callee — which props exist, which are
-/// optional, which take a closure — kept by hand and able to drift from the struct it described. With a
-/// builder the call site spells the prop names it was given and rustc answers everything else.
+/// **What it removes.** A call site used to need a table describing the callee — which props exist, which are optional, which take a closure — kept by hand and able to drift from the struct it described. With a builder the call site spells the prop names it was given and rustc answers everything else.
 ///
-/// A prop with no attribute is **required**: its setter must be called or `.build()` does not exist, so
-/// forgetting one is a compile error rather than a default that looks like a value at runtime.
+/// A prop with no attribute is **required**: its setter must be called or `.build()` does not exist, so forgetting one is a compile error rather than a default that looks like a value at runtime.
 ///
 /// - `#[props(default)]` — omitting it yields `Default::default()`.
 /// - `#[props(default = expr)]` — omitting it yields `expr`.
 ///
-/// - `#[props(into)]` — the setter takes `impl Into<T>` instead of `T`, which is what lets a prop declared
-///   `Reactive<T>` accept a literal, a signal or a memo. Opt-in, because a generic parameter leaves a
-///   literal's type unconstrained: `.size(20.0)` would infer `f64` and ask for `f32: From<f64>`.
+/// - `#[props(into)]` — the setter takes `impl Into<T>` instead of `T`, which is what lets a prop declared `Reactive<T>` accept a literal, a signal or a memo. Opt-in, because a generic parameter leaves a literal's type unconstrained: `.size(20.0)` would infer `f64` and ask for `f32: From<f64>`.
 ///
 /// Forgetting a required prop is caught where it was forgotten:
 ///
@@ -76,12 +68,9 @@ pub fn derive_props(input: TokenStream) -> TokenStream {
     }
 }
 
-/// Implements [`ThemeTokens`](telar::ThemeTokens) for a theme struct, mapping each token to the field of the
-/// same name.
+/// Implements `ThemeTokens` for a theme struct, mapping each token to the field of the same name.
 ///
-/// A token whose built-in is a fixed value has to be answered — silence there is what puts a 4px radius next to
-/// bars the user configured to 10, on the same screen, with nothing failing. `radius_sm`/`_md`/`_lg` are exempt:
-/// they derive from `radius`, so a theme that moves the base takes the steps with it.
+/// A token whose built-in is a fixed value has to be answered — silence there is what puts a 4px radius next to bars the user configured to 10, on the same screen, with nothing failing. `radius_sm`/`_md`/`_lg` are exempt: they derive from `radius`, so a theme that moves the base takes the steps with it.
 ///
 /// - `#[token(other)]` on a field: that field also answers `other`.
 /// - `#[theme(token = expr)]` on the struct: an expression, which may read `self`.
@@ -100,9 +89,7 @@ pub fn derive_theme_tokens(input: TokenStream) -> TokenStream {
 
 /// Translates a catalog key to a `String`, substituting named arguments: `t!("battery.remaining", time = t)`.
 ///
-/// The key and its arguments are validated against the on-disk `locales/` catalog at compile time (an unknown
-/// key or wrong argument is a `compile_error!`). At runtime it reads the active locale reactively, so calling it
-/// inside a widget's content closure makes that widget re-render on a language switch.
+/// The key and its arguments are validated against the on-disk `locales/` catalog at compile time (an unknown key or wrong argument is a `compile_error!`). At runtime it reads the active locale reactively, so calling it inside a widget's content closure makes that widget re-render on a language switch.
 #[proc_macro]
 pub fn t(input: TokenStream) -> TokenStream {
     match syn::parse::<t_macro::TInput>(input) {
@@ -112,6 +99,7 @@ pub fn t(input: TokenStream) -> TokenStream {
 }
 
 #[proc_macro]
+/// Transpiles the project's `.rsx`, wires the generated modules, and emits the runner entry point.
 pub fn app(input: TokenStream) -> TokenStream {
     let AppInput {
         theme_type,
@@ -194,9 +182,7 @@ pub fn app(input: TokenStream) -> TokenStream {
             #run_tail
         }
 
-        // A browser has no `main` to reach: `wasm-bindgen`'s `init()` runs the module's constructors and
-        // returns its exports, and the page calls this by name. A raw export rather than
-        // `#[wasm_bindgen(start)]` so an app needs no `wasm-bindgen` dependency of its own to be startable.
+        // A browser has no `main` to reach: `wasm-bindgen`'s `init()` runs the module's constructors and returns its exports, and the page calls this by name. A raw export rather than `#[wasm_bindgen(start)]`, so an app needs no `wasm-bindgen` dependency of its own to be startable.
         #[cfg(target_arch = "wasm32")]
         #[unsafe(no_mangle)]
         pub extern "C" fn telar_start() {
@@ -204,7 +190,7 @@ pub fn app(input: TokenStream) -> TokenStream {
         }
     };
 
-    // Only emitted under TELAR_HOT_RELOAD_BUILD so dlopen can find the factory; TELAR_PREVIEW_BUILD lets the macro branch here without leaking a custom cfg into generated output (--cfg=telar_preview in RUSTFLAGS is only for cache-busting recompilation when switching modes).
+    // Only under `TELAR_HOT_RELOAD_BUILD`, so dlopen can find the factory. `TELAR_PREVIEW_BUILD` lets the macro branch without leaking a custom cfg into generated output.
     let hot_export = if is_hot_reload {
         let body: TokenStream2 = if is_preview {
             quote! {
@@ -260,9 +246,7 @@ pub fn app(input: TokenStream) -> TokenStream {
         quote! {}
     };
 
-    // Tree-ownership symbols: the dylib mounts and owns the segment tree, so its view effects are created in the
-    // same reactive runtime as the signals they read. Mounting it on the host's side instead leaves every
-    // subscription unestablished, which is what the force-tick workaround exists to paper over — see `telar::tree`.
+    // The dylib mounts and owns the segment tree, so its view effects are created in the same reactive runtime as the signals they read. Mounting on the host's side leaves every subscription unestablished, which is what the force-tick workaround exists to paper over.
     let hot_tree_symbols = if is_hot_reload {
         quote! {
             #[unsafe(no_mangle)]
@@ -328,7 +312,7 @@ pub fn app(input: TokenStream) -> TokenStream {
             pub unsafe extern "Rust" fn _rsx_hot_motion_continuous() -> bool {
                 ::telar::motion::has_continuous()
             }
-            // Batch the dylib's reactive runtime around event dispatch: host and dylib link separate reactive-core copies, so the host must open/close the batch on the app's own runtime across this boundary — otherwise a handler's signal write flushes mid-dispatch and a segment loses its subscriptions while its widget is borrowed.
+            // Host and dylib link separate reactive-core copies, so the host must open and close the batch on the app's own runtime across this boundary — otherwise a handler's write flushes mid-dispatch and a segment loses its subscriptions while its widget is borrowed.
             #[unsafe(no_mangle)]
             pub unsafe extern "Rust" fn _rsx_hot_begin_batch() {
                 ::telar::begin_batch();
@@ -337,43 +321,33 @@ pub fn app(input: TokenStream) -> TokenStream {
             pub unsafe extern "Rust" fn _rsx_hot_end_batch() {
                 ::telar::end_batch();
             }
-            // Relayout the dylib's own layout runtime: the layout tree (taffy nodes) lives in the dylib's
-            // thread-local runtime, so the host must drive relayout across this boundary for a reactive
-            // list change to be laid out — its own copy is empty.
+            // Relayout the dylib's own layout runtime: the layout tree (taffy nodes) lives in the dylib's thread-local runtime, so the host must drive relayout across this boundary for a reactive list change to be laid out — its own copy is empty.
             #[unsafe(no_mangle)]
             pub unsafe extern "Rust" fn _rsx_hot_relayout() {
                 ::telar::relayout_if_dirty();
             }
-            // Consult the dylib's own overlay registry: `overlay` widgets register in this dylib's
-            // thread-local, so the host must route pointer events to overlays (modal priority / background
-            // blocking) across this boundary — its own copy is empty.
+            // Consult the dylib's own overlay registry: `overlay` widgets register in this dylib's thread-local, so the host must route pointer events to overlays (modal priority / background blocking) across this boundary — its own copy is empty.
             #[unsafe(no_mangle)]
             pub unsafe extern "Rust" fn _rsx_hot_dispatch_overlays(event: &::telar::Event) -> bool {
                 ::telar::dispatch_overlays(event)
             }
-            // Write the OS light/dark preference into the dylib's own theme runtime (where `follow_system`'s
-            // effect lives), across the same boundary the host cannot reach directly.
+            // Write the OS light/dark preference into the dylib's own theme runtime (where `follow_system`'s effect lives), across the same boundary the host cannot reach directly.
             #[unsafe(no_mangle)]
             pub unsafe extern "Rust" fn _rsx_hot_set_system_dark(dark: bool) {
                 ::telar::set_system_dark(dark);
             }
-            // Drain the dylib's own window-command queue: a title bar's `on_press` pushes into this dylib's
-            // thread-local, so the host must drain it across this boundary to apply drag/minimize/maximize/
-            // close — its own copy is empty.
+            // Drain the dylib's own window-command queue: a title bar's `on_press` pushes into this dylib's thread-local, so the host must drain it across this boundary to apply drag/minimize/maximize/ close — its own copy is empty.
             #[unsafe(no_mangle)]
             pub unsafe extern "Rust" fn _rsx_hot_drain_window_commands()
             -> ::std::vec::Vec<::telar::WindowCommand> {
                 ::telar::take_window_commands()
             }
-            // Run the completions of tasks spawned inside this dylib: `spawn_task` registers its callback in
-            // this dylib's reactive-core thread-local, so the host must drain it across this boundary — its
-            // own copy is empty.
+            // Run the completions of tasks spawned inside this dylib: `spawn_task` registers its callback in this dylib's reactive-core thread-local, so the host must drain it across this boundary — its own copy is empty.
             #[unsafe(no_mangle)]
             pub unsafe extern "Rust" fn _rsx_hot_drain_tasks() {
                 ::telar::drain_tasks();
             }
-            // Give this dylib's reactive-core copy the loop wake, so a worker finishing in here runs a frame
-            // instead of waiting for the next input event.
+            // Give this dylib's reactive-core copy the loop wake, so a worker finishing in here runs a frame instead of waiting for the next input event.
             #[unsafe(no_mangle)]
             pub unsafe extern "Rust" fn _rsx_hot_install_task_waker(waker: ::telar::RedrawWaker) {
                 ::telar::set_task_waker(move || waker.wake());
@@ -425,10 +399,7 @@ struct TranspileOutput {
 
 /// The `src`-relative directory the macro was written in.
 ///
-/// `Span::local_file` gives the path the compiler knows, which is relative to the *working* directory — the
-/// workspace root under cargo, not the package. So the path is re-rooted by its own `src` component rather
-/// than trusted whole: rooting it at the wrong `src` silently placed nothing, which reads as a crate that
-/// simply has no `.rsx` in it.
+/// `Span::local_file` gives the path the compiler knows, which is relative to the *working* directory — the workspace root under cargo, not the package. So the path is re-rooted by its own `src` component rather than trusted whole: rooting it at the wrong `src` silently placed nothing, which reads as a crate that simply has no `.rsx` in it.
 fn invocation_dir(file: &Path, src_dir: &Path) -> Option<PathBuf> {
     let dir = file.parent()?;
     if dir.starts_with(src_dir) {
@@ -443,17 +414,13 @@ fn invocation_dir(file: &Path, src_dir: &Path) -> Option<PathBuf> {
     resolved.is_dir().then_some(resolved)
 }
 
-// Transpiles every `.rsx` file under `src/` into `.telar/build/` (`.telar/build-hot/` for a hot-reload build), wiring each as a `#[path] mod` and aliasing
-// nested components to their basenames; also emits `include_str!` rerun triggers and (via `auto_modules`)
-// declares the hand-written `.rs` module tree. Shared by `app!` (which then adds the runner) and
-// `rsx_modules!` (transpilation only). `theme_type_str` types the transpiler's `use_theme` calls; pass `None`
-// when no theme is in scope. `Err` carries a `compile_error!` token stream for the caller to emit.
+// Transpiles every `.rsx` under `src/` into the build directory, wiring each as a `#[path] mod` and aliasing nested components to their basenames; also emits `include_str!` rerun triggers and, under `auto_modules`, declares the hand-written `.rs` module tree. Shared by `app!`, which then adds the runner, and `rsx_modules!`, which transpiles only. `Err` carries a `compile_error!` stream to emit.
 fn transpile_project(theme_type_str: Option<&str>) -> Result<TranspileOutput, TokenStream2> {
     let manifest_dir = std::env::var("CARGO_MANIFEST_DIR")
         .map(PathBuf::from)
         .map_err(|_| quote! { compile_error!("CARGO_MANIFEST_DIR not set") })?;
 
-    // A hot-reload build emits different code for the same `.rsx` (signals become `hot_signal_auto!`), so it needs its own output dir: sharing one has the two flavours — and the analyzer's live mirror, which always writes the plain one — overwrite each other's files on every build, leaving each cargo unit permanently stale.
+    // A hot-reload build emits different code for the same `.rsx`, so it needs its own output dir: sharing one has the two flavours — and the analyzer's live mirror, which always writes the plain one — overwrite each other on every build, leaving each cargo unit permanently stale.
     let flavour = if hot_reload_build() {
         "build-hot"
     } else {
@@ -467,8 +434,7 @@ fn transpile_project(theme_type_str: Option<&str>) -> Result<TranspileOutput, To
 
     let src_dir = manifest_dir.join("src");
     let rsx_files = telar_transpiler::find_rsx_files(&src_dir);
-    // Baked `src:"..."` asset paths resolve against one project asset root (default `./assets`), not each
-    // `.rsx`'s own directory — see `[telar] assets` in telar.toml.
+    // Baked `src:"..."` asset paths resolve against one project asset root (default `./assets`), not each `.rsx`'s own directory — see `[telar] assets` in telar.toml.
     let assets_root = telar_transpiler::assets_root(&manifest_dir);
 
     let mut include_stmts = TokenStream2::new();
@@ -529,9 +495,7 @@ fn transpile_project(theme_type_str: Option<&str>) -> Result<TranspileOutput, To
             }
         }
 
-        // Persist the source map next to the build file so the editor extension and `cargo telar check` can
-        // map rust-analyzer's and rustc's diagnostics on the generated Rust back onto the `.rsx` the author
-        // wrote — the lines, and the verbatim expression spans that make a column mean something.
+        // Persisted next to the build file, so the editor extension and `cargo telar check` can map diagnostics on the generated Rust back onto the `.rsx` the author wrote: the lines, and the verbatim expression spans that make a column mean something.
         let map_path = out_path.with_extension("rs.map");
         let map_json =
             telar_transpiler::SourceMap::new(result.source_map.clone(), result.expr_spans.clone())
@@ -543,16 +507,13 @@ fn transpile_project(theme_type_str: Option<&str>) -> Result<TranspileOutput, To
             let _ = std::fs::write(&map_path, &map_json);
         }
 
-        // Wire each generated file as a real `#[path] mod` (not `include!`) so rust-analyzer treats it as a
-        // first-class module and offers completion inside it; `pub use` keeps the component fns, preview consts
-        // and `Props` types reachable by bare name, exactly as `include!` did.
+        // A real `#[path] mod`, not `include!`, so rust-analyzer treats it as a first-class module and offers completion inside it. `pub use` keeps the component fns, preview consts and `Props` types reachable by bare name, exactly as `include!` did.
 
         let rsx_path_str = rsx_file.to_string_lossy().to_string();
         rerun_stmts.extend(quote! { const _: &str = include_str!(#rsx_path_str); });
 
         if !result.preview_names.is_empty() {
-            // The const lives inside the file's own module now, so it is named by its path rather than
-            // reached by a bare name the crate root used to re-export.
+            // The const lives inside the file's own module now, so it is named by its path rather than reached by a bare name the crate root used to re-export.
             let module: Vec<Ident> = telar_transpiler::relative_output_path(rsx_file, &src_dir)
                 .unwrap_or_default()
                 .with_extension("")
@@ -564,16 +525,11 @@ fn transpile_project(theme_type_str: Option<&str>) -> Result<TranspileOutput, To
         }
     }
 
-    // Opt-in via `[telar] auto_modules = true` in telar.toml: declare the hand-written `.rs` modules by walking the
-    // source tree, so an app needs no `mod.rs`/`mod` statements for them — mirroring how `.rsx` files are wired.
+    // Opt-in via `[telar] auto_modules = true`: declares the hand-written `.rs` modules by walking the source tree, so an app needs no `mod` statements for them, mirroring how `.rsx` files are wired.
     //
-    // Nothing tracks a borrowed component any more. Its signature used to be baked into this crate's call
-    // sites, so editing its `Props` elsewhere had to rebuild this crate or the call kept the old arity; the
-    // call now spells only names, and rustc checks them against the real type at the usual time.
+    // Nothing tracks a borrowed component any more. Its signature used to be baked into this crate's call sites, so editing its `Props` elsewhere had to rebuild this crate or the call kept the old arity.
     let auto_modules = telar_transpiler::auto_modules_enabled(&manifest_dir);
-    // The compiler's own span, not proc-macro2's shim: only the real one carries a file. A crate may invoke
-    // the macro once per module that owns `.rsx` files, and the two things that differ are what the module
-    // tree is rooted at and whether this run may sweep the generated directory.
+    // The compiler's own span, not proc-macro2's shim: only the real one carries a file. A crate may invoke the macro once per module owning `.rsx` files, and what differs is where the module tree is rooted and whether this run may sweep the generated directory.
     let invoked_in = proc_macro::Span::call_site()
         .local_file()
         .and_then(|file| invocation_dir(&file, &src_dir))
@@ -586,16 +542,11 @@ fn transpile_project(theme_type_str: Option<&str>) -> Result<TranspileOutput, To
         let telar_toml_str = telar_toml.to_string_lossy().to_string();
         rerun_stmts.extend(quote! { const _: &str = include_str!(#telar_toml_str); });
     }
-    // Always, not opt-in: a `.rsx` is a module where its file sits, so the tree that places it has to
-    // exist whatever `auto_modules` says. What the setting still decides is whether hand-written `.rs`
-    // siblings are declared for you.
+    // Always, not opt-in: a `.rsx` is a module where its file sits, so the tree placing it has to exist whatever `auto_modules` says. What the setting decides is whether hand-written `.rs` siblings are declared for you.
     //
-    // Rooted where the macro was written, not at `src/`. A module declares its own children, so
-    // `rsx_modules!()` in `app/editor/mod.rs` places `app/editor`'s files; declaring `pub mod app;` there
-    // would name an ancestor of the file doing the declaring, which rustc reads as a cycle.
+    // Rooted where the macro was written, not at `src/`. A module declares its own children, so a `rsx_modules!()` in `app/editor/mod.rs` places that directory's files; declaring `pub mod app;` there would name an ancestor of the file doing the declaring, which rustc reads as a cycle.
     {
-        // The discovered tree is split across real generated files (one per directory) so every module is a
-        // file-based `#[path] mod`; see `discover_rust_modules` for why inline `mod` blocks break rust-analyzer.
+        // The discovered tree is split across real generated files (one per directory) so every module is a file-based `#[path] mod`; see `discover_rust_modules` for why inline `mod` blocks break rust-analyzer.
         let modtree_dir = generated_dir.join("__modules");
         if let Err(e) = std::fs::create_dir_all(&modtree_dir) {
             let msg = format!("Failed to create {}: {e}", modtree_dir.display());
@@ -624,9 +575,7 @@ fn transpile_project(theme_type_str: Option<&str>) -> Result<TranspileOutput, To
         }
     }
 
-    // Bake the i18n catalog when a `locales/` directory exists: parse every `locales/<tag>.toml` into one
-    // generated module wired at the crate root, so `t!`/markup call sites reference `crate::__rsx_i18n::CATALOG`.
-    // Inert (nothing generated) when there is no catalog, mirroring how svg baking only fires for `svg` elements.
+    // Baked when a `locales/` directory exists: every `locales/<tag>.toml` becomes one generated module wired at the crate root, so `t!` and markup call sites reference it. Inert when there is no catalog, mirroring how svg baking only fires for `svg` elements.
     match telar_transpiler::parse_catalog(&manifest_dir) {
         Ok(Some(catalog)) => {
             let src = telar_transpiler::bake_catalog_to_source(&catalog);
@@ -658,12 +607,9 @@ fn transpile_project(theme_type_str: Option<&str>) -> Result<TranspileOutput, To
         Err(msg) => return Err(quote! { compile_error!(#msg) }),
     }
 
-    // Only reached once the whole project transpiled without error, so `written_files` is complete: anything
-    // else under `generated_dir` is what an earlier run wrote for a `.rsx` (or a feature) that is gone now.
+    // Only reached once the whole project transpiled without error, so `written_files` is complete: anything else under the generated directory is what an earlier run wrote for a `.rsx` that is gone now.
     //
-    // The root invocation only. A crate may have several — one per module that owns `.rsx` files — and each
-    // knows about its *own* module tree, so a nested one sweeping the directory deletes what the root wrote
-    // and the next build cannot read it back.
+    // The root invocation only. A crate may have several, one per module owning `.rsx` files, and each knows only its own module tree, so a nested one sweeping the directory deletes what the root wrote.
     if invoked_at_root {
         telar_transpiler::prune_stale_generated(&generated_dir, &written_files);
     }
@@ -675,12 +621,7 @@ fn transpile_project(theme_type_str: Option<&str>) -> Result<TranspileOutput, To
     })
 }
 
-/// Transpile every `.rsx` file under `src/` and declare the module tree — what `app!` does, minus the winit
-/// runner. Use this in a crate that drives rsx through a **custom** `Platform` (e.g. a Wayland layer-shell
-/// backend) instead of the built-in desktop runner: invoke `telar::rsx_modules!()` at the crate root, then build
-/// your own `App` from the transpiled components and run it via `telar::run_with_platform` /
-/// `telar::run_multi_with_platform`. Pass a theme type — `rsx_modules!(MyTheme)` — if your `.rsx` calls
-/// `use_theme`; otherwise `rsx_modules!()`.
+/// Transpile every `.rsx` file under `src/` and declare the module tree — what `app!` does, minus the winit runner. Use this in a crate that drives rsx through a **custom** `Platform` (e.g. a Wayland layer-shell backend) instead of the built-in desktop runner: invoke `telar::rsx_modules!()` at the crate root, then build your own `App` from the transpiled components and run it via `telar::run_with_platform` / `telar::run_multi_with_platform`. Pass a theme type — `rsx_modules!(MyTheme)` — if your `.rsx` calls `use_theme`; otherwise `rsx_modules!()`.
 #[proc_macro]
 pub fn rsx_modules(input: TokenStream) -> TokenStream {
     let theme_type_str = if input.is_empty() {

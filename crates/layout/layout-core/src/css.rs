@@ -1,9 +1,6 @@
 //! A layout style, as the CSS that means the same thing.
 //!
-//! Not a translation between two vocabularies: `taffy::Style` **is** CSS's box model, field for field, and
-//! this only writes it down. What makes that worth having is the target where the browser is the layout
-//! engine — there, this is the whole of what Telar tells it, and Taffy stays as the oracle a test compares
-//! against rather than the thing that positions anything.
+//! Not a translation between two vocabularies: `taffy::Style` **is** CSS's box model, field for field, and this only writes it down. What makes that worth having is the target where the browser is the layout engine — there, this is the whole of what Telar tells it, and Taffy stays as the oracle a test compares against rather than the thing that positions anything.
 
 use taffy::{
     AlignContentKeyword, AlignItemsKeyword, CompactLength, Dimension, Display, FlexDirection,
@@ -13,9 +10,7 @@ use taffy::{
 use crate::direction::Direction;
 use crate::style::LayoutStyle;
 
-/// Declarations, in the order a stylesheet would read best. Kept as one string rather than a map because
-/// what consumes it writes one `style` attribute: a per-property call into the DOM for each of twenty
-/// declarations costs more than the string it avoids.
+/// Declarations, in the order a stylesheet would read best. Kept as one string rather than a map because what consumes it writes one `style` attribute: a per-property call into the DOM for each of twenty declarations costs more than the string it avoids.
 #[derive(Default, Debug, PartialEq, Eq, Clone)]
 pub struct Css(String);
 
@@ -49,8 +44,7 @@ impl std::fmt::Display for Css {
 impl LayoutStyle {
     /// This style as CSS declarations, resolved for `direction`.
     ///
-    /// Resolved rather than logical: the same `resolve` every layout pass runs, so what a browser is told
-    /// and what Taffy computed came from one function and cannot drift apart in an RTL locale.
+    /// Resolved rather than logical: the same `resolve` every layout pass runs, so what a browser is told and what Taffy computed came from one function and cannot drift apart in an RTL locale.
     pub fn to_css(&self, direction: Direction) -> Css {
         css_of(&self.resolve(direction))
     }
@@ -61,21 +55,14 @@ fn css_of(style: &Style) -> Css {
 
     css.push("display", display_of(style.display));
     if style.display == Display::None {
-        // Nothing else about a box that is not in the flow can be observed, and saying it anyway is twenty
-        // declarations the browser parses to reach the same nothing.
+        // Nothing else about a box that is not in the flow can be observed, and saying it anyway is twenty declarations the browser parses to reach the same nothing.
         return css;
     }
 
-    // Taffy's `size` is the border box, padding and border inside it; CSS's default `content-box` adds them
-    // around it instead. Left out, a `pad:20` box came out 40px wider than Taffy said, its children were
-    // measured against the wrong width, and every box below it in the column drifted further down the page
-    // than the rects hit-testing reads — an interface that draws correctly and cannot be clicked.
+    // Taffy's `size` is the border box, with padding and border inside it; CSS's default `content-box` adds them around it. Left out, a `pad:20` box came out 40px wider than Taffy said and every box below it drifted further down the page than the rects hit-testing reads.
     css.push("box-sizing", "border-box");
 
-    // Every box is a containing block, because in Taffy every box is: an absolutely positioned child
-    // resolves its inset against its parent node, full stop. A document resolves it against the nearest
-    // ancestor that is positioned at all, and a box left `static` is not one — so a slider's fill, sized to
-    // overlay a 260x14 track, escaped to the layout root and came out the height of the window.
+    // Every box is a containing block, because in Taffy every box is: an absolutely positioned child resolves its inset against its parent node. A document resolves it against the nearest positioned ancestor, and a `static` box is not one — so a slider's fill escaped to the layout root and came out window-height.
     css.push(
         "position",
         if style.position == Position::Absolute {
@@ -210,8 +197,7 @@ fn sizing_of(sizing: taffy::TrackSizingFunction) -> String {
     let min_raw = sizing.min.into_raw();
     let min = track_length(min_raw);
     let max = track_length(sizing.max.into_raw());
-    // A flexible track is written as the bare `fr`. `1fr` *is* `minmax(auto, 1fr)` in CSS, so the long form
-    // would be right and unidiomatic — and this string is compared every frame, so shorter is also cheaper.
+    // A flexible track is written as the bare `fr`. `1fr` *is* `minmax(auto, 1fr)` in CSS, so the long form would be right and unidiomatic — and this string is compared every frame, so shorter is also cheaper.
     if min_raw.tag() == CompactLength::AUTO_TAG
         && sizing.max.into_raw().tag() == CompactLength::FR_TAG
         && let Some(max) = max.clone()
@@ -227,8 +213,7 @@ fn sizing_of(sizing: taffy::TrackSizingFunction) -> String {
     }
 }
 
-/// A track length, which has three spellings CSS has and a plain length does not: `fr`, the content
-/// keywords, and `fit-content`.
+/// A track length, which has three spellings CSS has and a plain length does not: `fr`, the content keywords, and `fit-content`.
 fn track_length(compact: CompactLength) -> Option<String> {
     match compact.tag() {
         CompactLength::FR_TAG => Some(format!("{}fr", format_number(compact.value()))),
@@ -318,8 +303,7 @@ fn length_of(compact: CompactLength) -> Option<String> {
     }
 }
 
-/// A size, or nothing when it is `auto` — which is what CSS starts every one of these at, and what
-/// `max-width` does not even accept as a value.
+/// A size, or nothing when it is `auto` — which is what CSS starts every one of these at, and what `max-width` does not even accept as a value.
 fn dimension(value: Dimension) -> Option<String> {
     let compact = value.into_raw();
     if compact.tag() == CompactLength::AUTO_TAG {
@@ -423,8 +407,7 @@ mod tests {
         style.to_css(Direction::Ltr).into_string()
     }
 
-    /// Every property CSS already starts where taffy does is left unsaid, so what reaches the browser is
-    /// what the app actually asked for.
+    /// Every property CSS already starts where taffy does is left unsaid, so what reaches the browser is what the app actually asked for.
     #[test]
     fn a_plain_style_says_only_what_it_is() {
         assert_eq!(
@@ -553,8 +536,7 @@ mod tests {
         assert!(css(LayoutStyle::new().aspect_ratio(1.5)).contains("aspect-ratio:1.5;"));
     }
 
-    /// A logical edge has to land on the physical one the direction chose, and land on the *same* one Taffy
-    /// resolved it to — the whole point of going through `resolve` rather than reading the logical fields.
+    /// A logical edge has to land on the physical one the direction chose, and land on the *same* one Taffy resolved it to — the whole point of going through `resolve` rather than reading the logical fields.
     #[test]
     fn a_logical_edge_follows_the_direction() {
         let style = LayoutStyle::new().padding_start(SizeDimension::Px(20.0));
@@ -598,8 +580,7 @@ mod grid_tests {
         );
     }
 
-    /// What `grid cols:"fit 150"` means, and the case that made the sandbox stack: a grid with no track
-    /// list is one implicit column, so every card came out full width.
+    /// What `grid cols:"fit 150"` means, and the case that made the sandbox stack: a grid with no track list is one implicit column, so every card came out full width.
     #[test]
     fn an_auto_fitting_repeat_keeps_its_keyword() {
         let out = css(LayoutStyle::new()
@@ -657,8 +638,7 @@ mod containing_block_tests {
     use super::tests::css;
     use super::*;
 
-    /// Taffy resolves an absolute child against its parent node; a document resolves it against the nearest
-    /// positioned ancestor. Left `static`, a box is not one, and what it was meant to overlay it escapes.
+    /// Taffy resolves an absolute child against its parent node; a document resolves it against the nearest positioned ancestor. Left `static`, a box is not one, and what it was meant to overlay it escapes.
     #[test]
     fn an_ordinary_box_is_a_containing_block_for_its_children() {
         assert!(css(LayoutStyle::new()).contains("position:relative;"));

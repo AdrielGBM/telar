@@ -1,6 +1,9 @@
+//! Vector artwork generated in code, for the SVG sections to draw.
+
 use std::sync::Arc;
 use telar::SvgData;
 
+/// A simple stroked icon, for the SVG sections to draw.
 pub fn make_icon() -> Arc<SvgData> {
     let src = r##"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
 <path d="M12 2l2.9 6.6 7.1.6-5.4 4.7 1.6 7-6.2-3.8-6.2 3.8 1.6-7-5.4-4.7 7.1-.6z" fill="#333333"/>
@@ -8,6 +11,7 @@ pub fn make_icon() -> Arc<SvgData> {
     Arc::new(SvgData::from_str(src).expect("valid icon svg"))
 }
 
+/// A multi-path mark, exercising fills and groups.
 pub fn make_logo() -> Arc<SvgData> {
     let src = r##"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
 <defs>
@@ -23,6 +27,7 @@ pub fn make_logo() -> Arc<SvgData> {
     Arc::new(SvgData::from_str(src).expect("valid logo svg"))
 }
 
+/// Artwork with a filter, which forces the raster fallback.
 pub fn make_blurred() -> Arc<SvgData> {
     let src = r##"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
 <defs>

@@ -1,8 +1,6 @@
 //! A path is a child like any other.
 //!
-//! It used to be a `Component` with no layout node, so the only way into a tree was a `Canvas` wrapped
-//! around it — a widget the caller had to know to write, and one the transpiler emitted around every `path`
-//! in markup. B8's whole complaint: a primitive that cannot be a child of a `col`.
+//! It used to be a `Component` with no layout node, so the only way into a tree was a `Canvas` wrapped around it — a widget the caller had to know to write, and one the transpiler emitted around every `path` in markup. B8's whole complaint: a primitive that cannot be a child of a `col`.
 
 use telar::{
     AvailableSpace, Color, Component, DrawCommand, LayoutItem, LayoutStyle, Path, PathData,
@@ -35,7 +33,6 @@ fn triangle() -> std::sync::Arc<PathData> {
 #[test]
 fn a_path_is_placed_by_the_row_it_sits_in() {
     reset_layout_runtime();
-    // A rect is the neighbour; the path is what has to follow it.
     let lead = telar::Rectangle::new(LayoutStyle::new().width(100.0).height(40.0), || {
         telar::RectStyle::default().with_fill(Color::BLACK)
     })
@@ -63,8 +60,7 @@ fn a_path_is_placed_by_the_row_it_sits_in() {
     assert_eq!(rect.width, 60.0);
 }
 
-/// And what it draws lands at that position: the geometry is in the path's own coordinates, and the box it
-/// was given is what moves it.
+/// And what it draws lands at that position: the geometry is in the path's own coordinates, and the box it was given is what moves it.
 #[test]
 fn a_paths_geometry_is_drawn_where_layout_put_it() {
     reset_layout_runtime();
@@ -93,8 +89,7 @@ fn a_paths_geometry_is_drawn_where_layout_put_it() {
 
     let tree = ui_core::ComponentList::new(Root(box_item(row)));
     let commands = tree.commands();
-    // The matrix in force where the geometry lands, not the first one in the frame: the rect beside it
-    // wears one too, at the origin.
+    // The matrix in force where the geometry lands, not the first one in the frame: the rect beside it wears one too, at the origin.
     let mut translation = None;
     for command in commands.iter() {
         match command {

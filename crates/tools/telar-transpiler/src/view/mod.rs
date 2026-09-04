@@ -54,7 +54,6 @@ pub(crate) fn resolve_source_map(marked: &str) -> ResolvedView {
     let mut stack: Vec<u32> = Vec::new();
     let mut lines = Vec::new();
     let mut expr_spans = Vec::new();
-    // Running byte length of the streamed body (each emitted line plus its trailing `\n`).
     let mut body_len = 0usize;
     for line in marked.split('\n') {
         if let Some(rest) = line.strip_prefix(SRC_PUSH) {
@@ -82,7 +81,6 @@ fn strip_expr_markers(line: &str, base: usize) -> (String, Vec<(usize, u32, u32)
         out.push_str(&rest[..open]);
         let after_open = &rest[open + SRC_EXPR_OPEN.len()..];
         let Some(close) = after_open.find(SRC_EXPR_CLOSE) else {
-            // Malformed marker (no close): keep the remainder verbatim and stop.
             out.push_str(rest);
             return (out, spans);
         };
@@ -98,10 +96,7 @@ fn strip_expr_markers(line: &str, base: usize) -> (String, Vec<(usize, u32, u32)
     (out, spans)
 }
 
-/// How a container collects its children: a `children![...]` literal (all static, no control flow), a
-/// `Vec<Box<dyn LayoutItem>>` mutated by static control flow, or a `Vec<ChildSlot>` when a reactive
-/// fragment is among the siblings (so it and the statics reconcile into the same node — the transparent
-/// `for`/`if`).
+/// How a container collects its children: a `children![...]` literal (all static, no control flow), a `Vec<Box<dyn LayoutItem>>` mutated by static control flow, or a `Vec<ChildSlot>` when a reactive fragment is among the siblings (so it and the statics reconcile into the same node — the transparent `for`/`if`).
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub(crate) enum ChildMode {
     Literal,
@@ -109,16 +104,13 @@ pub(crate) enum ChildMode {
     Slots,
 }
 
-/// The child accumulator currently in scope: the `Vec` variable that `if`/`for` bodies push into, and
-/// whether it holds `ChildSlot`s (slot mode) vs `Box<dyn LayoutItem>` (vec mode).
+/// The child accumulator currently in scope: the `Vec` variable that `if`/`for` bodies push into, and whether it holds `ChildSlot`s (slot mode) vs `Box<dyn LayoutItem>` (vec mode).
 pub(crate) struct ChildSink {
     var: &'static str,
     slots: bool,
 }
 
-/// Whether a node forces its parent into slot mode: a *reactive* `for`/`if` (a `$`-driven source) becomes
-/// a transparent fragment, which only the `ChildSlot`/`from_slots` path can host. A static `for`/`if` does
-/// not — it pushes its widgets directly, so a `Vec` accumulator suffices.
+/// Whether a node forces its parent into slot mode: a *reactive* `for`/`if` (a `$`-driven source) becomes a transparent fragment, which only the `ChildSlot`/`from_slots` path can host. A static `for`/`if` does not — it pushes its widgets directly, so a `Vec` accumulator suffices.
 pub(crate) fn forces_fragment(node: &ViewNode) -> bool {
     match node {
         ViewNode::ForBlock(block) => block.iterable.trim_start().starts_with('$'),
@@ -133,9 +125,7 @@ pub(crate) enum ChildEmit {
     Simple { name: String, code: String },
     /// Control flow (`if`/`for`) that mutates a child vector in place.
     Dynamic { code: String },
-    /// A reactive `for`/`if` region bound to `name` as a `ChildSlot::Dynamic` (a transparent fragment that
-    /// reconciles into the host container's node). Forces the parent to collect `ChildSlot`s and build via
-    /// `from_slots`, so the region's items are real siblings of the static children.
+    /// A reactive `for`/`if` region bound to `name` as a `ChildSlot::Dynamic` (a transparent fragment that reconciles into the host container's node). Forces the parent to collect `ChildSlot`s and build via `from_slots`, so the region's items are real siblings of the static children.
     Fragment { name: String, code: String },
 }
 
@@ -156,10 +146,7 @@ impl ChildEmit {
     }
 }
 
-/// Collapses a set of already-bound widget `names` into a single content expression: an empty column
-/// for none, the lone widget for one, or a `Container::column` wrapping all of them for several. Shared
-/// by `generate_root` (which boxes the result as the view's return value) and `emit_scroll`'s static
-/// branch (`LayoutScrollArea` takes a single content item).
+/// Collapses a set of already-bound widget `names` into a single content expression: an empty column for none, the lone widget for one, or a `Container::column` wrapping all of them for several. Shared by `generate_root` (which boxes the result as the view's return value) and `emit_scroll`'s static branch (`LayoutScrollArea` takes a single content item).
 fn wrap_as_single_content(names: &[String]) -> String {
     match names {
         [] => "Container::column(children![])?".to_string(),
@@ -168,6 +155,7 @@ fn wrap_as_single_content(names: &[String]) -> String {
     }
 }
 
+/// Emits Rust for a view tree, carrying the scope every node is generated against.
 pub struct ViewGen<'a> {
     /// Declared style classes, used to validate class references in elements.
     classes: &'a [StyleClass],
@@ -175,13 +163,9 @@ pub struct ViewGen<'a> {
     counters: HashMap<String, usize>,
     /// When set, the view binds `theme` and each `[style]` class function binds its own, so `$theme.field` is a read.
     theme_type: Option<String>,
-    /// Identifiers the `[logic]` zone binds. A bare name in the view resolves to one of these before the theme
-    /// is consulted, so a local shadows a same-named token rather than the other way round — see
-    /// [`crate::signal_scan::scan_locals`].
+    /// Identifiers the `[logic]` zone binds. A bare name in the view resolves to one of these before the theme is consulted, so a local shadows a same-named token rather than the other way round — see [`crate::signal_scan::scan_locals`].
     locals: Vec<String>,
-    /// Names the `[logic]` zone bound to a `signal(…)` or `memo(…)`. Read to tell a genuinely static iterable
-    /// from one that reads reactive state without the `$` that would make the loop follow it — see
-    /// [`ViewGen::signal_named_in`].
+    /// Names the `[logic]` zone bound to a `signal(…)` or `memo(…)`. Read to tell a genuinely static iterable from one that reads reactive state without the `$` that would make the loop follow it — see [`ViewGen::signal_named_in`].
     signals: Vec<String>,
     /// Indentation depth (in 4-space units) for the current emission scope.
     indent: usize,
@@ -193,23 +177,15 @@ pub struct ViewGen<'a> {
     base_dir: Option<PathBuf>,
     /// Monotonic counter for the hoisted `BAKED_*_N` static asset handles, unique per component so two baked assets never share a `static` name.
     baked_asset_count: usize,
-    /// Signatures of every component in the workspace, so `emit_component_call` emits optional props and the slot argument correctly. `None` falls back to the per-file heuristic.
-    /// Stack of child accumulators (see [`ChildSink`]); the top is the one an emitted `if`/`for` body
-    /// pushes into. Pushed before a container's children are emitted, popped after.
+    /// Signatures of every component in the workspace, so `emit_component_call` emits optional props and the slot argument correctly. `None` falls back to the per-file heuristic. Stack of child accumulators (see [`ChildSink`]); the top is the one an emitted `if`/`for` body pushes into. Pushed before a container's children are emitted, popped after.
     child_sinks: Vec<ChildSink>,
-    /// `[logic]` bindings a lone-identifier prop names more than once in this view, so the first call site
-    /// cannot move what the second still needs. Computed once from the whole view in [`Self::generate_root`].
+    /// `[logic]` bindings a lone-identifier prop names more than once in this view, so the first call site cannot move what the second still needs. Computed once from the whole view in [`Self::generate_root`].
     multi_referenced: Vec<String>,
-    /// How many reactive branch/item closures enclose the node being emitted. Non-zero means the code being
-    /// generated may run more than once for the same content, which is what makes a one-shot `widget`
-    /// reference unsound there — see [`ViewGen::in_reactive_region`].
+    /// How many reactive branch/item closures enclose the node being emitted. Non-zero means the code being generated may run more than once for the same content, which is what makes a one-shot `widget` reference unsound there — see [`ViewGen::in_reactive_region`].
     reactive_depth: usize,
-    /// Whether each enclosing container lays its children out horizontally. A boxed reactive region reads
-    /// the top to build its own node the same way round — an `if`/`for` inside a `row` runs horizontally.
+    /// Whether each enclosing container lays its children out horizontally. A boxed reactive region reads the top to build its own node the same way round — an `if`/`for` inside a `row` runs horizontally.
     host_rows: Vec<bool>,
-    /// The in-scope binding holding the enclosing scroll's live viewport, when the node being emitted sits
-    /// inside one that exposed it. `VirtualList` needs it to know which rows are on screen, and only a `scroll`
-    /// can supply it — so a `virtual` loop outside one is an error rather than a surprise at runtime.
+    /// The in-scope binding holding the enclosing scroll's live viewport, when the node being emitted sits inside one that exposed it. `VirtualList` needs it to know which rows are on screen, and only a `scroll` can supply it — so a `virtual` loop outside one is an error rather than a surprise at runtime.
     scroll_viewport: Option<String>,
 }
 
@@ -238,10 +214,7 @@ impl<'a> ViewGen<'a> {
         }
     }
 
-    /// Whether the node being emitted sits inside a reactive branch or item closure, i.e. inside code that may
-    /// build the same content again after the region has disposed it.
-    /// Whether a lone `[logic]` binding named here must be cloned rather than moved: either the code around it
-    /// can run again, or another call site still needs it.
+    /// Whether the node being emitted sits inside a reactive branch or item closure, i.e. inside code that may build the same content again after the region has disposed it. Whether a lone `[logic]` binding named here must be cloned rather than moved: either the code around it can run again, or another call site still needs it.
     pub(super) fn must_clone_local(&self, name: &str) -> bool {
         self.in_reactive_region() || self.multi_referenced.iter().any(|n| n == name)
     }
@@ -271,8 +244,7 @@ impl<'a> ViewGen<'a> {
         result
     }
 
-    /// Runs `emit` with a child-accumulator context in scope, so `if`/`for` bodies emitted inside push into
-    /// the right `Vec` in the right shape. No sink is pushed for [`ChildMode::Literal`] (nothing pushes).
+    /// Runs `emit` with a child-accumulator context in scope, so `if`/`for` bodies emitted inside push into the right `Vec` in the right shape. No sink is pushed for [`ChildMode::Literal`] (nothing pushes).
     fn with_child_sink<R>(&mut self, mode: ChildMode, emit: impl FnOnce(&mut Self) -> R) -> R {
         let pushed = mode != ChildMode::Literal;
         if pushed {
@@ -292,8 +264,7 @@ impl<'a> ViewGen<'a> {
         result
     }
 
-    /// Emits a push of static widget `name` into the current child accumulator, in its shape (a bare
-    /// `box_item` for a vec sink, wrapped in `ChildSlot::stat` for a slot sink).
+    /// Emits a push of static widget `name` into the current child accumulator, in its shape (a bare `box_item` for a vec sink, wrapped in `ChildSlot::stat` for a slot sink).
     fn push_static_child(&self, code: &mut String, pad: &str, name: &str) {
         match self.child_sinks.last() {
             Some(sink) if sink.slots => {
@@ -317,9 +288,7 @@ impl<'a> ViewGen<'a> {
         }
     }
 
-    /// Whether the child accumulator in scope hosts `ChildSlot`s — i.e. a reactive `for`/`if` here can be a
-    /// transparent fragment. Outside a slot host (component-slot children, a bare root, overlay/scroll) it
-    /// must fall back to a boxed `ReactiveList`.
+    /// Whether the child accumulator in scope hosts `ChildSlot`s — i.e. a reactive `for`/`if` here can be a transparent fragment. Outside a slot host (component-slot children, a bare root, overlay/scroll) it must fall back to a boxed `ReactiveList`.
     fn in_slot_host(&self) -> bool {
         self.child_sinks.last().is_some_and(|sink| sink.slots)
     }
@@ -335,8 +304,7 @@ impl<'a> ViewGen<'a> {
         }
     }
 
-    /// Attaches the names the `[logic]` zone binds, so a bare identifier in the view reaches them before the
-    /// theme. A preview has no logic zone and so passes none.
+    /// Attaches the names the `[logic]` zone binds, so a bare identifier in the view reaches them before the theme. A preview has no logic zone and so passes none.
     pub(crate) fn with_locals(mut self, locals: Vec<String>) -> Self {
         self.locals = locals;
         self
@@ -347,17 +315,14 @@ impl<'a> ViewGen<'a> {
         self
     }
 
-    /// Whether `name` is a binding the logic zone made, which a bare reference in the view means before any
-    /// same-named theme token.
+    /// Whether `name` is a binding the logic zone made, which a bare reference in the view means before any same-named theme token.
     pub(super) fn is_local(&self, name: &str) -> bool {
         self.locals.iter().any(|local| local == name)
     }
 
     /// The first signal `code` mentions by name, skipping strings and comments.
     ///
-    /// Names, not types: `[logic]` is spliced through verbatim and never type-checked here, so the only thing
-    /// this can honestly say is *this text refers to something the author declared reactive*. Enough for the
-    /// one question it is asked — whether an expression that looks static is reading state that moves.
+    /// Names, not types: `[logic]` is spliced through verbatim and never type-checked here, so the only thing this can honestly say is *this text refers to something the author declared reactive*. Enough for the one question it is asked — whether an expression that looks static is reading state that moves.
     pub(super) fn signal_named_in(&self, code: &str) -> Option<&str> {
         self.signals
             .iter()
@@ -404,9 +369,7 @@ impl<'a> ViewGen<'a> {
             })
             .cloned()
             .collect();
-        // A single static `if`/`if-else` root returns its branch directly, so the branch element becomes the
-        // component root with no injected column that would trap a `row align:stretch` at content height. A
-        // reactive (`$`) condition keeps the fragment-swap path below.
+        // Returned directly so the branch is the component root: an injected column would trap a `row align:stretch` at content height. A reactive condition keeps the fragment-swap path below.
         if let [ViewNode::IfBlock(block)] = nodes
             && !block.condition.contains('$')
         {
@@ -416,9 +379,7 @@ impl<'a> ViewGen<'a> {
         let mut out = String::new();
         let mode = Self::child_mode(nodes);
 
-        // A reactive fragment (or static control flow) at the root has no explicit container to attach to,
-        // so wrap the roots in one flex-column container built the matching way (`from_slots` for a
-        // fragment, `column` otherwise).
+        // Roots of a fragment or static control flow have no container to attach to, so wrap them in one.
         if mode != ChildMode::Literal {
             let child_emits: Vec<ChildEmit> =
                 self.with_child_sink(mode, |g| nodes.iter().map(|n| g.emit_node(n)).collect());
@@ -455,9 +416,7 @@ impl<'a> ViewGen<'a> {
         out
     }
 
-    /// Generates the body for a view that is a single static `if`/`if-else`: each branch returns its content
-    /// directly (via [`Self::emit_content_cell`]), so the chosen branch is the component root with no wrapping
-    /// column. A missing `else` returns an empty column. Source markers/spans are preserved for cursor mapping.
+    /// Generates the body for a view that is a single static `if`/`if-else`: each branch returns its content directly (via [`Self::emit_content_cell`]), so the chosen branch is the component root with no wrapping column. A missing `else` returns an empty column. Source markers/spans are preserved for cursor mapping.
     fn generate_root_if(&mut self, block: &IfBlock) -> String {
         let mut out = String::new();
         let pad = self.indent_str();
@@ -503,8 +462,7 @@ impl<'a> ViewGen<'a> {
             ViewNode::IfBlock(block) => self.emit_if(block),
             ViewNode::ForBlock(block) => self.emit_for(block),
             ViewNode::MatchBlock(block) => self.emit_match(block),
-            // Carried through as a Rust comment: the generated file is what a diagnostic points at, and a note
-            // explaining the markup is worth as much there as it is in the `.rsx`.
+            // The generated file is what a diagnostic points at, so a note is worth as much there as in the `.rsx`.
             ViewNode::Comment(text) => ChildEmit::Dynamic {
                 code: format!("{}{text}", self.indent_str()),
             },
@@ -513,7 +471,7 @@ impl<'a> ViewGen<'a> {
             ViewNode::Element(el) => self.clip_tail(el, emit),
             _ => emit,
         };
-        // Bracket this node's generated lines with source markers so the transpiler can map them back to the `.rsx` line. Nested nodes nest their own markers; `let` statements have no line of their own and inherit the enclosing node's mapping.
+        // Nested nodes nest their own markers; a `let` has no line of its own and inherits the enclosing node's.
         match node {
             ViewNode::Element(el) => wrap_source_markers(emit, el.line),
             ViewNode::IfBlock(block) => wrap_source_markers(emit, block.line),
@@ -523,14 +481,9 @@ impl<'a> ViewGen<'a> {
         }
     }
 
-    /// Wraps a node's widget in a [`ClippedItem`] when it carries `clip`, cutting its rendered output to the
-    /// shape the value names.
+    /// Wraps a node's widget in a [`ClippedItem`] when it carries `clip`, cutting its rendered output to the shape the value names.
     ///
-    /// `clip` on its own is `Clip::both()`; a value is a `Clip` expression, so `clip:Clip::x()` cuts the left
-    /// and right edges only — the thing CSS cannot say, since `overflow: hidden` on one axis forces the other
-    /// out of `visible` — and `clip:(Clip::both().rounded(8.0))` follows a rounded box's own corners. The
-    /// value used to be an axis keyword from a closed set of three, which is why a rounded box's clipped
-    /// child cut its corners square and the markup had no word for the radius the renderer already took.
+    /// `clip` on its own is `Clip::both()`; a value is a `Clip` expression, so `clip:Clip::x()` cuts the left and right edges only — the thing CSS cannot say, since `overflow: hidden` on one axis forces the other out of `visible` — and `clip:(Clip::both().rounded(8.0))` follows a rounded box's own corners. The value used to be an axis keyword from a closed set of three, which is why a rounded box's clipped child cut its corners square and the markup had no word for the radius the renderer already took.
     fn clip_tail(&mut self, el: &Element, emit: ChildEmit) -> ChildEmit {
         let Some(attr) = el.attributes.iter().find(|a| a.key == "clip") else {
             return emit;
@@ -551,15 +504,12 @@ impl<'a> ViewGen<'a> {
                     code,
                 }
             }
-            // A control-flow block carries no attributes and a fragment has no single node to cut, so neither is reachable from the markup.
+            // A control-flow block has no attributes and a fragment no single node, so neither is reachable.
             other => other,
         }
     }
 
-    /// Names any attribute a built-in tag does not accept, instead of mapping it to a builder call that does
-    /// nothing. It checks the same table the analyzer completes from, so an attribute the editor never suggests
-    /// is now one the build refuses too — before this, `cols:` on a plain `box` compiled and did nothing.
-    /// Component tags are exempt: their keys are `Props` fields, which rustc already checks.
+    /// Names any attribute a built-in tag does not accept, instead of mapping it to a builder call that does nothing. It checks the same table the analyzer completes from, so an attribute the editor never suggests is now one the build refuses too — before this, `cols:` on a plain `box` compiled and did nothing. Component tags are exempt: their keys are `Props` fields, which rustc already checks.
     fn unknown_attr_errors(&self, el: &Element) -> String {
         let allowed = crate::registry::tag_attr_keys(&el.tag);
         if allowed.is_empty() {
@@ -581,13 +531,9 @@ impl<'a> ViewGen<'a> {
             .collect()
     }
 
-    /// Names any attribute whose value its key cannot mean, instead of dropping the property or quietly
-    /// substituting a default for it.
+    /// Names any attribute whose value its key cannot mean, instead of dropping the property or quietly substituting a default for it.
     ///
-    /// The counterpart to [`Self::unknown_attr_errors`]: that one rejects a key the tag does not have, this
-    /// one rejects a value the key does not take. Between them the language stops being strict about keys
-    /// and silent about values — before this, `align:centre` laid out unaligned and `fit:covr` fitted the
-    /// other way, both with nothing to point at.
+    /// The counterpart to [`Self::unknown_attr_errors`]: that one rejects a key the tag does not have, this one rejects a value the key does not take. Between them the language stops being strict about keys and silent about values — before this, `align:centre` laid out unaligned and `fit:covr` fitted the other way, both with nothing to point at.
     fn value_errors(&self, el: &Element) -> String {
         if !crate::registry::is_builtin_tag(&el.tag) {
             return String::new();
@@ -612,7 +558,7 @@ impl<'a> ViewGen<'a> {
         match kind {
             // Only a flag key carries the empty spelling, so a valueless `align` is caught here too.
             ValueKind::Keywords(table) => crate::style::keyword(&attr.key, value, table).err(),
-            // A number is the axis itself; the names are steps of it, so either spelling is the same value.
+            // A number is the axis itself and the names are steps of it, so either spelling is the same value.
             ValueKind::KeywordsOrNumber(table) => (value.parse::<f32>().is_err())
                 .then(|| crate::style::keyword(&attr.key, value, table).err())
                 .flatten(),
@@ -654,9 +600,7 @@ impl<'a> ViewGen<'a> {
     }
 }
 
-/// Whether a view node must build a mutable `__children` vec rather than a `children![...]` literal:
-/// control flow (`if`/`for`/`let`) that mutates the vec in place, or a `children` slot placeholder that
-/// splices a runtime `Vec` into it.
+/// Whether a view node must build a mutable `__children` vec rather than a `children![...]` literal: control flow (`if`/`for`/`let`) that mutates the vec in place, or a `children` slot placeholder that splices a runtime `Vec` into it.
 pub(crate) fn forces_child_vec(node: &ViewNode) -> bool {
     match node {
         ViewNode::IfBlock(_)
@@ -690,7 +634,6 @@ mod tests {
     #[test]
     fn signal_interpolation() {
         let g = make_gen();
-        // `$count` is a reactive read; the rewritten expression carries no verbatim span.
         assert_eq!(
             g.interpolate_content("Count: {$count}", 0),
             "move || format!(\"Count: {}\", { count.get() })"
@@ -707,7 +650,6 @@ mod tests {
 
     #[test]
     fn a_non_reactive_branch_still_takes_a_widget() {
-        // A construction-time `if` picks its branch once, so the guard is about rebuilding, not about branching.
         let src = "[logic]\nlet icon = make_icon()?;\nlet vertical = true;\n[view]\nrow\n    if vertical\n        widget \"icon\"\n";
         let out = crate::transpile_source(src, "demo", None, None).unwrap();
         assert!(
@@ -717,9 +659,7 @@ mod tests {
         );
     }
 
-    /// `field: Type = expr` sugar reaches the builder as the attribute that says the same thing. The struct
-    /// stops deriving `Default` along the way: nothing constructs a `Props` that way any more, and keeping it
-    /// would demand a `Default` of every field type the builder does not need one for.
+    /// `field: Type = expr` sugar reaches the builder as the attribute that says the same thing. The struct stops deriving `Default` along the way: nothing constructs a `Props` that way any more, and keeping it would demand a `Default` of every field type the builder does not need one for.
     #[test]
     fn an_inline_field_default_becomes_a_props_attribute() {
         let src = "[logic]\n#[derive(Default)]\npub struct Props {\n    pub gap: f32,\n    pub pad: f32 = 16.0,\n}\n[view]\ntext \"x\"\n";
@@ -759,12 +699,10 @@ mod tests {
         let src = "[style]\n@card\n    fill: #ffffff\n    radius: 12\n    padding: 8\n[view]\ncol @card\n    text \"hi\"\n";
         let out = crate::transpile_source(src, "demo", None, None).unwrap();
         let code = &out.rust_code;
-        // A `col` carrying paint from its class becomes a StyledContainer, not a plain Container.
         assert!(
             code.contains("StyledContainer::new(style_card()"),
             "painted col should be a StyledContainer:\n{code}"
         );
-        // The class's fill reaches the RectStyle.
         assert!(
             code.contains("with_fill"),
             "class fill should reach the RectStyle:\n{code}"
@@ -773,17 +711,13 @@ mod tests {
 
     #[test]
     fn multiple_classes_compose_layout_and_paint() {
-        // `box @a @b`: the first class is the base (its `style_*()` fn), the second's layout props are chained
-        // on top (so it overrides), and a later class's paint still reaches the RectStyle.
         let src = "[style]\n@a\n    align: center\n@b\n    align: start\n    fill: #ff0000\n[view]\nbox @a @b\n    text \"hi\"\n";
         let out = crate::transpile_source(src, "demo", None, None).unwrap();
         let code = &out.rust_code;
-        // First class as base fn, second class's align chained directly after it (later wins at runtime).
         assert!(
             code.contains("style_a().align_items(AlignItems::START)"),
             "second class's layout should compose on top of the first:\n{code}"
         );
-        // The later class's fill reaches the RectStyle (paint composes too).
         assert!(
             code.contains("with_fill"),
             "a class's fill should reach the RectStyle:\n{code}"
@@ -792,8 +726,7 @@ mod tests {
 
     #[test]
     fn classed_box_is_a_flex_container() {
-        // A `style_*()` class fn is `LayoutStyle::new()` = display:block, where align/justify are no-ops.
-        // A classed `box` must still get `.flex_column()` (like a plain box) so its children actually centre.
+        // A `style_*()` class fn is `LayoutStyle::new()` (display:block), so a classed `box` still needs `.flex_column()` for its children to centre.
         let src = "[style]\n@center\n    align: center\n    justify: center\n[view]\nbox @center width:100 height:60\n    text \"hi\"\n";
         let out = crate::transpile_source(src, "demo", None, None).unwrap();
         assert!(
@@ -805,7 +738,6 @@ mod tests {
 
     #[test]
     fn container_on_press_emits_click_handler() {
-        // A painted `box` (StyledContainer) and a plain `col` (Container) both wire `.on_press`.
         let src = "[logic]\nlet n = signal(0i32);\n[view]\ncol\n    box fill:primary on_press:(|| $n.update(|v| *v += 1))\n    col on_press:(|| $n.set(0))\n        text \"x\"\n";
         let out = crate::transpile_source(src, "demo", None, None).unwrap();
         let code = &out.rust_code;
@@ -813,19 +745,16 @@ mod tests {
             code.matches(".on_press(").count() >= 2,
             "both box and col should emit .on_press:\n{code}"
         );
-        // The signal is cloned into the closure so the outer handle stays usable elsewhere.
         assert!(
             code.contains("let n = n.clone();"),
             "on_press closure should clone the captured signal:\n{code}"
         );
-        // `$n` is rewritten to the bare handle inside the closure body.
         assert!(
             code.contains("n.update(") && code.contains("n.set(0)"),
             "$n should be substituted to the handle:\n{code}"
         );
     }
 
-    // A forwarded (non-closure) `on_press` wires `.maybe_on_press`, which only StyledContainer has, so an unpainted `row` forwarding it must upgrade.
     #[test]
     fn a_forwarded_on_press_on_a_plain_row_upgrades_to_styled_container() {
         let src = "[logic]\npub struct Props {\n    pub on_press: Box<dyn Fn()>,\n}\n\n[view]\nrow on_press:(props.on_press)\n    text \"x\"\n";
@@ -838,7 +767,7 @@ mod tests {
         );
     }
 
-    // `lazy` stacks its children like `col`. It used to get that from `set_display(true)` forcing `Display::Flex`; once that call started restoring the declared display, the tag had to declare it.
+    // Regression: `lazy` got its column from `set_display(true)` forcing `Display::Flex`; once that call began restoring the declared display, the tag had to declare it.
     #[test]
     fn lazy_declares_a_flex_column() {
         let src = "[logic]\nlet open = signal(false);\n[view]\nlazy when:$open\n    text \"a\"\n    text \"b\"\n";
@@ -874,7 +803,6 @@ mod tests {
 
     #[test]
     fn toggle_and_update_closures_pass_through() {
-        // `.toggle()` (a real RwSignal<bool> method) and an explicit `.update(...)` are left untouched.
         let src = "[logic]\nlet flag = signal(false);\nlet count = signal(0i32);\n[view]\ncol\n    button on_press:(|| $flag.toggle())\n    button on_press:(|| $count.update(|n| *n += 1))\n";
         let out = crate::transpile_source(src, "demo", None, None).unwrap();
         let code = &out.rust_code;
@@ -890,7 +818,6 @@ mod tests {
 
     #[test]
     fn quoted_escape_decodes_then_reemits() {
-        // `\"` in .rsx content decodes to a real quote, then re-emits as an escaped quote in the Rust literal.
         let src = "[logic]\n[view]\ntext \"say \\\"hi\\\"\"\n";
         let out = crate::transpile_source(src, "demo", None, None).unwrap();
         let code = &out.rust_code;
@@ -902,8 +829,6 @@ mod tests {
 
     #[test]
     fn paren_attr_form_captures_nested_and_coexists() {
-        // `transition(...)` and `on_press(...)` are paren-delimited, so a box can be animated AND clickable
-        // on one line in any order, and a closure with nested parens is captured whole.
         let src = "[logic]\nlet count = signal(0i32);\n[view]\nbox fill:primary transition(fill 200ms ease-out) on_press:(|| $count.update(|n| *n += 1))\n    text \"x\"\n";
         let out = crate::transpile_source(src, "demo", None, None).unwrap();
         let code = &out.rust_code;
@@ -921,7 +846,6 @@ mod tests {
         );
     }
 
-    // `overlay` builds an `Overlay` widget (a top-layer portal) and collects its children.
     #[test]
     fn overlay_builds_overlay_widget() {
         let src = "[view]\ncol\n    text \"behind\"\n    overlay align:center justify:center\n        text \"on top\"\n";
@@ -938,7 +862,6 @@ mod tests {
         );
     }
 
-    // A `box` with a `hover(...)` override wires `.hover_style(...)`.
     #[test]
     fn box_hover_emits_hover_style() {
         let src = "[view]\nbox fill:#101010 hover_style(fill:#f0f0f0 stroke:#ff0000) radius:10\n    text \"x\"\n";
@@ -950,7 +873,6 @@ mod tests {
         );
     }
 
-    // `on_drag` wires the drag gesture and (on a plain col) forces the StyledContainer upgrade.
     #[test]
     fn on_drag_wires_and_upgrades_container() {
         let src = "[logic]\nlet x = signal(0.0f32);\n[view]\ncol on_drag:(|px, _py| $x.set(px))\n    text \"t\"\n";
@@ -966,7 +888,6 @@ mod tests {
         );
     }
 
-    // A plain `col` gains a hover style, so it must upgrade to a StyledContainer (which has a background).
     #[test]
     fn plain_col_with_hover_upgrades_to_styled_container() {
         let src = "[view]\ncol hover_style(fill:#f0f0f0)\n    text \"x\"\n";
@@ -982,8 +903,6 @@ mod tests {
         );
     }
 
-    // A `box` with an `active_style(...)` override wires `.active_style(...)` — the pressed-state swap,
-    // symmetric with `hover_style`.
     #[test]
     fn box_active_style_emits_active_style() {
         let src = "[view]\nbox fill:#101010 active_style(fill:#303030) radius:10\n    text \"x\"\n";
@@ -995,7 +914,6 @@ mod tests {
         );
     }
 
-    // A plain `col` with only an `active_style` must still upgrade to a StyledContainer (needs a background).
     #[test]
     fn plain_col_with_active_style_upgrades_to_styled_container() {
         let src = "[view]\ncol active_style(fill:#303030)\n    text \"x\"\n";
@@ -1007,7 +925,6 @@ mod tests {
         );
     }
 
-    // A component whose view uses a `children` placeholder takes a `Slots` arg and drains the default slot.
     #[test]
     fn component_default_slot_takes_slots_arg() {
         let src = "[view]\nbox fill:#101010 pad:16\n    children\n";
@@ -1023,7 +940,6 @@ mod tests {
         );
     }
 
-    // Named + default slots drain their respective buckets.
     #[test]
     fn component_named_and_default_slots() {
         let src = "[view]\nbox pad:16\n    children name:\"header\"\n    children\n";
@@ -1039,7 +955,6 @@ mod tests {
         );
     }
 
-    // Calling a component with markup children builds a Slots value and passes it as the trailing arg.
     #[test]
     fn component_call_with_children_builds_slots() {
         let src = "[view]\ncard\n    text \"hi\"\n";
@@ -1055,7 +970,6 @@ mod tests {
         );
     }
 
-    // A child written with `slot:"name"` is routed to that named slot; the `slot` attr is not a prop.
     #[test]
     fn component_call_routes_named_slot() {
         let src = "[view]\npanel\n    text \"T\" slot:\"header\"\n    text \"B\"\n";
@@ -1071,7 +985,6 @@ mod tests {
         );
     }
 
-    // A bare flag prop becomes a bool `true`.
     #[test]
     fn component_bool_flag_prop() {
         let src = "[view]\ncard elevated\n    text \"x\"\n";
@@ -1083,7 +996,6 @@ mod tests {
         );
     }
 
-    // A lone `$signal` prop passes the cloned handle.
     #[test]
     fn component_signal_prop_clones_handle() {
         let src = "[logic]\nlet count = signal(0i32);\n[view]\ncard count:$count\n    text \"x\"\n";
@@ -1095,7 +1007,6 @@ mod tests {
         );
     }
 
-    // A closure prop is boxed, with its captured signal cloned and `$` sugar desugared.
     #[test]
     fn component_closure_prop_is_boxed() {
         let src = "[logic]\nlet count = signal(0i32);\n[view]\ncard on_tap:(|| $count += 1)\n    text \"x\"\n";
@@ -1111,8 +1022,6 @@ mod tests {
         );
     }
 
-    // A `$`-free closure prop on a component carries its source span (an expr marker) so LSP completion
-    // works inside it, exactly like inside an element's `on_press`.
     #[test]
     fn component_free_closure_prop_carries_source_span() {
         let src = "[view]\ncard on_tap:(|| toggle())\n    text \"x\"\n";
@@ -1131,7 +1040,6 @@ mod tests {
         );
     }
 
-    // Rich text: a weight keyword, a slant and an alignment become TextStyle builder calls.
     #[test]
     fn text_rich_weight_italic_align() {
         let src = "[view]\ntext \"Hi\" font_weight:bold font_style:italic text_align:center\n";
@@ -1151,7 +1059,6 @@ mod tests {
         );
     }
 
-    // Numeric weight and `text_align:right` map correctly; an absent slant emits no builder call.
     #[test]
     fn text_rich_numeric_weight_and_align_end() {
         let src = "[view]\ntext \"Hi\" font_weight:600 text_align:right\n";
@@ -1172,8 +1079,6 @@ mod tests {
         );
     }
 
-    // `lines:N` and the `ellipsis` flag are one decision, so they become one call. An `ellipsis` with no
-    // `lines:` emits nothing at all, where it used to emit a builder the clamp never reached.
     #[test]
     fn text_lines_and_ellipsis() {
         let src = "[view]\ntext \"Long copy here\" lines:2 ellipsis max_width:200\n";
@@ -1189,8 +1094,6 @@ mod tests {
         assert!(!code.contains("with_clamp"), "{code}");
     }
 
-    // `input` binds `value:$signal` (cloned), amends the text style the tree declared, forwards layout attrs,
-    // and wires an optional `on_submit`.
     #[test]
     fn input_binds_value_style_and_submit() {
         let src = "[logic]\nlet name = signal(String::new());\n[view]\ninput value:$name font_size:16 color:$theme.primary width:200 on_submit:(|| $name.set(String::new()))\n";
@@ -1212,8 +1115,6 @@ mod tests {
         assert!(code.contains(".on_submit("), "wires on_submit:\n{code}");
     }
 
-    // A `$`-source `for` with a `key` clause inside a container emits a transparent fragment (source read,
-    // key closure, item builder) that reconciles into the parent's node — no boxed `ReactiveList`.
     #[test]
     fn reactive_for_emits_reactive_list() {
         let src = "[logic]\nlet items = signal(vec![1i32, 2, 3]);\n[view]\ncol\n    for n in $items key *n\n        text \"x\"\n";
@@ -1239,7 +1140,6 @@ mod tests {
         assert!(code.contains("move |n|"), "item builder closure:\n{code}");
     }
 
-    // A reactive `for` without a `key` clause reconciles by position (keyless transparent fragment).
     #[test]
     fn reactive_for_without_key_uses_positional_reconciliation() {
         let src = "[view]\ncol\n    for n in $items\n        text \"x\"\n";
@@ -1256,9 +1156,6 @@ mod tests {
         );
     }
 
-    // The canonical bar case: a reactive `for` between static siblings inside a `row` is transparent — the
-    // host `row` collects slots (`from_slots` with its own `flex_row`), the statics become `ChildSlot::stat`,
-    // and the fragment is pushed between them, so its items lay out horizontally as real row siblings.
     #[test]
     fn reactive_for_in_row_is_transparent_between_static_siblings() {
         let src = "[logic]\nlet ws = signal(vec![1i32, 2]);\n[view]\nrow\n    text \"L\"\n    for w in $ws key *w\n        text \"x\"\n    text \"R\"\n";
@@ -1279,9 +1176,6 @@ mod tests {
         );
     }
 
-    // A reactive `for … gap:N` in a `row` stays transparent: it emits a gap-carrying fragment (spaced by a
-    // per-item margin, resolved against the host's axis at runtime), not a boxed `ReactiveList` that would
-    // impose its own column. The `row` still hosts slots and keeps its row axis, so the items flow horizontally.
     #[test]
     fn reactive_for_with_gap_in_row_is_transparent_gap_fragment() {
         let src = "[logic]\nlet ws = signal(vec![1i32, 2]);\n[view]\nrow\n    for w in $ws key *w gap:6\n        text \"x\"\n";
@@ -1302,7 +1196,6 @@ mod tests {
         );
     }
 
-    // A keyless reactive `for … gap:N` in a slot host uses the positional gap fragment.
     #[test]
     fn reactive_for_with_gap_keyless_uses_positional_gap_fragment() {
         let src = "[view]\nrow\n    for w in $ws gap:4\n        text \"x\"\n";
@@ -1315,7 +1208,6 @@ mod tests {
         );
     }
 
-    // A non-`$` `for` stays the one-time construction loop.
     #[test]
     fn static_for_stays_construction_loop() {
         let src = "[view]\ncol\n    for n in 0..3\n        text \"x\"\n";
@@ -1332,9 +1224,6 @@ mod tests {
         );
     }
 
-    // An `if` whose condition reads a signal (`$`) inside a container becomes a transparent fragment keyed
-    // on the bool, whose builder holds the then/else branches — the shown branch's nodes are siblings of the
-    // surrounding children, not wrapped in a boxed list.
     #[test]
     fn reactive_if_emits_reactive_list() {
         let src = "[logic]\nlet show = signal(true);\n[view]\ncol\n    if $show\n        text \"yes\"\n    else\n        text \"no\"\n";
@@ -1356,7 +1245,6 @@ mod tests {
         assert!(code.contains("if __cond"), "branch selector:\n{code}");
     }
 
-    // A plain (non-`$`) condition stays a one-shot construction `if`.
     #[test]
     fn static_if_stays_construction() {
         let src = "[view]\ncol\n    if some_flag\n        text \"x\"\n";
@@ -1373,10 +1261,7 @@ mod tests {
         );
     }
 
-    // A view that is exactly one static `if`/`if-else` returns its chosen branch directly, so the branch's
-    // element becomes the component root. An injected `Container::column` wrapper would trap a `row
-    // align:stretch` root at content height on the column's main axis, so it must not appear — the branch
-    // element is boxed straight as the return value.
+    // An injected `Container::column` wrapper would trap a `row align:stretch` root at content height.
     #[test]
     fn root_static_if_returns_branch_directly_without_wrapper() {
         let src =
@@ -1398,7 +1283,6 @@ mod tests {
         );
     }
 
-    // A reactive `for` whose body is a single widget yields it bare, not wrapped in a per-item flex-column that would collapse a stretch chip to its text height.
     #[test]
     fn reactive_for_single_child_item_is_not_wrapped() {
         let src = "[logic]\nlet items = signal(vec![1i32, 2]);\n[view]\nrow align:stretch\n    for n in $items key *n\n        box fill:primary\n            text \"x\"\n";
@@ -1415,7 +1299,6 @@ mod tests {
         );
     }
 
-    // Declarative transform attrs emit `.with_transform(box_transform(...))`; `scale` fills both axes.
     #[test]
     fn transform_attrs_emit_with_transform() {
         let src = "[view]\ncol\n    box fill:primary rotate:30 scale:1.2\n        text \"x\"\n";
@@ -1440,7 +1323,6 @@ mod tests {
         );
     }
 
-    // A transform upgrades a plain col/row to a StyledContainer (only it carries `with_transform`).
     #[test]
     fn transform_promotes_plain_container() {
         let src = "[view]\ncol\n    col rotate:5\n        text \"x\"\n";
@@ -1457,7 +1339,6 @@ mod tests {
         );
     }
 
-    // A box with no transform attrs emits no transform call.
     #[test]
     fn no_transform_no_call() {
         let src = "[view]\ncol\n    box fill:primary\n        text \"x\"\n";
@@ -1470,10 +1351,8 @@ mod tests {
         );
     }
 
-    // `on_hover`/`on_key` attributes emit the matching container methods, with signal sugar applied.
     #[test]
     fn event_callbacks_emit_on_hover_and_on_key() {
-        // Paren form for both, since `key:value` consumes to end of line (only the last attr can use `:`).
         let src = "[logic]\nlet hot = signal(false);\nlet n = signal(0i32);\n[view]\ncol\n    box fill:primary on_hover:(|h| $hot.set(h)) on_key:(|_k| $n += 1)\n        text \"x\"\n";
         let code = crate::transpile_source(src, "demo", None, None)
             .unwrap()
@@ -1482,7 +1361,6 @@ mod tests {
         assert!(code.contains(".on_key("), "emits on_key:\n{code}");
     }
 
-    // `on_pointer_move` carries the pointer position, so a viewport can answer *where* rather than *whether*.
     #[test]
     fn on_pointer_move_emits_the_container_method() {
         let src = "[logic]\nlet at = signal((0.0f32, 0.0f32));\n[view]\ncol\n    box on_pointer_move:(|x, y| $at.set((x, y)))\n        text \"x\"\n";
@@ -1499,8 +1377,7 @@ mod tests {
         );
     }
 
-    /// `drag_threshold` is how far a press must travel before it is a drag rather than a click on what sits
-    /// under it — the knob a viewport needs and a slider must not have.
+    /// `drag_threshold` is how far a press must travel before it is a drag rather than a click on what sits under it — the knob a viewport needs and a slider must not have.
     #[test]
     fn drag_threshold_emits_the_slop_distance() {
         let src =
@@ -1514,7 +1391,6 @@ mod tests {
         );
     }
 
-    // `drag_button` widens which buttons may start the box's drag; the primary one always can.
     #[test]
     fn drag_button_emits_the_extra_buttons() {
         let src = "[view]\ncol\n    box drag_button:secondary,auxiliary on_drag:(|_x, _y| ())\n        text \"x\"\n";
@@ -1529,7 +1405,6 @@ mod tests {
         );
     }
 
-    // An event callback upgrades a plain col/row to a StyledContainer (only it carries the callbacks).
     #[test]
     fn on_hover_promotes_plain_container() {
         let src = "[view]\ncol\n    col on_hover:(|_h| ())\n        text \"x\"\n";
@@ -1543,7 +1418,6 @@ mod tests {
         assert!(code.contains(".on_hover("), "carries the callback:\n{code}");
     }
 
-    // `heading` resolves as a component call carrying its `text` (its title style lives in `ui-components`).
     #[test]
     fn heading_resolves_as_widget_component() {
         let src = "[view]\ncol\n    heading text:\"Title\"\n";
@@ -1558,12 +1432,8 @@ mod tests {
         );
     }
 
-    // A `$signal` button colour must be cloned into the reactive colour closure (color_expr drops the `$`,
-    // so the clone scan needs the raw fill value) — otherwise reusing the signal elsewhere fails to compile.
     #[test]
-    /// A `$signal` on a reactive prop hands over the *handle*, and the prop's own type turns it into a
-    /// reading. The emitter used to build that closure itself, which is why it needed a table saying which
-    /// props were reactive; `From<RwSignal<T>> for Reactive<T>` is where the `.get()` lives now.
+    /// A `$signal` on a reactive prop hands over the *handle*, and the prop's own type turns it into a reading. The emitter used to build that closure itself, which is why it needed a table saying which props were reactive; `From<RwSignal<T>> for Reactive<T>` is where the `.get()` lives now.
     fn btn_signal_color_reaches_the_prop_as_a_handle() {
         let src = "[logic]\nlet c = signal(Color::WHITE);\n[view]\nbutton label:\"x\" fill:$c\n";
         let code = crate::transpile_source(src, "demo", None, None)
@@ -1579,9 +1449,6 @@ mod tests {
         );
     }
 
-    // A box `fill(expr)` computes a reactive Color from state: `$signal` reads become reactive `.get()`
-    // calls, the signal is cloned into the paint closure (so the outer handle stays usable), and a loop var
-    // and helper call are emitted verbatim. This is the state-driven paint a stateful chip/pill needs.
     #[test]
     fn box_fill_computed_expression_is_reactive() {
         let src = "[logic]\nlet snap = signal(0i32);\nlet ids = signal(vec![1i32]);\n[view]\nrow\n    for id in $ids key id\n        box fill:(chip_fill($snap, id)) radius:6\n            text \"x\"\n";
@@ -1598,7 +1465,6 @@ mod tests {
         );
     }
 
-    // A text `color(expr)` is reactive the same way: `$signal` → reactive read, cloned into the style closure.
     #[test]
     fn text_color_computed_expression_is_reactive() {
         let src =
@@ -1616,9 +1482,7 @@ mod tests {
         );
     }
 
-    /// D2's bug: a layout value that reads state through a *call* was frozen, because the reactivity test
-    /// was `contains('$')` and a call carries no sigil. `styled_by` is what re-resolves a `LayoutStyle`, and
-    /// the runtime tracks whatever the closure reads — so the closure is all the emitter has to produce.
+    /// D2's bug: a layout value that reads state through a *call* was frozen, because the reactivity test was `contains('$')` and a call carries no sigil. `styled_by` is what re-resolves a `LayoutStyle`, and the runtime tracks whatever the closure reads — so the closure is all the emitter has to produce.
     #[test]
     fn a_computed_layout_value_is_re_resolved_even_without_a_sigil() {
         let src = "[logic]\nlet dock = signal(0.0f32);\nfn measured() -> f32 { 12.0 }\n[view]\ncol gap:measured() pad:8\n    text \"x\"\n";
@@ -1630,8 +1494,6 @@ mod tests {
             out.rust_code
         );
 
-        // The literal check that survives is an optimisation and nothing more: a node whose every layout
-        // value is a literal keeps no effect at all.
         let flat = crate::transpile_source(
             "[view]\ncol gap:8 pad:12 align:center\n    text \"x\"\n",
             "demo",
@@ -1643,9 +1505,7 @@ mod tests {
         assert!(!flat.contains(".styled_by("), "{flat}");
     }
 
-    /// A closure that runs again cannot move what it names, and a computed value names whatever the author
-    /// had in scope — including `props`, which the generated scope binds and `#[derive(Props)]` makes
-    /// cloneable for exactly this.
+    /// A closure that runs again cannot move what it names, and a computed value names whatever the author had in scope — including `props`, which the generated scope binds and `#[derive(Props)]` makes cloneable for exactly this.
     #[test]
     fn a_re_resolving_style_clones_what_it_names_instead_of_moving_it() {
         let src =
@@ -1660,8 +1520,7 @@ mod tests {
         );
     }
 
-    /// The parens a value needs to hold a space are the markup's delimiters, not part of the expression:
-    /// emitted, they warn `unused_parens` in code the author cannot edit.
+    /// The parens a value needs to hold a space are the markup's delimiters, not part of the expression: emitted, they warn `unused_parens` in code the author cannot edit.
     #[test]
     fn a_values_own_parens_do_not_reach_the_output() {
         let src = "[view]\ncol gap:(space::lg() * 2.0) pad:(::ui::scale::md())\n    box fill:(tint(on))\n";
@@ -1673,8 +1532,7 @@ mod tests {
         assert!(out.contains("with_fill(tint(on))"), "{out}");
     }
 
-    /// A theme read is a `$` read: the view binds `theme` as a handle, so the same sugar that reads a signal
-    /// reads the theme, and it re-reads inside the paint closure instead of freezing at construction.
+    /// A theme read is a `$` read: the view binds `theme` as a handle, so the same sugar that reads a signal reads the theme, and it re-reads inside the paint closure instead of freezing at construction.
     #[test]
     fn a_theme_read_is_a_dollar_read_like_any_other() {
         let src = "[view]\nbox fill:$theme.primary\n    text \"x\"\n";
@@ -1691,16 +1549,12 @@ mod tests {
         );
     }
 
-    // Every name in `builtin_tags()` must have a real dispatch arm in `emit_element`; a tag missing one
-    // silently falls through to `emit_component_call` and is emitted as a bare `tag(ctx…)?` component
-    // call (see `no_registry_keeps_flat_call`). Guards the registry table and the dispatch `match`
-    // against drift (e.g. `column`, which was listed as a builtin yet handled only under `col`).
+    // A tag with no dispatch arm falls through to `emit_component_call` and is emitted as a bare component call, so this guards the registry table and the dispatch `match` against drift.
     #[test]
     fn every_builtin_tag_has_a_dispatch_arm() {
         for &(tag, _ctor) in crate::registry::builtin_tags() {
             let src = format!("[view]\n{tag}\n");
-            // A real emit arm may still reject a bare instance (missing required attr, etc.); that is not
-            // a fall-through, since `emit_component_call` returns unconditionally and never errors.
+            // A real emit arm may still reject a bare instance; that is not a fall-through, since `emit_component_call` returns unconditionally.
             let Ok(out) = crate::transpile_source(&src, "demo", None, None) else {
                 continue;
             };
@@ -1712,8 +1566,7 @@ mod tests {
         }
     }
 
-    /// The language used to be strict about keys and silent about values: a misspelled `align` laid out
-    /// unaligned, with the attribute simply skipped and nothing to point at.
+    /// The language used to be strict about keys and silent about values: a misspelled `align` laid out unaligned, with the attribute simply skipped and nothing to point at.
     #[test]
     fn a_misspelled_keyword_stops_the_build_the_way_a_misspelled_key_does() {
         let src = "[view]\ncol align:centre\n    text \"x\"\n";
@@ -1725,8 +1578,7 @@ mod tests {
         );
     }
 
-    /// `img fit:covr` used to be *replaced by a default* rather than skipped, so the picture came out fitted
-    /// the other way with nothing anywhere saying so.
+    /// `img fit:covr` used to be *replaced by a default* rather than skipped, so the picture came out fitted the other way with nothing anywhere saying so.
     #[test]
     fn a_media_keyword_is_rejected_instead_of_defaulted() {
         let src = "[view]\nimg src:\"a.png\" fit:covr\n";
@@ -1738,8 +1590,7 @@ mod tests {
         );
     }
 
-    /// A `text`'s `align` is a different property from a container's `align` of the same name, so it takes a
-    /// different closed set: `justify` is a paragraph, and a typo under either must not pass as the other.
+    /// A `text`'s `align` is a different property from a container's `align` of the same name, so it takes a different closed set: `justify` is a paragraph, and a typo under either must not pass as the other.
     #[test]
     fn align_is_checked_against_the_set_its_own_tag_has() {
         let paragraph = "[view]\ntext \"x\" text_align:justify\n";
@@ -1756,8 +1607,7 @@ mod tests {
         assert!(out.rust_code.contains("is not a value of `align`"));
     }
 
-    /// Six keys that meant nothing apart become one value, and the three that sat among the colour keys stop
-    /// reading as properties a box has.
+    /// Six keys that meant nothing apart become one value, and the three that sat among the colour keys stop reading as properties a box has.
     #[test]
     fn a_gradient_is_a_value_of_fill_and_not_six_keys_of_its_own() {
         let code = crate::transpile_source(
@@ -1792,8 +1642,7 @@ mod tests {
         );
     }
 
-    /// A gradient's *shape* is the one thing about it this crate can judge — its stops are Rust expressions,
-    /// reported by rustc against the attribute's own line.
+    /// A gradient's *shape* is the one thing about it this crate can judge — its stops are Rust expressions, reported by rustc against the attribute's own line.
     #[test]
     fn a_gradient_that_is_not_one_is_reported_on_the_fill_that_holds_it() {
         let code = crate::transpile_source(
@@ -1807,8 +1656,7 @@ mod tests {
         assert!(code.contains("is not a gradient"), "{code}");
     }
 
-    /// A synonym is cost with nothing bought, and every one of these had a shorter or plainer spelling that
-    /// stays. They are errors rather than silences, which is what makes deleting them safe.
+    /// A synonym is cost with nothing bought, and every one of these had a shorter or plainer spelling that stays. They are errors rather than silences, which is what makes deleting them safe.
     #[test]
     fn a_second_spelling_of_a_value_is_not_a_value() {
         for (src, expected) in [
@@ -1837,8 +1685,7 @@ mod tests {
         }
     }
 
-    /// `white` and `black` stop being colours, so the name falls through to what a bare ident means — a
-    /// `[style]` constant — instead of quietly painting one.
+    /// `white` and `black` stop being colours, so the name falls through to what a bare ident means — a `[style]` constant — instead of quietly painting one.
     #[test]
     fn a_named_colour_is_only_transparent_now() {
         let code = crate::transpile_source("[view]\ntext \"x\" color:white\n", "demo", None, None)
@@ -1887,8 +1734,7 @@ mod tests {
         }
     }
 
-    /// `@heading { font_size: 22 }` used to compile and do nothing: a class reached a container's paint and a
-    /// container's layout, and a `text` never looked at its classes at all.
+    /// `@heading { font_size: 22 }` used to compile and do nothing: a class reached a container's paint and a container's layout, and a `text` never looked at its classes at all.
     #[test]
     fn a_class_carries_text_properties_to_a_text() {
         let src = "[style]\n@heading\n    font_size: 22\n    color: #ff0000\n\n[view]\ntext \"x\" @heading\n";
@@ -1926,8 +1772,7 @@ mod tests {
         );
     }
 
-    /// The line this whole document exists for: a container that draws no text says what the text under it
-    /// looks like, and `font_size:` on a `col` used to be a `compile_error!`.
+    /// The line this whole document exists for: a container that draws no text says what the text under it looks like, and `font_size:` on a `col` used to be a `compile_error!`.
     #[test]
     fn a_container_declares_the_text_below_it() {
         let src = "[view]\ncol font_size:11 color:#ff0000 raster:pixel\n    text \"x\"\n";
@@ -1959,8 +1804,7 @@ mod tests {
         );
     }
 
-    /// A container naming nothing inheritable declares nothing, so the map the cascade walks stays empty for
-    /// every tree that does not use the feature.
+    /// A container naming nothing inheritable declares nothing, so the map the cascade walks stays empty for every tree that does not use the feature.
     #[test]
     fn a_container_that_says_nothing_declares_nothing() {
         let src = "[view]\ncol gap:8\n    text \"x\"\n";
@@ -1968,8 +1812,7 @@ mod tests {
         assert!(!out.rust_code.contains(".declaring("), "{}", out.rust_code);
     }
 
-    /// The names the transpiler cannot enumerate — a `[logic]` binding, a `const`, a props field — still
-    /// reach rustc, which names them against this `.rsx` line through the source map.
+    /// The names the transpiler cannot enumerate — a `[logic]` binding, a `const`, a props field — still reach rustc, which names them against this `.rsx` line through the source map.
     #[test]
     fn a_name_the_author_has_in_scope_is_still_carried_through() {
         let src =
@@ -1984,8 +1827,7 @@ mod tests {
         assert!(out.rust_code.contains(".padding_all(props.pad)"));
     }
 
-    /// B1: the family was a process-wide global, so a `text` could not name one at all — the whole reason
-    /// "one font here and another in the window around it" was inexpressible.
+    /// B1: the family was a process-wide global, so a `text` could not name one at all — the whole reason "one font here and another in the window around it" was inexpressible.
     #[test]
     fn a_text_can_name_the_face_it_shapes_in() {
         let src = "[view]\ntext \"x\" font_family:\"LanaPixel\"\n";
@@ -1997,8 +1839,7 @@ mod tests {
         );
     }
 
-    /// The families an application has are its own vocabulary, so an unquoted value is carried through the
-    /// way a `theme.` read or a `[logic]` binding is everywhere else.
+    /// The families an application has are its own vocabulary, so an unquoted value is carried through the way a `theme.` read or a `[logic]` binding is everywhere else.
     #[test]
     fn an_unquoted_family_is_the_authors_own_expression() {
         let src = "[logic]\nlet face = \"LanaPixel\";\n[view]\ntext \"x\" font_family:face\n";
@@ -2010,8 +1851,7 @@ mod tests {
         );
     }
 
-    /// A `text` naming no family must emit no family call at all, so it keeps shaping in the configured
-    /// sans-serif face exactly as it did before the axis existed.
+    /// A `text` naming no family must emit no family call at all, so it keeps shaping in the configured sans-serif face exactly as it did before the axis existed.
     #[test]
     fn a_text_naming_no_family_is_untouched() {
         let src = "[view]\ntext \"x\" font_size:12\n";
@@ -2019,9 +1859,7 @@ mod tests {
         assert!(!out.rust_code.contains("with_font_family"));
     }
 
-    /// A `Canvas` is a `ui-core` primitive that had no tag, so the only way to place one was to build it in
-    /// `[logic]` and splice the binding through `widget` — which is also why a canvas could never sit inside
-    /// anything that rebuilds. Named as a tag, it is constructed where it is placed.
+    /// A `Canvas` is a `ui-core` primitive that had no tag, so the only way to place one was to build it in `[logic]` and splice the binding through `widget` — which is also why a canvas could never sit inside anything that rebuilds. Named as a tag, it is constructed where it is placed.
     #[test]
     fn canvas_tag_builds_the_primitive_where_it_is_placed() {
         let src = "[logic]\nlet paint = |rect: Rect| RenderNode::group([]);\n\n[view]\ncol\n    canvas paint:paint width:196 height:56\n";
@@ -2047,10 +1885,7 @@ mod tests {
 
 /// The expression inside a redundant paren pair, or `None` when the parens carry meaning.
 ///
-/// `key(expr)` is how the markup delimits a value that would otherwise run to end of line, so the parens
-/// are punctuation rather than grammar and emitting them warns `unused_parens` in code the author cannot
-/// edit. A top-level comma makes them a tuple, which is grammar, and stays — except in a closure, whose
-/// parameter list has a comma of its own.
+/// `key(expr)` is how the markup delimits a value that would otherwise run to end of line, so the parens are punctuation rather than grammar and emitting them warns `unused_parens` in code the author cannot edit. A top-level comma makes them a tuple, which is grammar, and stays — except in a closure, whose parameter list has a comma of its own.
 pub(crate) fn redundant_parens(expr: &str) -> Option<&str> {
     let inner = expr.trim().strip_prefix('(')?.strip_suffix(')')?;
     let is_closure = inner.starts_with('|') || inner.trim_start().starts_with("move |");

@@ -1,3 +1,5 @@
+//! The rect pipeline: rounded, bordered and shadowed boxes drawn by an SDF in one instanced pass.
+
 use geometry_core::Rect;
 use renderer_core::RectStyle;
 use wgpu::Device;
@@ -20,9 +22,9 @@ pub(crate) struct RectInstance {
     pub grad_positions: [f32; 4],
     pub grad_colors: [[f32; 4]; 4],
     pub stroke_color: [f32; 4],
-    // `[top, right, bottom, left]`, resolved from `RectStyle::border` — it fills exactly the slot the single width plus its three padding floats used to take.
+    // `[top, right, bottom, left]`, filling exactly the slot the single width plus its three padding floats took.
     pub stroke_widths: [f32; 4],
-    // Always-present shadow fields using analytical GPU/SDF fast-path, zeroed when no shadow; unlike text/path shadows which use CPU capture+blur+composite
+    // Analytical SDF fast path, zeroed when there is no shadow — unlike text and path shadows, which capture, blur and composite on the CPU.
     pub shadow_color: [f32; 4],
     pub shadow_offset: [f32; 2],
     pub shadow_blur: f32,
@@ -30,7 +32,7 @@ pub(crate) struct RectInstance {
     // transform (offset 240)
     pub transform: [f32; 6],
     pub _pad_t: [f32; 2],
-    // Stroke paint, mirroring the fill block above. An element can carry a gradient fill AND a gradient stroke, so the stroke cannot borrow the fill's slots; `stroke_color` above still carries a solid one.
+    // An element can carry a gradient fill and a gradient stroke, so the stroke cannot borrow the fill's slots.
     pub stroke_type: u32,
     pub _pad_st: [u32; 3],
     pub stroke_grad_p0: [f32; 2],
@@ -84,7 +86,7 @@ pub(crate) fn prepare_rect(rect: Rect, style: &RectStyle, matrix: [f32; 6]) -> R
         .map(|fill| encode_fill_style::<4>(fill, matrix))
         .unwrap_or_else(super::EncodedFill::none);
 
-    // Encoded the same way as the fill, so a gradient stroke keeps its whole ramp instead of collapsing to its first stop. For a solid stroke the encoder puts the colour in `fill_color`, which is what `stroke_color` uploads; for a gradient it leaves that transparent and fills the gradient slots.
+    // Encoded like the fill, so a gradient stroke keeps its whole ramp instead of collapsing to its first stop.
     let (stroke, stroke_widths) = match style.painted_border() {
         Some((paint, widths)) => (encode_fill_style::<4>(&paint, matrix), widths),
         None => (super::EncodedFill::none(), [0.0; 4]),
@@ -101,7 +103,7 @@ pub(crate) fn prepare_rect(rect: Rect, style: &RectStyle, matrix: [f32; 6]) -> R
         None => ([0.0f32; 4], [0.0f32; 2], 0.0f32, 0.0f32),
     };
 
-    // The rect.wgsl SDF degenerates past radius = min(w, h) / 2, so clamp there to match the software renderer and keep an oversized ("pill") radius identical on both backends.
+    // The SDF degenerates past radius = min(w, h) / 2, so clamping there keeps an oversized radius identical on both backends.
     let max_r = (rect.width.min(rect.height) * 0.5).max(0.0);
     RectInstance {
         rect: [rect.x, rect.y, rect.width, rect.height],

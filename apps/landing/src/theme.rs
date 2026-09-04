@@ -1,8 +1,8 @@
+//! The landing page's theme.
+
 use telar::{Color, ThemeTokens, use_theme};
 
-// A one-page site with no controls to speak of: the metrics and the status hues stay the catalogue's, said
-// here rather than left to silence. `surface`/`surface_alt`/`border`/`success` now reach the catalogue, which
-// the hand-written impl never forwarded despite the fields existing.
+// A one-page site with no controls to speak of, so the metrics and status hues stay the catalogue's. The hand-written impl never forwarded `surface`/`surface_alt`/`border`/`success` despite the fields existing.
 #[derive(Clone, ThemeTokens)]
 #[theme(default(
     radius,
@@ -17,6 +17,7 @@ use telar::{Color, ThemeTokens, use_theme};
     highlight_med,
     highlight_high
 ))]
+/// The landing page's tokens.
 pub struct LandingTheme {
     pub background: Color,
     pub surface: Color,
@@ -49,6 +50,7 @@ impl LandingTheme {
     }
 }
 
+/// The active theme, read reactively.
 pub fn theme() -> LandingTheme {
     use_theme::<LandingTheme>()
 }

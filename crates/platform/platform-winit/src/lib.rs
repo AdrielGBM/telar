@@ -1,3 +1,5 @@
+//! The winit pieces the desktop and Android backends share: the window wrapper and the event mapping.
+
 pub mod map;
 pub mod window;
 

@@ -1,3 +1,5 @@
+//! [`Keyframes`]: a sequence of legs travelled in order, optionally looping or ping-ponging.
+
 use std::cell::RefCell;
 use std::rc::Rc;
 use std::time::Duration;
@@ -17,8 +19,7 @@ pub enum Repeat {
     PingPong,
 }
 
-// One leg of the sequence: interpolate `start` -> `end` over `duration` under `easing`.
-// `hold()` emits a step with start == end, so its easing is inert by construction.
+// One leg of the sequence: interpolate `start` -> `end` over `duration` under `easing`. `hold()` emits a step with start == end, so its easing is inert by construction.
 struct Step<T: Lerp> {
     start: T,
     end: T,
@@ -33,8 +34,7 @@ enum Direction {
     Backward,
 }
 
-// Find the step spanning timeline position `t` (assumed clamped to `[0, total]`), returning its
-// index and its cumulative `[start, end)` bounds.
+// Find the step spanning timeline position `t` (assumed clamped to `[0, total]`), returning its index and its cumulative `[start, end)` bounds.
 fn locate<T: Lerp>(steps: &[Step<T>], t: f32) -> (usize, f32, f32) {
     let mut acc = 0.0;
     let last_idx = steps.len() - 1;
@@ -48,8 +48,7 @@ fn locate<T: Lerp>(steps: &[Step<T>], t: f32) -> (usize, f32, f32) {
     unreachable!("steps is never empty: KeyframesBuilder::start() guarantees at least one step")
 }
 
-// Pure function of timeline position: the same curve is reused for forward and backward travel,
-// so PingPong "mirrors" a step's easing simply by re-evaluating it as `t` decreases (see Design note on Keyframes).
+// Pure function of timeline position: the same curve is reused for forward and backward travel, so PingPong "mirrors" a step's easing simply by re-evaluating it as `t` decreases (see Design note on Keyframes).
 fn value_at<T: Lerp>(steps: &[Step<T>], t: f32) -> T {
     let (idx, start_cum, end_cum) = locate(steps, t);
     let step = &steps[idx];
@@ -114,8 +113,7 @@ impl<T: Lerp + 'static> KeyframesInner<T> {
     fn advance(&mut self, dt: f32) {
         match self.repeat {
             Repeat::Once => self.elapsed_secs = (self.elapsed_secs + dt).min(self.total_duration),
-            // Wrapping back to 0 replays the first step's start value, which is a deliberate discrete
-            // jump if it differs from the last step's end (CSS-style restart, not a smoothed loop).
+            // Wrapping back to 0 replays the first step's start value, which is a deliberate discrete jump if it differs from the last step's end (CSS-style restart, not a smoothed loop).
             Repeat::Loop => self.elapsed_secs = (self.elapsed_secs + dt) % self.total_duration,
             Repeat::PingPong => {
                 let mut remaining = dt;
@@ -157,9 +155,7 @@ impl<T: Lerp + 'static> KeyframesInner<T> {
         self.current.clone()
     }
 
-    // scale == 0.0 (reduced-motion "instant"): Once jumps to the sequence end; Loop/PingPong jump to
-    // the end of whichever step is in flight (simplest choice that stays coherent with `Animated`'s
-    // snap-to-target without collapsing an indefinite repeat to a single frozen frame).
+    // Reduced-motion "instant": `Once` jumps to the sequence end, `Loop`/`PingPong` to the end of whichever step is in flight — coherent with `Animated`'s snap-to-target without freezing an indefinite repeat.
     fn snap_scale_zero(&mut self) -> T {
         if matches!(self.repeat, Repeat::Once) {
             return self.finish_once();
@@ -192,8 +188,7 @@ impl<T: Lerp + 'static> Tickable for RefCell<KeyframesInner<T>> {
     }
 }
 
-/// A signal-backed, autonomous multi-step animation: it plays a fixed sequence rather than chasing a
-/// live target, driven by the same central ticker as [`crate::Animated`].
+/// A signal-backed, autonomous multi-step animation: it plays a fixed sequence rather than chasing a live target, driven by the same central ticker as [`crate::Animated`].
 pub struct Keyframes<T: Lerp + 'static> {
     inner: Rc<RefCell<KeyframesInner<T>>>,
     id: u64,
@@ -387,22 +382,18 @@ mod tests {
         tick(base); // establishes t0, no movement yet
         assert_eq!(kf.get(), 0.0);
 
-        // Mid first step: value should match the eased (not linear) progress.
         tick(base + Duration::from_millis(100));
         let expected = 0.0f32.lerp(&1.0, Easing::EaseInOut.apply(0.5));
         assert!((kf.get() - expected).abs() < 1e-4, "{}", kf.get());
 
-        // Into the second (linear) step: 200ms + 50ms = 50% through a 100ms step from 1.0 -> 2.0.
         tick(base + Duration::from_millis(250));
         assert!((kf.get() - 1.5).abs() < 1e-4, "{}", kf.get());
 
-        // Inside the hold: value stays at the previous end (2.0).
         tick(base + Duration::from_millis(320));
         assert!((kf.get() - 2.0).abs() < 1e-4, "{}", kf.get());
         assert!(has_active());
         assert!(!kf.is_finished());
 
-        // Past the total duration (350ms): settles at the final value and deregisters.
         tick(base + Duration::from_millis(400));
         assert!((kf.get() - 2.0).abs() < 1e-6);
         assert!(kf.is_finished());
@@ -412,12 +403,10 @@ mod tests {
     #[test]
     fn loop_wraps_with_a_discrete_jump_and_stays_active() {
         let base = fresh();
-        // Single 100ms linear leg 0 -> 1; looping restarts at 0, a deliberate discrete jump from 1.
         let kf = Keyframes::new(0.0f32)
             .then(1.0, Duration::from_millis(100), Easing::Linear)
             .start(Repeat::Loop);
         tick(base);
-        // 2.5 cycles later we should be 50% into the (2.5 mod 1 = 0.5) third cycle.
         tick(base + Duration::from_millis(250));
         assert!((kf.get() - 0.5).abs() < 1e-4, "{}", kf.get());
         assert!(has_active(), "Loop must stay registered indefinitely");
@@ -430,10 +419,8 @@ mod tests {
             .then(1.0, Duration::from_millis(100), Easing::Linear)
             .start(Repeat::PingPong);
         tick(base);
-        // Exactly at the far end: turnaround point.
         tick(base + Duration::from_millis(100));
         assert!((kf.get() - 1.0).abs() < 1e-4, "{}", kf.get());
-        // 20ms back into the reverse pass: value must have decreased from the peak.
         tick(base + Duration::from_millis(120));
         assert!(kf.get() < 1.0, "did not decrease: {}", kf.get());
         assert!((kf.get() - 0.8).abs() < 1e-4, "{}", kf.get());
@@ -500,7 +487,6 @@ mod tests {
         assert!((kf.get() - 0.5).abs() < 1e-4);
         assert!(has_active());
 
-        // The tween settles at 100ms but the Loop keeps the registry non-empty.
         tick(base + Duration::from_millis(100));
         assert!((anim.get() - 1.0).abs() < 1e-6);
         assert!(anim.is_settled());

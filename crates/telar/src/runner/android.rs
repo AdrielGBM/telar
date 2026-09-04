@@ -7,10 +7,7 @@ use crate::app_config::AppConfig;
 use crate::dev_plugin::DevPlugin;
 use services_core::AppPathsProvider;
 
-// App processes do not inherit the adb shell environment, so debug flags that are env vars on
-// desktop (TELAR_PERF, TELAR_HW_DAMAGE, …) are unreachable on Android. Bridge them from `debug.telar.<k>`
-// system properties (settable without root via `adb shell setprop debug.telar.perf 1`) into the
-// env vars the engine reads. Must run before any OnceLock reads them or the render thread spawns.
+// App processes do not inherit the adb shell environment, so the engine's env-var debug flags are unreachable. Bridged from `debug.telar.<k>` system properties, which need no root. Must run before any `OnceLock` reads them or the render thread spawns.
 #[cfg(feature = "runtime")]
 fn bridge_debug_props_to_env() {
     for (prop, var) in [
@@ -30,6 +27,7 @@ fn bridge_debug_props_to_env() {
 }
 
 #[cfg(feature = "runtime")]
+/// Starts an application on the Android backend.
 pub fn run_android_app_with_name<A: App>(
     config: AppConfig,
     app: A,
@@ -45,9 +43,7 @@ pub fn run_android_app_with_name<A: App>(
 
 /// Builds the Android platform and paths provider, then hands over to the one shared boot sequence.
 ///
-/// The sequence itself — load prefs, resolve the backend, resolve the window, build the handler, run — used
-/// to be written out again here, `run_with_platform` being gated off this target for no reason: it is generic
-/// over `Platform`, `AndroidPlatform` implements it, and it imports nothing desktop-only.
+/// The sequence itself — load prefs, resolve the backend, resolve the window, build the handler, run — used to be written out again here, `run_with_platform` being gated off this target for no reason: it is generic over `Platform`, `AndroidPlatform` implements it, and it imports nothing desktop-only.
 #[cfg(feature = "runtime")]
 fn run_android_with_plugin<A: App, D: DevPlugin>(
     config: AppConfig,

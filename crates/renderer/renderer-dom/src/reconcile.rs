@@ -1,18 +1,10 @@
 //! Turning one frame of draw commands into the document it describes.
 //!
-//! The reconcile is keyed by [`ElementId`](renderer_core::ElementId), which is the layout node the widget was
-//! built with: it lives as long as the widget, so a box that only moved is *moved*, and only a box that is
-//! genuinely new is created. Nothing here diffs strings against the DOM — the last style written is kept
-//! beside the node, because reading a property back out of the browser is the expensive direction.
+//! The reconcile is keyed by [`ElementId`](renderer_core::ElementId), which is the layout node the widget was built with: it lives as long as the widget, so a box that only moved is *moved*, and only a box that is genuinely new is created. Nothing here diffs strings against the DOM — the last style written is kept beside the node, because reading a property back out of the browser is the expensive direction.
 //!
-//! A box is a box, but not everything a box paints is one. Three things arrive inside an element: its own
-//! background, which is CSS; child boxes, which the browser lays out; and paint that is neither — a caret, a
-//! selection band, a scrollbar. The last of those become positioned children, in the order they were drawn,
-//! so what covered what on a canvas covers the same thing here.
+//! A box is a box, but not everything a box paints is one. Three things arrive inside an element: its own background, which is CSS; child boxes, which the browser lays out; and paint that is neither — a caret, a selection band, a scrollbar. The last of those become positioned children, in the order they were drawn, so what covered what on a canvas covers the same thing here.
 //!
-//! And a frame paints at its own level too, outside every element: an application's shell fills the panel its
-//! rail stands on, and dims the page behind a drawer. That becomes a box inside the host, placed as it is
-//! drawn — see `paint_at_root`.
+//! And a frame paints at its own level too, outside every element: an application's shell fills the panel its rail stands on, and dims the page behind a drawer. That becomes a box inside the host, placed as it is drawn — see `paint_at_root`.
 
 use geometry_core::Rect;
 use renderer_core::{Color, DrawCommand, Element, Role};
@@ -31,9 +23,7 @@ const RESET_ID: &str = "telar-reset";
 
 /// Where a box was told to be, beside where the browser put it.
 ///
-/// Written only when the page asks for it, because the whole claim of this backend is that the two agree —
-/// and a claim nothing checks is a claim that quietly stops being true. Off by default: it is an attribute
-/// written per box per frame, which is exactly the cost this reconcile exists to avoid.
+/// Written only when the page asks for it, because the whole claim of this backend is that the two agree — and a claim nothing checks is a claim that quietly stops being true. Off by default: it is an attribute written per box per frame, which is exactly the cost this reconcile exists to avoid.
 const AUDIT_ATTRIBUTE: &str = "data-telar-rect";
 const AUDIT_QUERY: &str = "telar-audit";
 
@@ -43,25 +33,13 @@ fn audit_requested() -> bool {
         .is_some_and(|search| search.contains(AUDIT_QUERY))
 }
 
-/// What a document brings to an element that Telar never asked for: a button's border and its own font, a
-/// heading's margins, a link's colour and underline. A widget's style is the whole of what its box looks
-/// like, and the browser's idea of it is the difference between what layout computed and what the page shows
-/// — a button's 2px frame made every row of a list four pixels taller than the rect hit-testing reads.
+/// What a document brings to an element that Telar never asked for: a button's border and its own font, a heading's margins, a link's colour and underline. A widget's style is the whole of what its box looks like, and the browser's idea of it is the difference between what layout computed and what the page shows — a button's 2px frame made every row of a list four pixels taller than the rect hit-testing reads.
 ///
-/// One rule rather than a declaration per box per frame, and the base font is the one the measurer assumes,
-/// so a paragraph is drawn in the face it was measured in.
+/// One rule rather than a declaration per box per frame, and the base font is the one the measurer assumes, so a paragraph is drawn in the face it was measured in.
 ///
-/// `color-scheme` is what dresses everything the browser draws itself and Telar cannot reach — the selection
-/// band, an autofill panel, the overlay scrollbar a nested document keeps. Declared here it follows the
-/// system, which is what an app that named no background of its own is doing too; one that named a colour
-/// overrides it from that colour (see `paint_host`). `color` goes with it because the rule
-/// below makes every box inherit one: without it a box that draws no text of its own inherited the page's
-/// black, under a dark theme as much as a light one.
+/// `color-scheme` is what dresses everything the browser draws itself and Telar cannot reach — the selection band, an autofill panel, the overlay scrollbar a nested document keeps. Declared here it follows the system, which is what an app that named no background of its own is doing too; one that named a colour overrides it from that colour (see `paint_host`). `color` goes with it because the rule below makes every box inherit one: without it a box that draws no text of its own inherited the page's black, under a dark theme as much as a light one.
 ///
-/// The scrollbars go too, and not for looks: a native one takes width out of the box it is in, layout never
-/// reserved it, and the sidebar came out fifteen pixels narrower than every rect hit-testing reads — with a
-/// horizontal scrollbar underneath for the fifteen pixels that no longer fitted. The scrolling stays the
-/// browser's; only the bar is Telar's, as it is on every other target.
+/// The scrollbars go too, and not for looks: a native one takes width out of the box it is in, layout never reserved it, and the sidebar came out fifteen pixels narrower than every rect hit-testing reads — with a horizontal scrollbar underneath for the fifteen pixels that no longer fitted. The scrolling stays the browser's; only the bar is Telar's, as it is on every other target.
 const RESET: &str = "[data-telar]{font:400 16px sans-serif;color-scheme:light dark;color:CanvasText}\
 [data-telar] *{margin:0;border:0;padding:0;background:none;font:inherit;color:inherit;\
 text-align:inherit;text-decoration:none;box-sizing:border-box;appearance:none;scrollbar-width:none;\
@@ -110,24 +88,17 @@ struct Described {
     hidden: bool,
     checked: Option<bool>,
     disabled: bool,
-    /// Part of the record even though it writes no attribute: a box that has just become the focused one is a
-    /// box this has to act on, and comparing without it made the acting unreachable.
+    /// Part of the record even though it writes no attribute: a box that has just become the focused one is a box this has to act on, and comparing without it made the acting unreachable.
     focused: bool,
     control: bool,
 }
 
 /// Text a drag across this box must not select, because the drag means something else there.
 ///
-/// A document starts a selection under any drag that begins on selectable content, and sweeping one out of a
-/// margin and across a page is exactly what a person expects — so this is not for boxes at large. It is for
-/// the two kinds where a drag is already spoken for: a control, which is what a browser's own stylesheet says
-/// this about (`<button>`, `<input>`); and paint that is not a box at all — a scrollbar's thumb, a caret, a
-/// panel a shell fills behind its rail — which has nothing to select in the first place. Dragging the bar of
-/// a scroll area used to sweep a selection across everything it scrolled past.
+/// A document starts a selection under any drag that begins on selectable content, and sweeping one out of a margin and across a page is exactly what a person expects — so this is not for boxes at large. It is for the two kinds where a drag is already spoken for: a control, which is what a browser's own stylesheet says this about (`<button>`, `<input>`); and paint that is not a box at all — a scrollbar's thumb, a caret, a panel a shell fills behind its rail — which has nothing to select in the first place. Dragging the bar of a scroll area used to sweep a selection across everything it scrolled past.
 const UNSELECTABLE: &str = "-webkit-user-select:none;user-select:none;";
 
-/// Writes an attribute, or takes it off where there is nothing to say. Removing matters as much as setting:
-/// a box that stops being a link keeps sending the reader somewhere until the `href` goes.
+/// Writes an attribute, or takes it off where there is nothing to say. Removing matters as much as setting: a box that stops being a link keeps sending the reader somewhere until the `href` goes.
 fn set_or_clear(node: &web_sys::Element, name: &str, value: Option<&str>) {
     match value {
         Some(value) => {
@@ -174,8 +145,7 @@ struct Open {
     /// How many child boxes have been put in place, and therefore where the next one belongs.
     placed: u32,
     pieces: Vec<Painted>,
-    /// A transform whose subject is not yet known: the box itself if its own paint turns up inside, and the
-    /// boxes it wraps otherwise.
+    /// A transform whose subject is not yet known: the box itself if its own paint turns up inside, and the boxes it wraps otherwise.
     moved: Option<[f32; 6]>,
     /// Whether this box scrolls its own content, which is what makes its clip an overflow rather than a cut.
     scrolls: bool,
@@ -188,10 +158,7 @@ impl Open {
             box_rect: Rect::new(0.0, 0.0, 0.0, 0.0),
             drawing: None,
             style: String::new(),
-            // The host takes no paint of its own: the page chose that element's size and the application
-            // named its background in `clear_color`, which `paint_host` has already written there. What the
-            // frame draws at this level becomes a box inside it instead — see `paint_at_root`, which is
-            // reached before this flag is ever read.
+            // The host takes no paint of its own: the page chose that element's size and the application named its background in `clear_color`, which `paint_host` has already written there. What the frame draws at this level becomes a box inside it instead.
             painted: true,
             placed: 0,
             pieces: Vec::new(),
@@ -205,6 +172,7 @@ impl Open {
     }
 }
 
+/// Turns one frame's command list into the document, reusing the elements the last frame left in place.
 pub struct Reconciler {
     document: web_sys::Document,
     host: web_sys::HtmlElement,
@@ -259,8 +227,7 @@ impl Reconciler {
         self.seen.clear();
         self.open.clear();
         self.root_painted = 0;
-        // The host is the outermost frame, so a top-level element is placed in it by the same code that
-        // places every other child.
+        // The host is the outermost frame, so a top-level element is placed in it by the same code that places every other child.
         self.open.push(Open::root());
 
         for command in commands {
@@ -276,8 +243,7 @@ impl Reconciler {
                 extra.node.remove();
             }
         }
-        // Close the host frame: anything left beyond what this frame placed is gone — except the one editable
-        // element the browser types into, which is a child of the host and is put back rather than swept.
+        // Anything left beyond what this frame placed is gone — except the one editable element the browser types into, which is a child of the host and is put back rather than swept.
         if let Some(root) = self.open.pop() {
             let entry = u32::from(self.entry.is_some());
             truncate(self.host.as_ref(), root.placed + entry);
@@ -291,22 +257,13 @@ impl Reconciler {
 
     /// The surface's own background, as a property of the element the app fills.
     ///
-    /// Every other backend is handed this as the colour to clear to before anything is drawn. A document has
-    /// no clear, and nothing else in the frame stands for it: an application states its background once, in
-    /// `clear_color`, and its root box paints panels and text over a surface it never fills itself. Dropped,
-    /// that surface was whatever the page happened to be — white, for the generated one — so a dark theme
-    /// arrived as its own dark panels on a white page, and switching themes recoloured everything except the
-    /// thing behind it.
+    /// Every other backend is handed this as the colour to clear to before anything is drawn. A document has no clear, and nothing else in the frame stands for it: an application states its background once, in `clear_color`, and its root box paints panels and text over a surface it never fills itself. Dropped, that surface was whatever the page happened to be — white, for the generated one — so a dark theme arrived as its own dark panels on a white page, and switching themes recoloured everything except the thing behind it.
     ///
-    /// Set property by property rather than through the `style` attribute: the host also carries the
-    /// positioning the reconcile needs and whatever cursor the app last asked for, and writing the attribute
-    /// whole would take both off.
+    /// Set property by property rather than through the `style` attribute: the host also carries the positioning the reconcile needs and whatever cursor the app last asked for, and writing the attribute whole would take both off.
     ///
-    /// The scheme is told from the colour, not from the media query, so an application whose theme was picked
-    /// by hand rather than followed from the system still gets a browser dressed to match it.
+    /// The scheme is told from the colour, not from the media query, so an application whose theme was picked by hand rather than followed from the system still gets a browser dressed to match it.
     fn paint_host(&mut self, clear: Option<Color>) {
-        // A fully transparent clear is an application asking to see the page through it, which is the same
-        // thing as naming no background at all.
+        // A fully transparent clear is an application asking to see the page through it, which is the same thing as naming no background at all.
         let clear = clear.filter(|color| color.a > 0.0);
         let declared = clear.map(paint::color).unwrap_or_default();
         if self.background == declared {
@@ -328,17 +285,9 @@ impl Reconciler {
 
     /// A box for paint the frame carries at its own top level.
     ///
-    /// A widget may draw where there is no element for it to be the background of: an application's shell
-    /// paints the panel its rail stands on before it draws the rail, and dims the page behind a drawer. The
-    /// host cannot take it — the page chose that element's size and the application named its background in
-    /// `clear_color` — so it becomes a box of its own inside it. Dropped, as it was, the rail stood on the
-    /// page's own colour and every pill in it that had been invisible against its panel was suddenly a
-    /// shape.
+    /// A widget may draw where there is no element for it to be the background of: an application's shell paints the panel its rail stands on before it draws the rail, and dims the page behind a drawer. The host cannot take it — the page chose that element's size and the application named its background in `clear_color` — so it becomes a box of its own inside it. Dropped, as it was, the rail stood on the page's own colour and every pill in it that had been invisible against its panel was suddenly a shape.
     ///
-    /// Put in place as it is drawn, and not collected the way paint *inside* an element is. There the pieces
-    /// go after the boxes because that is what they are — a scroll area's bar is drawn over the content it
-    /// scrolls. Here the order is the frame's own: a panel drawn before the rail belongs under it, and
-    /// holding it back would have laid it over the thing it stands behind.
+    /// Put in place as it is drawn, and not collected the way paint *inside* an element is. There the pieces go after the boxes because that is what they are — a scroll area's bar is drawn over the content it scrolls. Here the order is the frame's own: a panel drawn before the rail belongs under it, and holding it back would have laid it over the thing it stands behind.
     fn paint_at_root(&mut self, rect: Rect, painted: &str, text: &str) {
         let index = self.root_painted;
         self.root_painted += 1;
@@ -358,8 +307,7 @@ impl Reconciler {
         paint::declare(&mut style, "top", &paint::px(rect.y));
         paint::declare(&mut style, "width", &paint::px(rect.width.max(0.0)));
         paint::declare(&mut style, "height", &paint::px(rect.height.max(0.0)));
-        // This answers no pointer: the boxes do, and a pane of paint across them would swallow every press
-        // meant for what is underneath.
+        // This answers no pointer: the boxes do, and a pane of paint across them would swallow every press meant for what is underneath.
         paint::declare(&mut style, "pointer-events", "none");
         style.push_str(UNSELECTABLE);
         if let Some(matrix) = self.open.last().and_then(|root| root.moved) {
@@ -387,8 +335,7 @@ impl Reconciler {
 
     /// Everything that is not an element boundary: what the open box paints.
     fn paint(&mut self, command: &DrawCommand) {
-        // The frame's own paint, before the borrow the rest of this needs: it is placed as it is drawn, and
-        // placing reaches the host.
+        // Before the borrow the rest of this needs: the frame's paint is placed as it is drawn, and placing reaches the host.
         if self
             .open
             .last()
@@ -424,13 +371,10 @@ impl Reconciler {
                 if open.painted {
                     return;
                 }
-                // The box's own background is the one that *is* the box. Anything else is paint the widget
-                // put inside it — a scroll area's bar, a field's selection — and folding that into the
-                // background would spread one small mark over the whole element.
+                // The box's own background is the one that is the box. Anything else is paint the widget put inside it, and folding that into the background would spread one small mark over the whole element.
                 if is_own_box(*rect, open.box_rect) {
                     open.painted = true;
-                    // A matrix this box's own paint sits inside is the box's own transform, and now it is
-                    // known to be: the boxes it also wraps are moved by moving the box.
+                    // A matrix this box's own paint sits inside is the box's own transform, and now it is known to be: the boxes it also wraps are moved by moving the box.
                     if let Some(matrix) = open.moved.take() {
                         let at = open.box_rect;
                         paint::declare(&mut open.style, "transform-origin", "0 0");
@@ -468,9 +412,7 @@ impl Reconciler {
                 }
             }
             DrawCommand::PushClip { radius, .. } => {
-                // A scroll area clips the same way, and the difference is the whole point: `hidden` cuts what
-                // does not fit, `auto` lets the compositor move it — and with it find-in-page, the keyboard,
-                // `scrollIntoView` and every anchor, none of which a transform can give back.
+                // A scroll area clips the same way, and the difference is the whole point: `hidden` cuts what does not fit, `auto` lets the compositor move it — and with it find-in-page, the keyboard, `scrollIntoView` and every anchor, none of which a transform can give back.
                 let overflow = if open.scrolls { "auto" } else { "hidden" };
                 paint::declare(&mut open.style, "overflow", overflow);
                 if !radius.is_zero() {
@@ -481,16 +423,13 @@ impl Reconciler {
                     );
                 }
             }
-            // A matrix moves whatever it wraps, and which that is only becomes clear inside it. A widget that
-            // transforms itself draws its own box in there; a scroll area wraps its content and nothing
-            // else, and a transform on the viewport would carry the viewport away with it.
+            // A matrix moves whatever it wraps, and which that is only becomes clear inside it. A widget that transforms itself draws its own box in there; a scroll area wraps its content and nothing else.
             DrawCommand::PushMatrix { matrix } => {
                 if *matrix != IDENTITY {
                     open.moved = Some(*matrix);
                 }
             }
-            // Artwork and bitmaps reach a document as an SVG, which is what a drawing element is; one that
-            // arrives in a box means a widget drew geometry without saying its box was a drawing.
+            // Artwork reaches a document as an SVG, so one that arrives in a box means a widget drew geometry without saying its box was a drawing.
             DrawCommand::Image { .. } | DrawCommand::Path { .. } | DrawCommand::Line { .. } => {
                 tracing::debug!("a box painted geometry it did not declare itself a drawing for");
             }
@@ -507,18 +446,14 @@ impl Reconciler {
         let drawing = matches!(element.semantics.role, Role::Drawing);
         let mut style = String::new();
         if drawing {
-            // An `<svg>` is inline by default, which reserves a descender's worth of space under it that the
-            // box it is standing in never asked for. The declarations follow, so a box that wants another
-            // display still gets it.
+            // An `<svg>` is inline by default, reserving a descender's worth of space under it that the box it stands in never asked for. The declarations follow, so a box that wants another display still gets it.
             paint::declare(&mut style, "display", "block");
         }
         if element.semantics.role.is_control() {
             style.push_str(UNSELECTABLE);
         }
         style.push_str(&element.layout);
-        // A box whose parent is the host is a layout root: the application computed it and placed it itself,
-        // so there is no parent expressing where it goes and the declarations alone would stack them. This
-        // is the one place the *computed* rect is used instead of what the box asked for.
+        // A box whose parent is the host is a layout root: the application computed and placed it itself, so there is no parent expressing where it goes and the declarations alone would stack them. The one place the computed rect is used instead of what the box asked for.
         if self.open.len() == 1 {
             let rect = element.rect;
             paint::declare(&mut style, "position", "absolute");
@@ -528,18 +463,15 @@ impl Reconciler {
             paint::declare(&mut style, "height", &paint::px(rect.height));
         }
         if scrolls {
-            // The host declines touch gestures so a drag inside the app does not pan the page; a box that
-            // scrolls has to take them back, or a finger moves nothing at all.
+            // The host declines touch gestures so a drag inside the app does not pan the page; a box that scrolls has to take them back, or a finger moves nothing at all.
             paint::declare(&mut style, "touch-action", "pan-x pan-y");
-            // What is scrolled to the end is the end. Without this the page behind takes over and the app
-            // slides away under the finger.
+            // What is scrolled to the end is the end. Without this the page behind takes over and the app slides away under the finger.
             paint::declare(&mut style, "overscroll-behavior", "contain");
         }
         if element.semantics.click_through {
             paint::declare(&mut style, "pointer-events", "none");
         }
-        // A transform its parent is still holding is one that wraps this box rather than the parent: a
-        // scroll area moves its content, and moving the viewport instead takes the panel off the page.
+        // A transform its parent is still holding wraps this box rather than the parent: a scroll area moves its content, and moving the viewport instead takes the panel off the page.
         if let Some(matrix) = self.open.last().and_then(|parent| parent.moved) {
             let at = element.rect;
             paint::declare(&mut style, "transform-origin", "0 0");
@@ -570,13 +502,9 @@ impl Reconciler {
 
     /// Keeps the keyboard inside the app.
     ///
-    /// Key listeners sit on the host, and an event only reaches them by bubbling *up* to it — so focus that
-    /// escapes to `<body>` takes the whole keyboard with it, silently. It escapes on its own: an element
-    /// this reconcile replaces takes its focus down with it, and the browser hands it to the document. When
-    /// no box claimed the keyboard this frame and nothing inside the app holds it, the host takes it back.
+    /// Key listeners sit on the host, and an event only reaches them by bubbling *up* to it — so focus that escapes to `<body>` takes the whole keyboard with it, silently. It escapes on its own: an element this reconcile replaces takes its focus down with it, and the browser hands it to the document. When no box claimed the keyboard this frame and nothing inside the app holds it, the host takes it back.
     fn keep_the_keyboard(&mut self) {
-        // A field is typed into through the entry, and the entry is placed against what the browser did with
-        // the field — which is only knowable now, with everything in the document.
+        // A field is typed into through the entry, placed against what the browser did with the field — only knowable now, with everything in the document.
         if let Some((node, multiline)) = self.entry_target.take() {
             let host = self.host.get_bounding_client_rect();
             let box_rect = node.get_bounding_client_rect();
@@ -609,8 +537,7 @@ impl Reconciler {
 
     /// Says what the box is, in whatever way the element it became does not already say it.
     ///
-    /// A `<nav>` needs no `role="navigation"` — it *is* one, and duplicating it is noise a reader has to
-    /// step over. Only the roles with no element of their own carry the attribute.
+    /// A `<nav>` needs no `role="navigation"` — it *is* one, and duplicating it is noise a reader has to step over. Only the roles with no element of their own carry the attribute.
     fn describe(&mut self, node: &web_sys::Element, element: &Element, tag: &'static str) {
         let semantics = &element.semantics;
         let role = (tag == "div" || tag == "svg")
@@ -630,23 +557,16 @@ impl Reconciler {
             focused,
             control: semantics.role.is_control(),
         };
-        // Every frame, before the attributes: what is written can be skipped when nothing changed, but where
-        // the keyboard is has to be answered each time — a frame that skipped it read as a frame where no box
-        // held the keyboard, and the entry was taken out from under the field being typed into.
+        // Every frame, before the attributes: what is written can be skipped when nothing changed, but where the keyboard is has to be answered each time — a frame that skipped it read as one where no box held the keyboard, and took the entry out from under the field being typed into.
         if focused {
             self.claimed_focus = true;
-            // A field is typed into through the entry, not through its own box: what a browser accepts
-            // characters for is an editable element, and the box a person sees is not one. Measured at the
-            // end of the frame, because this runs as the box is opened and a detached element measures as
-            // nothing.
+            // A browser accepts characters for an editable element, and the box a person sees is not one. Measured at the end of the frame, because this runs as the box is opened and a detached element measures as nothing.
             match semantics.role {
                 Role::TextInput | Role::MultilineTextInput => {
                     self.entry_target =
                         Some((node.clone(), semantics.role == Role::MultilineTextInput));
                 }
-                // The document has a focus of its own, and two that disagree is one interface the keyboard
-                // and the screen reader read differently. Only ever moved *to* what Telar focused: blurring
-                // here would fight the element about to take it.
+                // The document has a focus of its own, and two that disagree is one interface the keyboard and the screen reader read differently. Only ever moved to what Telar focused: blurring here would fight the element about to take it.
                 _ => {
                     if let Some(html) = node.dyn_ref::<web_sys::HtmlElement>() {
                         let active = self.document.active_element();
@@ -675,9 +595,7 @@ impl Reconciler {
                 .map(|on| if on { "true" } else { "false" }),
         );
         set_or_clear(node, "aria-disabled", described.disabled.then_some("true"));
-        // A `div` cannot hold focus at all without this, and every control that is not a `<button>` is one.
-        // `-1` rather than `0`: Telar owns the tab order, and a second one the browser kept would walk a
-        // person through the interface in a different order than the app believes they are in.
+        // A `div` cannot hold focus at all without this, and every control that is not a `<button>` is one. `-1` rather than `0`: Telar owns the tab order, and a second one the browser kept would walk a person through the interface in a different order than the app believes.
         set_or_clear(node, "tabindex", described.control.then_some("-1"));
         live.described = described;
     }
@@ -686,10 +604,7 @@ impl Reconciler {
         let Some(mut open) = self.open.pop() else {
             return;
         };
-        // A single run of text is the box's own label, not something inside it: it becomes the element's
-        // text and its style, which is what lets it be selected, found and read as part of the document.
-        // Unless the text needs the background to itself — glyphs filled with a gradient are a background
-        // clipped to their shape, and the box's own fill would be clipped away with it.
+        // A single run of text is the box's own label, not something inside it, so it becomes the element's text and style — which is what lets it be selected, found and read as part of the document. Unless the text needs the background to itself: glyphs filled with a gradient are a background clipped to their shape.
         let inline_text = open.placed == 0
             && open.pieces.len() == 1
             && matches!(
@@ -702,9 +617,7 @@ impl Reconciler {
         if inline_text && let Painted::Text { style, .. } = &open.pieces[0] {
             open.style.push_str(style);
         } else if !open.pieces.is_empty() && !open.style.contains("position:") {
-            // Paint placed inside a box is placed against *that* box. Without this it is placed against
-            // whatever the nearest positioned ancestor happens to be — the host, for most boxes — and a
-            // field's own text went to the corner of the page.
+            // Paint placed inside a box is placed against that box. Without this it is placed against whatever the nearest positioned ancestor happens to be, and a field's own text went to the corner of the page.
             paint::declare(&mut open.style, "position", "relative");
         }
 
@@ -737,8 +650,7 @@ impl Reconciler {
                 live.pieces.clear();
             }
         } else {
-            // Paint the box carries that is not a box goes after the boxes, which is the order it was drawn
-            // in and therefore what it covers: a scroll area's bars are drawn over the content they scroll.
+            // Paint the box carries that is not a box goes after the boxes, the order it was drawn in and therefore what it covers: a scroll area's bars are drawn over the content they scroll.
             live.text.clear();
             fill_pieces(&document, live, open.placed, &open.pieces);
         }
@@ -747,14 +659,12 @@ impl Reconciler {
         self.place(node);
     }
 
-    /// Puts `node` where the frame says it belongs inside the element being assembled, moving it only when
-    /// it is not there already.
+    /// Puts `node` where the frame says it belongs inside the element being assembled, moving it only when it is not there already.
     fn place(&mut self, node: web_sys::Element) {
         let Some(parent_frame) = self.open.last_mut() else {
             return;
         };
-        // A drawing owns everything inside it as markup; a box placed in one would be written over by the
-        // next frame that changes the picture.
+        // A drawing owns everything inside it as markup, so a box placed in one would be written over by the next frame that changes the picture.
         if parent_frame.drawing.is_some() {
             return;
         }
@@ -778,8 +688,7 @@ impl Reconciler {
         let _ = parent.insert_before(node.as_ref(), current.as_ref());
     }
 
-    /// The element for `id`, created if this is the first frame that mentions it — or recreated if what it
-    /// means changed, since a role is a tag and a tag cannot be edited.
+    /// The element for `id`, created if this is the first frame that mentions it — or recreated if what it means changed, since a role is a tag and a tag cannot be edited.
     fn element_for(&mut self, id: u64, tag: &'static str, scrolls: bool) -> web_sys::Element {
         if let Some(live) = self.live.get(&id)
             && live.tag == tag
@@ -787,16 +696,14 @@ impl Reconciler {
             return live.node.clone();
         }
         let Some(node) = create(&self.document, tag) else {
-            // Only reachable if the document refuses a tag this crate chose, which would be a bug here
-            // rather than something an application can act on.
+            // Only reachable if the document refuses a tag this crate chose, which would be a bug here rather than something an application can act on.
             tracing::error!("could not create a <{tag}>");
             return self.host.clone().into();
         };
         if let Some(previous) = self.live.remove(&id) {
             previous.node.remove();
         }
-        // A box that scrolls itself has to say where it ended up, or hit-testing and every anchored overlay
-        // keep reading an offset that stopped being true the moment the compositor moved it.
+        // A box that scrolls itself has to say where it ended up, or hit-testing and every anchored overlay keep reading an offset that stopped being true the moment the compositor moved it.
         let scrolls = scrolls.then(|| watch_scroll(&node, id)).flatten();
         self.live.insert(
             id,
@@ -832,8 +739,7 @@ impl Reconciler {
 
 const IDENTITY: [f32; 6] = [1.0, 0.0, 0.0, 1.0, 0.0, 0.0];
 
-/// Whether a painted rect is the box it was painted in, in either of the two ways a widget can say so: a
-/// box that draws its own frame knows where it is, and a leaf that draws inside itself starts at its corner.
+/// Whether a painted rect is the box it was painted in, in either of the two ways a widget can say so: a box that draws its own frame knows where it is, and a leaf that draws inside itself starts at its corner.
 fn is_own_box(rect: Rect, box_rect: Rect) -> bool {
     let same = |a: f32, b: f32| (a - b).abs() < 0.01;
     same(rect.width, box_rect.width)
@@ -843,8 +749,7 @@ fn is_own_box(rect: Rect, box_rect: Rect) -> bool {
 }
 
 fn create(document: &web_sys::Document, tag: &'static str) -> Option<web_sys::Element> {
-    // An `svg` made as an HTML element is an unknown tag that renders nothing: what makes it a drawing is
-    // the namespace, not the name.
+    // An `svg` made as an HTML element is an unknown tag that renders nothing: what makes it a drawing is the namespace, not the name.
     if tag == "svg" {
         return document.create_element_ns(Some(SVG_NS), tag).ok();
     }
@@ -944,10 +849,7 @@ fn truncate(parent: &web_sys::Node, keep: u32) {
 
 /// The element a role *is*.
 ///
-/// A `div` is not a role that failed: it is one the document has no element for, and
-/// [`aria_role`] then says in an attribute what the tag could not. Preferring the element where there is one
-/// is not decoration — an element carries the meaning to a reader, to a search index and to a stylesheet,
-/// where an attribute reaches only the first.
+/// A `div` is not a role that failed: it is one the document has no element for, and [`aria_role`] then says in an attribute what the tag could not. Preferring the element where there is one is not decoration — an element carries the meaning to a reader, to a search index and to a stylesheet, where an attribute reaches only the first.
 fn tag_of(role: &Role) -> &'static str {
     match role {
         Role::Banner => "header",
@@ -976,18 +878,15 @@ fn tag_of(role: &Role) -> &'static str {
 
 /// The `role` attribute a box needs because the element it became does not carry its meaning.
 ///
-/// `None` where the role *is* the element, and where there is nothing worth announcing: a plain group is a
-/// `div`, and `role="group"` on every box in the tree is a reader reading out the scaffolding.
+/// `None` where the role *is* the element, and where there is nothing worth announcing: a plain group is a `div`, and `role="group"` on every box in the tree is a reader reading out the scaffolding.
 fn aria_role(role: Role) -> Option<&'static str> {
     match role {
         Role::Group => None,
         // A picture with a name; without one it is hidden instead, which `describe` decides.
         Role::Drawing => Some("img"),
-        // A scroll area is a region a reader can be told about, but `scrollarea` is not an ARIA role and a
-        // browser would ignore it.
+        // A scroll area is a region a reader can be told about, but `scrollarea` is not an ARIA role and a browser would ignore it.
         Role::ScrollArea => None,
-        // `ul` and `li` are a pair with a content model — a `ul` may hold only `li` — and nothing here can
-        // promise an author marked both. The ARIA roles are announced the same and are valid anywhere.
+        // `ul` and `li` are a pair with a content model and nothing here can promise an author marked both. The ARIA roles are announced the same and are valid anywhere.
         Role::List => Some("list"),
         Role::ListItem => Some("listitem"),
         other => Some(other.as_str()),
@@ -996,25 +895,16 @@ fn aria_role(role: Role) -> Option<&'static str> {
 
 /// Listens for the scroll a box performs on its own, and reports where it ended up.
 ///
-/// The offset is read back rather than accumulated from deltas: the compositor may have applied several
-/// between two of these, and a rubber-band at the edge undoes part of what it applied. Where it *is* is the
-/// only thing that is true.
-/// Puts a box's own scroll where the widget is asking for it.
+/// The offset is read back rather than accumulated from deltas: the compositor may have applied several between two of these, and a rubber-band at the edge undoes part of what it applied. Where it *is* is the only thing that is true. Puts a box's own scroll where the widget is asking for it.
 ///
-/// The offset travels the other way on almost every frame — the compositor scrolls, and `watch_scroll`
-/// reports where the content ended up. This is the other direction, and without it a widget had no way to
-/// move a box the compositor is holding: the scrollbar could not be dragged with a mouse, and a page
-/// navigated to opened wherever the last one had been left.
+/// The offset travels the other way on almost every frame — the compositor scrolls, and `watch_scroll` reports where the content ended up. This is the other direction, and without it a widget had no way to move a box the compositor is holding: the scrollbar could not be dragged with a mouse, and a page navigated to opened wherever the last one had been left.
 ///
-/// Only where the widget asks, and only for the one frame it asks in. Written every frame it would fight the
-/// scroll it is reporting — a fling is an offset the widget learns of a frame late, and answering with that
-/// stale value stops it dead.
+/// Only where the widget asks, and only for the one frame it asks in. Written every frame it would fight the scroll it is reporting — a fling is an offset the widget learns of a frame late, and answering with that stale value stops it dead.
 fn settle_scroll(node: &web_sys::Element, element: &Element) {
     let Some((x, y)) = element.scroll_to else {
         return;
     };
-    // Compared before writing: an assignment that changes nothing still costs a layout flush, and this runs
-    // while the frame is being built.
+    // Compared before writing: an assignment that changes nothing still costs a layout flush, and this runs while the frame is being built.
     if (node.scroll_left() as f32 - x).abs() >= 0.5 {
         node.set_scroll_left(x.round() as i32);
     }
@@ -1032,8 +922,7 @@ fn watch_scroll(node: &web_sys::Element, id: u64) -> Option<Closure<dyn FnMut(we
             y: target.scroll_top() as f32,
         });
     });
-    // Passive: this only reports, and saying so lets the browser scroll without waiting to hear whether the
-    // listener wanted to prevent it — which is the whole reason a compositor scroll stays smooth.
+    // Passive: this only reports, and saying so lets the browser scroll without waiting to hear whether the listener wanted to prevent it — which is the whole reason a compositor scroll stays smooth.
     let options = web_sys::AddEventListenerOptions::new();
     options.set_passive(true);
     node.add_event_listener_with_callback_and_add_event_listener_options(

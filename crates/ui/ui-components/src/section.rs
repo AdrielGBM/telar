@@ -1,3 +1,5 @@
+//! [`section`]: a titled block that groups the content nested inside it.
+
 use layout_core::{LayoutError, LayoutStyle};
 use reactive_core::Reactive;
 use telar_macros::Props;
@@ -6,14 +8,14 @@ use ui_core::{Children, Container, LayoutItem, box_item};
 use crate::heading::{HeadingProps, heading};
 use crate::shared;
 
-/// A titled column: a `heading` above its slot children in a small-gap `flex_column`. High-level sugar;
-/// lives in `ui-components`, not the kernel.
+/// A titled column: a `heading` above its slot children in a small-gap `flex_column`. High-level sugar; lives in `ui-components`, not the kernel.
 #[derive(Props)]
 pub struct SectionProps {
     #[props(into, default)]
     pub title: Reactive<String>,
 }
 
+/// A titled block grouping the content nested inside it.
 pub fn section(
     props: SectionProps,
     children: Children,

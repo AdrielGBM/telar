@@ -1,3 +1,5 @@
+//! Document lifecycle: reparsing on every edit, mirroring the generated Rust, and publishing diagnostics.
+
 use std::path::PathBuf;
 use std::sync::atomic::Ordering;
 
@@ -14,7 +16,7 @@ impl Backend {
     pub(crate) async fn reparse_and_diagnose(&self, uri: Uri, text: String) -> Vec<Diagnostic> {
         let revision = self.revision.fetch_add(1, Ordering::Relaxed) + 1;
         let file_path = crate::uri::to_path(&uri);
-        // Hold the store lock only for the parse + native diagnostics + build-file sync, then release it before the (slower) rust-analyzer query so concurrent completion/hover reads aren't blocked.
+        // Held only for the parse and native diagnostics, then released before the slower rust-analyzer query, so concurrent completion reads are not blocked.
         let (semantic, source, theme) = {
             let mut store = self.store.write().await;
             let parse_diagnostics = store.reparse(uri.clone(), text);
@@ -27,7 +29,7 @@ impl Backend {
             let project = file_path.as_deref().and_then(ProjectInfo::discover);
             let catalog_view = project.as_ref().and_then(ProjectInfo::catalog_view);
             let semantic = semantic_diagnostics(&parsed.document, catalog_view.as_ref());
-            // Mirror the live buffer to its generated `.rs` so the workspace rust-analyzer analyzes the in-flight text — this is what makes completion/hover/definition live instead of one `cargo check` behind. Same output as the `app!` macro produces at compile time.
+            // Mirrors the live buffer to its generated `.rs`, so rust-analyzer analyses the in-flight text and completion is live rather than one `cargo check` behind.
             let theme = project.as_ref().and_then(|p| p.theme_type.clone());
             if let Some(rsx_path) = file_path.as_deref() {
                 crate::build_sync::sync_build_file(rsx_path, &parsed.source, theme.as_deref());
@@ -35,13 +37,13 @@ impl Backend {
             (semantic, parsed.source.clone(), theme)
         };
 
-        // Keep the workspace `.rsx` index current with the live buffer so `workspace/symbol` and component references see in-flight edits (no-op until the index is first built).
+        // So `workspace/symbol` and component references see in-flight edits. A no-op until the index is built.
         if let Some(rsx_path) = file_path.as_deref() {
             self.update_index_file(rsx_path.to_path_buf(), source.clone());
         }
 
         let native: Vec<Diagnostic> = semantic.into_iter().map(Into::into).collect();
-        // Overlay the generated Rust into the embedded analyzer and re-publish native+rust merged from a detached task: `full_diagnostics` can be slow, and notifications are awaited in order on the read loop (see server.rs), so blocking here would stall completion. Native diagnostics are returned now for the immediate publish; the task republishes when the analyzer is ready, and skips (leaving native-only published) while it is still loading.
+        // From a detached task, because `full_diagnostics` can be slow and notifications are awaited in order on the read loop. Native diagnostics publish immediately; the task republishes once the analyzer is ready, and skips while it is still loading.
         if let Some(rsx_path) = file_path {
             self.spawn_rust_diagnostics(uri, rsx_path, source, theme, native.clone(), revision);
         }
@@ -81,7 +83,7 @@ impl Backend {
         let reload_at = self.reload_at.clone();
         tokio::spawn(async move {
             let raw = tokio::task::spawn_blocking(move || {
-                // A newer edit already superseded this one: skip the expensive query without even contending for the analyzer lock (its `full_diagnostics` would be wasted work).
+                // A newer edit already superseded this one, so skip the expensive query without even contending for the lock.
                 if revisions.load(Ordering::Relaxed) != revision {
                     return None;
                 }
@@ -111,11 +113,11 @@ impl Backend {
             .await
             .ok()
             .flatten();
-            // Analyzer not ready (or graph stale) → leave the native-only diagnostics already published.
+            // Analyzer not ready, so leave the native-only diagnostics already published.
             let Some(raw) = raw else {
                 return;
             };
-            // The buffer moved on while the query ran → a newer revision's task will publish; don't overwrite it with stale diagnostics.
+            // The buffer moved on while the query ran, so a newer revision's task will publish.
             if store.read().await.latest_source(&uri) != Some(&source) {
                 return;
             }
@@ -177,11 +179,11 @@ impl Backend {
 
     /// Starts the (slow) workspace load on a blocking thread if it hasn't started yet. Returns immediately; queries that arrive while loading simply yield nothing.
     pub(crate) fn ensure_loading(&self, root: PathBuf, warm: Option<PathBuf>) {
-        // `try_lock`, never `lock`: this runs on the single-threaded runtime, and a blocking RA query can hold the mutex for the length of its `analysis` call. Blocking here would stall the whole LSP read loop. Contention means the analyzer is already `Ready`/`Loading` (no query runs while `Idle`), so there is nothing to start — and any state that just reset to `Idle` is picked up by the next edit's call.
+        // `try_lock`, never `lock`: this runs on the single-threaded runtime and a blocking query can hold the mutex for the length of its call. Contention means the analyzer is already busy, so there is nothing to start, and a state that just reset to `Idle` is picked up by the next edit.
         let Ok(mut state) = self.analyzer.try_lock() else {
             return;
         };
-        // The one place the `RootDatabase` is released, and only once its replacement is about to be loaded, so the two never coexist and the peak stays at one workspace. The mark is consumed only when it can be acted on: a contended lock or an in-flight load must not swallow the invalidation.
+        // The one place the `RootDatabase` is released, and only once its replacement is about to load, so the two never coexist. The mark is consumed only when it can be acted on.
         if matches!(*state, AnalyzerState::Ready(_) | AnalyzerState::Failed)
             && self.take_due_reload()
         {
@@ -199,7 +201,7 @@ impl Backend {
                 let started = std::time::Instant::now();
                 let loaded = EmbeddedAnalyzer::load(&root);
                 let load_ms = started.elapsed().as_millis();
-                // Compute the next state (including the slow `warm`) OUTSIDE the state lock, so queries arriving mid-warm just see `Loading` instead of blocking on the mutex for ~15s.
+                // Computed outside the state lock, so queries arriving mid-warm see `Loading` instead of blocking for fifteen seconds.
                 let new_state = match loaded {
                     Ok(a) => {
                         let warm_ms = if let Some(p) = &warm {

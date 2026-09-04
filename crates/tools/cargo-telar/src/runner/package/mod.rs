@@ -1,3 +1,5 @@
+//! The bundlers, and the release build they all share.
+
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
@@ -44,7 +46,7 @@ pub(crate) fn package_bin_path(
         .join(format!("{package_name}{}", std::env::consts::EXE_SUFFIX))
 }
 
-// Distribution bundles live under target/ (a build artifact next to the binary they package), so they inherit target's gitignore and are never confused with .rsx/ (which is generated source).
+// Under target/, next to the binary they package, so they inherit its gitignore and are never confused with the generated `.rsx/` source.
 pub(crate) fn dist_dir(workspace_root: &Path) -> PathBuf {
     workspace_root.join("target").join("telar-dist")
 }
@@ -58,7 +60,7 @@ pub(crate) fn profile_of(args: &[String]) -> &'static str {
     }
 }
 
-// Runs a packaging tool as the terminal step: reports success, forwards the tool's exit code, or exits 1 with an optional install hint when the binary is missing. Diverges since every bundler ends here.
+// Reports success, forwards the tool's exit code, or exits 1 with an install hint when the binary is missing. Diverges, since every bundler ends here.
 fn run_bundler_tool(
     cmd: &mut Command,
     success_label: &str,
@@ -90,7 +92,7 @@ fn run_bundler_tool(
     }
 }
 
-// Runs the shared release build for the desktop packaging formats (dir/deb/appimage/dmg/nsis) and returns the built binary path alongside the resolved package (workspace root plus manifest fields the bundlers read).
+// Returns the built binary path alongside the resolved package: workspace root plus the manifest fields the bundlers read.
 fn run_release_build(cargo_args: Vec<String>, config: TelarConfig) -> (PathBuf, ResolvedPackage) {
     let (_android, rest) = split_android_flag(cargo_args);
     let backend_value = backend_as_str(config.backend.unwrap_or_default());
@@ -135,7 +137,7 @@ pub(crate) fn build_desktop_dir(cargo_args: Vec<String>, config: TelarConfig) ->
         eprintln!("[cargo-telar] Failed to copy binary into dist: {e}");
         std::process::exit(1);
     }
-    // Assets are embedded in the binary today (rsx has no exe-relative asset lookup), so the bundle is just the self-contained executable. See the "disk assets" TODO for the disk-asset story that would add an assets/ copy here.
+    // Assets are embedded in the binary today, so the bundle is just the self-contained executable.
 
     eprintln!(
         "[cargo-telar] Packaged desktop build at {}",

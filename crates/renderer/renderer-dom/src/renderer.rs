@@ -8,9 +8,7 @@ use crate::reconcile::Reconciler;
 
 /// Draws Telar's frames as real elements, laid out by the browser.
 ///
-/// The rects in the stream are ignored: CSS positions the boxes from what each one *asked* layout for, which
-/// is what the element carries. Taffy still runs and still computes those rects — they are what hit-testing,
-/// scrolling and every anchored overlay read, and what a parity test compares the browser's answer against.
+/// The rects in the stream are ignored: CSS positions the boxes from what each one *asked* layout for, which is what the element carries. Taffy still runs and still computes those rects — they are what hit-testing, scrolling and every anchored overlay read, and what a parity test compares the browser's answer against.
 pub struct DomRenderer {
     reconciler: Reconciler,
 }
@@ -43,8 +41,7 @@ impl RenderBackend for DomRenderer {
         Ok(())
     }
 
-    /// The browser has already applied the device pixel ratio to every CSS pixel, so a frame described in
-    /// them needs no scaling — and being handed pre-scaled commands would double it.
+    /// The browser has already applied the device pixel ratio to every CSS pixel, so a frame described in them needs no scaling — and being handed pre-scaled commands would double it.
     fn applies_scale_factor(&self) -> bool {
         true
     }

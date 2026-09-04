@@ -1,3 +1,5 @@
+//! Rasterizing a whole string into one premultiplied bitmap, for backends with no atlas.
+
 use super::TextShaper;
 use super::cache::{make_text_cache_key, text_style_bits};
 use super::{make_buffer, physical_glyph, resolve_coverage};
@@ -7,13 +9,9 @@ use renderer_core::{Raster, Span, TextStyle, premultiply_rgba};
 use std::sync::Arc;
 
 impl TextShaper {
-    /// Walks a shaped buffer's glyphs, handing each covered pixel to `callback` as
-    /// `(x, y, w, h, color)` — the same shape [`Buffer::draw`] uses, and delegating to it outright for
-    /// the smooth raster so that path stays byte-identical.
+    /// Walks a shaped buffer's glyphs, handing each covered pixel to `callback` as `(x, y, w, h, color)` — the same shape [`Buffer::draw`] uses, and delegating to it outright for the smooth raster so that path stays byte-identical.
     ///
-    /// The pixel raster needs its own walk because the two things it changes both live inside that
-    /// call: where a glyph's origin is rounded, and what its coverage resolves to. Text decorations are
-    /// not reproduced here — no `TextStyle` axis sets any, so a shaped buffer never carries one.
+    /// The pixel raster needs its own walk because the two things it changes both live inside that call: where a glyph's origin is rounded, and what its coverage resolves to. Text decorations are not reproduced here — no `TextStyle` axis sets any, so a shaped buffer never carries one.
     fn draw_buffer(
         &mut self,
         buffer: &mut Buffer,
@@ -60,11 +58,9 @@ impl TextShaper {
         }
     }
 
-    /// Rasterizes a paragraph to a premultiplied RGBA block. `Buffer::draw` honours each glyph's own
-    /// `color_opt`, so a span paints in its own colour; `style`'s only covers glyphs without one.
+    /// Rasterizes a paragraph to a premultiplied RGBA block. `Buffer::draw` honours each glyph's own `color_opt`, so a span paints in its own colour; `style`'s only covers glyphs without one.
     ///
-    /// Spanned paragraphs are uncached, for the same reason `measure_text` does not cache them: the key is the
-    /// paragraph's own style, which two paragraphs differing only in spans would share.
+    /// Spanned paragraphs are uncached, for the same reason `measure_text` does not cache them: the key is the paragraph's own style, which two paragraphs differing only in spans would share.
     pub fn rasterize(
         &mut self,
         text: &str,
@@ -144,10 +140,7 @@ impl TextShaper {
 
     /// Rasterizes `text` white-on-transparent, for a caller that will tint and blur it into a shadow.
     ///
-    /// Uncached, unlike [`rasterize`](Self::rasterize). The one caller keeps the *blurred* result, which is what a
-    /// later frame actually draws, so a cache here would hold the input to a computation whose output is already
-    /// kept — 64 MB of budget for an intermediate. That only worked out to a saving while the caller rasterized on
-    /// every frame before consulting its shadow cache; now it asks first and this runs on a miss.
+    /// Uncached, unlike [`rasterize`](Self::rasterize). The one caller keeps the *blurred* result, which is what a later frame actually draws, so a cache here would hold the input to a computation whose output is already kept — 64 MB of budget for an intermediate. That only worked out to a saving while the caller rasterized on every frame before consulting its shadow cache; now it asks first and this runs on a miss.
     pub fn rasterize_alpha(
         &mut self,
         text: &str,

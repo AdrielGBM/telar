@@ -1,3 +1,5 @@
+//! The renderer: its pixmap, its surface, and the per-frame state the phases thread between them.
+
 mod frame;
 mod pixels;
 mod present;
@@ -20,24 +22,24 @@ use present::{FrameOp, plan_present};
 #[cfg(target_os = "android")]
 use present::{extract_native_window, present_to_native_window};
 
+/// The CPU backend: a tiny-skia pixmap, presented through softbuffer or read back headless.
 pub struct SoftwareRenderer<D: HasDisplayHandle, W: HasWindowHandle> {
-    // Kept so the caches can be built on whichever thread ends up driving this renderer: they live in a
-    // thread-local, and that is not necessarily the thread the constructor ran on.
+    // Kept so the caches can be built on whichever thread ends up driving this renderer: they live in a thread-local, which is not necessarily the thread the constructor ran on.
     config: crate::SoftwareRendererConfig,
-    // Building the caches loads fonts, so it is deferred out of the constructor — see `ensure_caches`.
+    // Building the caches loads fonts, so it is deferred out of the constructor.
     caches_ready: bool,
-    // None in headless mode: no window means no softbuffer context/surface; the frame lives only in `pixmap`.
+    // `None` headless: no window means no softbuffer surface, and the frame lives only in `pixmap`.
     _context: Option<Context<D>>,
     surface: Option<Surface<D, W>>,
     width: u32,
     height: u32,
     pub(crate) pixmap: Option<Pixmap>,
-    // Real font ascender/line-height metrics for the default face, read off the shaper by `ensure_caches` so dirty-rect computation does not under-estimate the text region. Holds conservative defaults until then.
+    // Read off the shaper by `ensure_caches` so dirty-rect computation does not under-estimate the text region. Holds conservative defaults until then.
     font_metrics: renderer_core::FontMetrics,
     blur_scratch: Vec<u8>,
     pixmap_pool: Vec<tiny_skia::Pixmap>,
     clip_mask_buffer: Option<tiny_skia::Mask>,
-    // Last region written as 0xFF into clip_mask_buffer. Tracked across frames so the next PushClip can zero stale bits left by the previous frame without re-zeroing the whole mask.
+    // Tracked across frames, so the next `PushClip` can zero stale bits without re-zeroing the whole mask.
     clip_mask_dirty: Option<Rect>,
     draw_state: renderer_core::DrawState,
     layer_stack: Vec<(tiny_skia::Pixmap, f32, i32, i32)>,
@@ -49,15 +51,15 @@ pub struct SoftwareRenderer<D: HasDisplayHandle, W: HasWindowHandle> {
     expanded_commands_cache: Option<(u64, Vec<DrawCommand>)>,
     // Cache for compute_layer_bounds: avoids re-traversing commands when input and dimensions are unchanged.
     layer_bounds_cache: Option<(u64, Vec<Option<(i32, i32, u32, u32)>>)>,
-    // Per-frame change log for the damage-aware present path; an aged softbuffer buffer is brought current by replaying the last `age` entries instead of re-swizzling the whole framebuffer. Bounded to the last few frames.
+    // An aged softbuffer buffer is brought current by replaying the last `age` entries instead of re-swizzling the whole framebuffer. Bounded to the last few frames.
     present_history: std::collections::VecDeque<FrameOp>,
-    // Android only: a direct handle to the surface's ANativeWindow, used to present without softbuffer's swizzle+copy. softbuffer still owns surface creation and buffer-geometry; this is a second acquired reference used only at present time.
+    // Used to present without softbuffer's swizzle and copy. softbuffer still owns surface creation and buffer geometry; this is a second acquired reference used only at present time.
     #[cfg(target_os = "android")]
     native_window: Option<ndk::native_window::NativeWindow>,
-    // Linux only: when the app asked for a transparent surface, present via an own `wl_shm` ARGB8888 buffer, since softbuffer is opaque. `None` means the opaque softbuffer path is in use.
+    // softbuffer is opaque, so a transparent surface presents via an own `wl_shm` ARGB8888 buffer.
     #[cfg(target_os = "linux")]
     alpha: Option<wayland_alpha::WaylandAlphaPresenter>,
-    // Keeps the display/window alive so the alpha presenter's borrowed `wl_display`/`wl_surface` pointers stay valid for the renderer's lifetime.
+    // Keeps the display and window alive, so the alpha presenter's borrowed pointers stay valid.
     #[cfg(target_os = "linux")]
     _alpha_handles: Option<(D, W)>,
 }
@@ -72,7 +74,7 @@ where
         window: W,
         config: crate::SoftwareRendererConfig,
     ) -> Result<Self, RendererError> {
-        // A transparent Wayland surface can't use softbuffer (it presents opaque XRGB): drive it through an own ARGB8888 `wl_shm` buffer that preserves alpha. Every other case uses softbuffer as before.
+        // A transparent Wayland surface cannot use softbuffer, which presents opaque XRGB, so it is driven through an own ARGB8888 `wl_shm` buffer.
         #[cfg(target_os = "linux")]
         let alpha = if config.transparent {
             wayland_alpha::WaylandAlphaPresenter::try_new(&display, &window)
@@ -106,7 +108,7 @@ where
             let ctx = Context::new(display).map_err(|e| {
                 RendererError::Backend(format!("softbuffer context creation failed: {}", e))
             })?;
-            // Acquire a direct ANativeWindow reference before `window` is moved into softbuffer; used to present without softbuffer's intermediate buffer.
+            // Acquired before `window` is moved into softbuffer; used to present without its intermediate buffer.
             #[cfg(target_os = "android")]
             {
                 native_window = extract_native_window(&window);
@@ -121,7 +123,7 @@ where
             }
         }
 
-        // A transparent surface the software backend can't honor here (softbuffer is opaque on every platform; only the Linux/Wayland `wl_shm` ARGB path bypasses it) renders opaque. Surface it instead of failing silently — the hardware backend gives transparency on every platform. TODO: extend software transparency beyond Linux/Wayland — each OS needs its own softbuffer bypass, addable only when that platform is available to test: Windows (WS_EX_LAYERED + UpdateLayeredWindow, premultiplied ARGB DIB), macOS (non-opaque NSWindow + CALayer alpha), Linux/X11 (32-bit ARGB visual + compositor), Android (RGBA8888 ANativeWindow instead of RGBX).
+        // softbuffer is opaque on every platform, and only the Wayland `wl_shm` path bypasses it, so a transparent surface renders opaque here. Surfaced rather than failing silently — the hardware backend gives transparency everywhere. Extending this needs a per-OS bypass, addable only where it can be tested.
         if config.transparent && !use_alpha {
             tracing::warn!(
                 "software renderer: transparent surfaces are only supported on Linux/Wayland; this surface will be opaque. Use the hardware backend for transparency on this platform."
@@ -131,8 +133,7 @@ where
         Ok(Self {
             config,
             caches_ready: false,
-            // A conservative placeholder until `ensure_caches` reads the real thing off the shaper. Nothing
-            // reads it before the first frame, and the first frame runs `ensure_caches` before it draws.
+            // A conservative placeholder until `ensure_caches` reads the real thing off the shaper. Nothing reads it before the first frame, which runs `ensure_caches` before it draws.
             font_metrics: renderer_core::FontMetrics::default(),
             _context: context,
             surface,
@@ -162,10 +163,7 @@ where
 
     /// Builds this thread's glyph shaper and shadow caches, and reads the real font metrics off the shaper.
     ///
-    /// Deferred out of the constructors on purpose: the caches are a thread-local and building one loads
-    /// fonts, so doing it in `new` would build them on the thread that *made* the renderer rather than the
-    /// one that will draw with it. For an on-screen surface those are different threads, and the UI thread's
-    /// copy would then sit unused for the life of the process.
+    /// Deferred out of the constructors on purpose: the caches are a thread-local and building one loads fonts, so doing it in `new` would build them on the thread that *made* the renderer rather than the one that will draw with it. For an on-screen surface those are different threads, and the UI thread's copy would then sit unused for the life of the process.
     fn ensure_caches(&mut self) {
         if self.caches_ready {
             return;
@@ -183,7 +181,7 @@ where
             font_metrics: renderer_core::FontMetrics::default(),
             _context: None,
             surface: None,
-            // Pre-sized so a `begin_frame` at the same dimensions reuses these buffers instead of reallocating.
+            // Pre-sized, so a `begin_frame` at the same dimensions reuses these buffers instead of reallocating.
             width,
             height,
             pixmap: Pixmap::new(width, height),
@@ -218,7 +216,7 @@ where
         self.pixmap.as_ref()
     }
 
-    // Drains finished background shadow computations into their respective caches. Returns true if at least one shadow became available this frame.
+    // Returns true if at least one shadow became available this frame.
     fn poll_pending_shadows(&mut self) -> bool {
         let mut arrived = false;
         // Destructured so each `retain` and the cache it drains into are disjoint borrows of the shared set.
@@ -263,7 +261,7 @@ where
         arrived
     }
 
-    // `op` describes how this frame's pixmap differs from the previous one, used to refresh only the changed part of an aged softbuffer buffer (see plan_present). Pass FrameOp::Full when unsure.
+    // `op` describes how this frame's pixmap differs from the previous one, used to refresh only the changed part of an aged softbuffer buffer. Pass `FrameOp::Full` when unsure.
     fn present_pixmap(&mut self, op: FrameOp) -> Result<(), RendererError> {
         let Some(pixmap) = &self.pixmap else {
             return Ok(());
@@ -271,25 +269,25 @@ where
         if self.width == 0 || self.height == 0 {
             return Ok(());
         }
-        // Android: copy straight into the ANativeWindow back-buffer. tiny_skia's RGBA byte order matches the native RGBX8888, so presenting is a per-row memcpy with no swizzle.
+        // tiny_skia's RGBA byte order matches the native RGBX8888, so presenting is a per-row memcpy with no swizzle.
         #[cfg(target_os = "android")]
         if let Some(nw) = &self.native_window {
             return present_to_native_window(nw, pixmap);
         }
 
-        // Transparent Wayland surface: present the premultiplied-RGBA frame as ARGB8888, keeping alpha (softbuffer can't).
+        // Presents the premultiplied-RGBA frame as ARGB8888, keeping the alpha softbuffer cannot.
         #[cfg(target_os = "linux")]
         if let Some(alpha) = &mut self.alpha {
             alpha.present(pixmap.data(), self.width, self.height);
             return Ok(());
         }
 
-        // Headless: no surface to blit to; the frame already lives in `self.pixmap`, so presenting is a no-op.
+        // Headless: the frame already lives in `self.pixmap`, so presenting is a no-op.
         let Some(surface) = &mut self.surface else {
             return Ok(());
         };
 
-        // Append this frame's change set; an aged buffer is reconstructed by replaying the last `age` entries.
+        // An aged buffer is reconstructed by replaying the last `age` entries.
         self.present_history.push_back(op);
         while self.present_history.len() > 6 {
             self.present_history.pop_front();
@@ -300,7 +298,7 @@ where
         if let Ok(mut buffer) = surface.buffer_mut() {
             let age = buffer.age();
             let plan = plan_present(&self.present_history, age);
-            // Pixel format: tiny_skia RGBA bytes → softbuffer LE u32 0x00RRGGBB. The damage-aware plan re-swizzles only what changed; a full swizzle of the whole framebuffer is the fallback.
+            // tiny_skia RGBA bytes to softbuffer's LE u32 `0x00RRGGBB`. The damage-aware plan re-swizzles only what changed; a full swizzle is the fallback.
             #[cfg(target_endian = "little")]
             {
                 let buf: &mut [u32] = &mut buffer;
@@ -336,10 +334,7 @@ mod tests {
     use super::SoftwareRenderer;
     use crate::SoftwareRendererConfig;
 
-    // The caches are a thread-local, so *which* thread builds them decides whether the renderer ever sees its
-    // own fonts. Building them in the constructor furnished the UI thread for a renderer that draws on
-    // another one — a shaper nobody uses here, and none at all over there. Run on a fresh thread because the
-    // test binary's main thread may already have caches from another case.
+    // The caches are a thread-local, so which thread builds them decides whether the renderer sees its own fonts. Building them in the constructor furnished the UI thread for a renderer drawing on another. Run on a fresh thread, because the test binary's main thread may already have caches from another case.
     #[test]
     fn the_drawing_thread_builds_the_caches_not_the_constructing_one() {
         std::thread::spawn(|| {

@@ -1,12 +1,6 @@
-//! Keyboard focus: which widget receives key events. A base primitive with no styling of its own — a
-//! focusable widget (e.g. [`crate::Input`]) requests focus on tap and consults it in `on_event`/`view`.
+//! Keyboard focus: which widget receives key events. A base primitive with no styling of its own — a focusable widget (e.g. [`crate::Input`]) requests focus on tap and consults it in `on_event`/`view`.
 //!
-//! Key events are broadcast to every widget (see `dispatch_container_event`), so focus is *self-filtering*:
-//! a widget handles a key only when [`is_focused`] holds for its id — there is no central router. Focus is
-//! a reactive signal, so a widget that reads [`current`]/[`is_focused`] inside its `view()` re-renders when
-//! focus moves (e.g. to show or hide its caret). State is per-surface (each surface owns its own focus via
-//! [`FocusContext`], activated by the runner), so focus never crosses windows; preserving focus across a
-//! hot-reload dylib swap is out of scope.
+//! Key events are broadcast to every widget (see `dispatch_container_event`), so focus is *self-filtering*: a widget handles a key only when [`is_focused`] holds for its id — there is no central router. Focus is a reactive signal, so a widget that reads [`current`]/[`is_focused`] inside its `view()` re-renders when focus moves (e.g. to show or hide its caret). State is per-surface (each surface owns its own focus via [`FocusContext`], activated by the runner), so focus never crosses windows; preserving focus across a hot-reload dylib swap is out of scope.
 
 use std::rc::Rc;
 
@@ -20,9 +14,7 @@ pub type FocusId = u64;
 
 /// What kind of widget a focusable is, as far as the keyboard is concerned.
 ///
-/// The distinction exists for one question: whether the keys arriving now are *text*. Key events are
-/// broadcast, so an app-level shortcut handler and a focused field see the same press, and without this the
-/// `3` typed into a dimension field also fires the app's `3` shortcut.
+/// The distinction exists for one question: whether the keys arriving now are *text*. Key events are broadcast, so an app-level shortcut handler and a focused field see the same press, and without this the `3` typed into a dimension field also fires the app's `3` shortcut.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum FocusKind {
     /// Takes keys as commands: a button, a tab, a slider.
@@ -31,17 +23,12 @@ pub enum FocusKind {
     TextEntry,
 }
 
-/// What a focusable *is*, for the reader that has to say it out loud — a separate question from [`FocusKind`],
-/// which asks what the widget does with a key.
+/// What a focusable *is*, for the reader that has to say it out loud — a separate question from [`FocusKind`], which asks what the widget does with a key.
 ///
-/// Defined in `platform-core` because it is the vocabulary the UI and the platform share, the same way
-/// [`Key`] is. Re-exported here because this is where it is *authored*: a widget declares its role at the
-/// moment it declares itself focusable, and the two are one call.
+/// Defined in `platform-core` because it is the vocabulary the UI and the platform share, the same way [`Key`] is. Re-exported here because this is where it is *authored*: a widget declares its role at the moment it declares itself focusable, and the two are one call.
 pub use platform_core::Role;
 
-/// A cheap, `Copy` handle to a focusable widget's identity, so a caller that has moved the widget into a
-/// container (and no longer holds a reference to it) can still drive its focus — e.g. autofocus a hosted
-/// editor when its tab activates. Obtain one from the widget (see [`crate::TextArea::focus_handle`]).
+/// A cheap, `Copy` handle to a focusable widget's identity, so a caller that has moved the widget into a container (and no longer holds a reference to it) can still drive its focus — e.g. autofocus a hosted editor when its tab activates. Obtain one from the widget (see [`crate::TextArea::focus_handle`]).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct FocusHandle(FocusId);
 
@@ -67,16 +54,13 @@ pub fn handle(id: FocusId) -> FocusHandle {
     FocusHandle(id)
 }
 
-/// Identifies one registered [`Scope`], so a closing overlay can withdraw exactly its own.
+/// Identifies one registered `Scope`, so a closing overlay can withdraw exactly its own.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub struct ScopeId(u64);
 
 /// A region of the tree whose focusables are only reachable while it is showing.
 ///
-/// Declared by whatever can hide content without taking it out of the tree — an [`Overlay`](crate::Overlay)
-/// kept mounted across a close, today. It names a *node*, not a set of ids, and that is the whole trick: an
-/// overlay's children are built before the overlay that will host them, so it never learns which focusables
-/// are its own. Ancestry answers instead.
+/// Declared by whatever can hide content without taking it out of the tree — an [`Overlay`](crate::Overlay) kept mounted across a close, today. It names a *node*, not a set of ids, and that is the whole trick: an overlay's children are built before the overlay that will host them, so it never learns which focusables are its own. Ancestry answers instead.
 struct Scope {
     id: ScopeId,
     node: NodeId,
@@ -88,9 +72,7 @@ struct Scope {
 
 /// Why a scope's focusables are out of reach, which the keyboard does not care about and a screen reader does.
 ///
-/// Tab treats the two the same — neither is a stop — but they are opposite things to say out loud. A control
-/// inside a closed dialog is *not there*; a disabled one is there and unavailable, and a reader that omitted
-/// it would leave the user wondering where the button went.
+/// Tab treats the two the same — neither is a stop — but they are opposite things to say out loud. A control inside a closed dialog is *not there*; a disabled one is there and unavailable, and a reader that omitted it would leave the user wondering where the button went.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum ScopeReason {
     NotShowing,
@@ -100,17 +82,12 @@ pub enum ScopeReason {
 /// One entry in the tab order.
 struct Entry {
     id: FocusId,
-    /// The widget's layout node, which is what makes reachability answerable. `None` for a focus id that
-    /// belongs to no widget (the dismiss stack takes one as a token).
+    /// The widget's layout node, which is what makes reachability answerable. `None` for a focus id that belongs to no widget (the dismiss stack takes one as a token).
     node: Option<NodeId>,
     role: Role,
-    /// Whether Tab stops here. `false` for a control that is driven some other way and still has to be
-    /// announced: the rows of a menu answer to arrow keys, and putting each one in the tab order would make
-    /// Tab walk a list the user opened precisely so as not to.
+    /// Whether Tab stops here. `false` for a control that is driven some other way and still has to be announced: the rows of a menu answer to arrow keys, and putting each one in the tab order would make Tab walk a list the user opened precisely so as not to.
     tabbable: bool,
-    /// A checked state, for the controls that have one. A closure and not a flag, for the same reason
-    /// "reachable" is one: a checkbox toggles without being rebuilt, and a reader asking a moment later has to
-    /// get the answer that is true then.
+    /// A checked state, for the controls that have one. A closure and not a flag, for the same reason "reachable" is one: a checkbox toggles without being rebuilt, and a reader asking a moment later has to get the answer that is true then.
     toggled: Option<Rc<dyn Fn() -> bool>>,
     value: Option<Rc<dyn Fn() -> NumericValue>>,
 }
@@ -120,14 +97,13 @@ struct FocusState {
     next_id: FocusId,
     next_scope: u64,
     focused: RwSignal<Option<FocusId>>,
-    // Whether the focus held now was taken by a pointer. A signal, not a plain flag: Tab onto the widget you just clicked moves it without moving `focused`, and a ring that missed that would be stale exactly when the keyboard took over.
+    // A signal, not a plain flag: Tab onto the widget just clicked moves this without moving `focused`, and a ring that missed it would be stale exactly when the keyboard took over.
     pointer_focus: RwSignal<bool>,
-    // Registered focusables in tab order (registration order ≈ document order). Drives Tab/Shift-Tab.
+    // In tab order (registration order ≈ document order). Drives Tab and Shift-Tab.
     order: Vec<Entry>,
     // Regions that can hide their contents without unregistering them; consulted when stepping.
     scopes: Vec<Scope>,
-    // The subset of `order` that takes keys as text. A set rather than a field on each entry because it is
-    // the minority and the only kind anyone asks about.
+    // A set rather than a field on each entry, because it is the minority and the only kind anyone asks about.
     text_entries: FxHashSet<FocusId>,
 }
 
@@ -146,15 +122,13 @@ impl FocusState {
 }
 
 reactive_core::surface_local! {
-    /// Per-surface focus state. The runner activates each surface's [`FocusContext`] around its
-    /// build/event/frame, so focus never crosses windows.
+    /// Per-surface focus state. The runner activates each surface's [`FocusContext`] around its build/event/frame, so focus never crosses windows.
     slot FOCUS: FocusState = FocusState::new();
     access with_focus, with_focus_ref;
     context FocusContext, FocusGuard;
 }
 
-/// The active surface's focused-widget signal, cloned out of the slot so callers never hold the slot borrow
-/// across a `.set()` — its flush re-enters the slot when an effect reads [`current`].
+/// The active surface's focused-widget signal, cloned out of the slot so callers never hold the slot borrow across a `.set()` — its flush re-enters the slot when an effect reads [`current`].
 fn focused_signal() -> RwSignal<Option<FocusId>> {
     with_focus_ref(|s| s.focused)
 }
@@ -168,8 +142,7 @@ pub fn next_id() -> FocusId {
     })
 }
 
-/// The currently focused widget, or `None`. Reactive: reading this inside a `view()` re-renders the
-/// caller when focus changes.
+/// The currently focused widget, or `None`. Reactive: reading this inside a `view()` re-renders the caller when focus changes.
 pub fn current() -> Option<FocusId> {
     focused_signal().get()
 }
@@ -179,10 +152,7 @@ pub fn is_focused(id: FocusId) -> bool {
     current() == Some(id)
 }
 
-// The three commands below `peek` the signal they write, and it matters: a command is a thing an *effect* may
-// well issue ("while this row is the selected one, focus its field"), and a reactive read there would
-// subscribe that effect to the focus it sets — so the next focus change anywhere would re-run it and it would
-// take the focus straight back. Same rule, and the same bug, as `ScrollViewport::reveal`.
+// The three commands below `peek` the signal they write: an effect may well issue one ("focus the selected row's field"), and a reactive read would subscribe it to the focus it sets, taking focus straight back on the next change anywhere. Same rule as `ScrollViewport::reveal`.
 
 /// Gives focus to `id` (a no-op if it already holds it).
 pub fn request(id: FocusId) {
@@ -195,10 +165,7 @@ pub fn request(id: FocusId) {
 
 /// [`request`] for focus a *tap* is giving, which is the one case that should not draw a focus ring.
 ///
-/// The distinction CSS spent years arriving at as `:focus-visible`. A ring on every click is noise — the user
-/// already knows where they clicked — and the ring drawn anyway is why so many stylesheets used to turn
-/// outlines off altogether, taking the keyboard's only cue with them. Focus taken any other way (Tab, or an
-/// application focusing something itself) shows it.
+/// The distinction CSS spent years arriving at as `:focus-visible`. A ring on every click is noise — the user already knows where they clicked — and the ring drawn anyway is why so many stylesheets used to turn outlines off altogether, taking the keyboard's only cue with them. Focus taken any other way (Tab, or an application focusing something itself) shows it.
 pub fn request_from_pointer(id: FocusId) {
     set_pointer_focus(true);
     let focused = focused_signal();
@@ -223,8 +190,7 @@ fn set_pointer_focus(from_pointer: bool) {
     }
 }
 
-/// Removes focus from `id`, but only if it currently holds it — so a widget blurring itself never steals
-/// focus away from another.
+/// Removes focus from `id`, but only if it currently holds it — so a widget blurring itself never steals focus away from another.
 pub fn release(id: FocusId) {
     let focused = focused_signal();
     if focused.peek() == Some(id) {
@@ -234,20 +200,14 @@ pub fn release(id: FocusId) {
 
 /// Takes the keyboard away when a press lands on nothing that wants it.
 ///
-/// **The rule every platform has, and the one a toolkit cannot leave to its applications.** Focus was only
-/// ever *taken* here — by a tap on a focusable, by Tab — so a field kept the caret until something else asked
-/// for it, and clicking away from a form left it sitting there looking editable, eating the keys, and telling
-/// an application asking [`text_entry_focused`] that somebody was still typing.
+/// **The rule every platform has, and the one a toolkit cannot leave to its applications.** Focus was only ever *taken* here — by a tap on a focusable, by Tab — so a field kept the caret until something else asked for it, and clicking away from a form left it sitting there looking editable, eating the keys, and telling an application asking [`text_entry_focused`] that somebody was still typing.
 ///
-/// Asked before the press is dispatched, so a focusable that is pressed takes focus back on its way through
-/// and only a press with no focusable under it clears anything. The test is the on-screen rect — where the
-/// widget is drawn rather than where it was laid out — so a field inside a scrolled viewport answers about
-/// the place the pointer actually is.
+/// Asked before the press is dispatched, so a focusable that is pressed takes focus back on its way through and only a press with no focusable under it clears anything. The test is the on-screen rect — where the widget is drawn rather than where it was laid out — so a field inside a scrolled viewport answers about the place the pointer actually is.
 pub fn blur_from_pointer(x: f32, y: f32) {
     if current().is_none() {
         return;
     }
-    // Collected before the rects are asked for: reading layout under the focus borrow is a borrow of one runtime held across a call into another.
+    // Collected before the rects are asked for: reading layout under the focus borrow would hold one runtime across a call into another.
     let nodes: Vec<NodeId> =
         with_focus_ref(|s| s.order.iter().filter_map(|entry| entry.node).collect());
     let on_a_focusable = nodes.into_iter().any(|node| {
@@ -266,32 +226,24 @@ pub fn clear() {
     }
 }
 
-/// Adds `id` to the tab order (at the end), if not already present, as a widget that says what it does with
-/// the keyboard — a text field registers as [`FocusKind::TextEntry`], which is what makes
-/// [`text_entry_focused`] answerable. A focusable widget calls this on creation; registration order is the
-/// traversal order.
+/// Adds `id` to the tab order (at the end), if not already present, as a widget that says what it does with the keyboard — a text field registers as [`FocusKind::TextEntry`], which is what makes [`text_entry_focused`] answerable. A focusable widget calls this on creation; registration order is the traversal order.
 pub fn register_as(id: FocusId, kind: FocusKind) {
     register_node(id, kind, None, default_role(kind), true);
 }
 
-/// [`register_as`] for a widget that can say which layout node it is, which is what lets Tab skip it while it
-/// is not on screen. Every focusable widget should use this; the node-less forms remain for a focus id that
-/// stands for something other than a widget.
+/// [`register_as`] for a widget that can say which layout node it is, which is what lets Tab skip it while it is not on screen. Every focusable widget should use this; the node-less forms remain for a focus id that stands for something other than a widget.
 pub fn register_at(id: FocusId, kind: FocusKind, node: NodeId) {
     register_node(id, kind, Some(node), default_role(kind), true);
 }
 
-/// [`register_at`] for a widget that is not simply "a thing you activate" — a checkbox, a tab, a slider. The
-/// role is what a screen reader says this is; see [`Role`].
+/// [`register_at`] for a widget that is not simply "a thing you activate" — a checkbox, a tab, a slider. The role is what a screen reader says this is; see [`Role`].
 pub fn register_with_role(id: FocusId, kind: FocusKind, node: NodeId, role: Role) {
     register_node(id, kind, Some(node), role, true);
 }
 
 /// Registers a control that is announced but is not a Tab stop, because something else drives it.
 ///
-/// The rows of a menu are the case: they answer to arrow keys and type-ahead, and a reader that could not see
-/// them would be handed an open menu it could not describe — while a Tab order containing every row would
-/// walk the user through a list they opened in order to *avoid* walking it.
+/// The rows of a menu are the case: they answer to arrow keys and type-ahead, and a reader that could not see them would be handed an open menu it could not describe — while a Tab order containing every row would walk the user through a list they opened in order to *avoid* walking it.
 pub fn register_presented(id: FocusId, node: NodeId, role: Role) {
     register_node(id, FocusKind::Widget, Some(node), role, false);
 }
@@ -307,11 +259,10 @@ fn default_role(kind: FocusKind) -> Role {
 fn register_node(id: FocusId, kind: FocusKind, node: Option<NodeId>, role: Role, tabbable: bool) {
     with_focus(|s| {
         match s.order.iter_mut().find(|e| e.id == id) {
-            // Re-registering only ever adds knowledge: a widget that learns its node later keeps its place.
+            // Re-registering only adds knowledge: a widget that learns its node later keeps its place.
             Some(existing) => {
                 existing.node = existing.node.or(node);
-                // A re-registration that only repeats the default has said nothing, and must not write over a
-                // role the widget declared the first time.
+                // A re-registration repeating the default has said nothing, and must not overwrite a declared role.
                 if role != default_role(kind) {
                     existing.role = role;
                 }
@@ -332,12 +283,9 @@ fn register_node(id: FocusId, kind: FocusKind, node: Option<NodeId>, role: Role,
     });
 }
 
-/// Declares a region whose focusables are only reachable while `showing` reads true, and — when `traps` — that
-/// holds focus inside itself while it is up.
+/// Declares a region whose focusables are only reachable while `showing` reads true, and — when `traps` — that holds focus inside itself while it is up.
 ///
-/// The counterpart of the pointer barrier an overlay already puts up. Without it the tab order is a list built
-/// when widgets were *constructed*, which says nothing about what is on screen now: a dialog kept mounted
-/// across a close leaves its fields as Tab stops, and one that is open does not stop Tab walking out behind it.
+/// The counterpart of the pointer barrier an overlay already puts up. Without it the tab order is a list built when widgets were *constructed*, which says nothing about what is on screen now: a dialog kept mounted across a close leaves its fields as Tab stops, and one that is open does not stop Tab walking out behind it.
 pub fn register_scope(node: NodeId, showing: impl Fn() -> bool + 'static, traps: bool) -> ScopeId {
     register_scope_because(node, showing, traps, ScopeReason::NotShowing)
 }
@@ -368,8 +316,7 @@ pub fn unregister_scope(id: ScopeId) {
     with_focus(|s| s.scopes.retain(|scope| scope.id != id));
 }
 
-/// Removes `id` from the tab order and drops its focus if it held it. A focusable widget calls this on
-/// drop, so a destroyed widget never lingers in traversal or as the focused id.
+/// Removes `id` from the tab order and drops its focus if it held it. A focusable widget calls this on drop, so a destroyed widget never lingers in traversal or as the focused id.
 pub fn unregister(id: FocusId) {
     with_focus(|s| {
         s.order.retain(|e| e.id != id);
@@ -380,8 +327,7 @@ pub fn unregister(id: FocusId) {
 
 /// Whether the focused widget takes keys as text. Reactive, like [`current`].
 ///
-/// The guard an app-level shortcut table needs: without it, typing into a field also runs the shortcuts
-/// that share its letters. Prefer [`text_entry_takes_key`], which lets through the presses no editor wants.
+/// The guard an app-level shortcut table needs: without it, typing into a field also runs the shortcuts that share its letters. Prefer [`text_entry_takes_key`], which lets through the presses no editor wants.
 pub fn text_entry_focused() -> bool {
     match current() {
         Some(id) => with_focus_ref(|s| s.text_entries.contains(&id)),
@@ -391,10 +337,7 @@ pub fn text_entry_focused() -> bool {
 
 /// Whether a focused text entry would take this press as text — the guard for a global shortcut handler.
 ///
-/// Narrower than [`text_entry_focused`] on purpose: a field claims the letters and the caret keys, and
-/// nothing else. `⌘S` still saves while the caret sits in a field, and so do the function keys, because no
-/// editor here does anything with them. The list mirrors what [`crate::Input`] and [`crate::TextArea`]
-/// actually consume, and their own tests hold it to that.
+/// Narrower than [`text_entry_focused`] on purpose: a field claims the letters and the caret keys, and nothing else. `⌘S` still saves while the caret sits in a field, and so do the function keys, because no editor here does anything with them. The list mirrors what [`crate::Input`] and [`crate::TextArea`] actually consume, and their own tests hold it to that.
 pub fn text_entry_takes_key(key: &Key, modifiers: ModifiersState) -> bool {
     text_entry_focused() && edits_text(key, modifiers)
 }
@@ -422,8 +365,7 @@ fn edits_text(key: &Key, modifiers: ModifiersState) -> bool {
     }
 }
 
-/// Moves focus to the next registered focusable in tab order (wrapping); with nothing focused, focuses
-/// the first. A no-op when nothing is registered.
+/// Moves focus to the next registered focusable in tab order (wrapping); with nothing focused, focuses the first. A no-op when nothing is registered.
 pub fn focus_next() {
     step(1);
 }
@@ -433,19 +375,17 @@ pub fn focus_prev() {
     step(-1);
 }
 
-/// A [`Scope`] as [`step`] reads it, once copied out from under the slot borrow: where it is, whether it is
-/// showing, and whether it holds focus inside itself.
+/// A [`Scope`] as [`step`] reads it, once copied out from under the slot borrow: where it is, whether it is showing, and whether it holds focus inside itself.
 type ScopeView = (NodeId, Rc<dyn Fn() -> bool>, bool);
 
 /// Whether Tab should be able to land on a focusable at `node`, given the scopes registered right now.
 ///
-/// Three ways to be out of reach, and they are genuinely different mechanisms rather than one seen from three
-/// angles — which is why a rule aimed at any single one of them leaves the others open:
+/// Three ways to be out of reach, and they are genuinely different mechanisms rather than one seen from three angles — which is why a rule aimed at any single one of them leaves the others open:
 /// - out of layout flow, by its own `display:none` or an ancestor's, which leaves the rect it last had;
 /// - inside a region kept mounted while not showing, which leaves the rect *and* the layout intact;
 /// - outside the modal that is currently up, which is about nothing on the node itself.
 fn reachable(node: Option<NodeId>, scopes: &[ScopeView]) -> bool {
-    // A focus id that stands for no widget has no way to be off screen.
+    // A focus id standing for no widget has no way to be off screen.
     let Some(node) = node else { return true };
     if layout_reactive::is_hidden(node) {
         return false;
@@ -487,8 +427,7 @@ fn snapshot() -> (Vec<(FocusId, Option<NodeId>)>, Vec<ScopeView>) {
 
 /// Declares that `id` carries a checked state, and how to read it now.
 ///
-/// Separate from registering the control because the two are known at different moments: a box declares what
-/// it *is* as it is built, and what it is *bound to* when the caller hands it a signal.
+/// Separate from registering the control because the two are known at different moments: a box declares what it *is* as it is built, and what it is *bound to* when the caller hands it a signal.
 pub fn set_toggled(id: FocusId, state: impl Fn() -> bool + 'static) {
     let state: Rc<dyn Fn() -> bool> = Rc::new(state);
     with_focus(|s| {
@@ -498,8 +437,7 @@ pub fn set_toggled(id: FocusId, state: impl Fn() -> bool + 'static) {
     });
 }
 
-/// Declares that `id` carries a number, and how to read it now. The counterpart of [`set_toggled`] for the
-/// roles whose state is a value rather than a flag.
+/// Declares that `id` carries a number, and how to read it now. The counterpart of [`set_toggled`] for the roles whose state is a value rather than a flag.
 pub fn set_value(id: FocusId, read: impl Fn() -> NumericValue + 'static) {
     let read: Rc<dyn Fn() -> NumericValue> = Rc::new(read);
     with_focus(|s| {
@@ -524,13 +462,10 @@ pub struct Exposed {
 
 /// The focusables a screen reader should be told about, in tab order.
 ///
-/// Deliberately the same [`reachable`] the keyboard walks, so the two can never disagree about what is on
-/// screen — with one distinction Tab has no use for: a control kept out of reach by being *disabled* is
-/// reported as present and unavailable, where one inside a closed dialog is not reported at all.
+/// Deliberately the same `reachable` the keyboard walks, so the two can never disagree about what is on screen — with one distinction Tab has no use for: a control kept out of reach by being *disabled* is reported as present and unavailable, where one inside a closed dialog is not reported at all.
 pub fn exposed() -> Vec<Exposed> {
     let (order, scopes) = with_focus_ref(|s| {
-        // The state closures come out with everything else and are called after the borrow drops: reading one
-        // can read a signal, and reading a signal can flush effects back through this very slot.
+        // Called after the borrow drops: reading a state closure can read a signal, and that can flush effects back through this very slot.
         type Row = (
             FocusId,
             Option<NodeId>,
@@ -578,8 +513,7 @@ pub fn exposed() -> Vec<Exposed> {
 
 /// Moves focus to the first reachable focusable inside `node`, reporting whether it found one.
 ///
-/// What a dialog needs on open: the keyboard has to arrive somewhere inside it, or the user is left tabbing
-/// from wherever they were — which, now that a modal traps focus, means tabbing nowhere at all.
+/// What a dialog needs on open: the keyboard has to arrive somewhere inside it, or the user is left tabbing from wherever they were — which, now that a modal traps focus, means tabbing nowhere at all.
 pub fn focus_first_in(node: NodeId) -> bool {
     let (order, scopes) = snapshot();
     let found = order.into_iter().find(|(_, widget)| {
@@ -595,14 +529,13 @@ pub fn focus_first_in(node: NodeId) -> bool {
     }
 }
 
-/// Whether `id` is still registered, so a caller restoring remembered focus does not aim at a widget that has
-/// since been dropped.
+/// Whether `id` is still registered, so a caller restoring remembered focus does not aim at a widget that has since been dropped.
 pub fn is_registered(id: FocusId) -> bool {
     with_focus_ref(|s| s.order.iter().any(|e| e.id == id))
 }
 
 fn step(dir: isize) {
-    // Snapshot, then release the slot borrow: `showing` is the author's closure and the reachability queries borrow the layout runtime, and neither may run under this one — nor may `request`, which flushes.
+    // Snapshot, then release the borrow: `showing` is the author's closure, the reachability queries borrow the layout runtime, and `request` flushes — none may run under this one.
     let (order, scopes) = snapshot();
     let order: Vec<FocusId> = order
         .into_iter()
@@ -641,25 +574,19 @@ mod tests {
         request(a);
         assert!(is_focused(a) && current() == Some(a));
 
-        // Requesting b moves focus off a.
         request(b);
         assert!(is_focused(b) && !is_focused(a));
 
-        // Releasing a (which is not focused) leaves b focused.
         release(a);
         assert!(is_focused(b));
 
-        // Releasing the focused one clears it.
         release(b);
         assert!(current().is_none());
     }
 
-    /// A control the application has disabled is not a Tab stop — in HTML a `disabled` element is skipped
-    /// outright, and a keyboard user made to walk through controls that do nothing is being told less about
-    /// the interface than a mouse user, who at least sees them dimmed.
+    /// A control the application has disabled is not a Tab stop — in HTML a `disabled` element is skipped outright, and a keyboard user made to walk through controls that do nothing is being told less about the interface than a mouse user, who at least sees them dimmed.
     ///
-    /// Rides the same scope mechanism a hidden overlay uses rather than a second one, which is what gives a
-    /// disabled *wrapper* the `fieldset` reading for the keyboard as well as for the pointer.
+    /// Rides the same scope mechanism a hidden overlay uses rather than a second one, which is what gives a disabled *wrapper* the `fieldset` reading for the keyboard as well as for the pointer.
     #[test]
     fn tab_skips_a_disabled_box() {
         use crate::context::{compute_layout, reset_layout_runtime};
@@ -696,11 +623,7 @@ mod tests {
         );
     }
 
-    /// The case that showed an overlay-shaped fix would only ever be half of one: `display:none` hides content
-    /// without any overlay involved, and left it in the tab order just the same. The two mechanisms leave
-    /// opposite traces — a hidden overlay keeps its children's rects and stops painting, a `display:none`
-    /// subtree collapses to zero and keeps its place in the walk — so neither a paint test nor a rect test
-    /// catches both. Ancestry does.
+    /// The case that showed an overlay-shaped fix would only ever be half of one: `display:none` hides content without any overlay involved, and left it in the tab order just the same. The two mechanisms leave opposite traces — a hidden overlay keeps its children's rects and stops painting, a `display:none` subtree collapses to zero and keeps its place in the walk — so neither a paint test nor a rect test catches both. Ancestry does.
     #[test]
     fn tab_skips_a_focusable_taken_out_of_layout_flow() {
         use crate::context::{compute_layout, reset_layout_runtime, set_display};
@@ -747,8 +670,6 @@ mod tests {
 
     #[test]
     fn tab_order_steps_forward_and_back() {
-        // Register three contiguous ids at the end of the order and step within that block (robust to any
-        // ids other tests registered earlier on this thread).
         let (a, b, c) = (next_id(), next_id(), next_id());
         register_as(a, FocusKind::Widget);
         register_as(b, FocusKind::Widget);
@@ -762,7 +683,6 @@ mod tests {
         focus_prev();
         assert_eq!(current(), Some(b));
 
-        // Unregistering the focused one drops focus and removes it from traversal.
         unregister(b);
         assert!(current().is_none());
         unregister(a);
@@ -772,10 +692,7 @@ mod tests {
 
 /// The checked state `id` declared, read now.
 ///
-/// `None` both for a control that carries no such state and for one nothing has registered. Reading it here
-/// rather than through [`exposed`] is what lets a widget put its own state on the box it draws: the reading
-/// happens inside `view()`, so the box re-emits when the state changes, which a snapshot taken afterwards
-/// could never do.
+/// `None` both for a control that carries no such state and for one nothing has registered. Reading it here rather than through [`exposed`] is what lets a widget put its own state on the box it draws: the reading happens inside `view()`, so the box re-emits when the state changes, which a snapshot taken afterwards could never do.
 pub fn toggled_state(id: FocusId) -> Option<bool> {
     let read = with_focus(|s| {
         s.order

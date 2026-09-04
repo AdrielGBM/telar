@@ -1,3 +1,5 @@
+//! Guards that the baked and dynamic SVG paths produce the same display list.
+
 use std::sync::Arc;
 
 use geometry_core::{ObjectFit, Point};
@@ -6,7 +8,6 @@ use renderer_core::{Color, DrawCommand, GradientKind, Paint, PathData, PathStyle
 
 use super::SvgData;
 
-// SvgData is shared across threads via Arc.
 const _: fn() = || {
     fn assert_send_sync<T: Send + Sync>() {}
     assert_send_sync::<SvgData>();
@@ -35,13 +36,11 @@ fn invalid_svg_returns_err() {
 
 #[test]
 fn solid_path_scales_and_centers() {
-    // 10x10 viewBox, a filled rect covering the whole box, rendered into a 20x40 widget.
     let svg = r##"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10" width="10" height="10"><rect x="0" y="0" width="10" height="10" fill="#ff0000"/></svg>"##;
     let data = SvgData::from_str(svg).unwrap();
     let cmds = data.commands_for(20.0, 40.0, None, None, ObjectFit::Contain);
     let (path, style) = only_path(&cmds);
 
-    // Fit scale is min(20/10, 40/10) = 2, centered vertically: offset_y = (40 - 20)/2 = 10.
     let xs: Vec<Point> = path
         .verbs()
         .iter()
@@ -83,7 +82,6 @@ fn group_opacity_emits_balanced_layer() {
         .count();
     assert_eq!(pushes, 1, "one PushLayer expected: {cmds:?}");
     assert_eq!(pops, 1, "one PopLayer expected: {cmds:?}");
-    // PushLayer must precede PopLayer.
     let push_idx = cmds
         .iter()
         .position(|c| matches!(c, DrawCommand::PushLayer { .. }))
@@ -131,7 +129,6 @@ fn filter_falls_back_to_raster_image() {
     );
     match &cmds[0] {
         DrawCommand::Image { data, .. } => {
-            // 10x10 fitted content at 2x density.
             assert_eq!(data.width, 20);
             assert_eq!(data.height, 20);
         }
@@ -156,7 +153,6 @@ fn tint_replaces_vector_paint() {
 
 #[test]
 fn stroke_override_replaces_every_stroke_width() {
-    // A 1px stroke in a 10x10 viewBox rendered 1:1 (scale 1.0), so userspace widths map straight through.
     let svg = r##"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10" width="10" height="10"><path d="M0 5 L10 5" stroke="#000000" stroke-width="1" fill="none"/></svg>"##;
     let data = SvgData::from_str(svg).unwrap();
     let width_of = |cmds: &[DrawCommand]| {
@@ -168,21 +164,18 @@ fn stroke_override_replaces_every_stroke_width() {
             .width
     };
 
-    // No override keeps the glyph's own width.
     let base = data.commands_for(10.0, 10.0, None, None, ObjectFit::Contain);
     assert!(
         (width_of(&base) - 1.0).abs() < 1e-3,
         "own width kept: {}",
         width_of(&base)
     );
-    // The override forces the userspace width on every stroked path.
     let thick = data.commands_for(10.0, 10.0, None, Some(4.0), ObjectFit::Contain);
     assert!(
         (width_of(&thick) - 4.0).abs() < 1e-3,
         "override applied: {}",
         width_of(&thick)
     );
-    // A different override is a distinct memo entry, not the cached one.
     assert!(!Arc::ptr_eq(&base, &thick));
 }
 
@@ -200,7 +193,7 @@ fn commands_for_is_memoized() {
     );
 }
 
-// The three walks over a baked vector list — the hasher, the re-fitter and the baker's serializer — each answered differently when handed a command outside the set: one panicked, one cloned it through behind a debug assertion, one hashed a marker byte. `VectorCommand` is the set, so there is no fourth case to disagree about and `from_baked_vector` cannot be handed one.
+// The three walks over a baked vector list — the hasher, the re-fitter and the serializer — each answered differently when handed a command outside the set. `VectorCommand` is the set, so there is no fourth case to disagree about.
 #[test]
 fn a_baked_vector_list_round_trips_through_every_walk() {
     let svg = r##"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10" width="10" height="10"><rect width="10" height="10" fill="#00ff00"/></svg>"##;
@@ -227,7 +220,7 @@ fn id_is_stable_across_instances() {
     );
 }
 
-// Correctness guardrail: the baked path must reproduce the dynamic display list. Baking converts under an identity transform, so re-fitting `p * s + offset` at runtime must equal the dynamic `fit_ts.pre_concat(abs)` mapping. The math is bit-exact when the SVG's absolute transform is identity (no nested transforms), which every SVG below satisfies — so these assert EXACT `DrawCommand` equality, not an epsilon.
+// The baked path must reproduce the dynamic display list. Baking converts under an identity transform, so re-fitting at runtime must equal the dynamic mapping — bit-exact when the SVG's absolute transform is identity, which every SVG below satisfies, so these assert exact equality rather than an epsilon.
 #[cfg(feature = "dynamic-svg")]
 mod equivalence {
     use std::sync::Arc;
@@ -236,7 +229,7 @@ mod equivalence {
     use super::{ObjectFit, SvgData};
     use renderer_core::{Color, DrawCommand};
 
-    // Scales chosen so `sqrt(sx*sy) == s` exactly (integers / halves): the dynamic stroke width uses `uniform_scale = sqrt(det)` while the re-fit multiplies by the geometric-mean scale, and these agree bit-for-bit only when that square root is exact. This holds for every (size, fit) pair below — the aspect ratios are 1:1, 1:2 or 2:1, so `sx*sy` is a perfect square (1, 4, 9, 2.25) even under `fill`. Non-square aspect ratios (20x40, 40x20) force offset != 0 under contain/cover and stretch under fill.
+    // Scales chosen so `sqrt(sx*sy) == s` exactly: the dynamic stroke width uses `sqrt(det)` while the re-fit multiplies by the geometric-mean scale, and they agree bit-for-bit only when that root is exact. The non-square aspect ratios force a non-zero offset under contain and cover, and a stretch under fill.
     const SIZES: &[(f32, f32)] = &[
         (20.0, 20.0),
         (20.0, 40.0),
@@ -245,7 +238,6 @@ mod equivalence {
         (30.0, 30.0),
     ];
 
-    // Every fit re-fits through the same shared `fit_params`, so baked and dynamic must agree exactly for each.
     const FITS: &[ObjectFit] = &[ObjectFit::Contain, ObjectFit::Cover, ObjectFit::Fill];
 
     fn tints() -> [Option<Color>; 3] {
@@ -294,7 +286,7 @@ mod equivalence {
         }
     }
 
-    // A rasterized fallback can only match structurally, never byte-for-byte: `DrawCommand::Image`'s PartialEq compares `ImageData::id`, a fresh per-instance counter, and the dynamic fallback rasterizes at 2x the fitted (display-dependent) size while the bake rasterizes at 2x intrinsic. What must agree is placement: the same single Image drawn into the same content rect with the same filter.
+    // A rasterized fallback can only match structurally: `Image`'s equality compares a fresh per-instance id, and the dynamic fallback rasterizes at twice the fitted size while the bake uses twice intrinsic. What must agree is placement — the same single image in the same content rect with the same filter.
     fn assert_raster_structurally_equivalent(svg: &str) {
         for &(w, h) in SIZES {
             for tint in tints() {

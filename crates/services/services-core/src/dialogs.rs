@@ -1,3 +1,5 @@
+//! The file-picker service: what an app asks for, and the provider a backend installs to answer.
+
 use std::path::PathBuf;
 use std::sync::{Arc, OnceLock};
 
@@ -17,8 +19,7 @@ impl FileFilter {
     }
 }
 
-/// What to ask the OS for. Every field is optional: an empty request opens the platform's default
-/// "any file, last directory" dialog.
+/// What to ask the OS for. Every field is optional: an empty request opens the platform's default "any file, last directory" dialog.
 #[derive(Clone, Debug, Default)]
 pub struct FileDialog {
     pub title: Option<String>,
@@ -56,9 +57,7 @@ impl FileDialog {
 
 /// The OS file-chooser, as the vocabulary crate sees it.
 ///
-/// Every method BLOCKS until the user answers, which is why the whole trait is `Send + Sync`: the caller
-/// runs it on a worker thread and takes the answer back on the UI thread. Nothing here touches the event
-/// loop, so a backend is free to be a portal call, a native panel, or a stub in a test.
+/// Every method BLOCKS until the user answers, which is why the whole trait is `Send + Sync`: the caller runs it on a worker thread and takes the answer back on the UI thread. Nothing here touches the event loop, so a backend is free to be a portal call, a native panel, or a stub in a test.
 pub trait FileDialogs: Send + Sync + 'static {
     fn open_file(&self, request: FileDialog) -> Option<PathBuf>;
     fn open_files(&self, request: FileDialog) -> Vec<PathBuf>;
@@ -68,8 +67,7 @@ pub trait FileDialogs: Send + Sync + 'static {
 
 static DIALOGS: OnceLock<Arc<dyn FileDialogs>> = OnceLock::new();
 
-/// Installs the backend the app's dialogs go through. The desktop runner calls this at startup; a test or
-/// a headless build can install a stub instead. The first call wins.
+/// Installs the backend the app's dialogs go through. The desktop runner calls this at startup; a test or a headless build can install a stub instead. The first call wins.
 pub fn set_file_dialogs(provider: Arc<dyn FileDialogs>) {
     let _ = DIALOGS.set(provider);
 }

@@ -1,16 +1,8 @@
-//! Page-stack navigation for rsx: a reactive [`Navigator`] stack over an app-defined route type, and a
-//! [`NavHost`] container that renders the top of that stack as a page — lazily built, cached, and swapped
-//! with an optional [`NavTransition`].
+//! Page-stack navigation for rsx: a reactive [`Navigator`] stack over an app-defined route type, and a [`NavHost`] container that renders the top of that stack as a page — lazily built, cached, and swapped with an optional [`NavTransition`].
 //!
-//! [`Navigator`] is the primitive: a `Vec<R>` behind a reactive signal, with push/pop history. [`NavHost`]
-//! is the view: it owns one layout container, builds each page once from a factory, shows only the active
-//! one (`set_display`), and reconciles navigation on each event — the same mechanism the runtime host uses
-//! to switch tabs, generalized over routes. A page is any [`NavPage`] (a `LayoutItem` with `on_enter` /
-//! `on_relayout` lifecycle hooks); [`SimplePage`] wraps a hook-less widget as one.
+//! [`Navigator`] is the primitive: a `Vec<R>` behind a reactive signal, with push/pop history. [`NavHost`] is the view: it owns one layout container, builds each page once from a factory, shows only the active one (`set_display`), and reconciles navigation on each event — the same mechanism the runtime host uses to switch tabs, generalized over routes. A page is any [`NavPage`] (a `LayoutItem` with `on_enter` / `on_relayout` lifecycle hooks); [`SimplePage`] wraps a hook-less widget as one.
 //!
-//! [`TabStacks`] and [`TabHost`] are the same pair one level up: one stack *per tab* rather than one shared
-//! stack, which is the native model (`UITabBarController`, a nested `Navigator`, a nested nav graph) and what
-//! lets a tab you leave stay several screens deep until you come back to it.
+//! [`TabStacks`] and [`TabHost`] are the same pair one level up: one stack *per tab* rather than one shared stack, which is the native model (`UITabBarController`, a nested `Navigator`, a nested nav graph) and what lets a tab you leave stay several screens deep until you come back to it.
 
 mod host;
 mod navigator;

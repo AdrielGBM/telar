@@ -1,9 +1,6 @@
 //! The host for the two renderers Telar ships, and the only place that names them.
 //!
-//! Everything wgpu-specific about the lifecycle is here: the build kept off the UI thread because creating a
-//! device takes long enough to see, the device kept warm across a suspend so a resume rebinds a surface instead
-//! of rebuilding a pipeline cache, and `Auto` degrading to the rasteriser when there is no adapter — or when wgpu
-//! was not compiled in at all.
+//! Everything wgpu-specific about the lifecycle is here: the build kept off the UI thread because creating a device takes long enough to see, the device kept warm across a suspend so a resume rebinds a surface instead of rebuilding a pipeline cache, and `Auto` degrading to the rasteriser when there is no adapter — or when wgpu was not compiled in at all.
 
 use renderer_core::{RenderBackend, RendererError};
 
@@ -26,7 +23,7 @@ const NO_SOFTWARE: &str = "telar was built without its `software` feature, so th
 
 pub(crate) struct BuiltinHost<W: SurfaceWindow> {
     channels: Option<RenderChannels>,
-    // Typed per backend rather than boxed: joining hardware has to hand back a concrete `HardwareRenderer` for the next resume to rebind, and a `Box<dyn RenderBackend>` could not.
+    // Typed per backend rather than boxed: joining hardware must hand back a concrete `HardwareRenderer` for the next resume to rebind, which a `Box<dyn RenderBackend>` could not.
     #[cfg(feature = "hardware")]
     hw_join: Option<std::thread::JoinHandle<renderer_hardware::HardwareRenderer<W>>>,
     #[cfg(feature = "software")]
@@ -56,9 +53,8 @@ impl<W: SurfaceWindow> BuiltinHost<W> {
         }
     }
 
-    /// Waits for the render thread, keeping the hardware device when `keep_warm`: its caches, pipelines and adapter
-    /// are what make a resume cheap. Software has nothing worth carrying.
-    // Every reader of `keep_warm` is behind a `cfg`, so a build with neither renderer reads it nowhere.
+    /// Waits for the render thread, keeping the hardware device when `keep_warm`: its caches, pipelines and adapter are what make a resume cheap. Software has nothing worth carrying.
+    // Every reader is behind a `cfg`, so a build with neither renderer reads it nowhere.
     #[cfg_attr(
         not(any(feature = "hardware", target_os = "linux")),
         allow(unused_variables)
@@ -125,7 +121,7 @@ impl<W: SurfaceWindow> BuiltinHost<W> {
     /// One strategy for all three paths that build one: first resume, a dev backend toggle and a restart.
     #[cfg(feature = "hardware")]
     fn spawn_hardware_build(&mut self, window: &W, req: &RendererRequest<'_>) {
-        // A second handle for the wake below: with no renderer yet, nothing this thread asks for would draw, so the building thread is the only one that can end the wait.
+        // A second handle for the wake below: with no renderer yet nothing this thread asks for would draw, so the building thread is the only one that can end the wait.
         let wake = window.clone();
         let window = window.clone();
         let cache_path = crate::runner::font_config::hardware_cache_path(req.app_name, req.paths);
@@ -179,8 +175,7 @@ impl<W: SurfaceWindow> BuiltinHost<W> {
         None
     }
 
-    /// Builds the rasteriser and puts it on its own thread, as hardware gets. The surface is created *here*, on the
-    /// UI thread, because macOS/iOS refuse to hand out Core Graphics handles anywhere else; only the renderer moves.
+    /// Builds the rasteriser and puts it on its own thread, as hardware gets. The surface is created *here*, on the UI thread, because macOS/iOS refuse to hand out Core Graphics handles anywhere else; only the renderer moves.
     #[cfg(feature = "software")]
     fn start_software(&mut self, window: &W, req: &RendererRequest<'_>) -> RendererStart {
         let config = crate::runner::font_config::build_software_renderer_config(
@@ -273,8 +268,7 @@ impl<W: SurfaceWindow> RendererHost<W> for BuiltinHost<W> {
         self.join_thread(false);
     }
 
-    /// Offscreen windows have no surface for a windowed renderer to create, so this rasterises into a CPU pixmap
-    /// whatever backend was configured — the headless path then needs no GPU adapter.
+    /// Offscreen windows have no surface for a windowed renderer to create, so this rasterises into a CPU pixmap whatever backend was configured — the headless path then needs no GPU adapter.
     fn build_offscreen(
         &mut self,
         window: &W,

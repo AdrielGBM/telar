@@ -2,8 +2,7 @@
 
 use telar::{Children, Container, LayoutError, LayoutItem, LayoutStyle, RwSignal};
 
-/// What every widget a `[view]` cannot build for itself looks like from the markup's side: named props in,
-/// one item out. The arguments are the props, and nothing here says so twice.
+/// What every widget a `[view]` cannot build for itself looks like from the markup's side: named props in, one item out. The arguments are the props, and nothing here says so twice.
 #[telar::component]
 fn probe(
     /// A prop with no attribute is required: forgetting it is a compile error naming it.

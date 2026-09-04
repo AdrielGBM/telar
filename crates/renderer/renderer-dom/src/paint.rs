@@ -1,8 +1,6 @@
 //! A box's painted style, as the CSS that draws it.
 //!
-//! Separate from the layout half on purpose: layout comes from what the widget declared, paint comes from
-//! the `Rect` the widget drew. The two reach a document backend by different routes and are only joined
-//! here, in the string one element ends up with.
+//! Separate from the layout half on purpose: layout comes from what the widget declared, paint comes from the `Rect` the widget drew. The two reach a document backend by different routes and are only joined here, in the string one element ends up with.
 
 use geometry_core::Rect;
 use renderer_core::{
@@ -17,6 +15,7 @@ pub fn declare(out: &mut String, property: &str, value: &str) {
     out.push(';');
 }
 
+/// A colour as the CSS `rgba(...)` a declaration takes.
 pub fn color(c: Color) -> String {
     let [r, g, b, a] = c.to_rgba8();
     if a == 255 {
@@ -28,9 +27,7 @@ pub fn color(c: Color) -> String {
 
 /// Which of the two schemes a surface of this colour belongs to, as CSS `color-scheme` spells it.
 ///
-/// Weighted by what each channel contributes to how bright a colour looks rather than averaged: a saturated
-/// blue and a saturated yellow average the same and are nothing alike to look at, and a theme built on
-/// either would have been handed the wrong one.
+/// Weighted by what each channel contributes to how bright a colour looks rather than averaged: a saturated blue and a saturated yellow average the same and are nothing alike to look at, and a theme built on either would have been handed the wrong one.
 pub fn scheme_of(c: Color) -> &'static str {
     if 0.2126 * c.r + 0.7152 * c.g + 0.0722 * c.b < 0.5 {
         "dark"
@@ -39,8 +36,7 @@ pub fn scheme_of(c: Color) -> &'static str {
     }
 }
 
-/// A number with at most three decimals, so an animated value does not churn the string every frame with
-/// digits nobody can see.
+/// A number with at most three decimals, so an animated value does not churn the string every frame with digits nobody can see.
 pub fn round(value: f32) -> String {
     let rounded = (value * 1000.0).round() / 1000.0;
     if rounded.fract() == 0.0 {
@@ -50,10 +46,12 @@ pub fn round(value: f32) -> String {
     }
 }
 
+/// A length as a CSS `px` string, trimmed of trailing zeros.
 pub fn px(value: f32) -> String {
     format!("{}px", round(value))
 }
 
+/// A paint as the CSS value a `background` or `color` takes.
 pub fn paint(p: &Paint) -> String {
     match p {
         Paint::Solid(c) => color(*c),
@@ -70,8 +68,7 @@ fn gradient(g: &Gradient) -> String {
         .collect();
     let stops = stops.join(",");
     match g.kind {
-        // The angle CSS wants is measured clockwise from "up", where the vector is measured from the
-        // positive x axis with y growing downwards — hence the quarter turn and the sign.
+        // CSS measures the angle clockwise from up, where the vector is measured from the positive x axis with y growing downwards — hence the quarter turn and the sign.
         GradientKind::Linear { start, end } => {
             let (dx, dy) = (end.x - start.x, end.y - start.y);
             let degrees = dx.atan2(-dy).to_degrees().rem_euclid(360.0);
@@ -105,17 +102,12 @@ fn radius(r: BorderRadius) -> Option<String> {
 
 /// A box's frame, as the inset shadows that draw it.
 ///
-/// Not `border`, which takes room: Telar's frame is paint on a box whose size layout already decided, and a
-/// CSS border eats into the content box instead — a 1px frame left every child two pixels narrower than the
-/// rect hit-testing reads. An inset shadow is drawn inside the same shape, follows the radius, and costs the
-/// layout nothing.
+/// Not `border`, which takes room: Telar's frame is paint on a box whose size layout already decided, and a CSS border eats into the content box instead — a 1px frame left every child two pixels narrower than the rect hit-testing reads. An inset shadow is drawn inside the same shape, follows the radius, and costs the layout nothing.
 fn border(b: &Border) -> Vec<String> {
     if !b.is_visible() {
         return Vec::new();
     }
-    // A shadow carries a colour, and a gradient is not one: written here it made the whole `box-shadow`
-    // invalid, and the browser dropped it — taking the box's drop shadow down with it, since the two share
-    // the property. A frame painted with a gradient is a background layer instead; see [`frame_image`].
+    // A shadow carries a colour and a gradient is not one: written here it made the whole `box-shadow` invalid and the browser dropped it, taking the box's drop shadow with it, since the two share the property. A frame painted with a gradient becomes a background layer instead.
     let Paint::Solid(colour) = b.paint else {
         return Vec::new();
     };
@@ -124,8 +116,7 @@ fn border(b: &Border) -> Vec<String> {
     if top == right && top == bottom && top == left {
         return vec![format!("inset 0 0 0 {} {colour}", px(top))];
     }
-    // Each side is a shadow displaced by its own width, which fills exactly the band between the edge and
-    // where it moved to. They overlap at the corners, which for a solid colour is the corner drawn twice.
+    // Each side is a shadow displaced by its own width, filling the band between the edge and where it moved to. They overlap at the corners, which for a solid colour is the corner drawn twice.
     [
         (top > 0.0, format!("inset 0 {} 0 0 {colour}", px(top))),
         (right > 0.0, format!("inset {} 0 0 0 {colour}", px(-right))),
@@ -153,8 +144,7 @@ fn shadow(s: Shadow) -> String {
 
 /// A picture, as the CSS that names it.
 ///
-/// Only what a URL cannot carry raw is escaped: `%` because it introduces an escape, `#` because it would
-/// start a fragment, and the three the markup itself is made of.
+/// Only what a URL cannot carry raw is escaped: `%` because it introduces an escape, `#` because it would start a fragment, and the three the markup itself is made of.
 fn data_uri(svg: &str) -> String {
     let mut out = String::from("url(\"data:image/svg+xml,");
     for character in svg.chars() {
@@ -171,11 +161,9 @@ fn data_uri(svg: &str) -> String {
     out
 }
 
-/// A gradient frame, as the background layer that draws it — `None` for every frame [`border`] can draw
-/// itself.
+/// A gradient frame, as the background layer that draws it — `None` for every frame [`border`] can draw itself.
 ///
-/// Laid over the fill rather than beside it because a frame is over the box it frames, and sized to the box
-/// so the ring inside the picture lands exactly on its edge.
+/// Laid over the fill rather than beside it because a frame is over the box it frames, and sized to the box so the ring inside the picture lands exactly on its edge.
 fn frame_image(style: &RectStyle, rect: Rect) -> Option<String> {
     let border = style.border.as_ref().filter(|b| b.is_visible())?;
     let Paint::Gradient(gradient) = &border.paint else {
@@ -189,8 +177,7 @@ fn frame_image(style: &RectStyle, rect: Rect) -> Option<String> {
 ///
 /// `rect` is the one it was drawn with, which is what a gradient's own coordinates are measured against.
 pub fn rect_style(style: &RectStyle, rect: Rect, out: &mut String) {
-    // One property, because a background is one property: the frame is a layer over the fill, and a fill
-    // that is a colour may only be the last of them.
+    // One property, because a background is one property: the frame is a layer over the fill, and a fill that is a colour may only be the last of them.
     match (style.fill.as_ref().map(paint), frame_image(style, rect)) {
         (Some(fill), Some(frame)) => declare(out, "background", &format!("{frame},{fill}")),
         (Some(fill), None) => declare(out, "background", &fill),
@@ -210,8 +197,7 @@ pub fn rect_style(style: &RectStyle, rect: Rect, out: &mut String) {
 
 /// Whether text in this style takes the element's background for itself.
 ///
-/// A box paints its own background, so it cannot also be the element this text is drawn on: what makes the
-/// glyphs a gradient is a background clipped to their shape, and the box's fill would be clipped to it too.
+/// A box paints its own background, so it cannot also be the element this text is drawn on: what makes the glyphs a gradient is a background clipped to their shape, and the box's fill would be clipped to it too.
 pub fn text_claims_background(style: &TextStyle) -> bool {
     matches!(style.color, Paint::Gradient(_))
 }
@@ -221,10 +207,7 @@ pub fn text_style(style: &TextStyle, out: &mut String) {
     declare(out, "font-size", &px(style.font_size));
     match &style.color {
         Paint::Solid(ink) => declare(out, "color", &color(*ink)),
-        // `color` takes a colour, so a gradient written there was dropped and the text came out in whatever
-        // it had inherited. Painted behind the element and clipped to the glyphs instead, which is the only
-        // way a document fills text with anything but a colour. It costs the element its own background,
-        // which is why a text that asks for one is never folded into the box it is in — see `Reconciler::pop`.
+        // `color` takes a colour, so a gradient written there was dropped and the text came out in whatever it had inherited. Painted behind the element and clipped to the glyphs instead, the only way a document fills text with anything but a colour. It costs the element its own background, which is why a text asking for one is never folded into the box it is in.
         Paint::Gradient(g) => {
             declare(out, "background-image", &gradient(g));
             declare(out, "-webkit-background-clip", "text");
@@ -268,14 +251,7 @@ pub fn text_style(style: &TextStyle, out: &mut String) {
     if style.letter_spacing != 0.0 {
         declare(out, "letter-spacing", &px(style.letter_spacing));
     }
-    // Always said, because the document's default is not Telar's. `normal` collapses a run of spaces to one
-    // and a newline to a space, so a paragraph written on several lines arrives as one — a source listing came
-    // out as a single line thousands of characters wide. What Telar means is `pre-wrap`: the newlines an
-    // author wrote are breaks, the spaces are spaces, and what does not fit still wraps.
-    //
-    // It is also what keeps the two engines agreeing on height. The measurer breaks on `\n` and counts the
-    // lines; a document that collapsed them measured one line where layout had reserved twenty, and the
-    // scroll area went on believing there was content below that the browser no longer had.
+    // Always said, because the document's default is not Telar's. `normal` collapses a run of spaces to one and a newline to a space, so a source listing came out as a single line thousands of characters wide. What Telar means is `pre-wrap`. It is also what keeps the two engines agreeing on height: a document that collapsed newlines measured one line where layout had reserved twenty, and the scroll area went on believing there was content the browser no longer had.
     declare(
         out,
         "white-space",
@@ -380,8 +356,7 @@ mod tests {
         assert_eq!(color(Color::rgba(0.0, 0.0, 0.0, 0.5)), "rgba(0,0,0,0.5)");
     }
 
-    /// The whole point of telling the browser which scheme a surface is: the two are told apart by how bright
-    /// the colour looks, not by which channel happens to be largest.
+    /// The whole point of telling the browser which scheme a surface is: the two are told apart by how bright the colour looks, not by which channel happens to be largest.
     #[test]
     fn a_surface_is_the_scheme_its_own_brightness_makes_it() {
         assert_eq!(scheme_of(Color::from_hex("#0e1017").unwrap()), "dark");
@@ -391,8 +366,7 @@ mod tests {
         assert_eq!(scheme_of(Color::rgba(1.0, 1.0, 0.0, 1.0)), "light");
     }
 
-    /// A gradient is not a colour, and `box-shadow` takes one: written there the declaration was invalid and
-    /// the browser dropped it whole — the frame *and* the drop shadow that shares the property.
+    /// A gradient is not a colour, and `box-shadow` takes one: written there the declaration was invalid and the browser dropped it whole — the frame *and* the drop shadow that shares the property.
     #[test]
     fn a_gradient_frame_does_not_take_the_drop_shadow_down_with_it() {
         let gradient = Gradient::linear(
@@ -442,8 +416,7 @@ mod tests {
         assert!(background.ends_with(",#ffffff"), "{background}");
     }
 
-    /// `#` starts a fragment and `<` is not a character a URL carries; a colour or a tag written raw ended
-    /// the picture early and the frame did not draw at all.
+    /// `#` starts a fragment and `<` is not a character a URL carries; a colour or a tag written raw ended the picture early and the frame did not draw at all.
     #[test]
     fn a_picture_is_escaped_where_a_url_cannot_carry_it() {
         let uri = data_uri("<svg fill=\"#abc\"/>");
@@ -466,8 +439,7 @@ mod text_tests {
         out
     }
 
-    /// The document's default collapses a newline to a space and a run of spaces to one; Telar's model does
-    /// neither, and a paragraph written on several lines came out as a single line.
+    /// The document's default collapses a newline to a space and a run of spaces to one; Telar's model does neither, and a paragraph written on several lines came out as a single line.
     #[test]
     fn the_lines_an_author_wrote_stay_lines() {
         assert!(
@@ -484,8 +456,7 @@ mod text_tests {
         assert!(!css.contains("pre-wrap"), "{css}");
     }
 
-    /// `color` takes a colour, so a gradient written there was dropped and the glyphs came out in whatever
-    /// they had inherited — the page's black, under a dark theme as much as a light one.
+    /// `color` takes a colour, so a gradient written there was dropped and the glyphs came out in whatever they had inherited — the page's black, under a dark theme as much as a light one.
     #[test]
     fn glyphs_filled_with_a_gradient_are_a_background_clipped_to_them() {
         let gradient = Gradient::linear(
@@ -535,13 +506,9 @@ mod text_tests {
 
 /// An absolute-space matrix as the CSS transform of a box whose own top-left is at `(x, y)`.
 ///
-/// Telar's matrices move points in the surface's coordinates: a rotation about a box's centre carries that
-/// centre, measured from the corner of the page. A CSS transform moves an element within its own coordinates
-/// instead, so the same six numbers written out unchanged displace it by its whole distance from that corner
-/// — which is a spinner orbiting the window rather than turning, and a slider's fill stretched across it.
+/// Telar's matrices move points in the surface's coordinates: a rotation about a box's centre carries that centre, measured from the corner of the page. A CSS transform moves an element within its own coordinates instead, so the same six numbers written out unchanged displace it by its whole distance from that corner — which is a spinner orbiting the window rather than turning, and a slider's fill stretched across it.
 ///
-/// Rebasing puts the fixed point back where the widget meant it. Paired with `transform-origin: 0 0`, since
-/// the arithmetic assumes the element's own origin is what stays put, and CSS otherwise assumes its centre.
+/// Rebasing puts the fixed point back where the widget meant it. Paired with `transform-origin: 0 0`, since the arithmetic assumes the element's own origin is what stays put, and CSS otherwise assumes its centre.
 pub fn matrix(m: [f32; 6], x: f32, y: f32) -> String {
     let [a, b, c, d, e, f] = m;
     format!(
@@ -559,9 +526,7 @@ pub fn matrix(m: [f32; 6], x: f32, y: f32) -> String {
 mod matrix_tests {
     use super::*;
 
-    /// A spinner: a quarter turn about its own centre, written by a widget as a turn about that centre's
-    /// place on the page. Unrebased it read as "turn, then walk to where you already are", which is a
-    /// spinner orbiting the window instead of turning in it.
+    /// A spinner: a quarter turn about its own centre, written by a widget as a turn about that centre's place on the page. Unrebased it read as "turn, then walk to where you already are", which is a spinner orbiting the window instead of turning in it.
     #[test]
     fn a_turn_about_a_box_far_down_the_page_stays_on_the_box() {
         // A 24x24 box at (300, 500): a 90 degree turn about (312, 512).

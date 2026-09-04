@@ -1,15 +1,8 @@
 //! The menu a gesture asks for, wherever it was asked.
 //!
-//! Not [`menu`](crate::menu), which is a labelled button that drops a list under itself. This one has no
-//! trigger at all: it opens at a point, because the thing it is about is what was under the pointer. That is
-//! the difference the catalogue was missing, and every application that needed one wrote the panel, the
-//! placement, the dismissal and the keyboard again — and stopped at the panel and the placement, which is why
-//! a context menu almost never answers an arrow key.
+//! Not [`menu`](crate::menu), which is a labelled button that drops a list under itself. This one has no trigger at all: it opens at a point, because the thing it is about is what was under the pointer. That is the difference the catalogue was missing, and every application that needed one wrote the panel, the placement, the dismissal and the keyboard again — and stopped at the panel and the placement, which is why a context menu almost never answers an arrow key.
 //!
-//! **What it owns:** where the panel goes and that it stays on screen, which row is highlighted, the keys that
-//! move and commit, the submenu that opens beside a row, and every way of closing it. **What it does not own:**
-//! what the rows are, what they do, and what they look like — an entry carries its own action, a caller can
-//! hand over a whole widget for a row that is not a line of text, and the panel's paint is amendable.
+//! **What it owns:** where the panel goes and that it stays on screen, which row is highlighted, the keys that move and commit, the submenu that opens beside a row, and every way of closing it. **What it does not own:** what the rows are, what they do, and what they look like — an entry carries its own action, a caller can hand over a whole widget for a row that is not a line of text, and the panel's paint is amendable.
 
 use std::rc::Rc;
 use telar_macros::Props;
@@ -23,28 +16,22 @@ use ui_core::{Children, LayoutItem, Overlay, StyledContainer, Text, box_item};
 
 /// One line of a menu.
 ///
-/// The action rides on the entry rather than coming back as an index, because the rows of a context menu are
-/// heterogeneous by nature — half of them are only there when they apply — and a caller matching on numbers
-/// keeps a second list in step with the first for no reason.
+/// The action rides on the entry rather than coming back as an index, because the rows of a context menu are heterogeneous by nature — half of them are only there when they apply — and a caller matching on numbers keeps a second list in step with the first for no reason.
 #[derive(Clone)]
 pub enum Entry {
     /// A label, the key that does the same thing, and what picking it does.
     Row {
         label: String,
-        /// Drawn faintly at the trailing edge: the shortcut this row is the discoverable half of. Empty for
-        /// an action with no key.
+        /// Drawn faintly at the trailing edge: the shortcut this row is the discoverable half of. Empty for an action with no key.
         hint: String,
         act: Rc<dyn Fn()>,
         enabled: bool,
     },
     /// A row that opens another menu beside it.
     Sub { label: String, entries: Vec<Entry> },
-    /// A row the caller draws: the strip of icons a file manager puts at the top of its menu, a colour
-    /// swatch, a preview. `act` makes it a stop for the keyboard as well as for the pointer; without one the
-    /// arrows step over it, which is what a heading or a self-contained strip of buttons wants.
+    /// A row the caller draws: the strip of icons a file manager puts at the top of its menu, a colour swatch, a preview. `act` makes it a stop for the keyboard as well as for the pointer; without one the arrows step over it, which is what a heading or a self-contained strip of buttons wants.
     ///
-    /// A recipe rather than a built widget, so a menu can be opened twice — and so the entry list is
-    /// `Clone`, which is what lets it ride on props that reach a region that rebuilds.
+    /// A recipe rather than a built widget, so a menu can be opened twice — and so the entry list is `Clone`, which is what lets it ride on props that reach a region that rebuilds.
     Custom {
         widget: Rc<dyn Fn() -> Result<Box<dyn LayoutItem>, LayoutError>>,
         act: Option<Rc<dyn Fn()>>,
@@ -94,8 +81,7 @@ impl Entry {
     }
 }
 
-/// How a menu is painted, and how wide. Every colour is the caller's: this crate has no palette of its own and
-/// a context menu is chrome, which is exactly where an application's own look shows.
+/// How a menu is painted, and how wide. Every colour is the caller's: this crate has no palette of its own and a context menu is chrome, which is exactly where an application's own look shows.
 #[derive(Clone, Copy)]
 pub struct MenuStyle {
     pub background: Color,
@@ -135,27 +121,20 @@ impl Default for MenuStyle {
 
 /// The list a menu's children push themselves into as they build.
 ///
-/// A context menu's rows are heterogeneous and half of them are only there when they apply, which in markup is
-/// an `if` around a row and in Rust was a `Vec` built with pushes. The pieces below register what they are and
-/// hand back a bare node, the way a bound list's pieces do for [`ListContext::declare`](crate::list): the panel
-/// still owns the highlight, the keyboard and the submenus, because it still has the entries — they are simply
-/// written where they are read now.
+/// A context menu's rows are heterogeneous and half of them are only there when they apply, which in markup is an `if` around a row and in Rust was a `Vec` built with pushes. The pieces below register what they are and hand back a bare node, the way a bound list's pieces do for [`ListContext::declare`](crate::list): the panel still owns the highlight, the keyboard and the submenus, because it still has the entries — they are simply written where they are read now.
 #[derive(Clone)]
 struct MenuEntries(Rc<std::cell::RefCell<Declared>>);
 
 /// What a menu's children left behind: the entries they registered, and every node they handed back.
 ///
-/// The nodes are kept because nothing frees a layout node on drop and `remove` does not reach descendants — so
-/// taking only what `take_default` returns would leak a row wrapped in anything: a group of rows written as a
-/// component of its own, an `if`, a `for`. Each piece knows its own node, so each piece says so.
+/// The nodes are kept because nothing frees a layout node on drop and `remove` does not reach descendants — so taking only what `take_default` returns would leak a row wrapped in anything: a group of rows written as a component of its own, an `if`, a `for`. Each piece knows its own node, so each piece says so.
 #[derive(Default)]
 struct Declared {
     entries: Vec<Entry>,
     nodes: Vec<layout_core::NodeId>,
 }
 
-/// Runs `children` for their entries alone, and takes what they handed back out of the tree: a piece that
-/// registered itself is not a widget.
+/// Runs `children` for their entries alone, and takes what they handed back out of the tree: a piece that registered itself is not a widget.
 fn declared(children: &Children) -> Result<Vec<Entry>, LayoutError> {
     let collected = MenuEntries(Rc::new(std::cell::RefCell::new(Declared::default())));
     let mut built = children.build_with(collected.clone())?;
@@ -185,11 +164,11 @@ fn register(entry: Entry) -> Result<Box<dyn LayoutItem>, LayoutError> {
 }
 
 #[derive(Props)]
+/// One selectable row of a context menu.
 pub struct MenuRowProps {
     #[props(into)]
     pub label: String,
-    /// Drawn faintly at the trailing edge: the key that does the same thing, which is the half of a shortcut
-    /// anybody ever discovers.
+    /// Drawn faintly at the trailing edge: the key that does the same thing, which is the half of a shortcut anybody ever discovers.
     #[props(into, default)]
     pub hint: String,
     #[props(default = Rc::new(|| {}))]
@@ -214,6 +193,7 @@ pub fn menu_row(
 }
 
 #[derive(Props)]
+/// A rule between groups of rows.
 pub struct MenuSeparatorProps {}
 
 /// A line between two groups of rows. Never a stop for the keyboard.
@@ -225,6 +205,7 @@ pub fn menu_separator(
 }
 
 #[derive(Props)]
+/// A row that opens a submenu beside it.
 pub struct MenuSubProps {
     #[props(into)]
     pub label: String,
@@ -242,9 +223,9 @@ pub fn menu_sub(
 }
 
 #[derive(Props)]
+/// A row whose content is whatever markup the caller nested inside it.
 pub struct MenuCustomProps {
-    /// What picking it does, and whether the arrows stop on it at all: without one the keyboard steps over it,
-    /// which is what a heading or a self-contained strip of buttons wants.
+    /// What picking it does, and whether the arrows stop on it at all: without one the keyboard steps over it, which is what a heading or a self-contained strip of buttons wants.
     #[props(some, default)]
     pub on_select: Option<Rc<dyn Fn()>>,
 }
@@ -254,7 +235,7 @@ pub fn menu_custom(
     props: MenuCustomProps,
     children: Children,
 ) -> Result<Box<dyn LayoutItem>, LayoutError> {
-    // The children are a recipe, which is exactly what a `Custom` entry wants: a menu can be opened twice.
+    // The children are a recipe, which is what a `Custom` entry wants: a menu can be opened twice.
     let widget = Rc::new(move || {
         let mut items = children.build()?.take_default();
         match items.len() {
@@ -273,14 +254,14 @@ pub fn menu_custom(
 }
 
 #[derive(Props)]
+/// The menu itself: the rows it holds and where it is anchored.
 pub struct ContextMenuProps {
     /// Where it was asked for, in surface coordinates.
     #[props(default = (0.0, 0.0))]
     pub at: (f32, f32),
     #[props(default = Vec::new())]
     pub entries: Vec<Entry>,
-    /// Run when the menu is done with: a row was picked, Escape was pressed, or the hand went elsewhere. The
-    /// caller owns whether the menu exists, so this is how it says the answer is in.
+    /// Run when the menu is done with: a row was picked, Escape was pressed, or the hand went elsewhere. The caller owns whether the menu exists, so this is how it says the answer is in.
     #[props(default = Rc::new(|| {}))]
     pub on_close: Rc<dyn Fn()>,
     #[props(default = 180.0)]
@@ -294,8 +275,7 @@ pub struct ContextMenuProps {
 
 /// A menu opened at a point: rows, submenus, the keyboard, and every way out.
 ///
-/// The rows are its children — `menu_row`, `menu_separator`, `menu_sub`, `menu_custom` — or the `entries`
-/// prop, which is the same list handed over already built. Children come after, so a caller may do both.
+/// The rows are its children — `menu_row`, `menu_separator`, `menu_sub`, `menu_custom` — or the `entries` prop, which is the same list handed over already built. Children come after, so a caller may do both.
 pub fn context_menu(
     props: ContextMenuProps,
     children: Children,
@@ -321,14 +301,7 @@ pub fn context_menu(
         closing.clone(),
     )?;
 
-    // A see-through sheet over everything, inside a blocking overlay: it keeps the press off whatever the menu
-    // is about, and every way of pressing away from the panel is a way of being done with it. The stroke as
-    // well as the tap, and either button: waiting for a release a drag never delivers is how a menu ends up
-    // standing over a window nobody asked it to be on.
-    // The stroke and not the tap, and that is the whole of it: a drag with no threshold reports from the press
-    // itself, so this fires the moment the button goes down — which is when a menu should get out of the way,
-    // and the only reading that also covers the hand that presses away and keeps moving. A tap as well would be
-    // the same answer twice, once at each end of one gesture.
+    // A see-through sheet inside a blocking overlay, so the press never reaches whatever the menu is about. It closes on the stroke rather than the tap: a drag with no threshold reports from the press itself, so this fires the moment the button goes down, which also covers the hand that presses away and keeps moving. Waiting for a release a drag never delivers is how a menu ends up standing over a window nobody asked it to be on.
     let dragged = closing.clone();
     let backdrop = StyledContainer::new(
         LayoutStyle::new().flex_column().flex_grow(1.0),
@@ -346,9 +319,7 @@ pub fn context_menu(
 
 /// One panel of a menu, and the panels its submenus open. Recursive: a submenu is a menu.
 ///
-/// `at` places the panel in surface coordinates and is what the menu itself is opened with; a submenu passes
-/// `None`, because it is positioned against the row it hangs off rather than against the window. `left` is
-/// where the panel ends up either way, which is all its children need to know to pick the side they open on.
+/// `at` places the panel in surface coordinates and is what the menu itself is opened with; a submenu passes `None`, because it is positioned against the row it hangs off rather than against the window. `left` is where the panel ends up either way, which is all its children need to know to pick the side they open on.
 #[allow(clippy::too_many_arguments)]
 fn panel(
     entries: Vec<Entry>,
@@ -369,8 +340,7 @@ fn panel(
     let opened: RwSignal<Option<usize>> = signal(None);
 
     let mut rows: Vec<Box<dyn LayoutItem>> = Vec::new();
-    // What Enter does on each row, kept beside the widgets: the action rides on the entry, so the panel — which
-    // is what hears the key — has to be told what its rows do.
+    // The action rides on the entry, so the panel — which is what hears the key — has to be told what its rows do.
     let mut acts: Vec<Act> = Vec::new();
     for (index, entry) in entries.into_iter().enumerate() {
         let (widget, act) = row(
@@ -401,16 +371,14 @@ fn panel(
             rows,
         )?
         .styled_by(placed)
-        // Swallowed: a press on the panel's own padding is not a press away from it, and a stroke that starts
-        // on the panel is the panel's — it is the backdrop behind that closes on one.
+        // A press on the panel's own padding is not a press away from it, and a stroke that starts on the panel is the panel's.
         .on_press(|| {})
         .holds_stroke()
         .on_key(keyed),
     ))
 }
 
-/// Where the panel sits: at the point it was asked for, kept inside the box it was given — or wherever the row
-/// it hangs off has already put it, for a submenu.
+/// Where the panel sits: at the point it was asked for, kept inside the box it was given — or wherever the row it hangs off has already put it, for a submenu.
 fn placed_at(
     at: Option<(f32, f32)>,
     width: f32,
@@ -440,8 +408,7 @@ fn left_edge(at: (f32, f32), width: f32, within: Rect) -> f32 {
     at.0.min(within.x + within.width - width).max(within.x)
 }
 
-/// The keys a panel answers, and only while it is the deepest one open: a menu with a submenu showing has
-/// handed the arrows to it.
+/// The keys a panel answers, and only while it is the deepest one open: a menu with a submenu showing has handed the arrows to it.
 fn keys(
     stops: Vec<usize>,
     acts: Vec<Act>,
@@ -474,7 +441,7 @@ fn keys(
             Key::Named(NamedKey::Home) => highlighted.set(stops.first().copied()),
             Key::Named(NamedKey::End) => highlighted.set(stops.last().copied()),
             Key::Named(NamedKey::ArrowLeft) if opened.peek().is_some() => opened.set(None),
-            // Rightwards *into* a submenu, which is the other half of the leftwards out of one.
+            // Rightwards into a submenu, the other half of the leftwards out of one.
             Key::Named(NamedKey::ArrowRight) => {
                 if let Some(Act::Open) = held() {
                     opened.set(highlighted.peek());
@@ -605,15 +572,12 @@ fn row(
                 true,
                 move || opened.set(Some(index)),
             )?;
-            // Beside the row it belongs to, and on the side there is room for. Positioned against the row's
-            // own box rather than against the window: `inset_top(0)` is the row's top edge, which is where a
-            // submenu lines up, and it costs neither a measurement nor a rect to know.
+            // Positioned against the row's own box rather than the window: `inset_top(0)` is the row's top edge, which is where a submenu lines up, and it costs neither a measurement nor a rect to know.
             let leans = match left + width * 2.0 <= within.x + within.width {
                 true => width,
                 false => -width,
             };
-            // Built the first time it is opened, and only then: a menu with six submenus is six panels nobody
-            // has asked for, and the row it hangs off has no place on screen until the panel it is in has one.
+            // Built the first time it is opened: a menu with six submenus is six panels nobody asked for, and the row it hangs off has no place on screen until the panel it is in has one.
             let child = ui_core::Lazy::new(
                 LayoutStyle::new()
                     .absolute()
@@ -656,7 +620,7 @@ fn line(
     style: MenuStyle,
     highlighted: RwSignal<Option<usize>>,
     opened: RwSignal<Option<usize>>,
-    // Whether pointing at this row is already asking for it: a submenu opens by being hovered, an ordinary row does nothing until it is pressed.
+    // A submenu opens by being hovered; an ordinary row does nothing until it is pressed.
     opens: bool,
     act: impl Fn() + 'static,
 ) -> Result<Box<dyn LayoutItem>, LayoutError> {
@@ -694,10 +658,9 @@ fn line(
         }
         highlighted.set(Some(index));
         match opens {
-            // **A submenu opens by being pointed at.** Every menu bar there has ever been works this way, and one that waits for a press makes somebody click twice to reach a row they can already see the way to. The press stays: it is how a submenu is opened from the keyboard, and how a pointer that arrived by a straight line rather than by hovering the row gets in.
+            // A submenu opens by being pointed at, as every menu bar there has ever been does; one that waits for a press makes somebody click twice to reach a row they can already see the way to. The press stays: it is how a submenu opens from the keyboard, and how a pointer arriving by a straight line gets in.
             true => opened.set(Some(index)),
-            // A pointer moving down a menu closes the submenu it left, which is what makes hovering back and
-            // forth across a list of them show one at a time.
+            // A pointer moving down a menu closes the submenu it left, which is what makes hovering back and forth across a list of them show one at a time.
             false if opened.peek() != Some(index) => opened.set(None),
             false => {}
         }
@@ -744,8 +707,7 @@ mod tests {
         }
     }
 
-    /// A menu of three rows with a separator in the middle and a disabled one, over a shared record of what
-    /// was picked and whether it asked to be closed.
+    /// A menu of three rows with a separator in the middle and a disabled one, over a shared record of what was picked and whether it asked to be closed.
     #[allow(clippy::type_complexity)]
     fn menu() -> (ComponentList, Rc<RefCell<Vec<String>>>) {
         fresh_layout_runtime();
@@ -786,10 +748,7 @@ mod tests {
         (tree, said)
     }
 
-    /// **The rows written where they are read.** A context menu's rows are heterogeneous and half of them are
-    /// only there when they apply, which is an `if` around a row — and a `Vec` built with pushes in a function
-    /// somewhere else is the one shape that cannot show that. The children register what they are, so the
-    /// panel gets the same list it would have been handed.
+    /// **The rows written where they are read.** A context menu's rows are heterogeneous and half of them are only there when they apply, which is an `if` around a row — and a `Vec` built with pushes in a function somewhere else is the one shape that cannot show that. The children register what they are, so the panel gets the same list it would have been handed.
     #[test]
     fn the_rows_may_be_children() {
         fresh_layout_runtime();
@@ -839,8 +798,6 @@ mod tests {
             drawn_texts(&tree)
         );
 
-        // Down onto the first row and pick it: the entries kept their order, and the one that cannot be picked
-        // is still stepped over.
         route(&mut tree, &key(NamedKey::ArrowDown));
         route(&mut tree, &key(NamedKey::ArrowDown));
         route(&mut tree, &key(NamedKey::Enter));
@@ -852,15 +809,11 @@ mod tests {
         );
     }
 
-    /// **The arrows step over what cannot be picked.** A separator is not a row and a disabled one is there to
-    /// be read, not chosen — a menu that stops on either is one where the keyboard counts lines instead of
-    /// offering answers.
+    /// **The arrows step over what cannot be picked.** A separator is not a row and a disabled one is there to be read, not chosen — a menu that stops on either is one where the keyboard counts lines instead of offering answers.
     #[test]
     fn the_keyboard_walks_the_rows_that_can_be_picked() {
         let (mut tree, said) = menu();
 
-        // Down to the first row, down again — past the separator and the disabled one — to the submenu, and
-        // back up to where it started.
         route(&mut tree, &key(NamedKey::ArrowDown));
         route(&mut tree, &key(NamedKey::ArrowDown));
         route(&mut tree, &key(NamedKey::ArrowUp));
@@ -888,7 +841,6 @@ mod tests {
             drawn_texts(&tree)
         );
 
-        // The parent has handed the arrows over: down moves inside the child, and Enter picks there.
         route(&mut tree, &key(NamedKey::ArrowDown));
         route(&mut tree, &key(NamedKey::Enter));
         assert_eq!(
@@ -907,7 +859,7 @@ mod tests {
         let (mut tree, _said) = menu();
         assert!(!drawn_texts(&tree).iter().any(|text| text == "hondo"));
 
-        // The fourth entry down the panel, at the metrics the default style lays it out on: two rows and a separator above it, from a panel opened at y=30.
+        // The fourth entry down, at the metrics the default style lays it out on: two rows and a separator above it, from a panel opened at y=30.
         route(&mut tree, &moved(60.0, 94.0));
         ui_core::relayout_if_dirty();
         assert!(

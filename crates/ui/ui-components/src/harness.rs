@@ -1,10 +1,6 @@
 //! The pointer-event and layout scaffolding every widget's test module was writing for itself.
 //!
-//! Ten copies of `press`, nine of `release` and seven of `lay_out` had gone byte-identical — `checkbox`,
-//! `radio` and `toggle` shared 48 consecutive lines. Two things stayed parameters rather than being folded
-//! in, because folding them would have changed what the tests measure: the root's **direction** (`tabs` lays
-//! its pills out in a row, everyone else in a column, and a single `flex_column` helper would silently move
-//! the rect it asserts on) and the root's **size**.
+//! Ten copies of `press`, nine of `release` and seven of `lay_out` had gone byte-identical — `checkbox`, `radio` and `toggle` shared 48 consecutive lines. Two things stayed parameters rather than being folded in, because folding them would have changed what the tests measure: the root's **direction** (`tabs` lays its pills out in a row, everyone else in a column, and a single `flex_column` helper would silently move the rect it asserts on) and the root's **size**.
 
 use geometry_core::Rect;
 use layout_core::{AvailableSpace, LayoutStyle};
@@ -39,8 +35,7 @@ pub(crate) fn moved(x: f64, y: f64) -> Event {
     }
 }
 
-/// Dispatches like the runner does: overlays first, and only what they ignore reaches the tree. A widget with
-/// an open panel is not reachable any other way — the panel is in the overlay layer, not under the root.
+/// Dispatches like the runner does: overlays first, and only what they ignore reaches the tree. A widget with an open panel is not reachable any other way — the panel is in the overlay layer, not under the root.
 pub(crate) fn route(tree: &mut ComponentList, event: &Event) {
     if dispatch_overlays(event) == EventResult::Ignored {
         tree.on_event(event);

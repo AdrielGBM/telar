@@ -1,9 +1,6 @@
 //! Integration test for `HttpAssetSource`: the seam, the transport and the disk cache, end to end.
 //!
-//! The module's unit tests cover the cache-name rule in isolation. What this proves is the part that only
-//! shows up wired together — that a read returns `Loading` without blocking, that the worker's answer reaches
-//! the signal through `drain_tasks` on this thread, and that the second run resolves from disk with no server
-//! listening at all. A source that only ever spun would pass every unit test in the file.
+//! The module's unit tests cover the cache-name rule in isolation. What this proves is the part that only shows up wired together — that a read returns `Loading` without blocking, that the worker's answer reaches the signal through `drain_tasks` on this thread, and that the second run resolves from disk with no server listening at all. A source that only ever spun would pass every unit test in the file.
 
 use std::io::{Read, Write};
 use std::net::TcpListener;
@@ -17,8 +14,7 @@ use telar::{AssetSource, AssetState, drain_tasks};
 
 const SVG: &str = r#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M2 2 H22 V22 H2 Z"/></svg>"#;
 
-/// A one-endpoint HTTP server on a loopback port, counting what it served so a cache hit is distinguishable
-/// from a second download rather than merely plausible.
+/// A one-endpoint HTTP server on a loopback port, counting what it served so a cache hit is distinguishable from a second download rather than merely plausible.
 struct Server {
     port: u16,
     hits: Arc<AtomicUsize>,
@@ -57,8 +53,7 @@ impl Server {
     }
 }
 
-/// Drains delivered task values until `id` settles, or gives up. Stands in for the runner's per-frame
-/// `drain_tasks`, which is the only thing this test needs from a running app.
+/// Drains delivered task values until `id` settles, or gives up. Stands in for the runner's per-frame `drain_tasks`, which is the only thing this test needs from a running app.
 fn settle(
     source: &HttpAssetSource,
     id: &str,
@@ -75,8 +70,7 @@ fn settle(
     }
 }
 
-/// `SvgData` has no `Debug`, and a failure message that says which of the three states was reached is the
-/// whole point of asserting on it.
+/// `SvgData` has no `Debug`, and a failure message that says which of the three states was reached is the whole point of asserting on it.
 fn name_of(state: &AssetState<Arc<telar::SvgData>>) -> &'static str {
     match state {
         AssetState::Loading => "Loading",

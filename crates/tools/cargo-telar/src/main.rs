@@ -1,3 +1,5 @@
+//! `cargo telar`: the CLI entry point.
+
 mod runner;
 
 fn main() {

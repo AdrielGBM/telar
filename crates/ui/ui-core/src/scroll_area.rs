@@ -1,3 +1,5 @@
+//! The scroll viewport: offsets, scrollbars, the fling, and the content laid out as its own root.
+
 use std::cell::RefCell;
 use std::rc::Rc;
 
@@ -17,6 +19,7 @@ use crate::layout_leaf::LayoutLeaf;
 use crate::pointer::{clip_pointer_event, offset_pointer};
 use crate::scroll_region::{ScrollRegionId, register_scroll_region, unregister_scroll_region};
 
+/// How a scroll area's bars are painted, and how wide they are.
 pub struct ScrollbarStyle {
     pub color: Color,
     pub width: f32,
@@ -45,8 +48,7 @@ const MIN_THUMB: f32 = 24.0;
 
 /// Where a scrollbar's thumb sits along one axis, and the room it has to travel.
 ///
-/// One description read by both the drawing and the pointer: a thumb hit-tested against geometry worked out
-/// a second time is a thumb that can be drawn in one place and grabbed in another.
+/// One description read by both the drawing and the pointer: a thumb hit-tested against geometry worked out a second time is a thumb that can be drawn in one place and grabbed in another.
 struct Thumb {
     start: f32,
     length: f32,
@@ -139,8 +141,7 @@ struct Motion {
 }
 
 impl Motion {
-    /// Ends both. Whatever is taking the offset over is now the one that says where it goes, and a glide
-    /// finishing afterwards would drag it back to where the wheel had asked for.
+    /// Ends both. Whatever is taking the offset over is now the one that says where it goes, and a glide finishing afterwards would drag it back to where the wheel had asked for.
     fn stop_glides(&mut self) {
         for glide in [self.glide_x.take(), self.glide_y.take()]
             .into_iter()
@@ -178,17 +179,15 @@ fn handle_scroll_event(
     motion: &mut Motion,
 ) -> EventResult {
     if let Event::Scrolled { delta, x, y } = event {
-        // A surface that scrolls for itself has already decided which box the wheel moved, and says so with
-        // `BoxScrolled`. Answering it here as well would move the offset twice for one turn.
+        // A surface that scrolls for itself has already decided which box the wheel moved and says so with `BoxScrolled`; answering here too would move the offset twice for one turn.
         if ui_tree::element_capture() {
             return EventResult::Ignored;
         }
-        // The wheel belongs to whatever is under it: outside this viewport it is an ancestor's to handle.
+        // Outside this viewport the wheel is an ancestor's to handle.
         if !viewport.contains(*x as f32, *y as f32) {
             return EventResult::Ignored;
         }
-        // Nested scroll: offer the wheel to the content first (in content space, like every other pointer
-        // event that crosses this boundary), so an inner scroll area under the pointer consumes it first.
+        // Offered to the content first, in content space, so an inner scroll area under the pointer consumes it first.
         let inner = offset_pointer(
             event,
             viewport.x as f64 - scroll_x.get() as f64,
@@ -202,16 +201,12 @@ fn handle_scroll_event(
             return EventResult::Handled;
         }
         let (delta_x, delta_y) = delta.pixels();
-        // Here rather than where the event arrived: this is the point at which the scroll is known to be
-        // this area's and not an inner one's. Recorded earlier, an outer area built up the speed of a
-        // gesture its content had consumed, and let go of it into a fling of its own.
+        // Here rather than where the event arrived: this is where the scroll is known to be this area's. Recorded earlier, an outer area built up the speed of a gesture its content had consumed.
         motion.velocity.record(delta_y);
         let content_rect = content_rect_signal.get();
         let max_scroll_x = (content_rect.width - viewport.width).max(0.0);
         let max_scroll_y = (content_rect.height - viewport.height).max(0.0);
-        // A notch says how far, never how fast, so it is the one kind of scroll worth easing across. A
-        // trackpad and a finger report pixels they have already travelled, and animating those would be
-        // animating a movement that has happened.
+        // A notch says how far, never how fast, so it is the one scroll worth easing across. A trackpad and a finger report pixels already travelled, and animating those would animate a movement that has happened.
         if ui_tree::smooth_wheel() && matches!(delta, platform_core::ScrollDelta::Lines { .. }) {
             glide_axis(&mut motion.glide_x, scroll_x, -delta_x, (0.0, max_scroll_x));
             glide_axis(&mut motion.glide_y, scroll_y, -delta_y, (0.0, max_scroll_y));
@@ -241,14 +236,11 @@ pub(crate) struct ScrollCore {
     content_rect_signal: RwSignal<Rect>,
     scroll_x: RwSignal<f32>,
     scroll_y: RwSignal<f32>,
-    // Shared between event dispatch (borrow_mut) and the content segment (borrow). The content is its own segment so a scroll tick only re-runs this core's view() to rewrite the Transform matrix — the content is referenced as a cheap boundary and is NOT re-flattened on scroll.
+    // Shared between event dispatch (borrow_mut) and the content segment (borrow). The content is its own segment, so a scroll tick rewrites the transform without re-flattening it.
     content: Rc<RefCell<Box<dyn LayoutItem>>>,
     content_segment: Rc<Segment>,
     scrollbar_style: ScrollbarStyle,
-    // Touch tap-vs-scroll: finger travel accumulated while a pointer is pressed. Content children see
-    // content-space coords pinned under the finger during a drag, so they can't detect the scroll themselves;
-    // once travel passes SCROLL_TAP_SLOP the scroll area cancels their pending tap (one CursorLeft) so a scroll
-    // doesn't click. Gated on `press_active` so a mouse wheel scroll (no press) never cancels anything.
+    // Finger travel accumulated while a pointer is pressed. Content children see coords pinned under the finger and cannot detect the scroll themselves, so past `SCROLL_TAP_SLOP` the area cancels their pending tap. Gated on `press_active`, so a wheel scroll never cancels anything.
     press_active: bool,
     gesture_scroll: f32,
     tap_cancelled: bool,
@@ -259,22 +251,17 @@ pub(crate) struct ScrollCore {
     bar_drag: Option<(Axis, f32)>,
     /// An offset this widget is *asking* for, on a surface that holds the content itself.
     ///
-    /// There the offset travels the other way almost always: the compositor scrolls, and `BoxScrolled`
-    /// tells this widget where the content ended up. Moving the signal alone would be overruled by the very
-    /// next offset the surface reports — which is why the bar could not be dragged there at all. So it is
-    /// published instead, on the element, and the backend puts the box where this says it should be.
+    /// There the offset travels the other way almost always: the compositor scrolls, and `BoxScrolled` tells this widget where the content ended up. Moving the signal alone would be overruled by the very next offset the surface reports — which is why the bar could not be dragged there at all. So it is published instead, on the element, and the backend puts the box where this says it should be.
     ///
     /// A `Cell`, because `view` is where it is handed over and `view` takes `&self`.
     commanded: std::cell::Cell<Option<(f32, f32)>>,
 }
 
-/// Accumulated finger travel (logical px) within a gesture past which the scroll area treats it as a scroll
-/// and cancels any pending tap on its content.
+/// Accumulated finger travel (logical px) within a gesture past which the scroll area treats it as a scroll and cancels any pending tap on its content.
 const SCROLL_TAP_SLOP: f32 = 8.0;
 
 impl ScrollCore {
-    /// Adopts externally-created scroll offset signals, so a caller can hand those same signals to the
-    /// content it builds (see [`LayoutScrollArea::new_with`]). Fresh signals give an independent scroll.
+    /// Adopts externally-created scroll offset signals, so a caller can hand those same signals to the content it builds (see [`LayoutScrollArea::new_with`]). Fresh signals give an independent scroll.
     fn with_offsets(
         content_rect_signal: RwSignal<Rect>,
         content: Box<dyn LayoutItem>,
@@ -302,9 +289,7 @@ impl ScrollCore {
 
     /// Puts an offset where this widget wants it, wherever the content actually is.
     ///
-    /// The signal is the whole of it on a target that draws the content at the offset. Where the surface
-    /// holds the content instead, the signal only *records* where the surface put it, so the surface has to
-    /// be asked as well — see [`ScrollCore::commanded`].
+    /// The signal is the whole of it on a target that draws the content at the offset. Where the surface holds the content instead, the signal only *records* where the surface put it, so the surface has to be asked as well — see [`ScrollCore::commanded`].
     fn command(&self, x: f32, y: f32) {
         if self.scroll_x.peek() != x {
             self.scroll_x.set(x);
@@ -319,9 +304,7 @@ impl ScrollCore {
 
     /// The offset this widget is asking the surface for, taken by the frame that carries it.
     ///
-    /// One frame, one request: a scroll a backend applies is applied at once, and one it does not — because
-    /// the box cannot go that far — must not be asked for again, or every later frame would drag the box
-    /// back to it and nothing else could scroll at all.
+    /// One frame, one request: a scroll a backend applies is applied at once, and one it does not — because the box cannot go that far — must not be asked for again, or every later frame would drag the box back to it and nothing else could scroll at all.
     fn take_command(&self) -> Option<(f32, f32)> {
         self.commanded.take()
     }
@@ -334,9 +317,7 @@ impl ScrollCore {
         }
     }
 
-    // Both of these write the offsets they read, so both `peek` them: whoever calls them may be doing so from
-    // an effect, and a reactive read there would subscribe that effect to its own correction (see
-    // `ScrollViewport::reveal`, where that bug bites).
+    // Both write the offsets they read, so both `peek` them: a caller may be inside an effect, where a reactive read would subscribe that effect to its own correction.
     fn scroll_to_top(&mut self) {
         // Whatever was still gliding was gliding through the page being left.
         self.catch_all();
@@ -345,11 +326,9 @@ impl ScrollCore {
 
     /// Takes the offset a surface that scrolls for itself has already applied.
     ///
-    /// `peek` on both, and not for tidiness: this runs while the app is dispatching, and a reactive read here
-    /// would subscribe whatever is running to an offset it is about to be told again.
+    /// `peek` on both, and not for tidiness: this runs while the app is dispatching, and a reactive read here would subscribe whatever is running to an offset it is about to be told again.
     fn follow(&mut self, x: f32, y: f32) {
-        // Where the content is beats where this widget was about to ask for it to be: a fling is a scroll
-        // reported a frame late, and answering it with a stale request stops it dead.
+        // Where the content is beats where this widget was about to ask it to be: a fling is a scroll reported a frame late, and a stale request stops it dead.
         self.commanded.set(None);
         if self.scroll_x.peek() != x {
             self.scroll_x.set(x);
@@ -366,15 +345,13 @@ impl ScrollCore {
         }
     }
 
-    /// Stops everything moving on its own. What a hand on the screen does, and what a jump to an offset
-    /// somebody asked for does.
+    /// Stops everything moving on its own. What a hand on the screen does, and what a jump to an offset somebody asked for does.
     fn catch_all(&mut self) {
         self.catch_fling();
         self.motion.stop_glides();
     }
 
-    /// Takes hold of a bar under `(x, y)`, or pages towards a press on its track. `false` when the press
-    /// landed somewhere else and belongs to the content.
+    /// Takes hold of a bar under `(x, y)`, or pages towards a press on its track. `false` when the press landed somewhere else and belongs to the content.
     fn grab_bar(&mut self, viewport: Rect, x: f32, y: f32) -> bool {
         if !viewport.contains(x, y) {
             return false;
@@ -447,14 +424,14 @@ impl ScrollCore {
             self.motion.velocity.clear();
             return;
         }
-        // The offset grows as the content moves *up*, which is the opposite sign to the gesture.
+        // The offset grows as the content moves up, the opposite sign to the gesture.
         let velocity = -self.motion.velocity.take();
         let max = (self.content_rect_signal.peek().height - viewport.height).max(0.0);
         self.fling = crate::fling::Fling::start(self.scroll_y, velocity, (0.0, max));
     }
 
     fn clamp_scroll(&mut self, viewport: Rect) {
-        // The content resized under it, so the ground it was travelling over is not there any more.
+        // The content resized under it, so the ground it was travelling over is gone.
         self.catch_all();
         let content_rect = self.content_rect_signal.peek();
         let max_x = (content_rect.width - viewport.width).max(0.0);
@@ -473,10 +450,7 @@ impl ScrollCore {
         let scroll_x = self.scroll_x.get();
         let scroll_y = self.scroll_y.get();
         let content_rect = self.content_rect_signal.get();
-        // Where the content sits. Nowhere, on a target that scrolls for itself: it lays the content out at
-        // full height inside a box that scrolls, and has already moved it — displacing it again here would
-        // scroll it twice. The offset is still *held*, because hit-testing, anchored overlays and
-        // `visible_rect` all read it; it is just no longer what puts the content where it is.
+        // Nowhere, on a target that scrolls for itself: it has already moved the content, and displacing it again would scroll it twice. The offset is still held, because hit-testing, anchored overlays and `visible_rect` all read it.
         let owns_scroll = ui_tree::element_capture();
         let (dx, dy) = if owns_scroll {
             (0.0, 0.0)
@@ -492,10 +466,7 @@ impl ScrollCore {
                 [self.content_segment.boundary()],
             )],
         );
-        // The bar is Telar's on every target, the one that scrolls itself included: a native bar takes width
-        // out of the box it is in, and layout never reserved it — a rail came out fifteen pixels narrower
-        // than every rect hit-testing reads. Where the surface scrolls, the content moves under a bar that
-        // must not, so it is drawn at the offset the content is at and comes out standing still.
+        // Telar's bar on every target: a native one takes width out of the box and layout never reserved it. Where the surface scrolls, the content moves under a bar that must not, so it is drawn at the content's offset and comes out standing still.
         let bar_viewport = if owns_scroll {
             Rect::new(scroll_x, scroll_y, viewport.width, viewport.height)
         } else {
@@ -513,8 +484,7 @@ impl ScrollCore {
 
     fn on_event(&mut self, event: &Event, viewport: Rect) -> EventResult {
         match event {
-            // A press on a scrollbar is that bar's, not the content's: the bar is drawn over whatever is
-            // beneath it, and a button under the thumb must not take the click that grabbed it.
+            // A press on a scrollbar is the bar's, not the content's: a button under the thumb must not take the click that grabbed it.
             Event::PointerPressed { x, y, .. } if self.grab_bar(viewport, *x as f32, *y as f32) => {
                 return EventResult::Handled;
             }
@@ -531,8 +501,7 @@ impl ScrollCore {
                 self.press_active = true;
                 self.gesture_scroll = 0.0;
                 self.tap_cancelled = false;
-                // A hand on the screen stops whatever was still moving, and stops it where it stands: that
-                // is how a list is caught.
+                // A hand on the screen stops whatever was still moving, and stops it where it stands.
                 self.catch_all();
                 self.motion.velocity.clear();
             }
@@ -541,14 +510,10 @@ impl ScrollCore {
                 self.press_active = false;
                 self.launch_fling(viewport);
             }
-            // Anything scrolling now is in charge of the offset, so what was still coasting is not. This is
-            // also what keeps a platform that runs its own inertia from having Telar's added on top of it:
-            // the momentum it sends after the fingers lift takes the offset straight back over.
+            // Anything scrolling now owns the offset, so what was coasting does not. This also keeps a platform running its own inertia from having Telar's added on top.
             Event::Scrolled { delta, .. } => {
                 self.catch_fling();
-                // While a pointer is down (a touch drag, not a mouse wheel), once the finger has travelled
-                // past the slop this gesture is a scroll, not a tap: cancel the pending press on the content
-                // once (it sees pinned content-space coords and can't tell on its own).
+                // While a pointer is down, once the finger passes the slop this gesture is a scroll and not a tap: cancel the content's pending press once, since it sees pinned coords and cannot tell on its own.
                 if self.press_active && !self.tap_cancelled {
                     let (dx, dy) = delta.pixels();
                     self.gesture_scroll += (dx * dx + dy * dy).sqrt();
@@ -558,8 +523,7 @@ impl ScrollCore {
                     }
                 }
             }
-            // Fingers off the touchpad. A drag on a touch screen ends with a release instead, which is why
-            // both arms end here.
+            // Fingers off the touchpad. A touch-screen drag ends with a release instead, which is why both arms end here.
             Event::ScrollEnded { .. } => self.launch_fling(viewport),
             _ => {}
         }
@@ -575,7 +539,7 @@ impl ScrollCore {
     }
 }
 
-// Closure-viewport fixture exercising ScrollCore directly; test-only since LayoutScrollArea is the single public scroll-area.
+// Closure-viewport fixture exercising ScrollCore directly; LayoutScrollArea is the only public scroll area.
 #[cfg(test)]
 struct ScrollArea {
     viewport: Box<dyn Fn() -> Rect>,
@@ -605,17 +569,13 @@ impl Component for ScrollArea {
     }
 }
 
-/// A handle to the enclosing scroll area's live viewport, handed to the content builder by
-/// [`LayoutScrollArea::new_with`]. Because a scroll area lays its content out as its OWN layout root,
-/// every descendant's tracked rect is already in the same content-local space the scroll offset
-/// indexes into — so [`visible`](Self::visible) is a plain rect overlap, no scroll-transform math.
+/// A handle to the enclosing scroll area's live viewport, handed to the content builder by [`LayoutScrollArea::new_with`]. Because a scroll area lays its content out as its OWN layout root, every descendant's tracked rect is already in the same content-local space the scroll offset indexes into — so `visible` is a plain rect overlap, no scroll-transform math.
 #[derive(Clone)]
 pub struct ScrollViewport {
     offset_x: ReadSignal<f32>,
     offset_y: ReadSignal<f32>,
     rect: ReadSignal<Rect>,
-    // The writable side of the same offsets, so `reveal` can move the view. Kept private: callers should say
-    // *what they want visible*, not compute a scroll position.
+    // The writable side of the same offsets, so `reveal` can move the view. Private: callers should say what they want visible, not compute a scroll position.
     set_x: RwSignal<f32>,
     set_y: RwSignal<f32>,
 }
@@ -626,13 +586,9 @@ impl ScrollViewport {
         (self.offset_x, self.offset_y)
     }
 
-    /// Scrolls the minimum distance needed to bring `item` fully into view, leaving `margin` px of breathing
-    /// room at whichever edge it entered from. A no-op when the item is already visible.
+    /// Scrolls the minimum distance needed to bring `item` fully into view, leaving `margin` px of breathing room at whichever edge it entered from. A no-op when the item is already visible.
     ///
-    /// This is what keyboard navigation needs and what a scroll offset alone cannot express: moving a selection
-    /// down a list should follow it, without yanking the view when the item was on screen all along. `item` must
-    /// be a node inside this scroll's content, so its tracked rect shares the content-local space the offset
-    /// indexes into.
+    /// This is what keyboard navigation needs and what a scroll offset alone cannot express: moving a selection down a list should follow it, without yanking the view when the item was on screen all along. `item` must be a node inside this scroll's content, so its tracked rect shares the content-local space the offset indexes into.
     pub fn reveal(&self, item: NodeId, margin: f32) {
         let Some(item_rect) = track_layout(item) else {
             return;
@@ -642,21 +598,15 @@ impl ScrollViewport {
 
         let reveal_axis = |offset: f32, span: f32, start: f32, size: f32| -> f32 {
             if start - margin < offset {
-                // Entered from the near edge: put its leading edge at the top/left of the window.
                 (start - margin).max(0.0)
             } else if start + size + margin > offset + span {
-                // Entered from the far edge: put its trailing edge at the bottom/right.
                 (start + size + margin - span).max(0.0)
             } else {
                 offset
             }
         };
 
-        // `peek` on the offsets, and it is load-bearing: this is a *command*, and the natural place to call it
-        // from is an effect ("while this row is the selected one, keep it in view"). A reactive read of the
-        // offset there would subscribe that effect to the very signal it writes, so scrolling by hand would
-        // re-run it and drag the view straight back — a list that cannot be scrolled at all. The item and
-        // viewport rects are inputs rather than outputs, so re-running when *those* move is the right thing.
+        // `peek` is load-bearing here: the natural caller is an effect ("keep the selected row in view"), and a reactive read of the offset would subscribe it to the signal it writes, dragging the view back on every manual scroll. The item and viewport rects are inputs, so re-running when those move is correct.
         let y = reveal_axis(self.set_y.peek(), viewport.height, item.y, item.height);
         if y != self.set_y.peek() {
             self.set_y.set(y);
@@ -674,14 +624,9 @@ impl ScrollViewport {
 
     /// Puts the view back at the top-left.
     ///
-    /// For content that has been *replaced* rather than resized — a page swapped for another one — which is
-    /// the one thing the scroll area cannot tell on its own: a shorter page is clamped back into range
-    /// automatically, but only the caller knows that what is in the viewport is now a different thing, and
-    /// that being three screens down someone else's page is not where the reader left off.
+    /// For content that has been *replaced* rather than resized — a page swapped for another one — which is the one thing the scroll area cannot tell on its own: a shorter page is clamped back into range automatically, but only the caller knows that what is in the viewport is now a different thing, and that being three screens down someone else's page is not where the reader left off.
     ///
-    /// `peek` for the same reason as [`reveal`](Self::reveal), and this is where it bites hardest: "the page
-    /// changed" is noticed by an effect, so a reactive read of the offset would make every wheel tick re-run
-    /// the effect that puts the offset back — the viewport pinned to the top for good.
+    /// `peek` for the same reason as [`reveal`](Self::reveal), and this is where it bites hardest: "the page changed" is noticed by an effect, so a reactive read of the offset would make every wheel tick re-run the effect that puts the offset back — the viewport pinned to the top for good.
     pub fn scroll_to_top(&self) {
         if self.set_x.peek() != 0.0 {
             self.set_x.set(0.0);
@@ -692,17 +637,15 @@ impl ScrollViewport {
     }
 }
 
-// Taffy-layout viewport; always valid as a LayoutItem — no panic possible.
+/// Taffy-layout viewport; always valid as a `LayoutItem`, so no panic is possible.
 pub struct LayoutScrollArea {
     leaf: LayoutLeaf,
     core: ScrollCore,
-    // Publishes this viewport's offset so anything positioning against a node inside it (an anchored dropdown's trigger) can ask where that node is drawn rather than where it was laid out.
+    // Publishes the offset so anything positioning against a node inside it can ask where that node is drawn rather than where it was laid out.
     scroll_region: ScrollRegionId,
-    // Lays the detached content subtree out against the viewport width whenever the viewport is (re)sized,
-    // so a `scroll` element works on its own — its content is not a taffy child of the viewport leaf, so
-    // nothing else would lay it out (the app shell computes only its OWN top-level scroll by hand).
+    // The content is not a taffy child of the viewport leaf, so nothing else would lay it out; this re-lays the detached subtree whenever the viewport is resized.
     _layout_effect: Effect,
-    // Keeps the offset inside the range the content and the viewport currently allow. See `clamp_effect`.
+    // Keeps the offset inside the range the content and viewport currently allow.
     _clamp_effect: Effect,
 }
 
@@ -714,11 +657,7 @@ impl LayoutScrollArea {
         Self::new_with(layout_style, move |_| Ok(content))
     }
 
-    /// Like [`new`](Self::new), but the content is built with access to this scroll's live
-    /// [`ScrollViewport`], so descendants can gate work (e.g. lazy asset loading) on whether they are
-    /// currently on screen. The offset/viewport signals are created BEFORE `build` runs, so the content
-    /// it returns can capture them — resolving the ordering bind where the scroll is built from its own
-    /// content yet the content needs the scroll's signals.
+    /// Like [`new`](Self::new), but the content is built with access to this scroll's live [`ScrollViewport`], so descendants can gate work (e.g. lazy asset loading) on whether they are currently on screen. The offset/viewport signals are created BEFORE `build` runs, so the content it returns can capture them — resolving the ordering bind where the scroll is built from its own content yet the content needs the scroll's signals.
     pub fn new_with<F>(layout_style: LayoutStyle, build: F) -> Result<Self, LayoutError>
     where
         F: FnOnce(ScrollViewport) -> Result<Box<dyn LayoutItem>, LayoutError>,
@@ -728,10 +667,7 @@ impl LayoutScrollArea {
 
     /// A scroll area whose position the *surface* keeps under `key`, so it survives a rebuild of the tree.
     ///
-    /// The usual spelling of [`new_keeping`](Self::new_keeping): a remounted view — a shell following a
-    /// config edit, a page rebuilt under the same window — reopens where the reader left it instead of
-    /// snapping to the top. `key` names this viewport among everything else the surface keeps, so two scroll
-    /// areas on one surface need two keys (see [`kept`]).
+    /// The usual spelling of [`new_keeping`](Self::new_keeping): a remounted view — a shell following a config edit, a page rebuilt under the same window — reopens where the reader left it instead of snapping to the top. `key` names this viewport among everything else the surface keeps, so two scroll areas on one surface need two keys (see [`kept`]).
     pub fn new_kept<F>(
         key: &'static str,
         layout_style: LayoutStyle,
@@ -744,13 +680,9 @@ impl LayoutScrollArea {
         Self::new_keeping(layout_style, offset, build)
     }
 
-    /// Like [`new_with`](Self::new_with), but against offset signals the *caller* owns — so the scroll
-    /// position can outlive this widget.
+    /// Like [`new_with`](Self::new_with), but against offset signals the *caller* owns — so the scroll position can outlive this widget.
     ///
-    /// For a tree that is rebuilt while its surface stays (a shell following a config edit, a view remounted
-    /// under the same window): a scroll area built with fresh signals starts at the top every time, which
-    /// reads as the list jumping back under the reader's hands. Hand it the same pair on every build and the
-    /// view is where they left it. [`new_kept`](Self::new_kept) is this with the surface holding the pair.
+    /// For a tree that is rebuilt while its surface stays (a shell following a config edit, a view remounted under the same window): a scroll area built with fresh signals starts at the top every time, which reads as the list jumping back under the reader's hands. Hand it the same pair on every build and the view is where they left it. [`new_kept`](Self::new_kept) is this with the surface holding the pair.
     pub fn new_keeping<F>(
         layout_style: LayoutStyle,
         offset: (RwSignal<f32>, RwSignal<f32>),
@@ -772,10 +704,7 @@ impl LayoutScrollArea {
         let content_rect_signal =
             track_layout(content_node).expect("content node not registered in ctx");
 
-        // Re-lay out the content at the viewport width (unbounded height, so it can overflow and scroll)
-        // each time the viewport resizes. The viewport rect is set by the surrounding layout; this effect
-        // fires during that flush — after the runtime borrow is released — so computing here is re-entrancy
-        // safe (same pattern as reactive lists).
+        // The viewport rect is set by the surrounding layout and this effect fires during that flush, after the runtime borrow is released, so computing here is re-entrancy safe.
         let viewport = leaf.rect;
         let layout_effect = effect(move || {
             let vp = viewport.get();
@@ -788,12 +717,7 @@ impl LayoutScrollArea {
             }
         });
 
-        // Nothing may be scrolled past the end of what there is, and *both* things that decide where the end
-        // is move underneath the offset: how tall the content is (a page swapped for a shorter one, a list
-        // that lost rows) and how tall the viewport is (a window resized). Clamped from an effect rather than
-        // from the scroll handler because neither of those is an input event — left to the next wheel tick,
-        // the transform goes on pushing the content clean out of the clip and the viewport shows *nothing*,
-        // which is the shape this bug always takes: a page that is blank until it is touched.
+        // Both things deciding where the end is move underneath the offset: the content's height and the viewport's. Clamped from an effect because neither is an input event — left to the next wheel tick, the transform pushes the content out of the clip and the viewport shows nothing until it is touched.
         let clamp_effect = {
             let viewport = leaf.rect;
             let content_rect = content_rect_signal;
@@ -801,15 +725,13 @@ impl LayoutScrollArea {
             effect(move || {
                 let vp = viewport.get();
                 let content = content_rect.get();
-                // A zero rect is "not laid out yet", not "empty": clamping against it would throw away an
-                // offset the caller deliberately kept, one flush before the layout that justifies it.
+                // A zero rect is "not laid out yet", not "empty": clamping against it would throw away an offset the caller kept, one flush before the layout that justifies it.
                 if vp.height <= 0.0 || content.height <= 0.0 {
                     return;
                 }
                 let max_x = (content.width - vp.width).max(0.0);
                 let max_y = (content.height - vp.height).max(0.0);
-                // `peek`, not `get`: this effect writes those signals, and reading them would make it its own
-                // dependency and re-run it for its own correction.
+                // `peek`, not `get`: this effect writes those signals, and reading them would re-run it for its own correction.
                 if scroll_x.peek() > max_x {
                     scroll_x.set(max_x);
                 }
@@ -819,7 +741,7 @@ impl LayoutScrollArea {
             })
         };
 
-        // Registered on the CONTENT node, not the viewport leaf: the content is laid out as its own root (see the effect above), so the leaf is never its ancestor and a subtree test against it would miss.
+        // On the content node, not the viewport leaf: the content is laid out as its own root, so the leaf is never its ancestor and a subtree test would miss.
         let scroll_region = register_scroll_region(content_node, scroll_x, scroll_y);
 
         Ok(Self {
@@ -855,8 +777,7 @@ impl_leaf_widget!(LayoutScrollArea);
 
 impl Component for LayoutScrollArea {
     fn view(&self) -> RenderNode {
-        // Its own box rather than `LayoutLeaf::at_layout_position`: the content is positioned by the scroll
-        // offset inside the viewport, not by the leaf's own placement, so the two must not both apply.
+        // Its own box rather than `LayoutLeaf::at_layout_position`: the content is placed by the scroll offset, not by the leaf's placement, so the two must not both apply.
         let content = self.core.view(self.leaf.rect.get());
         if ui_tree::element_capture() {
             let semantics = renderer_core::Semantics::of(renderer_core::Role::ScrollArea);
@@ -872,8 +793,7 @@ impl Component for LayoutScrollArea {
     }
 
     fn on_event(&mut self, event: &Event) -> EventResult {
-        // A scroll the surface already performed: the content is drawn where it now is, and what needs
-        // correcting is this widget's idea of where that is.
+        // The surface already performed the scroll, so what needs correcting is this widget's idea of where the content is.
         if let Event::BoxScrolled { box_id, x, y } = event
             && *box_id == u64::from(self.leaf.node)
         {
@@ -903,8 +823,7 @@ mod tests {
     use crate::layout_item::LayoutItem;
     use crate::layout_leaf::LayoutLeaf;
 
-    // Laying out only the scroll node must, via its effect, lay out the detached content subtree too —
-    // a `scroll` element has no other owner to compute its content.
+    // A `scroll` element has no other owner to compute its content, so laying out the node must lay out the detached subtree through its effect.
     #[test]
     fn scroll_area_lays_out_its_detached_content() {
         reset_layout_runtime();
@@ -934,10 +853,7 @@ mod tests {
 
     /// A page swapped for a shorter one must not leave the viewport looking at nothing.
     ///
-    /// This is the bug as a user meets it: scroll down a long page, switch to a short one, and the panel is
-    /// blank — the offset is still 600 while there is 200 of content, so the transform has pushed all of it
-    /// out of the clip. It comes back on the next wheel tick, which is what makes it read as a repaint bug
-    /// rather than a scroll one. Nothing here touches an input event: the layout alone has to put it right.
+    /// This is the bug as a user meets it: scroll down a long page, switch to a short one, and the panel is blank — the offset is still 600 while there is 200 of content, so the transform has pushed all of it out of the clip. It comes back on the next wheel tick, which is what makes it read as a repaint bug rather than a scroll one. Nothing here touches an input event: the layout alone has to put it right.
     #[test]
     fn content_that_gets_shorter_pulls_the_view_back_into_it() {
         reset_layout_runtime();
@@ -971,7 +887,6 @@ mod tests {
         scroll.core.scroll_y.set(600.0);
         assert_eq!(scroll.core.scroll_y.get(), 600.0, "600 of 700 scrollable");
 
-        // The page is swapped, exactly as a reactive list swaps what it shows.
         crate::context::set_children(page_node, &[short_node]).unwrap();
         crate::context::mark_dirty(page_node).unwrap();
         crate::context::relayout_if_dirty();
@@ -986,11 +901,7 @@ mod tests {
 
     /// A viewport command called from an effect must not subscribe that effect to the offset it writes.
     ///
-    /// This is how the fix for "the page changed, put the view back at the top" turned into "the page can no
-    /// longer be scrolled at all": the effect noticing the page change also *read* the offset, so every wheel
-    /// tick re-ran it, and it dutifully put the view back at the top. Both commands are `peek`-only for this
-    /// reason, and both are exercised here — the launcher's follow-the-selection effect calls `reveal` from
-    /// exactly the same place.
+    /// This is how the fix for "the page changed, put the view back at the top" turned into "the page can no longer be scrolled at all": the effect noticing the page change also *read* the offset, so every wheel tick re-ran it, and it dutifully put the view back at the top. Both commands are `peek`-only for this reason, and both are exercised here — the launcher's follow-the-selection effect calls `reveal` from exactly the same place.
     #[test]
     fn a_viewport_command_run_from_an_effect_does_not_undo_the_users_own_scrolling() {
         reset_layout_runtime();
@@ -1017,7 +928,6 @@ mod tests {
         .unwrap();
         let viewport = captured.borrow().clone().expect("the builder ran");
 
-        // The shape every caller uses: an effect over what it is following, issuing a command.
         let page = signal(0u32);
         let watched = page.read_only();
         let commanded = viewport.clone();
@@ -1043,7 +953,6 @@ mod tests {
             "and the command still does its job when the thing it follows actually changes"
         );
 
-        // `reveal` is the same shape and the same trap.
         let revealing = viewport.clone();
         let _follow_row = effect(move || {
             watched.get();
@@ -1066,8 +975,7 @@ mod tests {
             RenderNode::Empty
         })
         .unwrap();
-        // Inside a column that fills the surface, which is how a page area actually gets its height: the
-        // viewport is whatever is left over, so resizing the surface resizes it.
+        // Inside a column that fills the surface, which is how a page area gets its height: the viewport is whatever is left over, so resizing the surface resizes it.
         let scroll = LayoutScrollArea::new(
             LayoutStyle::new()
                 .width(SizeDimension::Percent(1.0))
@@ -1162,7 +1070,7 @@ mod tests {
         );
     }
 
-    // The end-to-end shape of the anchored-overlay bug: a trigger deep inside a real scroll area, scrolled away from where it was laid out. Exercises the two things the unit tests cannot: that the area registers its content (not its viewport leaf, which is never the content's ancestor), and that the subtree test reaches into the separately-computed content root.
+    // The end-to-end anchored-overlay case: a trigger deep inside a real scroll area, scrolled away from where it was laid out. Covers what the unit tests cannot — that the area registers its content rather than its viewport leaf, and that the subtree test reaches the separately-computed content root.
     #[test]
     fn a_trigger_scrolled_inside_a_scroll_area_anchors_where_it_is_drawn() {
         reset_layout_runtime();
@@ -1277,7 +1185,6 @@ mod tests {
         reset_layout_runtime();
         let s = signal(0i32);
         let s_cb = s;
-        // A pressable primitive stands in for the old high-level Button (now in ui-components).
         let btn = StyledContainer::new(
             LayoutStyle::new().width(50.0).height(30.0),
             |_r| RectStyle::default(),
@@ -1311,7 +1218,6 @@ mod tests {
         let mut tree = crate::ComponentList::new(sa);
         let _ = tree.commands();
 
-        // The button fires on release (tap), so send press then release.
         let cx = (br.x + br.width / 2.0) as f64;
         let cy = (br.y + br.height / 2.0) as f64;
         for phase in [true, false] {
@@ -1345,8 +1251,7 @@ mod tests {
         );
     }
 
-    // A scroll gesture that begins on a button (touch-down, drag past the slop, release) must scroll the
-    // content and NOT click the button — the scroll area cancels the pending tap once it detects the scroll.
+    // The area must cancel the pending tap once it detects the scroll, or the button fires.
     #[test]
     fn scroll_gesture_over_button_does_not_click() {
         use crate::container::Container;
@@ -1358,7 +1263,6 @@ mod tests {
         reset_layout_runtime();
         let s = signal(0i32);
         let s_cb = s;
-        // A pressable primitive stands in for the old high-level Button (now in ui-components).
         let btn = StyledContainer::new(
             LayoutStyle::new().width(50.0).height(30.0),
             |_r| RectStyle::default(),
@@ -1386,7 +1290,6 @@ mod tests {
             (br.y + br.height / 2.0) as f64,
         );
 
-        // Touch-down on the button, then a drag: on Android each move sends Scrolled + PointerMoved.
         sa.on_event(&Event::PointerPressed {
             x: cx,
             y: cy,
@@ -1508,8 +1411,7 @@ mod tests {
         assert_eq!(sa.core.scroll_y.get(), 60.0);
     }
 
-    // Nested scroll: a wheel event is ignored when it happened outside this viewport (it belongs to an
-    // ancestor, or to an inner scroll that already consumed it), so the outer area does not steal it.
+    // A wheel outside this viewport belongs to an ancestor or to an inner scroll that consumed it.
     #[test]
     fn wheel_outside_viewport_does_not_scroll() {
         let mut sa = make_scroll_area(); // viewport 400x300
@@ -1526,8 +1428,7 @@ mod tests {
         );
     }
 
-    /// The wheel carries where it happened, so the first one lands correctly even though the pointer has
-    /// never moved — the case a viewport that tracked moves itself could only guess at.
+    /// The wheel carries where it happened, so the first one lands correctly even though the pointer has never moved — the case a viewport that tracked moves itself could only guess at.
     #[test]
     fn wheel_inside_viewport_scrolls_without_a_prior_move() {
         let mut sa = make_scroll_area();
@@ -1910,8 +1811,7 @@ mod touchpad_tests {
         Event::ScrollEnded { x: 100.0, y: 100.0 }
     }
 
-    /// Two fingers moving fast and then leaving: the same gesture a finger makes on a phone, reported the
-    /// way a touchpad reports it.
+    /// Two fingers moving fast and then leaving: the same gesture a finger makes on a phone, reported the way a touchpad reports it.
     fn flick(sa: &mut ScrollArea) {
         for _ in 0..6 {
             sa.on_event(&glided(-30.0));
@@ -1941,8 +1841,7 @@ mod touchpad_tests {
         );
     }
 
-    /// What macOS does: the system sends its own momentum after the fingers lift. Telar's must not be
-    /// added on top of it.
+    /// What macOS does: the system sends its own momentum after the fingers lift. Telar's must not be added on top of it.
     #[test]
     fn a_platform_running_its_own_momentum_takes_the_offset_back() {
         let mut sa = make_scroll_area();
@@ -1989,16 +1888,14 @@ mod touchpad_tests {
     }
 }
 
-/// The bar on a surface that holds the content itself — a document backend, where the compositor scrolls and
-/// this widget is told where the content ended up rather than deciding it.
+/// The bar on a surface that holds the content itself — a document backend, where the compositor scrolls and this widget is told where the content ended up rather than deciding it.
 #[cfg(test)]
 mod surface_scroll_tests {
     use super::scrollbar_tests::{moved, press};
     use super::tests::make_scroll_area;
     use super::*;
 
-    /// Turns element capture on for one test and puts it back, so a test that panics does not leave every
-    /// later one running as a document backend.
+    /// Turns element capture on for one test and puts it back, so a test that panics does not leave every later one running as a document backend.
     struct AsADocument(bool);
 
     impl AsADocument {
@@ -2013,8 +1910,7 @@ mod surface_scroll_tests {
         }
     }
 
-    /// The whole of the bug: the drag was refused outright where the surface owns the offset, because moving
-    /// the signal alone would be overruled by the next offset the surface reported. It is a request now.
+    /// The whole of the bug: the drag was refused outright where the surface owns the offset, because moving the signal alone would be overruled by the next offset the surface reported. It is a request now.
     #[test]
     fn the_thumb_can_be_dragged_and_asks_the_surface_to_move() {
         let _document = AsADocument::new();
@@ -2037,8 +1933,7 @@ mod surface_scroll_tests {
         );
     }
 
-    /// One frame, one request. A box that cannot go as far as it was asked reports the offset it settled on,
-    /// and a request left standing would drag it back there on every later frame.
+    /// One frame, one request. A box that cannot go as far as it was asked reports the offset it settled on, and a request left standing would drag it back there on every later frame.
     #[test]
     fn a_request_is_taken_by_the_frame_that_carries_it() {
         use crate::canvas::Canvas;
@@ -2082,8 +1977,7 @@ mod surface_scroll_tests {
         );
     }
 
-    /// Where the content already is beats where this widget was about to ask for it: a fling is an offset
-    /// reported a frame late, and answering it with a stale request stops it dead.
+    /// Where the content already is beats where this widget was about to ask for it: a fling is an offset reported a frame late, and answering it with a stale request stops it dead.
     #[test]
     fn a_scroll_the_surface_reports_drops_the_request_still_pending() {
         let _document = AsADocument::new();
@@ -2095,8 +1989,7 @@ mod surface_scroll_tests {
         assert_eq!(sa.core.scroll_y.get(), 120.0);
     }
 
-    /// A target that draws the content at the offset needs no request at all — there the signal *is* where
-    /// the content is, and a backend asked to scroll a box it does not have would be answering nothing.
+    /// A target that draws the content at the offset needs no request at all — there the signal *is* where the content is, and a backend asked to scroll a box it does not have would be answering nothing.
     #[test]
     fn a_target_that_draws_the_offset_asks_for_nothing() {
         let mut sa = make_scroll_area();

@@ -230,7 +230,6 @@ mod tests {
     #[test]
     fn expands_word_to_line_to_block_to_section_to_document() {
         let lines: Vec<&str> = SRC.lines().collect();
-        // Cursor on `btn` (line 6, deep in the [view] tree).
         let node = selection_for(
             &lines,
             Position {
@@ -239,14 +238,11 @@ mod tests {
             },
         );
         let c = chain(&node);
-        // Outermost is the whole document; innermost is the `btn` word.
         assert_eq!(c.first().unwrap().0, (0, 0));
         let inner = c.last().unwrap();
         assert_eq!(inner.0, (6, 8));
         assert_eq!(inner.1, (6, 11));
-        // The [view] section appears as a level, and at least one indentation block under `row`.
         assert!(c.iter().any(|&(s, _)| s == (2, 0)), "section level: {c:?}");
-        // Strictly nested: each level contains the next.
         for w in c.windows(2) {
             let (outer, inner) = (w[0], w[1]);
             assert!(
@@ -256,14 +252,12 @@ mod tests {
         }
     }
 
-    // `[view]` followed by a parameterized `[preview …]` header.
     const WITH_PREVIEW: &str =
         "[view]\ncol\n    text \"Hi\"\n[preview \"Default\"]\ncounter\n    text \"x\"\n";
 
     #[test]
     fn the_view_section_stops_at_a_preview_header() {
         let lines: Vec<&str> = WITH_PREVIEW.lines().collect();
-        // Cursor on `col` (line 1, a top-level [view] element).
         let c = chain(&selection_for(
             &lines,
             Position {
@@ -271,12 +265,10 @@ mod tests {
                 character: 0,
             },
         ));
-        // The `[view]` section level ends at line 2 (before the preview header on line 3).
         assert!(
             c.iter().any(|&(start, end)| start == (0, 0) && end.0 == 2),
             "expected a [view] section ending at line 2: {c:?}"
         );
-        // No level may span the `[view]` partially into the preview (only the whole-document level, ending at the last line, is allowed to start at line 0 and reach past line 2).
         assert!(
             !c.iter()
                 .any(|&(start, end)| start.0 == 0 && (end.0 == 3 || end.0 == 4)),
@@ -287,7 +279,6 @@ mod tests {
     #[test]
     fn a_preview_is_its_own_section() {
         let lines: Vec<&str> = WITH_PREVIEW.lines().collect();
-        // Cursor inside the preview body (`text "x"`, line 5).
         let c = chain(&selection_for(
             &lines,
             Position {
@@ -295,7 +286,6 @@ mod tests {
                 character: 4,
             },
         ));
-        // Its enclosing section is the `[preview]` block (header on line 3 down to line 5), not the earlier `[view]`.
         assert!(
             c.iter().any(|&(start, end)| start == (3, 0) && end.0 == 5),
             "expected a [preview] section spanning lines 3..5: {c:?}"
@@ -309,7 +299,6 @@ mod tests {
     #[test]
     fn block_groups_a_parent_with_its_children() {
         let lines: Vec<&str> = SRC.lines().collect();
-        // The `row gap:8` block (line 5) should extend to include its `btn` child (line 6).
         let (start, end) = block_bounds(&lines, 5);
         assert_eq!((start, end), (5, 6));
     }

@@ -13,12 +13,10 @@ use super::cli::WebRenderer;
 use super::config::TelarConfig;
 use super::package::build_web_bundle;
 
-/// How long to let a burst of file events settle before rebuilding. An editor writing a file produces
-/// several, and a save that touches a whole directory produces one per file.
+/// How long to let a burst of file events settle before rebuilding. An editor writing a file produces several, and a save that touches a whole directory produces one per file.
 const SETTLE: Duration = Duration::from_millis(150);
 
-/// Bumped by every successful rebuild. The page polls it and reloads when it moves, which is the whole
-/// live-reload protocol: no websocket, no client library, and nothing to go stale.
+/// Bumped by every successful rebuild. The page polls it and reloads when it moves, which is the whole live-reload protocol: no websocket, no client library, and nothing to go stale.
 static BUILD: AtomicU64 = AtomicU64::new(1);
 
 pub(crate) fn run_web_dev(
@@ -49,8 +47,7 @@ pub(crate) fn run_web_dev(
     std::thread::spawn(move || {
         for stream in listener.incoming().flatten() {
             let root = serve_from.clone();
-            // One thread per request: a page pulls a handful of files and then holds a poll open, and a
-            // sequential server would make the poll block the next reload's fetches.
+            // One thread per request: a page pulls a handful of files and then holds a poll open, and a sequential server would make the poll block the next reload's fetches.
             std::thread::spawn(move || serve(stream, &root));
         }
     });
@@ -106,8 +103,7 @@ fn watch_and_rebuild(
 
 /// Appends the reload poll to the served page.
 ///
-/// Added here rather than baked into the page the build writes, so what `cargo telar build` produces is the
-/// page that ships — a dev-only script has no business in it.
+/// Added here rather than baked into the page the build writes, so what `cargo telar build` produces is the page that ships — a dev-only script has no business in it.
 fn inject_reload_poll(dist: &Path) {
     let page = dist.join("index.html");
     let Ok(html) = std::fs::read_to_string(&page) else {

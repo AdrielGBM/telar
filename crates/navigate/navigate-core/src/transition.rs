@@ -1,3 +1,5 @@
+//! How a page arrives and leaves: the transition a host plays between two routes.
+
 use std::time::Duration;
 
 use motion_core::{Animated, Easing, tween};
@@ -5,12 +7,9 @@ use ui_core::RenderNode;
 
 const TRANSITION_MS: u64 = 220;
 
-/// How a [`NavHost`](crate::NavHost) animates the incoming page when navigation changes the current route,
-/// and how a [`TabHost`](crate::TabHost) animates the incoming tab when one is selected.
+/// How a [`NavHost`](crate::NavHost) animates the incoming page when navigation changes the current route, and how a [`TabHost`](crate::TabHost) animates the incoming tab when one is selected.
 ///
-/// The animation is one-sided — it moves only the incoming page over the host background — so it never needs
-/// two pages laid out at once (which a flex container would stack, not overlap). The outgoing page is hidden
-/// immediately; the incoming one animates from an offset/transparent start to its resting identity.
+/// The animation is one-sided — it moves only the incoming page over the host background — so it never needs two pages laid out at once (which a flex container would stack, not overlap). The outgoing page is hidden immediately; the incoming one animates from an offset/transparent start to its resting identity.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum NavTransition {
     /// Instant swap (no animation). The default.
@@ -18,8 +17,7 @@ pub enum NavTransition {
     None,
     /// The incoming page fades in (opacity 0 → 1).
     Fade,
-    /// The incoming page slides in horizontally — from the right on a forward push, from the left on a back
-    /// pop — to its resting position.
+    /// The incoming page slides in horizontally — from the right on a forward push, from the left on a back pop — to its resting position.
     SlideHorizontal,
 }
 
@@ -40,8 +38,7 @@ impl NavTransition {
         })
     }
 
-    /// Wraps the incoming page's render tree at `progress`. `forward` picks which side a slide enters from,
-    /// and `width` is the host's laid-out width — the distance that slide travels.
+    /// Wraps the incoming page's render tree at `progress`. `forward` picks which side a slide enters from, and `width` is the host's laid-out width — the distance that slide travels.
     pub(crate) fn wrap(
         self,
         child: RenderNode,

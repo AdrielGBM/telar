@@ -1,15 +1,10 @@
 //! `cargo telar migrate` — rewrites a project's `.rsx` files into the one value grammar.
 //!
-//! Every rewrite here is mechanical: a spelling that used to mean something the language no longer has a
-//! second way to say. What is *not* mechanical is reported instead of guessed — a `build "…"` or `widget "…"`
-//! needs names for positional arguments, and only a person knows them.
+//! Every rewrite here is mechanical: a spelling that used to mean something the language no longer has a second way to say. What is *not* mechanical is reported instead of guessed — a `build "…"` or `widget "…"` needs names for positional arguments, and only a person knows them.
 //!
-//! Run it once per project, then `cargo telar fmt` and the usual build. It is idempotent: a file already in
-//! the new grammar comes out byte-identical, which is what makes `--check` a CI answer.
+//! Run it once per project, then `cargo telar fmt` and the usual build. It is idempotent: a file already in the new grammar comes out byte-identical, which is what makes `--check` a CI answer.
 //!
-//! Quoted text is left alone throughout. A `"…"` is the author's data, and a documentation string showing
-//! the old spelling is prose about the language rather than a use of it — rewriting one would change what a
-//! sentence says.
+//! Quoted text is left alone throughout. A `"…"` is the author's data, and a documentation string showing the old spelling is prose about the language rather than a use of it — rewriting one would change what a sentence says.
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
@@ -80,17 +75,14 @@ pub(crate) fn run_migrate_cmd(args: MigrateArgs) {
     }
 }
 
-/// Every rewrite, in the order the later ones depend on: the colon form first, so what follows reads one
-/// grammar rather than two.
+/// Every rewrite, in the order the later ones depend on: the colon form first, so what follows reads one grammar rather than two.
 fn migrate(
     source: &str,
     modules: &BTreeMap<String, String>,
     own: &str,
     reactive: &BTreeMap<String, Vec<String>>,
 ) -> String {
-    // A file that binds `theme` itself is not talking about the view's handle: its own binding shadows it,
-    // and `theme.base` is a field access on what it bound. Leaving it alone keeps exactly the behaviour the
-    // file had — the author adopts `$theme` by dropping their `let`.
+    // A file that binds `theme` itself is not talking about the view's handle: its own binding shadows it, so leaving it alone keeps exactly the behaviour the file had.
     let binds_own_theme = zones(source).iter().any(|z| {
         z.section == Section::Logic
             && z.body
@@ -126,10 +118,7 @@ fn migrate(
 
 /// `tag key:(|| …)` → `tag key:(Reactive::of(|| …))` for the props this sweep turned into a `Reactive`.
 ///
-/// A closure was how a call site said "a value that changes", and it fitted the `Box<dyn Fn() -> T>` the
-/// prop used to be. `Reactive<T>` cannot take one through `Into` — the blanket `From<T>` already claims
-/// every type — so the wrapper is spelled out. Only for props this pass rewrote, by tag and by name: any
-/// other closure is a handler and stays one.
+/// A closure was how a call site said "a value that changes", and it fitted the `Box<dyn Fn() -> T>` the prop used to be. `Reactive<T>` cannot take one through `Into` — the blanket `From<T>` already claims every type — so the wrapper is spelled out. Only for props this pass rewrote, by tag and by name: any other closure is a handler and stays one.
 fn reactive_closures(body: &str, reactive: &BTreeMap<String, Vec<String>>) -> String {
     let mut out = String::with_capacity(body.len());
     for line in body.split_inclusive('\n') {
@@ -162,8 +151,7 @@ fn reactive_closures(body: &str, reactive: &BTreeMap<String, Vec<String>>) -> St
     out
 }
 
-/// The props each component turned into a `Reactive`, by file stem — read before anything is rewritten,
-/// because a call site is in a different file from the declaration it has to agree with.
+/// The props each component turned into a `Reactive`, by file stem — read before anything is rewritten, because a call site is in a different file from the declaration it has to agree with.
 fn reactive_props(sources: &[PathBuf]) -> BTreeMap<String, Vec<String>> {
     let mut out = BTreeMap::new();
     for path in sources {
@@ -183,8 +171,6 @@ fn reactive_props(sources: &[PathBuf]) -> BTreeMap<String, Vec<String>> {
     }
     out
 }
-
-// === zones =================================================================
 
 #[derive(Clone, Copy, PartialEq)]
 enum Section {
@@ -236,8 +222,6 @@ fn section_of(line: &str) -> Option<Section> {
     }
 }
 
-// === the rewrites ==========================================================
-
 /// The keys whose `key(…)` is a grammar of its own. Everything else is a value and takes the colon.
 const DIRECTIVES: &[&str] = &[
     "transition",
@@ -250,8 +234,7 @@ const DIRECTIVES: &[&str] = &[
     "drag_button",
 ];
 
-/// `key(expr)` → `key:expr`, parenthesised only where the expression holds a top-level space — which is what
-/// the parens are for now, and they are ordinary Rust rather than punctuation the DSL invented.
+/// `key(expr)` → `key:expr`, parenthesised only where the expression holds a top-level space — which is what the parens are for now, and they are ordinary Rust rather than punctuation the DSL invented.
 fn colonise(body: &str) -> String {
     let mut out = String::with_capacity(body.len());
     for line in body.split_inclusive('\n') {
@@ -261,8 +244,7 @@ fn colonise(body: &str) -> String {
 }
 
 fn colonise_line(line: &str) -> String {
-    // A control-flow line is Rust, not an attribute list: `if shown($seen)`, `for (i, x) in items()` and a
-    // `[view]`-level `let` all hold calls, and a call is not a key however much the shape rhymes.
+    // A control-flow line is Rust, not an attribute list: `if shown($seen)` and a `[view]`-level `let` both hold calls, and a call is not a key however much the shape rhymes.
     if leading_token(line).is_some_and(is_control_flow) {
         return line.to_string();
     }
@@ -275,16 +257,14 @@ fn colonise_line(line: &str) -> String {
             i = end;
             continue;
         }
-        // A value already in colon form is one token: `on_press:(|| f())` holds a call, and a call is not an
-        // attribute however much it looks like one.
+        // A value already in colon form is one token: `on_press:(|| f())` holds a call, and a call is not an attribute however much it looks like one.
         if bytes[i] == b'(' && i > 0 && bytes[i - 1] == b':' {
             let end = closing_paren(bytes, i).map(|c| c + 1).unwrap_or(line.len());
             out.push_str(&line[i..end]);
             i = end;
             continue;
         }
-        // One char, not one byte: a `.rsx` line holds prose, and an em dash outside a string literal is
-        // three bytes of it.
+        // One char, not one byte: a `.rsx` line holds prose, and an em dash outside a string literal is three of them.
         let step = line[i..].chars().next().unwrap().len_utf8();
         let Some((key, open)) = key_before_paren(line, i) else {
             out.push_str(&line[i..i + step]);
@@ -306,8 +286,7 @@ fn colonise_line(line: &str) -> String {
         out.truncate(out.len() - key.len());
         out.push_str(key);
         out.push(':');
-        // Parenthesised when the expression holds a top-level space, and when it opens with `::` — a
-        // leading path separator against the colon reads as `key::…`, which is a key nobody wrote.
+        // Parenthesised when the expression holds a top-level space, and when it opens with `::`: a leading path separator against the colon reads as `key::…`, which is a key nobody wrote.
         match top_level_space(inner) || inner.trim_start().starts_with("::") {
             true => out.push_str(&format!("({inner})")),
             false => out.push_str(inner),
@@ -317,8 +296,7 @@ fn colonise_line(line: &str) -> String {
     out
 }
 
-/// The keywords that open a Rust line rather than an element. `match` and `else` carry no parenthesised
-/// value of their own, but a scrutinee or a guard on the same line does.
+/// The keywords that open a Rust line rather than an element. `match` and `else` carry no parenthesised value of their own, but a scrutinee or a guard on the same line does.
 fn is_control_flow(word: &str) -> bool {
     matches!(word, "if" | "else" | "for" | "let" | "match" | "while")
 }
@@ -401,8 +379,7 @@ fn top_level_space(s: &str) -> bool {
     false
 }
 
-/// `key:t"nav.title"` → `key:t!("nav.title")`. The *content* position keeps `t"…"`, because there the
-/// literal is the syntax rather than a value.
+/// `key:t"nav.title"` → `key:t!("nav.title")`. The *content* position keeps `t"…"`, because there the literal is the syntax rather than a value.
 fn i18n_macro(body: &str) -> String {
     let mut out = String::with_capacity(body.len());
     let mut rest = body;
@@ -420,15 +397,12 @@ fn i18n_macro(body: &str) -> String {
     out
 }
 
-/// `theme.primary` → `$theme.primary`. The view binds `theme` as a handle, so a theme read is the same `$`
-/// that reads a signal — and it re-reads where it is written instead of freezing at construction.
+/// `theme.primary` → `$theme.primary`. The view binds `theme` as a handle, so a theme read is the same `$` that reads a signal — and it re-reads where it is written instead of freezing at construction.
 fn theme_reads(body: &str) -> String {
     replace_outside_strings(body, |chunk| replace_theme_name(chunk, "$theme"))
 }
 
-/// A bare `theme()` → `theme.get()` in `[logic]`, which sits below the binding and so no longer sees the
-/// crate's own accessor function. A qualified `crate::core::theme::theme()` still names that function and is
-/// left alone — which is also what a nested `fn` inside `[logic]` needs, since it cannot see the binding.
+/// A bare `theme()` → `theme.get()` in `[logic]`, which sits below the binding and so no longer sees the crate's own accessor function. A qualified `crate::core::theme::theme()` still names that function and is left alone — which is also what a nested `fn` inside `[logic]` needs, since it cannot see the binding.
 fn theme_calls(body: &str) -> String {
     replace_outside_strings(body, |chunk| {
         let bytes = chunk.as_bytes();
@@ -466,8 +440,7 @@ fn replace_theme_name(chunk: &str, to: &str) -> String {
     out
 }
 
-/// Whether a name may begin at `i`: not the tail of a longer one, not a field of something (`row.theme`), not
-/// already sigiled, and not a segment of a path (`crate::theme::…`).
+/// Whether a name may begin at `i`: not the tail of a longer one, not a field of something (`row.theme`), not already sigiled, and not a segment of a path (`crate::theme::…`).
 fn starts_a_name(bytes: &[u8], i: usize) -> bool {
     let prev = match i {
         0 => return true,
@@ -479,8 +452,7 @@ fn starts_a_name(bytes: &[u8], i: usize) -> bool {
     !(prev == b':' && i >= 2 && bytes[i - 2] == b':')
 }
 
-/// Applies `f` to every stretch of `body` outside a `"…"` literal — prose is not source, and a sentence
-/// mentioning the theme is not a read of it.
+/// Applies `f` to every stretch of `body` outside a `"…"` literal — prose is not source, and a sentence mentioning the theme is not a read of it.
 fn replace_outside_strings(body: &str, f: impl Fn(&str) -> String) -> String {
     let bytes = body.as_bytes();
     let (mut out, mut chunk_at, mut i) = (String::with_capacity(body.len()), 0usize, 0usize);
@@ -499,13 +471,9 @@ fn replace_outside_strings(body: &str, f: impl Fn(&str) -> String) -> String {
 
 /// A boxed closure in a `Props` declaration becomes the shape that says what it is for.
 ///
-/// `Box<dyn Fn() -> T>` was how a prop said "a value that can change", and `Reactive<T>` is that now — an
-/// enum, so a literal costs no allocation and a signal converts straight into it. `Box<dyn Fn(…)>` with
-/// nothing returned is a *handler*, and becomes `Rc<dyn Fn(…)>`: a props struct is `Clone` now, and a unique
-/// box has no second owner to give.
+/// `Box<dyn Fn() -> T>` was how a prop said "a value that can change", and `Reactive<T>` is that now — an enum, so a literal costs no allocation and a signal converts straight into it. `Box<dyn Fn(…)>` with nothing returned is a *handler*, and becomes `Rc<dyn Fn(…)>`: a props struct is `Clone` now, and a unique box has no second owner to give.
 ///
-/// Only inside the declaration. A `Box<dyn Fn…>` elsewhere in `[logic]` is the author's own, and a props
-/// struct is the one place the framework has an opinion about.
+/// Only inside the declaration. A `Box<dyn Fn…>` elsewhere in `[logic]` is the author's own, and a props struct is the one place the framework has an opinion about.
 fn shared_handlers(body: &str) -> String {
     let Some(at) = body.find("pub struct Props {") else {
         return body.to_string();
@@ -517,8 +485,7 @@ fn shared_handlers(body: &str) -> String {
     if declaration == body[at..end] {
         return body.to_string();
     }
-    // A prop that was a closure is read with `.get()` now, not called. Only the ones this pass just changed,
-    // by name, so a closure the author keeps for its own sake is left alone.
+    // A prop that was a closure is read with `.get()` now, not called. Only the ones this pass just changed, by name, so a closure the author keeps for its own sake is left alone.
     let mut rest = format!("{}{}", &declaration, &body[end..]);
     for name in &reactive {
         rest = rest.replace(&format!("(props.{name})()"), &format!("props.{name}.get()"));
@@ -538,8 +505,7 @@ fn rewrite_boxed_props(declaration: &str) -> (String, Vec<String>) {
     let mut out = String::with_capacity(declaration.len());
     let mut reactive = Vec::new();
     let mut rest = declaration.as_str();
-    // `Rc` as well as `Box`, because what decides is whether the closure *returns* something — a prop
-    // already moved to `Rc<dyn Fn() -> T>` by hand is still a value wearing a handler's shape.
+    // `Rc` as well as `Box`, because what decides is whether the closure returns something: a prop already moved to `Rc<dyn Fn() -> T>` by hand is still a value wearing a handler's shape.
     while let Some((at, owner)) = ["Box<dyn Fn", "Rc<dyn Fn"]
         .iter()
         .filter_map(|owner| rest.find(owner).map(|at| (at, *owner)))
@@ -553,8 +519,7 @@ fn rewrite_boxed_props(declaration: &str) -> (String, Vec<String>) {
         };
         out.push_str(&rest[..at]);
         let inner = &rest[at + head + 1..close];
-        // A closure that takes *and* returns is a callback the framework has no shape for, so it is left
-        // exactly as written. `Fn() -> T` is the reactive one; `Fn(T)` is a handler.
+        // A closure that takes and returns is a callback the framework has no shape for, so it is left as written. `Fn() -> T` is the reactive one; `Fn(T)` is a handler.
         let reads = inner
             .split_once("->")
             .filter(|(args, _)| args.trim().ends_with("()"));
@@ -565,8 +530,7 @@ fn rewrite_boxed_props(declaration: &str) -> (String, Vec<String>) {
                     reactive.push(name);
                 }
                 out.push_str(&format!("Reactive<{}>", yields.trim()));
-                // The inline `= Box::new(…)` default is a closure too, and the type it defaults no longer
-                // takes one.
+                // The inline `= Box::new(…)` default is a closure too, and the type it defaults no longer takes one.
                 if rest[close + 1..].starts_with(" = Box::new(") {
                     out.push_str(" = Reactive::of(");
                     rest = &rest[close + 1 + " = Box::new(".len()..];
@@ -589,8 +553,7 @@ fn field_name(so_far: &str) -> Option<String> {
     Some(name.trim().trim_start_matches("pub ").to_string())
 }
 
-/// `#[props(into)]` on every prop that became a `Reactive`, which is what lets a call site keep writing the
-/// literal or the signal it always wrote instead of naming the wrapper.
+/// `#[props(into)]` on every prop that became a `Reactive`, which is what lets a call site keep writing the literal or the signal it always wrote instead of naming the wrapper.
 fn permissive(declaration: &str, reactive: &[String]) -> String {
     let mut out = String::with_capacity(declaration.len());
     for line in declaration.split_inclusive('\n') {
@@ -607,8 +570,7 @@ fn permissive(declaration: &str, reactive: &[String]) -> String {
     out
 }
 
-/// The `>` closing the `<` at `open`, counting the ones between — and not the one in `->`, which is half an
-/// arrow and closes nothing.
+/// The `>` closing the `<` at `open`, counting the ones between — and not the one in `->`, which is half an arrow and closes nothing.
 fn closing_angle(s: &str, open: usize) -> Option<usize> {
     let bytes = s.as_bytes();
     let mut depth = 0i32;
@@ -637,9 +599,7 @@ fn clip_shapes(body: &str) -> String {
     })
 }
 
-/// Moves every `[style]` constant into `[logic]` as a `const`, and rewrites the names that referred to it.
-/// `[style]` keeps classes — named bundles of properties, which are reuse rather than a second evaluation
-/// model.
+/// Moves every `[style]` constant into `[logic]` as a `const`, and rewrites the names that referred to it. `[style]` keeps classes — named bundles of properties, which are reuse rather than a second evaluation model.
 fn style_constants_to_logic(source: &str) -> String {
     let constants: Vec<(String, String, String)> = zones(source)
         .iter()
@@ -682,8 +642,7 @@ fn style_constants_to_logic(source: &str) -> String {
     out
 }
 
-/// `(name, Rust type, Rust value)` for a `[style]` constant line, or `None` for a class header, a class
-/// property (indented) or a blank.
+/// `(name, Rust type, Rust value)` for a `[style]` constant line, or `None` for a class header, a class property (indented) or a blank.
 fn style_constant(line: &str) -> Option<(String, String, String)> {
     if line.starts_with([' ', '\t']) || line.trim().is_empty() || line.trim_start().starts_with('@')
     {
@@ -736,9 +695,7 @@ fn hex_to_color(hex: &str) -> Option<String> {
     ))
 }
 
-/// `from` → `to` wherever `from` is a whole name in a *value* position. A name followed by `:` is the
-/// attribute key, and a constant named `radius` used under a key of the same name is what makes that
-/// distinction load-bearing.
+/// `from` → `to` wherever `from` is a whole name in a *value* position. A name followed by `:` is the attribute key, and a constant named `radius` used under a key of the same name is what makes that distinction load-bearing.
 fn replace_whole_name(chunk: &str, from: &str, to: &str) -> String {
     let bytes = chunk.as_bytes();
     let (mut out, mut i) = (String::with_capacity(chunk.len()), 0usize);
@@ -758,10 +715,7 @@ fn replace_whole_name(chunk: &str, from: &str, to: &str) -> String {
     out
 }
 
-// === imports ===============================================================
-
-/// `stem -> crate::path::to::stem` for every `.rsx` in the sweep, so a tag that used to resolve through the
-/// crate-root re-export can be given the `use` line it now needs.
+/// `stem -> crate::path::to::stem` for every `.rsx` in the sweep, so a tag that used to resolve through the crate-root re-export can be given the `use` line it now needs.
 fn component_modules(sources: &[PathBuf]) -> BTreeMap<String, String> {
     let mut out = BTreeMap::new();
     for path in sources {
@@ -782,8 +736,7 @@ fn component_modules(sources: &[PathBuf]) -> BTreeMap<String, String> {
     out
 }
 
-/// Adds a `use` line to `[logic]` for every component tag the file calls and does not already import. Each
-/// `.rsx` is a module now, so a caller imports what it uses instead of reaching a crate-root re-export.
+/// Adds a `use` line to `[logic]` for every component tag the file calls and does not already import. Each `.rsx` is a module now, so a caller imports what it uses instead of reaching a crate-root re-export.
 fn imports_for_tags(source: &str, modules: &BTreeMap<String, String>, own: &str) -> String {
     let mut wanted: Vec<&str> = Vec::new();
     for zone in zones(source) {
@@ -866,11 +819,7 @@ fn pascal(name: &str) -> String {
         .collect()
 }
 
-// === what a person has to do ===============================================
-
-/// The `build "…"` and `widget "…"` sites, reported rather than guessed: turning
-/// `build "tray_icon(item, config, fg, size)?"` into a tag needs *names* for four positional arguments, and
-/// only a person knows them.
+/// The `build "…"` and `widget "…"` sites, reported rather than guessed: turning `build "tray_icon(item, config, fg, size)?"` into a tag needs *names* for four positional arguments, and only a person knows them.
 fn escapes_needing_a_person(path: &Path, source: &str) -> Vec<(PathBuf, usize, String)> {
     let mut out = Vec::new();
     for zone in zones(source) {
@@ -888,8 +837,6 @@ fn escapes_needing_a_person(path: &Path, source: &str) -> Vec<(PathBuf, usize, S
     }
     out
 }
-
-// === walking ===============================================================
 
 fn collect_rsx(root: &Path, out: &mut Vec<PathBuf>) {
     if root.is_file() {
@@ -912,8 +859,7 @@ fn collect_rsx(root: &Path, out: &mut Vec<PathBuf>) {
     }
 }
 
-/// The component this file *is*, which it never imports: a `[preview]` calling it is a sibling function in
-/// the same generated module.
+/// The component this file *is*, which it never imports: a `[preview]` calling it is a sibling function in the same generated module.
 fn own_stem(path: &Path) -> &str {
     path.file_stem().and_then(|s| s.to_str()).unwrap_or("")
 }
@@ -956,8 +902,7 @@ mod tests {
         );
     }
 
-    /// A control-flow line is Rust: `if shown($seen)` is a call, `for … in options()` is a call, and a
-    /// `[view]`-level `let` holds one. None of the three has an attribute in it.
+    /// A control-flow line is Rust: `if shown($seen)` is a call, `for … in options()` is a call, and a `[view]`-level `let` holds one. None of the three has an attribute in it.
     #[test]
     fn a_control_flow_line_is_left_alone() {
         let source = "[view]\nif shown($seen)\n    let over = signal(false)\n    for (i, x) in options()\n        row gap(4)\n";
@@ -1002,17 +947,14 @@ mod tests {
         );
     }
 
-    /// A qualified call still names the crate's own accessor — which is what a nested `fn` inside `[logic]`
-    /// needs, since it cannot see the view's binding.
+    /// A qualified call still names the crate's own accessor — which is what a nested `fn` inside `[logic]` needs, since it cannot see the view's binding.
     #[test]
     fn a_qualified_theme_call_is_not_the_views_binding() {
         let source = "[logic]\nfn draw() {\n    let t = crate::core::theme::theme();\n}\n";
         assert_eq!(migrated(source), source);
     }
 
-    /// A props struct is `Clone` now, so a unique box in one is a struct that cannot reach a region that
-    /// rebuilds. Only the declaration is rewritten — a `Box<dyn Fn>` elsewhere in `[logic]` is the
-    /// author's own.
+    /// A props struct is `Clone` now, so a unique box in one is a struct that cannot reach a region that rebuilds. Only the declaration is rewritten — a `Box<dyn Fn>` elsewhere in `[logic]` is the author's own.
     #[test]
     fn a_handler_prop_becomes_a_shared_one() {
         let out = migrated(
@@ -1025,8 +967,7 @@ mod tests {
             "a value, not a handler: {out}"
         );
         assert!(out.contains("pub tint: Option<Reactive<Color>>,"), "{out}");
-        // A closure that takes *and* returns is a callback with no framework shape: left as written, since
-        // reading it as a value would drop the argument it is handed.
+        // A closure that takes and returns is a callback with no framework shape: left as written, since reading it as a value would drop the argument it is handed.
         let callback = migrated(
             "[logic]\npub struct Props {\n    pub style: Box<dyn Fn(RectStyle) -> RectStyle>,\n}\n\n[view]\ncol\n",
         );
@@ -1035,8 +976,7 @@ mod tests {
             "{callback}"
         );
 
-        // A prop already moved to `Rc` by hand is still a value if it returns one, and still a handler if
-        // it does not — which is what makes running the codemod twice safe.
+        // A prop already moved to `Rc` by hand is still a value if it returns one and a handler if it does not, which is what makes running the codemod twice safe.
         let again = migrated(&out);
         assert_eq!(again, out, "the rewrite is its own fixed point");
         let by_hand = migrated(
@@ -1078,8 +1018,7 @@ mod tests {
         );
     }
 
-    /// The binding that shadows the view's handle is a top-level one. A `let theme = use_theme::<T>()`
-    /// inside a nested `fn` is that function's own and shadows nothing in the view.
+    /// The binding that shadows the view's handle is a top-level one. A `let theme = use_theme::<T>()` inside a nested `fn` is that function's own and shadows nothing in the view.
     #[test]
     fn a_theme_bound_inside_a_fn_shadows_nothing() {
         let out = migrated(
@@ -1092,8 +1031,7 @@ mod tests {
         );
     }
 
-    /// A file that binds `theme` itself means its own binding, not the view's handle — `$theme.base` on a
-    /// `NordTheme` is a `.get()` the type does not have.
+    /// A file that binds `theme` itself means its own binding, not the view's handle — `$theme.base` on a `NordTheme` is a `.get()` the type does not have.
     #[test]
     fn a_file_that_binds_theme_keeps_meaning_its_own() {
         let source =
@@ -1101,8 +1039,7 @@ mod tests {
         assert_eq!(migrated(source), source);
     }
 
-    /// A closure was how a call site said "a value that changes", and it fitted the `Box<dyn Fn() -> T>` the
-    /// prop used to be. Only the props this sweep rewrote are wrapped; any other closure is a handler.
+    /// A closure was how a call site said "a value that changes", and it fitted the `Box<dyn Fn() -> T>` the prop used to be. Only the props this sweep rewrote are wrapped; any other closure is a handler.
     #[test]
     fn a_closure_on_a_rewritten_prop_becomes_a_reactive() {
         let mut reactive = BTreeMap::new();
@@ -1172,8 +1109,7 @@ mod tests {
         );
     }
 
-    /// A `[preview]` in a component's own file calls it as a sibling function, so importing it would be a
-    /// module importing itself.
+    /// A `[preview]` in a component's own file calls it as a sibling function, so importing it would be a module importing itself.
     #[test]
     fn a_file_never_imports_the_component_it_is() {
         let mut modules = BTreeMap::new();

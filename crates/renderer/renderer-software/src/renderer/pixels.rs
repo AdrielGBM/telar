@@ -1,3 +1,5 @@
+//! Pixel-level work: the scroll blit, the clip mask, and the swizzle into the present buffer.
+
 use std::hash::{Hash, Hasher};
 
 use geometry_core::Rect;
@@ -55,7 +57,7 @@ pub(super) fn compute_layer_bounds(
     let mut result = vec![None; commands.len()];
     let mut stack: Vec<(usize, Option<Rect>)> = Vec::new();
 
-    // for_each_with_matrix owns the PushMatrix/PopMatrix cumulative-matrix walk; the callback keeps only the layer-stack bounds accumulation. `idx` mirrors the command position since the callback fires once per command in order.
+    // `for_each_with_matrix` owns the matrix walk, so the callback keeps only the layer-stack accumulation. `idx` mirrors the command position, since the callback fires once per command in order.
     let mut idx = 0usize;
     renderer_core::for_each_with_matrix(commands, |cmd, matrix| {
         match cmd {
@@ -76,7 +78,7 @@ pub(super) fn compute_layer_bounds(
                         (0, 0, window_w, window_h)
                     };
                     result[push_idx] = Some((ox, oy, bw, bh));
-                    // Propagate this layer's visual footprint to the parent layer's accumulator so the parent layer is sized to contain the composited result of all nested layers.
+                    // So the parent layer is sized to contain the composited result of all nested layers.
                     if let Some(parent) = stack.last_mut() {
                         let footprint = Rect {
                             x: ox as f32,
@@ -89,7 +91,7 @@ pub(super) fn compute_layer_bounds(
                 }
             }
             _ => {
-                // command_visual_rect returns None for PushMatrix/PopMatrix/PushClip/PopClip, so those pass through without touching the accumulator.
+                // `command_visual_rect` returns `None` for the state commands, so those pass through untouched.
                 if let Some(vr) =
                     renderer_core::culling::command_visual_rect(cmd, matrix, font_metrics)
                 {
@@ -105,7 +107,7 @@ pub(super) fn compute_layer_bounds(
     result
 }
 
-// Shifts rows (Y scroll) or columns (X scroll) inside `clip` in place; the two are mutually exclusive. The newly exposed strip is left stale and must be re-rendered by the caller.
+// The two are mutually exclusive. The newly exposed strip is left stale for the caller to re-render.
 pub(super) fn apply_scroll_blit(pixmap: &mut Pixmap, clip: Rect, delta_tx: f32, delta_ty: f32) {
     let width = pixmap.width() as usize;
     let height = pixmap.height() as usize;
@@ -122,7 +124,7 @@ pub(super) fn apply_scroll_blit(pixmap: &mut Pixmap, clip: Rect, delta_tx: f32, 
     if dy != 0 {
         let row_bytes = (x1 - x0) * 4;
         if dy < 0 {
-            // Content moved up: write to a lower row, read from a higher row → top-to-bottom is safe.
+            // Content moved up: write to a lower row, read from a higher one, so top-to-bottom is safe.
             let shift = (-dy) as usize;
             for dst_y in y0..y1 {
                 let src_y = dst_y + shift;
@@ -134,7 +136,7 @@ pub(super) fn apply_scroll_blit(pixmap: &mut Pixmap, clip: Rect, delta_tx: f32, 
                 data.copy_within(src_off..src_off + row_bytes, dst_off);
             }
         } else {
-            // Content moved down: write to a higher row, read from a lower row → bottom-to-top is safe.
+            // Content moved down: write to a higher row, read from a lower one, so bottom-to-top is safe.
             let shift = dy as usize;
             for dst_y in (y0..y1).rev() {
                 if dst_y < y0 + shift {
@@ -155,7 +157,7 @@ pub(super) fn apply_scroll_blit(pixmap: &mut Pixmap, clip: Rect, delta_tx: f32, 
         if copy_cols > 0 {
             let byte_count = copy_cols * 4;
             if dx < 0 {
-                // Content moved left: copy columns [x0+shift..x1] → [x0..x0+copy_cols] per row.
+                // Content moved left: copy columns `[x0+shift..x1]` to `[x0..x0+copy_cols]` per row.
                 for y in y0..y1 {
                     let row_base = y * width;
                     let src_off = (row_base + x0 + shift) * 4;
@@ -163,7 +165,7 @@ pub(super) fn apply_scroll_blit(pixmap: &mut Pixmap, clip: Rect, delta_tx: f32, 
                     data.copy_within(src_off..src_off + byte_count, dst_off);
                 }
             } else {
-                // Content moved right: copy columns [x0..x0+copy_cols] → [x0+shift..x1] per row.
+                // Content moved right: copy columns `[x0..x0+copy_cols]` to `[x0+shift..x1]` per row.
                 for y in y0..y1 {
                     let row_base = y * width;
                     let src_off = (row_base + x0) * 4;
@@ -175,7 +177,7 @@ pub(super) fn apply_scroll_blit(pixmap: &mut Pixmap, clip: Rect, delta_tx: f32, 
     }
 }
 
-// Updates the 1-bit clip mask in place. Only touches rows/cols within the union of the previous and new clip rects, avoiding the full-buffer zero (~2MB at 1080p) that would otherwise run on every PushClip/PopClip. Writes 0xFF directly because clip rects are axis-aligned and the existing fill_path used anti_alias=false (binary mask).
+// Only touches rows and columns within the union of the previous and new clip rects, avoiding a full-buffer zero of about 2MB at 1080p on every push and pop. Writes `0xFF` directly, since clip rects are axis-aligned and the mask is binary.
 pub(super) fn repaint_mask(
     mask: &mut tiny_skia::Mask,
     new_rect: Rect,
@@ -213,7 +215,7 @@ pub(super) fn fill_rounded_mask(
     }
 }
 
-// Hashes the draw-command slice together with the viewport dimensions, used to key the layer-bbox cache which depends on both the commands and the surface size.
+// Keys the layer-bbox cache, which depends on both the commands and the surface size.
 pub(super) fn hash_commands_with_dimensions(
     commands: &[DrawCommand],
     width: u32,
@@ -226,14 +228,14 @@ pub(super) fn hash_commands_with_dimensions(
     h.finish()
 }
 
-// Per-pixel swizzle: tiny_skia RGBA byte order (read as LE u32 = 0xAABBGGRR) → softbuffer's 0x00RRGGBB.
+// tiny_skia RGBA byte order, read as LE u32 `0xAABBGGRR`, to softbuffer's `0x00RRGGBB`.
 #[cfg(target_endian = "little")]
 #[inline(always)]
 fn xrgb_from_rgba_word(s: u32) -> u32 {
     ((s >> 16) & 0xFF) | (s & 0xFF00) | ((s & 0xFF) << 16)
 }
 
-// SIMD swizzle of a packed-RGBA u32 slice into XRGB u32s. Both slices hold the same pixel count.
+// Both slices hold the same pixel count.
 #[cfg(target_endian = "little")]
 fn swizzle_words(src: &[u32], dst: &mut [u32]) {
     use wide::u32x8;
@@ -253,18 +255,18 @@ fn swizzle_words(src: &[u32], dst: &mut [u32]) {
     }
 }
 
-// Converts a chunk of tiny_skia RGBA bytes into softbuffer's little-endian 0x00RRGGBB u32s. `dst.len()` pixels are written; `src` must hold `dst.len() * 4` bytes. Reads the RGBA bytes as packed u32 words (the pixmap allocation is 4-aligned in practice) to avoid a per-pixel byte gather; falls back to a scalar gather if the slice happens to be unaligned.
+// `dst.len()` pixels are written; `src` must hold four times that in bytes. Reads the RGBA bytes as packed u32 words to avoid a per-pixel byte gather, falling back to a scalar gather when unaligned.
 #[cfg(target_endian = "little")]
 pub(super) fn convert_rgba_to_xrgb(src: &[u8], dst: &mut [u32]) {
     let pixels = dst.len();
     let bytes = &src[..pixels * 4];
-    // SAFETY: any byte pattern is a valid u32; we only read the aligned middle.
+    // SAFETY: any byte pattern is a valid u32, and only the aligned middle is read.
     let (pre, words, _post) = unsafe { bytes.align_to::<u32>() };
     if pre.is_empty() && words.len() >= pixels {
         swizzle_words(words, dst);
         return;
     }
-    // Unaligned fallback (rare): per-pixel byte gather.
+    // Unaligned fallback, which is rare.
     for i in 0..pixels {
         let p = i * 4;
         let s = u32::from_le_bytes(src[p..p + 4].try_into().unwrap());
@@ -272,7 +274,7 @@ pub(super) fn convert_rgba_to_xrgb(src: &[u8], dst: &mut [u32]) {
     }
 }
 
-// Swizzles only `rect` from the RGBA pixmap into the XRGB output buffer, reusing the SIMD converter. A full-width rect is swizzled as one contiguous block (the common case for a horizontal scroll band); narrower rects go row by row.
+// A full-width rect is swizzled as one contiguous block, the common case for a horizontal scroll band; narrower rects go row by row.
 #[cfg(target_endian = "little")]
 pub(super) fn convert_rgba_to_xrgb_region(
     src: &[u8],
@@ -286,7 +288,7 @@ pub(super) fn convert_rgba_to_xrgb_region(
     };
     let (x0, y0, x1, y1) = (x0 as usize, y0 as usize, x1 as usize, y1 as usize);
     if x0 == 0 && x1 == width {
-        // Rows are contiguous in memory — one SIMD pass over the whole span.
+        // Rows are contiguous in memory, so one SIMD pass covers the whole span.
         let a = y0 * width;
         let b = y1 * width;
         convert_rgba_to_xrgb(&src[a * 4..b * 4], &mut dst[a..b]);

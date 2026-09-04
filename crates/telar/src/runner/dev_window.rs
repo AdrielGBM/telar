@@ -1,17 +1,12 @@
 //! The `[telar.dev.window]` overrides `cargo telar dev` passes through the environment.
 //!
-//! Their own module rather than desktop's: they read env vars into a `WindowConfig` and touch no winit, and
-//! the android runner called them as `super::desktop::…` while `mod desktop` is gated off Android — an
-//! unresolved module the moment a hot-reload build targeted it.
+//! Their own module rather than desktop's: they read env vars into a `WindowConfig` and touch no winit, and the android runner called them as `super::desktop::…` while `mod desktop` is gated off Android — an unresolved module the moment a hot-reload build targeted it.
 
 use crate::app_config::AppConfig;
 
-/// Applies the dev-window overrides to `config`, and returns it unchanged in a build that is not a
-/// hot-reload one — so every boot path calls this the same way and the `cfg` lives in one place.
+/// Applies the dev-window overrides to `config`, and returns it unchanged in a build that is not a hot-reload one — so every boot path calls this the same way and the `cfg` lives in one place.
 ///
-/// **Precedence, deliberately**: these land on the config the caller passes, which
-/// [`super::resolved_window`] then lets [`crate::App::window_config`] replace outright. The app's own answer
-/// wins, and trinity's `[telar.dev.window]` depends on that order. Pinned by the test below.
+/// **Precedence, deliberately**: these land on the config the caller passes, which [`super::resolved_window`] then lets [`crate::App::window_config`] replace outright. The app's own answer wins, and trinity's `[telar.dev.window]` depends on that order. Pinned by the test below.
 pub(super) fn with_dev_overrides(config: AppConfig) -> AppConfig {
     #[cfg(not(telar_hot_reload))]
     return config;
@@ -69,7 +64,7 @@ pub(super) fn apply_dev_window_overrides(config: &mut platform_core::WindowConfi
     }
 }
 
-// Parses the TELAR_DEV_WINDOW_POSITION value: "centered" (or empty/invalid) → Centered; "<x>,<y>" → absolute coordinates.
+// "centered" (or empty/invalid) → Centered; "<x>,<y>" → absolute coordinates.
 #[cfg(telar_hot_reload)]
 fn parse_dev_window_position(value: &str) -> platform_core::WindowPosition {
     let value = value.trim();
@@ -86,10 +81,7 @@ mod tests {
     use crate::app::App;
     use crate::runner::resolved_window;
 
-    // The order the two window sources resolve in, pinned so a boot-path merge cannot flip it in silence:
-    // the dev overrides land on the caller's config, and `App::window_config` replaces it outright.
-    // trinity's `[telar.dev.window]` depends on exactly this — an app that answers `None` keeps the
-    // overridden window, and one that answers `Some` overrides them back.
+    // The order the two window sources resolve in, pinned so a boot-path merge cannot flip it silently: the dev overrides land on the caller's config, and `App::window_config` replaces it outright.
     #[test]
     fn the_app_window_config_wins_over_the_dev_overrides() {
         struct Opinionated;

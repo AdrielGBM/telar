@@ -1,29 +1,27 @@
+//! Where an application's config, cache and data live, resolved per platform.
+
 use std::path::PathBuf;
 
+/// Where an application's config, cache and data live. A backend installs one; app code asks it.
 pub trait AppPathsProvider: Send + Sync {
     fn config_dir(&self) -> Option<PathBuf>;
     fn data_dir(&self) -> Option<PathBuf>;
     fn cache_dir(&self) -> Option<PathBuf>;
 
-    /// Machine-written state the user never edits. Defaults to [`data_dir`](Self::data_dir), which is where it
-    /// lives on every platform that does not separate the two.
+    /// Machine-written state the user never edits. Defaults to [`data_dir`](Self::data_dir), which is where it lives on every platform that does not separate the two.
     fn state_dir(&self) -> Option<PathBuf> {
         self.data_dir()
     }
-    /// Session-scoped runtime files — a socket, a lock. `None` where the platform has no such place, which is
-    /// the caller's cue to pick its own rather than be handed a directory that outlives the session.
+    /// Session-scoped runtime files — a socket, a lock. `None` where the platform has no such place, which is the caller's cue to pick its own rather than be handed a directory that outlives the session.
     fn runtime_dir(&self) -> Option<PathBuf> {
         None
     }
 
-    /// OS system-font directory to scan for fallback family resolution. `None` on platforms where the
-    /// renderer's default font discovery suffices (desktop); the platform adapter overrides it where the OS
-    /// keeps fonts in a fixed location (Android → `/system/fonts`).
+    /// OS system-font directory to scan for fallback family resolution. `None` on platforms where the renderer's default font discovery suffices (desktop); the platform adapter overrides it where the OS keeps fonts in a fixed location (Android → `/system/fonts`).
     fn system_fonts_dir(&self) -> Option<PathBuf> {
         None
     }
-    /// Sans-serif family names to try in priority order, OS/OEM-specific. Empty when default discovery
-    /// suffices; the platform adapter overrides it (Android OEM font stacks).
+    /// Sans-serif family names to try in priority order, OS/OEM-specific. Empty when default discovery suffices; the platform adapter overrides it (Android OEM font stacks).
     fn sans_serif_candidates(&self) -> Vec<String> {
         Vec::new()
     }
@@ -31,8 +29,7 @@ pub trait AppPathsProvider: Send + Sync {
 
 /// A provider that reports no directories at all, so nothing it is handed to touches a real XDG path.
 ///
-/// Public rather than test-only: a preview window, a headless rasterise and every integration test want the
-/// same answer, and each had written its own copy of these three `None`s.
+/// Public rather than test-only: a preview window, a headless rasterise and every integration test want the same answer, and each had written its own copy of these three `None`s.
 pub struct NoPaths;
 
 impl AppPathsProvider for NoPaths {
@@ -118,9 +115,7 @@ mod tests {
 
 /// The directories the host operating system keeps for a user's applications.
 ///
-/// Lives here rather than in a platform adapter because it is not one platform's answer: every backend that
-/// runs as an ordinary process — a windowed app, a terminal app, a tool — wants exactly these, and each
-/// having its own copy is one more place for them to drift apart.
+/// Lives here rather than in a platform adapter because it is not one platform's answer: every backend that runs as an ordinary process — a windowed app, a terminal app, a tool — wants exactly these, and each having its own copy is one more place for them to drift apart.
 #[cfg(feature = "system-paths")]
 pub struct SystemPaths;
 

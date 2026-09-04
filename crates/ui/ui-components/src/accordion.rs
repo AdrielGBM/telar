@@ -1,3 +1,5 @@
+//! [`accordion`]: a header that expands and collapses the body beneath it.
+
 use telar_macros::Props;
 
 use layout_core::{AlignItems, JustifyContent, LayoutError, LayoutStyle, NodeId};
@@ -35,15 +37,9 @@ fn header_box() -> LayoutStyle {
         .padding_vertical(pad_y())
 }
 
-/// A single collapsible section: a clickable header (title + caret) that toggles an `open` bool, and the
-/// slot children below it, present only while open. This is high-level sugar over the primitives; lives in
-/// `ui-components`, not the kernel, so an app can drop it or ship its own.
+/// A single collapsible section: a clickable header (title + caret) that toggles an `open` bool, and the slot children below it, present only while open. This is high-level sugar over the primitives; lives in `ui-components`, not the kernel, so an app can drop it or ship its own.
 ///
-/// The body is built ONCE from the slot children (they arrive as pre-built widgets and cannot be rebuilt
-/// once consumed, like `modal`/`drawer`'s), then shown/hidden by toggling `display:none` on its layout node
-/// — the same mechanism the sandbox uses to switch doc sections — instead of a `ReactiveList` rebuild.
-/// Unlike `modal`/`drawer`'s `Overlay`, this stays IN FLOW: collapsing the body's node to a zero rect pushes
-/// following siblings back up, and expanding it pushes them down again.
+/// The body is built ONCE from the slot children (they arrive as pre-built widgets and cannot be rebuilt once consumed, like `modal`/`drawer`'s), then shown/hidden by toggling `display:none` on its layout node — the same mechanism the sandbox uses to switch doc sections — instead of a `ReactiveList` rebuild. Unlike `modal`/`drawer`'s `Overlay`, this stays IN FLOW: collapsing the body's node to a zero rect pushes following siblings back up, and expanding it pushes them down again.
 #[derive(Props)]
 pub struct AccordionProps {
     /// Header label.
@@ -57,6 +53,7 @@ pub struct AccordionProps {
     pub color: Reactive<Color>,
 }
 
+/// A header that expands and collapses the body nested inside it.
 pub fn accordion(
     props: AccordionProps,
     children: Children,
@@ -67,7 +64,6 @@ pub fn accordion(
     let open = open.unwrap_or_else(|| signal(false));
     let body_children = slots.take_default();
 
-    // Caret flips glyph with `open`; its colour is the same reactive accent as the rest of the catalogue.
     let caret_open = open;
     let caret_color = color.clone();
     let caret = Text::declaring(
@@ -104,8 +100,7 @@ pub fn accordion(
     .toggled(move || announced_open.get())
     .on_press(move || toggle_open.update(|o| *o = !*o));
 
-    // Body: built once from the slot children. Clipped to its own rect so a collapsed (zero-rect) body
-    // draws nothing even if a child paints at fixed coordinates (mirrors `ClippedItem`'s own doc example).
+    // Built once from the slot children, and clipped to its own rect so a collapsed body draws nothing even if a child paints at fixed coordinates.
     let body = Container::new(LayoutStyle::new().flex_column(), body_children)?;
     let body_node = body.layout_node();
     let clipped_body = ClippedItem::new(box_item(body), Clip::both());
@@ -115,8 +110,7 @@ pub fn accordion(
         vec![box_item(header), box_item(clipped_body)],
     )?;
 
-    // Drives the body's `display` from `open`: collapses it out of flow when closed, restores it when open.
-    // Runs once immediately (setting the initial display) and again on every toggle; kept alive by `Accordion`.
+    // Collapses the body out of flow when closed and restores it when open. Runs once immediately for the initial display; kept alive by `Accordion`.
     let display_open = open;
     let _effect = effect(move || {
         set_display(body_node, display_open.get());
@@ -126,8 +120,7 @@ pub fn accordion(
     Ok(box_item(Accordion { root, _effect }))
 }
 
-/// Wraps the header+body column together with the display-toggling effect so it stays alive for the
-/// widget's lifetime — an `Effect` deregisters itself on drop, same as `ReactiveList`'s own `_effect` field.
+/// Wraps the header+body column together with the display-toggling effect so it stays alive for the widget's lifetime — an `Effect` deregisters itself on drop, same as `ReactiveList`'s own `_effect` field.
 struct Accordion {
     root: Container,
     _effect: Effect,
@@ -155,7 +148,6 @@ impl Component for Accordion {
 
 #[cfg(test)]
 mod tests {
-
     use layout_core::AvailableSpace;
 
     use ui_core::{compute_layout, new_container, track_layout};
@@ -175,7 +167,6 @@ mod tests {
         slots
     }
 
-    // Pressing the header toggles the bound `open` signal.
     #[test]
     fn pressing_the_header_toggles_open() {
         crate::test_support::fresh_layout_runtime();
@@ -194,8 +185,7 @@ mod tests {
         )
         .unwrap();
         let r = rect.get();
-        // The header is the first (top) row, so a point near the top-left always lands on it regardless of
-        // the closed body's collapsed height.
+        // The header is the top row, so a point near the top-left lands on it whatever the collapsed body's height.
         let (cx, cy) = ((r.x + 10.0) as f64, (r.y + 5.0) as f64);
 
         item.on_event(&press(cx, cy));
@@ -207,10 +197,7 @@ mod tests {
         assert!(!open.get(), "a second tap closes it again");
     }
 
-    // Closed, the body's node collapses to a zero rect (out of flow); opening it restores its natural size.
-    // Laid out as a CHILD of a fixed-size wrapper (not as the layout root itself): an auto-height root fills
-    // its given available space, which would stretch the accordion to 400px both closed and open and hide
-    // the very difference this test checks (mirrors `checkbox.rs`'s `lay_out` / `drawer.rs`'s test wrapper).
+    // Laid out as a child of a fixed-size wrapper, not as the layout root: an auto-height root fills its available space, which would stretch the accordion to 400px both closed and open and hide the difference.
     #[test]
     fn open_expands_body_and_close_collapses_it() {
         crate::test_support::fresh_layout_runtime();
@@ -250,8 +237,6 @@ mod tests {
         );
     }
 
-    // An unbound accordion (no `open` signal) still builds and starts collapsed: only the header
-    // contributes height, well under what the header plus the 20px body row would add up to.
     #[test]
     fn uncontrolled_accordion_builds_and_starts_closed() {
         crate::test_support::fresh_layout_runtime();

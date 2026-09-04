@@ -1,3 +1,5 @@
+//! `cargo telar doctor`: what this machine has, and what a build or a bundle would still need.
+
 use std::process::Command;
 
 use super::android::{android_sdk_root, installed_android_platforms, resolve_ndk_root};
@@ -53,9 +55,7 @@ fn command_first_line(program: &str, args: &[&str]) -> Option<String> {
     Some(text.lines().next().unwrap_or("").trim().to_string())
 }
 
-/// Whether a linker faster than the default is installed. The name probed is the driver's, not the
-/// package's — `-fuse-ld=lld` makes the C compiler look for `ld.lld` on PATH, so probing `lld` would report
-/// one that the link would then fail to find.
+/// Whether a linker faster than the default is installed. The name probed is the driver's, not the package's — `-fuse-ld=lld` makes the C compiler look for `ld.lld` on PATH, so probing `lld` would report one that the link would then fail to find.
 fn fast_linker() -> Option<&'static str> {
     [("mold", "mold"), ("lld", "ld.lld")]
         .into_iter()

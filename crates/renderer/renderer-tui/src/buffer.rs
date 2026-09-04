@@ -5,6 +5,7 @@ use unicode_width::UnicodeWidthStr;
 use crate::cell::{Attrs, Cell, Grapheme};
 use crate::color::{ColorDepth, Rgb, to_ansi16, to_ansi256};
 
+/// The cell grid one frame is painted into, and diffed against the last.
 pub struct CellBuffer {
     cols: u16,
     rows: u16,
@@ -28,8 +29,7 @@ impl CellBuffer {
         self.rows
     }
 
-    /// Resizes to `cols`×`rows`, discarding the old contents. The caller repaints the frame anyway, and
-    /// carrying pixels across a resize is what leaves a stale column down the edge of the screen.
+    /// Resizes to `cols`×`rows`, discarding the old contents. The caller repaints the frame anyway, and carrying pixels across a resize is what leaves a stale column down the edge of the screen.
     pub fn resize(&mut self, cols: u16, rows: u16, bg: Rgb) {
         self.cols = cols;
         self.rows = rows;
@@ -56,8 +56,7 @@ impl CellBuffer {
         self.index(col, row).map(|i| &mut self.cells[i])
     }
 
-    /// Writes a grapheme at `col`, claiming the next column too when the terminal will render it two
-    /// cells wide. Returns how many columns it took, so a caller laying out a run advances correctly.
+    /// Writes a grapheme at `col`, claiming the next column too when the terminal will render it two cells wide. Returns how many columns it took, so a caller laying out a run advances correctly.
     pub fn put(&mut self, col: u16, row: u16, glyph: Grapheme, fg: Rgb, attrs: Attrs) -> u16 {
         let width = glyph.as_str().width().max(1) as u16;
         let Some(i) = self.index(col, row) else {
@@ -171,8 +170,7 @@ impl Pen {
 
     fn apply(&mut self, cell: &Cell, depth: ColorDepth, out: &mut Vec<u8>) {
         let attrs = Attrs::from_bits(cell.attrs.bits() & !Attrs::WIDE_TAIL.bits());
-        // Turning an attribute *off* has no SGR of its own that is safe across terminals, so the whole pen
-        // is reset and restated. Turning one on is additive and costs one parameter.
+        // Turning an attribute *off* has no SGR of its own that is safe across terminals, so the whole pen is reset and restated. Turning one on is additive and costs one parameter.
         let clears = self
             .attrs
             .is_some_and(|current| current.bits() & !attrs.bits() != 0);
@@ -318,9 +316,7 @@ mod tests {
 
 /// A model of what a terminal ends up showing, built by replaying the bytes [`CellBuffer::diff_into`] wrote.
 ///
-/// The diff's whole contract is "apply this to the previous frame and you have the new one", and nothing
-/// short of interpreting the output actually checks it: comparing two buffers proves they differ, not that
-/// the escape sequences between them are right.
+/// The diff's whole contract is "apply this to the previous frame and you have the new one", and nothing short of interpreting the output actually checks it: comparing two buffers proves they differ, not that the escape sequences between them are right.
 #[cfg(test)]
 pub(crate) struct TerminalModel {
     cols: u16,
@@ -348,8 +344,7 @@ impl TerminalModel {
                 self.put(c);
                 continue;
             }
-            // Every escape this writer emits is either a CSI or a one-character sequence; only the CSIs
-            // that move the cursor change what ends up on the screen.
+            // Every escape this writer emits is either a CSI or a one-character sequence; only the CSIs that move the cursor change what ends up on the screen.
             if chars.next() == Some('[') {
                 let mut params = String::new();
                 let final_byte = loop {
@@ -376,8 +371,7 @@ impl TerminalModel {
             .max(1) as u16;
         if col < self.cols && row < self.rows {
             self.glyphs[row as usize * self.cols as usize + col as usize] = c.to_string();
-            // A double-width glyph covers the next column outright: whatever was there is gone, and the
-            // column contributes nothing of its own to the row.
+            // A double-width glyph covers the next column outright: whatever was there is gone, and the column contributes nothing of its own to the row.
             if width == 2 && col + 1 < self.cols {
                 self.glyphs[row as usize * self.cols as usize + col as usize + 1] = String::new();
             }
@@ -397,8 +391,7 @@ impl TerminalModel {
 mod replay_tests {
     use super::*;
 
-    /// What the buffer says its own rows are, for comparison with the model. A wide glyph's tail contributes
-    /// nothing, exactly as it does on the terminal.
+    /// What the buffer says its own rows are, for comparison with the model. A wide glyph's tail contributes nothing, exactly as it does on the terminal.
     fn buffer_row(buf: &CellBuffer, row: u16) -> String {
         let mut out = String::new();
         let mut col = 0;

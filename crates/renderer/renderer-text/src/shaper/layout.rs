@@ -1,3 +1,5 @@
+//! Shaping a string into positioned glyphs, and rasterizing the ones the atlas does not hold.
+
 use super::TextShaper;
 use super::cache::{ShapingCacheKey, hash_text, text_style_bits};
 use super::{
@@ -12,9 +14,7 @@ use super::atlas::GlyphInfo;
 impl TextShaper {
     /// Lays `text` into `rect`, `spans` colouring and restyling the byte ranges that differ from `style`.
     ///
-    /// A paragraph with spans skips the shaping cache, as the rich path always did: they are few and short,
-    /// and each glyph carries its own colour, which the position-only cache entry has no room for. The glyph
-    /// atlas still caches every raster either way.
+    /// A paragraph with spans skips the shaping cache, as the rich path always did: they are few and short, and each glyph carries its own colour, which the position-only cache entry has no room for. The glyph atlas still caches every raster either way.
     pub fn layout_glyphs(
         &mut self,
         text: &str,
@@ -84,7 +84,7 @@ impl TextShaper {
                 let mut pos: Vec<(CacheKey, i32, i32)> = Vec::new();
                 for run in buffer.layout_runs() {
                     for glyph in run.glyphs.iter() {
-                        // cosmic-text's `physical` adds the offset WITHOUT scaling it (`y = glyph_y * scale + offset.1`), and `screen_y` below divides the whole thing by `scale_factor`. So `line_y` must be pre-scaled here or it collapses to `line_y / scale_factor`, packing every line onto the first one at high-DPI (e.g. Android).
+                        // cosmic-text's `physical` adds the offset without scaling it, and `screen_y` below divides the whole thing by the scale factor, so `line_y` must be pre-scaled here or every line packs onto the first at high DPI.
                         let physical = physical_glyph(
                             glyph,
                             (0., run.line_y * scale_factor),
@@ -116,9 +116,7 @@ impl TextShaper {
         }
     }
 
-    /// Fetches (rasterizing and atlas-caching on a miss) one shaped glyph and appends its quad to `out`, tinted
-    /// `color`. The atlas stores mask glyphs white and the tint is applied here — the seam that lets a rich
-    /// paragraph colour each run differently while sharing one glyph cache.
+    /// Fetches (rasterizing and atlas-caching on a miss) one shaped glyph and appends its quad to `out`, tinted `color`. The atlas stores mask glyphs white and the tint is applied here — the seam that lets a rich paragraph colour each run differently while sharing one glyph cache.
     #[allow(clippy::too_many_arguments)]
     fn emit_glyph(
         &mut self,
@@ -134,7 +132,7 @@ impl TextShaper {
     ) {
         let tint = color.to_array();
         let identity_tint = [1.0, 1.0, 1.0, 1.0];
-        // px/py and the placement offsets are whole physical pixels; the text box's own origin is not, and under the pixel raster that is the last place a fraction can get in. It matters more here than it reads: the atlas is sampled with a linear filter, so a quad landing half a texel off smears every glyph edge back into the blend the raster exists to remove. Snapped in *physical* space, since that is the grid the sampler resolves against.
+        // The placement offsets are whole physical pixels but the text box's own origin is not, and the atlas is sampled with a linear filter, so a quad landing half a texel off smears every glyph edge back into the blend the pixel raster exists to remove. Snapped in physical space, the grid the sampler resolves against.
         let (origin_x, origin_y) = match raster {
             Raster::Smooth => (rect.x * scale_factor, rect.y * scale_factor),
             Raster::Pixel => (
@@ -144,7 +142,7 @@ impl TextShaper {
         };
 
         if let Some(entry) = self.atlas.fetch(&cache_key) {
-            // px/py and placement offsets are in physical pixels; divide by scale_factor to get logical pixel screen coordinates expected by the viewport shader.
+            // Physical pixels, so divide by the scale factor for the logical coordinates the viewport shader expects.
             let screen_x = (origin_x + px as f32 + entry.placement_left as f32) / scale_factor;
             let screen_y = (origin_y + py as f32 - entry.placement_top as f32) / scale_factor;
             let glyph_color = if entry.is_color_glyph {
@@ -170,7 +168,7 @@ impl TextShaper {
             return;
         }
 
-        // swash returns a usable bitmap for normal and color (e.g. CBDT) glyphs; for COLR v1 glyphs it returns None or an empty placement, in which case we rasterize with skrifa.
+        // swash returns a usable bitmap for normal and colour glyphs; for COLR v1 it returns `None` or an empty placement, and skrifa rasterizes instead.
         let raster: Option<(u32, u32, i32, i32, Vec<u8>, bool)> = {
             let img_opt = self.swash_cache.get_image(&mut self.font_system, cache_key);
             match img_opt {
@@ -193,7 +191,7 @@ impl TextShaper {
                         SwashContent::SubpixelMask => {
                             let mut out = vec![0u8; (w * h * 4) as usize];
                             for (i, chunk) in img.data.chunks_exact(3).enumerate() {
-                                // KNOWN LIMITATION: Subpixel anti-aliasing (LCD rendering) requires per-channel alpha compositing in the renderer to preserve per-color subpixel masks. Currently, we average the RGB channels to grayscale, losing the color-specific AA information. This produces visually inferior text on LCD screens. Supporting proper subpixel AA would require renderer-level per-channel compositing, which is not yet implemented.
+                                // Known limitation: subpixel AA needs per-channel alpha compositing in the renderer to preserve the per-colour masks. Averaging RGB to greyscale loses that, which reads worse on LCD screens.
                                 let mask = ((chunk[0] as u32 + chunk[1] as u32 + chunk[2] as u32)
                                     / 3) as u8;
                                 out[i * 4] = 255;
@@ -280,8 +278,7 @@ impl TextShaper {
             return (0.0, 0.0);
         }
 
-        // A no-wrap style has no wrap width to be zero: it measures its natural width whatever box it was
-        // offered, which is the whole point of asking for one line.
+        // A no-wrap style has no wrap width to be zero: it measures its natural width whatever box it was offered, which is the whole point of asking for one line.
         let width_u32 = max_width.ceil() as u32;
         if width_u32 == 0 && style.text_wrap == TextWrap::Wrap {
             return (0.0, 0.0);
@@ -307,7 +304,7 @@ impl TextShaper {
             width: max_width,
             height: 100000.0,
         };
-        // make_buffer already applies max_lines/ellipsis, so the measured extent reflects the clamp.
+        // `make_buffer` already applies the clamp, so the measured extent reflects it.
         let buffer = make_buffer(&mut self.font_system, text, spans, rect, style);
 
         let mut width: f32 = 0.0;
@@ -315,13 +312,13 @@ impl TextShaper {
         let line_height = effective_line_height(style);
 
         for run in buffer.layout_runs() {
-            // From the line's TOP, not its baseline. `line_y` is where the letters sit on, so adding a line height to it counted the ascent twice and every text box reserved that much more than it draws — a constant overshoot per block, near half the box at UI sizes. `line_top` is what the last line's bottom edge is measured from, so N lines now measure N line heights, which is exactly what a caller asking for `line_height` expects to get.
+            // From the line's top, not its baseline: `line_y` is where the letters sit, so adding a line height to it counted the ascent twice and every text box reserved nearly half again what it draws.
             height = run.line_top + line_height;
-            // Use the line's advance width, not the glyph ink boxes: the last glyph's advance extends past its ink, so an ink-based width leaves the box a hair too narrow and the renderer wraps the final glyph onto a new line.
+            // The line's advance width, not the glyph ink boxes: the last glyph's advance extends past its ink, so an ink-based width leaves the box a hair too narrow and the renderer wraps the final glyph.
             width = width.max(run.line_w);
         }
 
-        // Round the wrap width up so sub-pixel rounding never re-wraps the last glyph.
+        // Rounded up, so sub-pixel rounding never re-wraps the last glyph.
         let result = (width.ceil(), height);
         if spans.is_none() {
             self.measure_cache.insert(cache_key, result);
@@ -329,12 +326,7 @@ impl TextShaper {
         result
     }
 
-    /// The text's ink bounding box measured from the top of a `[0, max_width] × [0, ∞]` layout rect, at
-    /// scale 1.0: `(ink_top, ink_height)`. Unlike [`measure_text`](Self::measure_text) (which returns the
-    /// full line-box height) this is the actual drawn glyph extent, so a caller can *optically* center
-    /// text — the font's line box reserves ascent room for accents/descenders that short runs like "72%"
-    /// leave empty, which makes line-box-centered text sit visibly high next to an icon. Empty text or a
-    /// run with no inked glyphs returns `(0.0, 0.0)`.
+    /// The text's ink bounding box measured from the top of a `[0, max_width] × [0, ∞]` layout rect, at scale 1.0: `(ink_top, ink_height)`. Unlike [`measure_text`](Self::measure_text) (which returns the full line-box height) this is the actual drawn glyph extent, so a caller can *optically* center text — the font's line box reserves ascent room for accents/descenders that short runs like "72%" leave empty, which makes line-box-centered text sit visibly high next to an icon. Empty text or a run with no inked glyphs returns `(0.0, 0.0)`.
     pub fn measure_ink_bounds(
         &mut self,
         text: &str,
@@ -351,8 +343,7 @@ impl TextShaper {
             height: 100000.0,
         };
         let buffer = make_buffer(&mut self.font_system, text, None, rect, style);
-        // Collect (cache_key, baseline_y) first so the immutable `layout_runs` borrow ends before the
-        // mutable `swash_cache` lookups below.
+        // Collected first, so the immutable `layout_runs` borrow ends before the mutable lookups below.
         let mut glyphs: Vec<(CacheKey, i32)> = Vec::new();
         for run in buffer.layout_runs() {
             for glyph in run.glyphs.iter() {

@@ -1,3 +1,5 @@
+//! Blitting glyph alpha masks, and the colour-emoji path beside them.
+
 use std::hash::{Hash, Hasher};
 
 use geometry_core::Rect;
@@ -11,7 +13,7 @@ fn tint_premultiplied(pixels: &mut [u8], color: Color) {
     let n_simd = pixels.len() / 32;
     let (simd_pixels, rest) = pixels.split_at_mut(n_simd * 32);
 
-    // fast_div255(v, c) = (v * c + 128) >> 8, a 1-ulp approximation of v*c/255
+    // fast_div255(v, c) = (v * c + 128) >> 8, a 1-ulp approximation of v * c / 255.
     let r_splat = u32x8::splat(r as u32);
     let g_splat = u32x8::splat(g as u32);
     let b_splat = u32x8::splat(b as u32);
@@ -73,7 +75,6 @@ fn tint_premultiplied(pixels: &mut [u8], color: Color) {
         }
     }
 
-    // Scalar fallback for remaining < 8 pixels
     for chunk in rest.chunks_exact_mut(4) {
         chunk[0] = ((chunk[0] as u32 * r as u32) / 255) as u8;
         chunk[1] = ((chunk[1] as u32 * g as u32) / 255) as u8;
@@ -96,9 +97,7 @@ pub(crate) struct TextShadowCacheKey {
     pub texture_height: u32,
     pub shadow_color: u32,
     pub blur_radius_bits: u32,
-    /// Weight, slant, alignment, line clamp, ellipsis and spacing — everything past the string itself that moves a
-    /// glyph. The body raster keys on these; the shadow did not, so the same string set bold and regular, or
-    /// ellipsized and whole, shared one silhouette and whichever drew first was cast under both.
+    /// Weight, slant, alignment, line clamp, ellipsis and spacing — everything past the string itself that moves a glyph. The body raster keys on these; the shadow did not, so the same string set bold and regular, or ellipsized and whole, shared one silhouette and whichever drew first was cast under both.
     pub style_bits: u32,
 }
 
@@ -165,7 +164,7 @@ pub(crate) fn draw_text(
                 let tmp_h = texture_height + 2 * padding as u32 + 2;
                 let shadow_color = shadow.color;
 
-                // The shadow shape is the tinted alpha texture; it only needs the (Send) alpha buffer and Copy params, so large text shadows can be blurred on a background thread. The async closure owns a clone of the alpha Arc.
+                // The shadow shape is the tinted alpha texture, needing only the `Send` alpha buffer and Copy params, so a large text shadow can be blurred on a worker thread.
                 let draw_text_shadow = move |tmp_pmap: &mut tiny_skia::Pixmap, alpha: &[u8]| {
                     let mut shadow_pixels = alpha.to_vec();
                     tint_premultiplied(&mut shadow_pixels, shadow_color);
@@ -200,7 +199,7 @@ pub(crate) fn draw_text(
                     blur_scratch,
                     transform,
                     clip,
-                    // Rasterizing the alpha mask happens here, behind the cache lookup, because the blurred pixmap it feeds is the thing worth keeping — and once that is cached the mask is an intermediate nothing will read again.
+                    // Behind the cache lookup, because the blurred pixmap it feeds is the thing worth keeping — once that is cached the mask is an intermediate nothing reads again.
                     || {
                         let (alpha, _, _) = shaper.rasterize_alpha(text, rect, style);
                         let async_alpha = alpha.clone();
@@ -247,11 +246,7 @@ pub(crate) fn draw_text(
 
 /// Blits the text body at `rect` from the shaper's raster.
 ///
-/// Straight from the shaper's bytes, with no pixmap of its own. This used to keep a second cache here — the same
-/// premultiplied RGBA the shaper already held, copied into a `Pixmap` and stored again under the same key — which
-/// doubled what every cached label cost and, having neither a byte budget nor an admission rule, quietly kept the
-/// strings the shaper's admission had just decided were not worth keeping. `PixmapRef` borrows those bytes instead,
-/// so the copy and the cache both go.
+/// Straight from the shaper's bytes, with no pixmap of its own. This used to keep a second cache here — the same premultiplied RGBA the shaper already held, copied into a `Pixmap` and stored again under the same key — which doubled what every cached label cost and, having neither a byte budget nor an admission rule, quietly kept the strings the shaper's admission had just decided were not worth keeping. `PixmapRef` borrows those bytes instead, so the copy and the cache both go.
 #[allow(clippy::too_many_arguments)]
 fn blit_body(
     pixmap: &mut tiny_skia::Pixmap,
@@ -263,7 +258,7 @@ fn blit_body(
     transform: tiny_skia::Transform,
     clip: Option<&tiny_skia::Mask>,
 ) {
-    // rasterize, not rasterize_alpha + tint, so colour emoji keep their own colours instead of being multiplied by the text colour.
+    // `rasterize`, not `rasterize_alpha` plus tint, so colour emoji keep their own colours.
     let (pixels, width, height) = shaper.rasterize(text, spans, rect, style);
     let Some(src) = tiny_skia::PixmapRef::from_bytes(&pixels, width, height) else {
         return;
@@ -281,8 +276,7 @@ fn blit_body(
     );
 }
 
-/// Renders COLR v1 color glyphs that swash cannot rasterize. swash returns `None` for these glyphs,
-/// so `Buffer::draw` omits them; we re-rasterize via skrifa + tiny-skia and blit them on top.
+/// Renders COLR v1 color glyphs that swash cannot rasterize. swash returns `None` for these glyphs, so `Buffer::draw` omits them; we re-rasterize via skrifa + tiny-skia and blit them on top.
 fn draw_colr_fallback(
     pixmap: &mut tiny_skia::Pixmap,
     shaper: &mut renderer_text::TextShaper,

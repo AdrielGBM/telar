@@ -1,12 +1,12 @@
+//! The paint a box or path is drawn with: fill, border, corner radius and shadow.
+
 use geometry_core::Rect;
 
 use crate::{BorderRadius, Color};
 
 use super::paint::{FillRule, Paint, Shadow, Stroke};
 
-/// What a fillable shape shares. The outline is *not* here: a path is stroked, with a cap and a join that
-/// mean something along an open curve, and a box is framed, with a thickness per side that a path has no use
-/// for. They were one method while a rect carried a `Stroke` it only ever read two fields of.
+/// What a fillable shape shares. The outline is *not* here: a path is stroked, with a cap and a join that mean something along an open curve, and a box is framed, with a thickness per side that a path has no use for. They were one method while a rect carried a `Stroke` it only ever read two fields of.
 pub trait ShapeStyle: Sized {
     fn fill_mut(&mut self) -> &mut Option<Paint>;
     fn shadow_mut(&mut self) -> &mut Option<Shadow>;
@@ -23,13 +23,9 @@ pub trait ShapeStyle: Sized {
 
 /// A box's frame: what it is painted with, and how thick it is on each side.
 ///
-/// One value where a rect used to carry a [`Stroke`] beside a separate `BorderWidths` whose uniform case
-/// resolved against that stroke's `width` — so the thickness was defined in two places at once, and two of
-/// the stroke's four fields were dead: no rect path in either renderer has ever read `cap` or `join`. A
-/// `Stroke` still means all four things for a [`PathStyle`] and a line, where they all matter.
+/// One value where a rect used to carry a [`Stroke`] beside a separate `BorderWidths` whose uniform case resolved against that stroke's `width` — so the thickness was defined in two places at once, and two of the stroke's four fields were dead: no rect path in either renderer has ever read `cap` or `join`. A `Stroke` still means all four things for a [`PathStyle`] and a line, where they all matter.
 ///
-/// Four numbers rather than one because a side of `0.0` is simply not there: a rule under a header, a
-/// divider down one edge. `Border::uniform` is the common case spelled once.
+/// Four numbers rather than one because a side of `0.0` is simply not there: a rule under a header, a divider down one edge. `Border::uniform` is the common case spelled once.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Border {
     pub paint: Paint,
@@ -60,6 +56,7 @@ impl Border {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Default)]
+/// The paint a box is drawn with: fill, border, corner radius, shadow and opacity.
 pub struct RectStyle {
     pub fill: Option<Paint>,
     /// The frame around the box. See [`Border`].
@@ -87,23 +84,18 @@ impl RectStyle {
         self
     }
 
-    /// The border this style actually paints: its paint, and the four thicknesses in
-    /// `[top, right, bottom, left]` order. `None` when there is nothing to draw.
+    /// The border this style actually paints: its paint, and the four thicknesses in `[top, right, bottom, left]` order. `None` when there is nothing to draw.
     pub fn painted_border(&self) -> Option<(Paint, [f32; 4])> {
         let border = self.border?;
         border.is_visible().then_some((border.paint, border.widths))
     }
 }
 
-/// The inner edge of a border: the box pulled in by each side's thickness, with the corners tightened to
-/// match.
+/// The inner edge of a border: the box pulled in by each side's thickness, with the corners tightened to match.
 ///
-/// Shared rather than derived twice, because the rasterizer and the GPU have to agree to the pixel on where a
-/// border stops — one builds a path from it and the other an SDF, and a rule under a header that lands a half
-/// pixel apart between backends is a bug nobody can see until they switch machines.
+/// Shared rather than derived twice, because the rasterizer and the GPU have to agree to the pixel on where a border stops — one builds a path from it and the other an SDF, and a rule under a header that lands a half pixel apart between backends is a bug nobody can see until they switch machines.
 ///
-/// `None` when the border leaves no interior at all: the box is thinner than its own frame, and the frame
-/// swallows it whole.
+/// `None` when the border leaves no interior at all: the box is thinner than its own frame, and the frame swallows it whole.
 pub fn border_inner_shape(
     rect: Rect,
     radius: BorderRadius,
@@ -116,9 +108,7 @@ pub fn border_inner_shape(
         return None;
     }
     let max_r = width.min(height) * 0.5;
-    // A corner is pulled in by the thicker of the two sides meeting there. CSS uses an ellipse when they
-    // differ; `BorderRadius` holds one number per corner, and of the two the thicker side is the one that
-    // would otherwise cut across its own arc.
+    // A corner is pulled in by the thicker of the two sides meeting there. CSS uses an ellipse when they differ; `BorderRadius` holds one number per corner, and of the two the thicker side is the one that would otherwise cut across its own arc.
     let tighten = |r: f32, a: f32, b: f32| (r - a.max(b)).clamp(0.0, max_r);
     let inner_radius = BorderRadius {
         top_left: tighten(radius.top_left, top, left),
@@ -142,6 +132,7 @@ impl ShapeStyle for RectStyle {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Default)]
+/// The paint a path is drawn with: fill, stroke, fill rule and shadow.
 pub struct PathStyle {
     pub fill: Option<Paint>,
     pub stroke: Option<Stroke>,
@@ -155,8 +146,7 @@ impl PathStyle {
         self
     }
 
-    /// Strokes the path. A cap and a join mean something along an open curve, which is why this is the
-    /// path's own and not a box's frame.
+    /// Strokes the path. A cap and a join mean something along an open curve, which is why this is the path's own and not a box's frame.
     pub fn with_stroke(mut self, stroke: Stroke) -> Self {
         self.stroke = Some(stroke);
         self
@@ -207,15 +197,13 @@ mod border_tests {
         );
     }
 
-    /// Thicknesses with no paint to draw them in used to be representable — a `border_widths` beside a
-    /// `stroke: None`. Now there is nothing to construct.
+    /// Thicknesses with no paint to draw them in used to be representable — a `border_widths` beside a `stroke: None`. Now there is nothing to construct.
     #[test]
     fn a_box_with_no_border_paints_none() {
         assert_eq!(RectStyle::default().painted_border(), None);
     }
 
-    /// A side at zero leaves the inner edge flush with the outer one there, which is what makes the ring
-    /// cover nothing along it — the rasterizer's two boundaries coincide and the shader's two SDFs agree.
+    /// A side at zero leaves the inner edge flush with the outer one there, which is what makes the ring cover nothing along it — the rasterizer's two boundaries coincide and the shader's two SDFs agree.
     #[test]
     fn a_side_at_zero_leaves_the_inner_edge_flush_with_the_outer() {
         let (inner, _) =
@@ -223,8 +211,7 @@ mod border_tests {
         assert_eq!(inner, Rect::new(0.0, 0.0, 100.0, 99.0));
     }
 
-    /// The uniform case has to come out exactly where the old single-stroke path put it: outer edge on the
-    /// box, inner edge one width in, corners `r - w`.
+    /// The uniform case has to come out exactly where the old single-stroke path put it: outer edge on the box, inner edge one width in, corners `r - w`.
     #[test]
     fn a_uniform_border_insets_every_side_and_tightens_every_corner() {
         let (inner, radius) =
@@ -233,8 +220,7 @@ mod border_tests {
         assert_eq!(radius, BorderRadius::all(6.0));
     }
 
-    /// Two sides of different thickness meet at a corner, and only one number is available to describe the
-    /// arc between them.
+    /// Two sides of different thickness meet at a corner, and only one number is available to describe the arc between them.
     #[test]
     fn a_corner_is_tightened_by_the_thicker_of_the_two_sides_that_meet_there() {
         let (_, radius) =
@@ -251,8 +237,7 @@ mod border_tests {
         assert_eq!(radius, BorderRadius::zero());
     }
 
-    /// The border is thicker than the box it frames, so there is no interior left to punch out and the
-    /// caller paints the box solid instead.
+    /// The border is thicker than the box it frames, so there is no interior left to punch out and the caller paints the box solid instead.
     #[test]
     fn a_border_thicker_than_its_box_leaves_no_interior() {
         assert!(

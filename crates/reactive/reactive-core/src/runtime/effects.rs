@@ -1,3 +1,5 @@
+//! Effect registration, subscription cleanup, and the version and epoch checks that decide whether a scheduled effect actually has to run.
+
 use std::cmp::Reverse;
 
 use super::flush::flush;
@@ -12,7 +14,7 @@ pub(crate) fn current_observer() -> Option<EffectId> {
 pub(crate) fn register_effect(f: Box<dyn Fn()>) -> EffectId {
     RUNTIME.with(|rt| {
         let mut rt = rt.borrow_mut();
-        // Resolved off the borrow we already hold: `current_owner` takes its own, which would collide with this one.
+        // Resolved off the borrow already held: `current_owner` takes its own, which would collide.
         let owner = super::owner::owning_id(&mut rt);
         let id = rt.effects.insert(EffectEntry {
             callback: f,
@@ -34,7 +36,7 @@ pub(crate) fn register_effect(f: Box<dyn Fn()>) -> EffectId {
 pub(crate) fn register_pure_effect(f: Box<dyn Fn()>) -> EffectId {
     RUNTIME.with(|rt| {
         let mut rt = rt.borrow_mut();
-        // Resolved off the borrow we already hold: `current_owner` takes its own, which would collide with this one.
+        // Resolved off the borrow already held: `current_owner` takes its own, which would collide.
         let owner = super::owner::owning_id(&mut rt);
         let id = rt.effects.insert(EffectEntry {
             callback: f,
@@ -54,7 +56,7 @@ pub(crate) fn register_pure_effect(f: Box<dyn Fn()>) -> EffectId {
 }
 
 pub(crate) fn deregister_effect(id: EffectId) {
-    // Clean up subscriptions first so signals don't hold dangling effect ids
+    // Subscriptions first, so signals do not hold dangling effect ids.
     clean_effect(id);
     let removed = RUNTIME.with(|rt| {
         let mut rt = rt.borrow_mut();
@@ -74,7 +76,7 @@ pub(crate) fn schedule(id: EffectId) {
         let mut rt = rt.borrow_mut();
         let alive = rt.effects.contains_key(id);
         if alive {
-            // schedule() is only ever called by memo change notification; flag the subscriber so run_effect's signal-version shortcut cannot skip a genuinely-dirty memo read.
+            // Only ever called by memo change notification, so flag the subscriber and stop `run_effect`'s signal-version shortcut from skipping a genuinely dirty memo read.
             rt.effects[id].memo_dirty = true;
         }
         if alive && rt.pending_set.insert(id) {
@@ -141,14 +143,13 @@ pub(crate) fn run_effect(id: EffectId) {
         if !rt.effects.contains_key(id) {
             return None;
         }
-        // Epoch-based dedup: skip if already ran this flush cycle
         if rt.effects[id].last_run_epoch == rt.flush_epoch && rt.flush_epoch > 0 {
             return None;
         }
         rt.effects[id].last_run_epoch = rt.flush_epoch;
         let memo_dirty = std::mem::take(&mut rt.effects[id].memo_dirty);
 
-        // Version check: skip the closure if every tracked source still has the version it had last run. Bypassed when a memo scheduled this run — memo deps are not in `sources`, so unchanged signal versions say nothing about the memo's value.
+        // Bypassed when a memo scheduled this run: memo deps are not in `sources`, so unchanged signal versions say nothing about the memo's value.
         let sig_ids: Vec<SignalId> = rt
             .effects
             .get(id)
@@ -175,16 +176,16 @@ pub(crate) fn run_effect(id: EffectId) {
             }
         }
 
-        // SAFETY: The arena owns this Box. No effect closure in this codebase captures its own Effect handle, so deregistration cannot happen during execution.
+        // SAFETY: the arena owns this Box, and no effect closure here captures its own `Effect` handle, so deregistration cannot happen during execution.
         let ptr: *const dyn Fn() = &*rt.effects[id].callback;
         let surface = rt.effects[id].surface;
         let owner = rt.effects[id].owner;
         Some((ptr, surface, owner)) // Don't push observer_stack yet; clean_effect must run first
     });
     if let Some((ptr, surface, owner)) = ptr {
-        // Clean stale subscriptions before re-running so fresh subscriptions are tracked (Finding 1.7). clean_effect acquires the runtime borrow internally (safe: we released it above).
+        // Before re-running, so fresh subscriptions are tracked. `clean_effect` acquires the runtime borrow internally, which is safe because it was released above.
         clean_effect(id);
-        // Push observer_stack only after cleanup so clean_effect doesn't accidentally re-register. The owner rides along in the same borrow, because a re-run that starts declaring must attribute it to the scope that built this effect rather than to whatever build the flush interrupted — and a borrow of its own for that cost 3-5% of a whole-tree re-run, which is the one thing `tree_flatten` measures.
+        // After cleanup, so `clean_effect` does not re-register. The owner rides along in the same borrow: a re-run that starts declaring must attribute it to the scope that built this effect, and a borrow of its own for that cost 3-5% of a whole-tree re-run.
         let owner_depth = RUNTIME.with(|rt| {
             let mut rt = rt.borrow_mut();
             rt.observer_stack.push(id);
@@ -207,10 +208,7 @@ pub(crate) fn run_effect(id: EffectId) {
             }
         }
         let _guard = PopGuard(owner_depth);
-        // Owner scope: re-enter this effect's surface so its layout/overlay/focus resolve against the
-        // surface that built it, even when the write that scheduled it came from another surface. The
-        // guard is intentionally outside the RUNTIME borrow above (which was already released) and inert
-        // for single-surface apps (surface == current surface → no-op).
+        // Re-enter this effect's surface, so its layout, overlay and focus resolve against the surface that built it even when the write that scheduled it came from another. Outside the runtime borrow, and inert for a single-surface app.
         {
             let _surface_guard = surface.enter();
             unsafe { (*ptr)() };
@@ -218,7 +216,7 @@ pub(crate) fn run_effect(id: EffectId) {
         drop(_guard);
         RUNTIME.with(|rt| {
             let mut rt = rt.borrow_mut();
-            // Collect source IDs first to avoid borrowing `effects` and `signals` simultaneously.
+            // First, to avoid borrowing `effects` and `signals` at the same time.
             let sig_ids: Vec<SignalId> = rt
                 .effects
                 .get(id)
@@ -234,7 +232,7 @@ pub(crate) fn run_effect(id: EffectId) {
                     }
                 })
                 .collect();
-            // Signals are always leaf nodes (height 0), so any tracked source gives height 1.
+            // Signals are always leaf nodes, so any tracked source gives height 1.
             let new_height: u32 = if sig_ids.is_empty() { 0 } else { 1 };
             if let Some(entry) = rt.effects.get_mut(id) {
                 entry.source_versions = versions;

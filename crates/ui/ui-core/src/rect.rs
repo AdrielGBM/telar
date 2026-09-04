@@ -1,3 +1,5 @@
+//! [`Rectangle`]: the painted leaf with no children, and the simplest thing that draws.
+
 use geometry_core::Rect;
 use layout_core::{LayoutError, LayoutStyle};
 use platform_core::Event;
@@ -7,6 +9,7 @@ use ui_tree::{Component, EventResult, RenderNode};
 use crate::impl_leaf_widget;
 use crate::layout_leaf::LayoutLeaf;
 
+/// A painted leaf with no children: the simplest thing that draws.
 pub struct Rectangle {
     leaf: LayoutLeaf,
     style: Box<dyn Fn() -> RectStyle>,

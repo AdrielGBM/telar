@@ -1,10 +1,6 @@
 //! What a steady frame costs in allocations.
 //!
-//! Nothing forces you to look at this until something drives the loop at a sustained 60 Hz, and by then a
-//! few hundred bytes of per-frame garbage is a hitch you cannot find by reading. The guard is not a number
-//! — numbers rot across compilers and allocators — but a shape: **two identical frames must cost the same**.
-//! A cost that climbs is the signature of the bug worth catching, an allocation made per frame where the
-//! last one should have been reused.
+//! Nothing forces you to look at this until something drives the loop at a sustained 60 Hz, and by then a few hundred bytes of per-frame garbage is a hitch you cannot find by reading. The guard is not a number — numbers rot across compilers and allocators — but a shape: **two identical frames must cost the same**. A cost that climbs is the signature of the bug worth catching, an allocation made per frame where the last one should have been reused.
 //!
 //! Its own test binary because a counting global allocator is process-wide.
 
@@ -16,9 +12,7 @@ use telar::{
     UiTree, new_container, reset_layout_runtime, signal,
 };
 
-// Per thread, not per process: the allocator is global but the tests in this binary run concurrently, and a
-// shared counter charges one test's frames to whichever other one happens to be measuring. That reads as a
-// clean tree recomposing — the very bug this file exists to catch — at random.
+// Per thread, not per process: the tests in this binary run concurrently, and a shared counter would charge one test's frames to whichever other one happens to be measuring.
 thread_local! {
     static ALLOCATED: Cell<usize> = const { Cell::new(0) };
     static COUNTING: Cell<bool> = const { Cell::new(false) };
@@ -26,11 +20,10 @@ thread_local! {
 
 struct Counting;
 
-// Counts bytes rather than calls: a Vec that doubles once is one call and a real cost, while a handful of small boxes are several calls and almost none. Bytes is what turns into a hitch.
+// Bytes rather than calls: a Vec that doubles once is one call and a real cost, while a handful of small boxes are several calls and almost none. Bytes is what turns into a hitch.
 unsafe impl GlobalAlloc for Counting {
     unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
-        // `try_with`, because an allocation during this thread's TLS teardown must not panic — and the flags
-        // are `const`-initialised `Cell`s, so reading them allocates nothing and cannot recurse.
+        // `try_with`, because an allocation during this thread's TLS teardown must not panic. The flags are `const`-initialised `Cell`s, so reading them allocates nothing and cannot recurse.
         let counting = COUNTING.try_with(Cell::get).unwrap_or(false);
         if counting {
             let _ = ALLOCATED.try_with(|a| a.set(a.get() + layout.size()));
@@ -54,9 +47,7 @@ fn measure(mut body: impl FnMut()) -> usize {
     ALLOCATED.with(Cell::get)
 }
 
-/// A game's chrome: a few static panels around a counter that changes every frame. Deliberately not big —
-/// the question is whether a frame's cost is *stable*, and a small tree makes a per-frame allocation stand
-/// out instead of hiding inside a large one.
+/// A game's chrome: a few static panels around a counter that changes every frame. Deliberately not big — the question is whether a frame's cost is *stable*, and a small tree makes a per-frame allocation stand out instead of hiding inside a large one.
 fn chrome() -> (Box<dyn Component>, telar::RwSignal<i32>) {
     reset_layout_runtime();
     let ticks = signal(0);
@@ -120,8 +111,7 @@ fn chrome() -> (Box<dyn Component>, telar::RwSignal<i32>) {
     (Box::new(Chrome { children }), ticks)
 }
 
-/// An unchanged tree must cost nothing to ask again — that is the whole point of the dirty gate, and the
-/// case a viewport hits constantly: its texture changes, its commands do not.
+/// An unchanged tree must cost nothing to ask again — that is the whole point of the dirty gate, and the case a viewport hits constantly: its texture changes, its commands do not.
 #[test]
 fn asking_an_unchanged_tree_for_its_frame_allocates_nothing() {
     let (root, _ticks) = chrome();
@@ -137,14 +127,9 @@ fn asking_an_unchanged_tree_for_its_frame_allocates_nothing() {
     );
 }
 
-/// Two values, alternated, and only ever these two. Same digit count so the text box never changes width,
-/// and both strings are in every cache after the second frame — so nothing measured later can be the first
-/// of anything.
+/// Two values, alternated, and only ever these two. Same digit count so the text box never changes width, and both strings are in every cache after the second frame — so nothing measured later can be the first of anything.
 ///
-/// Counting up instead minted a new string every frame. The caches therefore never stopped growing, and
-/// which frame paid for a resize — or for the first three-digit box, the one the text gets wider on — came
-/// out of the platform's font metrics. On macOS both landed on the frame being measured: 3 KB over the
-/// steady cost, which the test could only read as a leak.
+/// Counting up instead minted a new string every frame. The caches therefore never stopped growing, and which frame paid for a resize — or for the first three-digit box, the one the text gets wider on — came out of the platform's font metrics. On macOS both landed on the frame being measured: 3 KB over the steady cost, which the test could only read as a leak.
 const EVEN: i32 = 2424;
 const ODD: i32 = 4242;
 
@@ -154,9 +139,7 @@ fn advance(tree: &LocalTree, ticks: &telar::RwSignal<i32>, value: i32) {
     let _ = tree.frame();
 }
 
-/// The real guard: a frame whose content changed costs the same every time. Compared against a later frame
-/// rather than a constant, so it survives a compiler that lays the tree out differently and still fails on
-/// a per-frame allocation nobody meant to keep.
+/// The real guard: a frame whose content changed costs the same every time. Compared against a later frame rather than a constant, so it survives a compiler that lays the tree out differently and still fails on a per-frame allocation nobody meant to keep.
 #[test]
 fn a_changing_frame_costs_the_same_every_time() {
     let (root, ticks) = chrome();

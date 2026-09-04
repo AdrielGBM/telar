@@ -17,9 +17,7 @@ pub struct TuiConfig {
     /// How many logical pixels one cell stands for. See [`CellSize`].
     pub cell: CellSize,
     pub depth: ColorDepth,
-    /// What an app's own transparent pixels are composited against. A terminal will not say what colour it
-    /// is drawing on, so a frame with a translucent background needs a stated assumption; black is the one
-    /// that is right for the overwhelming majority of terminals and wrong in a way that is easy to see.
+    /// What an app's own transparent pixels are composited against. A terminal will not say what colour it is drawing on, so a frame with a translucent background needs a stated assumption; black is the one that is right for the overwhelming majority of terminals and wrong in a way that is easy to see.
     pub assumed_background: Rgb,
 }
 
@@ -33,6 +31,7 @@ impl Default for TuiConfig {
     }
 }
 
+/// The terminal backend: a cell grid, and the escape sequences one frame's difference from the last becomes.
 pub struct TuiRenderer {
     config: TuiConfig,
     /// What the terminal is currently showing, and what the next frame is diffed against.
@@ -45,8 +44,7 @@ pub struct TuiRenderer {
 impl TuiRenderer {
     pub fn new(config: TuiConfig, sink: Box<dyn Write + Send>) -> Self {
         Self {
-            // Zero-sized, so the first frame finds no matching geometry and repaints in full — which it must:
-            // what is on the screen before the first frame is the user's shell, not a buffer we filled.
+            // Zero-sized, so the first frame finds no matching geometry and repaints in full — which it must: what is on the screen before the first frame is the user's shell, not a buffer we filled.
             front: CellBuffer::new(0, 0, config.assumed_background),
             back: CellBuffer::new(0, 0, config.assumed_background),
             out: Vec::with_capacity(16 * 1024),
@@ -106,9 +104,7 @@ impl RenderBackend for TuiRenderer {
         Ok(())
     }
 
-    /// The terminal has no device pixels to scale into: a cell is a cell whatever the font size, and the
-    /// window reports its size in the same logical units layout works in. Claiming the scale here keeps the
-    /// frame pipeline from multiplying every command by a factor that means nothing.
+    /// The terminal has no device pixels to scale into: a cell is a cell whatever the font size, and the window reports its size in the same logical units layout works in. Claiming the scale here keeps the frame pipeline from multiplying every command by a factor that means nothing.
     fn applies_scale_factor(&self) -> bool {
         true
     }
@@ -208,8 +204,7 @@ mod tests {
         );
     }
 
-    /// A resize must repaint everything: the terminal cleared and reflowed what was there, so nothing
-    /// the previous buffer recorded is still on screen.
+    /// A resize must repaint everything: the terminal cleared and reflowed what was there, so nothing the previous buffer recorded is still on screen.
     #[test]
     fn a_resize_repaints_in_full() {
         let sink = Recorder::default();

@@ -1,3 +1,5 @@
+//! The macros an application writes: `app!`, `rsx_modules!` and the tree shims they expand to.
+
 #[macro_export]
 macro_rules! children {
     ($($item:expr),* $(,)?) => {

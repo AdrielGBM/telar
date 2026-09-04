@@ -4,6 +4,7 @@ use platform_core::{
     Event, Key, ModifiersState, NamedKey, PointerButton, PointerSource, ScrollDelta,
 };
 
+/// Builds a [`ModifiersState`] from the four flags a DOM event carries.
 pub fn modifiers_of(shift: bool, ctrl: bool, alt: bool, meta: bool) -> ModifiersState {
     ModifiersState {
         is_shift: shift,
@@ -13,6 +14,7 @@ pub fn modifiers_of(shift: bool, ctrl: bool, alt: bool, meta: bool) -> Modifiers
     }
 }
 
+/// The modifiers held during a mouse event.
 pub fn mouse_modifiers(event: &web_sys::MouseEvent) -> ModifiersState {
     modifiers_of(
         event.shift_key(),
@@ -22,6 +24,7 @@ pub fn mouse_modifiers(event: &web_sys::MouseEvent) -> ModifiersState {
     )
 }
 
+/// The modifiers held during a keyboard event.
 pub fn key_modifiers(event: &web_sys::KeyboardEvent) -> ModifiersState {
     modifiers_of(
         event.shift_key(),
@@ -31,6 +34,7 @@ pub fn key_modifiers(event: &web_sys::KeyboardEvent) -> ModifiersState {
     )
 }
 
+/// Translates a DOM button index, returning `None` for one Telar has no spelling for.
 pub fn button_of(button: i16) -> Option<PointerButton> {
     match button {
         0 => Some(PointerButton::Primary),
@@ -40,8 +44,7 @@ pub fn button_of(button: i16) -> Option<PointerButton> {
     }
 }
 
-/// A pointer that is not a mouse is a touch, whatever the browser calls it: a pen and a finger both want the
-/// behaviour a touch gets — no hover, and a gesture that begins where it lands.
+/// A pointer that is not a mouse is a touch, whatever the browser calls it: a pen and a finger both want the behaviour a touch gets — no hover, and a gesture that begins where it lands.
 pub fn source_of(event: &web_sys::PointerEvent) -> PointerSource {
     match event.pointer_type().as_str() {
         "mouse" => PointerSource::Mouse,
@@ -56,9 +59,7 @@ const DELTA_PIXEL: u32 = 0;
 const DELTA_LINE: u32 = 1;
 const DELTA_PAGE: u32 = 2;
 
-/// How far a wheel event scrolls. The browser reports three units and the choice is the *device's*, not the
-/// page's — a trackpad reports pixels and a notched wheel reports lines — so both are passed through as what
-/// they are rather than flattened into one.
+/// How far a wheel event scrolls. The browser reports three units and the choice is the *device's*, not the page's — a trackpad reports pixels and a notched wheel reports lines — so both are passed through as what they are rather than flattened into one.
 pub fn scroll_delta(event: &web_sys::WheelEvent) -> ScrollDelta {
     // The browser's axes point the way the content moves; Telar's point the way the *gesture* does.
     let (x, y) = (-event.delta_x() as f32, -event.delta_y() as f32);
@@ -72,14 +73,12 @@ pub fn scroll_delta(event: &web_sys::WheelEvent) -> ScrollDelta {
     }
 }
 
-/// How many lines a page-mode wheel notch is worth. The browsers that still report pages use it for
-/// PageUp/PageDown-sized jumps, and a screenful of a list is about this many rows.
+/// How many lines a page-mode wheel notch is worth. The browsers that still report pages use it for PageUp/PageDown-sized jumps, and a screenful of a list is about this many rows.
 const PAGE_LINES: f32 = 20.0;
 
 /// A `KeyboardEvent.key` value, as a Telar key.
 ///
-/// `key` rather than `code`, because it is the character the user meant: it already accounts for the layout
-/// and the modifiers, so a French keyboard's `;` arrives as `;` and not as `Comma`.
+/// `key` rather than `code`, because it is the character the user meant: it already accounts for the layout and the modifiers, so a French keyboard's `;` arrives as `;` and not as `Comma`.
 pub fn key_of(key: &str) -> Option<Key> {
     let named = |k| Some(Key::Named(k));
     match key {
@@ -103,8 +102,7 @@ pub fn key_of(key: &str) -> Option<Key> {
             if let Some(n) = key.strip_prefix('F').and_then(|n| n.parse::<u8>().ok()) {
                 return function_key(n);
             }
-            // Everything else that is exactly one character is that character. A longer `key` is a name this
-            // does not map — "AltGraph", "MediaPlayPause" — and inventing a `Char` for it would type it.
+            // Everything else that is exactly one character is that character. A longer `key` is a name this does not map — "AltGraph", "MediaPlayPause" — and inventing a `Char` for it would type it.
             let mut chars = key.chars();
             match (chars.next(), chars.next()) {
                 (Some(c), None) => Some(Key::Char(c)),
@@ -148,9 +146,7 @@ fn function_key(n: u8) -> Option<Key> {
 
 /// Whether the browser's default action for a key would fight the app for it.
 ///
-/// Tab moves focus out of the surface, the arrows and space scroll the page, and Backspace navigates back in
-/// some browsers — all while the app is using them. Only suppressed while the surface has focus, which is
-/// what keeps the rest of the page usable.
+/// Tab moves focus out of the surface, the arrows and space scroll the page, and Backspace navigates back in some browsers — all while the app is using them. Only suppressed while the surface has focus, which is what keeps the rest of the page usable.
 pub fn key_steals_default(key: &Key) -> bool {
     matches!(
         key,
@@ -170,8 +166,7 @@ pub fn key_steals_default(key: &Key) -> bool {
     )
 }
 
-/// The events one `pointerdown` is worth. The browser reports the press at a position without a preceding
-/// move for a touch, so a widget that has never seen the pointer would take a press it never highlighted for.
+/// The events one `pointerdown` is worth. The browser reports the press at a position without a preceding move for a touch, so a widget that has never seen the pointer would take a press it never highlighted for.
 pub fn pointer_pressed(x: f64, y: f64, button: PointerButton, source: PointerSource) -> [Event; 2] {
     [
         Event::PointerMoved {

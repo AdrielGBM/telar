@@ -1,3 +1,5 @@
+//! [`modal`]: a dialog portaled over the page, dismissed by its scrim, its Close or Escape.
+
 use layout_core::{AlignItems, JustifyContent, LayoutError, LayoutStyle};
 use reactive_core::{Reactive, RwSignal};
 use renderer_core::{Border, BorderRadius, Color, RectStyle, ShapeStyle};
@@ -36,8 +38,7 @@ fn card() -> LayoutStyle {
     LayoutStyle::new()
         .flex_column()
         .gap(dialog_gap())
-        // A min width so the dialog never collapses to its content's min-content width (the header/body
-        // `Text` leaves are unmeasured → 0 intrinsic width, which otherwise shrinks the card to a strip).
+        // So the dialog never collapses to its min-content width: the header and body leaves are unmeasured, with 0 intrinsic width, which would shrink the card to a strip.
         .min_width(320.0)
         .max_width(440.0)
         .padding_all(dialog_pad())
@@ -51,19 +52,13 @@ fn backdrop() -> LayoutStyle {
         .padding_all(dialog_pad())
 }
 
-/// A centred dialog over a dimming scrim. When `open` is true it portals an `Overlay` (a top-layer layer that
-/// escapes clipping and blocks clicks behind it) with a translucent scrim and, centred on it, an opaque
-/// surface card holding the `title`, the slot children (the dialog body) and a Close affordance; when false
-/// it collapses to a 0-size node. Tapping the scrim (or Close) dismisses; tapping the card itself does not.
-/// High-level sugar built on the `overlay` primitive; lives in `ui-components`, not the kernel.
+/// A centred dialog over a dimming scrim. When `open` is true it portals an `Overlay` (a top-layer layer that escapes clipping and blocks clicks behind it) with a translucent scrim and, centred on it, an opaque surface card holding the `title`, the slot children (the dialog body) and a Close affordance; when false it collapses to a 0-size node. Tapping the scrim (or Close) dismisses; tapping the card itself does not. High-level sugar built on the `overlay` primitive; lives in `ui-components`, not the kernel.
 #[derive(Props)]
 pub struct ModalProps {
     /// Bound open/close state. `None` (the default) never opens (no signal to read); `Some` drives the modal.
     #[props(some, into, default)]
     pub open: Option<RwSignal<bool>>,
-    /// Names this dialog, so anything can open it with `open_overlay(id)` without holding its signal. `""`
-    /// (the default) leaves it unnamed. Ignored when `open` is bound — an explicit signal wins, so the two
-    /// forms never disagree about which state is authoritative.
+    /// Names this dialog, so anything can open it with `open_overlay(id)` without holding its signal. `""` (the default) leaves it unnamed. Ignored when `open` is bound — an explicit signal wins, so the two forms never disagree about which state is authoritative.
     #[props(default = "")]
     pub id: &'static str,
     #[props(into, default)]
@@ -71,12 +66,12 @@ pub struct ModalProps {
     /// Runs after the modal sets `open = false` (scrim tap or Close), so a caller can react to dismissal.
     #[props(some, default)]
     pub on_close: Option<Rc<dyn Fn()>>,
-    /// Dialog surface colour. `Color::TRANSPARENT` (the default) means "unset" -> the theme's `surface`. A closure
-    /// (re-read every frame) so a theme token or `$signal` colour re-colours live, like `button`'s `fill`.
+    /// Dialog surface colour. `Color::TRANSPARENT` (the default) means "unset" -> the theme's `surface`. A closure (re-read every frame) so a theme token or `$signal` colour re-colours live, like `button`'s `fill`.
     #[props(into, default = Reactive::of(|| Color::TRANSPARENT))]
     pub color: Reactive<Color>,
 }
 
+/// A dialog portaled over the page, dismissed by its scrim, its Close or Escape.
 pub fn modal(props: ModalProps, children: Children) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let mut slots = children.build()?;
     let ModalProps {
@@ -94,8 +89,7 @@ pub fn modal(props: ModalProps, children: Children) -> Result<Box<dyn LayoutItem
     })
 }
 
-/// Builds the scrim + centred opaque card for the open state: scrim (dims + dismisses) > centred card (title
-/// row with Close, then the body). The card swallows its own taps so a click inside it never dismisses.
+/// Builds the scrim + centred opaque card for the open state: scrim (dims + dismisses) > centred card (title row with Close, then the body). The card swallows its own taps so a click inside it never dismisses.
 fn build_open_modal(
     title: Reactive<String>,
     body: Vec<Box<dyn LayoutItem>>,
@@ -176,8 +170,6 @@ mod tests {
         slots
     }
 
-    // Toggling `open` shows then hides the dialog: the title and body are composed only while open, and the
-    // Overlay portal is disposed when it closes (its content leaves the command stream).
     #[test]
     fn open_shows_dialog_and_close_hides_it() {
         crate::test_support::fresh_layout_runtime();
@@ -203,11 +195,9 @@ mod tests {
         .unwrap();
         let tree = ComponentList::new(modal);
 
-        // Closed: neither the title nor the body is drawn.
         assert!(!find_text(&tree.commands(), "Confirm"));
         assert!(!find_text(&tree.commands(), "Body"));
 
-        // Open: the portal mounts, is laid out into the host, and its dialog composes on top.
         open.set(true);
         relayout_if_dirty();
         assert!(
@@ -216,7 +206,6 @@ mod tests {
         );
         assert!(find_text(&tree.commands(), "Body"), "body shows when open");
 
-        // Close: the dialog is hidden (kept mounted, draws nothing) and its content leaves the command stream.
         open.set(false);
         relayout_if_dirty();
         assert!(
@@ -228,7 +217,6 @@ mod tests {
             "body hidden when closed"
         );
 
-        // Reopen: the SAME pre-built body must reappear (the take-once bug lost it on the second open).
         open.set(true);
         relayout_if_dirty();
         assert!(
@@ -241,9 +229,7 @@ mod tests {
         );
     }
 
-    // A real modal must track the dismiss stack through the whole open/dismiss/reopen cycle, so Escape and a
-    // Back gesture close it. This is the seam the raw-stack unit tests cannot reach: the registration effect is
-    // created inside the `ReactiveList` build closure — an effect nested in a running effect.
+    // The seam the raw-stack unit tests cannot reach: the registration effect is created inside the `ReactiveList` build closure, an effect nested in a running effect.
     #[test]
     fn open_registers_on_the_dismiss_stack_and_dismissing_closes_it() {
         crate::test_support::fresh_layout_runtime();
@@ -275,7 +261,6 @@ mod tests {
             "an open modal is on the dismiss stack"
         );
 
-        // What Escape/Back ultimately call: it must drive the modal's own `open` back to false.
         assert!(ui_core::dismiss_top());
         relayout_if_dirty();
         assert!(!open.get(), "dismissing closed the modal");
@@ -285,7 +270,6 @@ mod tests {
             "closing withdrew the registration"
         );
 
-        // Closing by its own affordance must withdraw too, not leave a stale entry a later Escape would hit.
         open.set(true);
         relayout_if_dirty();
         assert_eq!(ui_core::dismiss_depth(), before + 1);
@@ -298,7 +282,7 @@ mod tests {
         );
     }
 
-    // A named modal is opened by name, with nothing holding its state — the point of `id:`. Opening it *before* it is built must still bring it up, since the name resolves to one shared signal either way.
+    // A named modal has nothing holding its state, so opening it before it is built must still bring it up: the name resolves to one shared signal either way.
     #[test]
     fn a_named_modal_opens_from_anywhere_even_before_it_is_built() {
         crate::test_support::fresh_layout_runtime();
@@ -331,7 +315,6 @@ mod tests {
             "the dialog came up open, from a name opened before it existed"
         );
 
-        // And a dismissal still drives it, so Escape and `Navigator::back()` work with no extra wiring.
         assert!(ui_core::dismiss_top());
         relayout_if_dirty();
         assert!(!ui_core::overlay_state("confirm-test").peek());
@@ -361,7 +344,6 @@ mod tests {
         ui_core::close_overlay("ignored-name");
     }
 
-    // An unbound modal (no `open` signal) builds a 0-size node and never portals anything.
     #[test]
     fn unbound_modal_renders_nothing() {
         crate::test_support::fresh_layout_runtime();

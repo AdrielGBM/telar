@@ -1,7 +1,6 @@
 //! The frame pipeline's render thread: the worker every backend hands its composed commands to.
 //!
-//! Lives here rather than in `hot_host`, which is compiled only under `dev` and named for hot reload —
-//! this is the always-compiled core of the frame loop, and `handler.rs` imports it on every build.
+//! Lives here rather than in `hot_host`, which is compiled only under `dev` and named for hot reload — this is the always-compiled core of the frame loop, and `handler.rs` imports it on every build.
 
 use renderer_core::RenderBackend;
 
@@ -19,17 +18,11 @@ pub(super) struct FrameMsg {
 
 /// Drives `renderer` on a thread of its own, fed one [`FrameMsg`] at a time.
 ///
-/// Generic over the backend so the software rasteriser gets the same pipeline the hardware one has always
-/// had — stale-frame dropping, buffer recycling, `catch_unwind`, and an ADPF session keyed to the thread that
-/// actually does the work. Staying generic (rather than boxing) is what lets `on_suspend` join and reclaim
-/// the *concrete* renderer, which is how the hardware path keeps its device, pipelines and caches warm.
+/// Generic over the backend so the software rasteriser gets the same pipeline the hardware one has always had — stale-frame dropping, buffer recycling, `catch_unwind`, and an ADPF session keyed to the thread that actually does the work. Staying generic (rather than boxing) is what lets `on_suspend` join and reclaim the *concrete* renderer, which is how the hardware path keeps its device, pipelines and caches warm.
 ///
-/// **Frames here are droppable.** Anything added to this loop has to tolerate a frame never arriving: the
-/// stale-frame gate below skips whole frames whenever the UI thread outruns the renderer, so no step may
-/// leave a side effect half-applied for the next one to finish.
+/// **Frames here are droppable.** Anything added to this loop has to tolerate a frame never arriving: the stale-frame gate below skips whole frames whenever the UI thread outruns the renderer, so no step may leave a side effect half-applied for the next one to finish.
 ///
-/// Only the UI-thread side of the boundary is `!Send`-constrained; nothing reactive crosses. What arrives is
-/// flat data plus `Arc`s, and the proof of that is simply that this compiles.
+/// Only the UI-thread side of the boundary is `!Send`-constrained; nothing reactive crosses. What arrives is flat data plus `Arc`s, and the proof of that is simply that this compiles.
 pub(super) fn spawn_render_thread<R>(
     renderer: R,
 ) -> (
@@ -41,29 +34,25 @@ where
     R: RenderBackend + Send + 'static,
 {
     let (tx, rx) = std::sync::mpsc::sync_channel::<FrameMsg>(1);
-    // F2: hand the consumed command buffer back to the UI thread so it refills the same allocation
-    // next frame instead of freeing it here and allocating a fresh Vec every frame.
+    // Handed back to the UI thread so it refills the same allocation instead of allocating a fresh Vec each frame.
     let (ret_tx, ret_rx) = std::sync::mpsc::channel::<Vec<renderer_core::DrawCommand>>();
     let join = std::thread::Builder::new()
         .name("telar-render".to_string())
         .spawn(move || {
             let mut renderer = renderer;
-            // Before anything is drawn: whatever per-thread state the constructor set up on the UI thread has
-            // to exist here too, or the first frame finds it empty and improvises.
+            // Whatever per-thread state the constructor set up on the UI thread has to exist here too, or the first frame finds it empty and improvises.
             renderer.bind_to_render_thread();
             let mut current_width = 0u32;
             let mut current_height = 0u32;
-            // HiDPI scaling for backends that don't fold it into a shader, kept off the UI thread: for the
-            // software path it is the largest per-frame cost that would otherwise sit in front of input.
+            // For backends that do not fold it into a shader, kept off the UI thread: on the software path it is the largest per-frame cost that would otherwise sit in front of input.
             let mut scale_scratch = renderer_core::ScaleScratch::new();
             let scales_itself = renderer.applies_scale_factor();
-            // ADPF lives on THIS thread: create the hint session with the render thread's own TID (None self-computes SYS_gettid here) so reportActualWorkDuration drives the scheduler for the thread that actually submits the work. The session is not Send, so it is created, used, and dropped here and never crosses a thread boundary.
+            // The hint session must carry this thread's own TID, so `reportActualWorkDuration` drives the scheduler for the thread that submits the work. It is not `Send`, so it is created, used and dropped here.
             #[cfg(target_os = "android")]
             let hint_session = platform_android::AdpfSession::new(16_666_667, None);
             let idle_sweep_after = renderer.idle_sweep_after();
             loop {
-                // One sweep per idle stretch, then park on a plain `recv` — a repeating timer would wake this
-                // thread forever on a screen nobody is looking at, which is the opposite of the point.
+                // One sweep per idle stretch, then park on a plain `recv`: a repeating timer would wake this thread forever on a screen nobody is looking at.
                 let msg = match idle_sweep_after {
                     Some(after) => match rx.recv_timeout(after) {
                         Ok(msg) => msg,
@@ -81,7 +70,7 @@ where
                         Err(_) => break,
                     },
                 };
-                // Drop stale frames to stay responsive, but never skip one that resizes the surface: the wgpu surface is reconfigured inside begin_frame, so a dropped resize frame leaves it at the old size and the window shows clipped content or empty margins until the next accepted frame.
+                // Never skip a frame that resizes: the surface is reconfigured inside `begin_frame`, so dropping one leaves it at the old size and the window shows clipped content until the next accepted frame.
                 let size_changed = msg.width != current_width || msg.height != current_height;
                 if !size_changed && msg.timestamp.elapsed() > FRAME_BUDGET {
                     let _ = ret_tx.send(msg.commands);
@@ -89,9 +78,7 @@ where
                 }
                 #[cfg(target_os = "android")]
                 let frame_start = web_time::Instant::now();
-                // begin_frame reconfigures the swapchain and recreates size-dependent textures; a wgpu fatal
-                // error there (e.g. a lost device after a compositor resize storm) is a panic, not an `Err`, so
-                // catch it as render_frame does below and drop the frame instead of unwinding into an abort.
+                // `begin_frame` reconfigures the swapchain, and a wgpu fatal error there is a panic rather than an `Err`, so catch it and drop the frame instead of unwinding into an abort.
                 let began = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
                     renderer.begin_frame(msg.width, msg.height, msg.scale_factor, msg.generation)
                 }));
@@ -101,12 +88,7 @@ where
                 }
                 current_width = msg.width;
                 current_height = msg.height;
-                // A wgpu validation error (e.g. a transient scissor/surface-size mismatch while a compositor
-                // resizes a just-opened window) is fatal by default and would abort the whole process from
-                // this render thread. Catch it and drop the frame so the app survives and recovers on the
-                // next, correctly-sized frame.
-                //
-                // Recovery needs `panic=unwind`, which the consuming binary's profile decides: an app built with `panic="abort"` still goes down on a driver-level bug here.
+                // A wgpu validation error is fatal by default and would abort the process from this render thread, so the frame is dropped and the app recovers on the next correctly-sized one. Recovery needs `panic=unwind`, which the consuming binary's profile decides.
                 let _ = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
                     let commands: &[renderer_core::DrawCommand] =
                         if scales_itself || msg.scale_factor == 1.0 {
@@ -121,11 +103,10 @@ where
                     let duration_ns = frame_start.elapsed().as_nanos() as i64;
                     session.report(duration_ns);
                 }
-                // Recycle the buffer for the UI thread to refill; a send failure (UI gone) just drops it.
+                // Recycled for the UI thread to refill; a send failure just drops it.
                 let _ = ret_tx.send(msg.commands);
             }
-            // hint_session drops here (closeSession) on this render thread before it exits.
-            // Return the renderer so on_suspend can reclaim it and keep warm caches across resume.
+            // `hint_session` drops here, on this thread, before it exits. The renderer is returned so `on_suspend` can reclaim it and keep warm caches across resume.
             renderer
         })
         .expect("failed to spawn render thread");
@@ -144,8 +125,7 @@ mod tests {
 
     use super::*;
 
-    /// Stands in for a real backend so the pipeline itself can be tested: what it was asked to draw, at what
-    /// size, and how many frames actually reached it.
+    /// Stands in for a real backend so the pipeline itself can be tested: what it was asked to draw, at what size, and how many frames actually reached it.
     struct StubBackend {
         scales_itself: bool,
         rendered: Arc<AtomicU32>,
@@ -310,8 +290,6 @@ mod tests {
         let (backend, rendered, seen) = stub(false);
         let (tx, ret_rx, join) = spawn_render_thread(backend);
 
-        // Establish the size first: the thread starts at 0×0, so any first frame counts as a resize and is
-        // drawn however old it is — which is what makes a window show something at all.
         tx.send(frame(100, 50, 1.0, Duration::ZERO)).unwrap();
         seen.recv_timeout(Duration::from_secs(5)).unwrap();
         let _ = ret_rx.recv_timeout(Duration::from_secs(5)).unwrap();
@@ -330,8 +308,7 @@ mod tests {
         join.join().unwrap();
     }
 
-    // The exception that makes the rule safe: skipping a resize would leave the surface at the old size, so
-    // the window shows clipped content until some later frame happens to be accepted.
+    // Skipping a resize would leave the surface at the old size, so the window shows clipped content until some later frame happens to be accepted.
     #[test]
     fn a_stale_frame_that_resizes_is_drawn_anyway() {
         let (backend, rendered, seen) = stub(false);
@@ -350,8 +327,7 @@ mod tests {
         join.join().unwrap();
     }
 
-    // Getting this order wrong is not a subtle bug: the software rasteriser reached its first string with a
-    // shaper that had been handed no fonts, which on Android aborts the process outright.
+    // Regression: the software rasteriser reached its first string with a shaper that had been handed no fonts, which on Android aborts the process outright.
     #[test]
     fn the_backend_is_bound_to_the_thread_before_the_first_frame() {
         let (backend, _rendered, seen, bound_first) = stub_watching_bind(false);
@@ -368,7 +344,6 @@ mod tests {
         join.join().unwrap();
     }
 
-    // The caches belong to this thread, so nothing on the UI thread can evict from them.
     #[test]
     fn an_idle_render_thread_sweeps_its_own_caches_once() {
         let (mut backend, _rendered, seen, _) = stub_watching_bind(false);
@@ -387,7 +362,6 @@ mod tests {
             "one sweep per idle stretch, not a repeating timer"
         );
 
-        // A frame after the idle stretch still gets drawn: the thread parked, it did not exit.
         tx.send(frame(100, 50, 1.0, Duration::ZERO)).unwrap();
         seen.recv_timeout(Duration::from_secs(5)).unwrap();
 
@@ -395,7 +369,6 @@ mod tests {
         join.join().unwrap();
     }
 
-    // What `on_suspend` relies on to keep the hardware device, pipelines and caches warm across a resume.
     #[test]
     fn joining_hands_the_renderer_back() {
         let (backend, _rendered, seen) = stub(false);

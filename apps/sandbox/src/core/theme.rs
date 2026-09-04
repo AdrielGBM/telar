@@ -1,27 +1,24 @@
+//! The sandbox's themes, and the modes the sidebar switches between.
+
 use telar::{Color, ThemeTokens, register_mode, set_theme, use_theme};
 
 /// Mode id applied on first launch (and the fallback when a restored/unknown id has no variant).
 pub const DEFAULT_MODE: &str = "modern";
 
-/// Semantic color tokens for the documentation app. Every `.rsx` color reference
-/// (`fill:primary`, `color:muted`, …) resolves to one of these fields via `use_theme`,
-/// so swapping the whole struct at runtime re-colors the entire UI reactively.
+/// Semantic color tokens for the documentation app. Every `.rsx` color reference (`fill:primary`, `color:muted`, …) resolves to one of these fields via `use_theme`, so swapping the whole struct at runtime re-colors the entire UI reactively.
 #[derive(Clone, ThemeTokens)]
 #[theme(scrollbar = Color::rgba(self.muted.r, self.muted.g, self.muted.b, 0.55))]
-// A documentation app deliberately reads like the catalogue's own defaults, so these stay the built-ins —
-// stated rather than left silent.
+// A documentation app deliberately reads like the catalogue's own defaults, so these stay the built-ins — stated rather than left silent.
 #[theme(default(radius, icon_size, info, highlight_low, highlight_med, highlight_high))]
+/// The sandbox's tokens, one instance per registered mode.
 pub struct SandboxTheme {
     pub name: &'static str,
-    // Structure
     pub background: Color,
     pub surface: Color,
     pub surface_alt: Color,
     pub border: Color,
-    // Text
     pub ink: Color,
     pub muted: Color,
-    // Brand + accents
     pub primary: Color,
     pub on_primary: Color,
     pub success: Color,
@@ -30,7 +27,6 @@ pub struct SandboxTheme {
     pub warning: Color,
     pub purple: Color,
     pub cyan: Color,
-    // Code blocks
     pub code_bg: Color,
     pub code_fg: Color,
     // Spacing scale. A non-colour token, so it can only be reached from `.rsx` through the dotted form (`pad:theme.gutter`) — a bare ident there means a `[style]` constant.
@@ -112,8 +108,7 @@ impl SandboxTheme {
 }
 
 impl SandboxTheme {
-    /// Single source of truth mapping a mode id to its variant; shared by the mode registry and the
-    /// hot-reload bridge. Unknown ids fall back to the default so a stale restored id never panics.
+    /// Single source of truth mapping a mode id to its variant; shared by the mode registry and the hot-reload bridge. Unknown ids fall back to the default so a stale restored id never panics.
     pub fn by_mode(mode: &str) -> Self {
         match mode {
             "pastel" => Self::pastel(),
@@ -123,14 +118,14 @@ impl SandboxTheme {
     }
 }
 
-/// Registers every theme variant under its mode id. Called from the `app!` setup closure (and any test that
-/// switches themes via the sidebar buttons) so `set_mode("pastel")` installs the matching `SandboxTheme`.
+/// Registers every theme variant under its mode id. Called from the `app!` setup closure (and any test that switches themes via the sidebar buttons) so `set_mode("pastel")` installs the matching `SandboxTheme`.
 pub fn register_modes() {
     for mode in ["modern", "pastel", "midnight"] {
         register_mode(mode, move || set_theme(SandboxTheme::by_mode(mode)));
     }
 }
 
+/// The active theme, read reactively.
 pub fn theme() -> SandboxTheme {
     use_theme::<SandboxTheme>()
 }

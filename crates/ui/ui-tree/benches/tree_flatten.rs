@@ -1,7 +1,4 @@
-//! Sprint 0 / T-1.1 baseline (F010): cost of a SINGLE signal change re-running the WHOLE tree's
-//! `view()` + `flatten_view`. Today the app is one `ComponentSlot`/effect, so any tracked signal
-//! re-walks the entire tree. This captures that baseline; the fine-grained-effects refactor (T-1.1)
-//! should turn it into O(affected component). Keep this bench to compare before/after.
+//! Sprint 0 / T-1.1 baseline (F010): cost of a SINGLE signal change re-running the WHOLE tree's `view()` + `flatten_view`. Today the app is one `ComponentSlot`/effect, so any tracked signal re-walks the entire tree. This captures that baseline; the fine-grained-effects refactor (T-1.1) should turn it into O(affected component). Keep this bench to compare before/after.
 
 use std::hint::black_box;
 use std::rc::Rc;
@@ -46,9 +43,7 @@ fn card(row: usize, t: f32) -> RenderNode {
     }
 }
 
-/// A representative UI tree: `rows` cards, each a Clip → Transform → group of `cols` rects + a label.
-/// One cell of the first card is driven by `tick`, so a single signal write must re-run the whole
-/// monolithic `view()` (every other card is recomputed even though nothing about it changed).
+/// A representative UI tree: `rows` cards, each a Clip → Transform → group of `cols` rects + a label. One cell of the first card is driven by `tick`, so a single signal write must re-run the whole monolithic `view()` (every other card is recomputed even though nothing about it changed).
 struct CardList {
     tick: RwSignal<i32>,
     rows: usize,
@@ -63,8 +58,7 @@ impl Component for CardList {
     }
 }
 
-/// Segmented equivalent: each card is its own reactive segment. Updating the active card's signal
-/// must re-run only that segment's view() (+ a cheap O(total) recompose), not the whole tree.
+/// Segmented equivalent: each card is its own reactive segment. Updating the active card's signal must re-run only that segment's view() (+ a cheap O(total) recompose), not the whole tree.
 struct CardSegment {
     tick: RwSignal<i32>,
     row: usize,
@@ -173,7 +167,7 @@ impl Component for ScrollContent {
 fn bench_scroll_tick(c: &mut Criterion) {
     let mut group = c.benchmark_group("scroll_tick");
     for &items in &[100usize, 1000] {
-        // (a) Current behaviour: a scroll-offset signal change re-runs content.view() + flatten.
+        // Current behaviour: a scroll-offset signal change re-runs `content.view()` and the flatten.
         let offset = signal(0.0f32);
         let tree = ComponentList::new(ScrollContent {
             offset: offset,
@@ -190,7 +184,7 @@ fn bench_scroll_tick(c: &mut Criterion) {
             });
         });
 
-        // (b) T-2.1 Part 1 target: only the PushMatrix changes, so a scroll tick just rewrites that one command in place — O(1) regardless of item count. Proxy on a plain command vec since ComponentList owns its cache internally.
+        // Target: only the `PushMatrix` changes, so a scroll tick just rewrites that one command.
         let mut cached: Vec<renderer_core::DrawCommand> = tree.commands().iter().cloned().collect();
         let mtx_idx = cached
             .iter()

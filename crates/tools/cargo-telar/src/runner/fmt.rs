@@ -1,10 +1,6 @@
 //! `cargo telar fmt` — formats a project's `.rsx` and `.rs` files.
 //!
-//! Two formatters behind one command, because a Telar project is two languages. `.rsx` goes through
-//! [`telar_parser::format`], the same function the language server serves `textDocument/formatting` from, so a
-//! file formatted from a terminal and one formatted on save come out identical. `.rs` goes to `rustfmt`, one
-//! file at a time — which is the whole reason this command exists, since `cargo fmt` walks the module tree from
-//! the crate root and an `auto_modules` crate declares that tree from a macro `cargo fmt` cannot expand.
+//! Two formatters behind one command, because a Telar project is two languages. `.rsx` goes through [`telar_parser::format`], the same function the language server serves `textDocument/formatting` from, so a file formatted from a terminal and one formatted on save come out identical. `.rs` goes to `rustfmt`, one file at a time — which is the whole reason this command exists, since `cargo fmt` walks the module tree from the crate root and an `auto_modules` crate declares that tree from a macro `cargo fmt` cannot expand.
 
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -60,8 +56,7 @@ pub(crate) fn run_fmt_cmd(args: FmtArgs) {
     }
 }
 
-/// Every `.rsx` and `.rs` file under `root`, skipping what is not source: `target/`, the generated `.telar/`
-/// tree (formatting it would be undone by the next build) and any dot-directory.
+/// Every `.rsx` and `.rs` file under `root`, skipping what is not source: `target/`, the generated `.telar/` tree (formatting it would be undone by the next build) and any dot-directory.
 fn collect(root: &Path, out: &mut Vec<PathBuf>) {
     if root.is_file() {
         if is_source(root) {
@@ -98,8 +93,7 @@ fn is_source(path: &Path) -> bool {
 fn format_file(path: &Path, check: bool) -> Result<bool, String> {
     let source = std::fs::read_to_string(path).map_err(|e| e.to_string())?;
     let formatted = match path.extension().and_then(|e| e.to_str()) {
-        // A document that does not parse is left exactly as it is, which is what every formatter does with a
-        // file it cannot read — the error belongs to the compiler, not to the formatter.
+        // A document that does not parse is left exactly as it is, which is what every formatter does with a file it cannot read — the error belongs to the compiler, not to the formatter.
         Some("rsx") => match telar_parser::format::format_document(&source) {
             Some(formatted) => formatted,
             None => return Ok(false),
@@ -115,8 +109,7 @@ fn format_file(path: &Path, check: bool) -> Result<bool, String> {
     Ok(true)
 }
 
-/// Runs `rustfmt` over one file's text. Through stdin rather than by path so `--check` never writes, and so a
-/// file rustfmt rejects leaves the original untouched instead of half-formatted.
+/// Runs `rustfmt` over one file's text. Through stdin rather than by path so `--check` never writes, and so a file rustfmt rejects leaves the original untouched instead of half-formatted.
 fn rustfmt(source: &str) -> Result<String, String> {
     use std::io::Write;
 

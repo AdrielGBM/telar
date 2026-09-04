@@ -1,3 +1,5 @@
+//! [`Image`]: a bitmap leaf, sized by `object-fit` and clipped to its corner radius.
+
 use std::sync::Arc;
 
 use geometry_core::{ObjectFit, Rect};
@@ -9,6 +11,7 @@ use ui_tree::{Component, EventResult, RenderNode};
 use crate::impl_leaf_widget;
 use crate::layout_leaf::LayoutLeaf;
 
+/// A bitmap leaf, sized by `object-fit` and clipped to its corner radius.
 pub struct Image {
     data: Box<dyn Fn() -> Arc<ImageData>>,
     leaf: LayoutLeaf,
@@ -24,7 +27,7 @@ impl Image {
         raster_fn: impl Fn() -> Raster + 'static,
         fit_fn: impl Fn() -> ObjectFit + 'static,
     ) -> Result<Self, LayoutError> {
-        // A side left at `auto` falls back to the bitmap's intrinsic size; a single px side derives the other from the intrinsic aspect ratio; a percent side is left untouched.
+        // A side left at `auto` falls back to the intrinsic size, a single px side derives the other from the intrinsic aspect ratio, and a percent side is left untouched.
         let layout_style = crate::layout_leaf::resolve_intrinsic_size(layout_style, || {
             let d = data_fn();
             (d.width as f32, d.height as f32)
@@ -42,17 +45,14 @@ impl Image {
 
     /// Rounds the picture's own corners.
     ///
-    /// A `StyledContainer` around it cannot do this — its radius rounds the *fill* it paints, and a bitmap child
-    /// draws over that — so a thumbnail, an avatar or a cover in a rounded UI had no way to be anything but a
-    /// square. The clip primitive already carries a radius; this is the widget passing one through.
+    /// A `StyledContainer` around it cannot do this — its radius rounds the *fill* it paints, and a bitmap child draws over that — so a thumbnail, an avatar or a cover in a rounded UI had no way to be anything but a square. The clip primitive already carries a radius; this is the widget passing one through.
     pub fn with_radius(self, radius: f32) -> Self {
         self.with_border_radius(BorderRadius::all(radius))
     }
 
     /// Rounds each corner separately, for a picture that meets an edge on one side only.
     pub fn with_border_radius(mut self, radius: BorderRadius) -> Self {
-        // A negative corner is not a shape the clip can answer, and it reaches here from a `radius:` the
-        // author typed rather than from anything the widget controls.
+        // A negative corner is not a shape the clip can answer, and it reaches here from a `radius:` the author typed.
         self.radius = BorderRadius {
             top_left: radius.top_left.max(0.0),
             top_right: radius.top_right.max(0.0),
@@ -83,7 +83,7 @@ impl Component for Image {
             rect: content,
             raster: (self.raster)(),
         });
-        // Cover overflows the box; clip it to the local box. The renderer maps clip rects through the active matrix, so a local (0,0,w,h) clip composes with this widget's layout transform and any scroll. A radius is the other reason to clip, and it applies to a `Contain` fit that overflows nothing too.
+        // Cover overflows the box. The renderer maps clip rects through the active matrix, so a local (0,0,w,h) clip composes with this widget's transform and any scroll. A radius clips a `Contain` fit too.
         let node = if clip || !self.radius.is_zero() {
             RenderNode::clip(r_local, self.radius, [image])
         } else {
@@ -141,8 +141,7 @@ mod tests {
         assert_eq!(rect.height, 20.0);
     }
 
-    /// A radius has to reach the render tree even on a fit that overflows nothing, since `Contain` takes the
-    /// early return that skips the clip entirely.
+    /// A radius has to reach the render tree even on a fit that overflows nothing, since `Contain` takes the early return that skips the clip entirely.
     #[test]
     fn a_radius_clips_the_picture_whatever_the_fit() {
         reset_layout_runtime();
@@ -179,7 +178,6 @@ mod tests {
     fn image_single_side_derives_aspect() {
         reset_layout_runtime();
         let data = Arc::new(ImageData::new(vec![0u8; 40 * 20 * 4], 40, 20));
-        // Width pinned, height auto → height follows the 2:1 intrinsic aspect ratio.
         let image = Image::new(
             LayoutStyle::new().width(100.0),
             move || Arc::clone(&data),

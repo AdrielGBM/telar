@@ -1,17 +1,12 @@
 //! The end-to-end i18n test, in the smallest crate that can hold it.
 //!
-//! `t!` resolves `crate::__rsx_i18n::CATALOG`, which only exists in a crate whose build ran the baker over a
-//! `locales/` directory — so this cannot be a test under `telar-transpiler`, which has neither. A fixture
-//! member crate is the whole apparatus: `rsx_modules!` bakes the catalog (the same `transpile_project` pass
-//! `app!` runs), and nothing here needs a theme, a root component or a window.
+//! `t!` resolves `crate::__rsx_i18n::CATALOG`, which only exists in a crate whose build ran the baker over a `locales/` directory — so this cannot be a test under `telar-transpiler`, which has neither. A fixture member crate is the whole apparatus: `rsx_modules!` bakes the catalog (the same `transpile_project` pass `app!` runs), and nothing here needs a theme, a root component or a window.
 
 telar::rsx_modules!();
 
 #[cfg(test)]
 mod tests {
-    // Exercises the whole i18n pipeline end to end: the build-time baker turned `locales/*.toml` into
-    // `crate::__rsx_i18n::CATALOG`, `t!` validated its keys/args at compile time, and `translate` renders the
-    // active locale — switching the locale changes the output.
+    // The whole i18n pipeline end to end: the baker turned `locales/*.toml` into a catalog, `t!` validated its keys and args at compile time, and `translate` renders the active locale.
     #[test]
     fn catalog_translates_and_switches() {
         telar::set_locale("en");
@@ -20,7 +15,6 @@ mod tests {
         telar::set_locale("es");
         assert_eq!(telar::t!("greeting", name = "Ada"), "Hola, Ada!");
         assert_eq!(telar::t!("nav.overview"), "Resumen");
-        // An unknown locale falls back to the default (en).
         telar::set_locale("fr");
         assert_eq!(telar::t!("nav.overview"), "Overview");
     }

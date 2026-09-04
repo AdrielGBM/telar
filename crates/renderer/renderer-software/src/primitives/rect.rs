@@ -1,3 +1,5 @@
+//! Rounded, bordered and shadowed boxes.
+
 use std::collections::HashMap;
 use std::sync::mpsc;
 
@@ -15,19 +17,14 @@ pub(crate) fn build_rect_path(rect: Rect, radius: BorderRadius) -> Option<tiny_s
 
 /// Appends the box's outline as one closed subpath, or nothing at all if it has no area.
 ///
-/// Separate from [`build_rect_path`] so a border can put its outer and inner outlines in the *same* path and
-/// let the even-odd rule punch one out of the other.
+/// Separate from [`build_rect_path`] so a border can put its outer and inner outlines in the *same* path and let the even-odd rule punch one out of the other.
 fn push_rect_path(pb: &mut tiny_skia::PathBuilder, rect: Rect, radius: BorderRadius) {
     let x = rect.x;
     let y = rect.y;
     let w = rect.width;
     let h = rect.height;
 
-    // A box with no area has no path, and neither branch below works that out for itself. `Rect::from_xywh`
-    // looks like it covers the square case and does not — it refuses a negative side, not a zero one, so a
-    // flat rect goes straight through it — and the rounded case clamps its radii to zero and emits a bare
-    // line. Either way tiny_skia declines to fill what it is handed, and says so once per frame for as long
-    // as the box stays flat.
+    // A box with no area has no path, and neither branch below works that out. `Rect::from_xywh` refuses a negative side, not a zero one, and the rounded case clamps its radii and emits a bare line. Either way tiny_skia declines to fill it and warns once per frame while the box stays flat.
     if !(w > 0.0 && h > 0.0) {
         return;
     }
@@ -79,13 +76,9 @@ fn push_rect_path(pb: &mut tiny_skia::PathBuilder, rect: Rect, radius: BorderRad
     pb.close();
 }
 
-/// The border as one filled ring: the box's own outline with its inner edge punched out of it under the
-/// even-odd rule.
+/// The border as one filled ring: the box's own outline with its inner edge punched out of it under the even-odd rule.
 ///
-/// One path rather than one stroke per side, and that is what makes the partial cases fall out instead of
-/// needing to be handled. A side of zero leaves the two outlines coincident there, so the ring has no area
-/// along it and covers nothing — no seam to hide, no mask to intersect. A corner where two thicknesses meet
-/// tapers between them, rather than being painted twice by two strokes that overlap.
+/// One path rather than one stroke per side, and that is what makes the partial cases fall out instead of needing to be handled. A side of zero leaves the two outlines coincident there, so the ring has no area along it and covers nothing — no seam to hide, no mask to intersect. A corner where two thicknesses meet tapers between them, rather than being painted twice by two strokes that overlap.
 fn build_border_path(
     rect: Rect,
     radius: BorderRadius,
@@ -93,7 +86,7 @@ fn build_border_path(
 ) -> Option<tiny_skia::Path> {
     let mut pb = tiny_skia::PathBuilder::new();
     push_rect_path(&mut pb, rect, radius);
-    // No interior means the border swallowed the box, and the outer outline alone is the whole of it.
+    // No interior means the border swallowed the box, so the outer outline is the whole of it.
     if let Some((inner, inner_radius)) = renderer_core::border_inner_shape(rect, radius, widths) {
         push_rect_path(&mut pb, inner, inner_radius);
     }
@@ -168,7 +161,7 @@ fn draw_rect_shadow(
         shadow_rect.height,
     );
 
-    // The shadow shape depends only on Copy data (rect dimensions, radius, color), so the same closure body can run either inline or on a background worker thread for large shadows.
+    // The shadow shape depends only on Copy data, so the same closure body runs inline or on a worker thread.
     let shadow_color = shadow.color;
     let draw_shadow = move |tmp_pmap: &mut tiny_skia::Pixmap| {
         if let Some(path) = build_rect_path(local_rect, shadow_radius) {
@@ -252,10 +245,7 @@ mod tests {
 
     /// Both branches of [`build_rect_path`] must refuse a box with no area, and neither used to.
     ///
-    /// The square branch looks as though it is covered, which is the trap: `tiny_skia::Rect::from_xywh`
-    /// rejects a *negative* side, not a zero one, so a flat rect passes it and reaches `push_rect` intact.
-    /// The rounded branch clamps its radii to zero and draws a bare line. Both hand tiny_skia something it
-    /// declines to fill and warns about, once per frame, for as long as the box stays flat.
+    /// The square branch looks as though it is covered, which is the trap: `tiny_skia::Rect::from_xywh` rejects a *negative* side, not a zero one, so a flat rect passes it and reaches `push_rect` intact. The rounded branch clamps its radii to zero and draws a bare line. Both hand tiny_skia something it declines to fill and warns about, once per frame, for as long as the box stays flat.
     #[test]
     fn a_box_with_no_area_has_no_path_whatever_its_corners_are() {
         let flat = Rect {

@@ -1,8 +1,11 @@
+//! Grid track sizing: the `1fr`, `auto` and fixed forms a template column is written in.
+
 use taffy::{
     GridTemplateComponent, GridTemplateRepetition, RepetitionCount, TrackSizingFunction,
     style_helpers,
 };
 
+/// One column or row of a grid template: a fixed length, `auto`, or a flexible `fr` share.
 pub enum TemplateTrack {
     Single(TrackSizingFunction),
     Repeat(RepetitionCount, TrackSizingFunction),

@@ -1,12 +1,8 @@
 //! CLDR plural categories and the rules that pick one for a count.
 //!
-//! Hand-rolled rather than pulled from `icu`: the rules below are a *subset* of CLDR covering the language
-//! families that differ structurally, and they are `const`-friendly pure functions with no data tables to
-//! load. A locale that matches nothing falls back to the English rule (one/other), which is right for the
-//! large majority of languages and wrong in a way that is visible rather than silent.
+//! Hand-rolled rather than pulled from `icu`: the rules below are a *subset* of CLDR covering the language families that differ structurally, and they are `const`-friendly pure functions with no data tables to load. A locale that matches nothing falls back to the English rule (one/other), which is right for the large majority of languages and wrong in a way that is visible rather than silent.
 
-/// The CLDR plural categories. A catalog entry never has to define all six — only the ones its language
-/// uses, plus `Other`, which CLDR requires as the fallback for every language.
+/// The CLDR plural categories. A catalog entry never has to define all six — only the ones its language uses, plus `Other`, which CLDR requires as the fallback for every language.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub enum PluralCategory {
     Zero,
@@ -18,8 +14,7 @@ pub enum PluralCategory {
 }
 
 impl PluralCategory {
-    /// Parses a category written in a catalog (`one`, `other`, …). `None` for anything else, which is what
-    /// lets the baker tell a plural table apart from a namespace table.
+    /// Parses a category written in a catalog (`one`, `other`, …). `None` for anything else, which is what lets the baker tell a plural table apart from a namespace table.
     pub fn parse(name: &str) -> Option<Self> {
         Some(match name {
             "zero" => PluralCategory::Zero,
@@ -44,8 +39,7 @@ impl PluralCategory {
     }
 }
 
-/// The category `count` falls into for `locale`, keyed by the language subtag (so `pt-BR` resolves like
-/// `pt`). Negative counts are treated by magnitude, matching CLDR's use of the absolute value.
+/// The category `count` falls into for `locale`, keyed by the language subtag (so `pt-BR` resolves like `pt`). Negative counts are treated by magnitude, matching CLDR's use of the absolute value.
 pub fn plural_category(locale: &str, count: i64) -> PluralCategory {
     let lang = locale
         .split(['-', '_'])
@@ -54,11 +48,9 @@ pub fn plural_category(locale: &str, count: i64) -> PluralCategory {
         .to_ascii_lowercase();
     let n = count.unsigned_abs();
     match lang.as_str() {
-        // No grammatical plural at all: one form covers every count.
         "ja" | "zh" | "ko" | "vi" | "th" | "id" | "ms" | "my" | "lo" | "km" => {
             PluralCategory::Other
         }
-        // Zero groups with one.
         "fr" | "hy" | "ff" | "kab" => {
             if n <= 1 {
                 PluralCategory::One
@@ -175,7 +167,6 @@ mod tests {
 
     #[test]
     fn polish_keeps_one_for_exactly_one() {
-        // Unlike Russian, 21 is not `one` in Polish.
         assert_eq!(plural_category("pl", 1), One);
         assert_eq!(plural_category("pl", 21), Many);
         assert_eq!(plural_category("pl", 22), Few);

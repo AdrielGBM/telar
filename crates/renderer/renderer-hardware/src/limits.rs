@@ -1,3 +1,5 @@
+//! The fixed pool and cache sizes the renderer pre-allocates against.
+
 /// Viewport buffer/bind-group slots pre-allocated for per-layer uniforms; frames with more concurrent layers fall back to ad-hoc allocations.
 pub const VIEWPORT_POOL_SIZE: usize = 8;
 

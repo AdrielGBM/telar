@@ -1,7 +1,9 @@
+//! The Android event loop: choreographer-paced frames, and the surface lifecycle an activity puts them through.
+
 use android_activity::AndroidApp;
 use platform_core::{Event, EventHandler, Platform, PlatformError, Window, WindowConfig};
 
-// ANativeWindow_setFrameRate is API 30+ and may live in libnativewindow.so on some OEM devices rather than libandroid.so, so resolve it at runtime to avoid a hard dlopen failure on devices where the NDK stub does not match the runtime library.
+// `ANativeWindow_setFrameRate` is API 30+ and may live in libnativewindow.so on some OEM devices, so it is resolved at runtime to avoid a hard dlopen failure where the NDK stub does not match the runtime library.
 #[cfg(target_os = "android")]
 unsafe fn try_set_frame_rate(window: *mut std::ffi::c_void, fps: f32) {
     unsafe extern "C" {
@@ -149,24 +151,19 @@ use winit::window::{WindowAttributes, WindowId};
 
 use platform_winit::{SurfaceIntent, TouchDrag, WinitWindow as AndroidWindow, map_window_event};
 
+/// The Android event loop, driven by `android-activity` and paced by the choreographer.
 pub struct AndroidPlatform {
     event_loop: EventLoop<()>,
     // winit's `theme()` is always `None` on Android and the `Window` never sees the activity's configuration, so the OS light/dark preference has to be read from here — the same role the freedesktop portal plays on Linux.
     app: AndroidApp,
 }
 
-/// How often the OS light/dark preference is re-read. A theme flip is a human action, so half a second reads
-/// as instant, and it keeps a config copy out of every frame.
+/// How often the OS light/dark preference is re-read. A theme flip is a human action, so half a second reads as instant, and it keeps a config copy out of every frame.
 const THEME_POLL_INTERVAL: std::time::Duration = std::time::Duration::from_millis(500);
 
 /// The OS light/dark preference, or `None` when the device expresses no opinion.
 ///
-/// Read from the **asset manager**, not from `AndroidApp::config()`. That cached `ConfigurationRef` is only
-/// refreshed when android-activity receives NativeActivity's `onConfigurationChanged`, and that callback does
-/// not always arrive: on a Redmi/HyperOS device the system applied `night` to the activity — visible in
-/// `dumpsys activity activities` as `mLastReportedConfigurations` — while the cached config stayed on the
-/// value it had at launch for as long as the process lived. The asset manager tracks the change either way,
-/// and it is the same source the glue itself copies from when the callback does fire.
+/// Read from the **asset manager**, not from `AndroidApp::config()`. That cached `ConfigurationRef` is only refreshed when android-activity receives NativeActivity's `onConfigurationChanged`, and that callback does not always arrive: on a Redmi/HyperOS device the system applied `night` to the activity — visible in `dumpsys activity activities` as `mLastReportedConfigurations` — while the cached config stayed on the value it had at launch for as long as the process lived. The asset manager tracks the change either way, and it is the same source the glue itself copies from when the callback does fire.
 fn prefers_dark(app: &AndroidApp) -> Option<bool> {
     // Through android-activity's own re-export rather than a direct `ndk` dependency, so the types can never be a different version of the ones it uses internally.
     use android_activity::ndk::configuration::{Configuration, UiModeNight};
@@ -182,8 +179,7 @@ impl AndroidPlatform {
         use tracing_subscriber::filter::LevelFilter;
         use tracing_subscriber::prelude::*;
 
-        // Route tracing events (and `log` records bridged from winit/wgpu) to Android logcat under
-        // the `rsx` tag. `try_init` is a no-op if a subscriber is already installed.
+        // Route tracing events (and `log` records bridged from winit/wgpu) to Android logcat under the `rsx` tag. `try_init` is a no-op if a subscriber is already installed.
         let logcat = paranoid_android::layer("telar").with_filter(LevelFilter::DEBUG);
         tracing_subscriber::registry().with(logcat).try_init().ok();
 
@@ -217,7 +213,7 @@ struct AndroidRunner<H: EventHandler<AndroidWindow>> {
 impl<H: EventHandler<AndroidWindow>> ApplicationHandler<()> for AndroidRunner<H> {
     fn new_events(&mut self, _event_loop: &ActiveEventLoop, _cause: StartCause) {
         self.handler.new_events();
-        // Polled rather than pushed: the notification this would hang off (`onConfigurationChanged`) is the very thing that does not arrive — see `prefers_dark`. Done here so the event lands inside the batch `new_events` just opened, exactly like a real input event.
+        // Polled rather than pushed: the notification this would hang off is the very thing that does not arrive. Done here so the event lands inside the batch `new_events` just opened, like a real input event.
         if self
             .last_theme_poll
             .is_none_or(|at| at.elapsed() >= THEME_POLL_INTERVAL)

@@ -1,8 +1,11 @@
+//! Gradient paint: the stops, and the linear and radial forms a backend resolves them into.
+
 use geometry_core::Point;
 
 use crate::Color;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
+/// One stop: a colour and its position along the ramp, in `0.0..=1.0`.
 pub struct GradientStop {
     pub position: f32,
     pub color: Color,
@@ -50,12 +53,14 @@ impl GradientStops {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
+/// Linear or radial, and the geometry each is defined by.
 pub enum GradientKind {
     Linear { start: Point, end: Point },
     Radial { center: Point, radius: f32 },
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
+/// A gradient paint: its stops and the shape they are laid along.
 pub struct Gradient {
     pub kind: GradientKind,
     pub stops: GradientStops,

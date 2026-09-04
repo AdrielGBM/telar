@@ -1,3 +1,6 @@
+//! Per-corner corner rounding.
+
+/// The four corner radii of a box, in logical pixels.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct BorderRadius {
     pub top_left: f32,

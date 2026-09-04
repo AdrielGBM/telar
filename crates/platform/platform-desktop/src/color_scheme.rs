@@ -1,10 +1,6 @@
-//! Linux OS light/dark detection via the freedesktop settings portal. winit 0.30 has no color-scheme
-//! integration on Linux (`Window::theme()` is always `None` there), so the desktop adapter reads the portal
-//! directly — a one-shot at window creation plus a background watch for live changes. Windows/macOS get the
-//! preference straight from winit and never reach this module.
+//! Linux OS light/dark detection via the freedesktop settings portal. winit 0.30 has no color-scheme integration on Linux (`Window::theme()` is always `None` there), so the desktop adapter reads the portal directly — a one-shot at window creation plus a background watch for live changes. Windows/macOS get the preference straight from winit and never reach this module.
 
-/// Reads `org.freedesktop.appearance` `color-scheme` (1 = prefer dark, 2 = prefer light, 0 = no preference).
-/// `None` when the portal is absent or reports no preference, so the app keeps its own default. Blocking.
+/// Reads `org.freedesktop.appearance` `color-scheme` (1 = prefer dark, 2 = prefer light, 0 = no preference). `None` when the portal is absent or reports no preference, so the app keeps its own default. Blocking.
 pub fn portal_prefers_dark() -> Option<bool> {
     let conn = zbus::blocking::Connection::session().ok()?;
     let reply = conn
@@ -36,9 +32,7 @@ fn scheme_u32(v: &zbus::zvariant::Value) -> Option<u32> {
     }
 }
 
-/// Watches the portal's `SettingChanged` signal on a background thread and calls `on_change(dark)` whenever
-/// the OS color-scheme flips, so the app reacts live. The thread lives for the process; silently returns if
-/// the session bus is unavailable.
+/// Watches the portal's `SettingChanged` signal on a background thread and calls `on_change(dark)` whenever the OS color-scheme flips, so the app reacts live. The thread lives for the process; silently returns if the session bus is unavailable.
 pub fn spawn_watch(on_change: impl Fn(bool) + Send + 'static) {
     std::thread::Builder::new()
         .name("telar-color-scheme".to_string())

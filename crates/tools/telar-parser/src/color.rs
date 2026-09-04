@@ -2,11 +2,7 @@
 
 /// Parses a hex colour body, with or without its `#`, into RGBA bytes.
 ///
-/// The accepted lengths are **3, 4, 6 and 8** digits (`#rgb`, `#rgba`, `#rrggbb`, `#rrggbbaa`); a short digit
-/// expands by `* 17`, so `#f` reads as `0xff`. This is the single statement of what a hex colour is: the
-/// `.rsx` front end validates against it, the transpiler lowers against it, the analyzer paints its swatch
-/// from it, and `geometry_core::Color::from_hex` accepts exactly the same set at runtime (it cannot depend on
-/// a tools crate, so it keeps its own body).
+/// The accepted lengths are **3, 4, 6 and 8** digits (`#rgb`, `#rgba`, `#rrggbb`, `#rrggbbaa`); a short digit expands by `* 17`, so `#f` reads as `0xff`. This is the single statement of what a hex colour is: the `.rsx` front end validates against it, the transpiler lowers against it, the analyzer paints its swatch from it, and `geometry_core::Color::from_hex` accepts exactly the same set at runtime (it cannot depend on a tools crate, so it keeps its own body).
 pub fn parse_hex(hex: &str) -> Option<[u8; 4]> {
     let hex = hex.strip_prefix('#').unwrap_or(hex);
     if !hex.bytes().all(|b| b.is_ascii_hexdigit()) {

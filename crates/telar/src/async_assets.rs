@@ -1,14 +1,8 @@
-//! An HTTP implementation of the [`AssetSource`] seam: SVGs fetched from a URL template, cached on disk, and
-//! delivered into signals on the UI thread.
+//! An HTTP implementation of the [`AssetSource`] seam: SVGs fetched from a URL template, cached on disk, and delivered into signals on the UI thread.
 //!
-//! The seam in `ui-core` says what a reactive asset *is* — a signal advancing `Loading` → `Ready`/`Failed` —
-//! and deliberately ships no transport. This is the transport every consumer of it was writing anyway: an
-//! icon CDN addressed by name, a directory of what has already been downloaded, and a retry for the shell
-//! that starts before the network is up.
+//! The seam in `ui-core` says what a reactive asset *is* — a signal advancing `Loading` → `Ready`/`Failed` — and deliberately ships no transport. This is the transport every consumer of it was writing anyway: an icon CDN addressed by name, a directory of what has already been downloaded, and a retry for the shell that starts before the network is up.
 //!
-//! Nothing here touches the frame thread. One worker owns the socket, the disk cache and the SVG parse, and
-//! reaches the signals through [`reactive_core::spawn_stream`] — the same bridge [`crate::files`] uses, for
-//! the same reason: signals are `!Send`, so the *data* crosses the thread boundary and the UI thread writes.
+//! Nothing here touches the frame thread. One worker owns the socket, the disk cache and the SVG parse, and reaches the signals through [`reactive_core::spawn_stream`] — the same bridge [`crate::files`] uses, for the same reason: signals are `!Send`, so the *data* crosses the thread boundary and the UI thread writes.
 
 use std::cell::RefCell;
 use std::collections::{HashMap, VecDeque};
@@ -23,18 +17,14 @@ use reactive_core::{Emitter, ReadSignal, RwSignal, Task, signal, spawn_stream};
 use renderer_assets::SvgData;
 use ui_core::{AssetSource, AssetState};
 
-/// A transient failure — the shell often starts before the network is up at login — keeps the asset on
-/// `Loading` and is retried, so it self-heals once connectivity arrives without hammering the endpoint over
-/// a genuine 404.
+/// A transient failure — the shell often starts before the network is up at login — keeps the asset on `Loading` and is retried, so it self-heals once connectivity arrives without hammering the endpoint over a genuine 404.
 const DEFAULT_ATTEMPTS: u32 = 8;
 const DEFAULT_RETRY_DELAY: Duration = Duration::from_secs(4);
 const DEFAULT_TIMEOUT: Duration = Duration::from_secs(15);
 
-/// A cache file name that is a file name: everything outside `[A-Za-z0-9_-]` becomes `_`, and anything that
-/// was not already such a name carries a hash of the original so two ids cannot collapse onto one file.
+/// A cache file name that is a file name: everything outside `[A-Za-z0-9_-]` becomes `_`, and anything that was not already such a name carries a hash of the original so two ids cannot collapse onto one file.
 ///
-/// The hash is not decoration. Ids arrive from application config (`mdi:home`, `lucide/arrow-right`), so
-/// without it `a:b` and `a/b` would share a file, and `../../x` would name a path outside the cache at all.
+/// The hash is not decoration. Ids arrive from application config (`mdi:home`, `lucide/arrow-right`), so without it `a:b` and `a/b` would share a file, and `../../x` would name a path outside the cache at all.
 fn cache_file_name(id: &str) -> String {
     let simple = id.len() <= 32
         && id
@@ -82,14 +72,9 @@ struct Store {
 
 /// An [`AssetSource`] that resolves each id against a URL template and keeps what it downloads on disk.
 ///
-/// `url_template` is the endpoint with `{name}` standing in for the id — `"https://api.iconify.design/{name}.svg"`
-/// resolves the id `"mdi/home"` to `https://api.iconify.design/mdi/home.svg`. What an id *means* stays with
-/// the application: a set-qualified icon name, a default set, a theme prefix are all decisions this cannot
-/// make for it, and all of them come out as the id it is handed.
+/// `url_template` is the endpoint with `{name}` standing in for the id — `"https://api.iconify.design/{name}.svg"` resolves the id `"mdi/home"` to `https://api.iconify.design/mdi/home.svg`. What an id *means* stays with the application: a set-qualified icon name, a default set, a theme prefix are all decisions this cannot make for it, and all of them come out as the id it is handed.
 ///
-/// Construct it on the UI thread and keep it there (a `thread_local!`, or a field of the app): it holds the
-/// signals it hands out, so it is `!Send` like everything else on this side of the seam. Dropping it retires
-/// the worker and cancels delivery, which is what a surface tearing down mid-download wants.
+/// Construct it on the UI thread and keep it there (a `thread_local!`, or a field of the app): it holds the signals it hands out, so it is `!Send` like everything else on this side of the seam. Dropping it retires the worker and cancels delivery, which is what a surface tearing down mid-download wants.
 ///
 /// ```ignore
 /// let icons = HttpAssetSource::new("https://api.iconify.design/{name}.svg")
@@ -100,20 +85,16 @@ struct Store {
 pub struct HttpAssetSource {
     store: Rc<Store>,
     requests: Sender<String>,
-    /// `Some` until the source is dropped; cancelling it releases the delivery callback, and with it the last
-    /// reference to [`Store`].
+    /// `Some` until the source is dropped; cancelling it releases the delivery callback, and with it the last reference to [`Store`].
     task: RefCell<Option<Task>>,
     fetch: Fetch,
     started: RefCell<bool>,
-    /// The receiving end, held until the worker starts. Kept rather than started in `new` so a source can be
-    /// built before the reactive runtime exists — a thread-local initializer, a test — without the worker
-    /// registering its callback against the wrong surface.
+    /// The receiving end, held until the worker starts. Kept rather than started in `new` so a source can be built before the reactive runtime exists — a thread-local initializer, a test — without the worker registering its callback against the wrong surface.
     incoming: RefCell<Option<Receiver<String>>>,
 }
 
 impl HttpAssetSource {
-    /// A source that fetches from `url_template` and caches nothing — every miss is a round trip. Pair it
-    /// with [`cached_in`](Self::cached_in) unless the assets genuinely should not touch disk.
+    /// A source that fetches from `url_template` and caches nothing — every miss is a round trip. Pair it with [`cached_in`](Self::cached_in) unless the assets genuinely should not touch disk.
     pub fn new(url_template: impl Into<String>) -> Self {
         let (requests, incoming) = mpsc::channel();
         Self {
@@ -132,15 +113,13 @@ impl HttpAssetSource {
         }
     }
 
-    /// Keeps every downloaded asset under `dir`, so a restart resolves from disk instead of the network.
-    /// The directory is created on first write.
+    /// Keeps every downloaded asset under `dir`, so a restart resolves from disk instead of the network. The directory is created on first write.
     pub fn cached_in(mut self, dir: impl Into<PathBuf>) -> Self {
         self.fetch.cache_dir = Some(dir.into());
         self
     }
 
-    /// How many times a failing fetch is retried, and how long between attempts. `attempts` counts the first
-    /// try, so `1` disables retrying; running out settles the asset on [`AssetState::Failed`].
+    /// How many times a failing fetch is retried, and how long between attempts. `attempts` counts the first try, so `1` disables retrying; running out settles the asset on [`AssetState::Failed`].
     pub fn with_retry(mut self, attempts: u32, delay: Duration) -> Self {
         self.fetch.max_attempts = attempts.max(1);
         self.fetch.retry_delay = delay;
@@ -167,9 +146,7 @@ impl HttpAssetSource {
         let task = spawn_stream(
             move |out| run_worker(incoming, fetch, out),
             move |(id, data): Delivery| {
-                // Clone the handle out and drop the borrow BEFORE `set`: a signal write flushes effects
-                // synchronously, which re-renders a widget → `svg()` → `states.borrow_mut()`, and holding the
-                // borrow across the write would re-enter and panic.
+                // Drop the borrow before `set`: a write flushes effects synchronously, re-rendering a widget that borrows `states` again.
                 let handle = store.states.borrow().get(&id).cloned();
                 if let Some(handle) = handle {
                     handle.set(match data {
@@ -209,12 +186,9 @@ impl AssetSource for HttpAssetSource {
     }
 }
 
-/// Resolves each requested id — disk cache first, then the network — and emits the parsed SVG back to the UI
-/// thread. Ends when the source is dropped and the request channel closes.
+/// Resolves each requested id — disk cache first, then the network — and emits the parsed SVG back to the UI thread. Ends when the source is dropped and the request channel closes.
 ///
-/// Requests are served one at a time and retries wait *inside this loop* rather than on a timer, so a whole
-/// screen of icons costs one thread and one connection rather than one of each per glyph, and a provider that
-/// is down is retried at the configured rate instead of as fast as the pool will spawn.
+/// Requests are served one at a time and retries wait *inside this loop* rather than on a timer, so a whole screen of icons costs one thread and one connection rather than one of each per glyph, and a provider that is down is retried at the configured rate instead of as fast as the pool will spawn.
 fn run_worker(requests: Receiver<String>, fetch: Fetch, out: Emitter<Delivery>) {
     let agent: ureq::Agent = ureq::Agent::config_builder()
         .timeout_global(Some(fetch.timeout))
@@ -285,9 +259,7 @@ fn cached(id: &str, cache_dir: Option<&PathBuf>) -> Option<Arc<SvgData>> {
     SvgData::from_str(&text).ok().map(Arc::new)
 }
 
-/// The disk copy if there is one, else a download. A body that does not parse as SVG is a failure and is not
-/// written: a provider's 404 page is a 200 with HTML in it often enough that caching the response would make
-/// one typo permanent.
+/// The disk copy if there is one, else a download. A body that does not parse as SVG is a failure and is not written: a provider's 404 page is a 200 with HTML in it often enough that caching the response would make one typo permanent.
 fn load(id: &str, fetch: &Fetch, agent: &ureq::Agent) -> Option<Arc<SvgData>> {
     if let Some(svg) = cached(id, fetch.cache_dir.as_ref()) {
         return Some(svg);

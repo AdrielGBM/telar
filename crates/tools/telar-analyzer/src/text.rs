@@ -57,8 +57,7 @@ pub fn ident_at(line: &str, character: u32) -> Option<(usize, &str)> {
     (start != end).then(|| (start, &line[start..end]))
 }
 
-/// The `.rsx` word under the cursor and its byte start, breaking on whitespace, `:` and `"` — so a `@class`
-/// keeps its sigil and an attribute value stops at its quote. Wider than [`ident_at`], which is for Rust.
+/// The `.rsx` word under the cursor and its byte start, breaking on whitespace, `:` and `"` — so a `@class` keeps its sigil and an attribute value stops at its quote. Wider than [`ident_at`], which is for Rust.
 pub fn word_at_cursor(line: &str, character: u32) -> (usize, &str) {
     let cursor = utf16_to_byte(line, character).min(line.len());
     let breaks = |c: char| c.is_whitespace() || c == ':' || c == '"';
@@ -109,18 +108,15 @@ pub fn byte_offset(source: &str, line: u32, utf16_col: u32) -> Option<usize> {
 mod tests {
     use super::*;
 
-    // The column arriving from the editor counts UTF-16 units; slicing the line by it directly panicked the
-    // moment anything before the cursor was multi-byte.
+    // The column arriving from the editor counts UTF-16 units; slicing the line by it directly panicked the moment anything before the cursor was multi-byte.
     #[test]
     fn word_at_cursor_takes_a_utf16_column_not_a_byte_offset() {
         let line = r#"    text "héllo world""#;
-        // The first `l`: its UTF-16 column lands inside the two bytes of `é`, so slicing the line by that
-        // column is a non-char-boundary panic, not merely a wrong answer.
+        // The first `l`: its UTF-16 column lands inside the two bytes of `é`, so slicing the line by that column is a non-char-boundary panic, not merely a wrong answer.
         let byte = line.find("llo").unwrap();
         let utf16 = byte_to_utf16(line, byte);
         assert!(!line.is_char_boundary(utf16 as usize));
         assert_eq!(word_at_cursor(line, utf16).1, "héllo");
-        // Past the end clamps rather than panicking.
         assert_eq!(word_at_cursor(line, 9_999).1, "");
     }
 
@@ -129,7 +125,6 @@ mod tests {
         let line = "let total_count = 1;";
         let (start, word) = ident_at(line, 7).unwrap();
         assert_eq!((start, word), (4, "total_count"));
-        // Cursor on the `=` (col 16) → no identifier.
         assert!(ident_at(line, 16).is_none());
     }
 
@@ -141,7 +136,6 @@ mod tests {
 
     #[test]
     fn offset_and_byte_offset_round_trip_multibyte() {
-        // `é` is 2 UTF-8 bytes / 1 UTF-16 unit; the cursor after it is byte 3, col 2 on line 1.
         let src = "[view]\ncol é x\n";
         let byte = byte_offset(src, 1, 6).unwrap();
         let pos = offset_to_position(src, byte);

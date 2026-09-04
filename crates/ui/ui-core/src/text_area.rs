@@ -1,3 +1,5 @@
+//! [`TextArea`]: the multi-line editor — caret, selection, and a height measured from its line count.
+
 use std::rc::Rc;
 use std::sync::Arc;
 
@@ -16,33 +18,23 @@ use crate::layout_leaf::LayoutLeaf;
 
 /// Width of the caret, in logical px.
 const CARET_WIDTH: f32 = 1.5;
-/// A width so large the shaper never soft-wraps: only an explicit `\n` breaks a line (code-editor behavior),
-/// which keeps caret/line math exact — a line's visual row is its logical row.
+/// A width so large the shaper never soft-wraps: only an explicit `\n` breaks a line (code-editor behavior), which keeps caret/line math exact — a line's visual row is its logical row.
 const NO_WRAP_WIDTH: f32 = 1.0e6;
 /// Inserted by the Tab key (soft tabs).
 const TAB_INSERT: &str = "    ";
 
-/// A multi-line editable text area bound to a `RwSignal<String>` — the multi-line sibling of [`Input`](crate::Input).
-/// A base primitive: unstyled (wrap it in a `box` for a border/background), keyboard-driven, no soft-wrap (only
-/// `\n` breaks lines, so long lines overflow horizontally). It requests focus on tap, positions the caret at
-/// the click, edits the bound signal from key events (typing, Enter for a newline, Backspace/Delete joining
-/// lines, arrows in all four directions, Home/End, Tab), and draws a caret. Its measured height grows with the
-/// line count, so wrapping it in a [`LayoutScrollArea`](crate::LayoutScrollArea) gives a scrolling editor.
-/// Selection (`Shift`+arrows, `Ctrl+A`, shift-click) with copy, cut and paste, newlines and all. IME is not
-/// yet supported.
+/// A multi-line editable text area bound to a `RwSignal<String>` — the multi-line sibling of [`Input`](crate::Input). A base primitive: unstyled (wrap it in a `box` for a border/background), keyboard-driven, no soft-wrap (only `\n` breaks lines, so long lines overflow horizontally). It requests focus on tap, positions the caret at the click, edits the bound signal from key events (typing, Enter for a newline, Backspace/Delete joining lines, arrows in all four directions, Home/End, Tab), and draws a caret. Its measured height grows with the line count, so wrapping it in a [`LayoutScrollArea`](crate::LayoutScrollArea) gives a scrolling editor. Selection (`Shift`+arrows, `Ctrl+A`, shift-click) with copy, cut and paste, newlines and all. IME is not yet supported.
 pub struct TextArea {
     value: RwSignal<String>,
-    // Caret byte offset into `value`. Reactive so a bare caret move re-renders even when the text is unchanged.
+    // Reactive so a bare caret move re-renders even when the text is unchanged.
     caret: RwSignal<usize>,
-    // The other end of a selection, or `None` when there is none. Byte offset like `caret`, and either side
-    // of it.
+    // Either side of the caret: a selection extended leftwards has its anchor after it.
     anchor: RwSignal<Option<usize>>,
     style: Rc<dyn Fn() -> TextStyle>,
     id: FocusId,
     leaf: LayoutLeaf,
     placeholder: String,
-    // Re-measures the leaf's height whenever the bound value changes — from a keystroke or a programmatic set
-    // (e.g. loading a file) — so the line count drives the layout in both cases. Kept alive for the widget's life.
+    // Re-measures the leaf's height on any change to the bound value, so a keystroke and a programmatic load both drive the line count into the layout.
     _remeasure: Effect,
     blink: Blink,
     // Keeps the blink running while the area holds the keyboard, and stops it when it does not.
@@ -65,8 +57,7 @@ impl TextArea {
         style_fn: impl Fn() -> TextStyle + 'static,
     ) -> Result<Self, LayoutError> {
         let style: Rc<dyn Fn() -> TextStyle> = Rc::new(style_fn);
-        // Height is measured from the line count at the current style; width is left to the parent (the field
-        // stretches to fill the pane), so a long line overflows to the right rather than widening the layout.
+        // Width is left to the parent, so a long line overflows to the right rather than widening the layout.
         let measure_value = value;
         let measure_style = Rc::clone(&style);
         let measure = Box::new(move |_max_width: f32| {
@@ -87,7 +78,7 @@ impl TextArea {
         let remeasure = {
             let value = value;
             effect(move || {
-                // Subscribe to the value (tracked read) without cloning it; re-measure on any change.
+                // A tracked read that subscribes without cloning the value.
                 value.with(|_| {});
                 mark_dirty(node).ok();
             })
@@ -114,8 +105,7 @@ impl TextArea {
         self
     }
 
-    /// Gives keyboard focus to this area (as a tap would), leaving the caret where it was. For programmatic
-    /// focus — e.g. a container autofocusing the editor when its tab or window becomes active.
+    /// Gives keyboard focus to this area (as a tap would), leaving the caret where it was. For programmatic focus — e.g. a container autofocusing the editor when its tab or window becomes active.
     pub fn request_focus(&self) {
         focus::request(self.id);
     }
@@ -125,8 +115,7 @@ impl TextArea {
         focus::is_focused(self.id)
     }
 
-    /// A `Copy` [`focus::FocusHandle`] to this area, so a caller that has moved it into a container can still
-    /// focus it later (e.g. autofocus on tab activation) without keeping a reference to the area itself.
+    /// A `Copy` [`focus::FocusHandle`] to this area, so a caller that has moved it into a container can still focus it later (e.g. autofocus on tab activation) without keeping a reference to the area itself.
     pub fn focus_handle(&self) -> focus::FocusHandle {
         focus::handle(self.id)
     }
@@ -159,25 +148,21 @@ impl TextArea {
             .map(|(from, to)| text[from..to].to_string())
     }
 
-    /// Removes the selection from `text` and reports where the caret lands. Every edit runs through this
-    /// first, so typing over a selection replaces it.
+    /// Removes the selection from `text` and reports where the caret lands. Every edit runs through this first, so typing over a selection replaces it.
     fn take_selection(&self, text: &mut String) -> Option<usize> {
         let (from, to) = self.selection(text)?;
         text.replace_range(from..to, "");
         Some(from)
     }
 
-    /// Applies a key while focused, editing the bound signal and/or moving the caret. Returns whether the key
-    /// was consumed. On a text change the leaf is marked dirty so the runner re-measures the (possibly new)
-    /// line count on the next frame.
+    /// Applies a key while focused, editing the bound signal and/or moving the caret. Returns whether the key was consumed. On a text change the leaf is marked dirty so the runner re-measures the (possibly new) line count on the next frame.
     fn edit(&mut self, key: &Key, mods: &ModifiersState, style: &TextStyle) -> EventResult {
-        // Lit again from the top, before the key is even read: see `Input::edit`.
+        // Before the key is even read; see `Input::edit`.
         self.blink.wake();
         let mut text = self.value.get();
         let mut caret = self.caret_at(&text);
         let mut changed = false;
-        // Where a movement key leaves the anchor: `Shift` keeps (or starts) a selection, anything else drops
-        // it. Resolved after the match so each arm can still read the selection it is replacing.
+        // Resolved after the match so each arm can still read the selection it is replacing.
         let anchor = if mods.is_shift {
             Some(self.anchor.get().unwrap_or(caret))
         } else {
@@ -194,7 +179,6 @@ impl TextArea {
                     return EventResult::Ignored;
                 };
                 services_core::set_clipboard_text(&selected);
-                // The selection survives a copy, as it does everywhere else.
                 return EventResult::Handled;
             }
             Key::Char('x') | Key::Char('X') if mods.is_ctrl || mods.is_meta => {
@@ -205,8 +189,7 @@ impl TextArea {
                 caret = self.take_selection(&mut text).unwrap_or(caret);
                 changed = true;
             }
-            // Paste replaces the selection, newlines and all — an editor is exactly where a multi-line paste
-            // belongs.
+            // An editor is exactly where a multi-line paste belongs, so newlines are kept.
             Key::Char('v') | Key::Char('V') if mods.is_ctrl || mods.is_meta => {
                 let Some(pasted) = services_core::clipboard_text() else {
                     return EventResult::Ignored;
@@ -220,7 +203,7 @@ impl TextArea {
                 caret += pasted.len();
                 changed = true;
             }
-            // Any other chord (Ctrl/Meta) is a shortcut, not text — leave it for global handlers (save, …).
+            // Any other chord is a shortcut, not text.
             Key::Char(_) if mods.is_ctrl || mods.is_meta => return EventResult::Ignored,
             Key::Char(c) if !c.is_control() => {
                 caret = self.take_selection(&mut text).unwrap_or(caret);
@@ -300,8 +283,7 @@ impl TextArea {
             _ => return EventResult::Ignored,
         }
         if changed {
-            // Setting the value fires the re-measure effect (registered in `new`), which marks the leaf dirty
-            // so the runner re-measures the (possibly new) line count next frame.
+            // Fires the re-measure effect, which marks the leaf dirty so the runner re-measures the line count.
             self.value.set(text);
         }
         self.caret.set(caret);
@@ -317,8 +299,7 @@ impl Component for TextArea {
         let text = self.value.get();
         let style = (self.style)();
         let line_h = self.line_height();
-        // Render at a huge width so the shaper never soft-wraps (only `\n` breaks a line); long lines overflow
-        // to the right and are clipped by an ancestor (e.g. the scroll viewport).
+        // A width the shaper never soft-wraps at, so only `\n` breaks a line; long lines overflow and are clipped by an ancestor.
         let full = Rect {
             x: 0.0,
             y: 0.0,
@@ -336,9 +317,7 @@ impl Component for TextArea {
         if focus::is_focused(self.id) {
             let caret = self.caret_at(&text);
             let line = line_index(&text, caret);
-            // One rect per line the selection spans: the first from its start to the line's end, the last from
-            // the line's start to its end, and every line between them whole. A selection that wraps lines is
-            // not one box — drawing it as one would paint over the margin the text does not occupy.
+            // One rect per line the selection spans. A selection that wraps is not one box — drawing it as one would paint over the margin the text does not occupy.
             let highlight = self.selection(&text).map(|(from, to)| {
                 let (first, last) = (line_index(&text, from), line_index(&text, to));
                 let mut bands = Vec::with_capacity(last - first + 1);
@@ -352,8 +331,7 @@ impl Component for TextArea {
                     let x1 = if line == last {
                         caret_x(&text, to, &style)
                     } else {
-                        // An empty line still shows a sliver, so a selection running through it is continuous
-                        // rather than a gap the eye reads as the selection having ended.
+                        // A sliver on an empty line keeps the selection continuous rather than a gap the eye reads as its end.
                         caret_x(&text, end, &style).max(x0 + line_h * 0.35)
                     };
                     let fill = style.color.faded(0.25);
@@ -376,7 +354,7 @@ impl Component for TextArea {
                 width: CARET_WIDTH,
                 height: line_h,
             };
-            // Read here rather than anywhere else: this is what subscribes the area's own view to the blink.
+            // Read here and nowhere else, so this is what subscribes the area's view to the blink.
             let lit = style.color.faded(self.blink.opacity());
             let caret_node = RenderNode::rect(caret_rect, RectStyle::default().with_fill(lit));
             let layers = match highlight {
@@ -404,16 +382,14 @@ impl Component for TextArea {
                     focus::request_from_pointer(self.id);
                     let style = (self.style)();
                     let line_h = crate::text_metrics::line_box(&style);
-                    // Read the text out (borrow released) before setting the caret: `set` inside a `with`
-                    // closure would re-borrow the reactive runtime.
+                    // Read the text out before setting the caret: a `set` inside a `with` closure would re-borrow the runtime.
                     let text = self.value.get();
                     let local_y = (*y as f32 - rect.y).max(0.0);
                     let local_x = (*x as f32 - rect.x).max(0.0);
                     let last = text.matches('\n').count();
                     let line = ((local_y / line_h).floor() as usize).min(last);
                     let at = offset_at_line_x(&text, &style, line, local_x);
-                    // Shift-click extends from wherever the selection already starts, which is what every
-                    // editor does and the only pointer gesture available until a drag can be tracked.
+                    // Extends from where the selection already starts, the only pointer gesture available until a drag can be tracked.
                     if crate::keyboard::modifiers().is_shift {
                         let from = self.anchor.get().unwrap_or_else(|| self.caret.get());
                         self.anchor.set(Some(from));
@@ -491,8 +467,7 @@ fn caret_x(text: &str, caret: usize, style: &TextStyle) -> f32 {
     .0
 }
 
-/// The byte offset within line `n` whose caret x is closest to `x` — used for click-to-position and vertical
-/// arrow moves (keeping the column).
+/// The byte offset within line `n` whose caret x is closest to `x` — used for click-to-position and vertical arrow moves (keeping the column).
 fn offset_at_line_x(text: &str, style: &TextStyle, n: usize, x: f32) -> usize {
     let (start, end) = nth_line_bounds(text, n);
     let line = &text[start..end];
@@ -637,8 +612,7 @@ mod tests {
         (area, value)
     }
 
-    /// The multi-line twin of `Input`'s guard test: this editor takes Enter and the vertical arrows as text,
-    /// so a global shortcut on any of them must stand aside while the caret is here.
+    /// The multi-line twin of `Input`'s guard test: this editor takes Enter and the vertical arrows as text, so a global shortcut on any of them must stand aside while the caret is here.
     #[test]
     fn the_shortcut_guard_covers_every_key_this_editor_edits() {
         let plain = ModifiersState::default();
@@ -688,7 +662,6 @@ mod tests {
     #[test]
     fn backspace_at_line_start_joins_lines() {
         let (mut area, value) = focused("ab\ncd");
-        // Caret starts at end (line 1). Home → line start (byte 3), Backspace removes the newline.
         area.on_event(&key(Key::Named(NamedKey::Home)));
         area.on_event(&key(Key::Named(NamedKey::Backspace)));
         assert_eq!(value.get(), "abcd");
@@ -697,7 +670,6 @@ mod tests {
     #[test]
     fn arrow_up_down_moves_between_lines() {
         let (mut area, value) = focused("aaaa\nbb");
-        // Caret at end of "bb" (line 1). Up → line 0, keeping column; Down → back to line 1.
         area.on_event(&key(Key::Named(NamedKey::ArrowUp)));
         assert_eq!(line_index(&value.get(), area.caret.get()), 0);
         area.on_event(&key(Key::Named(NamedKey::ArrowDown)));
@@ -709,8 +681,7 @@ mod tests {
         use platform_core::{PointerButton, PointerSource};
         let (mut area, _value) = focused("hello\nworld");
         focus::clear();
-        // A press inside must focus the field and move the caret without re-borrowing the reactive runtime
-        // (the caret set must not run inside a `value.with` closure).
+        // The caret set must not run inside a `value.with` closure, which would re-borrow the reactive runtime.
         let r = area.leaf.rect.get();
         let handled = area.on_event(&Event::PointerPressed {
             x: (r.x + 5.0) as f64,

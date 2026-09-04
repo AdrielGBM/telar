@@ -1,3 +1,5 @@
+//! Batching and the flush: draining scheduled effects in topological order, once per drain.
+
 use std::rc::Rc;
 
 use super::effects::run_effect;
@@ -6,15 +8,13 @@ use super::{EffectId, FlushNotifyHandle, RUNTIME};
 const MAX_FLUSH_ITERATIONS: usize = 1_000;
 
 pub(crate) fn flush() {
-    // A teardown holds its tree half-applied: owners uprooted, effects still registered, signals not yet removed. An effect that ran now would read state its own disposal has already freed, so `dispose_owner` takes the flush back once the tree is whole again.
+    // A teardown holds its tree half-applied: owners uprooted, effects still registered, signals not yet removed. An effect running now would read state its own disposal has already freed, so `dispose_owner` takes the flush back once the tree is whole again.
     if RUNTIME.with(|rt| rt.borrow().disposing > 0) {
         return;
     }
     RUNTIME.with(|rt| rt.borrow_mut().flushing = true);
 
-    // With the runtime shared across surfaces, a panic mid-effect must not leave `flushing` stuck true —
-    // that would wedge every surface's scheduling (schedule() early-returns while flushing). The guard
-    // clears it on any exit: normal return, the overflow panic below, or an unwind out of run_effect.
+    // With the runtime shared across surfaces, a panic mid-effect must not leave `flushing` stuck true, which would wedge every surface's scheduling. The guard clears it on any exit.
     struct FlushGuard;
     impl Drop for FlushGuard {
         fn drop(&mut self) {
@@ -27,14 +27,9 @@ pub(crate) fn flush() {
         let mut did_work = false;
         let mut overflowed = true;
         for _ in 0..MAX_FLUSH_ITERATIONS {
-            // One epoch per drain, not one per flush. The dedup in `run_effect` is there so two writes to
-            // the same signal in one drain cost one run; an effect whose source is written by a *later*
-            // effect in the same cascade must still run again. Under a flush-wide epoch that re-run was
-            // scheduled, popped and skipped, and nothing rescheduled it — the effect stayed stale until
-            // some unrelated event forced it. A genuine write-read cycle is still caught by the
-            // iteration cap below.
+            // One epoch per drain, not one per flush. The dedup in `run_effect` makes two writes to one signal cost one run, but an effect whose source is written by a later effect in the same cascade must still run again: under a flush-wide epoch that re-run was scheduled, popped and skipped, and nothing rescheduled it. A genuine write-read cycle is still caught by the iteration cap below.
             RUNTIME.with(|rt| rt.borrow_mut().flush_epoch += 1);
-            // Drain memo_pending first (pure computations), then user effects. Pop minimum height first so producers run before consumers (topological order).
+            // Memos first, then user effects. Pop minimum height first, so producers run before consumers.
             let memo_batch: Vec<EffectId> = RUNTIME.with(|rt| {
                 let mut rt = rt.borrow_mut();
                 let mut batch = Vec::new();
@@ -75,8 +70,7 @@ pub(crate) fn flush() {
         );
     }
 
-    // Notify flush observers (e.g. the runner's redraw waker) after `flushing` is cleared, so a callback
-    // that writes a signal can schedule and drive a fresh flush.
+    // Notify flush observers (e.g. the runner's redraw waker) after `flushing` is cleared, so a callback that writes a signal can schedule and drive a fresh flush.
     if did_work {
         let cbs: smallvec::SmallVec<[Rc<dyn Fn()>; 2]> = RUNTIME.with(|rt| {
             rt.borrow()
@@ -91,9 +85,9 @@ pub(crate) fn flush() {
     }
 }
 
+/// Defers every effect scheduled inside `f` until it returns, so a run of writes flushes once.
 pub fn batch<R>(f: impl FnOnce() -> R) -> R {
-    // A panic inside `f` must not leave `batch_depth` unbalanced (it would suppress every future flush on
-    // the shared runtime). The guard decrements on any exit, including an unwind.
+    // A panic inside `f` must not leave `batch_depth` unbalanced (it would suppress every future flush on the shared runtime). The guard decrements on any exit, including an unwind.
     struct DepthGuard;
     impl Drop for DepthGuard {
         fn drop(&mut self) {
@@ -118,10 +112,12 @@ pub fn batch<R>(f: impl FnOnce() -> R) -> R {
     result
 }
 
+/// Opens a batch. Pair with [`end_batch`]; nesting is counted.
 pub fn begin_batch() {
     RUNTIME.with(|rt| rt.borrow_mut().batch_depth += 1);
 }
 
+/// Closes a batch, flushing when the outermost one closes.
 pub fn end_batch() {
     let should_flush = RUNTIME.with(|rt| {
         let mut rt = rt.borrow_mut();
@@ -134,6 +130,7 @@ pub fn end_batch() {
     }
 }
 
+/// Drops every signal, effect and owner. For tests, and for a hot-reload swap.
 pub fn reset_runtime() {
     RUNTIME.with(|cell| {
         let old_ptr = cell.take_ptr();
@@ -144,6 +141,7 @@ pub fn reset_runtime() {
     });
 }
 
+/// Installs a callback run after each flush, which is how the runner learns a frame is due.
 pub fn set_flush_notify(f: impl Fn() + 'static) -> FlushNotifyHandle {
     RUNTIME.with(|rt| {
         let mut rt = rt.borrow_mut();

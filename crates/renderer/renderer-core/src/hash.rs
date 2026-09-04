@@ -1,3 +1,5 @@
+//! Content hashing for draw commands, used to tell an unchanged frame from a new one.
+
 use std::hash::{Hash, Hasher};
 use std::sync::Arc;
 
@@ -6,6 +8,7 @@ use rustc_hash::FxHasher;
 use crate::DrawCommand;
 use crate::style_pool::{hash_declared, hash_path_style, hash_rect_style, hash_text_style};
 
+/// Feeds a command list into `h`, hashing by content so a rebuilt but identical frame hashes the same.
 pub fn hash_draw_commands_into<H: Hasher>(cmds: &[DrawCommand], h: &mut H) {
     cmds.len().hash(h);
     for cmd in cmds {
@@ -101,12 +104,14 @@ pub fn hash_draw_commands_into<H: Hasher>(cmds: &[DrawCommand], h: &mut H) {
     }
 }
 
+/// The content hash of a command list.
 pub fn hash_draw_commands(cmds: &[DrawCommand]) -> u64 {
     let mut h = FxHasher::default();
     hash_draw_commands_into(cmds, &mut h);
     h.finish()
 }
 
+/// The content hash of a plain-data slice, hashed as raw bytes.
 pub fn hash_pod_slice<T: bytemuck::Pod>(data: &[T]) -> u64 {
     let bytes: &[u8] = bytemuck::cast_slice(data);
     let mut hasher = FxHasher::default();

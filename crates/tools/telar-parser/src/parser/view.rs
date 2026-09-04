@@ -20,9 +20,7 @@ impl Parser {
 
         let nodes = self.parse_view_nodes(base_indent)?;
 
-        // Any view line left unconsumed here is stranded at an indentation that lines up with no
-        // enclosing block (e.g. a child indented one space deeper than its siblings). Erroring is
-        // what keeps the formatter from silently dropping it when it re-serializes the AST.
+        // A line left unconsumed here is stranded at an indentation that lines up with no enclosing block. Erroring is what keeps the formatter from silently dropping it when it re-serializes the AST.
         self.skip_blank_view_lines();
         if let Some(line) = self.lines.get(self.pos)
             && line.section == Section::View
@@ -39,8 +37,7 @@ impl Parser {
         Ok(ViewSection { nodes })
     }
 
-    /// Parses all sibling nodes at exactly `min_indent`, recursing into deeper children.
-    /// `pub(super)` because `preview::parse_preview_body` reuses it to parse a preview's body.
+    /// Parses all sibling nodes at exactly `min_indent`, recursing into deeper children. `pub(super)` because `preview::parse_preview_body` reuses it to parse a preview's body.
     pub(super) fn parse_view_nodes(
         &mut self,
         min_indent: usize,
@@ -55,11 +52,11 @@ impl Parser {
             if line.section != Section::View {
                 break;
             }
-            // Dedent: this line belongs to an ancestor, stop collecting siblings here.
+            // Dedent: this line belongs to an ancestor, so stop collecting siblings.
             if line.indent < min_indent {
                 break;
             }
-            // Indent exceeds min_indent: children are consumed by recursion, so this means over-indentation; stop the sibling scan.
+            // Children are consumed by recursion, so exceeding `min_indent` means over-indentation.
             if line.indent > min_indent {
                 break;
             }
@@ -76,8 +73,7 @@ impl Parser {
         let content = self.lines[self.pos].content.clone();
         let first_word = content.split_whitespace().next().unwrap_or("");
 
-        // Before the tag dispatch: an unrecognised first word becomes a component call, so a note left here
-        // used to compile into a call to a component named `//`.
+        // Before the tag dispatch: an unrecognised first word becomes a component call, so a note left here used to compile into a call to a component named `//`.
         if content.starts_with("//") {
             self.pos += 1;
             return Ok(ViewNode::Comment(content));
@@ -121,7 +117,7 @@ impl Parser {
             let mut words = next.content.split_whitespace();
             words.next();
             if words.next() == Some("if") {
-                // `else if cond` desugars to the nesting a reader would otherwise write by hand: strip the `else`, re-parse the rest of the line as an `if`, and make it this else-branch's only child. `content_start` moves with the text so the condition still maps to its own bytes.
+                // `else if cond` desugars to the nesting a reader would otherwise write by hand: strip the `else`, re-parse the rest as an `if`, and make it the else-branch's only child. `content_start` moves with the text, so the condition still maps to its own bytes.
                 let line = &mut self.lines[self.pos];
                 let stripped = line.content["else".len()..].trim_start().to_string();
                 line.content_start += line.content.len() - stripped.len();
@@ -149,7 +145,7 @@ impl Parser {
         let rest = after.trim().to_string();
         self.pos += 1;
 
-        // Split on the first standalone ` in ` keyword, then peel off the optional trailing clauses.
+        // Split on the first standalone ` in `, then peel off the optional trailing clauses.
         let header = split_for_in(&rest).ok_or_else(|| ParseError {
             message: format!(
                 "expected `for <pattern> in <expr> [key <expr>] [gap:<expr>] [virtual row_height:<expr>]`, got `for {rest}`"
@@ -170,8 +166,7 @@ impl Parser {
         }))
     }
 
-    /// Parses `match <scrutinee> [as <name>] [key <expr>]` and its arms. Every direct child of a `match` is an
-    /// arm header — a raw Rust pattern — with the nodes it renders indented under it.
+    /// Parses `match <scrutinee> [as <name>] [key <expr>]` and its arms. Every direct child of a `match` is an arm header — a raw Rust pattern — with the nodes it renders indented under it.
     fn parse_match_block(&mut self, indent: usize) -> Result<ViewNode, ParseError> {
         let line = &self.lines[self.pos];
         let number = line.number;
@@ -238,13 +233,7 @@ impl Parser {
         let mut end = content_start + content.len();
         self.pos += 1;
 
-        // An element header runs past its line whenever a value's delimiters are still open — a closure
-        // written where it is used, rather than bound in `[logic]` and referred to by name.
-        //
-        // The join reproduces the source byte for byte: the gap between one line's content and the next's
-        // becomes a newline and spaces of exactly the width it occupied. Every span the parser hands the
-        // transpiler therefore still points at the `.rsx` byte the author typed, which is what keeps a
-        // diagnostic on the right column when the expression it names started three lines up.
+        // An element header runs past its line whenever a value's delimiters are still open. The join reproduces the source byte for byte — the gap between one line's content and the next becomes a newline and spaces of exactly the width it occupied — so every span still points at the `.rsx` byte the author typed, which is what keeps a diagnostic on the right column when the expression started three lines up.
         while unclosed_delimiters(&content) {
             let Some(next) = self.lines.get(self.pos) else {
                 break;
@@ -280,8 +269,7 @@ impl Parser {
         self.parse_view_nodes(child_indent)
     }
 
-    /// `pub(super)` because `preview::parse_previews`/`parse_preview_body` also skip blank view
-    /// lines when scanning for a preview body.
+    /// `pub(super)` because `preview::parse_previews`/`parse_preview_body` also skip blank view lines when scanning for a preview body.
     pub(super) fn skip_blank_view_lines(&mut self) {
         while let Some(line) = self.lines.get(self.pos) {
             if line.section == Section::View && line.is_blank() {
@@ -293,10 +281,7 @@ impl Parser {
     }
 }
 
-/// Splits a `for` header into `(pattern, iterable, key_expr, gap_expr)`: on the first ` in ` keyword, then
-/// an optional trailing ` gap:<expr>` clause (item spacing, reactive-list only), then an optional
-/// ` key <expr>` clause (identity for reconciliation; without it a reactive list reconciles by position).
-/// `gap` is always the last token on the line, so it's peeled off before the `key` search.
+/// Splits a `for` header into `(pattern, iterable, key_expr, gap_expr)`: on the first ` in ` keyword, then an optional trailing ` gap:<expr>` clause (item spacing, reactive-list only), then an optional ` key <expr>` clause (identity for reconciliation; without it a reactive list reconciles by position). `gap` is always the last token on the line, so it's peeled off before the `key` search.
 fn split_for_in(rest: &str) -> Option<ForHeader> {
     let tokens: Vec<&str> = rest.split_whitespace().collect();
     let in_idx = tokens.iter().position(|&t| t == "in")?;
@@ -306,8 +291,7 @@ fn split_for_in(rest: &str) -> Option<ForHeader> {
     let pattern = tokens[..in_idx].join(" ");
     let mut after_in: Vec<&str> = tokens[in_idx + 1..].to_vec();
 
-    // `virtual row_height:<expr>` peels off first: both its tokens sit at the end, and leaving them in would
-    // put `virtual` inside the iterable expression.
+    // Peeled off first: both its tokens sit at the end, and leaving them in would put `virtual` inside the iterable expression.
     let virtual_row_height = match after_in
         .iter()
         .position(|&t| t == "virtual")
@@ -361,8 +345,7 @@ struct ForHeader {
     virtual_row_height: Option<String>,
 }
 
-/// Splits `<scrutinee> [as <name>] [key <expr>]` into its three parts. `key` is peeled first so an `as` inside
-/// the key expression cannot be mistaken for the binding.
+/// Splits `<scrutinee> [as <name>] [key <expr>]` into its three parts. `key` is peeled first so an `as` inside the key expression cannot be mistaken for the binding.
 fn split_match_header(rest: &str) -> Option<(String, Option<String>, Option<String>)> {
     let tokens: Vec<&str> = rest.split_whitespace().collect();
     if tokens.is_empty() {
@@ -385,10 +368,7 @@ fn split_match_header(rest: &str) -> Option<(String, Option<String>, Option<Stri
 
 /// Parses an element header line into tag, classes, attrs, and quoted content.
 ///
-/// Tokens are consumed left to right. A bare `@name` is a class; a quoted string is the content; `key:value`
-/// is an attribute. Two rules delimit a value and there are no exceptions to them: `key:value` is one token
-/// with its parens balanced, and `key(…)` is anything wanting a space at depth 0. Which of the two was
-/// written — and whether the text was quoted or an i18n key — is what the resulting [`Value`] records.
+/// Tokens are consumed left to right. A bare `@name` is a class; a quoted string is the content; `key:value` is an attribute. Two rules delimit a value and there are no exceptions to them: `key:value` is one token with its parens balanced, and `key(…)` is anything wanting a space at depth 0. Which of the two was written — and whether the text was quoted or an i18n key — is what the resulting [`Value`] records.
 fn parse_element_header(
     content: &str,
     line: usize,
@@ -437,7 +417,6 @@ fn parse_element_header(
         let mut paren_at: Option<usize> = None;
         while j < len && !chars[j].is_whitespace() {
             if chars[j] == ':' {
-                // Ignore `::` path separators.
                 if chars.get(j + 1) == Some(&':') {
                     j += 2;
                     continue;
@@ -445,11 +424,7 @@ fn parse_element_header(
                 colon_at = Some(j);
                 break;
             }
-            // `key(…)` is the *directive* form, and nothing else. A directive has a grammar of its own —
-            // `transition(fill 250ms ease-out)` is space-separated clauses, `hover_style(fill:theme.accent)`
-            // is a nested attribute list — so it is not Rust and cannot go through the colon. Every value
-            // does: `key:expr`, parenthesised when it holds a top-level space, and those parens are ordinary
-            // Rust rather than punctuation the DSL invented.
+            // `key(…)` is the directive form, and nothing else. A directive has a grammar of its own — space-separated clauses, or a nested attribute list — so it is not Rust and cannot go through the colon. Every value does: `key:expr`, parenthesised when it holds a top-level space.
             if chars[j] == '(' {
                 let key: String = chars[token_start..j].iter().collect();
                 if !is_directive(key.trim()) {
@@ -473,7 +448,7 @@ fn parse_element_header(
                 message: "unterminated `(` in attribute value".to_string(),
                 line,
             })?;
-            // Map the value span to the first non-space char inside the parens (matches the colon form).
+            // To the first non-space char inside the parens, matching the colon form.
             let mut vs = paren + 1;
             while vs < len && chars[vs].is_whitespace() {
                 vs += 1;
@@ -493,8 +468,7 @@ fn parse_element_header(
             let is_closure_value = chars.get(val_start) == Some(&'|');
 
             if is_closure_value {
-                // A closure holds spaces at depth 0, so a bare one would run to end of line and swallow the
-                // attributes after it. Parenthesised, it is one value like any other.
+                // A closure holds spaces at depth 0, so a bare one would run to end of line and swallow the attributes after it. Parenthesised, it is one value like any other.
                 let key = key.trim();
                 return Err(ParseError {
                     message: format!(
@@ -505,7 +479,6 @@ fn parse_element_header(
             }
 
             let mut k = val_start;
-            // Allow quoted attribute values, escaped (`"…"`), raw (`r"…"`), or an i18n key (`t"…"`).
             if let Some((str_at, is_key)) = string_start(&chars, k) {
                 let (text, next, content_at) =
                     read_string_value(&chars, str_at).ok_or_else(|| ParseError {
@@ -513,10 +486,7 @@ fn parse_element_header(
                         line,
                     })?;
                 if is_key {
-                    // A value is a Rust expression, and `t!` is the macro the Rust side already uses — it
-                    // validates the key against the catalogue at compile time, which a second spelling of
-                    // the same lookup could only duplicate. The content position keeps `t"…"`, because
-                    // there the literal *is* the syntax.
+                    // A value is a Rust expression, and `t!` is the macro the Rust side already uses: it validates the key against the catalogue at compile time. The content position keeps `t"…"`, because there the literal is the syntax.
                     return Err(ParseError {
                         message: format!(
                             "`{0}:t\"{text}\"` is not a value — write the macro: `{0}:t!(\"{text}\")`",
@@ -533,10 +503,7 @@ fn parse_element_header(
                 i = next;
                 continue;
             }
-            // A colon value runs to the next whitespace, but not one nested inside `(...)`/`[...]`: so a
-            // computed value like `fill:chip_fill($snap, id)` (spaces inside the call) is read whole, while a
-            // following attribute on the same line still starts after the depth-0 space. Unbalanced parens
-            // read to end of line, leaving the malformed expression for the emitter/rustc to reject.
+            // A colon value runs to the next whitespace, but not one nested inside delimiters, so a computed value is read whole while a following attribute still starts after the depth-0 space. Unbalanced parens read to end of line, leaving the malformed expression for rustc to reject.
             let mut depth = 0i32;
             while k < len {
                 let c = chars[k];
@@ -561,7 +528,6 @@ fn parse_element_header(
             continue;
         }
 
-        // No colon: it's either the tag, a class, or a bare flag attribute.
         let token: String = chars[token_start..j].iter().collect();
         i = j;
 
@@ -574,7 +540,6 @@ fn parse_element_header(
         if let Some(class) = token.strip_prefix('@') {
             element.classes.push(class.to_string());
         } else {
-            // A bare token after the tag is a flag-style attribute (e.g. `ghost`).
             element.attributes.push(Attr {
                 key: token,
                 value: Value::Flag,
@@ -593,16 +558,12 @@ fn parse_element_header(
     Ok(element)
 }
 
-/// Byte offset within the original `content` string of the char at index `idx` (sum of the UTF-8
-/// widths of the preceding chars). Converts a `Vec<char>` index into a source byte offset.
+/// Byte offset within the original `content` string of the char at index `idx` (sum of the UTF-8 widths of the preceding chars). Converts a `Vec<char>` index into a source byte offset.
 fn byte_at(chars: &[char], idx: usize) -> usize {
     chars[..idx].iter().map(|c| c.len_utf8()).sum()
 }
 
-/// Reads a double-quoted string starting at `start`; interprets the C-style escapes `\"`, `\\`, `\n`,
-/// `\t`, `\r`, `\0` into their real characters (so a literal `"` inside content is written `\"`) and
-/// returns the decoded text plus the index past the closing quote. An unknown escape (`\d`) keeps both
-/// chars verbatim. `pub(super)` because `preview::parse_preview_header` reads the quoted preview name with it too.
+/// Reads a double-quoted string starting at `start`; interprets the C-style escapes `\"`, `\\`, `\n`, `\t`, `\r`, `\0` into their real characters (so a literal `"` inside content is written `\"`) and returns the decoded text plus the index past the closing quote. An unknown escape (`\d`) keeps both chars verbatim. `pub(super)` because `preview::parse_preview_header` reads the quoted preview name with it too.
 pub(super) fn read_quoted(chars: &[char], start: usize) -> Option<(String, usize)> {
     debug_assert_eq!(chars.get(start), Some(&'"'));
     let mut i = start + 1;
@@ -637,10 +598,7 @@ pub(super) fn read_quoted(chars: &[char], start: usize) -> Option<(String, usize
     None
 }
 
-/// Reads a raw string `r"…"` (`chars[start] == 'r'`, `chars[start + 1] == '"'`): the content is taken
-/// verbatim up to the next `"`, with NO escape processing, so `\` is a literal backslash — handy for
-/// Windows paths, regexes, or code snippets. A raw string cannot itself contain a `"`; use the escaped
-/// form (`"…\"…"`) for that. Returns the content and the index past the closing quote.
+/// Reads a raw string `r"…"` (`chars[start] == 'r'`, `chars[start + 1] == '"'`): the content is taken verbatim up to the next `"`, with NO escape processing, so `\` is a literal backslash — handy for Windows paths, regexes, or code snippets. A raw string cannot itself contain a `"`; use the escaped form (`"…\"…"`) for that. Returns the content and the index past the closing quote.
 pub(super) fn read_raw_quoted(chars: &[char], start: usize) -> Option<(String, usize)> {
     debug_assert_eq!(chars.get(start), Some(&'r'));
     debug_assert_eq!(chars.get(start + 1), Some(&'"'));
@@ -656,10 +614,7 @@ pub(super) fn read_raw_quoted(chars: &[char], start: usize) -> Option<(String, u
     None
 }
 
-/// Detects a string value starting at `i`: a plain `"…"`, raw `r"…"`, or an i18n key `t"…"`. Returns the index
-/// [`read_string_value`] should read from (past any `t` prefix) and whether it is an i18n key. `None` when no
-/// string begins at `i`. Only `t` *immediately* followed by a quote is a key marker, so a tag/token like `text`
-/// is never mistaken for one.
+/// Detects a string value starting at `i`: a plain `"…"`, raw `r"…"`, or an i18n key `t"…"`. Returns the index [`read_string_value`] should read from (past any `t` prefix) and whether it is an i18n key. `None` when no string begins at `i`. Only `t` *immediately* followed by a quote is a key marker, so a tag/token like `text` is never mistaken for one.
 pub(super) fn string_start(chars: &[char], i: usize) -> Option<(usize, bool)> {
     let is_str = |k: usize| {
         chars.get(k) == Some(&'"') || (chars.get(k) == Some(&'r') && chars.get(k + 1) == Some(&'"'))
@@ -673,8 +628,7 @@ pub(super) fn string_start(chars: &[char], i: usize) -> Option<(usize, bool)> {
     }
 }
 
-/// Reads a string value at `k` — an escaped `"…"` or a raw `r"…"`. Returns `(content, index past it, char
-/// index where the content begins)`, the last for source-map offsets. `None` if `k` is not a string start.
+/// Reads a string value at `k` — an escaped `"…"` or a raw `r"…"`. Returns `(content, index past it, char index where the content begins)`, the last for source-map offsets. `None` if `k` is not a string start.
 pub(super) fn read_string_value(chars: &[char], k: usize) -> Option<(String, usize, usize)> {
     if chars.get(k) == Some(&'"') {
         read_quoted(chars, k).map(|(s, next)| (s, next, k + 1))
@@ -685,11 +639,7 @@ pub(super) fn read_string_value(chars: &[char], k: usize) -> Option<(String, usi
     }
 }
 
-/// Reads a balanced `( … )` group starting at `open` (which must be `(`). Returns the inner text with the
-/// outer parens stripped, plus the index past the closing `)`. Nested parens are balanced and parens inside
-/// a `"…"` string literal are ignored, so a closure body like `|| f(x)` is captured whole. `None` if unbalanced.
-/// Whether `content` leaves a bracket open, so the element header continues on the next line. String
-/// literals are skipped, since a bracket inside one is text rather than structure.
+/// Reads a balanced `( … )` group starting at `open` (which must be `(`). Returns the inner text with the outer parens stripped, plus the index past the closing `)`. Nested parens are balanced and parens inside a `"…"` string literal are ignored, so a closure body like `|| f(x)` is captured whole. `None` if unbalanced. Whether `content` leaves a bracket open, so the element header continues on the next line. String literals are skipped, since a bracket inside one is text rather than structure.
 fn unclosed_delimiters(content: &str) -> bool {
     let (mut depth, mut in_str, mut escaped) = (0i32, false, false);
     for c in content.chars() {
@@ -763,10 +713,7 @@ fn read_balanced_parens(chars: &[char], open: usize) -> Option<(String, usize)> 
 
 /// The keys whose `key(…)` form is a grammar of its own rather than a Rust value.
 ///
-/// Three shapes, all of them space-separated and none of them Rust: `transition`'s clause list, the nested
-/// attribute lists of the state styles, and the track/edge/button lists (`cols(240 1fr auto)`,
-/// `stroke_width(0 0 1 0)`, `drag_button(secondary auxiliary)`). Everything else is a value and takes the
-/// colon — which is what makes the spelling say which world you are in.
+/// Three shapes, all of them space-separated and none of them Rust: `transition`'s clause list, the nested attribute lists of the state styles, and the track/edge/button lists (`cols(240 1fr auto)`, `stroke_width(0 0 1 0)`, `drag_button(secondary auxiliary)`). Everything else is a value and takes the colon — which is what makes the spelling say which world you are in.
 fn is_directive(key: &str) -> bool {
     matches!(
         key,

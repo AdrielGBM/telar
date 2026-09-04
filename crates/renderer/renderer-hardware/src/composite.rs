@@ -1,3 +1,5 @@
+//! Compositing a rendered layer back onto its parent, with its opacity and rounded-clip mask.
+
 use wgpu::util::DeviceExt;
 
 #[repr(C)]
@@ -13,9 +15,9 @@ pub(crate) struct CompositePipeline {
     pub(crate) pipeline: wgpu::RenderPipeline,
     sampler: wgpu::Sampler,
     pub(crate) bind_group_layout: wgpu::BindGroupLayout,
-    // Free uniform buffers available for reuse; create_bind_group pops from here (or creates a fresh one on miss) and pushes the used buffer into params_buffer_in_use. recycle_params_buffers moves them all back at frame start.
+    // Popped by `create_bind_group`, which pushes the used buffer into `params_buffer_in_use`.
     params_buffer_pool: Vec<wgpu::Buffer>,
-    // Uniform buffers handed to bind groups during the current frame; kept alive until the frame's GPU work is submitted, then recycled into params_buffer_pool at the next begin_frame.
+    // Kept alive until the frame's GPU work is submitted, then recycled at the next `begin_frame`.
     params_buffer_in_use: Vec<wgpu::Buffer>,
 }
 
@@ -124,7 +126,7 @@ impl CompositePipeline {
         }
     }
 
-    // Moves all uniform buffers used by the previous frame back into the free pool. Must be called once per frame before any create_bind_group, after the previous frame's queue.submit so the buffers are no longer referenced by in-flight GPU work.
+    // Must run once per frame before any `create_bind_group`, and after the previous frame's submit, so the buffers are no longer referenced by in-flight GPU work.
     pub(crate) fn recycle_params_buffers(&mut self) {
         self.params_buffer_pool
             .append(&mut self.params_buffer_in_use);
@@ -146,7 +148,7 @@ impl CompositePipeline {
             clip_radius,
             content_uv_scale,
         };
-        // Reuse a pooled UNIFORM buffer (writing the new params in place) or create one on a pool miss; COPY_DST is required for queue.write_buffer.
+        // Reuses a pooled buffer, writing params in place, or creates one on a miss. COPY_DST is required for `queue.write_buffer`.
         let params_buf = match self.params_buffer_pool.pop() {
             Some(buf) => {
                 queue.write_buffer(&buf, 0, bytemuck::bytes_of(&params));
@@ -176,7 +178,7 @@ impl CompositePipeline {
                 },
             ],
         });
-        // Retain the buffer for the duration of the frame; recycle_params_buffers returns it to the pool next frame.
+        // Retained for the frame; returned to the pool by `recycle_params_buffers` next frame.
         self.params_buffer_in_use.push(params_buf);
         bind_group
     }

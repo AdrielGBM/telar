@@ -1,3 +1,5 @@
+//! Packaging a Linux AppImage.
+
 use std::process::Command;
 
 use super::super::config::TelarConfig;

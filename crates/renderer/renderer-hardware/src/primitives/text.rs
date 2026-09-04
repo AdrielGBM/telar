@@ -1,3 +1,5 @@
+//! The text pipeline: glyph quads sampled from the shared atlas.
+
 use geometry_core::Rect;
 use renderer_core::TextStyle;
 use wgpu::Device;
@@ -13,13 +15,11 @@ pub(crate) struct TextInstance {
     pub color: [f32; 4],
 }
 
-/// The per-surface half of drawing text: the instance buffers a frame fills, and a pipeline that bakes in this
-/// surface's format and sample count. The atlas it samples is shared — see [`crate::caches::SharedAtlas`].
+/// The per-surface half of drawing text: the instance buffers a frame fills, and a pipeline that bakes in this surface's format and sample count. The atlas it samples is shared — see [`crate::caches::SharedAtlas`].
 pub(crate) struct TextPipeline {
     pub(crate) instances: InstancePipeline<TextInstance>,
     pub(crate) pipeline: wgpu::RenderPipeline,
-    /// A handle on the shared atlas's bind group, not a second one: `wgpu`'s resources are `Arc`s, so this names
-    /// the same GPU object every other renderer draws from.
+    /// A handle on the shared atlas's bind group, not a second one: `wgpu`'s resources are `Arc`s, so this names the same GPU object every other renderer draws from.
     pub(crate) atlas_bind_group: wgpu::BindGroup,
 }
 

@@ -1,3 +1,5 @@
+//! [`button`]: the pressable control, in its filled, outline and ghost variants.
+
 use std::rc::Rc;
 
 use telar_macros::Props;
@@ -10,9 +12,7 @@ use ui_core::{Children, LayoutItem, StyledContainer, Text, box_item};
 
 use crate::shared;
 
-/// Padding a button reserves around its label, derived from the theme's spacing unit rather than fixed so one
-/// theme number moves it. `Text::new` measures the label at its full line box (taller than a bare
-/// `font_size * line_height`), which is why the vertical share is the lighter of the two.
+/// Padding a button reserves around its label, derived from the theme's spacing unit rather than fixed so one theme number moves it. `Text::new` measures the label at its full line box (taller than a bare `font_size * line_height`), which is why the vertical share is the lighter of the two.
 fn pad_x() -> f32 {
     shared::spacing() * 1.75
 }
@@ -20,8 +20,7 @@ fn pad_y() -> f32 {
     shared::spacing() * 0.75
 }
 
-/// A row so the label's measured width sets the box's main-axis size (a column would collapse the cross axis:
-/// `Text::new` sets `align_self_stretch`, which fights content-sizing and renders 0-wide).
+/// A row so the label's measured width sets the box's main-axis size (a column would collapse the cross axis: `Text::new` sets `align_self_stretch`, which fights content-sizing and renders 0-wide).
 fn shell() -> LayoutStyle {
     LayoutStyle::new()
         .flex_row()
@@ -31,16 +30,12 @@ fn shell() -> LayoutStyle {
         .padding_vertical(pad_y())
 }
 
-/// A labelled, pressable button. This is the high-level convenience over the primitives (`box` +
-/// `on_press` + `hover` + a centred `text`); it lives in `ui-components`, not the kernel, so an app can
-/// drop it or ship its own. `fill`/`outline` are reactive colour closures (re-read every frame) so a
-/// button styled from a theme token re-colours when the theme switches.
+/// A labelled, pressable button. This is the high-level convenience over the primitives (`box` + `on_press` + `hover` + a centred `text`); it lives in `ui-components`, not the kernel, so an app can drop it or ship its own. `fill`/`outline` are reactive colour closures (re-read every frame) so a button styled from a theme token re-colours when the theme switches.
 #[derive(Props)]
 pub struct ButtonProps {
     #[props(into, default)]
     pub label: Reactive<String>,
-    /// Filled variant colour. `Color::TRANSPARENT` (the default) means "unset" — the button keeps its
-    /// theme-driven default fill. A closure so a theme token re-reads on every render.
+    /// Filled variant colour. `Color::TRANSPARENT` (the default) means "unset" — the button keeps its theme-driven default fill. A closure so a theme token re-reads on every render.
     #[props(into, default = Reactive::of(|| Color::TRANSPARENT))]
     pub fill: Reactive<Color>,
     /// Outlined variant colour; `Color::TRANSPARENT` means unset. Takes precedence only when `fill` is unset.
@@ -52,6 +47,7 @@ pub struct ButtonProps {
     pub on_press: Rc<dyn Fn()>,
 }
 
+/// The pressable control, in its filled, outline and ghost variants.
 pub fn button(props: ButtonProps, _children: Children) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let ButtonProps {
         label,
@@ -60,11 +56,7 @@ pub fn button(props: ButtonProps, _children: Children) -> Result<Box<dyn LayoutI
         ghost,
         on_press,
     } = props;
-    // The reactive colour closures feed three independent style closures (base rect, hover rect, label
-    // colour), so share them via `Rc` rather than move them into a single one.
-    // The container tracks its own hover for the rect swap; the label's colour lives on a separate leaf,
-    // so mirror the hover into this signal and read it from the label style (the outline variant flips
-    // its text to white on hover).
+    // The colour closures feed three independent style closures, so they are shared via `Rc`. The container tracks its own hover for the rect swap, but the label's colour lives on a separate leaf, so the hover is mirrored into this signal for the label style to read.
     let hovered = signal(false);
 
     let (label_fill, label_outline, label_hover) = (fill.clone(), outline.clone(), hovered);
@@ -95,10 +87,7 @@ pub fn button(props: ButtonProps, _children: Children) -> Result<Box<dyn LayoutI
     Ok(box_item(container))
 }
 
-/// Resolves the box paint for the current frame and hover state from the variant inputs, re-reading the
-/// reactive `fill`/`outline` closures so a theme switch re-colours the button. Mirrors the old `ButtonStyle`:
-/// ghost is transparent, outline strokes then fills on hover, filled keeps its fill, and the no-variant
-/// default is the theme's primary (darkened on hover).
+/// Resolves the box paint for the current frame and hover state from the variant inputs, re-reading the reactive `fill`/`outline` closures so a theme switch re-colours the button. Mirrors the old `ButtonStyle`: ghost is transparent, outline strokes then fills on hover, filled keeps its fill, and the no-variant default is the theme's primary (darkened on hover).
 fn variant_rect(
     fill: &Reactive<Color>,
     outline: &Reactive<Color>,
@@ -134,12 +123,9 @@ fn variant_rect(
     RectStyle::default().with_fill(base).with_radius(radius)
 }
 
-/// The label colour for the current frame and hover state: outline is its own colour (white on hover), filled
-/// contrasts with whatever it is filled with, and the no-variant default is the theme's on-primary.
+/// The label colour for the current frame and hover state: outline is its own colour (white on hover), filled contrasts with whatever it is filled with, and the no-variant default is the theme's on-primary.
 ///
-/// `None` is the ghost variant, and means "whatever the page says". A ghost button paints no surface of its
-/// own, so its label sits on the page beside ordinary text — naming the theme's `ink` here made it the one
-/// word in a region that had declared its colour that came out in the theme's.
+/// `None` is the ghost variant, and means "whatever the page says". A ghost button paints no surface of its own, so its label sits on the page beside ordinary text — naming the theme's `ink` here made it the one word in a region that had declared its colour that came out in the theme's.
 fn label_color(
     fill: &Reactive<Color>,
     outline: &Reactive<Color>,
@@ -176,9 +162,7 @@ mod tests {
 
     use super::*;
 
-    /// A ghost button paints no surface, so its label is a word on the page like any other and takes the ink
-    /// the page is written in. It is the variant a toolbar is made of, which is exactly where a region that
-    /// declared its own colour would have had one word come out in the theme's instead.
+    /// A ghost button paints no surface, so its label is a word on the page like any other and takes the ink the page is written in. It is the variant a toolbar is made of, which is exactly where a region that declared its own colour would have had one word come out in the theme's instead.
     #[test]
     fn a_ghost_label_keeps_the_ink_of_the_region_around_it() {
         crate::test_support::fresh_layout_runtime();
@@ -218,7 +202,6 @@ mod tests {
         assert_eq!(ink, declared);
     }
 
-    // A tap (press then release inside) fires on_press; press alone does not.
     #[test]
     fn tap_fires_on_press() {
         let flag = Rc::new(Cell::new(false));
@@ -262,9 +245,7 @@ mod tests {
 
     /// A theme switch has to re-*space*, not only re-colour.
     ///
-    /// Paint is a closure the renderer re-runs every frame, so a colour token switches for free. A metric is a
-    /// number handed to the layout tree once, when the node is made — so until [`ui_core::style_follows`] the
-    /// button kept the padding of the theme it was built under, and only a rebuild caught it up.
+    /// Paint is a closure the renderer re-runs every frame, so a colour token switches for free. A metric is a number handed to the layout tree once, when the node is made — so until [`ui_core::style_follows`] the button kept the padding of the theme it was built under, and only a rebuild caught it up.
     #[test]
     fn switching_theme_re_spaces_the_button() {
         use theme_core::{ThemeTokens, set_theme};
@@ -280,8 +261,7 @@ mod tests {
 
         crate::test_support::fresh_layout_runtime();
         set_theme(Spaced(8.0));
-        // Measured with no label, so the width is the padding and nothing else — what a font system made of
-        // the text is a different question from whether the box followed the theme.
+        // Measured with no label, so the width is the padding alone: what a font system makes of the text is a different question from whether the box followed the theme.
         let btn = button(ButtonProps::props().build(), Children::default()).unwrap();
         let node = btn.layout_node();
         let rect = track_layout(node).unwrap();
@@ -301,10 +281,7 @@ mod tests {
         );
     }
 
-    /// The control size is one ambient number that every component interprets through its own proportions —
-    /// the alternative being a `size` prop on each of them and a table of what each of their parts measures at
-    /// each size. So the check is that the button did *not* need to know: nothing about it mentions a size, and
-    /// it still gets smaller.
+    /// The control size is one ambient number that every component interprets through its own proportions — the alternative being a `size` prop on each of them and a table of what each of their parts measures at each size. So the check is that the button did *not* need to know: nothing about it mentions a size, and it still gets smaller.
     #[test]
     fn the_ambient_control_size_scales_a_control_that_never_asked_for_one() {
         use theme_core::{ControlSize, ThemeTokens, set_control_size, set_theme};

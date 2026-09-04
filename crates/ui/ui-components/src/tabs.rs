@@ -1,3 +1,5 @@
+//! [`tabs`]: a row of pills selecting one index.
+
 use telar_macros::Props;
 
 use layout_core::{AlignItems, JustifyContent, LayoutError, LayoutStyle};
@@ -32,11 +34,7 @@ fn bar() -> LayoutStyle {
     LayoutStyle::new().flex_row().gap(gap())
 }
 
-/// A horizontal tab bar: one button per label, driving a `selected` index. Renders only the row of tab
-/// buttons — the matching content panel is the caller's responsibility (typically the DSL's reactive
-/// `if selected == i`, mirroring the sandbox's own nav-button/section-switch split). Modelled on
-/// `select.rs`'s items/selected handling, but rendered inline (a row) rather than as an anchored overlay.
-/// High-level sugar over the primitives; lives in `ui-components`, not the kernel.
+/// A horizontal tab bar: one button per label, driving a `selected` index. Renders only the row of tab buttons — the matching content panel is the caller's responsibility (typically the DSL's reactive `if selected == i`, mirroring the sandbox's own nav-button/section-switch split). Modelled on `select.rs`'s items/selected handling, but rendered inline (a row) rather than as an anchored overlay. High-level sugar over the primitives; lives in `ui-components`, not the kernel.
 #[derive(Props)]
 pub struct TabsProps {
     /// The tab labels, rendered in order.
@@ -50,6 +48,7 @@ pub struct TabsProps {
     pub color: Reactive<Color>,
 }
 
+/// A row of pills selecting one index.
 pub fn tabs(props: TabsProps, _children: Children) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let TabsProps {
         items,
@@ -91,8 +90,7 @@ pub fn tabs(props: TabsProps, _children: Children) -> Result<Box<dyn LayoutItem>
     Ok(box_item(row))
 }
 
-/// The tab pill's paint: the active tab fills with the accent (a touch darker on hover); an inactive tab
-/// blends in until hovered, when it lifts to a faint accent wash.
+/// The tab pill's paint: the active tab fills with the accent (a touch darker on hover); an inactive tab blends in until hovered, when it lifts to a faint accent wash.
 fn tab_rect(active: bool, color: &Reactive<Color>, hovered: bool) -> RectStyle {
     let radius = BorderRadius::all(radius());
     let accent = shared::resolve(color, shared::accent);
@@ -108,12 +106,9 @@ fn tab_rect(active: bool, color: &Reactive<Color>, hovered: bool) -> RectStyle {
     RectStyle::default().with_radius(radius)
 }
 
-/// A tab's label: legible on the accent pill when it is the selected one, and otherwise a quieter shade of
-/// whatever the bar around it is written in.
+/// A tab's label: legible on the accent pill when it is the selected one, and otherwise a quieter shade of whatever the bar around it is written in.
 ///
-/// The inactive tone was a flat grey literal — the same grey in dark mode, and the same grey under a region
-/// that had declared its own ink. It was also, to two decimals, what fading the default ink over a white page
-/// produces: a light-mode screenshot of a value the cascade already knows how to work out.
+/// The inactive tone was a flat grey literal — the same grey in dark mode, and the same grey under a region that had declared its own ink. It was also, to two decimals, what fading the default ink over a white page produces: a light-mode screenshot of a value the cascade already knows how to work out.
 fn tab_text(inherited: TextStyle, active: bool) -> TextStyle {
     if active {
         shared::control_text(inherited, 1.0).with_color(shared::on_accent())
@@ -124,7 +119,6 @@ fn tab_text(inherited: TextStyle, active: bool) -> TextStyle {
 
 #[cfg(test)]
 mod tests {
-
     use layout_core::AvailableSpace;
     use renderer_core::DrawCommand;
     use ui_core::{Component, ComponentList, NodeId, compute_layout, new_container};
@@ -132,8 +126,7 @@ mod tests {
     use super::*;
     use crate::harness::{press, release};
 
-    /// A bar in a region that declared its own ink writes the tabs that are not selected in a quieter shade
-    /// of *that*, rather than in a grey no theme and no declaration can move.
+    /// A bar in a region that declared its own ink writes the tabs that are not selected in a quieter shade of *that*, rather than in a grey no theme and no declaration can move.
     #[test]
     fn an_inactive_tab_fades_the_ink_of_the_region_around_it() {
         crate::test_support::fresh_layout_runtime();
@@ -173,14 +166,11 @@ mod tests {
         assert_eq!(ink, declared.with_alpha(shared::QUIET_ALPHA));
     }
 
-    // Lays `node` out as the sole child of a 400×100 root (an auto-size ROOT fills its available space, so
-    // laying `node` itself out as the root would force it to 400px wide instead of its natural content
-    // width) and returns its laid-out rect.
+    // As the sole child of a 400×100 root: an auto-size root fills its available space, so laying `node` out as the root would force it to 400px wide instead of its natural content width.
     fn lay_out(node: NodeId) -> geometry_core::Rect {
         crate::harness::lay_out_row(node, 400.0, 100.0)
     }
 
-    // Construction: a tab bar builds headless, lays out (a row of measured tab pills), and renders.
     #[test]
     fn builds_and_lays_out() {
         crate::test_support::fresh_layout_runtime();
@@ -196,7 +186,7 @@ mod tests {
         let _ = item.view();
     }
 
-    // With exactly two content-sized tabs and no `flex_grow` on the row, its right edge sits flush against the second tab's own padding, so a point just inside that edge lands on index 1 without hardcoding font metrics.
+    // With two content-sized tabs and no `flex_grow`, the row's right edge sits flush against the second tab's padding, so a point just inside it lands on index 1 without hardcoding font metrics.
     #[test]
     fn pressing_the_last_tab_sets_selected_index() {
         crate::test_support::fresh_layout_runtime();

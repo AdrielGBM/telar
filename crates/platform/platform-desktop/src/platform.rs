@@ -1,3 +1,5 @@
+//! The winit runners: one window, and the multi-surface one that shares a UI thread between several.
+
 use std::collections::HashMap;
 use std::sync::Arc;
 
@@ -14,16 +16,12 @@ use platform_winit::{SurfaceIntent, TouchDrag, WinitWindow, map_window_event};
 
 // Winit user-event payloads injected from background threads (via EventLoopProxy) to wake the loop.
 enum UserEvent {
-    // A screen reader asked for the tree, asked to act on a node, or went away. Routed through the loop
-    // rather than answered where it arrives: AccessKit calls its handlers on a platform thread, and the UI
-    // that has to answer is `!Send` — it lives on this one.
+    // Routed through the loop rather than answered where it arrives: AccessKit calls its handlers on a platform thread, and the UI that has to answer is `!Send`.
     Accessibility(accesskit_winit::Event),
-    // The OS color-scheme flipped; carries the new dark (`true`) / light preference. Linux only: it is the
-    // portal watch that sends it, where winit reports nothing. Elsewhere winit delivers `ThemeChanged` itself.
+    // Linux only: the portal watch sends it, where winit reports nothing. Elsewhere winit delivers `ThemeChanged` itself.
     #[cfg(target_os = "linux")]
     ColorScheme(bool),
-    // A background thread asked to wake the UI (via the app redraw waker); redraw every live surface so each
-    // one's `on_frame` runs and drains its channels — wherever the waking app's content currently lives.
+    // Redraw every live surface so each one's `on_frame` runs and drains its channels, wherever the waking app's content currently lives.
     Wake,
 }
 
@@ -33,6 +31,7 @@ impl From<accesskit_winit::Event> for UserEvent {
     }
 }
 
+/// The single-window desktop backend.
 pub struct WinitPlatform {
     event_loop: EventLoop<UserEvent>,
 }
@@ -55,10 +54,9 @@ struct WinitRunner<H: EventHandler<WinitWindow>> {
     scale_factor: f64,
     modifiers: platform_core::ModifiersState,
     touch: TouchDrag,
-    // True only on WaitUntil timer expiry; gates keepalive request_redraw() so it doesn't fire on every event queue drain.
+    // True only on `WaitUntil` timer expiry, so keepalive redraws do not fire on every event-queue drain.
     timer_has_fired: bool,
-    // Built at resume, before the window is shown, which the adapter requires. The tree behind it is only ever
-    // assembled while an assistive technology is attached — which `update_if_active` is the whole point of.
+    // Built at resume, before the window is shown, which the adapter requires. The tree behind it is assembled only while an assistive technology is attached.
     a11y: Option<accesskit_winit::Adapter>,
     a11y_proxy: winit::event_loop::EventLoopProxy<UserEvent>,
     // The nodes last published, so a request naming one can be mapped back to the control it means.
@@ -77,19 +75,16 @@ impl<H: EventHandler<WinitWindow>> WinitRunner<H> {
                 else {
                     return;
                 };
-                // Through the same door the keyboard uses. A reader activating a button takes the path a press
-                // takes, or the two grow apart and it is always the untested one that rots.
+                // Through the same door the keyboard uses: a reader activating a button takes the path a press takes, or the two grow apart and it is always the untested one that rots.
                 self.handler.on_accessibility_action(id, activate);
                 self.publish_accessibility();
             }
-            // Nothing to tear down: the tree is only ever built on demand, so ceasing to be asked is the whole
-            // of stopping.
+            // The tree is only ever built on demand, so ceasing to be asked is the whole of stopping.
             AkEvent::AccessibilityDeactivated => self.a11y_nodes.clear(),
         }
     }
 
-    /// Hands the current tree over, and only if something is listening — which is what keeps the cost of all
-    /// this at nothing for the overwhelmingly common case of nobody being.
+    /// Hands the current tree over, and only if something is listening — which is what keeps the cost of all this at nothing for the overwhelmingly common case of nobody being.
     fn publish_accessibility(&mut self) {
         let Some(adapter) = &mut self.a11y else {
             return;
@@ -127,7 +122,7 @@ impl<H: EventHandler<WinitWindow>> ApplicationHandler<UserEvent> for WinitRunner
 
     fn about_to_wait(&mut self, event_loop: &ActiveEventLoop) {
         if let Some(d) = self.handler.about_to_wait() {
-            // Only request_redraw() on timer expiry, not every drain; reactive changes call it themselves via flush_notify.
+            // Only on timer expiry, not every drain; reactive changes call it themselves via `flush_notify`.
             if self.timer_has_fired {
                 if let Some(window) = &self.window {
                     window.request_redraw();
@@ -143,8 +138,7 @@ impl<H: EventHandler<WinitWindow>> ApplicationHandler<UserEvent> for WinitRunner
         let Some(window) = create_window_from_config(event_loop, &self.config) else {
             return;
         };
-        // Deliver the OS light/dark preference before the tree mounts, so its first layout uses the
-        // right theme. winit reports it on Windows/macOS; on Linux fall back to the freedesktop portal.
+        // Before the tree mounts, so its first layout uses the right theme. winit reports it on Windows and macOS; on Linux fall back to the freedesktop portal.
         if let Some(dark) = initial_prefers_dark(&window) {
             self.handler
                 .on_event(Event::ColorSchemeChanged { dark }, &window);
@@ -153,8 +147,7 @@ impl<H: EventHandler<WinitWindow>> ApplicationHandler<UserEvent> for WinitRunner
             event_loop.exit();
             return;
         }
-        // Attached before the window is ever visible, which the adapter requires — hence the window being
-        // created hidden. The proxy is what routes a reader's requests back onto this thread.
+        // Attached before the window is ever visible, which the adapter requires — hence creating it hidden. The proxy is what routes a reader's requests back onto this thread.
         self.a11y = Some(accesskit_winit::Adapter::with_event_loop_proxy(
             event_loop,
             &window.0,
@@ -166,13 +159,11 @@ impl<H: EventHandler<WinitWindow>> ApplicationHandler<UserEvent> for WinitRunner
     }
 
     fn window_event(&mut self, event_loop: &ActiveEventLoop, _id: WindowId, event: WindowEvent) {
-        // Clone (a cheap Arc bump) so the immutable window borrow doesn't conflict with the mutable
-        // self.handler/cursor/scale/modifiers borrows the shared dispatcher takes.
+        // A cheap Arc bump, so the immutable window borrow does not conflict with the mutable borrows the shared dispatcher takes.
         let Some(window) = self.window.clone() else {
             return;
         };
-        // The adapter tracks the window itself — focus, size, scale — so it sees the event before anything
-        // consumes it.
+        // The adapter tracks the window itself, so it sees the event before anything consumes it.
         if let Some(adapter) = &mut self.a11y {
             adapter.process_event(&window.0, &event);
         }
@@ -186,12 +177,11 @@ impl<H: EventHandler<WinitWindow>> ApplicationHandler<UserEvent> for WinitRunner
             &mut self.touch,
             event,
         );
-        // After the frame rather than before: what is announced is then the frame that was drawn.
+        // After the frame rather than before, so what is announced is the frame that was drawn.
         if redrawn {
             self.publish_accessibility();
         }
-        // A custom title-bar close button sets the handler's exit request during dispatch; honor it alongside
-        // the OS close (window manager X / Alt-F4).
+        // A custom title-bar close button sets the handler's exit request during dispatch, so it is honoured alongside the OS close.
         if matches!(outcome, WindowEventOutcome::CloseRequested) || self.handler.take_exit_request()
         {
             event_loop.exit();
@@ -204,14 +194,13 @@ enum WindowEventOutcome {
     CloseRequested,
 }
 
-// Builds a winit window from a `WindowConfig`. Shared by the single- and multi-surface runners.
+// Shared by the single- and multi-surface runners.
 fn create_window_from_config(
     event_loop: &ActiveEventLoop,
     config: &WindowConfig,
 ) -> Option<WinitWindow> {
     let mut attributes = WindowAttributes::default()
-        // Shown once the accessibility adapter is attached, which has to happen before the window is ever
-        // visible. Creating it hidden and revealing it a moment later is what that costs.
+        // Shown once the accessibility adapter is attached, which has to happen before the window is ever visible.
         .with_visible(false)
         .with_title(config.title.as_str())
         .with_inner_size(winit::dpi::LogicalSize::new(config.width, config.height))
@@ -227,7 +216,7 @@ fn create_window_from_config(
     }
     match config.fullscreen {
         FullscreenMode::Disabled => {}
-        // Exclusive requires a concrete video mode; fall back to borderless for now.
+        // Exclusive requires a concrete video mode.
         FullscreenMode::Borderless | FullscreenMode::Exclusive => {
             attributes = attributes.with_fullscreen(Some(Fullscreen::Borderless(None)));
         }
@@ -248,8 +237,7 @@ fn create_window_from_config(
     }
 }
 
-// Applies one winit `WindowEvent` to a single surface's [`EventHandler`] on the same thread. Returns whether
-// the surface requested close.
+// Returns whether the surface requested close.
 fn dispatch_window_event<H: EventHandler<WinitWindow>>(
     handler: &mut H,
     window: &WinitWindow,
@@ -300,14 +288,12 @@ impl Platform for WinitPlatform {
             a11y_proxy: self.event_loop.create_proxy(),
             a11y_nodes: Vec::new(),
         };
-        // The app-facing redraw waker (handed to background threads) wakes the loop through this proxy, not by
-        // holding a window — so caching it can't pin a window open.
+        // The app-facing redraw waker wakes the loop through this proxy rather than by holding a window, so caching it cannot pin a window open.
         let wake_proxy = self.event_loop.create_proxy();
         platform_core::set_loop_waker(std::sync::Arc::new(move || {
             let _ = wake_proxy.send_event(UserEvent::Wake);
         }));
-        // Live OS color-scheme changes: winit has no Linux integration, so a portal watch thread pushes them
-        // back through the loop via a proxy. Elsewhere winit delivers WindowEvent::ThemeChanged natively.
+        // winit has no Linux integration, so a portal watch thread pushes changes back through the loop. Elsewhere winit delivers `ThemeChanged` natively.
         #[cfg(target_os = "linux")]
         {
             let proxy = self.event_loop.create_proxy();
@@ -321,8 +307,7 @@ impl Platform for WinitPlatform {
     }
 }
 
-// The initial OS light/dark preference at window creation: winit's native answer (Windows/macOS), falling
-// back to the freedesktop portal on Linux where winit always reports `None`.
+// winit's native answer on Windows and macOS, falling back to the freedesktop portal on Linux, where winit always reports `None`.
 fn initial_prefers_dark(window: &WinitWindow) -> Option<bool> {
     let winit = window.prefers_dark();
     #[cfg(target_os = "linux")]
@@ -335,22 +320,10 @@ fn initial_prefers_dark(window: &WinitWindow) -> Option<bool> {
     }
 }
 
-// ---- Multi-surface (multi-window) backend --------------------------------------------------------------
 //
-// M3: every surface shares this one UI thread and one reactive runtime. winit already creates windows and
-// pumps their events on the main thread; each surface's `EventHandler` — built here by the factory, carrying
-// its own `Surface` world — runs directly on the main thread too. The handler activates its surface around
-// every lifecycle call, so the surfaces stay isolated without a thread apiece, and a signal shared between
-// them re-runs each surface's effects under its own context. The hardware backend still presents on its own
-// per-surface render thread (as in single-window).
-//
-// Each dispatch is bracketed by the handler's own `new_events`/`about_to_wait` (begin/end of the reactive
-// batch), so batch_depth always returns to 0 within one callback — no cross-callback bookkeeping, and a
-// surface created in `resumed` (after the iteration's `new_events`) can never leave the batch unbalanced.
+// Every surface shares this one UI thread and one reactive runtime. Each surface's `EventHandler` carries its own `Surface` world and activates it around every lifecycle call, so they stay isolated without a thread apiece and a shared signal re-runs each surface's effects under its own context. The hardware backend still presents on its own per-surface render thread. Each dispatch is bracketed by the handler's own `new_events`/`about_to_wait`, so the batch depth always returns to 0 within one callback.
 
-// A dynamically-opened surface (`open_surface`) awaiting creation by the running runner. Enqueued from app
-// code deep inside an event handler — where `&ActiveEventLoop` (needed to create a winit window) is not
-// available — and drained by the runner on its next `about_to_wait`.
+// Enqueued from app code deep inside an event handler, where the `&ActiveEventLoop` needed to create a window is not available, and drained by the runner on its next `about_to_wait`.
 struct DynamicRequest {
     config: WindowConfig,
     handler: Box<dyn EventHandler<WinitWindow>>,
@@ -362,10 +335,7 @@ thread_local! {
         const { std::cell::RefCell::new(Vec::new()) };
 }
 
-/// Requests a new top-level window rendering `handler`, created on the next event-loop iteration by the
-/// running multi-surface runner (which shares this thread and the one reactive runtime). Returns a flag the
-/// caller flips to close the surface. rsx's winit `SurfaceHost` uses this to implement `open_surface` without
-/// a per-surface thread. If no multi-surface runner is running, the request simply sits undrained.
+/// Requests a new top-level window rendering `handler`, created on the next event-loop iteration by the running multi-surface runner (which shares this thread and the one reactive runtime). Returns a flag the caller flips to close the surface. rsx's winit `SurfaceHost` uses this to implement `open_surface` without a per-surface thread. If no multi-surface runner is running, the request simply sits undrained.
 pub fn request_dynamic_surface(
     config: WindowConfig,
     handler: Box<dyn EventHandler<WinitWindow>>,
@@ -385,9 +355,7 @@ fn drain_dynamic_requests() -> Vec<DynamicRequest> {
     DYNAMIC_QUEUE.with(|q| std::mem::take(&mut *q.borrow_mut()))
 }
 
-// Per-surface main-thread state: the handler plus that surface's input state (needed to translate winit
-// events), its last frame-pacing deadline, and — for a dynamically-opened surface — the flag its
-// `SurfaceControl` flips to request close.
+// The handler plus that surface's input state, its last frame-pacing deadline, and — for a dynamically opened surface — the flag its `SurfaceControl` flips to request close.
 struct SurfaceRunner {
     handler: Box<dyn EventHandler<WinitWindow>>,
     window: WinitWindow,
@@ -396,22 +364,18 @@ struct SurfaceRunner {
     modifiers: platform_core::ModifiersState,
     touch: TouchDrag,
     pace: Option<std::time::Duration>,
-    // `None` for a statically-declared surface; `Some` for one opened via `open_surface`.
+    // `None` for a statically declared surface; `Some` for one opened via `open_surface`.
     close_flag: Option<Arc<std::sync::atomic::AtomicBool>>,
-    // A dynamically-opened window defers on_resume until its first event, when the compositor has given it
-    // its real size (a tiling WM may override the requested size); rendering before that would size the
-    // surface and the layout differently. `false` until resumed.
+    // A dynamically opened window defers `on_resume` until its first event, when the compositor has given it its real size: rendering before that would size the surface and the layout differently.
     resumed: bool,
-    // As in the single-window runner: built before the window is shown, and the tree behind it assembled only while something is listening.
+    // Built before the window is shown, with the tree behind it assembled only while something is listening.
     a11y: Option<accesskit_winit::Adapter>,
     a11y_nodes: Vec<platform_core::AccessNode>,
     title: String,
 }
 
 impl SurfaceRunner {
-    /// Hands this surface's tree over, if something is listening. The multi-surface counterpart of
-    /// [`WinitRunner::publish_accessibility`] — a detached tab is a window like any other, and a reader that
-    /// can see the first one and not the second is reporting the shell's plumbing rather than the app.
+    /// Hands this surface's tree over, if something is listening. The multi-surface counterpart of [`WinitRunner::publish_accessibility`] — a detached tab is a window like any other, and a reader that can see the first one and not the second is reporting the shell's plumbing rather than the app.
     fn publish_accessibility(&mut self) {
         let Some(adapter) = &mut self.a11y else {
             return;
@@ -423,9 +387,7 @@ impl SurfaceRunner {
     }
 }
 
-// Brings a surface up: build under a panic guard (T-4.2), so a build that fails/panics returns `false` and
-// the caller drops it without disturbing the others. Reads the window's *current* size, so calling it once
-// the compositor has configured the window keeps the layout and the render surface the same size.
+// Built under a panic guard, so a build that fails returns `false` and the caller drops it without disturbing the others. Reads the window's current size, so calling it once the compositor has configured the window keeps the layout and the render surface the same size.
 fn resume_surface(surface: &mut SurfaceRunner) -> bool {
     let window = surface.window.clone();
     surface.handler.new_events();
@@ -444,8 +406,7 @@ fn resume_surface(surface: &mut SurfaceRunner) -> bool {
     matches!(built, Ok(true))
 }
 
-// The runner is non-generic over the handler type: both the statically-declared surfaces (boxed from the
-// factory) and the dynamically-opened ones share one `Box<dyn EventHandler<WinitWindow>>` map.
+// Non-generic over the handler type: statically declared and dynamically opened surfaces share one `Box<dyn EventHandler<WinitWindow>>` map.
 type BoxedFactory = Box<dyn Fn(SurfaceId) -> Box<dyn EventHandler<WinitWindow>>>;
 
 struct WinitMultiRunner {
@@ -454,15 +415,12 @@ struct WinitMultiRunner {
     surfaces: HashMap<WindowId, SurfaceRunner>,
     created: bool,
     a11y_proxy: winit::event_loop::EventLoopProxy<UserEvent>,
-    // True only on WaitUntil timer expiry; gates keepalive request_redraw so it fires only on timer ticks.
+    // True only on `WaitUntil` timer expiry, so keepalive redraws fire only on timer ticks.
     timer_has_fired: bool,
 }
 
 impl WinitMultiRunner {
-    // Creates a window for `handler` and inserts it into the live surface map. `resume_now` brings it up
-    // immediately (the initial surfaces, created in `resumed`, whose window winit has already configured);
-    // a dynamically-opened surface passes `false` and is resumed on its first event instead (see
-    // `window_event`), once the compositor has given it its real size.
+    // `resume_now` brings it up immediately, for the initial surfaces whose window winit has already configured; a dynamically opened surface passes `false` and is resumed on its first event, once the compositor has given it its real size.
     fn spawn_surface(
         &mut self,
         event_loop: &ActiveEventLoop,
@@ -471,9 +429,7 @@ impl WinitMultiRunner {
         close_flag: Option<Arc<std::sync::atomic::AtomicBool>>,
         resume_now: bool,
     ) {
-        // Creating the window creates its `wl_surface`; hold the GPU lifecycle lock so it can't race another
-        // window's render thread present/acquire on the shared Wayland/driver connection. Scoped tightly so
-        // `resume_surface` below (which builds the renderer under its own lifecycle lock) isn't nested under it.
+        // Creating the window creates its `wl_surface`, so hold the GPU lifecycle lock against another window's render thread. Scoped tightly, so `resume_surface` below is not nested under it.
         let Some(window) = ({
             let _gpu = renderer_core::gpu_sync::lifecycle_guard();
             create_window_from_config(event_loop, &config)
@@ -481,7 +437,7 @@ impl WinitMultiRunner {
             return;
         };
         let window_id = window.0.id();
-        // Attached here, while the window is still invisible, because that is what the adapter requires.
+        // Attached while the window is still invisible, because that is what the adapter requires.
         let a11y = accesskit_winit::Adapter::with_event_loop_proxy(
             event_loop,
             &window.0,
@@ -516,7 +472,7 @@ impl WinitMultiRunner {
 impl ApplicationHandler<UserEvent> for WinitMultiRunner {
     fn user_event(&mut self, _event_loop: &ActiveEventLoop, event: UserEvent) {
         match event {
-            // Routed by window: every surface carries its own adapter, so a request names the one it came from.
+            // Every surface carries its own adapter, so a request names the one it came from.
             UserEvent::Accessibility(event) => {
                 use accesskit_winit::WindowEvent as AkEvent;
                 let Some(surface) = self.surfaces.get_mut(&event.window_id) else {
@@ -538,7 +494,7 @@ impl ApplicationHandler<UserEvent> for WinitMultiRunner {
             }
             #[cfg(target_os = "linux")]
             UserEvent::ColorScheme(dark) => {
-                // Bracket each surface's write on its own (this callback is not inside a shared batch bracket).
+                // This callback is not inside a shared batch bracket.
                 for surface in self.surfaces.values_mut() {
                     surface.handler.new_events();
                     surface
@@ -548,8 +504,7 @@ impl ApplicationHandler<UserEvent> for WinitMultiRunner {
                 }
             }
             UserEvent::Wake => {
-                // Redraw every surface so each one's `on_frame` runs — the waking app's content may now live in
-                // any of them (a tabbed host can move it between windows), so we don't assume which.
+                // The waking app's content may now live in any surface, since a tabbed host can move it between windows.
                 for surface in self.surfaces.values() {
                     surface.window.request_redraw();
                 }
@@ -558,13 +513,12 @@ impl ApplicationHandler<UserEvent> for WinitMultiRunner {
     }
 
     fn new_events(&mut self, _event_loop: &ActiveEventLoop, cause: StartCause) {
-        // Only gate keepalive redraws on a real timer expiry (not every event-queue drain).
+        // Only on a real timer expiry, not every event-queue drain.
         self.timer_has_fired = matches!(cause, StartCause::ResumeTimeReached { .. });
     }
 
     fn about_to_wait(&mut self, event_loop: &ActiveEventLoop) {
-        // Bring up any surfaces opened via `open_surface` since the last iteration, and tear down any whose
-        // SurfaceControl flag was flipped — both are cheap and immediate on this one thread (no polling).
+        // Both are cheap and immediate on this one thread, with no polling.
         for req in drain_dynamic_requests() {
             self.spawn_surface(event_loop, req.config, req.handler, Some(req.close), false);
         }
@@ -581,8 +535,7 @@ impl ApplicationHandler<UserEvent> for WinitMultiRunner {
         for id in to_close {
             if let Some(mut removed) = self.surfaces.remove(&id) {
                 removed.handler.on_suspend();
-                // Renderer + window teardown, serialized against sibling render threads (see the close path in
-                // window_event and renderer_core::gpu_sync).
+                // Renderer and window teardown, serialised against sibling render threads.
                 let _gpu = renderer_core::gpu_sync::lifecycle_guard();
                 drop(removed);
             }
@@ -592,8 +545,7 @@ impl ApplicationHandler<UserEvent> for WinitMultiRunner {
             return;
         }
 
-        // Aggregate the soonest frame-pacing deadline across surfaces; wake each animating surface for its own
-        // frame on a timer tick (reactive changes call request_redraw themselves via flush_notify).
+        // Wake each animating surface for its own frame on a timer tick; reactive changes call `request_redraw` themselves via `flush_notify`.
         let mut next_wake: Option<std::time::Duration> = None;
         for surface in self.surfaces.values() {
             if let Some(d) = surface.pace {
@@ -612,8 +564,7 @@ impl ApplicationHandler<UserEvent> for WinitMultiRunner {
     }
 
     fn resumed(&mut self, event_loop: &ActiveEventLoop) {
-        // Create every static surface once. winit can emit `resumed` more than once on some platforms; the
-        // guard keeps us from spawning duplicate windows.
+        // winit can emit `resumed` more than once on some platforms, and the guard keeps that from spawning duplicate windows.
         if self.created {
             return;
         }
@@ -633,10 +584,7 @@ impl ApplicationHandler<UserEvent> for WinitMultiRunner {
             return;
         };
         if !surface.resumed {
-            // Bring a dynamically-opened window up only on its first non-empty `Resized` — the compositor's
-            // configure, when the window has its real size (a tiling WM overrides the requested one). Ignore
-            // earlier events (e.g. a pre-configure `RedrawRequested`), which would resume at the requested
-            // size and overflow the smaller surface.
+            // Only on its first non-empty `Resized`, the compositor's configure, when the window has its real size — a tiling WM overrides the requested one. Earlier events would resume at the requested size and overflow the smaller surface.
             let configured =
                 matches!(&event, WindowEvent::Resized(s) if s.width > 0 && s.height > 0);
             if !configured {
@@ -644,11 +592,9 @@ impl ApplicationHandler<UserEvent> for WinitMultiRunner {
             }
             if resume_surface(surface) {
                 surface.resumed = true;
-                // Fall through to dispatch this Resized: it carries the authoritative size, which relays the
-                // layout out to match the surface even if `window.inner_size()` (read in on_resume) lagged it.
+                // Fall through to dispatch this `Resized`: it carries the authoritative size, which relays the layout out even if `window.inner_size()` lagged it.
             } else {
-                // Exiting the whole loop is `about_to_wait`'s job (it runs after pending `open_surface`
-                // requests are spawned), so a just-removed last surface can't kill a window being born.
+                // Exiting the whole loop is `about_to_wait`'s job, which runs after pending `open_surface` requests are spawned, so a just-removed last surface cannot kill a window being born.
                 if let Some(removed) = self.surfaces.remove(&id) {
                     let _gpu = renderer_core::gpu_sync::lifecycle_guard();
                     drop(removed);
@@ -656,18 +602,15 @@ impl ApplicationHandler<UserEvent> for WinitMultiRunner {
                 return;
             }
         }
-        // Clone (a cheap Arc bump) so the window borrow doesn't conflict with the mutable handler/input borrows.
+        // A cheap Arc bump, so the window borrow does not conflict with the mutable handler borrows.
         let window = surface.window.clone();
         let redrawn = matches!(event, WindowEvent::RedrawRequested);
-        // The adapter tracks the window itself — focus, size, scale — so it sees the event first.
+        // The adapter tracks the window itself, so it sees the event first.
         if let Some(adapter) = &mut surface.a11y {
             adapter.process_event(&window.0, &event);
         }
         surface.handler.new_events();
-        // Dispatch under a panic guard (T-4.2): a widget handler / render / effect panic unmounts just this
-        // surface. about_to_wait (end_batch) is guarded separately so it always runs, keeping the reactive
-        // batch balanced (T-1.3 leaves the shared runtime consistent after the unwind). Under panic=unwind
-        // only; a panic=abort release build aborts instead.
+        // A widget handler, render or effect panic unmounts just this surface. `about_to_wait` is guarded separately so it always runs and the reactive batch stays balanced. Under `panic=unwind` only.
         let dispatched = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
             dispatch_window_event(
                 &mut surface.handler,
@@ -684,28 +627,24 @@ impl ApplicationHandler<UserEvent> for WinitMultiRunner {
         }));
         surface.pace = paced.as_ref().copied().unwrap_or(None);
         let panicked = dispatched.is_err() || paced.is_err();
-        // After the frame rather than before, as in the single-window runner: what is announced is the frame that was drawn.
+        // After the frame rather than before, so what is announced is the frame that was drawn.
         if redrawn && !panicked {
             surface.publish_accessibility();
         }
         let close = matches!(dispatched, Ok(WindowEventOutcome::CloseRequested));
-        // A panicked handler is in an unknown state; don't poll it, just unmount.
+        // A panicked handler is in an unknown state, so unmount rather than poll it.
         let exit_requested = !panicked && surface.handler.take_exit_request();
         if panicked {
             tracing::error!(?id, "surface panicked; unmounting it");
         }
-        // OS close (WM X / Alt-F4), a custom title-bar close button, or a panic: tear down just this surface.
+        // OS close, a custom title-bar close button, or a panic: tear down just this surface.
         if panicked || close || exit_requested {
             if let Some(mut removed) = self.surfaces.remove(&id) {
-                // on_suspend joins THIS surface's render thread (which needs the render guard to finish its
-                // last frame), so it must run before we take the lifecycle lock — otherwise we'd deadlock.
+                // `on_suspend` joins this surface's render thread, which needs the render guard to finish its last frame, so it must run before the lifecycle lock is taken or the two deadlock.
                 if !panicked {
                     removed.handler.on_suspend();
                 }
-                // Destroying this window's swapchain/surface and its winit window (wl_surface) must not race a
-                // sibling window's render thread; the lock waits for every in-flight frame and blocks new ones
-                // for the duration of the drop (see renderer_core::gpu_sync). The GPU device/instance is shared
-                // process-wide, so this drops only a swapchain — never a device — which is what makes it safe.
+                // Destroying this window's swapchain and its `wl_surface` must not race a sibling's render thread; the lock waits for every in-flight frame and blocks new ones for the duration. The device is shared process-wide, so this drops only a swapchain.
                 let _gpu = renderer_core::gpu_sync::lifecycle_guard();
                 drop(removed);
             }
@@ -717,9 +656,7 @@ impl ApplicationHandler<UserEvent> for WinitMultiRunner {
                 remaining = self.surfaces.len(),
                 "surface closed"
             );
-            // The whole-loop exit is decided in `about_to_wait`, after the same iteration's queued
-            // `open_surface`/`open_window` requests are spawned — so detaching the last tab (which closes the
-            // host and opens a new window at once) doesn't exit before the new window exists.
+            // Decided in `about_to_wait`, after the same iteration's queued requests are spawned, so detaching the last tab does not exit before the new window exists.
         }
     }
 }
@@ -736,7 +673,7 @@ impl MultiSurfacePlatform for WinitPlatform {
         H: EventHandler<WinitWindow> + 'static,
         F: Fn(SurfaceId) -> H + 'static,
     {
-        // Box the factory output so static and dynamic surfaces share one handler type in the runner's map.
+        // Boxed so static and dynamic surfaces share one handler type in the runner's map.
         let factory: BoxedFactory =
             Box::new(move |id| Box::new(factory(id)) as Box<dyn EventHandler<WinitWindow>>);
         let mut runner = WinitMultiRunner {
@@ -747,14 +684,12 @@ impl MultiSurfacePlatform for WinitPlatform {
             a11y_proxy: self.event_loop.create_proxy(),
             timer_has_fired: false,
         };
-        // The app-facing redraw waker wakes the loop through this proxy (which redraws every surface), not by
-        // holding a window — so an app can cache it and, if its content is later moved to another window, the
-        // original still closes and background wakeups still reach it wherever it now lives.
+        // Through this proxy, which redraws every surface, rather than by holding a window: an app can cache it and, if its content later moves to another window, wakeups still reach it wherever it now lives.
         let wake_proxy = self.event_loop.create_proxy();
         platform_core::set_loop_waker(std::sync::Arc::new(move || {
             let _ = wake_proxy.send_event(UserEvent::Wake);
         }));
-        // Live OS color-scheme changes, delivered to every surface (see the single-window `run`).
+        // Delivered to every surface.
         #[cfg(target_os = "linux")]
         {
             let proxy = self.event_loop.create_proxy();

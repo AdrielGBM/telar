@@ -1,13 +1,8 @@
 //! H2 + H6 from performance-research §8.
 //!
-//! H2 — the software COLR fallback's font-byte access. `font_data_for` re-reads/copies the (often
-//! multi-MB) font on every call; `colr_font_bytes` returns an `Arc` clone after the first.
-//! Requires a resolvable font; the bench skips cleanly when the host has none.
+//! H2 — the software COLR fallback's font-byte access. `font_data_for` re-reads/copies the (often multi-MB) font on every call; `colr_font_bytes` returns an `Arc` clone after the first. Requires a resolvable font; the bench skips cleanly when the host has none.
 //!
-//! H6 — the `collect_colr_glyphs` gating. Plain UI text is re-shaped (make_buffer + per-glyph swash
-//! probe) on every emoji-fallback pass unless a cached `has_colr = false` flag short-circuits it.
-//! The warm/gated speedup only materializes on a host whose fonts actually render the text (so the
-//! glyphs are not flagged as COLR); without fonts both arms do the full work, but the bench still runs.
+//! H6 — the `collect_colr_glyphs` gating. Plain UI text is re-shaped (make_buffer + per-glyph swash probe) on every emoji-fallback pass unless a cached `has_colr = false` flag short-circuits it. The warm/gated speedup only materializes on a host whose fonts actually render the text (so the glyphs are not flagged as COLR); without fonts both arms do the full work, but the bench still runs.
 
 use std::cell::Cell;
 use std::hint::black_box;
@@ -34,7 +29,7 @@ fn bench_font_bytes_h2(c: &mut Criterion) {
     };
 
     let mut group = c.benchmark_group("colr_font_bytes");
-    // Before: read + copy the whole font on every access.
+    // Before: read and copy the whole font on every access.
     group.bench_function("cold_font_data_for", |b| {
         b.iter(|| black_box(shaper.font_data_for(black_box(font_id))));
     });
@@ -52,7 +47,7 @@ fn bench_collect_colr_h6(c: &mut Criterion) {
 
     let mut group = c.benchmark_group("collect_colr_glyphs");
 
-    // Ungated: a unique text per iteration. More distinct texts than the flag cache cap, so each lands as a miss and pays the full make_buffer + per-glyph probe — the work the gate skips.
+    // A unique text per iteration, more distinct texts than the flag cache cap, so each is a miss and pays the full buffer build and per-glyph probe.
     let texts: Vec<String> = (0..2048).map(|i| format!("ui label number {i}")).collect();
     let mut shaper_cold = TextShaper::new();
     let idx = Cell::new(0usize);
@@ -66,7 +61,7 @@ fn bench_collect_colr_h6(c: &mut Criterion) {
         });
     });
 
-    // Gated: the same plain text every iteration. After the first call records the flag, later calls short-circuit (on a host whose fonts render the text) to a single hashmap probe.
+    // The same plain text every iteration, so after the first call records the flag later ones short-circuit.
     let mut shaper_warm = TextShaper::new();
     let warm_text = "ui label";
     {

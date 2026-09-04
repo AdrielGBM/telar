@@ -1,3 +1,5 @@
+//! Converting between rust-analyzer's types and the LSP ones.
+
 use lsp_types::{
     CompletionItemKind, DiagnosticSeverity, Documentation, MarkupContent, MarkupKind, Position,
 };

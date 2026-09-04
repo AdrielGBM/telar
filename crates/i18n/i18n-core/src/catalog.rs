@@ -1,14 +1,8 @@
 //! The parsed, owned form of a catalog, and the TOML grammar that produces it.
 //!
-//! Two things need this and they arrive from opposite directions. The transpiler's baker parses a project's
-//! `locales/` at build time and serializes the result to `&'static` Rust — the fast path, no parser in the
-//! binary. An application with no `.rsx` file in it has no transpiler to do that, and loads the same TOML at
-//! runtime instead, leaking it to `&'static` so every lookup afterwards is the identical
-//! [`crate::translate`] over the identical [`Catalog`].
+//! Two things need this and they arrive from opposite directions. The transpiler's baker parses a project's `locales/` at build time and serializes the result to `&'static` Rust — the fast path, no parser in the binary. An application with no `.rsx` file in it has no transpiler to do that, and loads the same TOML at runtime instead, leaking it to `&'static` so every lookup afterwards is the identical [`crate::translate`] over the identical [`Catalog`].
 //!
-//! Both read the *same grammar*, which is why it lives here rather than in either of them: a `{name}`
-//! placeholder, an escaped brace or a plural table that meant one thing to the baker and another at runtime
-//! would be a bug nobody could see from either side.
+//! Both read the *same grammar*, which is why it lives here rather than in either of them: a `{name}` placeholder, an escaped brace or a plural table that meant one thing to the baker and another at runtime would be a bug nobody could see from either side.
 
 use std::collections::BTreeMap;
 
@@ -27,14 +21,12 @@ pub enum PartModel {
 pub enum MessageModel {
     Plain(String),
     Format(Vec<PartModel>),
-    /// Per-CLDR-category messages, keyed by category name and always containing `other`. `BTreeMap` keeps the
-    /// emitted order deterministic, as everywhere else in the baker.
+    /// Per-CLDR-category messages, keyed by category name and always containing `other`. `BTreeMap` keeps the emitted order deterministic, as everywhere else in the baker.
     Plural(BTreeMap<String, MessageModel>),
 }
 
 impl MessageModel {
-    /// The placeholder names this message expects, in source order (with duplicates removed). A plural
-    /// contributes the union across its branches: which one a call renders is a runtime decision.
+    /// The placeholder names this message expects, in source order (with duplicates removed). A plural contributes the union across its branches: which one a call renders is a runtime decision.
     pub fn arg_names(&self) -> Vec<String> {
         let mut names = Vec::new();
         let mut push = |name: &String| {
@@ -61,9 +53,7 @@ impl MessageModel {
     }
 }
 
-/// A whole catalog as parsed: available locales, the fallback locale, and every key's per-locale messages.
-/// `BTreeMap`s keep output deterministic so unchanged catalogs don't retrigger recompilation — and, for the
-/// runtime path, give [`leak`](Self::leak) the sorted order [`Catalog`]'s binary searches rely on.
+/// A whole catalog as parsed: available locales, the fallback locale, and every key's per-locale messages. `BTreeMap`s keep output deterministic so unchanged catalogs don't retrigger recompilation — and, for the runtime path, give [`leak`](Self::leak) the sorted order [`Catalog`]'s binary searches rely on.
 #[derive(Debug, Clone)]
 pub struct CatalogModel {
     pub locales: Vec<String>,
@@ -76,8 +66,7 @@ impl CatalogModel {
         self.entries.contains_key(key)
     }
 
-    /// The placeholder names expected for `key`, taken from the default-locale message (falling back to any
-    /// locale that defines the key). Used to validate `t!` arguments.
+    /// The placeholder names expected for `key`, taken from the default-locale message (falling back to any locale that defines the key). Used to validate `t!` arguments.
     pub fn arg_names(&self, key: &str) -> Option<Vec<String>> {
         let per_locale = self.entries.get(key)?;
         let msg = per_locale
@@ -90,13 +79,9 @@ impl CatalogModel {
         self.entries.keys()
     }
 
-    /// Merges every `(locale, TOML, label)` into one catalog. `label` names the source in error messages —
-    /// a file path for the baker, a locale tag for a caller that parsed a string it holds in memory.
+    /// Merges every `(locale, TOML, label)` into one catalog. `label` names the source in error messages — a file path for the baker, a locale tag for a caller that parsed a string it holds in memory.
     ///
-    /// `default` is the fallback locale when the active one lacks a key; an unknown or absent one resolves to
-    /// `en` if the catalog has it, else the first tag alphabetically. Defining one key twice for one locale is
-    /// an error rather than a last-writer-wins: the two definitions came from different files, and which of
-    /// them a user sees would otherwise depend on directory order.
+    /// `default` is the fallback locale when the active one lacks a key; an unknown or absent one resolves to `en` if the catalog has it, else the first tag alphabetically. Defining one key twice for one locale is an error rather than a last-writer-wins: the two definitions came from different files, and which of them a user sees would otherwise depend on directory order.
     pub fn from_sources(
         sources: &[(&str, &str, &str)],
         default: Option<&str>,
@@ -141,13 +126,9 @@ impl CatalogModel {
 
     /// The same catalog as `&'static` data, indistinguishable from a baked one at the point of use.
     ///
-    /// It leaks, deliberately: [`Catalog`] is `&'static` throughout so that the baked path costs no
-    /// allocation and no lifetime, and a runtime-loaded catalog buys into the same deal. A catalog is loaded
-    /// once at startup and read for the life of the process, so the leak is the allocation — call it that
-    /// many times, not once per language switch.
+    /// It leaks, deliberately: [`Catalog`] is `&'static` throughout so that the baked path costs no allocation and no lifetime, and a runtime-loaded catalog buys into the same deal. A catalog is loaded once at startup and read for the life of the process, so the leak is the allocation — call it that many times, not once per language switch.
     ///
-    /// The returned data is heap-allocated, so unlike a catalog baked into a hot-reload dylib it stays valid
-    /// after that dylib is unloaded.
+    /// The returned data is heap-allocated, so unlike a catalog baked into a hot-reload dylib it stays valid after that dylib is unloaded.
     pub fn leak(&self) -> &'static Catalog {
         let locales: Vec<&'static str> = self.locales.iter().map(|s| leak_str(s)).collect();
         let entries: Vec<Entry> = self
@@ -202,20 +183,16 @@ fn leak_message(message: &MessageModel) -> Message {
     }
 }
 
-/// Whether `table` spells a plural set rather than a namespace: every key is a CLDR category *and* `other`
-/// is among them.
+/// Whether `table` spells a plural set rather than a namespace: every key is a CLDR category *and* `other` is among them.
 ///
-/// Both halves matter. Requiring `other` is what CLDR requires of any language, and it keeps a namespace
-/// that happens to hold a single `one = "…"` key from being swallowed; requiring every key to be a category
-/// keeps a namespace with a stray `few` sibling from being misread.
+/// Both halves matter. Requiring `other` is what CLDR requires of any language, and it keeps a namespace that happens to hold a single `one = "…"` key from being swallowed; requiring every key to be a category keeps a namespace with a stray `few` sibling from being misread.
 pub fn is_plural_table(table: &toml::Table) -> bool {
     !table.is_empty()
         && table.contains_key("other")
         && table.keys().all(|k| PluralCategory::parse(k).is_some())
 }
 
-/// Flattens nested TOML tables into dotted keys (`[settings] title = ".."` → `settings.title`). String scalars
-/// become messages; other scalars are coerced to their display; arrays/datetimes are rejected.
+/// Flattens nested TOML tables into dotted keys (`[settings] title = ".."` → `settings.title`). String scalars become messages; other scalars are coerced to their display; arrays/datetimes are rejected.
 pub fn flatten(
     table: &toml::Table,
     prefix: String,
@@ -260,8 +237,7 @@ pub fn flatten(
     Ok(())
 }
 
-/// Splits a message string into literal/placeholder parts. `{name}` is a named placeholder (whitespace inside
-/// is trimmed); `{{` / `}}` are escaped literal braces. A string with no placeholders yields [`MessageModel::Plain`].
+/// Splits a message string into literal/placeholder parts. `{name}` is a named placeholder (whitespace inside is trimmed); `{{` / `}}` are escaped literal braces. A string with no placeholders yields [`MessageModel::Plain`].
 pub fn parse_message(content: &str) -> MessageModel {
     let mut parts: Vec<PartModel> = Vec::new();
     let mut literal = String::new();
@@ -310,21 +286,16 @@ pub fn parse_message(content: &str) -> MessageModel {
 }
 
 impl Catalog {
-    /// A catalog parsed from one locale's TOML, for an application whose translations are a string it already
-    /// holds — an `include_str!`, a downloaded pack, a test.
+    /// A catalog parsed from one locale's TOML, for an application whose translations are a string it already holds — an `include_str!`, a downloaded pack, a test.
     ///
-    /// The format is the one the baker reads: dotted or nested keys, `{name}` placeholders, a table of CLDR
-    /// categories for a plural.
+    /// The format is the one the baker reads: dotted or nested keys, `{name}` placeholders, a table of CLDR categories for a plural.
     pub fn from_toml(locale: &str, toml: &str) -> Result<&'static Catalog, String> {
         Ok(CatalogModel::from_sources(&[(locale, toml, locale)], Some(locale))?.leak())
     }
 
-    /// A catalog loaded from a directory of `<locale>.toml` files — the `locales/` layout the transpiler bakes
-    /// from, read at runtime instead.
+    /// A catalog loaded from a directory of `<locale>.toml` files — the `locales/` layout the transpiler bakes from, read at runtime instead.
     ///
-    /// This is the answer for an application with no `.rsx` files: the baked `CATALOG` only exists where the
-    /// transpiler ran, so without this there is no way to reach [`crate::translate`] at all. `default` names
-    /// the fallback locale; `None` resolves to `en` when present, else the first tag alphabetically.
+    /// This is the answer for an application with no `.rsx` files: the baked `CATALOG` only exists where the transpiler ran, so without this there is no way to reach [`crate::translate`] at all. `default` names the fallback locale; `None` resolves to `en` when present, else the first tag alphabetically.
     pub fn from_dir(
         dir: impl AsRef<std::path::Path>,
         default: Option<&str>,
@@ -416,7 +387,6 @@ mod tests {
                 PartModel::Lit(" remaining".into()),
             ])
         );
-        // Whitespace inside the braces is trimmed; escaped braces are literal.
         assert_eq!(
             parse_message("{{ {name} }}"),
             MessageModel::Format(vec![
@@ -427,8 +397,7 @@ mod tests {
         );
     }
 
-    /// The point of the whole module: what a runtime load produces must be indistinguishable from what the
-    /// baker emits, down to the binary searches `Catalog::message` does over both.
+    /// The point of the whole module: what a runtime load produces must be indistinguishable from what the baker emits, down to the binary searches `Catalog::message` does over both.
     #[test]
     fn a_leaked_catalog_answers_like_a_baked_one() {
         let catalog = CatalogModel::from_sources(
@@ -458,7 +427,6 @@ mod tests {
                 .render(&[("time", "5m")]),
             "quedan 5m"
         );
-        // A locale with no entry for the key falls back to the default locale, as the baked path does.
         assert_eq!(
             catalog.message("title", "fr").unwrap().render(&[]),
             "Settings"

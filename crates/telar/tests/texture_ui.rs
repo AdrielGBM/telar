@@ -1,7 +1,6 @@
 //! Telar composes into a texture the application owns, at a resolution the application picked.
 //!
-//! The mirror of `renderer-hardware/tests/app_owned_texture.rs`, which proves the other direction. Its own
-//! test binary because the shared device is a process-wide `OnceLock` and this one wants to open it.
+//! The mirror of `renderer-hardware/tests/app_owned_texture.rs`, which proves the other direction. Its own test binary because the shared device is a process-wide `OnceLock` and this one wants to open it.
 
 mod common;
 
@@ -17,7 +16,7 @@ use telar::{
 const APP: [u8; 4] = [40, 90, 200, 255];
 const UI: Color = Color::rgba(1.0, 0.0, 0.0, 1.0);
 
-// A leaf that paints a solid rect over the top-left quarter of its box and records where the pointer landed, in its own coordinates. Hand-written rather than borrowed from the catalogue so the test asserts against numbers it chose itself.
+// Paints a solid rect over the top-left quarter of its box and records where the pointer landed, in its own coordinates. Hand-written so the test asserts against numbers it chose itself.
 struct Marker {
     node: NodeId,
     rect: Rect,
@@ -167,7 +166,7 @@ fn telar_draws_into_the_application_picture_and_takes_the_pointer_with_it() {
          picture, it does not replace it"
     );
 
-    // Shown at 2× in a window whose origin the UI knows nothing about: a press on the widget's far corner has to arrive in the texture's own coordinates, not the window's.
+    // A press on the widget's far corner has to arrive in the texture's own coordinates, not the window's.
     ui.place_in(Rect::new(100.0, 50.0, 640.0, 360.0));
     let handled = ui.on_event(&Event::PointerPressed {
         x: 100.0 + 150.0 * 2.0,
@@ -182,7 +181,6 @@ fn telar_draws_into_the_application_picture_and_takes_the_pointer_with_it() {
         "the pointer must arrive where the user saw it, in the target's coordinates"
     );
 
-    // An application-side resize is a new texture, laid out and composed against without rebuilding the UI.
     let bigger = app_texture(&gpu, 640, 360);
     ui.resize(bigger.clone(), 1.0);
     assert_eq!(ui.logical_size(), (640.0, 360.0));
@@ -196,7 +194,7 @@ fn telar_draws_into_the_application_picture_and_takes_the_pointer_with_it() {
     );
 }
 
-// Two trees at two resolutions, on one thread, in what would be one window — the chrome at the window's own size and a diegetic UI at 320×180. Each lays out against its own target and neither can see the other's layout world, which is what the per-UI `Surface` buys.
+// Two trees at two resolutions on one thread, each laying out against its own target and blind to the other's layout world, which is what the per-UI `Surface` buys.
 #[test]
 fn two_texture_uis_lay_out_against_their_own_targets() {
     let Ok(gpu) = telar::gpu::open() else {
@@ -204,7 +202,6 @@ fn two_texture_uis_lay_out_against_their_own_targets() {
         return;
     };
 
-    // Each records the box its content was laid out into, read from its own layout world.
     let sizes = Rc::new(RefCell::new(Vec::new()));
     let ui_of = |width: u32, height: u32| {
         let seen = sizes.clone();
@@ -238,7 +235,7 @@ fn two_texture_uis_lay_out_against_their_own_targets() {
         "the chrome tree lays out against the window's size, in the same process and the same thread"
     );
 
-    // Resizing one leaves the other where it was: two worlds, not two views of one. The layout node ids themselves are per-world and freely collide across them, so this is what independence looks like from outside — each tree's own rect signal, unmoved by the other's resize.
+    // Two worlds, not two views of one. Layout node ids are per-world and freely collide across them, so each tree's rect signal being unmoved by the other's resize is what independence looks like from outside.
     large.resize(app_texture(&gpu, 1920, 1080), 1.0);
     assert_eq!(
         (boxes()[1].width, boxes()[1].height),
@@ -252,7 +249,7 @@ fn two_texture_uis_lay_out_against_their_own_targets() {
     );
 }
 
-// A leaf that draws a line of text at a deliberately half-pixel origin — where the smooth raster's blend and the pixel raster's on/off coverage differ, and where a linear atlas sample would smear either.
+// Draws at a deliberately half-pixel origin, where the smooth raster's blend and the pixel raster's on/off coverage differ and a linear atlas sample would smear either.
 struct Label {
     node: NodeId,
     raster: telar::Raster,
@@ -277,7 +274,7 @@ impl LayoutItem for Label {
     }
 }
 
-// The glyph grid, end to end: shaped by cosmic-text, packed into the GPU atlas, sampled by the text pipeline and composed into the application's texture. Every pixel is either the background or the text colour — nothing in between — which no stage between here and the shaper is allowed to reintroduce.
+// The glyph grid end to end: shaped, packed into the GPU atlas, sampled and composed. Every pixel is either the background or the text colour, which no stage between here and the shaper may reintroduce.
 #[test]
 fn pixel_raster_reaches_the_application_texture_without_a_blended_edge() {
     let Ok(gpu) = telar::gpu::open() else {

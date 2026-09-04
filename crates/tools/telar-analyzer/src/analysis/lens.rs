@@ -3,6 +3,7 @@
 use lsp_types::{CodeLens, Command, Position, Range, Uri};
 use telar_parser::RsxDocument;
 
+/// The lenses shown above each `[preview]` header.
 pub fn code_lenses(doc: &RsxDocument, uri: &Uri) -> Vec<CodeLens> {
     doc.previews
         .iter()
@@ -40,7 +41,6 @@ mod tests {
         let uri = Uri::from_str("file:///x.rsx").unwrap();
         let lenses = code_lenses(&doc, &uri);
         assert_eq!(lenses.len(), 2);
-        // Header lines are 0-based 3 and 6.
         assert_eq!(lenses[0].range.start.line, 3);
         assert_eq!(lenses[1].range.start.line, 6);
         let cmd = lenses[0].command.as_ref().unwrap();

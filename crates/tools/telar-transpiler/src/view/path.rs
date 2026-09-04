@@ -1,9 +1,6 @@
-//! Declarative vector-path emitter: a `path d:"…"` tag whose SVG path-data string is parsed at
-//! compile time into a `PathData` builder chain and drawn as a `Path` inside a sized `Canvas`.
+//! Declarative vector-path emitter: a `path d:"…"` tag whose SVG path-data string is parsed at compile time into a `PathData` builder chain and drawn as a `Path` inside a sized `Canvas`.
 //!
-//! The runtime `Path` widget is not a `LayoutItem` (its points are absolute, not relative to a layout
-//! rect), so it cannot be a bare child of a `col`/`row`. We wrap it in a `Canvas` — the same escape hatch
-//! the imperative `PathData` demo uses — so the declarative `path` slots into layout like any other widget.
+//! The runtime `Path` widget is not a `LayoutItem` (its points are absolute, not relative to a layout rect), so it cannot be a bare child of a `col`/`row`. We wrap it in a `Canvas` — the same escape hatch the imperative `PathData` demo uses — so the declarative `path` slots into layout like any other widget.
 
 use telar_parser::Element;
 
@@ -17,7 +14,7 @@ impl ViewGen<'_> {
         let var = self.next_variable_name("path");
         let pad = self.indent_str();
 
-        // Parse the `d:` path-data string into an absolute `PathData` builder chain at compile time. A missing/invalid `d` becomes a `compile_error!` on this element's line (via the source map).
+        // A missing or invalid `d` becomes a `compile_error!` on this element's line, via the source map.
         let (data_chain, extent, parse_err) = match el.attributes.iter().find(|a| a.key == "d") {
             Some(a) => match parse_path_data(a.value.text()) {
                 Ok(built) => (built.chain, Some((built.max_x, built.max_y)), None),
@@ -36,7 +33,7 @@ impl ViewGen<'_> {
 
         let path_style = self.path_style_expr(el);
 
-        // Explicit width/height win; otherwise the path's own extent sizes its box so it doesn't collapse to zero.
+        // Explicit width/height win; otherwise the path's own extent sizes its box so it does not collapse to zero.
         let mut layout = self.make_layout_style("path", &el.classes, &el.attributes);
         if let Some((max_x, max_y)) = extent {
             if !el.attributes.iter().any(|a| a.key == "width") && max_x > 0.0 {
@@ -47,7 +44,7 @@ impl ViewGen<'_> {
             }
         }
 
-        // A `$signal` fill/stroke resolves through `color_expr`'s `.get()` branch; clone it into the style closure, which re-reads it each frame, leaving the outer binding usable by sibling widgets.
+        // Cloned into the style closure, which re-reads it each frame, leaving the outer binding usable.
         let raw_colors: Vec<&str> = el
             .attributes
             .iter()
@@ -324,8 +321,7 @@ impl Extent {
     }
 }
 
-/// A byte cursor over the path-data string with SVG-flavored number scanning (signs, decimals, and
-/// exponents; commas and whitespace are interchangeable separators).
+/// A byte cursor over the path-data string with SVG-flavored number scanning (signs, decimals, and exponents; commas and whitespace are interchangeable separators).
 struct Cursor<'a> {
     b: &'a [u8],
     i: usize,
@@ -422,7 +418,6 @@ mod tests {
 
     #[test]
     fn implicit_lineto_after_moveto() {
-        // `M` followed by extra pairs treats the extras as `line_to`.
         let built = parse_path_data("M0 0 10 0 10 10").unwrap();
         assert_eq!(
             built.chain,
@@ -463,7 +458,6 @@ mod tests {
 
     #[test]
     fn negative_and_decimal_no_separator() {
-        // `-` and `.` start a new number with no separator (`1.5.5` -> 1.5, .5).
         let built = parse_path_data("M1.5.5L-3-4").unwrap();
         assert_eq!(
             built.chain,
@@ -478,7 +472,6 @@ mod tests {
 
     #[test]
     fn unsupported_command_errors() {
-        // Smooth curves / arcs are not supported and must report, not silently drop.
         assert!(parse_path_data("M0,0 A10,10 0 0 1 20,20").is_err());
     }
 }

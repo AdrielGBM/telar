@@ -1,3 +1,5 @@
+//! Stroked segments.
+
 use geometry_core::{Point, Rect};
 use renderer_core::Stroke;
 

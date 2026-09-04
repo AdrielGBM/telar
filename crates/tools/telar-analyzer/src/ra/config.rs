@@ -1,3 +1,5 @@
+//! How the embedded rust-analyzer is configured.
+
 use ra_ap_hir::ClosureStyle;
 use ra_ap_ide::{
     AdjustmentHints, AdjustmentHintsMode, ClosureReturnTypeHints, CompletionConfig,

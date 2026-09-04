@@ -1,3 +1,5 @@
+//! [`Container`]: the plain flex box — children, an optional tap gesture, and nothing painted.
+
 use geometry_core::Rect;
 use layout_core::{LayoutError, LayoutStyle, NodeId};
 use platform_core::{Event, PointerButton};
@@ -11,16 +13,16 @@ use crate::layout_item::{LayoutItem, TrackedChildren, register_container};
 use crate::pointer::dispatch_container_event;
 use crate::press::PressGesture;
 
+/// The plain flex box: children, an optional tap gesture, and nothing painted.
 pub struct Container {
     node: NodeId,
     rect: RwSignal<Rect>,
-    // Static children; empty when `dyn_host` is set (a container holding a reactive fragment routes all
-    // children — static and dynamic — through the host so they interleave in the layout node).
+    // Empty when `dyn_host` is set: a container holding a reactive fragment routes every child through the host so they interleave in the layout node.
     children: TrackedChildren,
     dyn_host: Option<DynHost>,
     // Optional tap gesture so a plain row/col can be pressable; children still hit-test first.
     press: PressGesture,
-    // What this box *is*, where it is more than a box. `None` reads it from what the box does.
+    // What the box is, where it is more than a box. `None` reads it from what the box does.
     role: Option<renderer_core::Role>,
 }
 
@@ -40,9 +42,7 @@ impl Container {
         })
     }
 
-    /// A container whose children are a mix of static widgets and reactive fragments (`ChildSlot`s). The
-    /// fragments reconcile into this container's own node, so their items are real siblings of the static
-    /// children and inherit this container's flex direction/gap — the transparent `for`/`if` path.
+    /// A container whose children are a mix of static widgets and reactive fragments (`ChildSlot`s). The fragments reconcile into this container's own node, so their items are real siblings of the static children and inherit this container's flex direction/gap — the transparent `for`/`if` path.
     pub fn from_slots(
         layout_style: LayoutStyle,
         slots: Vec<ChildSlot>,
@@ -67,20 +67,16 @@ impl Container {
         }
     }
 
-    /// Says what the text below this container looks like — everything under it, not the container itself,
-    /// which draws no text at all.
+    /// Says what the text below this container looks like — everything under it, not the container itself, which draws no text at all.
     ///
-    /// Re-run when a signal the declaration read changes, and withdrawn when this container goes, so a
-    /// subtree that is rebuilt does not inherit from the one it replaced.
+    /// Re-run when a signal the declaration read changes, and withdrawn when this container goes, so a subtree that is rebuilt does not inherit from the one it replaced.
     pub fn declaring(self, declared: impl Fn() -> Declared + 'static) -> Self {
         let node = self.node;
         reactive_core::effect(move || crate::inherit::declare(node, declared()));
         self
     }
 
-    /// Keeps this container's layout style in step with the reactive state it was built from — see
-    /// [`StyledContainer::styled_by`](crate::StyledContainer::styled_by), which is the same thing on a box that
-    /// also paints.
+    /// Keeps this container's layout style in step with the reactive state it was built from — see [`StyledContainer::styled_by`](crate::StyledContainer::styled_by), which is the same thing on a box that also paints.
     pub fn styled_by(self, style: impl Fn() -> LayoutStyle + 'static) -> Self {
         let node = self.node;
         crate::styled_container::style_follows(node, style);
@@ -89,29 +85,22 @@ impl Container {
 
     /// What this box *is*, beyond a box: a region of the screen, a list, a heading.
     ///
-    /// Only a description — it does not make the box focusable, because a region is not something the
-    /// keyboard stops at. A control says so with [`StyledContainer::control`](crate::StyledContainer::control),
-    /// which declares the role *and* joins the tab order.
+    /// Only a description — it does not make the box focusable, because a region is not something the keyboard stops at. A control says so with [`StyledContainer::control`](crate::StyledContainer::control), which declares the role *and* joins the tab order.
     ///
-    /// What it buys: a screen reader that can jump between the regions of a screen, and a document backend
-    /// that writes `<nav>` where a box said it was the navigation. A target that has no use for it drops it.
+    /// What it buys: a screen reader that can jump between the regions of a screen, and a document backend that writes `<nav>` where a box said it was the navigation. A target that has no use for it drops it.
     pub fn role(mut self, role: renderer_core::Role) -> Self {
         self.role = Some(role);
         self
     }
 
-    /// Make the container itself pressable. The callback fires on a tap (release, not press) inside it;
-    /// a child widget that handles the press wins, and a scroll gesture started on it does not fire it.
+    /// Make the container itself pressable. The callback fires on a tap (release, not press) inside it; a child widget that handles the press wins, and a scroll gesture started on it does not fire it.
     pub fn on_press(self, f: impl Fn() + 'static) -> Self {
         self.maybe_on_press(Some(f))
     }
 
     /// [`on_press`](Self::on_press) for a handler the caller may not have supplied.
     ///
-    /// The emitter picks this form for any `on_press:` whose value is not a closure literal, which is how a
-    /// wrapper component forwards an `Option` — and a `Container` reached that emitter with no such method,
-    /// so a plain container forwarding one did not compile. `None` leaves the container untouched: a no-op
-    /// handler would still report the tap `Handled`, turning a display-only row into one that swallows it.
+    /// The emitter picks this form for any `on_press:` whose value is not a closure literal, which is how a wrapper component forwards an `Option` — and a `Container` reached that emitter with no such method, so a plain container forwarding one did not compile. `None` leaves the container untouched: a no-op handler would still report the tap `Handled`, turning a display-only row into one that swallows it.
     pub fn maybe_on_press(mut self, f: Option<impl Fn() + 'static>) -> Self {
         let Some(f) = f else { return self };
         self.press.set(f);
@@ -137,13 +126,12 @@ impl LayoutItem for Container {
 
 impl Component for Container {
     fn view(&self) -> RenderNode {
-        // Each child is its own segment: referencing it is a cheap Rc clone, so this view() does not re-run children and is not subscribed to their signals.
+        // Each child is its own segment, referenced by a cheap `Rc` clone, so this `view()` neither re-runs them nor subscribes to their signals.
         let content = match &self.dyn_host {
             Some(host) => RenderNode::group(host.child_boundaries()),
             None => RenderNode::group(self.children.iter().map(|c| c.segment.boundary())),
         };
-        // A transparent box still owns a layout node, so it is still a box a document has to create: its
-        // children are laid out by *it*, and attaching them to its parent instead puts them in the wrong flow.
+        // A transparent box still owns a layout node, and its children are laid out by it, so attaching them to its parent would put them in the wrong flow.
         if ui_tree::element_capture() {
             let semantics = renderer_core::Semantics::of(crate::element::role_of(
                 self.role,
@@ -159,7 +147,7 @@ impl Component for Container {
     }
 
     fn on_event(&mut self, event: &Event) -> EventResult {
-        // No tap handler: behave exactly as before (pure child routing).
+        // No tap handler, so this is pure child routing.
         if !self.press.is_set() {
             return self.dispatch_children(event);
         }
@@ -189,7 +177,7 @@ impl Component for Container {
                 }
                 self.press.release(event, rect)
             }
-            // Neither will ever deliver the release a tap needs, and a press left armed pairs with whatever release arrives next and fires a click the user never made.
+            // Neither delivers the release a tap needs, and a press left armed would pair with the next release and fire a click nobody made.
             Event::CursorLeft | Event::FocusChanged { is_focused: false } => {
                 self.press.cancel();
                 self.dispatch_children(event)
@@ -226,17 +214,11 @@ mod tests {
             .declaring(move || Declared::default().with_font_size(size))
     }
 
-    /// The first half of the bug `crate::context` describes: a declaration left behind lands on whatever the
-    /// next tree builds on that id.
+    /// The first half of the bug `crate::context` describes: a declaration left behind lands on whatever the next tree builds on that id.
     ///
-    /// Note what this does *not* call. `crate::context::reset_layout_runtime` sweeps the cascade too, and
-    /// that pairing is the workaround — the reason the two "have to go together". Here only the layout half
-    /// runs, so what keeps the second tree clean is the owner having withdrawn, not the reset.
+    /// Note what this does *not* call. `crate::context::reset_layout_runtime` sweeps the cascade too, and that pairing is the workaround — the reason the two "have to go together". Here only the layout half runs, so what keeps the second tree clean is the owner having withdrawn, not the reset.
     ///
-    /// It also has to replace the runtime rather than merely drop and rebuild. Taffy's `NodeId` packs a
-    /// slotmap version, so within one runtime a recycled slot yields a *different* id and the collision
-    /// cannot happen. A fresh `LayoutRuntime` starts its versions over, which is what hands the second tree
-    /// the first tree's ids exactly.
+    /// It also has to replace the runtime rather than merely drop and rebuild. Taffy's `NodeId` packs a slotmap version, so within one runtime a recycled slot yields a *different* id and the collision cannot happen. A fresh `LayoutRuntime` starts its versions over, which is what hands the second tree the first tree's ids exactly.
     #[test]
     fn a_second_tree_is_not_styled_by_what_the_first_declared() {
         reset_layout_runtime();
@@ -262,9 +244,7 @@ mod tests {
 
     /// The second half: a widget withdrawing one it no longer owns when it is finally dropped.
     ///
-    /// Nothing about a late `Drop` needs a recycled id to be wrong — it only needs the declaration on that id
-    /// to be somebody else's by then. Under the owner it withdraws nothing, because withdrawal is not its
-    /// job any more.
+    /// Nothing about a late `Drop` needs a recycled id to be wrong — it only needs the declaration on that id to be somebody else's by then. Under the owner it withdraws nothing, because withdrawal is not its job any more.
     #[test]
     fn a_declaring_widget_dropped_late_withdraws_nothing() {
         reset_layout_runtime();
@@ -383,7 +363,6 @@ mod tests {
         reset_layout_runtime();
         let s = signal(0i32);
         let s_cb = s;
-        // A pressable primitive stands in for the old high-level Button (now in ui-components).
         let btn = StyledContainer::new(
             LayoutStyle::new().width(50.0).height(30.0),
             |_r| renderer_core::RectStyle::default(),
@@ -416,8 +395,6 @@ mod tests {
         let mut tree = crate::ComponentList::new(root);
         let _ = tree.commands();
 
-        // Mimic the runner's event cycle, including the dev-only force-tick. The button fires on release
-        // (tap), so send press then release.
         let cx = (br.x + br.width / 2.0) as f64;
         let cy = (br.y + br.height / 2.0) as f64;
         for phase in [true, false] {
@@ -448,7 +425,7 @@ mod tests {
         assert_eq!(s.get(), 1, "click should have incremented the signal");
     }
 
-    // A pressable plain Container must publish its rect to the same interactive registry StyledContainer uses, or a click-through surface never carves an input region for it.
+    // A pressable plain Container must publish its rect to the same registry `StyledContainer` uses, or a click-through surface never carves an input region for it.
     #[test]
     fn pressable_container_publishes_rect_to_interactive_registry_and_withdraws_on_drop() {
         use crate::interactive_rects;

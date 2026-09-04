@@ -1,3 +1,5 @@
+//! Telar's landing page, written in Telar.
+
 telar::app!(
     theme::LandingTheme,
     {
@@ -11,7 +13,6 @@ telar::app!(
 mod layout_tests {
     use telar::{AvailableSpace, LayoutItem, compute_layout, track_layout};
 
-    // The root page must fill the available window width at any size so its full-bleed bands stretch instead of collapsing into a centered column.
     fn page_rect_at(window_width: f32) -> (f32, f32) {
         telar::set_theme(crate::theme::LandingTheme::light());
         telar::reset_layout_runtime();
@@ -41,7 +42,6 @@ mod layout_tests {
         assert!((page_rect_at(480.0).0 - 480.0).abs() < 1.0);
     }
 
-    // Narrowing the window past the split breakpoints should wrap the side-by-side sections into stacked columns, making the page taller — i.e. it reflows.
     #[test]
     fn narrow_window_reflows_taller() {
         let wide = page_rect_at(1400.0).1;
@@ -59,7 +59,6 @@ mod layout_tests {
         telar::for_each_with_matrix(cmds, |c, m| {
             if let Rect { rect, .. } | Text { rect, .. } | Image { rect, .. } = c {
                 let right = rect.x + rect.width;
-                // apply affine to the rect's right edge (y irrelevant for max-x here)
                 let x = m[0] * right + m[2] * rect.y + m[4];
                 if x > max_x {
                     max_x = x;
@@ -69,7 +68,6 @@ mod layout_tests {
         max_x
     }
 
-    // The real feature cards (different body lengths → different heights) in a wrap row must not overflow the row's reserved height when one wraps to line 2.
     #[test]
     fn real_feature_cards_do_not_overflow_row() {
         use telar::{
@@ -123,7 +121,6 @@ mod layout_tests {
         let (marker, _) = new_leaf(LayoutStyle::new().height(50.0)).unwrap();
         let col =
             new_container(LayoutStyle::new().flex_column().gap(20.0), &[row, marker]).unwrap();
-        // 1120 = the centered content width on a large screen → 3 cards + 1 on line 2.
         compute_layout(
             col,
             AvailableSpace::Definite(1120.0),
@@ -161,7 +158,6 @@ mod layout_tests {
         max_y
     }
 
-    // Diagnostic: at a wrap-inducing width, the drawn content must not extend below the page's own computed height — otherwise text/cards overflow onto whatever sits below them (the "next section positions as if it didn't exist" report).
     #[test]
     fn drawn_content_stays_within_page_height() {
         use telar::{App, AvailableSpace, Event, LayoutItem, compute_layout, track_layout};
@@ -258,7 +254,6 @@ mod layout_tests {
         }
     }
 
-    // Full-width section bands must not overlap vertically at any width, including the ones where the feature cards wrap to a second line.
     #[test]
     fn section_bands_do_not_overlap() {
         use telar::{App, Event};
@@ -285,7 +280,6 @@ mod layout_tests {
         }
     }
 
-    // The drawn content must actually widen with the window, not stay fixed.
     #[test]
     fn drawn_content_follows_width() {
         use telar::{App, Event};
@@ -310,7 +304,6 @@ mod layout_tests {
         );
     }
 
-    // Reproduces the live-app flow: feed the SAME root tree several WindowResized events and confirm every resize re-flattens to different draw commands. A dropped subscription would show up as an unchanged generation after the first.
     #[test]
     fn live_tree_relayouts_on_every_resize() {
         use telar::{App, Event};

@@ -1,8 +1,4 @@
-//! The rsx motion engine: signal-backed values that chase a target over time,
-//! driven by a central frame ticker. An [`Animated<T>`] wraps a reactive signal
-//! whose value is interpolated toward `target` by a [`Curve`] (a [`Tween`] or a
-//! [`Spring`]); [`tick`] advances every registered animation once per frame.
-//! Colors interpolate in Oklch (see [`Lerp`]) as a deliberate perceptual choice.
+//! The rsx motion engine: signal-backed values that chase a target over time, driven by a central frame ticker. An [`Animated<T>`] wraps a reactive signal whose value is interpolated toward `target` by a [`Curve`] (a [`Tween`] or a [`Spring`]); [`tick`] advances every registered animation once per frame. Colors interpolate in Oklch (see [`Lerp`]) as a deliberate perceptual choice.
 
 mod animated;
 mod curve;

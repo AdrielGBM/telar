@@ -2,10 +2,7 @@
 
 /// Begins a render pass with a single colour attachment and nothing else.
 ///
-/// Every pass here is that: no depth-stencil, no occlusion query, no timestamps, no multiview. Only the
-/// label, the target view, an optional resolve target and the load/store ops ever differ, so those are all a
-/// caller states — the fifteen descriptors that used to spell out the same five `None`s each cannot drift
-/// apart any more.
+/// Every pass here is that: no depth-stencil, no occlusion query, no timestamps, no multiview. Only the label, the target view, an optional resolve target and the load/store ops ever differ, so those are all a caller states — the fifteen descriptors that used to spell out the same five `None`s each cannot drift apart any more.
 pub(crate) fn color_pass<'encoder>(
     encoder: &'encoder mut wgpu::CommandEncoder,
     label: &str,

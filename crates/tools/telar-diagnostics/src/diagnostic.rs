@@ -1,6 +1,9 @@
+//! What a diagnostic is here: a message, a severity and the `.rsx` span it points at.
+
 use telar_parser::ParseError;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// How bad a diagnostic is.
 pub enum Severity {
     Error,
     Warning,
@@ -19,6 +22,7 @@ impl Span {
 }
 
 #[derive(Debug, Clone)]
+/// A message, a severity, and the `.rsx` line it points at.
 pub struct Diagnostic {
     pub severity: Severity,
     pub message: String,

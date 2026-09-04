@@ -1,3 +1,5 @@
+//! Draw steps and the layer boundaries between them — what the command list becomes before it is executed.
+
 use geometry_core::Rect;
 use raw_window_handle::{HasDisplayHandle, HasWindowHandle};
 use renderer_core::Raster;
@@ -30,12 +32,11 @@ pub(super) enum DrawStep {
     SetScissor {
         rect: Option<Rect>,
     },
-    // Rebinds the viewport uniform (group 0) to one carrying rounded-clip SDF params, so a non-nested rounded PushClip masks corners in-shader instead of allocating a mini-layer.
+    // Rebinds the viewport uniform to one carrying rounded-clip SDF params, so a non-nested rounded `PushClip` masks corners in-shader instead of allocating a mini-layer.
     SetShaderClip {
         viewport_bind_group: wgpu::BindGroup,
     },
-    // Where the pass has to break. Carried as one payload so `build_segments` can move it into a `Segment`
-    // instead of repacking it field by field into a second set of variants that has to be kept identical.
+    // One payload, so `build_segments` can move it into a `Segment` rather than repacking it into a second set of variants that has to be kept identical.
     Boundary(Boundary),
     ShadowPlaceholder {
         op_index: usize,
@@ -45,8 +46,7 @@ pub(super) enum DrawStep {
     },
 }
 
-// A point where one render pass ends and another begins: everything the executor needs to open the new pass
-// or to composite the finished one.
+// Everything the executor needs to open the new pass or composite the finished one.
 pub(super) enum Boundary {
     BeginLayer {
         msaa_texture: wgpu::Texture,
@@ -62,15 +62,15 @@ pub(super) enum Boundary {
     },
     EndLayerComposite {
         bind_group: wgpu::BindGroup,
-        // Some(hash) when the resolved layer texture should be cached for reuse next frame; None for layers that must not be cached (backdrop blur, round-clip).
+        // `Some` when the resolved layer texture should be cached; `None` for layers that must not be (backdrop blur, round-clip).
         cache_hash: Option<u64>,
-        // Outer scissor to apply during the composite blit, so the layer respects parent clip rects (e.g. scroll area). None = full render target.
+        // Applied during the composite blit so the layer respects parent clip rects. `None` is the full target.
         scissor: Option<Rect>,
     },
-    // Already-cached layer composited directly without a render pass.
+    // Already cached, composited directly without a render pass.
     PrerenderedLayer {
         bind_group: wgpu::BindGroup,
-        // Outer scissor to apply during the composite blit, so the layer respects parent clip rects (e.g. scroll area). None = full render target.
+        // Applied during the composite blit so the layer respects parent clip rects. `None` is the full target.
         scissor: Option<Rect>,
     },
 }
@@ -80,9 +80,9 @@ pub(super) struct LayerAccum {
     pub(super) backdrop_blur: f32,
     pub(super) begin_step_index: usize,
     pub(super) bounds: Option<Rect>,
-    // Index into the commands slice just after the PushLayer (start of layer content).
+    // Just after the `PushLayer`, where the layer content starts.
     pub(super) command_start: usize,
-    // Instance buffer lengths captured at PushLayer, used to truncate on a cache hit.
+    // Captured at `PushLayer`, used to truncate on a cache hit.
     pub(super) instance_start: u32,
     pub(super) text_instance_start: u32,
     pub(super) line_instance_start: u32,
@@ -95,7 +95,7 @@ impl LayerAccum {
     }
 }
 
-// Tries to merge two consecutive same-type batch steps whose instance index ranges are contiguous. Returns Ok(merged) on success, Err((a, b)) if they cannot be merged.
+// `Err((a, b))` hands both back when they cannot be merged.
 fn try_merge_steps(a: DrawStep, b: DrawStep) -> Result<DrawStep, (DrawStep, DrawStep)> {
     match (a, b) {
         (DrawStep::RectBatch { start: s, end: e1 }, DrawStep::RectBatch { start: s2, end: e2 })
@@ -156,7 +156,7 @@ pub(super) fn flush_image_batch(
 }
 
 impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRenderer<W> {
-    // Stable-sorts RectBatch/TextBatch/LineBatch within flat zones (separated by structural markers), then merges consecutive same-type batches with contiguous index ranges. Reduces 2N draw calls for a list of N items (rect+label) down to 2.
+    // Stable-sorts batches within flat zones separated by structural markers, then merges consecutive same-type batches with contiguous ranges: 2N draw calls for a list of N rect-plus-label items become 2.
     pub(super) fn merge_opaque_batches(&mut self) {
         let steps = &mut self.pending_steps;
         let mut out = std::mem::take(&mut self.merge_out);
@@ -208,7 +208,7 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
         }
         flush_zone(&mut zone, &mut out);
 
-        // Put the merged result in pending_steps and reclaim the (now-empty) former pending_steps buffer as the next merge_out.
+        // Reclaims the now-empty former `pending_steps` buffer as the next `merge_out`.
         std::mem::swap(&mut self.pending_steps, &mut out);
         self.merge_out = out;
         self.merge_zone = zone;

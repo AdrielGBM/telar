@@ -12,17 +12,13 @@ impl ViewGen<'_> {
         let var = self.next_variable_name(&el.tag);
         let pad = self.indent_str();
         let style = self.make_layout_style(&el.tag, &el.classes, &el.attributes);
-        // `keep:"a.key"` names this viewport's position among the things its *surface* keeps, so a remounted
-        // tree reopens where the reader left it instead of at the top. Named and opt-in rather than implicit:
-        // a scroll emitted inside a `for` would otherwise have every row sharing one position.
+        // Named and opt-in rather than implicit: a scroll emitted inside a `for` would otherwise have every row sharing one position.
         let keep = el
             .attributes
             .iter()
             .find(|attr| attr.key == "keep")
             .map(|attr| rust_str(attr.value.text()));
-        // A `virtual` loop anywhere under this scroll needs its live viewport, and only the closure forms hand
-        // one over — so the constructor's shape follows what the subtree asked for. Every other scroll keeps the
-        // cheaper form it had.
+        // Only the closure forms hand over a live viewport, so the constructor's shape follows what the subtree asked for and every other scroll keeps the cheaper form.
         let viewport = wants_viewport(&el.children).then(|| "__viewport".to_string());
         let bind = viewport.as_deref().unwrap_or("_");
         let build = |content: &str| match (&keep, &viewport) {
@@ -34,7 +30,6 @@ impl ViewGen<'_> {
             ),
             (None, None) => format!("LayoutScrollArea::new({style}, Box::new({content}))?"),
         };
-        // The same constructors, with the content built inside the closure so it can read the bound viewport.
         let body_pad = format!("{pad}    ");
         let build_with_body = |body: &str, content: &str| {
             let ctor = match &keep {
@@ -46,9 +41,7 @@ impl ViewGen<'_> {
             )
         };
 
-        // LayoutScrollArea wraps a single content item. A reactive `for`/`if` inside becomes a transparent
-        // fragment whose items flow in the wrapping flex-column content (`from_slots`); static control flow
-        // uses a `Container::column`; a plain single child needs no wrapper.
+        // A reactive region becomes a transparent fragment flowing in the wrapping flex-column content; static control flow uses a `Container::column`; a plain single child needs no wrapper.
         let mode = Self::child_mode(&el.children);
         self.indent += 1;
         let inner_pad = self.indent_str();
@@ -59,9 +52,7 @@ impl ViewGen<'_> {
         self.scroll_viewport = outer_viewport;
         self.indent -= 1;
 
-        // The children's statements are built into their own buffer first, because where they belong depends on
-        // whether this scroll bound a viewport: a `VirtualList` among them reads `__viewport`, which exists only
-        // inside the constructor's closure, so their code has to go in there rather than above it.
+        // Built into their own buffer first: a `VirtualList` among them reads `__viewport`, which exists only inside the constructor's closure, so their code has to go in there rather than above it.
         let mut inner = String::new();
         let content = if mode == ChildMode::Literal {
             let mut names = Vec::new();
@@ -100,8 +91,7 @@ impl ViewGen<'_> {
     }
 }
 
-/// Whether any node in this subtree is a `virtual` loop, so the enclosing `scroll` knows to hand its viewport
-/// over. A nested `scroll` is not descended into: its own loops are its own to serve.
+/// Whether any node in this subtree is a `virtual` loop, so the enclosing `scroll` knows to hand its viewport over. A nested `scroll` is not descended into: its own loops are its own to serve.
 fn wants_viewport(nodes: &[telar_parser::ViewNode]) -> bool {
     use telar_parser::ViewNode;
     nodes.iter().any(|node| match node {

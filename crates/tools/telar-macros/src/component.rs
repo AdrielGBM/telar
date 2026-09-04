@@ -8,10 +8,7 @@ use syn::{FnArg, Ident, ItemFn, Pat, Result, parse2};
 
 /// Turns a function of named arguments into the pair a `[view]` calls: a props struct and a component.
 ///
-/// A widget that markup cannot build itself — one that owns a canvas, a register, a document — reaches a
-/// `[view]` as a component with named props, which is the shape the child position takes since the `widget`
-/// escape went. Written by hand that is a struct, a `derive`, a destructuring `let` and a signature nobody
-/// reads; the arguments already say all four.
+/// A widget that markup cannot build itself — one that owns a canvas, a register, a document — reaches a `[view]` as a component with named props, which is the shape the child position takes since the `widget` escape went. Written by hand that is a struct, a `derive`, a destructuring `let` and a signature nobody reads; the arguments already say all four.
 pub fn expand(item: TokenStream2) -> Result<TokenStream2> {
     let function: ItemFn = parse2(item)?;
     let signature = &function.sig;
@@ -51,8 +48,7 @@ pub fn expand(item: TokenStream2) -> Result<TokenStream2> {
             ));
         };
         let (name, ty, attrs) = (&name.ident, &arg.ty, &arg.attrs);
-        // The one argument that is not a prop: what the call site nested inside the tag, which every component
-        // takes whether or not it uses them.
+        // The one argument that is not a prop: what the call site nested inside the tag, which every component takes whether or not it uses them.
         if name == "children" {
             children = Some(quote! { let #name: #ty = __children; });
             continue;
@@ -100,8 +96,7 @@ pub fn expand(item: TokenStream2) -> Result<TokenStream2> {
     })
 }
 
-/// The props type a tag of this name asks for, spelled the way the transpiler spells it: `graph_canvas` is
-/// `GraphCanvasProps`. A tag names its props type, so the two have to agree letter for letter.
+/// The props type a tag of this name asks for, spelled the way the transpiler spells it: `graph_canvas` is `GraphCanvasProps`. A tag names its props type, so the two have to agree letter for letter.
 fn props_type_name(name: &Ident) -> Ident {
     let pascal: String = name
         .to_string()

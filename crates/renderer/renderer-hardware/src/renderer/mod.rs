@@ -1,3 +1,5 @@
+//! The renderer itself: the shared GPU handles, the per-surface state, and the caches a frame draws from.
+
 use std::collections::HashMap;
 use std::collections::VecDeque;
 use std::hash::{Hash, Hasher};
@@ -36,14 +38,12 @@ use steps::{DrawStep, flush_batch, flush_image_batch};
 impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRenderer<W> {
     /// Leaves this renderer's cache census where another thread can read it. Called once per frame, throttled.
     ///
-    /// The GPU backend has to publish for itself: a census only the CPU backend filled would read "nothing cached"
-    /// on a machine rendering entirely on the GPU — silent, and wrong in exactly the case worth looking at.
+    /// The GPU backend has to publish for itself: a census only the CPU backend filled would read "nothing cached" on a machine rendering entirely on the GPU — silent, and wrong in exactly the case worth looking at.
     fn publish_cache_stats(&self) {
         if !renderer_cache::registry::publish_due() {
             return;
         }
-        // One set for the process however many render threads report it, so it publishes under a shared identity
-        // rather than each thread's own — otherwise every figure reads once per render thread.
+        // One set for the process however many render threads report it, so it publishes under a shared identity rather than each thread's own.
         if let Some(shared) = crate::caches::with_shared(|caches| caches.stats()) {
             renderer_cache::registry::publish_shared("gpu", shared);
         }
@@ -53,7 +53,7 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
 /// A hardware-accelerated renderer using wgpu. The `W: Send + Sync + 'static` bound is a wgpu requirement for surface creation, not an indication that this renderer is thread-safe. The renderer must only be used on the main thread alongside the reactive runtime; it is not safe to move between threads.
 pub struct HardwareRenderer<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> {
     instance: wgpu::Instance,
-    // None in headless mode: there is no window/swapchain, so frames render into `offscreen_output` instead of a presented surface.
+    // `None` headless: with no swapchain, frames render into `offscreen_output` instead.
     surface: Option<Surface<'static>>,
     device: Device,
     queue: Queue,
@@ -61,10 +61,10 @@ pub struct HardwareRenderer<W: HasWindowHandle + HasDisplayHandle + Send + Sync 
     viewport_buffer: wgpu::Buffer,
     viewport_bind_group: wgpu::BindGroup,
     viewport_dirty: bool,
-    // Round-robin pool of (buffer, bind group) pairs reused for per-layer viewport uniforms; avoids a create_buffer_init + create_bind_group driver round-trip per layer each frame. Reset to index 0 at begin_frame.
+    // Round-robin pool of (buffer, bind group) pairs for per-layer viewport uniforms, avoiding a driver round trip per layer each frame. Reset to index 0 at `begin_frame`.
     viewport_buffer_pool: Vec<(wgpu::Buffer, wgpu::BindGroup)>,
     viewport_buffer_pool_index: usize,
-    // Reusable offscreen textures keyed by (width, height, format); reused across frames for backdrop-blur scratch targets to avoid per-frame multi-megabyte allocations.
+    // Keyed by (width, height, format) and reused across frames, so backdrop-blur scratch targets cost no per-frame multi-megabyte allocations.
     texture_pool: Vec<(
         u32,
         u32,
@@ -72,13 +72,12 @@ pub struct HardwareRenderer<W: HasWindowHandle + HasDisplayHandle + Send + Sync 
         wgpu::Texture,
         wgpu::TextureView,
     )>,
-    // Upper bound on cached scratch textures per (width, height, format) in texture_pool.
     max_texture_pool_per_size: usize,
     rect_pipeline: RectPipeline,
     text_pipeline: TextPipeline,
     line_pipeline: LinePipeline,
     image_pipeline: ImagePipeline,
-    // Real font ascender/line-height metrics for the default face, queried once at construction so dirty-rect computation does not under-estimate the text region.
+    // Queried once at construction, so dirty-rect computation does not under-estimate the text region.
     font_metrics: renderer_core::FontMetrics,
     surface_format: wgpu::TextureFormat,
     present_mode: wgpu::PresentMode,
@@ -91,10 +90,8 @@ pub struct HardwareRenderer<W: HasWindowHandle + HasDisplayHandle + Send + Sync 
     pending_line_instances: Vec<LineInstance>,
     pending_image_instances: Vec<ImageInstance>,
     pending_steps: Vec<DrawStep>,
-    // Reusable scratch buffers for merge_opaque_batches so the merge pass allocates nothing per frame.
     merge_out: Vec<DrawStep>,
     merge_zone: Vec<DrawStep>,
-    // Reusable scratch buffer for prepare_text glyph layout so shaping allocates nothing per text command.
     glyph_scratch: Vec<renderer_text::GlyphInfo>,
     path_pipeline: PathPipeline,
     layer_pipeline: LayerPipeline,
@@ -120,36 +117,36 @@ pub struct HardwareRenderer<W: HasWindowHandle + HasDisplayHandle + Send + Sync 
     draw_state: renderer_core::DrawState,
     layer_texture_pool: Vec<PooledTexture>,
     shadow_capture_pool: Vec<PooledTexture>,
-    // Retained frame-wide shadow instance buffer + bind group, keyed by a hash of all pending shadow instances. Reused across frames so unchanged shadows skip per-frame create_buffer_init + create_bind_group.
+    // Keyed by a hash of all pending shadow instances, so unchanged shadows skip the per-frame create-and-bind.
     shadow_instances_cache: Option<(u64, wgpu::Buffer, wgpu::BindGroup)>,
-    // Resolved layer textures keyed by a hash of their draw commands + layer params. Value is (resolve_texture, resolve_view, pixel_count). Lets unchanged static layers skip their whole render pass and composite directly.
+    // Keyed by a hash of their draw commands and layer params, so unchanged static layers skip their whole render pass and composite directly.
     layer_resolved_cache: HashMap<u64, (wgpu::Texture, wgpu::TextureView, u64)>,
-    // LRU eviction order for layer_resolved_cache: front is least-recently-used, back is most-recently-used.
+    // Front is least-recently-used, back is most-recently-used.
     layer_resolved_cache_order: VecDeque<u64>,
-    // Total pixel budget for layer_resolved_cache, set per frame to 4 * width * height.
+    // Set per frame to 4 * width * height.
     layer_cache_pixel_budget: u64,
-    // Non-MSAA presentation texture holding the last resolved frame. Used both as the idle-frame fast-path source (blit when commands are unchanged) and as the MSAA resolve target each active frame.
+    // Both the idle-frame fast-path source and the MSAA resolve target each active frame.
     retained_texture: Option<wgpu::Texture>,
     retained_view: Option<wgpu::TextureView>,
-    // Windowless render target (Some iff `surface` is None). The final frame lands here (via direct draw, MSAA resolve-blit, or copy) so `read_rgba` can copy it back. Sized to the current width/height, recreated on resize in `reconfigure` — unless it belongs to the application, see `app_owned_target`.
+    // `Some` if and only if `surface` is `None`. The final frame lands here so `read_rgba` can copy it back; recreated on resize, unless it belongs to the application.
     offscreen_output: Option<wgpu::Texture>,
-    // True when `offscreen_output` is a texture the application handed over (see `compose_into`) rather than one this renderer allocated. Two things follow: `reconfigure` must not replace it (it is not ours to size), and the final frame is *blended* into it rather than copied over it, so Telar composes into whatever the application already drew there.
+    // An app-owned target must not be replaced by `reconfigure`, and the frame is blended into it rather than copied over it, so Telar composes into whatever the application already drew.
     app_owned_target: bool,
     prev_commands: Vec<DrawCommand>,
-    // ComponentList generation of the last fully rendered frame. Initialized to u64::MAX so the first frame never matches and always renders. Set to the incoming generation after each successful render.
+    // Initialised to `u64::MAX`, so the first frame never matches and always renders.
     prev_generation: u64,
-    // Generation received from the current begin_frame call; used by render_frame to decide the idle-blit fast path.
+    // Used by `render_frame` to decide the idle-blit fast path.
     incoming_generation: u64,
     retained_blit_pipeline: crate::composite::CompositePipeline,
     prev_rect_hash: u64,
     prev_text_hash: u64,
     prev_line_hash: u64,
     prev_image_hash: u64,
-    // None in headless mode (no backing window). Kept alive otherwise so wgpu's surface stays valid for its lifetime.
+    // `None` headless. Kept alive otherwise, so wgpu's surface stays valid for its lifetime.
     _window: Option<std::sync::Arc<W>>,
 }
 
-// Headless render target: RENDER_ATTACHMENT for the final draw/resolve-blit, COPY_SRC for read_rgba, COPY_DST for the msaa_samples==1 copy-to-target path.
+// RENDER_ATTACHMENT for the final draw, COPY_SRC for `read_rgba`, COPY_DST for the single-sample copy path.
 fn create_offscreen_texture(
     device: &wgpu::Device,
     format: wgpu::TextureFormat,
@@ -174,7 +171,7 @@ fn create_offscreen_texture(
     })
 }
 
-// Safety: cross-thread transfer via JoinHandle happens before any DrawCommands are processed, so no Rc<> values exist at transfer time (prev_commands starts empty); after joining the renderer lives exclusively on the main thread.
+// Safety: the cross-thread transfer happens before any DrawCommands are processed, so no `Rc` values exist at transfer time; after joining, the renderer lives exclusively on the main thread.
 unsafe impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> Send
     for HardwareRenderer<W>
 {
@@ -182,18 +179,9 @@ unsafe impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> Send
 
 impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> Drop for HardwareRenderer<W> {
     fn drop(&mut self) {
-        // The caller tearing a window down holds renderer_core::gpu_sync::lifecycle_guard() across the whole
-        // renderer+window drop, serializing it against sibling render threads.
-        // Release cached layer textures before the device so the driver can free their GPU memory.
+        // The caller tearing a window down holds a lifecycle guard across the whole renderer and window drop, serialising it against sibling render threads. Before the device, so the driver can free their GPU memory.
         self.layer_resolved_cache.clear();
-        // Destroy this window's surface (its VkSurfaceKHR) *before* polling. With a process-shared device wgpu
-        // defers surface teardown to the next maintenance on that device; this window's own render thread is
-        // already gone, so polling with the surface still alive frees nothing, and the VkSurfaceKHR — which
-        // keeps the wl_surface alive — would linger on screen until some *other* window's teardown polls the
-        // shared device. Dropping the surface (its `_window` Arc still outlives this body, so the raw handle
-        // stays valid) then polling flushes the destruction now. On a lost device `poll` is a fatal wgpu error
-        // (a panic); if this Drop runs while unwinding from an earlier render panic that second panic would
-        // abort — so catch it and let teardown finish cleanly.
+        // Destroy this window's surface before polling: with a process-shared device wgpu defers surface teardown to the next maintenance, and this window's render thread is already gone, so the VkSurfaceKHR — which keeps the wl_surface alive — would linger on screen until some other window's teardown polls. On a lost device `poll` is a fatal wgpu panic, which while unwinding from an earlier render panic would abort, so it is caught and teardown finishes cleanly.
         self.surface = None;
         let _ = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
             let _ = self.device.poll(wgpu::PollType::wait_indefinitely());
@@ -201,12 +189,9 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> Drop for Har
     }
 }
 
-// One GPU instance/adapter/device/queue shared by every window in the process; per-window renderers each own
-// only a `Surface` and hold cloned (Arc) handles to these. Sharing is REQUIRED for multi-window: a separate
-// VkInstance/VkDevice per window, destroyed when its window closes, corrupts the shared driver state and
-// segfaults a sibling window's in-flight `vkAcquireNextImageKHR` (reproduced on the NVIDIA driver). With a
-// shared device, closing a window drops only its swapchain — never a device — which the driver handles fine.
+// One GPU instance, adapter, device and queue shared by every window; per-window renderers own only a `Surface`. Sharing is required for multi-window: a separate device per window, destroyed when its window closes, corrupts the shared driver and segfaults a sibling's in-flight `vkAcquireNextImageKHR`. With a shared device, closing a window drops only its swapchain.
 #[derive(Clone)]
+/// The one instance, adapter, device and queue every window in the process draws through.
 pub struct SharedGpu {
     pub instance: wgpu::Instance,
     pub adapter: wgpu::Adapter,
@@ -216,19 +201,7 @@ pub struct SharedGpu {
 
 pub(crate) static SHARED_GPU: std::sync::OnceLock<SharedGpu> = std::sync::OnceLock::new();
 
-// Keeps a swapchain from being rebuilt while any window is advancing one. A single device is shared by every
-// window (see SharedGpu) and the WSI beneath it does not take being driven from several threads at once:
-// reconfiguring one window's swapchain while a sibling sits inside its acquire loses the *device*, and a lost
-// device is every window at once — which is what a resize, of one window's grip or of every window's scale at
-// a time, used to cost.
-//
-// A read/write lock rather than a mutex because that is the shape of the rule: acquiring and presenting run
-// concurrently with each other exactly as wgpu intends, and only a rebuild excludes them. A mutex here made a
-// dragged window's per-frame reconfigure serialise every other window's presentation behind it, which is a
-// visible stutter across the whole desktop for the sake of a rule that never asked for it.
-//
-// Taken around each call rather than held across a frame: the acquire path reconfigures on `Lost`, and a read
-// guard still held there would deadlock against the write it needs.
+// Keeps a swapchain from being rebuilt while any window is advancing one: the WSI beneath a shared device does not take being driven from several threads at once, and reconfiguring one window's swapchain while a sibling sits inside its acquire loses the device — which is every window at once. A read/write lock rather than a mutex, because acquire and present are meant to run concurrently and only a rebuild excludes them; a mutex serialised every window's presentation behind a dragged window's reconfigure. Taken around each call rather than held across a frame: the acquire path reconfigures on `Lost`, and a read guard still held there would deadlock against the write it needs.
 static SWAPCHAIN: std::sync::RwLock<()> = std::sync::RwLock::new(());
 
 /// Held while a swapchain is advanced — acquired or presented. Shared: any number of windows at once.
@@ -240,8 +213,7 @@ pub fn swapchain_lock() -> std::sync::RwLockReadGuard<'static, ()> {
 
 /// Held while a swapchain is built or rebuilt. Exclusive against every window's acquire and present.
 pub(crate) fn swapchain_rebuild_lock() -> std::sync::RwLockWriteGuard<'static, ()> {
-    // wgpu reports a fatal error as a panic, so the thread holding either guard can die with it. Poisoning
-    // would then take down the windows that survived, which is the opposite of the point.
+    // wgpu reports a fatal error as a panic, so the thread holding either guard can die with it, and poisoning would take down the windows that survived.
     SWAPCHAIN
         .write()
         .unwrap_or_else(|poisoned| poisoned.into_inner())
@@ -249,10 +221,7 @@ pub(crate) fn swapchain_rebuild_lock() -> std::sync::RwLockWriteGuard<'static, (
 
 /// A pipeline built on a scoped thread, or the reason it could not be.
 ///
-/// A panic here is rarely a bug in the pipeline: wgpu reports a fatal device error as a panic, so a device
-/// lost by any window arrives as one on every thread that touches it afterwards. Unwrapping would carry that
-/// into the caller — the UI thread — and end the process, which is how one dead device cost a whole
-/// application rather than the one surface that failed to open.
+/// A panic here is rarely a bug in the pipeline: wgpu reports a fatal device error as a panic, so a device lost by any window arrives as one on every thread that touches it afterwards. Unwrapping would carry that into the caller — the UI thread — and end the process, which is how one dead device cost a whole application rather than the one surface that failed to open.
 #[cfg(not(target_arch = "wasm32"))]
 fn built<T>(handle: std::thread::ScopedJoinHandle<'_, T>) -> Result<T, RendererError> {
     handle
@@ -260,8 +229,7 @@ fn built<T>(handle: std::thread::ScopedJoinHandle<'_, T>) -> Result<T, RendererE
         .map_err(|_| RendererError::Backend("a render pipeline could not be built".to_string()))
 }
 
-/// Opens the process-wide GPU objects, or hands back the ones a renderer already opened. Blocking, and
-/// serialized against every window's surface lifecycle for the same reason [`HardwareRenderer::new`] is.
+/// Opens the process-wide GPU objects, or hands back the ones a renderer already opened. Blocking, and serialized against every window's surface lifecycle for the same reason [`HardwareRenderer::new`] is.
 pub(crate) fn open_shared_gpu() -> Result<SharedGpu, RendererError> {
     if let Some(gpu) = SHARED_GPU.get() {
         return Ok(gpu.clone());
@@ -272,14 +240,9 @@ pub(crate) fn open_shared_gpu() -> Result<SharedGpu, RendererError> {
 
 /// What the instance is allowed to switch on for itself.
 ///
-/// A debug build normally asks for the validation layers and `VK_EXT_debug_utils`, which is the right
-/// default everywhere it works. It does not work here: several Android Vulkan loaders *advertise*
-/// `VK_EXT_debug_utils` and then hand back no entry point for it, and the loader that asked panics inside a
-/// function that cannot unwind — so the process aborts before the first frame, and a debug build of any
-/// Telar app simply would not start on the phone.
+/// A debug build normally asks for the validation layers and `VK_EXT_debug_utils`, which is the right default everywhere it works. It does not work here: several Android Vulkan loaders *advertise* `VK_EXT_debug_utils` and then hand back no entry point for it, and the loader that asked panics inside a function that cannot unwind — so the process aborts before the first frame, and a debug build of any Telar app simply would not start on the phone.
 ///
-/// Left alone on every other target: losing the validation layers is a real cost, and it is only paid where
-/// the alternative is not running at all.
+/// Left alone on every other target: losing the validation layers is a real cost, and it is only paid where the alternative is not running at all.
 fn instance_flags() -> wgpu::InstanceFlags {
     let flags = wgpu::InstanceFlags::from_build_config();
     if cfg!(target_os = "android") {
@@ -298,9 +261,7 @@ async fn shared_gpu(backends: wgpu::Backends) -> Result<&'static SharedGpu, Rend
         flags: instance_flags(),
         ..wgpu::InstanceDescriptor::new_without_display_handle()
     });
-    // No `compatible_surface`: the shared adapter serves every window, and on a normal single-compositor
-    // desktop any window's surface is presentable by whichever this picks. Which one that is belongs to the
-    // application (see `gpu::prefer`), because only it knows whether its frame is a menu or a viewport.
+    // No `compatible_surface`: the shared adapter serves every window, and on a normal desktop any window's surface is presentable by whichever this picks. Which one belongs to the application, because only it knows whether its frame is a menu or a viewport.
     let adapter = instance
         .request_adapter(&wgpu::RequestAdapterOptions {
             power_preference: crate::gpu::preference(),
@@ -337,8 +298,7 @@ async fn shared_gpu(backends: wgpu::Backends) -> Result<&'static SharedGpu, Rend
         .await
         .map_err(|e| RendererError::Backend(format!("GPU device request failed: {}", e)))?;
 
-    // A concurrent initializer may have won the race; keep whichever landed first (dropping the loser's
-    // handles is safe — no surface is bound to them).
+    // A concurrent initializer may have won the race; keep whichever landed first. Dropping the loser's handles is safe, since no surface is bound to them.
     let _ = SHARED_GPU.set(SharedGpu {
         instance,
         adapter,
@@ -348,17 +308,14 @@ async fn shared_gpu(backends: wgpu::Backends) -> Result<&'static SharedGpu, Rend
     Ok(SHARED_GPU.get().expect("shared GPU just set"))
 }
 
-// Hardware scroll-blit-with-clear: seed the offscreen with the previous frame shifted by the scroll delta so a cleared scrolling frame only redraws the exposed band. On by default for the MSAA (desktop) path; set TELAR_HW_SCROLL_BLIT=0 to fall back to a full re-render.
+// Seeds the offscreen with the previous frame shifted by the scroll delta, so a cleared scrolling frame redraws only the exposed band. `TELAR_HW_SCROLL_BLIT=0` falls back to a full re-render.
 fn hw_scroll_blit_enabled() -> bool {
     use std::sync::OnceLock;
     static V: OnceLock<bool> = OnceLock::new();
     *V.get_or_init(|| std::env::var("TELAR_HW_SCROLL_BLIT").as_deref() != Ok("0"))
 }
 
-// Damage tracking with an opaque clear (F1): generalize the scroll-blit-with-clear prime to an
-// arbitrary dirty rect so a `clear_color` frame that changed only a small region seeds the offscreen
-// with the previous frame (retained_view) and repaints only the dirty scissor instead of the whole
-// surface. On by default for the MSAA (desktop) path; set TELAR_HW_DAMAGE=0 to force a full re-render.
+// Generalises the scroll-blit prime to an arbitrary dirty rect, so a frame that changed only a small region repaints just the dirty scissor. `TELAR_HW_DAMAGE=0` forces a full re-render.
 fn hw_damage_with_clear_enabled() -> bool {
     use std::sync::OnceLock;
     static V: OnceLock<bool> = OnceLock::new();
@@ -409,7 +366,7 @@ fn cull_bounds(
     false
 }
 
-// Converts a logical scissor rect into clamped physical (x, y, w, h) for set_scissor_rect; width/height >= 1 since wgpu rejects empty scissors.
+// Width and height are at least 1, since wgpu rejects empty scissors.
 fn physical_scissor(rect: Rect, width: u32, height: u32, scale: f32) -> (u32, u32, u32, u32) {
     let x = ((rect.x * scale).max(0.0).floor() as u32).min(width.saturating_sub(1));
     let y = ((rect.y * scale).max(0.0).floor() as u32).min(height.saturating_sub(1));
@@ -431,8 +388,7 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
         font_config: renderer_text::TextShaperConfig,
         config: HardwareRendererConfig,
     ) -> Result<Self, RendererError> {
-        // Exclusive against every render thread: creating a Vulkan device/surface must not overlap another
-        // window's in-flight acquire/present (see renderer_core::gpu_sync).
+        // Exclusive against every render thread: creating a device or surface must not overlap another window's in-flight acquire or present.
         let _gpu = renderer_core::gpu_sync::lifecycle_guard();
         pollster::block_on(Self::new_async(
             window,
@@ -457,7 +413,7 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
         } else {
             wgpu::Backends::all()
         };
-        // Share the process-wide instance/adapter/device (see SharedGpu); this window owns only its surface.
+        // The process-wide instance, adapter and device are shared; this window owns only its surface.
         let gpu = shared_gpu(backends).await?;
         let instance = gpu.instance.clone();
         let adapter = gpu.adapter.clone();
@@ -468,7 +424,7 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
 
         let surface_caps = surface.get_capabilities(&adapter);
         let surface_format = preferred_format(&surface_caps);
-        // Android Adreno TBDR GPUs silently drop MSAA samples across render-pass boundaries (StoreOp::Store + LoadOp::Load on multisampled textures yields zeros); force 1 sample on Android.
+        // Adreno TBDR GPUs silently drop MSAA samples across render-pass boundaries, yielding zeros.
         let msaa_samples = if cfg!(target_os = "android") {
             1
         } else if adapter
@@ -480,7 +436,7 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
         } else {
             1
         };
-        // On Android always use Fifo: Mailbox on some Adreno/MIUI devices silently drops frames producing a black screen.
+        // Mailbox on some Adreno and MIUI devices silently drops frames, producing a black screen.
         let present_mode = if cfg!(target_os = "android") {
             wgpu::PresentMode::Fifo
         } else {
@@ -491,7 +447,7 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
                 .copied()
                 .unwrap_or(wgpu::PresentMode::Fifo)
         };
-        // A transparent app needs the compositor to blend its surface (premultiplied alpha); a normal app prefers Opaque. Pick the first mode the surface actually offers from the preference order, falling back to whatever it has.
+        // A transparent app needs the compositor to blend its surface; a normal app prefers Opaque. Pick the first mode the surface actually offers, falling back to whatever it has.
         let preferred: &[wgpu::CompositeAlphaMode] = if config.transparent {
             &[
                 wgpu::CompositeAlphaMode::PreMultiplied,
@@ -539,7 +495,7 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
         .await
     }
 
-    // Surface-independent GPU/device/pipeline construction shared by `new_async` (windowed) and `new_headless` (offscreen). Format/msaa/present/alpha are decided by the caller since only the windowed path can query surface capabilities.
+    // Format, msaa, present and alpha are decided by the caller, since only the windowed path can query surface capabilities.
     async fn from_parts(
         instance: wgpu::Instance,
         adapter: wgpu::Adapter,
@@ -554,12 +510,12 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
         cache_path: Option<&std::path::Path>,
         font_config: renderer_text::TextShaperConfig,
     ) -> Result<Self, RendererError> {
-        // Read off the device, not the adapter: an adopted device (see `crate::gpu`) may have been created without a feature its adapter advertises, and taking the immediates path against one that lacks it is a validation error rather than a slow path.
+        // Off the device, not the adapter: an adopted device may lack a feature its adapter advertises, and taking the immediates path against one is a validation error rather than a slow path.
         const BLUR_PARAMS_SIZE: u32 = std::mem::size_of::<BlurParams>() as u32;
         let supports_immediates = device.features().contains(wgpu::Features::IMMEDIATES)
             && device.limits().max_immediate_size >= BLUR_PARAMS_SIZE;
 
-        // Returns None on non-Vulkan backends where pipeline caching is unsupported.
+        // `None` on non-Vulkan backends, where pipeline caching is unsupported.
         let (pipeline_cache, cache_file_path) = {
             let adapter_info = adapter.get_info();
             let key = wgpu::util::pipeline_cache_key(&adapter_info)
@@ -596,17 +552,13 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
             }],
         });
 
-        // Builds this thread's shared caches if this is its first renderer, and yields handles on the one glyph
-        // atlas every renderer on the thread samples. Taken before the scope below because the text pipeline is
-        // built on a spawned thread, which a thread-local borrow cannot cross.
+        // Builds this thread's shared caches on first use and yields handles on the one glyph atlas. Taken before the scope below, because the text pipeline is built on a spawned thread a thread-local borrow cannot cross.
         let (atlas_bgl, atlas_bind_group) =
             crate::caches::atlas_handles(&device, font_config.font.clone());
 
-        // `pc` is defined here rather than inside the scope closure below so its lifetime covers the
-        // spawned threads. `ImagePipeline` is absent: its `Rc<>` cache must be built on this thread.
+        // Defined out here so its lifetime covers the spawned threads. `ImagePipeline` is absent: its `Rc` cache must be built on this thread.
         let pc = pipeline_cache.as_ref();
-        // Each pipeline's construction as a closure, so the two ways of running them — in parallel where
-        // there are threads, one after another where there are none — share one set of definitions.
+        // Each pipeline's construction as a closure, so running them in parallel or one after another shares one set of definitions.
         let make_rect = || {
             RectPipeline::new(
                 &device,
@@ -659,7 +611,7 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
         let make_retained =
             || CompositePipeline::new(&device, surface_format, 1, &viewport_bind_group_layout, pc);
 
-        // On Vulkan/Metal this takes startup from ~8 serial shader compilations to ~1 critical path.
+        // On Vulkan and Metal this takes startup from about eight serial shader compilations to one critical path.
         #[cfg(not(target_arch = "wasm32"))]
         let (
             rect_pipeline,
@@ -690,7 +642,7 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
                 built(t_retained)?,
             ))
         })?;
-        // The browser has one thread, and `std::thread::scope` there is not slower but absent: it panics.
+        // The browser has one thread, where `std::thread::scope` is not slower but absent: it panics.
         #[cfg(target_arch = "wasm32")]
         let (
             rect_pipeline,
@@ -711,8 +663,7 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
             make_composite(),
             make_retained(),
         );
-        // Built after the parallel scope because it needs the shared image layout, which the borrow of the shared
-        // set cannot cross a spawned thread to reach.
+        // After the parallel scope, because it needs the shared image layout, which the borrow of the shared set cannot cross a spawned thread to reach.
         let image_bgl =
             crate::caches::with_shared(|caches| caches.images.bind_group_layout.clone())
                 .expect("atlas_handles above built the shared caches");
@@ -725,7 +676,7 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
             &image_bgl,
         );
 
-        // Persist pipeline cache data so subsequent startups skip shader compilation.
+        // So subsequent startups skip shader compilation.
         if let (Some(cache), Some(path)) = (pipeline_cache, cache_file_path) {
             if let Some(data) = cache.get_data() {
                 if let Some(parent) = path.parent() {
@@ -738,7 +689,7 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
             }
         }
 
-        // Pre-allocate the per-layer viewport buffer/bind-group pool so the common case (few layers per frame) never hits create_buffer_init/create_bind_group during rendering.
+        // So the common case of few layers per frame never allocates during rendering.
         let mut viewport_buffer_pool = Vec::with_capacity(crate::limits::VIEWPORT_POOL_SIZE);
         for _ in 0..crate::limits::VIEWPORT_POOL_SIZE {
             viewport_buffer_pool.push(create_viewport_pool_slot(
@@ -747,7 +698,7 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
             ));
         }
 
-        // From the shared shaper, which `atlas_handles` above already built with this font config.
+        // From the shared shaper, which `atlas_handles` already built with this font config.
         let font_metrics = crate::caches::with_shared(|caches| caches.text_shaper.font_metrics())
             .expect("atlas_handles above built the shared caches");
 
@@ -827,9 +778,7 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
         })
     }
 
-    /// Rebind the renderer to a new native window after Android resume.
-    /// Keeps all GPU resources (device, pipelines, caches, atlas) intact — only the surface is replaced.
-    /// The new surface will be configured on the next `begin_frame` call.
+    /// Rebind the renderer to a new native window after Android resume. Keeps all GPU resources (device, pipelines, caches, atlas) intact — only the surface is replaced. The new surface will be configured on the next `begin_frame` call.
     pub fn rebind_surface(&mut self, window: std::sync::Arc<W>) -> Result<(), RendererError> {
         let new_surface = self
             .instance
@@ -837,7 +786,7 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
             .map_err(|e| RendererError::Surface(e.to_string()))?;
         self.surface = Some(new_surface);
         self._window = Some(window);
-        // Force reconfiguration on the next begin_frame (begin_frame handles config.is_none()).
+        // `begin_frame` handles `config.is_none()`.
         self.config = None;
         self.viewport_dirty = true;
         Ok(())
@@ -851,7 +800,7 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
         let width = texture.width();
         let height = texture.height();
         let unpadded_bytes_per_row = width * 4;
-        // Buffer copies require each row to start at a COPY_BYTES_PER_ROW_ALIGNMENT (256) boundary; pad the stride and strip the padding after mapping.
+        // Buffer copies require each row to start at a 256-byte boundary, so the stride is padded and stripped after mapping.
         let align = wgpu::COPY_BYTES_PER_ROW_ALIGNMENT;
         let padded_bytes_per_row = unpadded_bytes_per_row.div_ceil(align) * align;
         let buffer = self.device.create_buffer(&wgpu::BufferDescriptor {
@@ -915,7 +864,7 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
             .map_err(|e| RendererError::Backend(format!("poll failed: {e:?}")))
     }
 
-    // Returns a viewport bind group backed by a pooled uniform buffer holding `viewport`. Reuses a pre-allocated slot via round-robin (writing the new contents in place) when available, otherwise grows the pool with a fresh slot. The returned BindGroup is an Arc-backed clone, so the pool retains ownership of the underlying resources.
+    // Reuses a pooled slot round-robin, writing the new contents in place, and grows the pool otherwise. The returned bind group is an Arc-backed clone, so the pool keeps ownership.
     fn take_layer_viewport_bind_group(&mut self, viewport: Viewport) -> wgpu::BindGroup {
         let idx = self.viewport_buffer_pool_index;
         self.viewport_buffer_pool_index += 1;
@@ -933,7 +882,7 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
         bind_group.clone()
     }
 
-    // Builds a viewport bind group for the main render pass carrying the given rounded-clip SDF params (clip_rect/radius in logical space). Passing a zero rect and radius restores the unclipped viewport.
+    // A zero rect and radius restores the unclipped viewport.
     fn take_shader_clip_viewport_bind_group(
         &mut self,
         clip_rect: Rect,
@@ -950,7 +899,7 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
     }
 
     fn reconfigure(&mut self, width: u32, height: u32) {
-        // COPY_DST is needed for the non-MSAA (sample_count=1) copy_texture_to_texture path.
+        // COPY_DST is needed for the single-sample copy path.
         let surface_usage = if self.msaa_samples == 1 {
             wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::COPY_DST
         } else {
@@ -959,7 +908,7 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
         let config = SurfaceConfiguration {
             usage: surface_usage,
             format: self.surface_format,
-            // `Auto` is wgpu's pre-30 behavior: sRGB for our 8-bit formats, chosen by the backend.
+            // `Auto` is wgpu's pre-30 behaviour: sRGB for our 8-bit formats, chosen by the backend.
             color_space: wgpu::SurfaceColorSpace::Auto,
             width,
             height,
@@ -969,14 +918,14 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
             desired_maximum_frame_latency: 2,
         };
 
-        // Headless mode has no surface to configure; the SurfaceConfiguration is still kept in `self.config` so the same `config.is_some()` gating used by the windowed path applies unchanged.
+        // Headless has no surface to configure, but the config is still kept so the same `config.is_some()` gating applies unchanged.
         if let Some(surface) = self.surface.as_ref() {
             let _swapchain = swapchain_rebuild_lock();
             surface.configure(&self.device, &config);
         }
         self.config = Some(config);
         self.viewport_dirty = true;
-        // msaa_samples==1: the "resolve" is a texture copy (COPY_SRC), and the idle-blit samples this texture directly (TEXTURE_BINDING) instead of a separate retained copy. A multisample texture cannot be sampled, so TEXTURE_BINDING is added only on the single-sample branch.
+        // At one sample the resolve is a texture copy and the idle-blit samples this texture directly. A multisample texture cannot be sampled, so TEXTURE_BINDING is added only on the single-sample branch.
         let msaa_usage = if self.msaa_samples == 1 {
             wgpu::TextureUsages::RENDER_ATTACHMENT
                 | wgpu::TextureUsages::COPY_SRC
@@ -998,7 +947,7 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
             usage: msaa_usage,
             view_formats: &[],
         }));
-        // msaa_samples==1: retained texture is the copy destination, so COPY_DST is required.
+        // At one sample the retained texture is the copy destination, so COPY_DST is required.
         let retained_usage = if self.msaa_samples == 1 {
             wgpu::TextureUsages::RENDER_ATTACHMENT
                 | wgpu::TextureUsages::TEXTURE_BINDING
@@ -1022,7 +971,7 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
         });
         self.retained_view = Some(retained.create_view(&wgpu::TextureViewDescriptor::default()));
         self.retained_texture = Some(retained);
-        // Windowless: (re)create the offscreen render target at the new size. The windowed path presents to the surface swapchain instead, so it has no offscreen target; an app-owned target is sized by whoever owns it, and replacing it here would drop the picture on the floor.
+        // The windowed path presents to the swapchain and has no offscreen target; an app-owned one is sized by whoever owns it, and replacing it here would drop the picture on the floor.
         if self.surface.is_none() && !self.app_owned_target {
             self.offscreen_output = Some(create_offscreen_texture(
                 &self.device,
@@ -1031,7 +980,7 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
                 height,
             ));
         }
-        // Invalidate prev_commands on resize so scroll blit is never applied across size changes.
+        // So a scroll blit is never applied across a size change.
         self.prev_commands.clear();
     }
 
@@ -1114,8 +1063,7 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
     }
 }
 
-// Headless needs no window, so `W` is a pure phantom (`_window` is `None`) — kept generic so the caller picks
-// any window type (e.g. the canonical `platform_headless::HeadlessWindow`) without this crate depending on it.
+// Headless needs no window, so `W` is a pure phantom — kept generic so the caller picks any window type without this crate depending on it.
 impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRenderer<W> {
     /// Build a windowless renderer that draws into an offscreen texture instead of a swapchain surface. Read the rendered frame back with [`HardwareRenderer::read_rgba`]. Same font/cache/config parameters as [`HardwareRenderer::new_async`] minus the window; `width`/`height` are the initial physical target size and are re-derived from `begin_frame` on the first frame.
     pub async fn new_headless(
@@ -1125,7 +1073,7 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
         vulkan_only: bool,
         font_config: renderer_text::TextShaperConfig,
     ) -> Result<Self, RendererError> {
-        // Rgba8Unorm is a mandatory renderable format and the windowed path's first choice (see `pool::preferred_format`), so `read_rgba` yields straight R,G,B,A bytes.
+        // Rgba8Unorm is a mandatory renderable format and the windowed path's first choice, so `read_rgba` yields straight R, G, B, A bytes.
         let mut renderer = Self::new_offscreen(
             wgpu::TextureFormat::Rgba8Unorm,
             cache_path,
@@ -1133,7 +1081,7 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
             font_config,
         )
         .await?;
-        // Allocate an initial offscreen target so read_rgba works even before the first begin_frame; begin_frame's reconfigure recreates it at the real frame size.
+        // So `read_rgba` works even before the first `begin_frame`, which recreates it at the real frame size.
         if width > 0 && height > 0 {
             renderer.offscreen_output = Some(create_offscreen_texture(
                 &renderer.device,
@@ -1145,10 +1093,7 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
         Ok(renderer)
     }
 
-    /// [`new_for_texture`](Self::new_for_texture), blocking, and serialized against every other window's
-    /// surface lifecycle — the sibling of [`new`](Self::new), and what a caller building one of these
-    /// beside a live window needs: device and pipeline creation must not overlap another surface's
-    /// in-flight acquire/present (see `renderer_core::gpu_sync`).
+    /// [`new_for_texture`](Self::new_for_texture), blocking, and serialized against every other window's surface lifecycle — the sibling of [`new`](Self::new), and what a caller building one of these beside a live window needs: device and pipeline creation must not overlap another surface's in-flight acquire/present (see `renderer_core::gpu_sync`).
     pub fn for_texture(
         target: wgpu::Texture,
         cache_path: Option<&std::path::Path>,
@@ -1166,20 +1111,11 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
 
     /// Build a windowless renderer that composes its frames **into a texture the application owns**.
     ///
-    /// The mirror of [`crate::gpu::image`]: there the application fills a texture and Telar places it in
-    /// its frame; here Telar draws its frame inside a picture the application is assembling. Neither
-    /// direction tells Telar what the rest of the picture is of.
+    /// The mirror of [`crate::gpu::image`]: there the application fills a texture and Telar places it in its frame; here Telar draws its frame inside a picture the application is assembling. Neither direction tells Telar what the rest of the picture is of.
     ///
-    /// The frame is *blended* over what the texture already holds, premultiplied-alpha over, so a UI
-    /// composed with no `clear_color` lands on top of the application's own content rather than erasing
-    /// it. Rendering at the application's chosen resolution is the point — a UI at 320×180 inside a
-    /// window that is not, a viewport at half resolution while it is being dragged.
+    /// The frame is *blended* over what the texture already holds, premultiplied-alpha over, so a UI composed with no `clear_color` lands on top of the application's own content rather than erasing it. Rendering at the application's chosen resolution is the point — a UI at 320×180 inside a window that is not, a viewport at half resolution while it is being dragged.
     ///
-    /// Requirements on `target`: it must belong to the device Telar is drawing with (see
-    /// [`crate::gpu::shared`]) and carry `RENDER_ATTACHMENT` usage. Its format decides the format every
-    /// pipeline here is built against, so it must be renderable and blendable. Drive the renderer with
-    /// `begin_frame` at the target's own pixel size; [`compose_into`](Self::compose_into) swaps in a new
-    /// texture when the application resizes.
+    /// Requirements on `target`: it must belong to the device Telar is drawing with (see [`crate::gpu::shared`]) and carry `RENDER_ATTACHMENT` usage. Its format decides the format every pipeline here is built against, so it must be renderable and blendable. Drive the renderer with `begin_frame` at the target's own pixel size; [`compose_into`](Self::compose_into) swaps in a new texture when the application resizes.
     pub async fn new_for_texture(
         target: wgpu::Texture,
         cache_path: Option<&std::path::Path>,
@@ -1194,15 +1130,13 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
 
     /// Swaps the application-owned texture this renderer composes into — how an application resizes it.
     ///
-    /// The new texture must match the format the renderer's pipelines were built against (that of the
-    /// one passed to [`new_for_texture`](Self::new_for_texture)); a different format needs a new
-    /// renderer.
+    /// The new texture must match the format the renderer's pipelines were built against (that of the one passed to [`new_for_texture`](Self::new_for_texture)); a different format needs a new renderer.
     pub fn compose_into(&mut self, target: wgpu::Texture) {
         self.app_owned_target = true;
         self.offscreen_output = Some(target);
     }
 
-    // Everything `new_headless` and `new_for_texture` share: no window, no surface, no swapchain — only the format differs, and with it every pipeline built below.
+    // Everything the two offscreen constructors share: no window, no surface, no swapchain. Only the format differs, and with it every pipeline built below.
     async fn new_offscreen(
         surface_format: wgpu::TextureFormat,
         cache_path: Option<&std::path::Path>,
@@ -1214,7 +1148,7 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
         } else {
             wgpu::Backends::all()
         };
-        // Share the process-wide instance/adapter/device (see SharedGpu); this renderer draws offscreen (no surface).
+        // The process-wide device is shared; this renderer draws offscreen, with no surface.
         let gpu = shared_gpu(backends).await?;
         let instance = gpu.instance.clone();
         let adapter = gpu.adapter.clone();
@@ -1228,7 +1162,7 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
         } else {
             1
         };
-        // present_mode/alpha_mode are only consumed when configuring a surface, which never happens without one; they still fill the shared SurfaceConfiguration built in reconfigure.
+        // Only consumed when configuring a surface, which never happens without one; they still fill the shared `SurfaceConfiguration` built in `reconfigure`.
         let present_mode = wgpu::PresentMode::Fifo;
         let alpha_mode = wgpu::CompositeAlphaMode::Opaque;
         tracing::info!(

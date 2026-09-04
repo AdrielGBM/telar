@@ -1,3 +1,5 @@
+//! [`menu`]: a button that opens a list of one-shot actions.
+
 use std::rc::Rc;
 
 use layout_core::LayoutError;
@@ -9,16 +11,13 @@ use ui_core::Slots;
 use ui_core::{Children, LayoutItem};
 
 use crate::dropdown;
-// Re-exported for the test module below, which reads these via `use super::*` to compute click points.
+// Re-exported for the test module below, which reads them via `use super::*` to compute click points.
 #[cfg(test)]
 use crate::dropdown::{PANEL_WIDTH, ROW_HEIGHT, TRIGGER_HEIGHT, panel_pad};
 #[cfg(test)]
 use ui_core::track_layout;
 
-/// A click-triggered list of action items: a labelled trigger button that opens an anchored list; picking an
-/// item fires `on_select` with its index and closes. Unlike `select`, a menu holds no bound selection state —
-/// its items are one-shot actions. High-level sugar built on the overlay anchor + click-through primitives;
-/// lives in `ui-components`, not the kernel.
+/// A click-triggered list of action items: a labelled trigger button that opens an anchored list; picking an item fires `on_select` with its index and closes. Unlike `select`, a menu holds no bound selection state — its items are one-shot actions. High-level sugar built on the overlay anchor + click-through primitives; lives in `ui-components`, not the kernel.
 #[derive(Props)]
 pub struct MenuProps {
     /// The trigger button's label.
@@ -27,32 +26,27 @@ pub struct MenuProps {
     /// Fired with the index of the chosen item when it is picked.
     #[props(some, default)]
     pub on_select: Option<Rc<dyn Fn(u32)>>,
-    /// Accent colour (trigger border, hover highlight). `Color::TRANSPARENT` (the default) means "unset" and
-    /// falls back to the theme accent. A closure so a theme token re-reads on every render.
+    /// Accent colour (trigger border, hover highlight). `Color::TRANSPARENT` (the default) means "unset" and falls back to the theme accent. A closure so a theme token re-reads on every render.
     #[props(into, default = Reactive::of(|| Color::TRANSPARENT))]
     pub color: Reactive<Color>,
     /// Take the width the row offers instead of the fixed trigger width — see [`crate::SelectProps::stretch`].
     #[props(default)]
     pub stretch: bool,
-    /// Draw the trigger as a field, with the border a `select` carries. Off by default, because a menu is a
-    /// *button* that happens to open a list, and a button wears no frame until it is pressed.
+    /// Draw the trigger as a field, with the border a `select` carries. Off by default, because a menu is a *button* that happens to open a list, and a button wears no frame until it is pressed.
     ///
-    /// A prop and not a decision settled inside the component, because both readings are legitimate: a menu
-    /// standing alone in a header wants no frame, and one sitting in a row of fields wants to match them.
+    /// A prop and not a decision settled inside the component, because both readings are legitimate: a menu standing alone in a header wants no frame, and one sitting in a row of fields wants to match them.
     #[props(default)]
     pub bordered: bool,
     /// Show the caret that says the trigger opens something. On by default.
     #[props(default = true)]
     pub caret: bool,
-    /// Amends the paint of the trigger — this component's **principal surface**, the thing a caller means
-    /// when they point at a menu. See `shared::SurfaceStyle` for why it takes the finished style rather than
-    /// naming one property, and for when a theme token is the right instrument instead.
+    /// Amends the paint of the trigger — this component's **principal surface**, the thing a caller means when they point at a menu. See `shared::SurfaceStyle` for why it takes the finished style rather than naming one property, and for when a theme token is the right instrument instead.
     #[props(some, default)]
     pub style: Option<Rc<dyn Fn(renderer_core::RectStyle) -> renderer_core::RectStyle>>,
 }
 
-// A menu carries no bound selection (`selected: None`), so its rows are one-shot actions: no index is written
-// back and no row is highlighted. The reactive `label` closure is handed straight to the dropdown trigger.
+// A menu carries no bound selection, so its rows are one-shot actions: no index is written back and no row is highlighted.
+/// A button that opens a list of one-shot actions.
 pub fn menu(props: MenuProps, children: Children) -> Result<Box<dyn LayoutItem>, LayoutError> {
     dropdown::dropdown(dropdown::Dropdown {
         label: dropdown::TriggerLabel::Fixed(props.label),
@@ -67,8 +61,7 @@ pub fn menu(props: MenuProps, children: Children) -> Result<Box<dyn LayoutItem>,
     })
 }
 
-/// A plain row per label, which is what the markup `menu … item label:"…"` compiles to. Enough for the tests
-/// that care about the trigger and the panel rather than about what a row can be.
+/// A plain row per label, which is what the markup `menu … item label:"…"` compiles to. Enough for the tests that care about the trigger and the panel rather than about what a row can be.
 #[cfg(test)]
 fn rows(labels: &'static [&'static str]) -> Children {
     Children::new(move || {
@@ -90,10 +83,7 @@ fn rows(labels: &'static [&'static str]) -> Children {
 
 /// The shape of a trigger is the caller's call, not the component's.
 ///
-/// The default splits them by what they are — a menu is a button, a select is a field — but a menu dropped
-/// into a row of inputs wants to match them, and there has to be a way to say so that is not editing the
-/// catalogue. Guards the props rather than the pixels: what matters is that they *reach*
-/// the trigger's paint at all.
+/// The default splits them by what they are — a menu is a button, a select is a field — but a menu dropped into a row of inputs wants to match them, and there has to be a way to say so that is not editing the catalogue. Guards the props rather than the pixels: what matters is that they *reach* the trigger's paint at all.
 #[cfg(test)]
 #[test]
 fn a_menu_can_be_asked_for_a_field_and_for_no_caret() {
@@ -152,12 +142,9 @@ fn a_menu_can_be_asked_for_a_field_and_for_no_caret() {
 
 /// A caller can restyle the surface without editing the catalogue.
 ///
-/// The pressure this relieves is real: an app wanted its menu trigger squared off, and the only lever the
-/// catalogue offered was the theme's radius — which moves every rounded thing in the application. Editing
-/// `dropdown.rs` to hold one app's opinion is how a shared component stops being shared.
+/// The pressure this relieves is real: an app wanted its menu trigger squared off, and the only lever the catalogue offered was the theme's radius — which moves every rounded thing in the application. Editing `dropdown.rs` to hold one app's opinion is how a shared component stops being shared.
 ///
-/// The amendment must *compose*, not replace: the component still decides that a bordered trigger wears a
-/// stroke, and the caller only says what they came to say.
+/// The amendment must *compose*, not replace: the component still decides that a bordered trigger wears a stroke, and the caller only says what they came to say.
 #[cfg(test)]
 #[test]
 fn a_caller_can_amend_the_paint_the_trigger_worked_out_for_itself() {
@@ -228,12 +215,9 @@ mod tests {
     use super::*;
     use crate::harness::{press, release, route};
 
-    // Mirror the runner: consult the overlay registry first, then walk the tree only if no overlay
-    // consumed the event (the anchored panel routes through the registry, the trigger through the tree).
+    // Mirrors the runner: the overlay registry first, then the tree only if no overlay consumed the event.
 
-    /// A compact trigger does not squeeze the panel. `stretch` means "be at least as wide as the control I sit
-    /// under", and taking that width outright turned a `File` button into a 40px sheet with one character per
-    /// line — every item wrapped down its own column.
+    /// A compact trigger does not squeeze the panel. `stretch` means "be at least as wide as the control I sit under", and taking that width outright turned a `File` button into a 40px sheet with one character per line — every item wrapped down its own column.
     #[test]
     fn a_narrow_filled_trigger_still_opens_a_readable_panel() {
         crate::test_support::fresh_layout_runtime();
@@ -242,7 +226,6 @@ mod tests {
             rows(&["New", "Open…", "Save", "Import STEP…"]),
         )
         .unwrap();
-        // A row 44px wide: what a compact menu button gets in a header.
         let root_node = item.layout_node();
         let row = ui_core::new_container(
             LayoutStyle::new().flex_row().width(44.0).height(400.0),
@@ -263,7 +246,6 @@ mod tests {
         relayout_if_dirty();
         let _ = tree.commands();
 
-        // The first item's row: it belongs to the panel, so its width is the panel's minus its padding.
         let widths: Vec<f32> = tree
             .commands()
             .iter()
@@ -280,7 +262,6 @@ mod tests {
         );
     }
 
-    // Construction: a menu builds headless, lays out (the trigger takes its fixed size), and renders.
     #[test]
     fn builds_and_lays_out() {
         crate::test_support::fresh_layout_runtime();
@@ -313,10 +294,7 @@ mod tests {
         }
     }
 
-    /// A menu was reachable by mouse and by nothing else: the trigger took no focus, so Tab passed it by, and
-    /// the panel answered to no key at all. Radix gives arrows, Home/End and Escape away for free; here every
-    /// one of them was absent, which is the difference between a control a keyboard user can operate and one
-    /// they cannot.
+    /// A menu was reachable by mouse and by nothing else: the trigger took no focus, so Tab passed it by, and the panel answered to no key at all. Radix gives arrows, Home/End and Escape away for free; here every one of them was absent, which is the difference between a control a keyboard user can operate and one they cannot.
     #[test]
     fn a_menu_can_be_opened_and_driven_from_the_keyboard() {
         use platform_core::NamedKey;
@@ -342,7 +320,6 @@ mod tests {
         .unwrap();
         let mut tree = ComponentList::new(item);
 
-        // Tab reaches the trigger at all, which is what makes the rest addressable.
         ui_core::focus::focus_next();
         assert!(
             ui_core::focus::current().is_some(),
@@ -351,15 +328,12 @@ mod tests {
 
         route(&mut tree, &key(NamedKey::ArrowDown));
         relayout_if_dirty();
-        // Down from the trigger opens, Down again steps to the second row, Enter commits it.
         route(&mut tree, &key(NamedKey::ArrowDown));
         route(&mut tree, &key(NamedKey::Enter));
         assert_eq!(seen.get(), Some(1), "the highlighted row is what commits");
     }
 
-    /// Escape closes it even though the trigger holds focus. `dispatch_overlays` only dismisses when nothing
-    /// is focused — right for a field, which blurs itself first, and wrong here, where the focused thing *is*
-    /// the control the menu belongs to.
+    /// Escape closes it even though the trigger holds focus. `dispatch_overlays` only dismisses when nothing is focused — right for a field, which blurs itself first, and wrong here, where the focused thing *is* the control the menu belongs to.
     #[test]
     fn escape_closes_a_menu_whose_trigger_holds_focus() {
         use platform_core::NamedKey;
@@ -391,12 +365,10 @@ mod tests {
         route(&mut tree, &key(NamedKey::Escape));
         relayout_if_dirty();
 
-        // Shut: Enter commits nothing, because there is no list to commit from.
         route(&mut tree, &key(NamedKey::Enter));
         assert_eq!(seen.get(), None, "Escape shut it before Enter could pick");
     }
 
-    // Picking an item fires on_select with its index and closes the menu.
     #[test]
     fn selecting_an_item_fires_on_select_and_closes() {
         crate::test_support::fresh_layout_runtime();
@@ -410,8 +382,7 @@ mod tests {
             rows(&["Rename", "Duplicate", "Delete"]),
         )
         .unwrap();
-        // The widget's own root is the parent-less layout host, laid out at the origin: the trigger sits at
-        // (0,0) and the panel anchors directly below it, so click points are computable from the constants.
+        // The widget's own root is the parent-less layout host laid out at the origin, so the trigger sits at (0,0) and the panel anchors directly below it.
         let root_node = item.layout_node();
         compute_layout(
             root_node,
@@ -422,14 +393,12 @@ mod tests {
         let mut tree = ComponentList::new(item);
         let _ = tree.commands();
 
-        // A tap on the trigger (through the tree) opens the panel.
         let tx = (PANEL_WIDTH / 2.0) as f64;
         let ty = (TRIGGER_HEIGHT / 2.0) as f64;
         route(&mut tree, &press(tx, ty));
         route(&mut tree, &release(tx, ty));
         relayout_if_dirty();
 
-        // Item index 1 ("Duplicate") sits at the trigger's bottom + panel padding + one row.
         let ox = (PANEL_WIDTH / 2.0) as f64;
         let oy = (TRIGGER_HEIGHT + panel_pad() + ROW_HEIGHT + ROW_HEIGHT / 2.0) as f64;
         route(&mut tree, &press(ox, oy));
@@ -446,12 +415,9 @@ mod tests {
             "the menu closes after a pick"
         );
     }
-    /// What a menu could not say before, said end to end: a disabled row, a separator, and a heading are all
-    /// *in* the list and none of them is a place the keyboard stops.
+    /// What a menu could not say before, said end to end: a disabled row, a separator, and a heading are all *in* the list and none of them is a place the keyboard stops.
     ///
-    /// The three used to be inexpressible for the same reason — the rows were `Vec<&str>`, and a string
-    /// carries no state — and they are testable together now for the same reason: each row builds itself
-    /// inside the menu, so it can register what it is rather than being told.
+    /// The three used to be inexpressible for the same reason — the rows were `Vec<&str>`, and a string carries no state — and they are testable together now for the same reason: each row builds itself inside the menu, so it can register what it is rather than being told.
     #[test]
     fn the_keyboard_steps_over_what_it_cannot_commit() {
         use platform_core::NamedKey;
@@ -460,7 +426,6 @@ mod tests {
         ui_core::focus::clear();
         let seen: Rc<Cell<Option<u32>>> = Rc::new(Cell::new(None));
         let sink = seen.clone();
-        // Rename · [disabled] Duplicate · ─── · "Danger" · Delete.
         let structured = Children::new(|| {
             let mut slots = Slots::new();
             let row = |label: &'static str, disabled: bool| {
@@ -510,8 +475,7 @@ mod tests {
         ui_core::focus::focus_next();
         route(&mut tree, &key(NamedKey::ArrowDown));
         relayout_if_dirty();
-        // One step down from "Rename" is "Delete" at index 4: the disabled row, the rule and the heading are
-        // all passed over rather than stopped on.
+        // One step down from "Rename" is "Delete" at index 4: the disabled row, the rule and the heading are all passed over rather than stopped on.
         route(&mut tree, &key(NamedKey::ArrowDown));
         route(&mut tree, &key(NamedKey::Enter));
         assert_eq!(
@@ -566,7 +530,6 @@ mod tests {
         route(&mut tree, &release(tx, ty));
         relayout_if_dirty();
 
-        // The second row, which is the disabled one.
         let oy = (TRIGGER_HEIGHT + panel_pad() + ROW_HEIGHT + ROW_HEIGHT / 2.0) as f64;
         route(&mut tree, &press(tx, oy));
         route(&mut tree, &release(tx, oy));
@@ -580,8 +543,7 @@ mod tests {
         }
     }
 
-    /// Rename · Duplicate · Delete · [disabled] Deploy. Three rows share a first letter and the fourth is out
-    /// of reach, which is the whole of what type-ahead has to tell apart.
+    /// Rename · Duplicate · Delete · [disabled] Deploy. Three rows share a first letter and the fourth is out of reach, which is the whole of what type-ahead has to tell apart.
     fn typeahead_menu(sink: Rc<Cell<Option<u32>>>) -> Box<dyn LayoutItem> {
         let structured = Children::new(|| {
             let mut slots = Slots::new();
@@ -630,7 +592,7 @@ mod tests {
         ui_core::reset_keyboard();
         let seen: Rc<Cell<Option<u32>>> = Rc::new(Cell::new(None));
 
-        // Scoped and disposed, because this helper runs twice in one test and the second call replaces the layout runtime, which starts its ids over. An unscoped first tree keeps its effects running against ids the second tree now owns, and the second walk finds rows that are not there.
+        // Scoped and disposed, because this helper runs twice in one test and the second call replaces the layout runtime, which starts its ids over. An unscoped first tree would keep effects running against ids the second now owns.
         let scope = reactive_core::owner_scope();
         let owner = scope.id();
         let mut tree = ComponentList::new(typeahead_menu(seen.clone()));
@@ -650,24 +612,19 @@ mod tests {
         seen.get()
     }
 
-    /// The plain case, and the one a list of more than a screenful is unusable without: a letter takes the
-    /// cursor to the row that starts with it instead of making the user arrow there.
+    /// The plain case, and the one a list of more than a screenful is unusable without: a letter takes the cursor to the row that starts with it instead of making the user arrow there.
     #[test]
     fn a_typed_letter_moves_the_cursor_to_the_row_it_names() {
         assert_eq!(typed_pick("d"), Some(1), "`d` lands on Duplicate");
     }
 
-    /// Refining holds still. `de` after `d` narrows towards a row rather than asking for the next one, which
-    /// is why a multi-character query does not skip where the cursor already is.
+    /// Refining holds still. `de` after `d` narrows towards a row rather than asking for the next one, which is why a multi-character query does not skip where the cursor already is.
     #[test]
     fn a_longer_query_narrows_instead_of_advancing() {
         assert_eq!(typed_pick("de"), Some(2), "`de` narrows past Duplicate");
     }
 
-    /// A repeated letter cycles. `ddd` is not a query — no label could match it — it is "the next row starting
-    /// with d", and it is the only way to reach the second of two rows sharing a first letter. The third press
-    /// wraps back around, stepping over the disabled `Deploy` on the way: a row the keyboard may not stop on
-    /// is not a search result either.
+    /// A repeated letter cycles. `ddd` is not a query — no label could match it — it is "the next row starting with d", and it is the only way to reach the second of two rows sharing a first letter. The third press wraps back around, stepping over the disabled `Deploy` on the way: a row the keyboard may not stop on is not a search result either.
     #[test]
     fn a_repeated_letter_cycles_through_the_rows_that_share_it() {
         assert_eq!(
@@ -682,8 +639,7 @@ mod tests {
         );
     }
 
-    /// A chord is a command, not a query. Without this, an application-level `Ctrl+S` reaching an open menu
-    /// would silently walk its cursor to the first row starting with `s`.
+    /// A chord is a command, not a query. Without this, an application-level `Ctrl+S` reaching an open menu would silently walk its cursor to the first row starting with `s`.
     #[test]
     fn a_modified_character_is_not_a_search() {
         use platform_core::NamedKey;

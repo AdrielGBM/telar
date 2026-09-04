@@ -1,10 +1,6 @@
-//! Does a click alone keep frames coming? A navigation starts a `NavTransition::Fade`, and the loop must keep
-//! scheduling frames for as long as it is unsettled — without the user moving the mouse to generate events.
-//! Driven through the same `EventHandler` seam winit uses, so a regression here is a regression on the desktop.
+//! Does a click alone keep frames coming? A navigation starts a `NavTransition::Fade`, and the loop must keep scheduling frames for as long as it is unsettled — without the user moving the mouse to generate events. Driven through the same `EventHandler` seam winit uses, so a regression here is a regression on the desktop.
 //!
-//! Asserted as a contract, not as a frame count: how many frames a 220ms fade gets depends on what a frame
-//! costs (in a debug build with the software renderer, a section swap costs tens of ms), so the invariant is
-//! "the loop asks to be woken exactly while something is animating".
+//! Asserted as a contract, not as a frame count: how many frames a 220ms fade gets depends on what a frame costs (in a debug build with the software renderer, a section swap costs tens of ms), so the invariant is "the loop asks to be woken exactly while something is animating".
 
 use std::time::Duration;
 
@@ -23,8 +19,7 @@ fn feed(
     handler.about_to_wait()
 }
 
-/// One loop iteration that renders, returning the pace the handler asks to be woken at. `None` means "nothing
-/// to do, sleep until real input" — which while an animation runs is the symptom of a stalled transition.
+/// One loop iteration that renders, returning the pace the handler asks to be woken at. `None` means "nothing to do, sleep until real input" — which while an animation runs is the symptom of a stalled transition.
 fn frame(
     handler: &mut Box<dyn EventHandler<HeadlessWindow>>,
     window: &HeadlessWindow,
@@ -79,8 +74,7 @@ fn a_nav_click_keeps_the_loop_scheduling_frames_until_the_fade_settles() {
     frame(&mut handler, &window);
     frame(&mut handler, &window);
 
-    // Nav item 5 in the rail, at the coordinates the other shell tests use. The press only arms the button;
-    // `on_press` fires on release, which is where the navigation (and its fade) starts.
+    // Nav item 5 in the rail, at the coordinates the other shell tests use. The press only arms the button; `on_press` fires on release, which is where the navigation (and its fade) starts.
     let (x, y) = (110.0, 489.0);
     feed(&mut handler, &window, press(x, y));
     let after_release = feed(&mut handler, &window, release(x, y));
@@ -94,8 +88,7 @@ fn a_nav_click_keeps_the_loop_scheduling_frames_until_the_fade_settles() {
          advance when some unrelated event arrived"
     );
 
-    // Drive frames with NO further input, as the runner's own timer wake does. While the fade is unsettled the
-    // handler must keep asking for the next frame; once it settles it must stop, so the loop can sleep.
+    // Drive frames with NO further input, as the runner's own timer wake does. While the fade is unsettled the handler must keep asking for the next frame; once it settles it must stop, so the loop can sleep.
     for i in 0..60 {
         let pace = frame(&mut handler, &window);
         if telar::motion::has_active() {

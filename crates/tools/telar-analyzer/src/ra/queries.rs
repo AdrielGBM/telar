@@ -1,3 +1,5 @@
+//! The analyzer queries the backend delegates to: completion, hover, definition, references and rename.
+
 use std::path::Path;
 
 use lsp_types::{

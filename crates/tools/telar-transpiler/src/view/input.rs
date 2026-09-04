@@ -12,8 +12,7 @@ impl ViewGen<'_> {
         let var = self.next_variable_name("input");
         let pad = self.indent_str();
 
-        // `value:$signal` binds the field to an `RwSignal<String>`; pass a clone so the binding stays usable
-        // elsewhere. A non-`$` value is forwarded verbatim (e.g. an already-owned signal expression).
+        // Pass a clone so the caller's binding stays usable; a non-`$` value is forwarded verbatim.
         let value_expr = match el.attributes.iter().find(|a| a.key == "value") {
             Some(a) => match a.value.text().trim().strip_prefix('$') {
                 Some(id) => format!("{id}.clone()"),
@@ -22,9 +21,6 @@ impl ViewGen<'_> {
             None => "Default::default()".to_string(),
         };
 
-        // Styled by what the tree above it declared, amended by whatever it says for itself — the same rule a
-        // `text` takes, and for the same reason: a field that ignored the face around it was written in a
-        // different hand from the labels beside it, which is why one standing in for a tab had to stay Rust.
         let mut hoists = Vec::new();
         let transitions = std::collections::HashMap::new();
         let modifiers = self.inheritable_modifiers(&el.attributes, &transitions, &mut hoists);
@@ -32,8 +28,6 @@ impl ViewGen<'_> {
             &[super::text::raw_color_value(&el.attributes)],
             format!("move |__inherited: TextStyle| __inherited{modifiers}"),
         );
-        // The size a leaf falls back to for its own height, which is the one thing inheritance cannot answer
-        // before the layout runs.
         let size = el
             .attributes
             .iter()
@@ -41,7 +35,7 @@ impl ViewGen<'_> {
             .map(|a| crate::style::number_or(a.value.text(), "14.0"))
             .unwrap_or_else(|| "14.0".to_string());
 
-        // Remaining attrs are layout (width/height/…); `value`/`size`/`color`/`on_submit` are consumed above.
+        // `value`/`size`/`color`/`on_submit` are consumed above; the rest is layout.
         let mut extra = String::new();
         for a in &el.attributes {
             if matches!(
@@ -71,7 +65,6 @@ impl ViewGen<'_> {
             format!("LayoutStyle::new(){extra}.height({size} * 1.4)")
         };
 
-        // Optional `on_submit` closure (Enter), boxed like any handler with its `$signal`s cloned in.
         let on_submit = el
             .attributes
             .iter()
@@ -81,9 +74,6 @@ impl ViewGen<'_> {
                 wrap_signal_clones(&[a.value.text()], format!("move {closure}"))
             });
 
-        // The hint shown while the field is empty: a quoted literal, a `t"…"` translation, or any expression
-        // yielding a `String`. The widget has taken one since it existed; without a spelling for it, every form
-        // field in a real application had to stay hand-written Rust just to say what it is for.
         let placeholder = el
             .attributes
             .iter()
@@ -93,9 +83,7 @@ impl ViewGen<'_> {
                 value => value.text().trim().to_string(),
             });
 
-        // The other half of `on_submit`: Escape is a key a focused field eats, so an application watching from
-        // outside cannot tell «they gave up» from «they clicked away» — opposite answers wherever losing focus
-        // commits.
+        // Escape is eaten by a focused field, so without this an application cannot tell giving up from clicking away.
         let on_cancel = el
             .attributes
             .iter()
@@ -115,21 +103,13 @@ impl ViewGen<'_> {
         if let Some(p) = placeholder {
             tail.push_str(&format!(".placeholder({p})"));
         }
-        // A bare `secret` is the whole of what a password field needs to say; the bullet is not the caller's
-        // choice to make. Without a spelling for it, every login form in a `.rsx` application had to drop to
-        // hand-written Rust or render the password in clear text.
         if el.attributes.iter().any(|a| a.key == "secret") {
             tail.push_str(".secret()");
         }
-        // A field somebody has to click before they can type into it is a field that has not opened — which is
-        // what a surface that exists *because* it wants a keystroke is asking for.
         if el.attributes.iter().any(|a| a.key == "autofocus") {
             tail.push_str(".autofocus()");
         }
-        // `focus_id:$sig` — who holds the keyboard, published by the field itself, because the answer only
-        // exists once the widget does: `[logic]` runs before the view is built and has nothing to ask yet.
-        // Withdrawn when the field goes, by the field: an id that outlived the widget it named is an answer
-        // about something that is not there any more, and whoever is watching would read it as «still typing».
+        // Published by the field itself, because the answer exists only once the widget does. Withdrawn with the field: an id outliving its widget would read as "still typing".
         let held = el
             .attributes
             .iter()

@@ -1,3 +1,5 @@
+//! [`Svg`]: a vector-artwork leaf, sized by `object-fit` and optionally tinted.
+
 use std::sync::Arc;
 
 use geometry_core::{ObjectFit, Rect};
@@ -10,6 +12,7 @@ use ui_tree::{Component, EventResult, NodeVec, RenderNode};
 use crate::impl_leaf_widget;
 use crate::layout_leaf::LayoutLeaf;
 
+/// A vector-artwork leaf, sized by `object-fit` and optionally tinted.
 pub struct Svg {
     data: Box<dyn Fn() -> Arc<SvgData>>,
     tint: Box<dyn Fn() -> Option<Color>>,
@@ -25,7 +28,7 @@ impl Svg {
         tint_fn: impl Fn() -> Option<Color> + 'static,
         fit_fn: impl Fn() -> ObjectFit + 'static,
     ) -> Result<Self, LayoutError> {
-        // A side left at `auto` falls back to the SVG's intrinsic size; a single px side derives the other from the intrinsic aspect ratio; a percent side is left untouched.
+        // A side left at `auto` falls back to the intrinsic size, a single px side derives the other from the intrinsic aspect ratio, and a percent side is left untouched.
         let layout_style =
             crate::layout_leaf::resolve_intrinsic_size(layout_style, || data_fn().intrinsic_size());
 
@@ -54,7 +57,7 @@ impl Component for Svg {
             (self.data)().commands_for(r.width, r.height, (self.tint)(), (self.stroke)(), fit);
         let children = NodeVec::collect(commands.iter().cloned().map(RenderNode::Primitive));
         let group = RenderNode::Group { children };
-        // Cover scales the paths past the box; clip the overflow to the widget's local box. The renderer maps clip rects through the active matrix, so a local (0,0,w,h) clip composes with this widget's layout transform and any scroll.
+        // Cover scales the paths past the box. The renderer maps clip rects through the active matrix, so a local (0,0,w,h) clip composes with this widget's transform and any scroll.
         let node = if fit == ObjectFit::Cover {
             RenderNode::clip(
                 Rect::new(0.0, 0.0, r.width, r.height),
@@ -79,7 +82,7 @@ impl Component for Svg {
 
 impl_leaf_widget!(Svg);
 
-// Gated on `dynamic-svg`: these tests build `SvgData` with `from_str`, which is unavailable under bare `svg`.
+// Gated on `dynamic-svg`: these build `SvgData` with `from_str`, unavailable under bare `svg`.
 #[cfg(all(test, feature = "dynamic-svg"))]
 mod tests {
     use std::cell::Cell;
@@ -195,8 +198,6 @@ mod tests {
         );
     }
 
-    // `tint_fn` must be invoked fresh on every `view()` (not cached from construction), so a `$signal`
-    // tint (the reactive path the transpiler now wires for `svg tint:$accent`) recolors live.
     #[test]
     fn tint_closure_is_re_read_each_view_and_recolors_the_path() {
         reset_layout_runtime();
@@ -231,12 +232,9 @@ mod tests {
         );
     }
 
-    // `data_fn` must likewise be invoked fresh on every `view()`, so a reactive `svg src:icon($glyph)`
-    // (the transpiler now wires a re-reading data closure) swaps the glyph live when its signal changes.
     #[test]
     fn data_closure_is_re_read_each_view_and_swaps_the_glyph() {
         reset_layout_runtime();
-        // Two glyphs distinguishable by shape count: one rect vs two.
         let one = Arc::new(
             SvgData::from_str(
                 r##"<svg xmlns="http://www.w3.org/2000/svg" width="10" height="10"><rect width="4" height="4" fill="#f00"/></svg>"##,
@@ -279,9 +277,7 @@ mod tests {
         );
     }
 
-    // Reactive swap through the FULL pipeline (signal + ComponentList), mirroring a bar's adaptive icon
-    // whose glyph flips on a live update. The second frame must contain ONLY the new glyph's paths — a
-    // leftover from the first would be the "icon after the icon" duplicate seen live.
+    // Regression: the second frame must hold only the new glyph's paths — a leftover from the first was the "icon after the icon" duplicate seen live.
     #[test]
     fn reactive_svg_swap_through_component_list_replaces() {
         use reactive_core::signal;

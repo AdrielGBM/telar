@@ -1,13 +1,10 @@
+//! [`Navigator`]: the route stack, and the push/pop/replace commands that move it.
+
 use reactive_core::{RwSignal, signal};
 
 /// A reactive navigation stack over an app-defined route type `R` (typically a small `Clone + Eq` enum).
 ///
-/// The stack is never empty: the root route stays at the bottom, so [`current`](Self::current) always yields
-/// a page and [`pop`](Self::pop) is a no-op at the root. Reads ([`current`](Self::current),
-/// [`depth`](Self::depth), [`can_pop`](Self::can_pop), [`with_stack`](Self::with_stack)) subscribe the caller,
-/// so a widget that renders `nav.current()` re-renders on every navigation. Cheap to clone — the inner
-/// `RwSignal` is refcounted — and shared between the shell that reads it and the controls that push/pop it,
-/// exactly like the app-state signals threaded through a GUI.
+/// The stack is never empty: the root route stays at the bottom, so [`current`](Self::current) always yields a page and [`pop`](Self::pop) is a no-op at the root. Reads ([`current`](Self::current), [`depth`](Self::depth), [`can_pop`](Self::can_pop), [`with_stack`](Self::with_stack)) subscribe the caller, so a widget that renders `nav.current()` re-renders on every navigation. Cheap to clone — the inner `RwSignal` is refcounted — and shared between the shell that reads it and the controls that push/pop it, exactly like the app-state signals threaded through a GUI.
 pub struct Navigator<R: Clone + 'static> {
     stack: RwSignal<Vec<R>>,
 }
@@ -28,9 +25,7 @@ impl<R: Clone + 'static> Navigator<R> {
 
     /// Adopts an externally owned stack signal, seeding it with `root` when it is empty.
     ///
-    /// Lets the stack come from somewhere the navigator itself cannot reach — notably `telar::hot_signal`, so
-    /// the history survives a hot-reload dylib swap. The `root` seed also repairs a restored snapshot that
-    /// deserialized to an empty vector, upholding the never-empty invariant [`current`](Self::current) relies on.
+    /// Lets the stack come from somewhere the navigator itself cannot reach — notably `telar::hot_signal`, so the history survives a hot-reload dylib swap. The `root` seed also repairs a restored snapshot that deserialized to an empty vector, upholding the never-empty invariant [`current`](Self::current) relies on.
     pub fn from_signal(stack: RwSignal<Vec<R>>, root: R) -> Self {
         if stack.with(|s| s.is_empty()) {
             stack.update(|s| s.push(root));
@@ -43,11 +38,9 @@ impl<R: Clone + 'static> Navigator<R> {
         self.stack.update(|s| s.push(route));
     }
 
-    /// Pops the current page, returning to the one beneath. No-op returning `false` when already at the root
-    /// (the stack always keeps at least the root).
+    /// Pops the current page, returning to the one beneath. No-op returning `false` when already at the root (the stack always keeps at least the root).
     pub fn pop(&self) -> bool {
-        // Read the length under its own borrow first: `.with` holds the runtime borrow across the closure, so
-        // mutating inside it would re-borrow. Release it, then `.update`.
+        // Read the length under its own borrow first: `.with` holds the runtime borrow across the closure, so mutating inside it would re-borrow. Release it, then `.update`.
         if self.stack.with(|s| s.len()) <= 1 {
             return false;
         }
@@ -57,12 +50,9 @@ impl<R: Clone + 'static> Navigator<R> {
         true
     }
 
-    /// One "back" as the user means it: closes the frontmost open dialog or drawer if there is one, otherwise
-    /// pops a page. Reports whether anything happened, so a caller wiring a hardware/gesture back can let the
-    /// gesture fall through to the OS (exiting the app) when this returns `false` at the root with nothing open.
+    /// One "back" as the user means it: closes the frontmost open dialog or drawer if there is one, otherwise pops a page. Reports whether anything happened, so a caller wiring a hardware/gesture back can let the gesture fall through to the OS (exiting the app) when this returns `false` at the root with nothing open.
     ///
-    /// Prefer this over [`pop`](Self::pop) for any general back affordance: popping directly would tear the
-    /// page out from under an open dialog instead of closing the dialog the user is looking at.
+    /// Prefer this over [`pop`](Self::pop) for any general back affordance: popping directly would tear the page out from under an open dialog instead of closing the dialog the user is looking at.
     pub fn back(&self) -> bool {
         ui_core::dismiss::dismiss_top() || self.pop()
     }

@@ -1,7 +1,6 @@
 //! The seam the in-app devtools overlay plugs into, and the tree model it reads.
 //!
-//! A runtime with no overlay compiled in runs `()` through the same trait, so the frame loop has one shape
-//! whether or not `dev` is on.
+//! A runtime with no overlay compiled in runs `()` through the same trait, so the frame loop has one shape whether or not `dev` is on.
 
 use std::borrow::Cow;
 use std::time::Duration;
@@ -10,12 +9,14 @@ use platform_core::{Key, ModifiersState};
 use renderer_core::DrawCommand;
 use ui_tree::SegmentNodeInfo;
 
+/// What a dev overlay asks the runner to do.
 pub enum DevAction {
     None,
     Redraw,
     ToggleBackend,
 }
 
+/// The dev overlay seam: `()` in a release build, the inspector and FPS counter in a dev one.
 pub trait DevPlugin: Default + 'static {
     fn on_frame<'a>(
         &mut self,
@@ -41,9 +42,7 @@ pub trait DevPlugin: Default + 'static {
         let _ = info;
     }
 
-    /// The mounted component tree as the inspector sees it, once per frame. Takes the walked slice rather
-    /// than a trait that walks on demand: the two questions the trait offered were asked one after the
-    /// other, and each walked the whole tree.
+    /// The mounted component tree as the inspector sees it, once per frame. Takes the walked slice rather than a trait that walks on demand: the two questions the trait offered were asked one after the other, and each walked the whole tree.
     fn on_tree(&mut self, _nodes: &[SegmentNodeInfo]) {}
 }
 

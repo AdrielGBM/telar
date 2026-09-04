@@ -1,11 +1,6 @@
-//! A Wayland `wl_shm` `Argb8888` present path for the software renderer, used when the app asks for a
-//! transparent surface.
+//! A Wayland `wl_shm` `Argb8888` present path for the software renderer, used when the app asks for a transparent surface.
 //!
-//! softbuffer only offers opaque `Xrgb8888`, so this bypasses it and manages its own alpha-preserving shm
-//! buffers — mirroring softbuffer's own Wayland backend (from which the shm/pool/release plumbing is adapted)
-//! and the Android `ANativeWindow` bypass, so all three present paths honor transparency consistently. The
-//! connection is built from the *foreign* display pointer, so it shares the app's existing Wayland display;
-//! present runs on the same thread as the surface's event loop, exactly like the softbuffer path it replaces.
+//! softbuffer only offers opaque `Xrgb8888`, so this bypasses it and manages its own alpha-preserving shm buffers — mirroring softbuffer's own Wayland backend (from which the shm/pool/release plumbing is adapted) and the Android `ANativeWindow` bypass, so all three present paths honor transparency consistently. The connection is built from the *foreign* display pointer, so it shares the app's existing Wayland display; present runs on the same thread as the surface's event loop, exactly like the softbuffer path it replaces.
 
 use std::fs::File;
 use std::os::fd::{AsFd, AsRawFd};
@@ -19,8 +14,7 @@ use wayland_client::globals::{GlobalListContents, registry_queue_init};
 use wayland_client::protocol::{wl_buffer, wl_registry, wl_shm, wl_shm_pool, wl_surface};
 use wayland_client::{Connection, Dispatch, EventQueue, Proxy, QueueHandle};
 
-/// The event-dispatch sink. Only `wl_buffer.release` carries state (flips the buffer's `released` flag); the
-/// rest are inert because we drive everything with explicit requests.
+/// The event-dispatch sink. Only `wl_buffer.release` carries state (flips the buffer's `released` flag); the rest are inert because we drive everything with explicit requests.
 struct State;
 
 impl Dispatch<wl_registry::WlRegistry, GlobalListContents> for State {
@@ -80,7 +74,7 @@ fn create_memfile() -> std::io::Result<File> {
         c"telar-alpha-shm",
         MemfdFlags::CLOEXEC | MemfdFlags::ALLOW_SEALING,
     )?;
-    // Sealing lets the compositor mmap the fd read-only without worrying it might shrink under it.
+    // Sealing lets the compositor mmap the fd read-only without worrying it might shrink underneath.
     let _ = rustix::fs::fcntl_add_seals(&fd, SealFlags::SHRINK | SealFlags::SEAL);
     Ok(File::from(fd))
 }
@@ -89,8 +83,7 @@ fn pool_size(width: i32, height: i32) -> i32 {
     ((width.max(1) * height.max(1) * 4) as u32).next_power_of_two() as i32
 }
 
-/// One `wl_shm` `Argb8888` buffer plus its mmap'd backing store. Double-buffered by the presenter so the
-/// compositor can hold one while the next is filled.
+/// One `wl_shm` `Argb8888` buffer plus its mmap'd backing store. Double-buffered by the presenter so the compositor can hold one while the next is filled.
 struct Buf {
     tempfile: File,
     map: MmapMut,
@@ -190,8 +183,7 @@ pub(crate) struct WaylandAlphaPresenter {
 }
 
 impl WaylandAlphaPresenter {
-    /// Builds a presenter over the app's existing Wayland surface, or `None` when the handles are not Wayland
-    /// or the connection/globals cannot be set up (the caller then falls back to opaque softbuffer).
+    /// Builds a presenter over the app's existing Wayland surface, or `None` when the handles are not Wayland or the connection/globals cannot be set up (the caller then falls back to opaque softbuffer).
     pub(crate) fn try_new(
         display: &impl HasDisplayHandle,
         window: &impl HasWindowHandle,
@@ -202,13 +194,13 @@ impl WaylandAlphaPresenter {
         let RawWindowHandle::Wayland(wh) = window.window_handle().ok()?.as_raw() else {
             return None;
         };
-        // SAFETY: the display pointer is a live `wl_display` owned by the app's platform layer, valid for as long as the window that yielded it; the caller keeps that window alive for the renderer's lifetime.
+        // SAFETY: a live `wl_display` owned by the platform layer, valid as long as the window that yielded it, which the caller keeps alive for the renderer's lifetime.
         let backend = unsafe { Backend::from_foreign_display(dh.display.as_ptr().cast()) };
         let conn = Connection::from_backend(backend);
         let (globals, event_queue) = registry_queue_init::<State>(&conn).ok()?;
         let qh = event_queue.handle();
         let shm: wl_shm::WlShm = globals.bind(&qh, 1..=1, ()).ok()?;
-        // SAFETY: `wh.surface` is a live `wl_surface` proxy on this same display; wrapping it as an object id on the shared backend mirrors softbuffer.
+        // SAFETY: a live `wl_surface` proxy on this same display; wrapping it as an object id mirrors softbuffer.
         let surface_id = unsafe {
             ObjectId::from_ptr(
                 wl_surface::WlSurface::interface(),
@@ -227,8 +219,7 @@ impl WaylandAlphaPresenter {
         })
     }
 
-    /// Presents a premultiplied-RGBA frame (tiny_skia's pixmap byte order) as premultiplied `Argb8888`,
-    /// preserving alpha so the compositor blends the surface.
+    /// Presents a premultiplied-RGBA frame (tiny_skia's pixmap byte order) as premultiplied `Argb8888`, preserving alpha so the compositor blends the surface.
     pub(crate) fn present(&mut self, rgba: &[u8], width: u32, height: u32) {
         let (w, h) = (width as i32, height as i32);
         if w <= 0 || h <= 0 {
@@ -258,7 +249,7 @@ impl WaylandAlphaPresenter {
             return;
         }
 
-        // tiny_skia gives premultiplied RGBA bytes; ARGB8888 shm on little-endian wants the u32 0xAARRGGBB (also premultiplied), so pack per pixel.
+        // tiny_skia gives premultiplied RGBA bytes, and little-endian ARGB8888 shm wants the u32 `0xAARRGGBB`.
         let dst = back.pixels_mut();
         let n = dst.len().min(rgba.len() / 4);
         for (i, px) in dst[..n].iter_mut().enumerate() {

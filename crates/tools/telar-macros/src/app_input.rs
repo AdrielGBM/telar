@@ -1,3 +1,5 @@
+//! Parsing the `app!` invocation: the theme, the root component and the setup block.
+
 use proc_macro2::{Ident, Span};
 use syn::{
     Token,

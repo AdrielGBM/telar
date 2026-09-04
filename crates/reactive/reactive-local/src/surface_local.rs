@@ -1,19 +1,10 @@
 //! `surface_local!` — declares a thread-local whose contents can be swapped per surface.
 //!
-//! A per-surface "world" (the layout tree, the overlay registry, focus, ...) is a thread-local singleton.
-//! Under M3 several surfaces share one UI thread, so each such world must be swappable: the runner activates
-//! a surface's instance around that surface's build/event/frame, and the reactive flush re-enters the
-//! instance that owns each effect. This macro generates that swap once — the live instance sits behind a
-//! `Cell<*mut RefCell<T>>` (like the reactive runtime's own cell), a private accessor derefs it, and a
-//! `Context`/`Guard` pair allocates and activates per-surface instances.
+//! A per-surface "world" (the layout tree, the overlay registry, focus, ...) is a thread-local singleton. Under M3 several surfaces share one UI thread, so each such world must be swappable: the runner activates a surface's instance around that surface's build/event/frame, and the reactive flush re-enters the instance that owns each effect. This macro generates that swap once — the live instance sits behind a `Cell<*mut RefCell<T>>` (like the reactive runtime's own cell), a private accessor derefs it, and a `Context`/`Guard` pair allocates and activates per-surface instances.
 //!
-//! The cell holds a raw pointer and has no `Drop`, so no TLS destructor is registered — dlclosing a
-//! hot-reload dylib on thread exit stays safe (same reasoning as the reactive runtime cell). The ambient
-//! instance is intentionally leaked; per-surface instances are freed when their `Context` drops.
+//! The cell holds a raw pointer and has no `Drop`, so no TLS destructor is registered — dlclosing a hot-reload dylib on thread exit stays safe (same reasoning as the reactive runtime cell). The ambient instance is intentionally leaked; per-surface instances are freed when their `Context` drops.
 //!
-//! Both instances build their contents inside [`detached`](crate::detached), because a slot initialises on
-//! first access and that access is somebody's build. Without it a surface's world is adopted by whichever
-//! reactive owner happened to be running — see that module.
+//! Both instances build their contents inside [`detached`](crate::detached), because a slot initialises on first access and that access is somebody's build. Without it a surface's world is adopted by whichever reactive owner happened to be running — see that module.
 
 /// Generates a swappable per-surface thread-local plus its `Context`/`Guard`. See the module docs.
 ///
@@ -49,9 +40,7 @@ macro_rules! surface_local {
         #[allow(dead_code)]
         #[track_caller]
         fn $with<R>(f: impl ::std::ops::FnOnce(&mut $ty) -> R) -> R {
-            // SAFETY: the pointer always addresses a live, heap-allocated `RefCell<$ty>` — either the
-            // leaked ambient instance or a per-surface `Context`'s box that outlives every guard pointing
-            // the slot at it. The borrow is released before the closure returns, so swaps never race a borrow.
+            // SAFETY: the pointer always addresses a live, heap-allocated `RefCell` — the leaked ambient instance or a per-surface box that outlives every guard pointing the slot at it. The borrow is released before the closure returns, so swaps never race a borrow.
             $slot.with(|cell| {
                 let slot = cell.get();
                 let borrowed = unsafe { (*slot.live).try_borrow_mut() };
@@ -105,8 +94,7 @@ macro_rules! surface_local {
                 }
             }
 
-            /// Makes this instance the live one until the returned guard drops, which restores the
-            /// previously-active instance. Nest by keeping guards in scope; they restore in reverse order.
+            /// Makes this instance the live one until the returned guard drops, which restores the previously-active instance. Nest by keeping guards in scope; they restore in reverse order.
             #[must_use = "the surface context is only active while this guard is alive"]
             pub fn enter(&self) -> $guard {
                 $guard {
@@ -119,14 +107,9 @@ macro_rules! surface_local {
                 }
             }
 
-            /// Makes the *ambient* instance — the one that exists before any surface is built, and the only
-            /// world a single-surface app ever has — live until the returned guard drops.
+            /// Makes the *ambient* instance — the one that exists before any surface is built, and the only world a single-surface app ever has — live until the returned guard drops.
             ///
-            /// What the reactive flush needs for an effect owned by [`SurfaceHandle::NONE`](crate::SurfaceHandle::NONE):
-            /// it was registered outside any surface, so its world is this one, and running it against
-            /// whichever surface happened to be entered when the signal fired would resolve its layout,
-            /// overlays and focus in somebody else's. Reachable as soon as one app has both — a window tree
-            /// that never built a surface and a second tree that did.
+            /// What the reactive flush needs for an effect owned by [`SurfaceHandle::NONE`](crate::SurfaceHandle::NONE): it was registered outside any surface, so its world is this one, and running it against whichever surface happened to be entered when the signal fired would resolve its layout, overlays and focus in somebody else's. Reachable as soon as one app has both — a window tree that never built a surface and a second tree that did.
             #[must_use = "the surface context is only active while this guard is alive"]
             pub fn enter_ambient() -> $guard {
                 $guard {
@@ -172,19 +155,14 @@ macro_rules! surface_local {
 
 /// The live instance of a [`surface_local!`] world plus the ambient one it started as.
 ///
-/// Both are kept because "restore what was active before" and "activate the world of an effect that
-/// belongs to no surface" are different questions, and only the second one can be answered from a saved
-/// pointer that no guard is holding.
+/// Both are kept because "restore what was active before" and "activate the world of an effect that belongs to no surface" are different questions, and only the second one can be answered from a saved pointer that no guard is holding.
 ///
-/// `#[doc(hidden)]` — public only because macro expansion lands in the calling crate, which has to be able
-/// to name it. Nothing outside the macro should construct one: the fields are raw pointers the expansion
-/// dereferences under a SAFETY note that only holds for the ones it makes itself.
+/// `#[doc(hidden)]` — public only because macro expansion lands in the calling crate, which has to be able to name it. Nothing outside the macro should construct one: the fields are raw pointers the expansion dereferences under a SAFETY note that only holds for the ones it makes itself.
 #[doc(hidden)]
 pub struct SurfaceSlot<T> {
     pub live: *mut std::cell::RefCell<T>,
     pub ambient: *mut std::cell::RefCell<T>,
-    /// Where the last borrow of this slot to succeed was taken, so a collision names what it collided with
-    /// rather than only itself. See [`crate::reentry`].
+    /// Where the last borrow of this slot to succeed was taken, so a collision names what it collided with rather than only itself. See [`crate::reentry`].
     pub last_borrow: Option<&'static std::panic::Location<'static>>,
 }
 
@@ -215,9 +193,7 @@ mod tests {
         context ProbeContext, ProbeGuard;
     }
 
-    /// The shape every `surface_local!` world has hit at least once, and the reason six of them carry a
-    /// hand-written "copy out, drop the borrow, write after" dance: a closure holding the slot reaches back
-    /// into it. The panic now points at the two lines instead of at the `RefCell` that noticed.
+    /// The shape every `surface_local!` world has hit at least once, and the reason six of them carry a hand-written "copy out, drop the borrow, write after" dance: a closure holding the slot reaches back into it. The panic now points at the two lines instead of at the `RefCell` that noticed.
     #[test]
     fn a_reentrant_slot_borrow_names_both_call_sites() {
         let quiet = std::panic::take_hook();
@@ -240,9 +216,7 @@ mod tests {
         );
     }
 
-    /// And the case that must keep working: two surfaces are two worlds, so reaching the second from inside
-    /// the first is not reentrancy at all. The recorded site is per slot rather than per instance, which is
-    /// why this is worth pinning — the check itself has to stay on the `RefCell`, not on the record.
+    /// And the case that must keep working: two surfaces are two worlds, so reaching the second from inside the first is not reentrancy at all. The recorded site is per slot rather than per instance, which is why this is worth pinning — the check itself has to stay on the `RefCell`, not on the record.
     #[test]
     fn entering_another_surface_is_not_a_collision() {
         let other = ProbeContext::new();
@@ -257,8 +231,7 @@ mod tests {
         with_probe_ref(|ambient| assert_eq!(*ambient, 1, "and the first kept its own"));
     }
 
-    /// A shared borrow blocks a mutable one just the same, and that pairing is the one a reader would least
-    /// expect to be a collision at all.
+    /// A shared borrow blocks a mutable one just the same, and that pairing is the one a reader would least expect to be a collision at all.
     #[test]
     fn a_read_that_blocks_a_write_is_reported_too() {
         let quiet = std::panic::take_hook();

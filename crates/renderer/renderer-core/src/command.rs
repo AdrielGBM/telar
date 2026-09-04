@@ -1,3 +1,5 @@
+//! [`DrawCommand`]: the flat instruction stream every backend consumes, and the equality that decides whether a frame changed.
+
 use std::sync::Arc;
 
 use geometry_core::{Point, Rect};
@@ -8,18 +10,15 @@ use crate::{
 };
 
 #[derive(Debug, Clone)]
+/// One instruction in a frame: something painted, or a change to the clip, matrix or layer stack.
 pub enum DrawCommand {
     Rect {
         rect: Rect,
         style: Arc<RectStyle>,
     },
-    /// A paragraph, uniform or mixed. `style` is the paragraph's; `spans` are the byte ranges that differ
-    /// from it — `None`, overwhelmingly the common case, is text that does not.
+    /// A paragraph, uniform or mixed. `style` is the paragraph's; `spans` are the byte ranges that differ from it — `None`, overwhelmingly the common case, is text that does not.
     ///
-    /// One command rather than two because mixed text is not a different kind of thing from text: the shaper
-    /// builds one span or many through the same call, and every layer above it was carrying a parallel
-    /// function for a distinction that stopped at the boundary. Keeping the text whole is also what lets a
-    /// clamp re-shape it with an ellipsis, which per-run text could never be cut across.
+    /// One command rather than two because mixed text is not a different kind of thing from text: the shaper builds one span or many through the same call, and every layer above it was carrying a parallel function for a distinction that stopped at the boundary. Keeping the text whole is also what lets a clamp re-shape it with an ellipsis, which per-run text could never be cut across.
     Text {
         text: Arc<str>,
         spans: Option<Arc<[Span]>>,
@@ -57,10 +56,7 @@ pub enum DrawCommand {
     PopLayer,
     /// Opens the box `id` names, for a backend whose output is a document rather than pixels.
     ///
-    /// A marker, like [`PushClip`](Self::PushClip): everything until the matching [`PopElement`](Self::PopElement)
-    /// belongs to this box. A rasteriser skips both and draws exactly what it drew before — the commands
-    /// between them are already positioned. What a document backend gets is the structure the flattening
-    /// would otherwise have thrown away, and the identity that lets it move an element instead of rebuilding it.
+    /// A marker, like [`PushClip`](Self::PushClip): everything until the matching [`PopElement`](Self::PopElement) belongs to this box. A rasteriser skips both and draws exactly what it drew before — the commands between them are already positioned. What a document backend gets is the structure the flattening would otherwise have thrown away, and the identity that lets it move an element instead of rebuilding it.
     PushElement {
         element: Arc<Element>,
     },

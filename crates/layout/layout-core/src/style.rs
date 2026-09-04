@@ -1,3 +1,5 @@
+//! The style a node is laid out by, written in logical edges and resolved to taffy's physical ones.
+
 use taffy::{
     Dimension, Display, FlexDirection, FlexWrap, GridPlacement, LengthPercentage,
     LengthPercentageAuto, Style,
@@ -9,6 +11,7 @@ use crate::direction::Direction;
 use crate::track::TemplateTrack;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
+/// A width or height: a length in logical pixels, a percentage of the parent, or `auto`.
 pub enum SizeDimension {
     Px(f32),
     Percent(f32),
@@ -31,9 +34,7 @@ impl From<SizeDimension> for Dimension {
     }
 }
 
-/// For padding and gap, which resolve against the containing block but have no `auto` to fall back on —
-/// CSS has none there either, and taffy's type says so. `Auto` is the caller asking for a size decision on a
-/// property that makes none, so it is nothing.
+/// For padding and gap, which resolve against the containing block but have no `auto` to fall back on — CSS has none there either, and taffy's type says so. `Auto` is the caller asking for a size decision on a property that makes none, so it is nothing.
 impl From<SizeDimension> for LengthPercentage {
     fn from(d: SizeDimension) -> Self {
         match d {
@@ -44,8 +45,7 @@ impl From<SizeDimension> for LengthPercentage {
     }
 }
 
-/// For margin and inset, where `auto` is a real answer: it is what centres a block and what leaves an edge
-/// unpinned.
+/// For margin and inset, where `auto` is a real answer: it is what centres a block and what leaves an edge unpinned.
 impl From<SizeDimension> for LengthPercentageAuto {
     fn from(d: SizeDimension) -> Self {
         match d {
@@ -56,9 +56,7 @@ impl From<SizeDimension> for LengthPercentageAuto {
     }
 }
 
-/// The parts of a style that cannot be turned into physical edges until a [`Direction`] is known. Kept
-/// alongside the resolved `taffy::Style` rather than folded into it, so a direction flip can re-resolve the
-/// original intent instead of trying to un-swap edges it can no longer tell apart from physical ones.
+/// The parts of a style that cannot be turned into physical edges until a [`Direction`] is known. Kept alongside the resolved `taffy::Style` rather than folded into it, so a direction flip can re-resolve the original intent instead of trying to un-swap edges it can no longer tell apart from physical ones.
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub(crate) struct LogicalStyle {
     pub(crate) padding_start: Option<SizeDimension>,
@@ -67,22 +65,15 @@ pub(crate) struct LogicalStyle {
     pub(crate) margin_end: Option<SizeDimension>,
     pub(crate) inset_start: Option<SizeDimension>,
     pub(crate) inset_end: Option<SizeDimension>,
-    /// Set by [`LayoutStyle::flex_row`]: the main axis is the inline axis, so it reverses under RTL. An
-    /// explicit [`LayoutStyle::flex_row_reverse`] leaves this clear — it means "reversed" in either direction.
+    /// Set by [`LayoutStyle::flex_row`]: the main axis is the inline axis, so it reverses under RTL. An explicit [`LayoutStyle::flex_row_reverse`] leaves this clear — it means "reversed" in either direction.
     pub(crate) row_follows_direction: bool,
     /// Set by `LayoutEngine::make_flex_row` for a node whose own declared style never called `flex_row`.
     pub(crate) row_forced: bool,
-    /// Set by [`LayoutStyle::shown`] / [`LayoutStyle::display_none`]: what the node's own style says about
-    /// being in flow. A style is free to say the opposite of what it said last time — which is the whole of
-    /// `shown:` in a `[view]`, re-resolved from whatever it reads.
+    /// Set by [`LayoutStyle::shown`] / [`LayoutStyle::display_none`]: what the node's own style says about being in flow. A style is free to say the opposite of what it said last time — which is the whole of `shown:` in a `[view]`, re-resolved from whatever it reads.
     pub(crate) hidden: bool,
-    /// Set by `LayoutEngine::set_display`: an answer given *out of band*, which no style knows about and so
-    /// none may overwrite. `None` leaves the question to [`hidden`](Self::hidden).
+    /// Set by `LayoutEngine::set_display`: an answer given *out of band*, which no style knows about and so none may overwrite. `None` leaves the question to [`hidden`](Self::hidden).
     ///
-    /// The two used to be one flag that `set_style` OR-ed into whatever came next, so a node hidden once — by
-    /// either door — could never be shown again by a style. That is the trap this pair exists to close: the
-    /// out-of-band answer is carried forward because nothing else knows it, and the declared one is replaced
-    /// because the new style is exactly what does.
+    /// The two used to be one flag that `set_style` OR-ed into whatever came next, so a node hidden once — by either door — could never be shown again by a style. That is the trap this pair exists to close: the out-of-band answer is carried forward because nothing else knows it, and the declared one is replaced because the new style is exactly what does.
     pub(crate) display_override: Option<bool>,
     /// Set by `LayoutEngine::set_min_height`: overrides `inner.min_size.height`.
     pub(crate) min_height_override: Option<f32>,
@@ -91,8 +82,7 @@ pub(crate) struct LogicalStyle {
 }
 
 impl LogicalStyle {
-    /// Whether the node is out of flow: what was set out of band if anything was, and what the style declares
-    /// otherwise.
+    /// Whether the node is out of flow: what was set out of band if anything was, and what the style declares otherwise.
     pub(crate) fn is_hidden(&self) -> bool {
         match self.display_override {
             Some(shown) => !shown,
@@ -103,8 +93,7 @@ impl LogicalStyle {
 
 /// A box's four margins, named by axis so they follow the writing direction rather than the screen.
 ///
-/// The nine builders this replaces mixed two vocabularies — seven physical, two logical — and nothing in the
-/// name of `margin_left` said which of the two it belonged to.
+/// The nine builders this replaces mixed two vocabularies — seven physical, two logical — and nothing in the name of `margin_left` said which of the two it belonged to.
 #[derive(Debug, Clone, Copy, Default, PartialEq)]
 pub struct Margin {
     pub block_start: f32,
@@ -134,6 +123,7 @@ impl Margin {
 }
 
 #[derive(Clone)]
+/// How a node is laid out and placed, written in logical edges and resolved against the active direction.
 pub struct LayoutStyle {
     pub(crate) inner: Style,
     pub(crate) logical: LogicalStyle,
@@ -142,12 +132,7 @@ pub struct LayoutStyle {
 impl LayoutStyle {
     /// A **block** box, as in CSS: children stack vertically and the flex properties do nothing.
     ///
-    /// Worth saying out loud because the ones that do nothing do it silently. [`gap`](Self::gap),
-    /// [`justify_content`](Self::justify_content) and [`align_items`](Self::align_items) all belong to
-    /// flex layout, so on a box that never called [`flex_row`](Self::flex_row) or
-    /// [`flex_column`](Self::flex_column) they are accepted and ignored — a row written without
-    /// `flex_row` comes out as a column, and the reading on screen is not "that row is a column" but
-    /// "why is this panel twice as tall as it should be".
+    /// Worth saying out loud because the ones that do nothing do it silently. [`gap`](Self::gap), [`justify_content`](Self::justify_content) and [`align_items`](Self::align_items) all belong to flex layout, so on a box that never called [`flex_row`](Self::flex_row) or [`flex_column`](Self::flex_column) they are accepted and ignored — a row written without `flex_row` comes out as a column, and the reading on screen is not "that row is a column" but "why is this panel twice as tall as it should be".
     pub fn new() -> Self {
         Self {
             inner: Style {
@@ -158,9 +143,7 @@ impl LayoutStyle {
         }
     }
 
-    /// A flex row along the inline axis: items run left-to-right under [`Direction::Ltr`] and right-to-left
-    /// under [`Direction::Rtl`], the way `flex-direction: row` follows `dir` on the web. Use
-    /// [`flex_row_reverse`](Self::flex_row_reverse) for a row that is reversed in both directions.
+    /// A flex row along the inline axis: items run left-to-right under [`Direction::Ltr`] and right-to-left under [`Direction::Rtl`], the way `flex-direction: row` follows `dir` on the web. Use [`flex_row_reverse`](Self::flex_row_reverse) for a row that is reversed in both directions.
     pub fn flex_row(mut self) -> Self {
         self.inner.display = Display::Flex;
         self.inner.flex_direction = FlexDirection::Row;
@@ -168,8 +151,7 @@ impl LayoutStyle {
         self
     }
 
-    /// A flex row laid out against the writing direction, unconditionally. Unlike
-    /// [`flex_row`](Self::flex_row) this is a physical choice and does not flip with [`Direction`].
+    /// A flex row laid out against the writing direction, unconditionally. Unlike [`flex_row`](Self::flex_row) this is a physical choice and does not flip with [`Direction`].
     pub fn flex_row_reverse(mut self) -> Self {
         self.inner.display = Display::Flex;
         self.inner.flex_direction = FlexDirection::RowReverse;
@@ -189,9 +171,7 @@ impl LayoutStyle {
         self
     }
 
-    /// Whether the node is in layout flow at all — the declarative half of the question, re-read whenever the
-    /// style is: `shown:` in a `[view]` is this builder, so an area that comes and goes with what it reads
-    /// keeps its subtree and its state, where an `if` would build it again from nothing.
+    /// Whether the node is in layout flow at all — the declarative half of the question, re-read whenever the style is: `shown:` in a `[view]` is this builder, so an area that comes and goes with what it reads keeps its subtree and its state, where an `if` would build it again from nothing.
     ///
     /// Says nothing about `LayoutEngine::set_display`, which answers out of band and wins while it holds.
     pub fn shown(mut self, shown: bool) -> Self {
@@ -204,9 +184,7 @@ impl LayoutStyle {
         self.shown(false)
     }
 
-    /// Takes the node out of normal flow (`position: absolute`) with all four insets pinned to 0, so it
-    /// fills its containing block without affecting sibling layout — used by `overlay` to cover the
-    /// viewport. Combine with `flex_column`/alignment to position the overlay's content within the layer.
+    /// Takes the node out of normal flow (`position: absolute`) with all four insets pinned to 0, so it fills its containing block without affecting sibling layout — used by `overlay` to cover the viewport. Combine with `flex_column`/alignment to position the overlay's content within the layer.
     pub fn absolute_fill(mut self) -> Self {
         self.inner.position = taffy::Position::Absolute;
         let zero = LengthPercentageAuto::length(0.0);
@@ -219,17 +197,13 @@ impl LayoutStyle {
         self
     }
 
-    /// Takes the node out of normal flow (`position: absolute`) leaving every inset at `auto`, so the
-    /// edges it is pinned by are exactly the ones the caller names. [`absolute_fill`](Self::absolute_fill)
-    /// is this plus all four insets at 0; a floating panel wants three of them and its own size on the
-    /// fourth axis, which pinning everything would override.
+    /// Takes the node out of normal flow (`position: absolute`) leaving every inset at `auto`, so the edges it is pinned by are exactly the ones the caller names. [`absolute_fill`](Self::absolute_fill) is this plus all four insets at 0; a floating panel wants three of them and its own size on the fourth axis, which pinning everything would override.
     pub fn absolute(mut self) -> Self {
         self.inner.position = taffy::Position::Absolute;
         self
     }
 
-    /// Inset from the top edge, for a node already taken out of flow. Physical, not logical: `top` does not
-    /// swap under RTL the way [`inset_start`](Self::inset_start) does.
+    /// Inset from the top edge, for a node already taken out of flow. Physical, not logical: `top` does not swap under RTL the way [`inset_start`](Self::inset_start) does.
     pub fn inset_top(mut self, size: impl Into<SizeDimension>) -> Self {
         self.inner.inset.top = size.into().into();
         self
@@ -241,8 +215,7 @@ impl LayoutStyle {
         self
     }
 
-    /// The node's `width` in pixels if it is a definite length, else `None` (e.g. percent or auto).
-    /// Lets widgets with an intrinsic size (e.g. `<svg>`/`<img>`) inspect a caller-supplied width before registering their layout leaf.
+    /// The node's `width` in pixels if it is a definite length, else `None` (e.g. percent or auto). Lets widgets with an intrinsic size (e.g. `<svg>`/`<img>`) inspect a caller-supplied width before registering their layout leaf.
     pub fn width_px(&self) -> Option<f32> {
         self.inner.size.width.into_option()
     }
@@ -352,15 +325,13 @@ impl LayoutStyle {
         self
     }
 
-    /// Padding on the edge the text starts from — `left` under [`Direction::Ltr`], `right` under
-    /// [`Direction::Rtl`].
+    /// Padding on the edge the text starts from — `left` under [`Direction::Ltr`], `right` under [`Direction::Rtl`].
     pub fn padding_start(mut self, size: impl Into<SizeDimension>) -> Self {
         self.logical.padding_start = Some(size.into());
         self
     }
 
-    /// Padding on the edge the text runs towards — `right` under [`Direction::Ltr`], `left` under
-    /// [`Direction::Rtl`].
+    /// Padding on the edge the text runs towards — `right` under [`Direction::Ltr`], `left` under [`Direction::Rtl`].
     pub fn padding_end(mut self, size: impl Into<SizeDimension>) -> Self {
         self.logical.padding_end = Some(size.into());
         self
@@ -386,15 +357,13 @@ impl LayoutStyle {
         self
     }
 
-    /// Margin on the edge the text starts from — `left` under [`Direction::Ltr`], `right` under
-    /// [`Direction::Rtl`].
+    /// Margin on the edge the text starts from — `left` under [`Direction::Ltr`], `right` under [`Direction::Rtl`].
     pub fn margin_inline_start(mut self, size: impl Into<SizeDimension>) -> Self {
         self.logical.margin_start = Some(size.into());
         self
     }
 
-    /// Margin on the edge the text runs towards — `right` under [`Direction::Ltr`], `left` under
-    /// [`Direction::Rtl`].
+    /// Margin on the edge the text runs towards — `right` under [`Direction::Ltr`], `left` under [`Direction::Rtl`].
     pub fn margin_inline_end(mut self, size: impl Into<SizeDimension>) -> Self {
         self.logical.margin_end = Some(size.into());
         self
@@ -402,17 +371,13 @@ impl LayoutStyle {
 
     /// A margin from the viewport's physical left edge, which does **not** follow the writing direction.
     ///
-    /// The one place that is right: placing an in-flow box at an x already worked out in physical viewport
-    /// coordinates — a dropdown panel under its trigger, a picker under its anchor. Those come from a
-    /// laid-out rect, so mirroring them under RTL would put the panel on the wrong side of the screen. For a
-    /// margin that is part of a box's own spacing, use [`margin_inline_start`](Self::margin_inline_start).
+    /// The one place that is right: placing an in-flow box at an x already worked out in physical viewport coordinates — a dropdown panel under its trigger, a picker under its anchor. Those come from a laid-out rect, so mirroring them under RTL would put the panel on the wrong side of the screen. For a margin that is part of a box's own spacing, use [`margin_inline_start`](Self::margin_inline_start).
     pub fn margin_from_left(mut self, px: f32) -> Self {
         self.inner.margin.left = LengthPercentageAuto::length(px);
         self
     }
 
-    /// Inset from the edge the text starts from, for a node already taken out of flow (see
-    /// [`absolute_fill`](Self::absolute_fill)); ignored on an in-flow node, as `inset` is in CSS.
+    /// Inset from the edge the text starts from, for a node already taken out of flow (see [`absolute_fill`](Self::absolute_fill)); ignored on an in-flow node, as `inset` is in CSS.
     pub fn inset_start(mut self, size: impl Into<SizeDimension>) -> Self {
         self.logical.inset_start = Some(size.into());
         self
@@ -453,8 +418,7 @@ impl LayoutStyle {
         self
     }
 
-    /// Overrides the parent's `align_items` for this child, centering it on the cross axis instead of
-    /// stretching — so a fixed-size child (e.g. a square icon chip) keeps its size and stays centered.
+    /// Overrides the parent's `align_items` for this child, centering it on the cross axis instead of stretching — so a fixed-size child (e.g. a square icon chip) keeps its size and stays centered.
     pub fn align_self_center(mut self) -> Self {
         self.inner.align_self = Some(taffy::AlignSelf::CENTER);
         self
@@ -511,8 +475,7 @@ impl LayoutStyle {
         self
     }
 
-    /// The physical `taffy::Style` this describes under `direction`. Called by the engine at every point a
-    /// style reaches a node, and again for each affected node when the direction flips.
+    /// The physical `taffy::Style` this describes under `direction`. Called by the engine at every point a style reaches a node, and again for each affected node when the direction flips.
     ///
     /// Does not place the leading margin ([`LogicalStyle::leading_margin`]) — the engine does that afterwards, since it needs the parent's axis to know which physical edge "leading" means.
     pub(crate) fn resolve(&self, direction: Direction) -> Style {
@@ -640,9 +603,7 @@ mod tests {
         }
     }
 
-    /// The point of keeping the style a node was built from: a logical edge resolves against whichever
-    /// direction is current, from the intent, rather than being un-swapped from a physical edge that no
-    /// longer says which one it was.
+    /// The point of keeping the style a node was built from: a logical edge resolves against whichever direction is current, from the intent, rather than being un-swapped from a physical edge that no longer says which one it was.
     #[test]
     fn a_logical_edge_resolves_to_the_side_the_direction_chose() {
         let style = LayoutStyle::new().margin_inline_start(4.0);

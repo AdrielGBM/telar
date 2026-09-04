@@ -1,3 +1,5 @@
+//! Packaging a macOS `.dmg`.
+
 use std::process::Command;
 
 use super::super::config::{TelarConfig, default_app_id};

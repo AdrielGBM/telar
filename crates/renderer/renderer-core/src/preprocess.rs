@@ -1,3 +1,5 @@
+//! Passes run over a command list before it reaches a backend: fill-layer expansion, blur sizing and HiDPI scaling.
+
 use std::sync::Arc;
 
 use rustc_hash::FxHashMap;
@@ -23,6 +25,7 @@ fn would_expand_fill_layers(commands: &[DrawCommand]) -> bool {
     })
 }
 
+/// Rewrites a translucent rounded fill as an opacity layer, so its corners and border composite as one. `None` when nothing needed expanding.
 pub fn expand_fill_layers(commands: &[DrawCommand]) -> Option<Vec<DrawCommand>> {
     if !would_expand_fill_layers(commands) {
         return None;
@@ -52,10 +55,12 @@ pub fn expand_fill_layers(commands: &[DrawCommand]) -> Option<Vec<DrawCommand>> 
     Some(result)
 }
 
+/// The Gaussian deviation a CSS blur radius means.
 pub fn blur_sigma(blur_radius: f32) -> f32 {
     blur_radius / 2.0
 }
 
+/// How many pixels of margin a blur of this sigma needs around its shape.
 pub fn blur_padding(sigma: f32) -> i32 {
     (sigma * 3.0).ceil() as i32 + 1
 }
@@ -140,10 +145,7 @@ fn scale_command(cmd: &DrawCommand, sf: f32) -> DrawCommand {
     }
 }
 
-/// Reusable scratch for scaling draw commands to physical pixels on the software path. Holds the
-/// output buffer plus per-frame caches keyed by the source `Arc` pointer, so a style shared by many
-/// commands (the common case for a UI tree) is scaled and heap-allocated once per frame rather than
-/// once per command.
+/// Reusable scratch for scaling draw commands to physical pixels on the software path. Holds the output buffer plus per-frame caches keyed by the source `Arc` pointer, so a style shared by many commands (the common case for a UI tree) is scaled and heap-allocated once per frame rather than once per command.
 #[derive(Default)]
 pub struct ScaleScratch {
     storage: Vec<DrawCommand>,
@@ -158,9 +160,7 @@ impl ScaleScratch {
         Self::default()
     }
 
-    /// Scales every command in `commands` by `sf` into the reusable internal buffer and returns it.
-    /// The pointer-keyed caches are cleared on entry, so a recycled allocator address can never yield
-    /// a stale hit (ABA-safe); cache reuse only spans commands within this single call.
+    /// Scales every command in `commands` by `sf` into the reusable internal buffer and returns it. The pointer-keyed caches are cleared on entry, so a recycled allocator address can never yield a stale hit (ABA-safe); cache reuse only spans commands within this single call.
     pub fn scale_into(&mut self, commands: &[DrawCommand], sf: f32) -> &[DrawCommand] {
         // Destructure so the output buffer and the caches are borrowed as disjoint fields in the loop.
         let Self {
@@ -190,9 +190,7 @@ impl ScaleScratch {
     }
 }
 
-/// A paragraph's spans at the device scale. A span can set its own size and letter spacing, which are logical
-/// pixels like the paragraph's and have to follow the same factor, or a `<b>` at an explicit size would come
-/// out at the logical one on a HiDPI screen.
+/// A paragraph's spans at the device scale. A span can set its own size and letter spacing, which are logical pixels like the paragraph's and have to follow the same factor, or a `<b>` at an explicit size would come out at the logical one on a HiDPI screen.
 fn scaled_spans(spans: &Option<Arc<[Span]>>, sf: f32) -> Option<Arc<[Span]>> {
     let spans = spans.as_ref()?;
     Some(spans.iter().cloned().map(|s| s.scale(sf)).collect())

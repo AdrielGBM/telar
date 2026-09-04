@@ -1,3 +1,5 @@
+//! Where `cargo telar` enters an app: the env vars that choose between running it, previewing it and testing its previews.
+
 #[cfg(feature = "runtime")]
 use crate::{LayoutError, LayoutItem};
 
@@ -6,30 +8,25 @@ use crate::{AppConfig, AvailableSpace, ComponentList, compute_layout};
 
 #[cfg(feature = "runtime")]
 #[derive(Clone)]
+/// One `[preview]` block: which component it belongs to, its name, and the fn that builds it.
 pub struct PreviewEntry {
     pub component_name: &'static str,
     pub preview_name: &'static str,
     pub build: fn() -> Result<Box<dyn LayoutItem>, LayoutError>,
-    /// Set when the preview is a *surface* rather than a tree — `[preview "…" surface:360x240]`. See
-    /// [`PreviewSurface`].
+    /// Set when the preview is a *surface* rather than a tree — `[preview "…" surface:360x240]`. See [`PreviewSurface`].
     pub surface: Option<PreviewSurface>,
 }
 
-/// What a preview needs to be rendered the way the runner mounts a surface, rather than as one more widget in
-/// the page's column.
+/// What a preview needs to be rendered the way the runner mounts a surface, rather than as one more widget in the page's column.
 ///
-/// A tree preview answers "does this component look right"; a surface preview answers "does this *window* look
-/// right" — and the difference is everything a surface adds on top of its content: a definite size the content
-/// lays out against, and the enter transition its root plays. Without it the two questions could not both be
-/// asked, so an app ended up keeping a headless harness of its own for the second one.
+/// A tree preview answers "does this component look right"; a surface preview answers "does this *window* look right" — and the difference is everything a surface adds on top of its content: a definite size the content lays out against, and the enter transition its root plays. Without it the two questions could not both be asked, so an app ended up keeping a headless harness of its own for the second one.
 #[cfg(feature = "runtime")]
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct PreviewSurface {
     /// The size the surface would be given by the compositor, in logical px.
     pub width: f32,
     pub height: f32,
-    /// Play the root's enter transition, so a preview shows what the user sees when the surface opens — and a
-    /// transition that never settles shows up as a window that is still half-transparent when the frames run out.
+    /// Play the root's enter transition, so a preview shows what the user sees when the surface opens — and a transition that never settles shows up as a window that is still half-transparent when the frames run out.
     pub animate: bool,
 }
 
@@ -51,21 +48,13 @@ impl PreviewSurface {
     }
 }
 
-/// The `cargo telar` dev-loop entry, for an app that wires its own runner instead of expanding [`crate::app!`] —
-/// a multi-surface host, or one on an out-of-tree backend, which reaches [`crate::run_with_platform`] or
-/// [`crate::run_multi_with_platform`] directly. `app!` generates a call to this; anything using `rsx_modules!`
-/// has to make it by hand, and until it does, `cargo telar preview`/`test` silently start the real application.
+/// The `cargo telar` dev-loop entry, for an app that wires its own runner instead of expanding [`crate::app!`] — a multi-surface host, or one on an out-of-tree backend, which reaches [`crate::run_with_platform`] or [`crate::run_multi_with_platform`] directly. `app!` generates a call to this; anything using `rsx_modules!` has to make it by hand, and until it does, `cargo telar preview`/`test` silently start the real application.
 ///
 /// Returns `true` when it handled the invocation and the caller must return without starting its app.
 ///
-/// `setup` runs only on the dev path, never on the way to a normal start — a caller whose setup seeds a world
-/// that exists *for* previews must not pay for it, or change its own startup, every time the app launches. It is
-/// not optional on the dev path, because [`crate::use_theme`] panics when no theme is set: a `[preview]` reading
-/// one would otherwise fail for a reason that has nothing to do with the component under test.
+/// `setup` runs only on the dev path, never on the way to a normal start — a caller whose setup seeds a world that exists *for* previews must not pay for it, or change its own startup, every time the app launches. It is not optional on the dev path, because [`crate::use_theme`] panics when no theme is set: a `[preview]` reading one would otherwise fail for a reason that has nothing to do with the component under test.
 ///
-/// `entries` is a closure so a normal run pays nothing to build a list it will not read. A workspace whose
-/// `.rsx` files live in several crates concatenates one `telar_all_preview_entries()` per crate here — each
-/// `rsx_modules!` invocation emits its own, and they are per crate rather than per process.
+/// `entries` is a closure so a normal run pays nothing to build a list it will not read. A workspace whose `.rsx` files live in several crates concatenates one `telar_all_preview_entries()` per crate here — each `rsx_modules!` invocation emits its own, and they are per crate rather than per process.
 #[cfg(all(feature = "runtime", not(target_os = "android")))]
 pub fn dev_entry<F>(entries: F, config: AppConfig, setup: impl FnOnce()) -> bool
 where
@@ -83,7 +72,7 @@ where
         return false;
     }
     setup();
-    // Checked before `TELAR_PREVIEW` so an app built with both hosts can still ask for pictures rather than a window; the value is the directory to write them to.
+    // Checked before `TELAR_PREVIEW`, so an app built with both hosts can ask for pictures rather than a window.
     #[cfg(feature = "preview-headless")]
     if let Ok(out_dir) = std::env::var("TELAR_PREVIEW_PNG") {
         crate::run_preview_png(entries(), config, std::path::Path::new(&out_dir));
@@ -125,7 +114,7 @@ pub fn try_run_test(entries: Vec<PreviewEntry>, config: AppConfig) -> ! {
     let mut failed = 0usize;
     for entry in &entries {
         let label = format!("{}::{}", entry.component_name, entry.preview_name);
-        // Do NOT reset the runtime between components: the app's setup block installed the theme once, and resetting would drop it, making previews that read theme tokens panic spuriously.
+        // Do not reset the runtime between components: the app's setup installed the theme once, and resetting would make previews that read theme tokens panic spuriously.
         let outcome = catch_unwind(AssertUnwindSafe(|| -> Result<usize, LayoutError> {
             crate::reset_layout_runtime();
             let item = (entry.build)()?;

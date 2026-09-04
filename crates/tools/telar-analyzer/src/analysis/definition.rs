@@ -1,3 +1,5 @@
+//! Go-to-definition for the things `.rsx` names itself: classes, colours and component tags.
+
 use crate::analysis::util::{ViewToken, view_token_at};
 use crate::position::parser_line_to_lsp_range;
 use crate::project::ProjectInfo;
@@ -5,6 +7,7 @@ use lsp_types::{GotoDefinitionResponse, Location, Uri};
 use telar_parser::RsxDocument;
 use telar_transpiler::is_builtin_tag;
 
+/// Where the thing under the cursor is defined, for the names `.rsx` owns itself.
 pub fn goto_definition(
     doc: &RsxDocument,
     source: &str,

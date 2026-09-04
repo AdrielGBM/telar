@@ -1,3 +1,5 @@
+//! The line pipeline: stroked segments as instanced quads.
+
 use geometry_core::Point;
 use renderer_core::{LineCap, Stroke};
 use wgpu::Device;
@@ -13,7 +15,7 @@ pub(crate) struct LineInstance {
     pub width: f32,
     pub cap: f32,
     pub _pad: [f32; 2],
-    // Paint encoding, as on `RectInstance`: `color` carries a solid stroke, these carry a gradient one.
+    // As on `RectInstance`: `color` carries a solid stroke, these carry a gradient one.
     pub paint_type: u32,
     pub _pad_pt: [u32; 3],
     pub grad_p0: [f32; 2],
@@ -60,8 +62,7 @@ impl LinePipeline {
 }
 
 #[inline]
-/// `p1`/`p2` arrive already transformed into world space; `matrix` is that same transform, needed here to
-/// place a gradient's endpoints in the space the fragment shader samples in.
+/// `p1`/`p2` arrive already transformed into world space; `matrix` is that same transform, needed here to place a gradient's endpoints in the space the fragment shader samples in.
 pub(crate) fn prepare_line(p1: Point, p2: Point, style: Stroke, matrix: [f32; 6]) -> LineInstance {
     let cap = match style.cap {
         LineCap::Butt => 0.0f32,

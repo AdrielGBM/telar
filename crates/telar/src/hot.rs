@@ -1,14 +1,14 @@
+//! [`HotApp`]: an application loaded from a dylib, and the symbols the host drives its own runtime through.
+
 #[cfg(feature = "dev")]
+/// An application loaded from a dylib, driven through the symbols it exports.
 pub struct HotApp {
-    // inner must be declared first so it drops before _lib (Rust drops fields in declaration order)
+    // Declared before `_lib` so it drops first: Rust drops fields in declaration order.
     inner: Box<dyn crate::app::App>,
     _lib: libloading::Library,
 }
 
-/// The host's handle on a tree the dylib mounted and owns: an opaque pointer plus the shims to drive it. The
-/// function pointers are copied out of the library once (plain `fn` pointers, not borrowed `Symbol`s) so this
-/// handle carries no lifetime; it is valid for as long as the library stays mapped, which the runner guarantees
-/// by dropping the tree before it replaces the app.
+/// The host's handle on a tree the dylib mounted and owns: an opaque pointer plus the shims to drive it. The function pointers are copied out of the library once (plain `fn` pointers, not borrowed `Symbol`s) so this handle carries no lifetime; it is valid for as long as the library stays mapped, which the runner guarantees by dropping the tree before it replaces the app.
 #[cfg(feature = "dev")]
 struct HotTreeHandle {
     ptr: *mut crate::tree::HotTree,
@@ -18,15 +18,13 @@ struct HotTreeHandle {
     generation: unsafe extern "Rust" fn(*mut crate::tree::HotTree) -> u64,
     walk: unsafe extern "Rust" fn(*mut crate::tree::HotTree) -> Vec<ui_tree::SegmentNodeInfo>,
     release: unsafe extern "Rust" fn(*mut crate::tree::HotTree),
-    /// Absent in a dylib built before the input registries were fed on this side; the tree still runs, it
-    /// just leaves `key_pressed` answering for longer than a frame.
+    /// Absent in a dylib built before the input registries were fed on this side; the tree still runs, it just leaves `key_pressed` answering for longer than a frame.
     end_frame: Option<unsafe extern "Rust" fn(*mut crate::tree::HotTree)>,
 }
 
 #[cfg(feature = "dev")]
 impl HotTreeHandle {
-    /// Resolves every shim up front and mounts the tree inside the dylib. `None` when any symbol is missing (a
-    /// dylib built before app-side mounting existed), so the caller can fall back to mounting on the host side.
+    /// Resolves every shim up front and mounts the tree inside the dylib. `None` when any symbol is missing (a dylib built before app-side mounting existed), so the caller can fall back to mounting on the host side.
     fn mount(lib: &libloading::Library, app: &dyn crate::app::App) -> Option<Self> {
         unsafe {
             let mount: libloading::Symbol<
@@ -96,9 +94,7 @@ impl crate::app::App for HotApp {
         self.inner.root()
     }
 
-    // Mount inside the dylib, where the app's signals live: a tree mounted out here would register its segment
-    // effects in the host's reactive runtime and never subscribe to anything the app writes (see `crate::tree`).
-    // A dylib too old to export them has no fallback any more: the host-side mount only worked because the force-tick re-ran every segment on every event, and that is gone. An app that repaints when the mouse moves and at no other time is worse than one that refuses to start.
+    // Mounted inside the dylib, where the app's signals live: a tree mounted out here would register its segment effects in the host's runtime and never subscribe to anything the app writes. A dylib too old to export them has no fallback — the host-side mount only worked while a force-tick re-ran every segment.
     fn mount(&mut self) -> Box<dyn crate::tree::UiTree> {
         match HotTreeHandle::mount(&self._lib, self.inner.as_ref()) {
             Some(handle) => Box::new(handle),
@@ -117,7 +113,7 @@ impl crate::app::App for HotApp {
     }
 
     fn hot_snapshot(&self) -> Option<String> {
-        // Missing symbol (dylib built before hot state existed) degrades to no preservation.
+        // Missing symbol (a dylib built before hot state existed) degrades to no preservation.
         let snapshot: libloading::Symbol<unsafe extern "Rust" fn() -> String> =
             unsafe { self._lib.get(b"_rsx_hot_snapshot\0") }.ok()?;
         Some(unsafe { snapshot() })
@@ -132,7 +128,7 @@ impl crate::app::App for HotApp {
         }
     }
 
-    // Resolved per call rather than cached: this is a dev-only path (never compiled into release builds), the symbol lookup is a cheap hashmap hit, and per-call resolution avoids storing a `Symbol` borrowed from `_lib` inside the same struct. Missing symbol (dylib built before hot motion existed) degrades to a no-op: the host's own motion-core copy is a separate, empty registry, so ticking it would accomplish nothing useful.
+    // Resolved per call rather than cached: a dev-only path where the lookup is a cheap hashmap hit, and this avoids storing a `Symbol` borrowed from `_lib` in the same struct. A missing symbol is a no-op, since the host's own motion-core copy is a separate, empty registry.
     fn motion_tick(&self, now: web_time::Instant) {
         if let Ok(tick) = unsafe {
             self._lib
@@ -162,7 +158,7 @@ impl crate::app::App for HotApp {
         unsafe { continuous() }
     }
 
-    // Batch the dylib's own reactive runtime (separate from the host's) across event dispatch. Missing symbol (dylib built before this existed) degrades to a no-op: without it the app runs as before, just without the mid-dispatch flush protection.
+    // The dylib's reactive runtime is separate from the host's. A missing symbol degrades to a no-op: the app runs as before, without the mid-dispatch flush protection.
     fn begin_event_batch(&self) {
         if let Ok(begin) = unsafe {
             self._lib
@@ -181,8 +177,7 @@ impl crate::app::App for HotApp {
         }
     }
 
-    // Relayout the dylib's own layout runtime (separate from the host's) so a reactive list change is laid
-    // out before the frame composes. Missing symbol (dylib built before this existed) degrades to a no-op.
+    // The dylib's own layout runtime, so a reactive list change is laid out before the frame composes. A missing symbol degrades to a no-op.
     fn relayout(&self) {
         if let Ok(relayout) = unsafe {
             self._lib
@@ -192,10 +187,7 @@ impl crate::app::App for HotApp {
         }
     }
 
-    // Consult the dylib's own overlay registry (separate thread-local from the host's): `overlay` widgets
-    // register in the dylib where the view is built, so a modal's priority routing / background blocking
-    // must be driven across this boundary. Missing symbol (dylib built before this existed) degrades to
-    // `false` — the event falls through to the tree walk, as before this feature.
+    // `overlay` widgets register in the dylib where the view is built, so a modal's priority routing must be driven across this boundary. A missing symbol degrades to `false` and the event falls through.
     fn dispatch_overlays(&self, event: &platform_core::Event) -> bool {
         let Ok(dispatch) = (unsafe {
             self._lib
@@ -208,10 +200,7 @@ impl crate::app::App for HotApp {
         unsafe { dispatch(event) }
     }
 
-    // Drain window commands from the dylib's own thread-local queue (separate from the host's): a title bar's
-    // `on_press` pushes into the dylib's platform-core copy, so the host must drain it across this boundary to
-    // apply drag/minimize/maximize/close. Missing symbol (dylib built before this existed) degrades to an
-    // empty vec — window controls are simply inert until the dylib is rebuilt.
+    // A title bar's `on_press` pushes into the dylib's platform-core copy, so the host drains it across this boundary. A missing symbol degrades to an empty vec: window controls are inert until the dylib is rebuilt.
     fn drain_window_commands(&self) -> Vec<platform_core::WindowCommand> {
         let Ok(drain) = (unsafe {
             self._lib
@@ -224,8 +213,7 @@ impl crate::app::App for HotApp {
         unsafe { drain() }
     }
 
-    // Write the OS light/dark preference into the dylib's own theme runtime (separate from the host's), where
-    // the `follow_system` effect lives. Missing symbol (dylib built before this existed) degrades to a no-op.
+    // The `follow_system` effect lives in the dylib's theme runtime. A missing symbol degrades to a no-op.
     fn set_system_dark(&self, dark: bool) {
         if let Ok(set) = unsafe {
             self._lib
@@ -235,9 +223,7 @@ impl crate::app::App for HotApp {
         }
     }
 
-    // Run the completions of tasks spawned inside the dylib: `spawn_task` registered their callbacks in the
-    // dylib's own reactive-core thread-local, so the host must drain it across this boundary — its own copy is
-    // empty. Missing symbol (dylib built before this existed) degrades to a no-op.
+    // `spawn_task` registered their callbacks in the dylib's own reactive-core thread-local, so the host must drain it across this boundary; its own copy is empty. A missing symbol degrades to a no-op.
     fn drain_tasks(&self) {
         if let Ok(drain) = unsafe {
             self._lib
@@ -247,8 +233,7 @@ impl crate::app::App for HotApp {
         }
     }
 
-    // Install the loop wake in the dylib's own reactive-core copy, so a worker finishing inside it can run a
-    // frame. Missing symbol degrades to a no-op: results then wait for the next input event to be drained.
+    // So a worker finishing inside the dylib can run a frame. A missing symbol degrades to a no-op: results then wait for the next input event.
     fn install_task_waker(&self, waker: crate::app_context::RedrawWaker) {
         if let Ok(install) = unsafe {
             self._lib
@@ -262,8 +247,9 @@ impl crate::app::App for HotApp {
 }
 
 #[cfg(feature = "dev")]
+/// Copies the dylib to a unique path and dlopens it, so a rebuild is never served from the loader's cache.
 pub fn load_hot_app(path: &std::path::Path) -> Result<HotApp, Box<dyn std::error::Error>> {
-    // Copy to a unique path before dlopen. On Linux, dlopen caches loaded libraries by (device, inode). If the linker writes the new .so in-place (same inode), dlopen returns the already-loaded old handle instead of the fresh build. Copying creates a new inode, guaranteeing a fresh load. Unlinking after dlopen is safe: the kernel keeps the inode alive via the mapping until the Library is dropped.
+    // dlopen caches loaded libraries by (device, inode), so a linker writing the new .so in place would return the already-loaded old handle. Unlinking after dlopen is safe: the mapping keeps the inode alive.
     let unique = path.with_file_name(format!(
         ".hot-{}.so",
         std::time::SystemTime::now()
@@ -272,7 +258,7 @@ pub fn load_hot_app(path: &std::path::Path) -> Result<HotApp, Box<dyn std::error
             .as_nanos()
     ));
     std::fs::copy(path, &unique)?;
-    // RUNTIME and THEME use trivially-destructible TLS types (no Drop impl), so no TLS destructors are registered in the dylib. dlclose without RTLD_NODELETE is safe.
+    // `RUNTIME` and `THEME` use trivially-destructible TLS types, so the dylib registers no TLS destructors and `dlclose` without `RTLD_NODELETE` is safe.
     let lib_result = crate::dylib::open(&unique);
     let _ = std::fs::remove_file(&unique);
     let lib = lib_result?;
@@ -283,14 +269,13 @@ pub fn load_hot_app(path: &std::path::Path) -> Result<HotApp, Box<dyn std::error
 }
 
 #[cfg(feature = "dev")]
+/// What `cargo telar dev` sends the running app: a rebuild landed, or a build failed.
 pub enum HotEvent {
     Reload(std::path::PathBuf),
     BuildError(String),
 }
 
-/// Connects to the cargo-telar TCP loopback channel (it binds the port and passes it via
-/// `TELAR_HOT_PORT`) and forwards line-delimited hot events. TCP instead of a unix socket so the
-/// same code path works on non-Unix hosts.
+/// Connects to the cargo-telar TCP loopback channel (it binds the port and passes it via `TELAR_HOT_PORT`) and forwards line-delimited hot events. TCP instead of a unix socket so the same code path works on non-Unix hosts.
 #[cfg(feature = "dev")]
 pub fn listen_hot_reload(port: u16) -> std::sync::mpsc::Receiver<HotEvent> {
     use std::io::BufRead;
@@ -326,7 +311,7 @@ pub fn listen_hot_reload(port: u16) -> std::sync::mpsc::Receiver<HotEvent> {
                 } else if let Some(msg) = line.strip_prefix("err:") {
                     HotEvent::BuildError(unescape_lines(msg))
                 } else {
-                    // Legacy: bare path (no prefix) — treat as reload
+                    // Legacy bare path, with no prefix.
                     HotEvent::Reload(std::path::PathBuf::from(line))
                 };
                 if tx.send(event).is_err() {
@@ -338,9 +323,7 @@ pub fn listen_hot_reload(port: u16) -> std::sync::mpsc::Receiver<HotEvent> {
     rx
 }
 
-/// Undoes the escaping `cargo-telar` applies so a multi-line build error survives a protocol of one event
-/// per line. A trailing lone backslash cannot occur (the sender doubles them) and is passed through rather
-/// than dropped, so a malformed message is still shown.
+/// Undoes the escaping `cargo-telar` applies so a multi-line build error survives a protocol of one event per line. A trailing lone backslash cannot occur (the sender doubles them) and is passed through rather than dropped, so a malformed message is still shown.
 fn unescape_lines(message: &str) -> String {
     let mut out = String::with_capacity(message.len());
     let mut chars = message.chars();
@@ -366,9 +349,7 @@ fn unescape_lines(message: &str) -> String {
 mod tests {
     use super::*;
 
-    /// The build error shown in the window is a rustc-shaped code frame, and a frame is mostly `|` — which
-    /// is exactly what the old protocol substituted for a newline. Round-tripping one proves the frame
-    /// survives instead of being cut apart at every gutter.
+    /// The build error shown in the window is a rustc-shaped code frame, and a frame is mostly `|` — which is exactly what the old protocol substituted for a newline. Round-tripping one proves the frame survives instead of being cut apart at every gutter.
     #[test]
     fn a_code_frame_survives_the_hot_reload_channel() {
         let frame =

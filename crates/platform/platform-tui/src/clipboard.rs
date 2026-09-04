@@ -1,8 +1,6 @@
 //! The system clipboard, over the wire.
 //!
-//! A terminal application has no connection to the display server, so it cannot read or write the
-//! clipboard directly. OSC 52 asks the *terminal emulator* to do it — which is the only mechanism that
-//! works over SSH as well as locally, and is why it is worth having despite what it cannot do.
+//! A terminal application has no connection to the display server, so it cannot read or write the clipboard directly. OSC 52 asks the *terminal emulator* to do it — which is the only mechanism that works over SSH as well as locally, and is why it is worth having despite what it cannot do.
 
 use std::io::Write;
 use std::sync::Mutex;
@@ -11,11 +9,7 @@ use services_core::Clipboard;
 
 /// Copies through the terminal, and reads back what this application last copied.
 ///
-/// Reading the real clipboard would mean an OSC 52 query, whose answer arrives as *input* — interleaved
-/// with the user's keystrokes, on a terminal that may never reply at all, and which most emulators disable
-/// by default because it lets any program read the user's clipboard. So a paste of something copied
-/// elsewhere reaches the app the way it does in every other terminal program: the terminal's own paste,
-/// which arrives as bracketed-paste input.
+/// Reading the real clipboard would mean an OSC 52 query, whose answer arrives as *input* — interleaved with the user's keystrokes, on a terminal that may never reply at all, and which most emulators disable by default because it lets any program read the user's clipboard. So a paste of something copied elsewhere reaches the app the way it does in every other terminal program: the terminal's own paste, which arrives as bracketed-paste input.
 pub struct OscClipboard {
     last_copied: Mutex<String>,
 }

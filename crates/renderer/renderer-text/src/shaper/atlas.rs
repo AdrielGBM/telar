@@ -1,9 +1,12 @@
+//! The glyph atlas: packing rasterized glyphs into one texture and evicting when it fills.
+
 use cosmic_text::CacheKey;
 use etagere::{AllocId, BucketedAtlasAllocator, size2};
 use lru::LruCache;
 use rustc_hash::FxHashMap;
 
 #[derive(Clone, Copy, Debug)]
+/// Where one glyph sits in the atlas texture, and how big it is.
 pub struct AtlasEntry {
     pub uv_min: [f32; 2],
     pub uv_max: [f32; 2],
@@ -14,6 +17,7 @@ pub struct AtlasEntry {
     pub is_color_glyph: bool,
 }
 
+/// A positioned glyph: its atlas entry and where it is drawn.
 pub struct GlyphInfo {
     pub dest_rect: [f32; 4],
     pub uv_min: [f32; 2],
@@ -21,8 +25,10 @@ pub struct GlyphInfo {
     pub color: [f32; 4],
 }
 
+/// The atlas texture's side, in pixels.
 pub const ATLAS_SIZE: u32 = 2048;
 
+/// The shared glyph texture: packing rasterized glyphs in, and evicting when it fills.
 pub struct GlyphAtlas {
     pub pixels: Vec<u8>,
     pub dirty_rects: Vec<[u32; 4]>,
@@ -32,7 +38,7 @@ pub struct GlyphAtlas {
 }
 
 impl GlyphAtlas {
-    /// Opens an atlas that has not reserved its pixels yet. See [`Self::insert`] for why they wait.
+    /// Opens an atlas that has not reserved its pixels yet. See `insert` for why they wait.
     pub fn new() -> Self {
         Self {
             pixels: Vec::new(),
@@ -49,18 +55,14 @@ impl GlyphAtlas {
 
     /// Bytes of address space the atlas has reserved: zero until the first glyph is packed, the full plane after.
     ///
-    /// Reserved, not resident, and on a sparse atlas the two differ by orders of magnitude. `vec![0u8; N]` at this
-    /// size goes to `mmap`, which hands back zero pages that cost nothing until something writes to them — an
-    /// atlas holding a few hundred glyphs measures 16 MiB here and a fraction of one in `/proc/self/smaps`.
+    /// Reserved, not resident, and on a sparse atlas the two differ by orders of magnitude. `vec![0u8; N]` at this size goes to `mmap`, which hands back zero pages that cost nothing until something writes to them — an atlas holding a few hundred glyphs measures 16 MiB here and a fraction of one in `/proc/self/smaps`.
     pub fn reserved_bytes(&self) -> usize {
         self.pixels.len()
     }
 
     /// Bytes the packed glyphs have actually written, which is what the atlas costs in memory.
     ///
-    /// Reported instead of [`Self::reserved_bytes`] wherever the figure sits beside other caches' real sizes: an
-    /// atlas that reserves 16 MiB and has written 300 KB is a 300 KB cost, and summing the reservation with
-    /// genuine allocations produced a census claiming more memory than the whole process had.
+    /// Reported instead of [`Self::reserved_bytes`] wherever the figure sits beside other caches' real sizes: an atlas that reserves 16 MiB and has written 300 KB is a 300 KB cost, and summing the reservation with genuine allocations produced a census claiming more memory than the whole process had.
     pub fn packed_bytes(&self) -> usize {
         self.entries
             .values()
@@ -72,14 +74,10 @@ impl GlyphAtlas {
         self.entries.len()
     }
 
-    // pub(super): called from `shaper::layout`, a sibling module, when packing newly rasterized glyphs.
+    // `pub(super)` for `shaper::layout`, which packs newly rasterized glyphs.
     /// Packs one rasterized glyph, reserving the atlas's 16 MiB on the first glyph to arrive.
     ///
-    /// Lazily, because only the hardware backend ever packs a glyph — `layout_glyphs` is the sole path in, and only
-    /// `renderer-hardware` calls it. The software backend composites text through `rasterize`, never touching the
-    /// atlas, yet it builds a [`TextShaper`](super::TextShaper) like everyone else; reserving up front billed every
-    /// software surface 16 MiB of zeroed RGBA it would never read, which was the largest single line in a heap
-    /// profile of a shell that has no GPU backend at all.
+    /// Lazily, because only the hardware backend ever packs a glyph — `layout_glyphs` is the sole path in, and only `renderer-hardware` calls it. The software backend composites text through `rasterize`, never touching the atlas, yet it builds a [`TextShaper`](super::TextShaper) like everyone else; reserving up front billed every software surface 16 MiB of zeroed RGBA it would never read, which was the largest single line in a heap profile of a shell that has no GPU backend at all.
     pub(super) fn insert(
         &mut self,
         key: CacheKey,
@@ -124,12 +122,12 @@ impl GlyphAtlas {
     }
 
     pub fn fetch(&mut self, key: &CacheKey) -> Option<AtlasEntry> {
-        // lru_cache.get promotes to MRU; returned value is discarded — only the side effect matters.
+        // `get` promotes to MRU; the returned value is discarded, since only the side effect matters.
         self.lru_cache.get(key)?;
         self.entries.get(key).copied()
     }
 
-    // pub(super): called from `shaper::layout`, a sibling module, to make room when the atlas is full.
+    // `pub(super)` for `shaper::layout`, which calls it to make room when the atlas is full.
     pub(super) fn evict_lru(&mut self) -> Option<CacheKey> {
         let (key, alloc_id) = self.lru_cache.pop_lru()?;
         self.allocator.deallocate(alloc_id);

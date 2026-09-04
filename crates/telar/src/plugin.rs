@@ -1,19 +1,10 @@
 //! Dynamic plugins: hosting a separately-`dlopen`'d rsx UI inside a host window.
 //!
-//! Unlike hot-reload (dev-only, one dylib that *replaces* the whole window), a plugin is a production
-//! capability: the host stays a full rsx app and embeds one or more plugins, each a cdylib with its **own**
-//! reactive/layout/overlay/motion runtime (separate thread-locals, because each dylib statically links its own
-//! copy of the runtime crates). The host cannot reach into that runtime, so — exactly as hot-reload does for
-//! its single dylib — it *drives* the plugin across the FFI boundary through exported shims.
+//! Unlike hot-reload (dev-only, one dylib that *replaces* the whole window), a plugin is a production capability: the host stays a full rsx app and embeds one or more plugins, each a cdylib with its **own** reactive/layout/overlay/motion runtime (separate thread-locals, because each dylib statically links its own copy of the runtime crates). The host cannot reach into that runtime, so — exactly as hot-reload does for its single dylib — it *drives* the plugin across the FFI boundary through exported shims.
 //!
-//! The novel part hot-reload never needed is **compositing two runtimes into one window**: the plugin flattens
-//! its own view tree to a self-contained `Vec<DrawCommand>` ([`PluginInstance::paint`]) and hands it back; the
-//! host translates + clips those commands into the plugin's sub-rect and splices them into its own frame. No
-//! offscreen texture, no shared GPU device — the host's renderer paints everything in one pass.
+//! The novel part hot-reload never needed is **compositing two runtimes into one window**: the plugin flattens its own view tree to a self-contained `Vec<DrawCommand>` ([`PluginInstance::paint`]) and hands it back; the host translates + clips those commands into the plugin's sub-rect and splices them into its own frame. No offscreen texture, no shared GPU device — the host's renderer paints everything in one pass.
 //!
-//! Layering: this module is app-agnostic. A plugin author implements [`EmbeddedApp`] (or an adapter to it) and
-//! calls the [`plugin!`](crate::plugin) macro to export the shims. The host calls [`load_plugin`] and drives the
-//! returned [`LoadedPlugin`]. Nothing here knows about any particular app.
+//! Layering: this module is app-agnostic. A plugin author implements [`EmbeddedApp`] (or an adapter to it) and calls the [`plugin!`](crate::plugin) macro to export the shims. The host calls [`load_plugin`] and drives the returned [`LoadedPlugin`]. Nothing here knows about any particular app.
 
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -28,9 +19,7 @@ use ui_tree::{Component, RenderNode};
 
 use crate::app_context::AppCtx;
 
-/// Owned draw-command list returned across the FFI boundary (the plugin's flattened frame). Self-contained:
-/// baked geometry, `Arc`-shared styles/data — the host can render it directly (same-toolchain ABI, as with
-/// hot-reload's `Vec<WindowCommand>`).
+/// Owned draw-command list returned across the FFI boundary (the plugin's flattened frame). Self-contained: baked geometry, `Arc`-shared styles/data — the host can render it directly (same-toolchain ABI, as with hot-reload's `Vec<WindowCommand>`).
 pub type DrawList = Vec<DrawCommand>;
 /// Owned window-command list drained from the plugin's own queue (a title bar's drag/close etc.).
 pub type WindowCommands = Vec<WindowCommand>;
@@ -39,18 +28,12 @@ pub type WindowCommands = Vec<WindowCommand>;
 pub use platform_core::Event as PluginEvent;
 pub use renderer_core::Color as PluginColor;
 
-/// Wrap a plugin's painted [`DrawList`] into a [`RenderNode`] the host splices into its own frame: translated
-/// to `rect`'s origin (the plugin paints in its own `(0,0)` space) and clipped to `rect` (so it can't draw over
-/// the host chrome). The exact idiom rsx's own scroll area uses to host a sub-tree in a viewport.
+/// Wrap a plugin's painted [`DrawList`] into a [`RenderNode`] the host splices into its own frame: translated to `rect`'s origin (the plugin paints in its own `(0,0)` space) and clipped to `rect` (so it can't draw over the host chrome). The exact idiom rsx's own scroll area uses to host a sub-tree in a viewport.
 ///
-/// `image_salt` namespaces the plugin's image ids into a distinct range. Each dylib allocates `ImageData` ids
-/// from its own process-local counter starting at 1, so a plugin's ids would otherwise alias the host's (and
-/// other plugins') in the shared renderer's texture cache; a distinct nonzero salt per plugin instance keeps
-/// them apart. Pass `0` to skip (single-runtime callers).
+/// `image_salt` namespaces the plugin's image ids into a distinct range. Each dylib allocates `ImageData` ids from its own process-local counter starting at 1, so a plugin's ids would otherwise alias the host's (and other plugins') in the shared renderer's texture cache; a distinct nonzero salt per plugin instance keeps them apart. Pass `0` to skip (single-runtime callers).
 pub fn composite(rect: Rect, image_salt: u64, mut commands: DrawList) -> RenderNode {
     if image_salt != 0 {
-        // Original ids are small and monotonic; shift the salt above them so `(salt, id)` stays unique and
-        // stable frame-to-frame (so the texture cache still hits). `make_mut` clones only shared image data.
+        // Original ids are small and monotonic, so shifting the salt above them keeps `(salt, id)` unique and stable frame-to-frame and the texture cache still hits.
         const ID_BITS: u32 = 40;
         for cmd in &mut commands {
             if let DrawCommand::Image { data, .. } = cmd {
@@ -70,16 +53,11 @@ pub fn composite(rect: Rect, image_salt: u64, mut commands: DrawList) -> RenderN
     )
 }
 
-/// An embeddable rsx UI a host can drive as a plugin. The generic union of "build a view tree, render it,
-/// handle events, run per-frame background work, and present a title/icon" — no app-specific semantics. A
-/// concrete app (or an adapter over one) implements this; the [`plugin!`](crate::plugin) macro exports it.
+/// An embeddable rsx UI a host can drive as a plugin. The generic union of "build a view tree, render it, handle events, run per-frame background work, and present a title/icon" — no app-specific semantics. A concrete app (or an adapter over one) implements this; the [`plugin!`](crate::plugin) macro exports it.
 ///
-/// Lifecycle the driver enforces: [`build`](Self::build) runs once, inside the plugin's freshly-entered
-/// [`Surface`], so the content's layout nodes land in *this* surface's world; afterwards [`layout_root`] is the
-/// node the driver sizes to the host's sub-rect.
+/// Lifecycle the driver enforces: [`build`](Self::build) runs once, inside the plugin's freshly-entered [`Surface`], so the content's layout nodes land in *this* surface's world; afterwards [`layout_root`] is the node the driver sizes to the host's sub-rect.
 pub trait EmbeddedApp: 'static {
-    /// Build the content's layout tree. Called once by the driver with the plugin's surface active, so nodes
-    /// are allocated in this surface's layout world. [`layout_root`](Self::layout_root) must be valid after it.
+    /// Build the content's layout tree. Called once by the driver with the plugin's surface active, so nodes are allocated in this surface's layout world. [`layout_root`](Self::layout_root) must be valid after it.
     fn build(&mut self);
 
     /// The content's top layout node — the one the driver `compute_layout`s to the host-assigned rect size.
@@ -91,8 +69,7 @@ pub trait EmbeddedApp: 'static {
     /// Route an event (already translated into the content's local coordinate space by the host).
     fn on_event(&mut self, event: &Event) -> EventResult;
 
-    /// Re-lay-out internal scroll viewports after the driver has laid out the root at the new size. No-op for
-    /// content without its own scroll roots.
+    /// Re-lay-out internal scroll viewports after the driver has laid out the root at the new size. No-op for content without its own scroll roots.
     fn relayout_viewports(&mut self) {}
 
     /// Called when the content becomes visible (the host activated its tab). Autofocus the primary input here.
@@ -118,10 +95,7 @@ pub trait EmbeddedApp: 'static {
     fn id(&self) -> String;
 }
 
-/// Bridges the driver's [`ComponentList`] (which owns its root [`Component`]) to the shared [`EmbeddedApp`], so
-/// the driver keeps its own handle to call `activate`/`relayout_viewports`/metadata while the segment tree
-/// renders and dispatches events through the same object. Single-threaded; the borrows never overlap (paint
-/// borrows during `commands()`, events during `on_event`, driver calls in between).
+/// Bridges the driver's [`ComponentList`] (which owns its root [`Component`]) to the shared [`EmbeddedApp`], so the driver keeps its own handle to call `activate`/`relayout_viewports`/metadata while the segment tree renders and dispatches events through the same object. Single-threaded; the borrows never overlap (paint borrows during `commands()`, events during `on_event`, driver calls in between).
 struct EmbeddedComponent(Rc<RefCell<Box<dyn EmbeddedApp>>>);
 
 impl Component for EmbeddedComponent {
@@ -136,20 +110,16 @@ impl Component for EmbeddedComponent {
     }
 }
 
-/// The dylib-side plugin driver: a headless single-surface runtime (no window, no renderer) that the host
-/// drives across the FFI boundary. Owns the plugin's [`Surface`] and its [`ComponentList`]; every method
-/// enters the surface first, so all work touches this plugin's thread-local worlds, not the host's.
+/// The dylib-side plugin driver: a headless single-surface runtime (no window, no renderer) that the host drives across the FFI boundary. Owns the plugin's [`Surface`] and its [`ComponentList`]; every method enters the surface first, so all work touches this plugin's thread-local worlds, not the host's.
 ///
-/// The host holds this only as an opaque `*mut PluginInstance` (it never dereferences it — every call goes
-/// through an exported shim so the code runs in the dylib). Constructed by [`__plugin_create`].
+/// The host holds this only as an opaque `*mut PluginInstance` (it never dereferences it — every call goes through an exported shim so the code runs in the dylib). Constructed by [`__plugin_create`].
 pub struct PluginInstance {
     embedded: Rc<RefCell<Box<dyn EmbeddedApp>>>,
     tree: ComponentList,
     root: NodeId,
     size: (f32, f32),
     task_waker_installed: bool,
-    // Declared last so it drops last: the content and segment tree free their state while this surface's
-    // worlds (layout, overlay, focus) still exist.
+    // Declared last so it drops last: the content and segment tree free their state while this surface's worlds still exist.
     surface: Rc<Surface>,
 }
 
@@ -185,29 +155,24 @@ impl PluginInstance {
             AvailableSpace::Definite(width),
             AvailableSpace::Definite(height),
         );
-        // Batch so any signal the content writes here flushes AFTER the `borrow_mut` is released — otherwise the
-        // synchronous flush re-runs the segment's `view()`, which borrows the same `RefCell` (double borrow).
+        // So a signal the content writes flushes after the `borrow_mut` is released; a synchronous flush would re-run the segment's `view()`, which borrows the same `RefCell`.
         let embedded = &self.embedded;
         reactive_core::batch(|| embedded.borrow_mut().relayout_viewports());
     }
 
-    /// Re-lay-out only what the plugin's own reactive changes dirtied (a list grew, a panel toggled), at the
-    /// last size given to [`relayout`](Self::relayout). Driven every frame by the host — the analog of the
-    /// runner calling `App::relayout` (`ui_core::relayout_if_dirty`) on an in-process app.
+    /// Re-lay-out only what the plugin's own reactive changes dirtied (a list grew, a panel toggled), at the last size given to [`relayout`](Self::relayout). Driven every frame by the host — the analog of the runner calling `App::relayout` (`ui_core::relayout_if_dirty`) on an in-process app.
     pub fn relayout_dirty(&self) {
         let _g = self.surface.enter();
         ui_core::relayout_if_dirty();
     }
 
-    /// The plugin's current frame as a flat, self-contained command list. The host translates it into the
-    /// plugin's sub-rect and splices it into its own frame.
+    /// The plugin's current frame as a flat, self-contained command list. The host translates it into the plugin's sub-rect and splices it into its own frame.
     pub fn paint(&self) -> DrawList {
         let _g = self.surface.enter();
         self.tree.commands().clone()
     }
 
-    /// The content generation; unchanged between two reads means [`paint`](Self::paint) would return the same
-    /// commands, so the host can skip re-fetching (mirrors the host renderer's idle-blit gate).
+    /// The content generation; unchanged between two reads means [`paint`](Self::paint) would return the same commands, so the host can skip re-fetching (mirrors the host renderer's idle-blit gate).
     pub fn generation(&self) -> u64 {
         let _g = self.surface.enter();
         self.tree.generation()
@@ -222,28 +187,24 @@ impl PluginInstance {
     /// Dispatch an event to the content (already in local coordinates). Self-batches in the plugin's runtime.
     pub fn on_event(&mut self, event: &Event) -> bool {
         let _g = self.surface.enter();
-        // A cdylib carries its own copy of every `thread_local` in ui-core, so the host observing on its side of the boundary left the plugin's widgets reading a permanently empty registry — `modifiers()` answered "none" and a dropdown's type-ahead swallowed Ctrl+C. `crate::tree::HotTree::on_event` carries the same two lines for the same reason.
+        // A cdylib carries its own copy of every `thread_local` in ui-core, so observing on the host's side left the plugin's widgets reading a permanently empty registry. `HotTree::on_event` carries these for the same reason.
         ui_core::observe_keyboard(event);
         ui_core::observe_pointer(event);
         self.tree.on_event(event) == EventResult::Handled
     }
 
-    /// Route a positioned event to the plugin's overlay layer (modals/dropdowns) with priority; `true` means an
-    /// overlay consumed it and the host should not fall through to the content.
+    /// Route a positioned event to the plugin's overlay layer (modals/dropdowns) with priority; `true` means an overlay consumed it and the host should not fall through to the content.
     ///
-    /// The host calls this before [`on_event`](Self::on_event) and stops when it returns `true`, so the
-    /// registries are fed here too — otherwise an event an overlay consumes never reaches them at all.
+    /// The host calls this before [`on_event`](Self::on_event) and stops when it returns `true`, so the registries are fed here too — otherwise an event an overlay consumes never reaches them at all.
     pub fn dispatch_overlays(&self, event: &Event) -> bool {
         let _g = self.surface.enter();
         ui_core::observe_keyboard(event);
         ui_core::observe_pointer(event);
-        // Batch so an overlay handler's signal writes flush after dispatch, not mid-walk (matches the runner's
-        // event-batch bracket around overlay dispatch).
+        // So an overlay handler's signal writes flush after dispatch rather than mid-walk.
         reactive_core::batch(|| ui_core::dispatch_overlays(event) == EventResult::Handled)
     }
 
-    /// Closes the frame on this side of the boundary, for the same reason [`on_event`](Self::on_event) observes
-    /// on it: `key_pressed` answers for one frame, and the frame it answers for is the one whose widgets asked.
+    /// Closes the frame on this side of the boundary, for the same reason [`on_event`](Self::on_event) observes on it: `key_pressed` answers for one frame, and the frame it answers for is the one whose widgets asked.
     pub fn end_frame(&self) {
         let _g = self.surface.enter();
         ui_core::end_keyboard_frame();
@@ -271,13 +232,10 @@ impl PluginInstance {
         reactive_core::end_batch();
     }
 
-    /// Run the plugin's per-frame background-work hook, forwarding the host's `ctx` (so a plugin worker thread
-    /// can wake the host loop via `ctx.redraw_waker()`, just as an in-process app does).
+    /// Run the plugin's per-frame background-work hook, forwarding the host's `ctx` (so a plugin worker thread can wake the host loop via `ctx.redraw_waker()`, just as an in-process app does).
     pub fn on_frame(&mut self, ctx: &mut AppCtx) {
         let _g = self.surface.enter();
-        // The plugin links its own reactive-core copy, so `spawn_task` inside it registers in a runtime the
-        // host cannot reach. Both halves of the bridge are wired here rather than through new FFI symbols:
-        // the host's wake goes in once, and the completions run on every frame it drives.
+        // The plugin links its own reactive-core copy, so `spawn_task` inside it registers in a runtime the host cannot reach. Both halves of the bridge are wired here rather than through new FFI symbols.
         if !self.task_waker_installed {
             if let Some(waker) = ctx.redraw_waker() {
                 reactive_core::set_task_waker(move || waker.wake());
@@ -285,8 +243,7 @@ impl PluginInstance {
             }
         }
         reactive_core::drain_tasks();
-        // Batch so signals the hook writes (draining channels) flush after the `borrow_mut` releases, never
-        // re-entering `view()` mid-borrow (see `relayout`).
+        // So signals the hook writes flush after the `borrow_mut` releases, never re-entering `view()` mid-borrow.
         let embedded = &self.embedded;
         reactive_core::batch(|| embedded.borrow_mut().on_frame(ctx));
     }
@@ -319,15 +276,11 @@ impl PluginInstance {
     }
 }
 
-// --- Dylib-side shim helpers -------------------------------------------------------------------------------
-// The `plugin!` macro exports one thin `#[no_mangle]` wrapper per method; each forwards to one of these so all
-// logic stays here in rsx. `#[doc(hidden)]` — public only because macro expansion lands in the plugin crate.
+// The `plugin!` macro exports one thin `#[no_mangle]` wrapper per method, each forwarding to one of these. `#[doc(hidden)]`: public only because the expansion lands in the plugin crate.
 
 impl Drop for PluginInstance {
     fn drop(&mut self) {
-        // Background work this plugin started must not outlive it: its callbacks close over this surface's
-        // state. Scoped to this instance's surface because two instances of the same plugin dylib share one
-        // task registry (dlopen refcounts the library), so a blanket reset would cancel the sibling's work.
+        // Callbacks close over this surface's state, so its work must not outlive it. Scoped to this instance, because two instances of one plugin dylib share a task registry and a blanket reset would cancel both.
         reactive_core::cancel_tasks_for(self.surface.handle());
     }
 }
@@ -338,8 +291,7 @@ pub fn __plugin_create(embedded: Box<dyn EmbeddedApp>) -> *mut PluginInstance {
     Box::into_raw(Box::new(PluginInstance::new(embedded)))
 }
 
-/// # Safety
-/// `inst` must be a pointer returned by [`__plugin_create`] and not yet destroyed.
+/// # Safety `inst` must be a pointer returned by [`__plugin_create`] and not yet destroyed.
 #[doc(hidden)]
 pub unsafe fn __plugin_destroy(inst: *mut PluginInstance) {
     drop(unsafe { Box::from_raw(inst) });
@@ -349,8 +301,7 @@ macro_rules! plugin_shim {
     ($(#[$m:meta])* $vis_fn:ident ($($arg:ident : $ty:ty),*) $(-> $ret:ty)? => $method:ident) => {
         $(#[$m])*
         #[doc(hidden)]
-        /// # Safety
-        /// `inst` must be a live pointer from [`__plugin_create`].
+        /// # Safety `inst` must be a live pointer from [`__plugin_create`].
         pub unsafe fn $vis_fn(inst: *mut PluginInstance $(, $arg: $ty)*) $(-> $ret)? {
             unsafe { (*inst).$method($($arg),*) }
         }
@@ -374,27 +325,21 @@ plugin_shim!(__plugin_title() -> String => title);
 plugin_shim!(__plugin_icon() -> Option<Vec<u8>> => icon);
 plugin_shim!(__plugin_id() -> String => id);
 
-// on_frame takes `&mut AppCtx`, whose lifetime the shim macro can't spell; write it out.
-/// # Safety
-/// `inst` must be a live pointer from [`__plugin_create`].
+// `on_frame` takes `&mut AppCtx`, whose lifetime the shim macro cannot spell.
+/// # Safety `inst` must be a live pointer from [`__plugin_create`].
 #[doc(hidden)]
 pub unsafe fn __plugin_on_frame(inst: *mut PluginInstance, ctx: &mut AppCtx) {
     unsafe { (*inst).on_frame(ctx) }
 }
 
-/// The version of the guest/host contract below. Bump it whenever [`PluginVTable`] changes shape — adding a
-/// field, reordering one, or changing a signature — so a stale `.so` is refused with a version mismatch
-/// instead of being called through a table whose fields have moved under it.
+/// The version of the guest/host contract below. Bump it whenever [`PluginVTable`] changes shape — adding a field, reordering one, or changing a signature — so a stale `.so` is refused with a version mismatch instead of being called through a table whose fields have moved under it.
 pub const TELAR_PLUGIN_ABI: u32 = 1;
 
 /// Everything the host calls on a plugin, as one exported symbol.
 ///
-/// `#[repr(C)]` is what makes the version check sound rather than cosmetic: `abi` is guaranteed to sit at
-/// offset 0, so the host can read it out of a guest built against a different (possibly shorter) table before
-/// it reads anything else.
+/// `#[repr(C)]` is what makes the version check sound rather than cosmetic: `abi` is guaranteed to sit at offset 0, so the host can read it out of a guest built against a different (possibly shorter) table before it reads anything else.
 ///
-/// The signatures use the `extern "Rust"` ABI over Rust types, so a plugin must be built with the same
-/// toolchain as its host — a first-party plugin model, exactly as hot reload requires.
+/// The signatures use the `extern "Rust"` ABI over Rust types, so a plugin must be built with the same toolchain as its host — a first-party plugin model, exactly as hot reload requires.
 #[repr(C)]
 #[derive(Clone, Copy)]
 pub struct PluginVTable {
@@ -420,16 +365,13 @@ pub struct PluginVTable {
     pub on_frame: unsafe extern "Rust" fn(*mut PluginInstance, &mut AppCtx),
 }
 
-/// Exports a plugin cdylib's one FFI symbol, the `_rsx_plugin_vtable`. `$factory` is any
-/// `Fn(&[String]) -> Box<dyn telar::EmbeddedApp>` — invoked once per instance with the launch args.
+/// Exports a plugin cdylib's one FFI symbol, the `_rsx_plugin_vtable`. `$factory` is any `Fn(&[String]) -> Box<dyn telar::EmbeddedApp>` — invoked once per instance with the launch args.
 ///
 /// ```ignore
 /// telar::plugin!(|args: &[String]| -> Box<dyn telar::EmbeddedApp> { Box::new(MyApp::new(args)) });
 /// ```
 ///
-/// One symbol rather than one per method, so adding a guest method is a field here and a wrapper on the host
-/// instead of four edits across two macros — and so a stale `.so` fails the [`TELAR_PLUGIN_ABI`] check with a
-/// version mismatch rather than a missing-symbol error that names whichever method happened to be added last.
+/// One symbol rather than one per method, so adding a guest method is a field here and a wrapper on the host instead of four edits across two macros — and so a stale `.so` fails the [`TELAR_PLUGIN_ABI`] check with a version mismatch rather than a missing-symbol error that names whichever method happened to be added last.
 ///
 /// The symbol is a plain (release) export — no `TELAR_HOT_RELOAD_BUILD`, no `dev` feature.
 #[macro_export]
@@ -468,8 +410,6 @@ macro_rules! plugin {
     };
 }
 
-// --- Host-side loader --------------------------------------------------------------------------------------
-
 #[cfg(feature = "plugin-host")]
 pub use host::{LoadedPlugin, load_plugin};
 
@@ -478,19 +418,17 @@ mod host {
     use super::*;
     use std::path::Path;
 
-    /// A loaded plugin the host drives. Holds the live instance (dylib-allocated) and the `Library` that must
-    /// outlive it. `!Send`/`!Sync`: the instance is a foreign reactive runtime, driven only on the UI thread.
+    /// A loaded plugin the host drives. Holds the live instance (dylib-allocated) and the `Library` that must outlive it. `!Send`/`!Sync`: the instance is a foreign reactive runtime, driven only on the UI thread.
     pub struct LoadedPlugin {
         inst: *mut PluginInstance,
         vtable: PluginVTable,
-        // Declared last so it drops last: the instance is destroyed (dylib code) before the library unmaps.
+        // Declared last so it drops last: the instance is destroyed before the library unmaps.
         _lib: libloading::Library,
     }
 
     /// Load a plugin cdylib and create one instance from it (calling its vtable's `create` with `args`).
     ///
-    /// The library is kept mapped for the plugin's lifetime — the instance holds live pointers into the dylib's
-    /// code and data.
+    /// The library is kept mapped for the plugin's lifetime — the instance holds live pointers into the dylib's code and data.
     pub fn load_plugin(
         path: &Path,
         args: &[String],
@@ -500,7 +438,7 @@ mod host {
         let symbol: libloading::Symbol<*const PluginVTable> =
             unsafe { lib.get(b"_rsx_plugin_vtable\0")? };
         let ptr: *const PluginVTable = *symbol;
-        // Read the version word alone first: a guest built against a shorter table has fewer bytes than `PluginVTable`, so copying the whole struct out before the check would read past the end of it. `#[repr(C)]` is what puts `abi` at offset 0 for every version of the table.
+        // A guest built against a shorter table has fewer bytes than `PluginVTable`, so copying the whole struct before the check would read past its end. `#[repr(C)]` puts `abi` at offset 0 for every version.
         let abi = unsafe { *ptr.cast::<u32>() };
         if abi != TELAR_PLUGIN_ABI {
             return Err(format!(
@@ -541,8 +479,7 @@ mod host {
         pub fn dispatch_overlays(&self, event: &Event) -> bool {
             unsafe { (self.vtable.dispatch_overlays)(self.inst, event) }
         }
-        /// Call once per frame the host drove this plugin through, after its events. Closes the plugin's
-        /// one-frame keyboard state, which `key_pressed` inside it answers from.
+        /// Call once per frame the host drove this plugin through, after its events. Closes the plugin's one-frame keyboard state, which `key_pressed` inside it answers from.
         pub fn end_frame(&self) {
             unsafe { (self.vtable.end_frame)(self.inst) }
         }
@@ -580,7 +517,7 @@ mod host {
 
     impl Drop for LoadedPlugin {
         fn drop(&mut self) {
-            // Destroy the instance (runs dylib code touching its thread-locals) before `_lib` unmaps.
+            // Runs dylib code touching its thread-locals, so it must happen before `_lib` unmaps.
             unsafe { (self.vtable.destroy)(self.inst) }
         }
     }
@@ -638,7 +575,7 @@ mod tests {
         }
     }
 
-    // No crate in this repository links a plugin cdylib, so this invocation is the only place the `plugin!` expansion is ever compiled — without it, adding a vtable field type-checks here and breaks every guest at load time instead.
+    // No crate here links a plugin cdylib, so this is the only place the expansion is ever compiled: without it, adding a vtable field type-checks and breaks every guest at load time.
     crate::plugin!(|_args: &[String]| -> Box<dyn EmbeddedApp> { Box::new(Stub::new()) });
 
     #[test]
@@ -650,7 +587,7 @@ mod tests {
         unsafe { (_rsx_plugin_vtable.destroy)(inst) };
     }
 
-    // B5. These tests deliberately never observe on the caller's behalf, so they fail the moment either observe call leaves `PluginInstance::on_event` — the state every hogar plugin shipped in.
+    // These deliberately never observe on the caller's behalf, so they fail the moment either observe call leaves `PluginInstance::on_event`.
     #[test]
     fn a_plugin_records_the_modifiers_it_is_handed() {
         let mut inst = PluginInstance::new(Box::new(Stub::new()));
@@ -670,7 +607,6 @@ mod tests {
     #[test]
     fn an_overlay_event_reaches_the_registry_too() {
         let inst = PluginInstance::new(Box::new(Stub::new()));
-        // The host stops at `dispatch_overlays` when it returns true, so an event an overlay consumes would never reach the registry if only `on_event` observed.
         inst.dispatch_overlays(&Event::ModifiersChanged { modifiers: shift() });
 
         let _g = inst.surface.enter();
@@ -717,7 +653,6 @@ mod tests {
         assert_eq!(inst.clear_color(), None);
     }
 
-    // `composite` splices a plugin's frame into the host's: translated to its sub-rect so the plugin paints in its own origin space, and clipped so it cannot draw over the host's chrome.
     #[test]
     fn composite_translates_into_the_sub_rect_and_clips_to_it() {
         let rect = Rect::new(10.0, 20.0, 100.0, 50.0);

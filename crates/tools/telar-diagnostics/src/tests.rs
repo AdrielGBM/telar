@@ -1,3 +1,5 @@
+//! Guards over the semantic checks and the LSP conversion.
+
 use std::collections::HashSet;
 
 use telar_parser::{
@@ -71,7 +73,6 @@ fn lsp_conversion_maps_severity_and_zero_based_line() {
     let diag = Diagnostic::warning("x", crate::Span::line(1));
     let lsp: LspDiagnostic = (&diag).into();
     assert_eq!(lsp.severity, Some(DiagnosticSeverity::WARNING));
-    // 1-based parser line 1 -> 0-based LSP line 0, spanning the whole line.
     assert_eq!(lsp.range.start.line, 0);
     assert_eq!(lsp.range.start.character, 0);
     assert_eq!(lsp.range.end.character, u32::MAX);

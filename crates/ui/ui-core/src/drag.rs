@@ -1,3 +1,5 @@
+//! The drag gesture: arming on a press, reporting each move, and deciding who owns the stroke.
+
 use std::cell::Cell;
 
 use geometry_core::Rect;
@@ -8,9 +10,7 @@ use crate::pointer::PointerButtons;
 
 /// What armed a drag: the button pressed, and what was held down at that moment.
 ///
-/// Frozen at the press, and that is the whole of it. [`modifiers`](crate::modifiers) answers what is held
-/// *now*, so a mode read from it mid-stroke would change under a hand that let go of Shift — turning an orbit
-/// into a pan halfway through. A gesture chooses what it is once, when it starts, and is measured from there.
+/// Frozen at the press, and that is the whole of it. [`modifiers`](crate::modifiers) answers what is held *now*, so a mode read from it mid-stroke would change under a hand that let go of Shift — turning an orbit into a pan halfway through. A gesture chooses what it is once, when it starts, and is measured from there.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct DragStart {
     pub button: PointerButton,
@@ -18,9 +18,7 @@ pub struct DragStart {
 }
 
 thread_local! {
-    /// What armed the drag whose callback is currently running, and how far it has travelled. Ambient rather
-    /// than a callback parameter for the reason [`PointerButtons`] gives: widening `on_drag` would make the
-    /// whole catalogue pay for a question two widgets ask.
+    /// What armed the drag whose callback is currently running, and how far it has travelled. Ambient rather than a callback parameter for the reason [`PointerButtons`] gives: widening `on_drag` would make the whole catalogue pay for a question two widgets ask.
     static ACTIVE: Cell<Option<(DragStart, f32)>> = const { Cell::new(None) };
     /// Whether the press being dispatched right now has already armed a drag somewhere below. See [`claimed`].
     static CLAIMED: Cell<bool> = const { Cell::new(false) };
@@ -33,10 +31,7 @@ pub(crate) fn claim() {
 
 /// Runs `dispatch` over the children and reports whether one of them armed a drag on this press.
 ///
-/// **The innermost drag owns the stroke.** A tab that reorders sits in a strip that moves the window, and a
-/// slider sits in a card that can be dragged around; with both armed, one press runs two gestures and the
-/// answer is whichever one the eye notices first. The parent asks this and stands its own down — it is the
-/// same rule the pointer already follows for hit-testing, said for gestures.
+/// **The innermost drag owns the stroke.** A tab that reorders sits in a strip that moves the window, and a slider sits in a card that can be dragged around; with both armed, one press runs two gestures and the answer is whichever one the eye notices first. The parent asks this and stands its own down — it is the same rule the pointer already follows for hit-testing, said for gestures.
 pub(crate) fn claimed<R>(dispatch: impl FnOnce() -> R) -> (R, bool) {
     let outer = CLAIMED.with(|c| c.replace(false));
     let answer = dispatch();
@@ -46,26 +41,21 @@ pub(crate) fn claimed<R>(dispatch: impl FnOnce() -> R) -> (R, bool) {
 
 /// What armed the drag whose callback is running, or `None` outside one.
 ///
-/// The button-and-modifier half of mode dispatch: a viewport reads this once and knows whether this stroke is
-/// an orbit, a pan or a dolly — without every drag callback in the catalogue growing a parameter for it.
+/// The button-and-modifier half of mode dispatch: a viewport reads this once and knows whether this stroke is an orbit, a pan or a dolly — without every drag callback in the catalogue growing a parameter for it.
 pub fn drag_start() -> Option<DragStart> {
     ACTIVE.with(|a| a.get()).map(|(start, _)| start)
 }
 
 /// How far the drag whose callback is running has been from its press point, at its furthest.
 ///
-/// The number a click-versus-drag decision is read against when the widget wants to make it itself rather
-/// than hand it to [`DragGesture`'s threshold](crate::StyledContainer::drag_threshold).
+/// The number a click-versus-drag decision is read against when the widget wants to make it itself rather than hand it to [`DragGesture`'s threshold](crate::StyledContainer::drag_threshold).
 pub fn drag_travel() -> f32 {
     ACTIVE.with(|a| a.get()).map_or(0.0, |(_, travel)| travel)
 }
 
 /// Which way a drag is allowed to travel.
 ///
-/// **A gesture with one meaning should not report two numbers.** A strip of tabs is reordered along its own
-/// axis and a slider has only one; without this each of them takes the pointer's other coordinate and throws
-/// it away, which is the same arithmetic written once per widget — and the ones that forget let what they are
-/// dragging wander off the line it lives on.
+/// **A gesture with one meaning should not report two numbers.** A strip of tabs is reordered along its own axis and a slider has only one; without this each of them takes the pointer's other coordinate and throws it away, which is the same arithmetic written once per widget — and the ones that forget let what they are dragging wander off the line it lives on.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum DragAxis {
     #[default]
@@ -74,26 +64,17 @@ pub enum DragAxis {
     Vertical,
 }
 
-/// A drag gesture any container can opt into: reports the pointer position on a press inside its bounds
-/// and on every move until release. Because pointer events are broadcast to every widget, a drag keeps
-/// receiving moves even after the pointer leaves the widget's bounds — no explicit pointer capture is
-/// needed. Coordinates are reported *local to the widget* (relative to its rect origin), so a slider maps
-/// `x / width` to a value regardless of where the widget sits; they can go negative or exceed the size
-/// once the pointer leaves the bounds.
+/// A drag gesture any container can opt into: reports the pointer position on a press inside its bounds and on every move until release. Because pointer events are broadcast to every widget, a drag keeps receiving moves even after the pointer leaves the widget's bounds — no explicit pointer capture is needed. Coordinates are reported *local to the widget* (relative to its rect origin), so a slider maps `x / width` to a value regardless of where the widget sits; they can go negative or exceed the size once the pointer leaves the bounds.
 pub(crate) struct DragGesture {
     on_drag: Option<Box<dyn Fn(f32, f32)>>,
     on_drag_end: Option<Box<dyn Fn(f32, f32)>>,
-    /// Which buttons may start it. The primary one alone by default, which is every slider and splitter in
-    /// the catalogue; a viewport widens it, because a modeller pans with the button the OS calls secondary.
+    /// Which buttons may start it. The primary one alone by default, which is every slider and splitter in the catalogue; a viewport widens it, because a modeller pans with the button the OS calls secondary.
     arms: PointerButtons,
     /// Where the press landed (widget-local) and what armed it, for as long as the gesture is live.
     origin: Option<((f32, f32), DragStart)>,
     /// How far the pointer must travel before this counts as a drag at all.
     ///
-    /// `0.0` (the default) reports from the press, which is what a slider wants: pressing the track *is*
-    /// setting the value, and waiting for movement would make the first click do nothing. A viewport wants the
-    /// other reading, where a press that never travelled was a click on whatever sits under it. Both are
-    /// legitimate, so it is the caller's to say — and the widget that says nothing keeps what it always had.
+    /// `0.0` (the default) reports from the press, which is what a slider wants: pressing the track *is* setting the value, and waiting for movement would make the first click do nothing. A viewport wants the other reading, where a press that never travelled was a click on whatever sits under it. Both are legitimate, so it is the caller's to say — and the widget that says nothing keeps what it always had.
     threshold: f32,
     /// The furthest the pointer has been from the press.
     travel: f32,
@@ -101,16 +82,11 @@ pub(crate) struct DragGesture {
     started: bool,
     /// The last position the drag reported, so an end with no event of its own still knows where it got to.
     last: (f32, f32),
-    /// Which way it may travel. The other coordinate is reported as it was at the press, so a widget on a
-    /// line stays on it.
+    /// Which way it may travel. The other coordinate is reported as it was at the press, so a widget on a line stays on it.
     axis: DragAxis,
-    /// The box the reported point is kept inside, **in the widget's own coordinates**, or `None` for a drag
-    /// that may be reported anywhere the pointer goes.
+    /// The box the reported point is kept inside, **in the widget's own coordinates**, or `None` for a drag that may be reported anywhere the pointer goes.
     ///
-    /// A drag keeps receiving moves after the pointer leaves the widget — that is what makes a slider still
-    /// track when the hand overshoots — and the same broadcast is what lets a pointer that left the window
-    /// report a position no layout could ever produce. Bounding it is the caller saying where the answer is
-    /// allowed to be, once, instead of clamping it at every use.
+    /// A drag keeps receiving moves after the pointer leaves the widget — that is what makes a slider still track when the hand overshoots — and the same broadcast is what lets a pointer that left the window report a position no layout could ever produce. Bounding it is the caller saying where the answer is allowed to be, once, instead of clamping it at every use.
     within: Option<Box<dyn Fn() -> Rect>>,
 }
 
@@ -164,9 +140,7 @@ impl DragGesture {
         self.within = Some(Box::new(within));
     }
 
-    /// The point as the callbacks are told it: on the axis it is allowed to travel, and inside the box it is
-    /// allowed to be. Applied once, here, so every reader of `on_drag`, `on_drag_end` and the travel measured
-    /// against the threshold sees the same answer.
+    /// The point as the callbacks are told it: on the axis it is allowed to travel, and inside the box it is allowed to be. Applied once, here, so every reader of `on_drag`, `on_drag_end` and the travel measured against the threshold sees the same answer.
     fn held(&self, local: (f32, f32)) -> (f32, f32) {
         let start = self.origin.map(|(at, _)| at).unwrap_or(local);
         let (x, y) = match self.axis {
@@ -190,8 +164,7 @@ impl DragGesture {
         self.threshold = px.max(0.0);
     }
 
-    /// Whether the gesture has cleared its threshold and is reporting. A widget with both a tap and a
-    /// thresholded drag uses this to drop the tap once the stroke has committed to being a drag.
+    /// Whether the gesture has cleared its threshold and is reporting. A widget with both a tap and a thresholded drag uses this to drop the tap once the stroke has committed to being a drag.
     pub(crate) fn has_started(&self) -> bool {
         self.started
     }
@@ -200,11 +173,9 @@ impl DragGesture {
         self.threshold > 0.0
     }
 
-    /// A press inside `rect` with a button this gesture arms starts the drag and reports the press point.
-    /// Returns `Handled` when it starts, so the press is consumed (as with a tap).
+    /// A press inside `rect` with a button this gesture arms starts the drag and reports the press point. Returns `Handled` when it starts, so the press is consumed (as with a tap).
     ///
-    /// With a threshold set, the press *arms* the gesture without reporting: nothing has travelled yet, so
-    /// nothing has been dragged.
+    /// With a threshold set, the press *arms* the gesture without reporting: nothing has travelled yet, so nothing has been dragged.
     pub(crate) fn press(&mut self, event: &Event, rect: Rect) -> EventResult {
         if let Event::PointerPressed { x, y, button, .. } = event
             && self.arms(button)
@@ -220,7 +191,7 @@ impl DragGesture {
             ));
             self.travel = 0.0;
             self.started = !self.has_threshold();
-            // Said before anything else runs: whatever contains this box asks, once the press has been through its children, whether the stroke was already spoken for.
+            // Before anything else runs, so whatever contains this box can ask whether the stroke was already spoken for.
             claim();
             if self.started {
                 self.report(local.0, local.1);
@@ -230,8 +201,7 @@ impl DragGesture {
         EventResult::Ignored
     }
 
-    /// While a drag is active, reports each move (local to `rect`). Returns `Handled` so it is consumed —
-    /// and `Ignored` while the gesture is armed but has not travelled far enough to be a drag yet.
+    /// While a drag is active, reports each move (local to `rect`). Returns `Handled` so it is consumed — and `Ignored` while the gesture is armed but has not travelled far enough to be a drag yet.
     pub(crate) fn moved(&mut self, event: &Event, rect: Rect) -> EventResult {
         let (Some((press, _)), Event::PointerMoved { x, y, .. }) = (self.origin, event) else {
             return EventResult::Ignored;
@@ -239,8 +209,7 @@ impl DragGesture {
         let local = (*x as f32 - rect.x, *y as f32 - rect.y);
         let (dx, dy) = (local.0 - press.0, local.1 - press.1);
         self.travel = self.travel.max(dx.hypot(dy));
-        // The drag begins *here* and not back at the press: reporting the press point retroactively would jump
-        // whatever is being dragged by the slop distance the moment it started moving.
+        // The drag begins here, not back at the press: reporting the press point retroactively would jump the dragged thing by the slop distance the moment it started moving.
         self.started |= self.travel > self.threshold;
         if !self.started {
             return EventResult::Ignored;
@@ -250,7 +219,7 @@ impl DragGesture {
     }
 
     fn report(&mut self, x: f32, y: f32) {
-        // Held to its axis and its box here, at the one place every report goes through, so `on_drag_end` and a `last` read after a stroke that left the window answer the same as the moves did.
+        // At the one place every report goes through, so `on_drag_end` and a `last` read after a stroke that left the window answer the same as the moves did.
         let (x, y) = self.held((x, y));
         self.last = (x, y);
         let Some((_, start)) = self.origin else {
@@ -261,15 +230,9 @@ impl DragGesture {
         }
     }
 
-    /// Ends the drag (on release, or when the pointer leaves the window) and fires `on_drag_end` with where
-    /// it finished. Returns whether one was active, so the caller can consume the release that ended it.
+    /// Ends the drag (on release, or when the pointer leaves the window) and fires `on_drag_end` with where it finished. Returns whether one was active, so the caller can consume the release that ended it.
     ///
-    /// `at` is the release position when the caller has one. The fallback matters: a drag also ends on
-    /// `CursorLeft`, and on a child consuming the release, neither of which carries a position — reporting the
-    /// last place the drag actually reached is the only answer that is true in all three cases.
-    /// A gesture that never cleared its threshold ends silently and answers `false`: nothing was dragged, so
-    /// the release belongs to whatever else the widget arms — which is how a click and a drag on one button
-    /// stop being ambiguous.
+    /// `at` is the release position when the caller has one. The fallback matters: a drag also ends on `CursorLeft`, and on a child consuming the release, neither of which carries a position — reporting the last place the drag actually reached is the only answer that is true in all three cases. A gesture that never cleared its threshold ends silently and answers `false`: nothing was dragged, so the release belongs to whatever else the widget arms — which is how a click and a drag on one button stop being ambiguous.
     pub(crate) fn end(&mut self, at: Option<(f32, f32)>) -> bool {
         // Held before the origin goes: the axis is measured from where the press was.
         let landed = at.map(|at| self.held(at));
@@ -288,8 +251,7 @@ impl DragGesture {
     }
 }
 
-/// Runs `f` with [`drag_start`] and [`drag_travel`] answering for this gesture. The previous value is put back
-/// rather than cleared, so a drag callback that builds a widget which drags in turn does not blank the outer.
+/// Runs `f` with [`drag_start`] and [`drag_travel`] answering for this gesture. The previous value is put back rather than cleared, so a drag callback that builds a widget which drags in turn does not blank the outer.
 fn in_drag<R>(start: DragStart, travel: f32, f: impl FnOnce() -> R) -> R {
     let outer = ACTIVE.with(|a| a.replace(Some((start, travel))));
     let out = f();
@@ -342,8 +304,7 @@ mod tests {
         (drag, log)
     }
 
-    /// The default, which a slider depends on: pressing the track *is* setting the value, so the press itself
-    /// reports and waiting for movement would make the first click do nothing.
+    /// The default, which a slider depends on: pressing the track *is* setting the value, so the press itself reports and waiting for movement would make the first click do nothing.
     #[test]
     fn without_a_threshold_the_press_itself_reports() {
         let (mut drag, log) = logging(0.0);
@@ -355,8 +316,7 @@ mod tests {
         assert_eq!(log.borrow()[0].0, (30.0, 40.0));
     }
 
-    /// And the reading a viewport needs: a stroke that never travelled was a click on whatever sits under it,
-    /// not a drag of nothing. `end` answering `false` is what leaves the release to the tap gesture.
+    /// And the reading a viewport needs: a stroke that never travelled was a click on whatever sits under it, not a drag of nothing. `end` answering `false` is what leaves the release to the tap gesture.
     #[test]
     fn a_press_that_never_travels_is_not_a_drag() {
         let (mut drag, log) = logging(4.0);
@@ -366,8 +326,7 @@ mod tests {
         assert!(!drag.end(None), "so nothing was dragged to end");
     }
 
-    /// Crossing the threshold starts the drag *where it crossed*. Reporting the press point retroactively
-    /// would jump whatever is being dragged by the slop distance the instant it started moving.
+    /// Crossing the threshold starts the drag *where it crossed*. Reporting the press point retroactively would jump whatever is being dragged by the slop distance the instant it started moving.
     #[test]
     fn crossing_the_threshold_starts_the_drag_where_it_crossed() {
         let (mut drag, log) = logging(4.0);
@@ -380,8 +339,7 @@ mod tests {
         assert!(drag.end(None), "this one really was a drag");
     }
 
-    /// Mode dispatch, and the reason it is frozen: a hand that lets go of Shift halfway through would turn an
-    /// orbit into a pan mid-stroke if the gesture asked what is held *now*.
+    /// Mode dispatch, and the reason it is frozen: a hand that lets go of Shift halfway through would turn an orbit into a pan mid-stroke if the gesture asked what is held *now*.
     #[test]
     fn a_drag_reports_what_armed_it_and_not_what_is_held_now() {
         crate::keyboard::reset();

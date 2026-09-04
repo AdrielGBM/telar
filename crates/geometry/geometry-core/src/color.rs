@@ -1,3 +1,6 @@
+//! RGBA colour, and the conversions a theme needs to derive one colour from another.
+
+/// A straight-alpha RGBA colour with components in `0.0..=1.0`.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Color {
     pub r: f32,
@@ -70,9 +73,7 @@ impl Color {
 
     /// Parses `#rgb`, `#rgba`, `#rrggbb` or `#rrggbbaa`, with or without the `#`.
     ///
-    /// Those four lengths are the `.rsx` hex table (`telar_parser::parse_hex`), stated there and repeated
-    /// here because geometry cannot depend on a tools crate. The two must accept the same set: a colour that
-    /// parses at runtime and not in the DSL is a colour the author cannot write.
+    /// Those four lengths are the `.rsx` hex table (`telar_parser::parse_hex`), stated there and repeated here because geometry cannot depend on a tools crate. The two must accept the same set: a colour that parses at runtime and not in the DSL is a colour the author cannot write.
     pub fn from_hex(hex: &str) -> Option<Self> {
         let hex = hex.strip_prefix('#').unwrap_or(hex);
         // Byte-slice indexing below assumes single-byte chars.
@@ -127,8 +128,7 @@ impl Color {
         }
     }
 
-    /// WCAG 2.x relative luminance in `[0, 1]` (0 = black, 1 = white): the linearized sRGB channels weighted
-    /// by human luminance sensitivity. Alpha is ignored — compose over a background first if it matters.
+    /// WCAG 2.x relative luminance in `[0, 1]` (0 = black, 1 = white): the linearized sRGB channels weighted by human luminance sensitivity. Alpha is ignored — compose over a background first if it matters.
     pub fn relative_luminance(self) -> f32 {
         let r = Self::srgb_to_linear(self.r);
         let g = Self::srgb_to_linear(self.g);
@@ -136,9 +136,7 @@ impl Color {
         0.2126 * r + 0.7152 * g + 0.0722 * b
     }
 
-    /// WCAG 2.x contrast ratio between two colors, from `1.0` (identical) to `21.0` (black vs white).
-    /// Order-independent. Use it to pick a legible foreground: `>= 4.5` passes AA for body text, `>= 3.0`
-    /// for large text.
+    /// WCAG 2.x contrast ratio between two colors, from `1.0` (identical) to `21.0` (black vs white). Order-independent. Use it to pick a legible foreground: `>= 4.5` passes AA for body text, `>= 3.0` for large text.
     pub fn contrast_ratio(self, other: Color) -> f32 {
         let a = self.relative_luminance();
         let b = other.relative_luminance();
@@ -146,9 +144,7 @@ impl Color {
         (hi + 0.05) / (lo + 0.05)
     }
 
-    /// Picks the most legible foreground for this color (treated as a background): the candidate with the
-    /// highest [`contrast_ratio`](Self::contrast_ratio) against `self`. Returns `self` if `candidates` is
-    /// empty. This is the "auto-contrast" pick — e.g. a filled chip choosing text vs base over its accent.
+    /// Picks the most legible foreground for this color (treated as a background): the candidate with the highest [`contrast_ratio`](Self::contrast_ratio) against `self`. Returns `self` if `candidates` is empty. This is the "auto-contrast" pick — e.g. a filled chip choosing text vs base over its accent.
     pub fn most_readable(self, candidates: &[Color]) -> Color {
         candidates
             .iter()
@@ -182,11 +178,7 @@ impl Color {
 
     /// The colour as eight bits a channel, rounded to the nearest.
     ///
-    /// Rounded, not truncated, and the difference is a whole channel step: `as u8` throws the fraction away,
-    /// so `0.5` came out 127 where every other path in the codebase produces 128 — tiny-skia and the GPU both
-    /// round when they write their own final byte. Only the backends that name a colour in *text* go through
-    /// here, so the truncation showed up as a document drawing every theme one step darker than the same
-    /// theme rasterised.
+    /// Rounded, not truncated, and the difference is a whole channel step: `as u8` throws the fraction away, so `0.5` came out 127 where every other path in the codebase produces 128 — tiny-skia and the GPU both round when they write their own final byte. Only the backends that name a colour in *text* go through here, so the truncation showed up as a document drawing every theme one step darker than the same theme rasterised.
     #[inline]
     pub fn to_rgba8(self) -> [u8; 4] {
         let byte = |channel: f32| (channel * 255.0).round().clamp(0.0, 255.0) as u8;
@@ -256,8 +248,7 @@ mod tests {
         assert_eq!(color.to_rgba8(), [0, 0, 0, 0]);
     }
 
-    /// Truncating threw away a whole channel step, and only the backends that write a colour as text went
-    /// through here — so a document drew a theme one step darker than the same theme rasterised.
+    /// Truncating threw away a whole channel step, and only the backends that write a colour as text went through here — so a document drew a theme one step darker than the same theme rasterised.
     #[test]
     fn to_rgba8_rounds_to_the_nearest_channel() {
         let color = Color::rgba(0.5, 0.47, 0.98, 0.1);
@@ -350,7 +341,6 @@ mod tests {
 
     #[test]
     fn from_oklch_srgb_red() {
-        // sRGB pure red expressed in OKLCH (culori reference).
         assert_rgb(
             Color::from_oklch(0.627_955, 0.257_683, 29.233_88),
             1.0,
@@ -416,7 +406,6 @@ mod tests {
 
     #[test]
     fn contrast_ratio_extremes_and_identity() {
-        // WCAG max contrast is 21:1 (black vs white); a color against itself is 1:1.
         assert!((Color::WHITE.contrast_ratio(Color::BLACK) - 21.0).abs() < 1e-3);
         assert!((Color::BLACK.contrast_ratio(Color::WHITE) - 21.0).abs() < 1e-3);
         assert!((Color::RED.contrast_ratio(Color::RED) - 1.0).abs() < 1e-6);
@@ -426,18 +415,15 @@ mod tests {
     fn most_readable_picks_the_higher_contrast_foreground() {
         let ink = Color::from_rgb_u8(20, 20, 25);
         let paper = Color::from_rgb_u8(240, 240, 245);
-        // On a light background, the dark ink is more legible; on a dark one, the light paper.
         let light_bg = Color::from_rgb_u8(230, 220, 180);
         let dark_bg = Color::from_rgb_u8(40, 50, 70);
         assert_eq!(light_bg.most_readable(&[ink, paper]), ink);
         assert_eq!(dark_bg.most_readable(&[ink, paper]), paper);
-        // Empty candidates fall back to self.
         assert_eq!(light_bg.most_readable(&[]), light_bg);
     }
 
     #[test]
     fn oklch_round_trip_is_stable() {
-        // Round-tripping an in-gamut sRGB color through OKLCH and back must be idempotent (out-of-gamut OKLCH inputs are clamped, so we start from sRGB).
         let start = Color::rgb(0.1, 0.6, 0.9);
         let (l1, c1, h1, _) = start.to_oklcha();
         let (l2, c2, h2, _) = Color::from_oklcha(l1, c1, h1, 1.0).to_oklcha();

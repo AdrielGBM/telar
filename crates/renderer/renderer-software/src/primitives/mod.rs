@@ -1,3 +1,5 @@
+//! One rasterizer per primitive.
+
 pub(crate) mod colr;
 pub(crate) mod image;
 pub(crate) mod line;

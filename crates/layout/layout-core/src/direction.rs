@@ -1,9 +1,8 @@
+//! The writing direction, and the logical-to-physical edge mapping it decides.
+
 /// The writing direction the layout resolves logical edges against.
 ///
-/// Layout is authored in *logical* terms — start/end rather than left/right — and resolved to physical edges
-/// when a style is handed to the engine. One build therefore serves both directions: flipping [`Direction`]
-/// re-resolves the tree in place instead of rebuilding it, which is why the intent is kept alongside the
-/// resolved style rather than baked into it.
+/// Layout is authored in *logical* terms — start/end rather than left/right — and resolved to physical edges when a style is handed to the engine. One build therefore serves both directions: flipping [`Direction`] re-resolves the tree in place instead of rebuilding it, which is why the intent is kept alongside the resolved style rather than baked into it.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
 pub enum Direction {
     #[default]
@@ -16,9 +15,7 @@ impl Direction {
         matches!(self, Direction::Rtl)
     }
 
-    /// The direction conventionally written with `locale`'s script, keyed by language subtag: Arabic, Hebrew,
-    /// Persian, Urdu and the other right-to-left languages, matched against the tag's primary subtag so
-    /// `ar-EG` resolves like `ar`.
+    /// The direction conventionally written with `locale`'s script, keyed by language subtag: Arabic, Hebrew, Persian, Urdu and the other right-to-left languages, matched against the tag's primary subtag so `ar-EG` resolves like `ar`.
     pub fn for_locale(locale: &str) -> Self {
         let lang = locale
             .split(['-', '_'])

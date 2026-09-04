@@ -1,3 +1,5 @@
+//! [`Canvas`]: a leaf that hands its rect to a closure and lets it draw whatever it likes.
+
 use crate::impl_leaf_widget;
 use crate::layout_leaf::LayoutLeaf;
 use geometry_core::Rect;
@@ -12,6 +14,7 @@ enum Artwork {
     Inheriting(Box<dyn Fn(Rect, TextStyle) -> RenderNode>),
 }
 
+/// A leaf that hands its laid-out rect to a closure and lets it draw whatever it likes.
 pub struct Canvas {
     leaf: LayoutLeaf,
     draw: Artwork,
@@ -31,11 +34,7 @@ impl Canvas {
 
     /// A canvas whose artwork is handed the text style the tree above it declared.
     ///
-    /// For the glyphs an interface draws rather than spells — a caret, a tick, a chevron — because a font
-    /// cannot be relied on to carry them at the size and weight the label beside them is set in. Drawn, they
-    /// stop being text and lose the cascade with it: the caret on a `select` stayed the theme's ink in a
-    /// region that had declared its own, while the label it points at followed. This is CSS's `currentColor`,
-    /// for the shapes a face does not supply.
+    /// For the glyphs an interface draws rather than spells — a caret, a tick, a chevron — because a font cannot be relied on to carry them at the size and weight the label beside them is set in. Drawn, they stop being text and lose the cascade with it: the caret on a `select` stayed the theme's ink in a region that had declared its own, while the label it points at followed. This is CSS's `currentColor`, for the shapes a face does not supply.
     pub fn declaring(
         layout_style: LayoutStyle,
         draw_fn: impl Fn(Rect, TextStyle) -> RenderNode + 'static,
@@ -62,12 +61,11 @@ impl_leaf_widget!(Canvas);
 impl Component for Canvas {
     fn view(&self) -> RenderNode {
         let r = self.leaf.rect.get();
-        // A Canvas closure draws at fixed coordinates that ignore the layout rect, so a collapsed rect
-        // (e.g. a section hidden via `display:none`) would still paint over other content. Draw nothing.
+        // A Canvas closure draws at fixed coordinates that ignore the layout rect, so a collapsed rect would still paint over other content.
         if r.width <= 0.0 || r.height <= 0.0 {
             return RenderNode::Empty;
         }
-        // The closure draws in local space (at_layout_position translates the output), so it gets a zero-origin rect — passing the absolute layout rect would double-offset anything derived from rect.x/y.
+        // `at_layout_position` translates the output, so a zero-origin rect avoids double-offsetting anything derived from `rect.x`/`rect.y`.
         let local = Rect {
             x: 0.0,
             y: 0.0,
@@ -106,9 +104,7 @@ mod tests {
     use crate::context::{compute_layout, new_container};
     use crate::layout_item::LayoutItem;
 
-    // `draw` must be re-invoked on every `view()`, not cached from construction — a `$signal` colour
-    // read inside it (the reactive path the transpiler now clones into a canvas child's `fill`/`stroke`)
-    // would otherwise freeze at whatever value was current when the closure was built.
+    // `draw` must be re-invoked on every `view()`: a `$signal` colour read inside it would otherwise freeze at whatever was current when the closure was built.
     #[test]
     fn draw_closure_is_re_read_each_view_and_recolors() {
         let color = Rc::new(Cell::new(Color::RED));
@@ -139,9 +135,7 @@ mod tests {
         );
     }
 
-    /// Artwork that stands in for a glyph follows the region it is drawn in, the way the text beside it does.
-    /// A caret drawn instead of spelled used to be the one mark in a region that had declared its ink that
-    /// came out in the theme's.
+    /// Artwork that stands in for a glyph follows the region it is drawn in, the way the text beside it does. A caret drawn instead of spelled used to be the one mark in a region that had declared its ink that came out in the theme's.
     #[test]
     fn a_declaring_canvas_paints_with_the_ink_around_it() {
         reset_layout_runtime();

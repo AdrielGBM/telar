@@ -1,3 +1,7 @@
+//! The seam between Telar and whatever opens its windows.
+//!
+//! A backend implements [`Platform`] and [`Window`] against these types; everything above this crate speaks only in them, so a frontend can be swapped without touching the UI.
+
 pub mod accessibility;
 pub mod error;
 pub mod event;

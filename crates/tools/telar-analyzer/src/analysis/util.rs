@@ -1,7 +1,10 @@
+//! Locating the token under a cursor, and classifying what kind of thing it is.
+
 use crate::position::{Section, find_section_at};
 use crate::text::word_at_cursor;
 use telar_transpiler::color_attr_keys;
 
+/// The attribute key a value position belongs to, or `None` when the cursor is not in one.
 pub fn attribute_key_before_colon(line: &str, word_start: usize) -> Option<&str> {
     let before_colon = line[..word_start.saturating_sub(1)].trim_end();
     let key_start = before_colon
@@ -11,8 +14,7 @@ pub fn attribute_key_before_colon(line: &str, word_start: usize) -> Option<&str>
     Some(before_colon[key_start..].trim())
 }
 
-/// What a `[view]` cursor is sitting on. Goto-definition and hover ask the same question of the same line and
-/// diverge only in what they do with the answer, so the question is asked once, here.
+/// What a `[view]` cursor is sitting on. Goto-definition and hover ask the same question of the same line and diverge only in what they do with the answer, so the question is asked once, here.
 pub enum ViewToken<'a> {
     /// `@name`: a style-class reference, without its sigil.
     Class(&'a str),
@@ -22,8 +24,7 @@ pub enum ViewToken<'a> {
     Tag(&'a str),
 }
 
-/// Classifies the `[view]` token under the cursor. `None` outside `[view]`, off a word, on the value of an
-/// attribute that carries no colour, or anywhere else nothing resolvable is written.
+/// Classifies the `[view]` token under the cursor. `None` outside `[view]`, off a word, on the value of an attribute that carries no colour, or anywhere else nothing resolvable is written.
 pub fn view_token_at(source: &str, line: u32, character: u32) -> Option<ViewToken<'_>> {
     if find_section_at(source, line) != Section::View {
         return None;
@@ -33,8 +34,7 @@ pub fn view_token_at(source: &str, line: u32, character: u32) -> Option<ViewToke
     if word.is_empty() {
         return None;
     }
-    // `word_at_cursor` keeps the sigil in the word (it breaks on whitespace/`:`/`"`, not `@`), so a class is
-    // recognised by the prefix rather than by the char before it.
+    // `word_at_cursor` keeps the sigil in the word (it breaks on whitespace/`:`/`"`, not `@`), so a class is recognised by the prefix rather than by the char before it.
     if let Some(class) = word.strip_prefix('@') {
         return Some(ViewToken::Class(class));
     }

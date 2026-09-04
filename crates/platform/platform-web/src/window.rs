@@ -17,13 +17,9 @@ struct Inner {
 
 /// One element of a page, presented as a window.
 ///
-/// Its logical size is the element's own, in CSS pixels: a Telar layout and a CSS layout agree on what a
-/// pixel is, so an app mounted in a 900-pixel column lays out to 900 whether the page put that column there
-/// with a media query or a flex rule.
+/// Its logical size is the element's own, in CSS pixels: a Telar layout and a CSS layout agree on what a pixel is, so an app mounted in a 900-pixel column lays out to 900 whether the page put that column there with a media query or a flex rule.
 ///
-/// [`Window::width`] and [`Window::height`], though, report **device** pixels — the same contract every other
-/// backend keeps, because what asks for them is a renderer sizing its backing store. What lays out asks for
-/// the logical size instead, through the resize event.
+/// [`Window::width`] and [`Window::height`], though, report **device** pixels — the same contract every other backend keeps, because what asks for them is a renderer sizing its backing store. What lays out asks for the logical size instead, through the resize event.
 #[derive(Clone)]
 pub struct WebWindow {
     inner: Rc<Inner>,
@@ -51,8 +47,7 @@ impl WebWindow {
     /// Re-reads the host's size and the device pixel ratio, reporting what changed.
     pub fn measure(&self) -> Measured {
         let rect = self.inner.host.get_bounding_client_rect();
-        // A host with no height of its own — a bare `<body>` — would lay out to nothing, so it takes the
-        // viewport instead. Width is safe to read as-is: a block element always has one.
+        // A host with no height of its own — a bare `<body>` — would lay out to nothing, so it takes the viewport instead. Width is safe to read as-is: a block element always has one.
         let viewport = dom::window();
         let width = rect.width().max(1.0).round() as u32;
         let height = if rect.height() >= 1.0 {
@@ -106,8 +101,7 @@ impl Window for WebWindow {
         crate::platform::request_frame();
     }
 
-    /// The device pixel ratio. A renderer drawing pixels multiplies by it to fill the backing store; one
-    /// drawing DOM ignores it, because the browser has already applied it.
+    /// The device pixel ratio. A renderer drawing pixels multiplies by it to fill the backing store; one drawing DOM ignores it, because the browser has already applied it.
     fn scale_factor(&self) -> f64 {
         self.inner.scale.get()
     }
@@ -136,8 +130,7 @@ impl Window for WebWindow {
         dom::prefers_dark()
     }
 
-    /// None: a frame is requested through `requestAnimationFrame`, whose callback belongs to the thread that
-    /// registered it. The platform installs a process-global waker instead, which reaches the same loop.
+    /// None: a frame is requested through `requestAnimationFrame`, whose callback belongs to the thread that registered it. The platform installs a process-global waker instead, which reaches the same loop.
     fn redraw_waker(&self) -> Option<std::sync::Arc<dyn Fn() + Send + Sync>> {
         None
     }

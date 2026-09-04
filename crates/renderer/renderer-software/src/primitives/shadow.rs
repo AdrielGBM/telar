@@ -1,3 +1,5 @@
+//! Blurring a shape into a cached pixmap, inline for small shadows and on a worker thread for large ones.
+
 /// Quantizes blur radius to half-pixel steps so near-identical blurs share one shadow-cache entry.
 pub(crate) fn quantize_blur(blur_radius: f32) -> f32 {
     (blur_radius * 2.0).round() / 2.0
@@ -37,7 +39,7 @@ pub(crate) fn spawn_shadow_async(
         draw_fn(&mut pixmap);
         if blur_radius > 0.0 {
             let sigma = renderer_core::blur_sigma(blur_radius);
-            // The worker owns its own scratch buffer; the main thread's blur_scratch is not shared across threads.
+            // The worker owns its scratch buffer; the main thread's is not shared across threads.
             let mut scratch = vec![0u8; pixmap.data().len()];
             let (w, h) = (pixmap.width(), pixmap.height());
             gaussian_blur(pixmap.data_mut(), w, h, sigma, &mut scratch);
@@ -51,10 +53,7 @@ pub(crate) fn spawn_shadow_async(
 ///
 /// While a blur is pending, the **previous shadow of the same size** is drawn in its place (`recent`). Without that stand-in the shadow blinks out for those frames: a desktop clock re-keys its shadow every minute (the text is part of the key) and its pixmap lands just past the threshold, so it took the async path and left a hole under the glyphs once a minute. A stand-in whose silhouette is one glyph stale for ~30 ms is not visible; its absence is.
 ///
-/// `make_draw` yields the shape-drawing closure and its `Send + 'static` twin for the worker, and is called only on
-/// the paths that actually need one — never on a cache hit, and never while a worker is already producing the same
-/// pixmap. Producing them lazily is what lets a caller put expensive work (rasterizing a string to an alpha mask)
-/// behind the cache lookup instead of ahead of it.
+/// `make_draw` yields the shape-drawing closure and its `Send + 'static` twin for the worker, and is called only on the paths that actually need one — never on a cache hit, and never while a worker is already producing the same pixmap. Producing them lazily is what lets a caller put expensive work (rasterizing a string to an alpha mask) behind the cache lookup instead of ahead of it.
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn blit_cached_shadow_async<K, D, A>(
     pixmap: &mut tiny_skia::Pixmap,
@@ -76,7 +75,7 @@ pub(crate) fn blit_cached_shadow_async<K, D, A>(
     D: FnOnce(&mut tiny_skia::Pixmap),
     A: FnOnce(&mut tiny_skia::Pixmap) + Send + 'static,
 {
-    // Small shadows: the spawn/channel overhead outweighs the blur cost, so compute inline.
+    // For small shadows the spawn and channel overhead outweighs the blur cost.
     if tmp_w.saturating_mul(tmp_h) <= ASYNC_SHADOW_THRESHOLD {
         blit_cached_shadow(
             pixmap,
@@ -96,7 +95,7 @@ pub(crate) fn blit_cached_shadow_async<K, D, A>(
     }
 
     if !cache.contains(&key) {
-        // Not cached yet. Either a worker is already computing it (poll for completion) or we need to spawn one.
+        // Either a worker is already computing it, or one needs spawning.
         if let Some(rx) = pending.get(&key) {
             match rx.try_recv() {
                 Ok(tmp) => {
@@ -104,7 +103,7 @@ pub(crate) fn blit_cached_shadow_async<K, D, A>(
                     pending.remove(&key);
                 }
                 Err(std::sync::mpsc::TryRecvError::Disconnected) => {
-                    // Worker failed (e.g. allocation failure); drop the entry so a later frame can retry.
+                    // The worker failed, so drop the entry and let a later frame retry.
                     pending.remove(&key);
                 }
                 Err(std::sync::mpsc::TryRecvError::Empty) => {}
@@ -115,7 +114,7 @@ pub(crate) fn blit_cached_shadow_async<K, D, A>(
         }
     }
 
-    // Matching size is what makes the stand-in safe to blit at these coordinates.
+    // A matching size is what makes the stand-in safe to blit at these coordinates.
     let drawn = if cache.contains(&key) {
         Some(key.clone())
     } else {
@@ -171,7 +170,7 @@ pub(crate) fn blit_cached_shadow<K, D>(
         pixmap.draw_pixmap(blit_x, blit_y, cached.as_ref(), &paint, transform, clip);
         return;
     }
-    // Blurred, blitted, then offered: a shadow too large for the budget still draws rather than silently vanishing.
+    // A shadow too large for the budget still draws rather than silently vanishing.
     if let Some(tmp) = render_shadow_pixmap(tmp_w, tmp_h, blur_radius, blur_scratch, make_draw()) {
         pixmap.draw_pixmap(blit_x, blit_y, tmp.as_ref(), &paint, transform, clip);
         cache.insert(key, tmp);
@@ -194,7 +193,7 @@ pub(crate) fn gaussian_blur(
     let h = height as usize;
     for _ in 0..3 {
         box_blur_h(data, width, height, r, scratch);
-        // Vertical pass via transpose to keep both passes cache-sequential. Transpose data(w×h) into scratch(h×w), blur scratch's rows (which are original columns), then transpose back. data is safe to use as the inner scratch because we've already copied data into scratch before calling box_blur_h on scratch.
+        // Transposed so both passes stay cache-sequential: transpose into scratch, blur its rows (the original columns), then transpose back. `data` is safe as the inner scratch, having already been copied out.
         transpose_to_scratch(data, scratch, w, h);
         box_blur_h(scratch, height, width, r, data);
         transpose_to_scratch(scratch, data, h, w);
@@ -239,7 +238,7 @@ fn box_blur_h(data: &mut [u8], width: u32, height: u32, r: u32, scratch: &mut [u
         .zip(scratch.par_chunks_mut(row_size))
         .for_each(|(row_data, row_scratch)| {
             let initial_end = (r + 1).min(w);
-            // Accumulate all 4 channels together so each row is walked once instead of 4 times.
+            // All four channels together, so each row is walked once instead of four times.
             let mut sum = [0u32; 4];
             for xi in 0..initial_end {
                 let base = xi * 4;

@@ -29,13 +29,11 @@ pub struct IndexedFile {
     pub classes: Vec<(String, u32)>,
     /// Every component `<tag>` usage in this file.
     pub tags: Vec<TagUse>,
-    /// The module segment of every `[logic]` `use` line that imports a component: `crate::ui::card::{card,
-    /// CardProps}` records `card` at the module position. A `.rsx` is a module named after its file, so a
-    /// rename has to move that segment too — the item names inside the braces are Rust and rust-analyzer's
-    /// own, but the segment comes from a file name it never sees change.
+    /// The module segment of every `[logic]` `use` line that imports a component: `crate::ui::card::{card, CardProps}` records `card` at the module position. A `.rsx` is a module named after its file, so a rename has to move that segment too — the item names inside the braces are Rust and rust-analyzer's own, but the segment comes from a file name it never sees change.
     pub imports: Vec<TagUse>,
 }
 
+/// The workspace's `.rsx` symbols: components, classes and the tag usages that reference them.
 pub struct WorkspaceIndex {
     root: PathBuf,
     files: HashMap<PathBuf, IndexedFile>,
@@ -164,11 +162,9 @@ fn index_source(path: &Path, source: &str) -> Option<IndexedFile> {
     })
 }
 
-/// The module segment of every `[logic]` `use` line that imports a component from its own module:
-/// `use crate::ui::card::{card, CardProps};` records `card` at the segment before the braces.
+/// The module segment of every `[logic]` `use` line that imports a component from its own module: `use crate::ui::card::{card, CardProps};` records `card` at the segment before the braces.
 ///
-/// Matched only when the segment names something the tail also names, so `use std::rc::Rc` never looks like
-/// an import of a component called `rc`.
+/// Matched only when the segment names something the tail also names, so `use std::rc::Rc` never looks like an import of a component called `rc`.
 fn scan_component_imports(source: &str) -> Vec<TagUse> {
     let mut out = Vec::new();
     let mut section = Section::Unknown;
@@ -279,7 +275,6 @@ mod tests {
         let entry = index_source(&abs("/x/src/home.rsx"), src).unwrap();
         assert_eq!(entry.stem, "home");
         assert_eq!(entry.classes, vec![("card".to_string(), 1)]);
-        // `col` is a builtin (not a tag use); `feature_card` is a component reference.
         assert_eq!(entry.tags.len(), 1);
         assert_eq!(entry.tags[0].name, "feature_card");
         assert_eq!(entry.tags[0].range.start.line, 5);
@@ -298,18 +293,14 @@ mod tests {
             "[view]\ncol\n    text \"hi\"\n",
         );
 
-        // The component definition (its file) + the one `<feature_card>` usage in home.
         let refs = idx.component_references("feature_card");
         assert_eq!(refs.len(), 2);
 
-        // A query matches both the component module and is case-insensitive.
         let syms = idx.symbols("feature");
         assert!(syms.iter().any(|s| s.name == "feature_card"));
     }
 
-    /// A `.rsx` is a module named after its file, so renaming the file moves the segment every importer
-    /// spells — the half of a component rename that rust-analyzer cannot see, because the name it changes
-    /// lives on disk rather than in the generated Rust.
+    /// A `.rsx` is a module named after its file, so renaming the file moves the segment every importer spells — the half of a component rename that rust-analyzer cannot see, because the name it changes lives on disk rather than in the generated Rust.
     #[test]
     fn a_use_line_records_the_module_a_component_is_imported_from() {
         let source =

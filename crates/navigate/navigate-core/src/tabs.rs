@@ -1,3 +1,5 @@
+//! Tabs: one route stack per tab, and the host that shows whichever tab is active.
+
 use std::rc::Rc;
 
 use layout_core::{LayoutError, LayoutStyle, SizeDimension};
@@ -14,35 +16,25 @@ use crate::navigator::Navigator;
 use crate::page::{NavPage, PagePolicy};
 use crate::transition::NavTransition;
 
-/// Builds a page for a route inside a given tab. The tab is passed alongside the route so an app whose route
-/// type is shared between tabs can still tell them apart; an app whose routes already name their tab can
-/// ignore it.
+/// Builds a page for a route inside a given tab. The tab is passed alongside the route so an app whose route type is shared between tabs can still tell them apart; an app whose routes already name their tab can ignore it.
 type TabPageFactory<T, R> = dyn Fn(&T, &R) -> Result<Box<dyn NavPage>, LayoutError>;
 
-/// One tab's navigation stack, plus the [`NavHost`] rendering it — minted on the tab's first visit, then kept
-/// for the life of the host. That is the whole point of nested stacks: a tab you leave is still standing where
-/// you left it, several screens deep, without any per-route keep-alive policy holding it up.
+/// One tab's navigation stack, plus the [`NavHost`] rendering it — minted on the tab's first visit, then kept for the life of the host. That is the whole point of nested stacks: a tab you leave is still standing where you left it, several screens deep, without any per-route keep-alive policy holding it up.
 struct BuiltTab<T, R: Clone + Eq + 'static> {
     tab: T,
     host: NavHost<R>,
     node: NodeId,
 }
 
-/// One navigation stack per tab, and which tab is active — the state half of [`TabHost`], and the handle the
-/// app's tab bar or rail drives.
+/// One navigation stack per tab, and which tab is active — the state half of [`TabHost`], and the handle the app's tab bar or rail drives.
 ///
-/// A single [`Navigator`] is a browser: one shared history that every destination pushes onto. This is the
-/// native model instead — `UITabBarController` giving each tab its own `UINavigationController`, Flutter's
-/// nested `Navigator`, Compose's nested graph — where switching tabs is not a navigation at all: it swaps
-/// which stack you are looking at, and each tab keeps its own depth and its own history.
+/// A single [`Navigator`] is a browser: one shared history that every destination pushes onto. This is the native model instead — `UITabBarController` giving each tab its own `UINavigationController`, Flutter's nested `Navigator`, Compose's nested graph — where switching tabs is not a navigation at all: it swaps which stack you are looking at, and each tab keeps its own depth and its own history.
 ///
-/// Cheap to clone (the active-tab signal and the stack table are refcounted), so the rail that selects tabs,
-/// the back control, and the pages that push all hold their own handle.
+/// Cheap to clone (the active-tab signal and the stack table are refcounted), so the rail that selects tabs, the back control, and the pages that push all hold their own handle.
 pub struct TabStacks<T: Clone + Eq + 'static, R: Clone + 'static> {
     active: RwSignal<T>,
     navs: Rc<Vec<(T, Navigator<R>)>>,
-    /// Tabs visited before the active one, oldest first — `None` when tab history is off (the default).
-    /// A signal rather than a plain cell so a Back control's enabled state tracks it without extra wiring.
+    /// Tabs visited before the active one, oldest first — `None` when tab history is off (the default). A signal rather than a plain cell so a Back control's enabled state tracks it without extra wiring.
     history: Option<RwSignal<Vec<T>>>,
 }
 
@@ -56,21 +48,15 @@ impl<T: Clone + Eq + 'static, R: Clone + 'static> Clone for TabStacks<T, R> {
     }
 }
 
-/// How many previous tabs a history keeps. Deep enough that a reading session never notices the bound, small
-/// enough that it cannot grow without limit over hours of use.
+/// How many previous tabs a history keeps. Deep enough that a reading session never notices the bound, small enough that it cannot grow without limit over hours of use.
 const TAB_HISTORY_LIMIT: usize = 32;
 
 impl<T: Clone + Eq + 'static, R: Clone + 'static> TabStacks<T, R> {
     /// Mints one stack per entry of `tabs`, in that order, with `active` naming the one on screen.
     ///
-    /// `navigator_for` builds each tab's stack: `Navigator::new(root)` for a plain one, or
-    /// `Navigator::from_signal(hot_signal(key, vec![root]), root)` to keep that tab's history across a
-    /// hot-reload dylib swap. Minting every stack up front is cheap — a stack is one signal holding a `Vec<R>`;
-    /// it is the *pages* that are deferred, and [`TabHost`] still builds those on a tab's first visit.
+    /// `navigator_for` builds each tab's stack: `Navigator::new(root)` for a plain one, or `Navigator::from_signal(hot_signal(key, vec![root]), root)` to keep that tab's history across a hot-reload dylib swap. Minting every stack up front is cheap — a stack is one signal holding a `Vec<R>`; it is the *pages* that are deferred, and [`TabHost`] still builds those on a tab's first visit.
     ///
-    /// `active` is clamped into the set, so a tab restored from a hot snapshot (or a deep link) that no longer
-    /// exists falls back to the first tab rather than leaving the host with no stack to show. An empty `tabs`
-    /// is read as "just the active one", which keeps the never-empty invariant without a fallible constructor.
+    /// `active` is clamped into the set, so a tab restored from a hot snapshot (or a deep link) that no longer exists falls back to the first tab rather than leaving the host with no stack to show. An empty `tabs` is read as "just the active one", which keeps the never-empty invariant without a fallible constructor.
     pub fn new(
         active: RwSignal<T>,
         tabs: &[T],
@@ -98,21 +84,15 @@ impl<T: Clone + Eq + 'static, R: Clone + 'static> TabStacks<T, R> {
         }
     }
 
-    /// Lets [`back`](Self::back) leave the active tab: once its stack is at its root, the next Back returns to
-    /// the tab you were on before, and so on until there is nothing left to go back to.
+    /// Lets [`back`](Self::back) leave the active tab: once its stack is at its root, the next Back returns to the tab you were on before, and so on until there is nothing left to go back to.
     ///
-    /// Off by default, which is iOS tab-bar semantics — tabs are parallel contexts and Back never crosses
-    /// them. Turn it on for Android (where the platform back button is expected to walk back through tabs, and
-    /// only then leave the app) and for any rail that reads as a table of contents rather than a tab bar,
-    /// where "go back to what I was just reading" is what a user means by Back.
+    /// Off by default, which is iOS tab-bar semantics — tabs are parallel contexts and Back never crosses them. Turn it on for Android (where the platform back button is expected to walk back through tabs, and only then leave the app) and for any rail that reads as a table of contents rather than a tab bar, where "go back to what I was just reading" is what a user means by Back.
     pub fn with_tab_history(mut self) -> Self {
         self.history = Some(signal(Vec::new()));
         self
     }
 
-    /// Records `leaving` as the tab to come back to. Consecutive duplicates are impossible (a switch is only
-    /// recorded when the tab actually changes), and the history is capped so a long session cannot grow it
-    /// without bound.
+    /// Records `leaving` as the tab to come back to. Consecutive duplicates are impossible (a switch is only recorded when the tab actually changes), and the history is capped so a long session cannot grow it without bound.
     pub(crate) fn remember(&self, leaving: T) {
         let Some(history) = &self.history else {
             return;
@@ -125,8 +105,7 @@ impl<T: Clone + Eq + 'static, R: Clone + 'static> TabStacks<T, R> {
         });
     }
 
-    /// Returns to the previously visited tab, if tab history is on and holds one. The tab being left is *not*
-    /// recorded, or Back would bounce between two tabs forever instead of walking out.
+    /// Returns to the previously visited tab, if tab history is on and holds one. The tab being left is *not* recorded, or Back would bounce between two tabs forever instead of walking out.
     fn pop_tab_history(&self) -> bool {
         let Some(history) = &self.history else {
             return false;
@@ -152,8 +131,7 @@ impl<T: Clone + Eq + 'static, R: Clone + 'static> TabStacks<T, R> {
         self.active.peek()
     }
 
-    /// The backing signal, so an app can make the active tab hot-preserved state (`hot_signal`) or drive it
-    /// from somewhere else entirely.
+    /// The backing signal, so an app can make the active tab hot-preserved state (`hot_signal`) or drive it from somewhere else entirely.
     pub fn active_signal(&self) -> RwSignal<T> {
         self.active
     }
@@ -165,9 +143,7 @@ impl<T: Clone + Eq + 'static, R: Clone + 'static> TabStacks<T, R> {
 
     /// Selects `tab`, or — when it is already the active one — pops its stack back to its root.
     ///
-    /// That second behaviour is the platform convention (tapping the tab you are already on returns you to the
-    /// top of it), and it is what makes a tab bar item never inert: pressing it from three screens deep inside
-    /// that tab takes you home rather than doing nothing.
+    /// That second behaviour is the platform convention (tapping the tab you are already on returns you to the top of it), and it is what makes a tab bar item never inert: pressing it from three screens deep inside that tab takes you home rather than doing nothing.
     pub fn select(&self, tab: T) {
         let leaving = self.active.peek();
         if leaving == tab {
@@ -200,12 +176,9 @@ impl<T: Clone + Eq + 'static, R: Clone + 'static> TabStacks<T, R> {
         self.navigator().push(route);
     }
 
-    /// One "back" as the user means it: closes the frontmost dialog if one is open, else pops the active tab's
-    /// stack, else — only with [`with_tab_history`](Self::with_tab_history) — returns to the previous tab.
-    /// Reports whether anything happened, so a hardware back gesture can fall through to the OS when it did not.
+    /// One "back" as the user means it: closes the frontmost dialog if one is open, else pops the active tab's stack, else — only with [`with_tab_history`](Self::with_tab_history) — returns to the previous tab. Reports whether anything happened, so a hardware back gesture can fall through to the OS when it did not.
     ///
-    /// Without tab history, Back stays strictly *within* a tab, which is the difference between a tab bar and
-    /// browser history.
+    /// Without tab history, Back stays strictly *within* a tab, which is the difference between a tab bar and browser history.
     pub fn back(&self) -> bool {
         if ui_core::dismiss::dismiss_top() {
             return true;
@@ -216,9 +189,7 @@ impl<T: Clone + Eq + 'static, R: Clone + 'static> TabStacks<T, R> {
         self.pop_tab_history()
     }
 
-    /// Reactive read of whether [`back`](Self::back) would move the user: a screen to pop in the active tab,
-    /// or — with tab history on — a tab to return to. Does *not* count an open dialog; read
-    /// `use_dismiss_depth` alongside this for a control that lights up for that too.
+    /// Reactive read of whether [`back`](Self::back) would move the user: a screen to pop in the active tab, or — with tab history on — a tab to return to. Does *not* count an open dialog; read `use_dismiss_depth` alongside this for a control that lights up for that too.
     pub fn can_pop(&self) -> bool {
         // Subscribe to the tab as well: switching tabs changes which stack this answer comes from.
         let active = self.active.get();
@@ -239,14 +210,9 @@ impl<T: Clone + Eq + 'static, R: Clone + 'static> TabStacks<T, R> {
 
 /// A container that renders the active tab's stack, with one [`NavHost`] per tab.
 ///
-/// Where [`NavHost`] shows the top of *one* stack, this shows the top of *the active tab's* stack, and holds
-/// the other tabs' hosts alongside it — built on first visit, then collapsed out of layout with
-/// [`set_display`] while another tab is on screen. Nothing is torn down on a tab switch, so a tab that was
-/// three screens deep with a half-filled form is exactly that when you come back to it.
+/// Where [`NavHost`] shows the top of *one* stack, this shows the top of *the active tab's* stack, and holds the other tabs' hosts alongside it — built on first visit, then collapsed out of layout with [`set_display`] while another tab is on screen. Nothing is torn down on a tab switch, so a tab that was three screens deep with a half-filled form is exactly that when you come back to it.
 ///
-/// The [`PagePolicy`] and [`NavTransition`] set here apply to every tab's host, so `Transient` — the real page
-/// stack semantics — is the sane default choice here in a way it never was for a single shared stack: each
-/// tab's persistence comes from its stack staying alive, not from pinning pages by route.
+/// The [`PagePolicy`] and [`NavTransition`] set here apply to every tab's host, so `Transient` — the real page stack semantics — is the sane default choice here in a way it never was for a single shared stack: each tab's persistence comes from its stack staying alive, not from pinning pages by route.
 pub struct TabHost<T: Clone + Eq + 'static, R: Clone + Eq + 'static> {
     stacks: TabStacks<T, R>,
     factory: Rc<TabPageFactory<T, R>>,
@@ -257,8 +223,7 @@ pub struct TabHost<T: Clone + Eq + 'static, R: Clone + Eq + 'static> {
     content_area: NodeId,
     /// The tab currently displayed — the shadow reconciled against `stacks.active()`.
     current: T,
-    /// A running entrance animation for the tab just switched to, plus whether it sits later in declaration
-    /// order than the one it replaced (so a slide enters from the side the tab bar suggests).
+    /// A running entrance animation for the tab just switched to, plus whether it sits later in declaration order than the one it replaced (so a slide enters from the side the tab bar suggests).
     entrance: Option<(T, bool, Animated<f32>)>,
 }
 
@@ -300,10 +265,7 @@ impl<T: Clone + Eq + 'static, R: Clone + Eq + 'static> TabHost<T, R> {
         self
     }
 
-    /// Sets the animation played on the incoming tab when a different one is selected. Defaults to
-    /// [`NavTransition::None`], which is what a real tab bar does — selecting a tab swaps context rather than
-    /// travelling somewhere, and animating it makes a fast switcher feel sluggish. Worth turning on for a rail
-    /// that reads more like a table of contents than a tab bar.
+    /// Sets the animation played on the incoming tab when a different one is selected. Defaults to [`NavTransition::None`], which is what a real tab bar does — selecting a tab swaps context rather than travelling somewhere, and animating it makes a fast switcher feel sluggish. Worth turning on for a rail that reads more like a table of contents than a tab bar.
     pub fn with_tab_transition(mut self, transition: NavTransition) -> Self {
         self.tab_transition = transition;
         self
@@ -337,14 +299,12 @@ impl<T: Clone + Eq + 'static, R: Clone + Eq + 'static> TabHost<T, R> {
         self.index_of(&self.current)
     }
 
-    /// Where a tab sits in declaration order — the tab bar's own left-to-right order, which is the only thing
-    /// a directional switch animation can key off (tabs have no depth to compare).
+    /// Where a tab sits in declaration order — the tab bar's own left-to-right order, which is the only thing a directional switch animation can key off (tabs have no depth to compare).
     fn order_of(&self, tab: &T) -> usize {
         self.stacks.tabs().position(|t| t == tab).unwrap_or(0)
     }
 
-    /// Builds `tab`'s host if this is its first visit, appending its node to the container. Deferring this is
-    /// what keeps an app with twenty tabs from constructing twenty screens at boot.
+    /// Builds `tab`'s host if this is its first visit, appending its node to the container. Deferring this is what keeps an app with twenty tabs from constructing twenty screens at boot.
     fn ensure_built(&mut self, tab: &T) -> Result<usize, LayoutError> {
         if let Some(i) = self.index_of(tab) {
             return Ok(i);
@@ -379,9 +339,7 @@ impl<T: Clone + Eq + 'static, R: Clone + Eq + 'static> TabHost<T, R> {
 
     /// Reconciles the displayed tab against the active one, and the displayed page against that tab's stack.
     ///
-    /// [`on_event`](Component::on_event) already calls this. An owner whose tab bar lives *outside* this
-    /// host's subtree — a shell rail that handles the press itself — must call it after that press, exactly as
-    /// with [`NavHost::sync`], and gets back whether the press actually moved the user.
+    /// [`on_event`](Component::on_event) already calls this. An owner whose tab bar lives *outside* this host's subtree — a shell rail that handles the press itself — must call it after that press, exactly as with [`NavHost::sync`], and gets back whether the press actually moved the user.
     pub fn sync(&mut self) -> bool {
         let active = self.stacks.peek_active();
         let switched = active != self.current;
@@ -491,8 +449,7 @@ mod tests {
     type PageLog = Rc<RefCell<Vec<PageId>>>;
     type NodeLog = Rc<RefCell<Vec<(PageId, NodeId)>>>;
 
-    /// Records its (tab, route) when built and when dropped, so a test can observe exactly which screens the
-    /// host constructed and which it released.
+    /// Records its (tab, route) when built and when dropped, so a test can observe exactly which screens the host constructed and which it released.
     struct TestPage {
         id: PageId,
         node: NodeId,
@@ -643,8 +600,7 @@ mod tests {
         );
     }
 
-    /// With tab history on, Back walks out of the active tab once its stack is at its root — the Android
-    /// behaviour — and only reports "nothing to do" when there is no tab left to return to either.
+    /// With tab history on, Back walks out of the active tab once its stack is at its root — the Android behaviour — and only reports "nothing to do" when there is no tab left to return to either.
     #[test]
     fn tab_history_lets_back_walk_out_to_the_previous_tab() {
         reset_layout_runtime();
@@ -668,12 +624,10 @@ mod tests {
         tick(&mut host);
         assert!(stacks.can_pop());
 
-        // Inside a tab first: Back pops that tab's own stack before it considers leaving.
         assert!(stacks.back());
         tick(&mut host);
         assert_eq!(host.current_tab(), 2);
 
-        // Now at tab 2's root, Back walks back through the tabs visited to get here.
         assert!(stacks.back());
         tick(&mut host);
         assert_eq!(host.current_tab(), 1);
@@ -687,8 +641,7 @@ mod tests {
         assert!(!stacks.can_pop());
     }
 
-    /// Back never bounces: returning to a tab must not record the one being left, or two tabs would trade
-    /// places forever instead of the history walking out.
+    /// Back never bounces: returning to a tab must not record the one being left, or two tabs would trade places forever instead of the history walking out.
     #[test]
     fn walking_back_through_tabs_does_not_record_the_tab_it_leaves() {
         reset_layout_runtime();
@@ -703,8 +656,7 @@ mod tests {
         );
     }
 
-    /// Without tab history (the default), Back is scoped to the active tab — it pops that stack rather than
-    /// walking to the tab you came from, which is the iOS tab-bar model.
+    /// Without tab history (the default), Back is scoped to the active tab — it pops that stack rather than walking to the tab you came from, which is the iOS tab-bar model.
     #[test]
     fn back_pops_the_active_tab_and_never_switches_tabs() {
         let (mut host, stacks, _h) = build();
@@ -726,8 +678,7 @@ mod tests {
         assert_eq!(host.current_route(), Some(0));
     }
 
-    /// Selecting the tab you are already on is the platform's "go home": it pops that tab to its root instead
-    /// of doing nothing. It is also what replaces the per-route `KeepAlive` dance a single shared stack needed.
+    /// Selecting the tab you are already on is the platform's "go home": it pops that tab to its root instead of doing nothing. It is also what replaces the per-route `KeepAlive` dance a single shared stack needed.
     #[test]
     fn reselecting_the_active_tab_pops_it_to_its_root() {
         let (mut host, stacks, h) = build();
@@ -770,8 +721,7 @@ mod tests {
         assert_eq!(hidden, 0.0, "the tab you left is collapsed out of layout");
     }
 
-    /// A stack pushed while its tab was off screen is reconciled when the tab comes back in, so a deep link or
-    /// a redirect into a background tab lands on the right screen rather than the one it left.
+    /// A stack pushed while its tab was off screen is reconciled when the tab comes back in, so a deep link or a redirect into a background tab lands on the right screen rather than the one it left.
     #[test]
     fn a_background_tabs_stack_is_reconciled_on_the_way_in() {
         let (mut host, stacks, _h) = build();
@@ -788,7 +738,6 @@ mod tests {
     #[test]
     fn an_active_tab_outside_the_set_falls_back_to_the_first() {
         reset_layout_runtime();
-        // What a hot-reload snapshot naming a since-deleted tab restores to.
         let active = signal(9u8);
         let stacks = TabStacks::new(active, &[0, 1], |tab| Navigator::new(*tab));
         assert_eq!(active.peek(), 0);

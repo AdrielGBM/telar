@@ -16,7 +16,6 @@ pub fn document_colors(doc: &RsxDocument, source: &str) -> Vec<ColorInformation>
     // `[style]` class paint props (`fill: #hex`). Scanned from the source line-by-line because the AST carries no per-prop position.
     collect_style_colors(source, &mut out);
 
-    // `[view]` (and `[preview]`) attribute literals.
     collect_view_colors(&doc.view.nodes, source, &mut out);
     for preview in &doc.previews {
         collect_view_colors(&preview.body, source, &mut out);
@@ -60,7 +59,6 @@ fn collect_style_colors(source: &str, out: &mut Vec<ColorInformation>) {
 pub fn color_presentations(color: Color) -> Vec<ColorPresentation> {
     vec![ColorPresentation {
         label: hex_string(color),
-        // No `text_edit`: the client applies `label` over the requested color range.
         text_edit: None,
         additional_text_edits: None,
     }]
@@ -71,7 +69,6 @@ fn collect_view_colors(nodes: &[ViewNode], source: &str, out: &mut Vec<ColorInfo
         match node {
             ViewNode::Element(el) => {
                 for attr in &el.attributes {
-                    // A value written as a string literal is text, never a color.
                     if attr.value.is_quoted() {
                         continue;
                     }
@@ -119,8 +116,7 @@ fn keyword_color(value: &str) -> Option<Color> {
     Some(rgba(r, g, b, a))
 }
 
-/// The swatch for a `#`-prefixed value, at any length [`telar_parser::parse_hex`] accepts. The `#` is
-/// required here: a bare `ff0000` in a `.rsx` is a word, not a colour.
+/// The swatch for a `#`-prefixed value, at any length [`telar_parser::parse_hex`] accepts. The `#` is required here: a bare `ff0000` in a `.rsx` is a word, not a colour.
 pub(crate) fn parse_hex(hex: &str) -> Option<Color> {
     let [r, g, b, a] = hex
         .starts_with('#')
@@ -200,22 +196,18 @@ mod tests {
         let src = "[view]\nbox fill:#ff0000 stroke:transparent color:primary\n    text label:\"#nothex\"\n";
         let doc = parse(src).unwrap();
         let infos = document_colors(&doc, src);
-        // Inline hex.
         assert!(
             color_at(&infos, src, "#ff0000").is_some(),
             "hex attr swatch"
         );
-        // Keyword under a color key.
         assert!(
             color_at(&infos, src, "transparent").is_some(),
             "keyword swatch"
         );
-        // A theme-token reference is skipped (no RGBA, would clobber the binding).
         assert!(
             color_at(&infos, src, "primary").is_none(),
             "token ref must not get a swatch"
         );
-        // A quoted value is a string, not a color.
         assert!(
             color_at(&infos, src, "#nothex").is_none(),
             "quoted value must not get a swatch"
@@ -251,7 +243,6 @@ mod tests {
             color_at(&infos, src, "#ff8800").is_some(),
             "class-prop fill should get a swatch"
         );
-        // Only the fill is a color — `radius: 8` and `direction` must not add swatches.
         assert_eq!(
             infos.len(),
             1,

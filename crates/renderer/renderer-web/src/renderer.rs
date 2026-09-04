@@ -14,13 +14,10 @@ type Gpu = HardwareRenderer<CanvasSurface>;
 
 /// What the device build left behind.
 enum Device {
-    /// The promise is still in flight. Frames drawn now are dropped, which is correct rather than
-    /// unfortunate: there is nothing to draw them on yet, and the runtime asks for another as soon as one
-    /// can land.
+    /// The promise is still in flight. Frames drawn now are dropped, which is correct rather than unfortunate: there is nothing to draw them on yet, and the runtime asks for another as soon as one can land.
     Building,
     Ready(Box<Gpu>),
-    /// The browser refused. Recorded rather than retried: a machine with no WebGPU adapter will not grow one
-    /// while the page is open, and a frame loop retrying a failing device every 16ms is a hot loop.
+    /// The browser refused. Recorded rather than retried: a machine with no WebGPU adapter will not grow one while the page is open, and a frame loop retrying a failing device every 16ms is a hot loop.
     Failed,
 }
 
@@ -37,8 +34,7 @@ impl WebGpuRenderer {
         let build_into = Rc::clone(&device);
         let build_on = canvas.clone();
         wasm_bindgen_futures::spawn_local(async move {
-            // Asked before wgpu, so a browser that cannot draw says so in words rather than throwing a
-            // `TypeError` out of the generated glue. See `probe`.
+            // Asked before wgpu, so a browser that cannot draw says so in words rather than throwing a `TypeError` out of the generated glue. See `probe`.
             if let Err(reason) = crate::webgpu_available().await {
                 tracing::error!("telar cannot draw here: {}", reason.message());
                 report_on_page(&build_on, reason.message());
@@ -51,8 +47,7 @@ impl WebGpuRenderer {
             };
             let built = HardwareRenderer::new_async(
                 build_on,
-                // No shader cache: the browser has no directory to keep one in, and the device reports no
-                // `PIPELINE_CACHE` feature to fill it with anyway.
+                // No shader cache: the browser has no directory to keep one in, and the device reports no `PIPELINE_CACHE` feature to fill it with anyway.
                 None,
                 false,
                 font_config,
@@ -83,8 +78,7 @@ impl RenderBackend for WebGpuRenderer {
         scale_factor: f32,
         generation: u64,
     ) -> Result<(), RendererError> {
-        // The backing store follows the surface even while the device is coming up, so the first frame that
-        // lands finds a canvas already the right size rather than one it has to resize mid-frame.
+        // The backing store follows the surface even while the device is coming up, so the first frame that lands finds a canvas already the right size rather than one it has to resize mid-frame.
         self.canvas.resize(width, height);
         match &mut *self.device.borrow_mut() {
             Device::Ready(gpu) => gpu.begin_frame(width, height, scale_factor, generation),
@@ -103,8 +97,7 @@ impl RenderBackend for WebGpuRenderer {
         }
     }
 
-    /// True whether or not the device has landed: the answer decides whether the frame pipeline pre-scales
-    /// every command, and it must not change under it halfway through a run.
+    /// True whether or not the device has landed: the answer decides whether the frame pipeline pre-scales every command, and it must not change under it halfway through a run.
     fn applies_scale_factor(&self) -> bool {
         true
     }
@@ -112,8 +105,7 @@ impl RenderBackend for WebGpuRenderer {
 
 /// Builds a [`WebGpuRenderer`] on a canvas chosen before the app starts.
 ///
-/// The canvas is held rather than derived from the window the runtime passes, which is what keeps this crate
-/// from having to know anything about the browser platform: whoever wires the two together picks the element.
+/// The canvas is held rather than derived from the window the runtime passes, which is what keeps this crate from having to know anything about the browser platform: whoever wires the two together picks the element.
 pub struct WebGpuRendererFactory {
     canvas: CanvasSurface,
 }
@@ -136,8 +128,7 @@ impl<W: 'static> RendererFactory<W> for WebGpuRendererFactory {
 
 /// Puts the reason a frame will never arrive where somebody looking at the page can read it.
 ///
-/// A console message is not enough on its own: the visible result of a device that will not open is a blank
-/// area, and a blank area reads as a bug in the application rather than as a browser that cannot draw.
+/// A console message is not enough on its own: the visible result of a device that will not open is a blank area, and a blank area reads as a bug in the application rather than as a browser that cannot draw.
 fn report_on_page(canvas: &CanvasSurface, message: &str) {
     let Some(host) = canvas.canvas().parent_element() else {
         return;

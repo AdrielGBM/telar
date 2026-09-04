@@ -1,3 +1,5 @@
+//! Android ADPF: reporting each frame's real work duration so the scheduler can size the clocks for it.
+
 use std::ffi::{c_long, c_void};
 
 mod ffi {
@@ -20,18 +22,14 @@ mod ffi {
     }
 }
 
-// Safe RAII wrapper over an Android ADPF (Adaptive Performance) hint session: report actual per-frame
-// work durations so the scheduler can right-size CPU/GPU clocks for the reporting thread. The raw
-// session pointer is not Send, so the wrapper stays on the thread that created it (enforced by the
-// `*mut c_void` field), and closeSession runs on that thread via Drop.
+// Reports actual per-frame work durations so the scheduler can right-size clocks for the reporting thread. The raw session pointer is not `Send`, so the wrapper stays on the thread that created it and `closeSession` runs there via `Drop`.
+/// An ADPF hint session, bound to the thread that created it and closed when it drops.
 pub struct AdpfSession {
     session: *mut c_void,
 }
 
 impl AdpfSession {
-    // `tid` defaults to the calling thread's kernel TID (SYS_gettid) when None, so the hint must be
-    // created on the thread that will report. Returns None when the platform exposes no hint manager
-    // or session creation fails.
+    // `tid` defaults to the calling thread's kernel TID (SYS_gettid) when None, so the hint must be created on the thread that will report. Returns None when the platform exposes no hint manager or session creation fails.
     pub fn new(target_ns: i64, tid: Option<i32>) -> Option<Self> {
         let session = unsafe {
             let manager = ffi::APerformanceHint_getManager();

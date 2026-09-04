@@ -6,14 +6,9 @@ use crate::wrap::{WrapConfig, WrappedLine, wrap};
 
 /// How many logical pixels one terminal cell stands for.
 ///
-/// The terminal has no pixels, but every layout value in a Telar app is written in them — `pad:24`,
-/// `width:300`, a theme's `gutter`. Rather than teach the layout engine a second unit, the terminal
-/// declares an exchange rate and reports its own size in the same currency: an 80×24 terminal at the
-/// default rate is a 640×384 "window". Everything above stays exactly as it is on the desktop, and the
-/// rounding to whole cells happens once, in the painter, on absolute edges.
+/// The terminal has no pixels, but every layout value in a Telar app is written in them — `pad:24`, `width:300`, a theme's `gutter`. Rather than teach the layout engine a second unit, the terminal declares an exchange rate and reports its own size in the same currency: an 80×24 terminal at the default rate is a 640×384 "window". Everything above stays exactly as it is on the desktop, and the rounding to whole cells happens once, in the painter, on absolute edges.
 ///
-/// The default is the proportion of a typical monospace face — twice as tall as it is wide — which is what
-/// makes a layout authored for the desktop come out with recognisable proportions here.
+/// The default is the proportion of a typical monospace face — twice as tall as it is wide — which is what makes a layout authored for the desktop come out with recognisable proportions here.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct CellSize {
     pub width: f32,
@@ -30,8 +25,7 @@ impl Default for CellSize {
 }
 
 impl CellSize {
-    /// The column a logical x falls in. Rounds, and callers round *both* edges of a box rather than its
-    /// width, so two boxes that touch in logical space still touch in cells.
+    /// The column a logical x falls in. Rounds, and callers round *both* edges of a box rather than its width, so two boxes that touch in logical space still touch in cells.
     pub fn col_at(self, x: f32) -> i32 {
         (x / self.width).round() as i32
     }
@@ -58,8 +52,7 @@ impl CellMetrics {
 
     fn config(&self, max_width: f32, style: &TextStyle) -> WrapConfig {
         WrapConfig {
-            // Taffy probes intrinsic width with an effectively unbounded available space; a column count
-            // derived from it would overflow, and the answer wanted there is "however wide it wants to be".
+            // Taffy probes intrinsic width with an effectively unbounded available space; a column count derived from it would overflow, and the answer wanted there is "however wide it wants to be".
             max_cols: if max_width.is_finite() && max_width < 1.0e5 {
                 self.cell.cols_in(max_width).max(1)
             } else {
@@ -71,8 +64,7 @@ impl CellMetrics {
         }
     }
 
-    /// The wrapped lines of `text` under `style` at `max_width`. The painter calls this with the cell width
-    /// of the box it actually got, so what it draws is what layout was told.
+    /// The wrapped lines of `text` under `style` at `max_width`. The painter calls this with the cell width of the box it actually got, so what it draws is what layout was told.
     pub fn lines(&self, text: &str, max_width: f32, style: &TextStyle, out: &mut Vec<WrappedLine>) {
         wrap(text, &self.config(max_width, style), out);
     }
@@ -89,8 +81,7 @@ impl CellMetrics {
 }
 
 impl TextMetrics for CellMetrics {
-    /// Spans change colour and weight, never advance: every cell is one column wide whatever face it claims
-    /// to be in, which is the one thing a terminal is strict about.
+    /// Spans change colour and weight, never advance: every cell is one column wide whatever face it claims to be in, which is the one thing a terminal is strict about.
     fn measure(
         &self,
         text: &str,

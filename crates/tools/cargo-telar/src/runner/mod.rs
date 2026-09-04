@@ -1,3 +1,5 @@
+//! The subcommands: dev, check, fmt, preview, test, build, package and migrate.
+
 use std::process::Command;
 
 use clap::Parser;
@@ -28,6 +30,7 @@ use package::{build_appimage, build_deb, build_desktop_dir, build_dmg, build_nsi
 use watch::{HotLoopOpts, HotMode, run_hot_loop};
 use web_dev::run_web_dev;
 
+/// Dispatches a `cargo telar` invocation to its subcommand.
 pub fn run(args: Vec<String>) {
     let cli = Cli::parse_from(std::iter::once("cargo-telar".to_string()).chain(args));
     match cli.command.unwrap_or_else(default_dev_command) {
@@ -99,8 +102,7 @@ fn run_dev_cmd(args: DevArgs) {
         HotLoopOpts {
             args: cargo_args,
             config,
-            // The hot-reload host opens a window of its own, so an app running in the terminal restarts on
-            // a change instead. Reloading in place is the only thing lost: the rebuild is the same one.
+            // The hot-reload host opens a window of its own, so an app running in the terminal restarts on a change instead. Reloading in place is the only thing lost: the rebuild is the same one.
             no_hot_reload: no_hot_reload || terminal,
         },
     );
@@ -123,7 +125,7 @@ fn run_preview_cmd(args: PreviewArgs) {
         no_hot_reload,
     } = hot;
     if list {
-        // TELAR_PREVIEW_LIST makes the generated entrypoint print "component\tpreview" lines and exit instead of opening a window.
+        // Makes the generated entrypoint print "component\tpreview" lines and exit instead of opening a window.
         let mut cargo_args = vec!["run".to_string()];
         cargo_args.extend(build_cargo_args(&common.package, release, &common.features));
         cargo_args.extend(common.cargo_args);
@@ -179,11 +181,11 @@ fn run_test_cmd(args: TestArgs) -> ! {
         );
         std::process::exit(2);
     }
-    // Run the app binary in test mode: TELAR_TEST makes the generated entrypoint render every preview headlessly and exit non-zero on any failure, instead of opening a window.
+    // `TELAR_TEST` makes the generated entrypoint render every preview headlessly and exit non-zero on failure.
     let mut cargo_args = vec!["run".to_string()];
     cargo_args.extend(build_cargo_args(&package, release, &features));
     cargo_args.extend(extra);
-    // No TELAR_RENDERER_BACKEND: the test host never instantiates a renderer, and that value is read via option_env!, so setting it would change the build fingerprint and force a needless recompile.
+    // The test host never instantiates a renderer, and the value is read via `option_env!`, so setting it would change the build fingerprint and force a needless recompile.
     let _ = (backend, renderer);
     eprintln!("[cargo-telar] Running component render tests...");
     let status = Command::new("cargo")
@@ -230,7 +232,7 @@ fn run_build_cmd(args: BuildArgs) -> ! {
         build_web(cargo_args, load_config(&[]), true, renderer);
     }
 
-    // All desktop formats reject `--target android`; `--format apk` implies Android. Host-OS gating (dmg → macOS, nsis → Windows) happens in each build fn since rsx does not cross-compile.
+    // All desktop formats reject `--target android`, and `--format apk` implies Android. Host-OS gating happens in each build fn, since telar does not cross-compile.
     match &format {
         Some(
             fmt @ (BuildFormat::Deb | BuildFormat::Appimage | BuildFormat::Dmg | BuildFormat::Nsis),
@@ -298,12 +300,9 @@ fn build_cargo_args(
     args
 }
 
-/// Turns on the frontend `target` names and tells the app to start on it, returning whether the app will run
-/// in this terminal.
+/// Turns on the frontend `target` names and tells the app to start on it, returning whether the app will run in this terminal.
 ///
-/// The feature goes through `telar/` rather than a feature of the app's own, so any project reaches a
-/// frontend without first declaring one; the environment variable is what picks between the frontends a
-/// build ends up with, since a default build still has the windowed one compiled in.
+/// The feature goes through `telar/` rather than a feature of the app's own, so any project reaches a frontend without first declaring one; the environment variable is what picks between the frontends a build ends up with, since a default build still has the windowed one compiled in.
 fn select_frontend(target: Target, cargo_args: &mut Vec<String>) -> bool {
     if target != Target::Tui {
         return false;
@@ -315,6 +314,5 @@ fn select_frontend(target: Target, cargo_args: &mut Vec<String>) -> bool {
     true
 }
 
-/// Where `cargo telar dev --target web` serves from. Fixed rather than chosen: a page reloaded by hand, a
-/// bookmark and a second terminal all have to name the same address.
+/// Where `cargo telar dev --target web` serves from. Fixed rather than chosen: a page reloaded by hand, a bookmark and a second terminal all have to name the same address.
 const WEB_DEV_PORT: u16 = 8080;

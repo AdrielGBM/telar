@@ -1,9 +1,6 @@
 //! Recursive-descent parser for `.rsx` documents.
 //!
-//! Split by document section: [`style`] parses `[style]` classes, [`view`] parses
-//! `[view]` element trees, [`preview`] parses trailing `[preview ...]` blocks. All three `impl
-//! Parser` blocks live in this file's descendant modules and can reach `Parser`'s private fields
-//! because Rust privacy is scoped to a module and its descendants.
+//! Split by document section: [`style`] parses `[style]` classes, [`view`] parses `[view]` element trees, [`preview`] parses trailing `[preview ...]` blocks. All three `impl Parser` blocks live in this file's descendant modules and can reach `Parser`'s private fields because Rust privacy is scoped to a module and its descendants.
 
 mod preview;
 mod style;
@@ -63,7 +60,7 @@ impl Parser {
             self.pos += 1;
         }
 
-        // Trim leading/trailing blank lines but keep interior formatting intact.
+        // Trim leading and trailing blank lines but keep interior formatting intact.
         let start = raws.iter().position(|l| !l.trim().is_empty()).unwrap_or(0);
         let end = raws
             .iter()
@@ -80,8 +77,7 @@ impl Parser {
     }
 }
 
-/// Splits a string on its first `:` that is not part of a closure/`::` path. Shared by style,
-/// view and preview header parsing, so it lives here rather than in any one submodule.
+/// Splits a string on its first `:` that is not part of a closure/`::` path. Shared by style, view and preview header parsing, so it lives here rather than in any one submodule.
 fn split_once_colon(s: &str) -> Option<(&str, &str)> {
     let bytes = s.as_bytes();
     let mut i = 0;

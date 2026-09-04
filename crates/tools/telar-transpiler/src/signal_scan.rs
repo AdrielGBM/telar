@@ -3,28 +3,26 @@
 use crate::naming::is_ident;
 
 #[derive(Debug, Clone)]
+/// A signal declared in `[logic]`: its name, its kind and the line it was declared on.
 pub struct SignalInfo {
     pub name: String,
-    // All signal kinds currently read via `.get()`; kind is retained to drive future kind-specific codegen.
+    // Retained to drive future kind-specific codegen; every kind currently reads via `.get()`.
     #[allow(dead_code)]
     pub kind: SignalKind,
-    // 0-based index of the declaring line within `logic_source.lines()`, so callers can test "declared above line j" without re-parsing.
+    // 0-based within `logic_source.lines()`, so "declared above line j" is a comparison, not a re-parse.
     pub line_index: usize,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// Which reactive primitive a `[logic]` binding is.
 pub enum SignalKind {
     RwSignal,
     Memo,
 }
 
-/// Every identifier the logic zone binds with a top-level `let`, so a bare name in the view resolves to the
-/// binding the author wrote three lines above instead of an ambient theme token that happens to share its
-/// spelling. Without this the shadowing runs the wrong way: `let size = props.size` is unreachable from
-/// `font_size:size`, and a binding named after a real token (`radius`, `spacing`, `muted`) silently reads the theme.
+/// Every identifier the logic zone binds with a top-level `let`, so a bare name in the view resolves to the binding the author wrote three lines above instead of an ambient theme token that happens to share its spelling. Without this the shadowing runs the wrong way: `let size = props.size` is unreachable from `font_size:size`, and a binding named after a real token (`radius`, `spacing`, `muted`) silently reads the theme.
 ///
-/// Only bindings at the zone's own indentation count — anything deeper belongs to a nested `fn` or block and is
-/// not in scope where the view is emitted. Destructuring patterns contribute every name they bind.
+/// Only bindings at the zone's own indentation count — anything deeper belongs to a nested `fn` or block and is not in scope where the view is emitted. Destructuring patterns contribute every name they bind.
 pub fn scan_locals(logic_source: &str) -> Vec<String> {
     let base = logic_source
         .lines()
@@ -33,8 +31,7 @@ pub fn scan_locals(logic_source: &str) -> Vec<String> {
         .min()
         .unwrap_or(0);
 
-    // `props` is a binding of the generated scope, not of `[logic]`, and it is one a rebuilding closure has
-    // to clone rather than move — `#[derive(Props)]` writes the `Clone` that makes it possible.
+    // A binding of the generated scope, not of `[logic]`, and one a rebuilding closure must clone rather than move — `#[derive(Props)]` writes the `Clone` that allows it.
     let mut locals = vec!["props".to_string()];
     for raw in logic_source.lines() {
         if raw.trim().is_empty() || raw.len() - raw.trim_start().len() != base {
@@ -53,9 +50,7 @@ pub fn scan_locals(logic_source: &str) -> Vec<String> {
     locals
 }
 
-/// The identifiers a `let` pattern binds. A simple `name: Type` keeps only the name; anything with a
-/// destructuring delimiter yields every identifier in it, since telling a bound name from a path segment there
-/// needs a real parser and over-collecting only costs a shadowed token.
+/// The identifiers a `let` pattern binds. A simple `name: Type` keeps only the name; anything with a destructuring delimiter yields every identifier in it, since telling a bound name from a path segment there needs a real parser and over-collecting only costs a shadowed token.
 fn pattern_bindings(pattern: &str) -> Vec<String> {
     let destructures = pattern.contains(['(', '{', '[', ',']);
     let pattern = if destructures {
@@ -105,7 +100,6 @@ pub fn scan_signals(logic_source: &str) -> Vec<SignalInfo> {
             continue;
         };
 
-        // Simple binding: strip an optional `mut` and a type annotation.
         let name = binding
             .strip_prefix("mut ")
             .unwrap_or(binding)
@@ -127,13 +121,7 @@ pub fn scan_signals(logic_source: &str) -> Vec<SignalInfo> {
 
 /// Every identifier the logic zone binds to an `effect(…)`.
 ///
-/// An `Effect` deregisters on drop, so one bound to a `let` here would stop the moment the component
-/// function returns — running exactly once and never again, with nothing to see in the source. The view
-/// generator hands these to the root widget so they live as long as the tree they belong to. An `effect(…)`
-/// that is never bound at all is already a loud `must_use` warning and needs nothing from this.
-/// Whether `expr` opens with a call to `effect`, however it is spelled — bare, `telar::effect`, or through any
-/// other path. The bare form was the only one recognised, so `let e = telar::effect(…)` — the spelling an
-/// application reaches for when it is not inside a `use telar::*` — was silently not kept alive.
+/// An `Effect` deregisters on drop, so one bound to a `let` here would stop the moment the component function returns — running exactly once and never again, with nothing to see in the source. The view generator hands these to the root widget so they live as long as the tree they belong to. An `effect(…)` that is never bound at all is already a loud `must_use` warning and needs nothing from this. Whether `expr` opens with a call to `effect`, however it is spelled — bare, `telar::effect`, or through any other path. The bare form was the only one recognised, so `let e = telar::effect(…)` — the spelling an application reaches for when it is not inside a `use telar::*` — was silently not kept alive.
 fn opens_an_effect(expr: &str) -> bool {
     let expr = expr.trim_start();
     let Some(head) = expr.split('(').next() else {
@@ -142,8 +130,7 @@ fn opens_an_effect(expr: &str) -> bool {
     head.rsplit("::").next().map(str::trim) == Some("effect")
 }
 
-/// The `[logic]` bindings that hold an `Effect`, so the view can keep them alive past the function that made
-/// them. A handle that drops deregisters its effect, which runs once and then stops.
+/// The `[logic]` bindings that hold an `Effect`, so the view can keep them alive past the function that made them. A handle that drops deregisters its effect, which runs once and then stops.
 pub fn scan_effects(logic_source: &str) -> Vec<String> {
     let mut effects = Vec::new();
     for raw in logic_source.lines() {
@@ -171,10 +158,7 @@ pub fn scan_effects(logic_source: &str) -> Vec<String> {
     effects
 }
 
-/// Rewrites a `let NAME = signal(EXPR)` logic line into the keyed hot-reload form
-/// `let NAME = telar::hot_signal_auto!("<fn_name>::<NAME>", EXPR)` so `cargo telar dev` can snapshot
-/// and restore the value across dylib swaps. Returns `None` when the line is not a signal binding
-/// (memos are derived state and recompute from their sources, so they are left untouched).
+/// Rewrites a `let NAME = signal(EXPR)` logic line into the keyed hot-reload form `let NAME = telar::hot_signal_auto!("<fn_name>::<NAME>", EXPR)` so `cargo telar dev` can snapshot and restore the value across dylib swaps. Returns `None` when the line is not a signal binding (memos are derived state and recompute from their sources, so they are left untouched).
 pub fn hot_rewrite_signal_decl(line: &str, fn_name: &str) -> Option<String> {
     let indent_len = line.len() - line.trim_start().len();
     let (indent, trimmed) = line.split_at(indent_len);
@@ -266,7 +250,6 @@ mod effect_scan_tests {
     fn a_binding_that_is_not_an_effect_is_left_alone() {
         assert!(scan_effects("let s = signal(0);").is_empty());
         assert!(scan_effects("let m = memo(|| 1);").is_empty());
-        // A name merely *ending* in `effect` is a different function.
         assert!(scan_effects("let e = side_effect(|| {});").is_empty());
     }
 }

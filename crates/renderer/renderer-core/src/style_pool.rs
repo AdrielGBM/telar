@@ -1,3 +1,5 @@
+//! Field-by-field hashing for the style types, which carry floats and so cannot be hashed as plain bytes.
+
 use std::hash::Hasher;
 
 use rustc_hash::FxHasher;
@@ -9,6 +11,7 @@ use crate::{
 };
 
 // Styles carry f32 fields and enums without a fixed bit layout, so they are not `bytemuck::Pod`; each field is hashed explicitly (f32 via `to_bits` to stay total over NaN) instead.
+/// The content hash of a box's paint.
 pub fn hash_rect_style(s: &RectStyle) -> u64 {
     let mut h = FxHasher::default();
     hash_opt_paint(s.fill.as_ref(), &mut h);
@@ -31,6 +34,7 @@ fn hash_opt_border(b: Option<&Border>, h: &mut FxHasher) {
     }
 }
 
+/// The content hash of a text style.
 pub fn hash_text_style(s: &TextStyle) -> u64 {
     let mut h = FxHasher::default();
     h.write_u32(s.font_size.to_bits());
@@ -39,6 +43,7 @@ pub fn hash_text_style(s: &TextStyle) -> u64 {
     h.finish()
 }
 
+/// The content hash of a path's paint.
 pub fn hash_path_style(s: &PathStyle) -> u64 {
     let mut h = FxHasher::default();
     hash_opt_paint(s.fill.as_ref(), &mut h);
@@ -51,8 +56,7 @@ pub fn hash_path_style(s: &PathStyle) -> u64 {
     h.finish()
 }
 
-/// Hashes a span's overrides. Every field, unlike [`hash_text_style`], because a span exists precisely to
-/// differ in one of them: a bold range and a plain one over identical text must not hash alike.
+/// Hashes a span's overrides. Every field, unlike `hash_text_style`, because a span exists precisely to differ in one of them: a bold range and a plain one over identical text must not hash alike.
 pub fn hash_declared(d: &Declared) -> u64 {
     let mut h = FxHasher::default();
     match &d.font_family {

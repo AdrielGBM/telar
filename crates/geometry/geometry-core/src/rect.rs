@@ -1,3 +1,6 @@
+//! An axis-aligned rectangle, and the containment and intersection tests every hit test is built from.
+
+/// An axis-aligned rectangle in logical pixels, positioned by its top-left corner.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Rect {
     pub x: f32,

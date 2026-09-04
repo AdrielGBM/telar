@@ -1,20 +1,19 @@
 //! Line breaking in character cells.
 //!
-//! One implementation, used by both the measurer layout asks and the painter that finally writes the
-//! glyphs. Two would be two chances to disagree about how many lines a paragraph takes, and the disagreement
-//! only ever shows up as a clipped last line in somebody else's terminal.
+//! One implementation, used by both the measurer layout asks and the painter that finally writes the glyphs. Two would be two chances to disagree about how many lines a paragraph takes, and the disagreement only ever shows up as a clipped last line in somebody else's terminal.
 
 use std::ops::Range;
 
 use unicode_segmentation::UnicodeSegmentation;
 use unicode_width::UnicodeWidthStr;
 
+/// What marks a line the clamp cut short.
 pub const ELLIPSIS: &str = "…";
 
 #[derive(Clone, Copy, Debug)]
+/// How text is wrapped: the column to break at, and the line clamp if there is one.
 pub struct WrapConfig {
-    /// The widest a line may be, in cells. `0` is treated as `1`: a column that cannot hold one cell can
-    /// hold nothing, and returning no lines at all loses the text instead of clipping it.
+    /// The widest a line may be, in cells. `0` is treated as `1`: a column that cannot hold one cell can hold nothing, and returning no lines at all loses the text instead of clipping it.
     pub max_cols: u16,
     pub wrap: bool,
     pub max_lines: Option<u16>,
@@ -22,6 +21,7 @@ pub struct WrapConfig {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
+/// One visual line: its text, and the columns it occupies.
 pub struct WrappedLine {
     /// Byte range into the original string.
     pub range: Range<usize>,
@@ -30,16 +30,17 @@ pub struct WrappedLine {
     pub ellipsized: bool,
 }
 
-/// The width of one grapheme cluster in cells. Zero-width clusters (combining marks alone) count as one so
-/// they cannot make a line of infinite length.
+/// The width of one grapheme cluster in cells. Zero-width clusters (combining marks alone) count as one so they cannot make a line of infinite length.
 pub fn grapheme_cols(g: &str) -> u16 {
     g.width().max(1) as u16
 }
 
+/// How many terminal columns a string occupies, counting wide glyphs as two.
 pub fn line_cols(s: &str) -> u16 {
     s.graphemes(true).map(grapheme_cols).sum()
 }
 
+/// Wraps `text` to `cfg`, appending the resulting lines to `out`.
 pub fn wrap(text: &str, cfg: &WrapConfig, out: &mut Vec<WrappedLine>) {
     out.clear();
     let max_cols = cfg.max_cols.max(1);
@@ -68,8 +69,7 @@ pub fn wrap(text: &str, cfg: &WrapConfig, out: &mut Vec<WrappedLine>) {
     clamp(text, cfg, max_cols, out);
 }
 
-/// Greedy word wrap over one hard-broken line. A word wider than the whole column breaks mid-word rather
-/// than overflowing, because the alternative is a line the terminal truncates without telling anyone.
+/// Greedy word wrap over one hard-broken line. A word wider than the whole column breaks mid-word rather than overflowing, because the alternative is a line the terminal truncates without telling anyone.
 fn wrap_one(text: &str, span: Range<usize>, max_cols: u16, out: &mut Vec<WrappedLine>) {
     let slice = &text[span.clone()];
     if slice.is_empty() {

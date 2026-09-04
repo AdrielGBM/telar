@@ -1,3 +1,5 @@
+//! Render-pipeline construction shared by every primitive.
+
 pub(crate) fn create_render_pipeline(
     device: &wgpu::Device,
     label: &str,

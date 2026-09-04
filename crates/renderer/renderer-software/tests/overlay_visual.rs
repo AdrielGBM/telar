@@ -1,7 +1,4 @@
-//! End-to-end headless check for the `overlay` modal fix: builds a red background covered by a blue
-//! overlay scrim, renders the real widget tree, and confirms (1) the overlay draws on top (compose still
-//! hoists it), and (2) a tap at the center reaches the scrim and is blocked from the background behind it
-//! (priority pointer routing). Runs in CI without an env var; pass `TELAR_VISUAL_OUT` to also dump a PNG.
+//! End-to-end headless check for the `overlay` modal fix: builds a red background covered by a blue overlay scrim, renders the real widget tree, and confirms (1) the overlay draws on top (compose still hoists it), and (2) a tap at the center reaches the scrim and is blocked from the background behind it (priority pointer routing). Runs in CI without an env var; pass `TELAR_VISUAL_OUT` to also dump a PNG.
 
 mod common;
 
@@ -70,7 +67,6 @@ fn overlay_draws_on_top_and_captures_the_tap() {
 
     let mut tree = ComponentList::new(root);
 
-    // Render the composed tree headless.
     let mut renderer = SoftwareRenderer::<HeadlessWindow, HeadlessWindow>::new_headless(
         w,
         h,
@@ -83,7 +79,6 @@ fn overlay_draws_on_top_and_captures_the_tap() {
     let rgba = renderer.read_rgba().expect("pixmap exists after a frame");
     common::save_png_if_requested("TELAR_VISUAL_OUT", w, h, &rgba);
 
-    // The center pixel must be the blue scrim, not the red background: the overlay hoisted above it.
     let center = (((h / 2) * w + w / 2) * 4) as usize;
     let (r, _g, b) = (rgba[center], rgba[center + 1], rgba[center + 2]);
     assert!(
@@ -91,8 +86,7 @@ fn overlay_draws_on_top_and_captures_the_tap() {
         "overlay scrim must be drawn on top of the background (got r={r} b={b})"
     );
 
-    // A tap at the center: the overlay must receive it and block it from the background it covers.
-    // Mirror the runner: consult the overlay registry first, walk the tree only if nothing consumed it.
+    // Mirrors the runner: the overlay registry first, then the tree only if nothing consumed it.
     let mut route = |event: &Event| {
         if ui_tree::dispatch_overlays(event) == ui_tree::EventResult::Ignored {
             tree.on_event(event);

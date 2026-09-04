@@ -1,3 +1,5 @@
+//! [`drawer`]: a panel that slides in from an edge over a dismissing scrim.
+
 use layout_core::{AlignItems, JustifyContent, LayoutError, LayoutStyle};
 use reactive_core::{Reactive, RwSignal};
 use renderer_core::{Border, Color, RectStyle, ShapeStyle};
@@ -19,21 +21,15 @@ fn panel_gap() -> f32 {
     shared::spacing() * 1.5
 }
 
-/// A side panel that covers the page from the left or right edge over a dimming scrim. When `open` is true it
-/// portals an `Overlay` with a translucent scrim and a full-height opaque panel pinned to `side`, holding the
-/// slot children; when false it collapses to a 0-size node. Tapping the scrim dismisses; tapping the panel
-/// does not. High-level sugar built on the `overlay` primitive; lives in `ui-components`, not the kernel.
+/// A side panel that covers the page from the left or right edge over a dimming scrim. When `open` is true it portals an `Overlay` with a translucent scrim and a full-height opaque panel pinned to `side`, holding the slot children; when false it collapses to a 0-size node. Tapping the scrim dismisses; tapping the panel does not. High-level sugar built on the `overlay` primitive; lives in `ui-components`, not the kernel.
 ///
-/// The panel snaps in (no slide animation): the overlay is built only while open, so there is no off-screen
-/// frame to animate from. A slide-in (a `motion_core::Animated<f32>` x-offset kept mounted across the close
-/// transition) is a follow-up.
+/// The panel snaps in (no slide animation): the overlay is built only while open, so there is no off-screen frame to animate from. A slide-in (a `motion_core::Animated<f32>` x-offset kept mounted across the close transition) is a follow-up.
 #[derive(Props)]
 pub struct DrawerProps {
     /// Bound open/close state. `None` (the default) never opens; `Some` drives the drawer.
     #[props(some, into, default)]
     pub open: Option<RwSignal<bool>>,
-    /// Names this drawer, so anything can open it with `open_overlay(id)` without holding its signal. `""`
-    /// (the default) leaves it unnamed. Ignored when `open` is bound.
+    /// Names this drawer, so anything can open it with `open_overlay(id)` without holding its signal. `""` (the default) leaves it unnamed. Ignored when `open` is bound.
     #[props(default = "")]
     pub id: &'static str,
     /// Which edge the panel is pinned to: `"left"` (the default) or `"right"`.
@@ -45,12 +41,12 @@ pub struct DrawerProps {
     /// Runs after the drawer sets `open = false`, so a caller can react to dismissal.
     #[props(some, default)]
     pub on_close: Option<Rc<dyn Fn()>>,
-    /// Panel surface colour. `Color::TRANSPARENT` (the default) means "unset" -> the theme's `surface`. A closure
-    /// (re-read every frame) so a theme token or `$signal` colour re-colours live.
+    /// Panel surface colour. `Color::TRANSPARENT` (the default) means "unset" -> the theme's `surface`. A closure (re-read every frame) so a theme token or `$signal` colour re-colours live.
     #[props(into, default = Reactive::of(|| Color::TRANSPARENT))]
     pub color: Reactive<Color>,
 }
 
+/// A panel that slides in from an edge over a dismissing scrim.
 pub fn drawer(props: DrawerProps, children: Children) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let mut slots = children.build()?;
     let DrawerProps {
@@ -76,8 +72,7 @@ pub fn drawer(props: DrawerProps, children: Children) -> Result<Box<dyn LayoutIt
     })
 }
 
-/// Builds the scrim + full-height opaque panel for the open state: scrim (dims + dismisses) > panel pinned to
-/// `side`. The panel swallows its own taps so a click inside it never dismisses.
+/// Builds the scrim + full-height opaque panel for the open state: scrim (dims + dismisses) > panel pinned to `side`. The panel swallows its own taps so a click inside it never dismisses.
 fn build_open_drawer(
     width: f32,
     justify: JustifyContent,
@@ -145,8 +140,6 @@ mod tests {
         slots
     }
 
-    // Toggling `open` shows then hides the panel: the body is composed only while open, and the Overlay
-    // portal is disposed when it closes (its content leaves the command stream).
     #[test]
     fn open_shows_panel_and_close_hides_it() {
         crate::test_support::fresh_layout_runtime();
@@ -188,7 +181,6 @@ mod tests {
         );
     }
 
-    // An unbound drawer (no `open` signal) builds a 0-size node and never portals anything.
     #[test]
     fn unbound_drawer_renders_nothing() {
         crate::test_support::fresh_layout_runtime();

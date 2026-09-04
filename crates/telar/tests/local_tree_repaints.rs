@@ -1,14 +1,8 @@
 //! Whether the tree the runner drives needs anything forcing it to re-render.
 //!
-//! `bump_force_ticks` re-ran *every* segment's view effect by setting one signal they all read — O(tree) work
-//! in a design whose whole point is that a change wakes only what read it. It was there for the case where a
-//! tree's effects and the signals they read live in different reactive runtimes, which is what a dylib
-//! mounted by the host used to be; the `UiTree`/`HotTree` seam moved the mount to where the signals are, and
-//! the runner's calls outlived the reason for them.
+//! `bump_force_ticks` re-ran *every* segment's view effect by setting one signal they all read — O(tree) work in a design whose whole point is that a change wakes only what read it. It was there for the case where a tree's effects and the signals they read live in different reactive runtimes, which is what a dylib mounted by the host used to be; the `UiTree`/`HotTree` seam moved the mount to where the signals are, and the runner's calls outlived the reason for them.
 //!
-//! This is the claim that replaced them, on the two things a frame depends on: the state a widget reads, and
-//! the layout it is placed by. The hot-reload half was checked the only way it can be — a `cargo telar dev`
-//! session with both calls removed, editing an `.rsx` and watching the window take the change.
+//! This is the claim that replaced them, on the two things a frame depends on: the state a widget reads, and the layout it is placed by. The hot-reload half was checked the only way it can be — a `cargo telar dev` session with both calls removed, editing an `.rsx` and watching the window take the change.
 
 use telar::{
     Color, Component, DrawCommand, EventResult, LayoutItem, LayoutStyle, LocalTree, RectStyle,
@@ -69,9 +63,7 @@ fn a_changed_signal_repaints_without_being_told_to() {
     assert_eq!(drawn_text(&tree), "after");
 }
 
-/// The harder half: a resize changes no signal the widget reads, only the rect it is placed at. A segment
-/// that took its rect without subscribing would keep drawing at the old one, which is the failure the force
-/// tick was covering for. Driven through a `WindowRoot`, which is what turns a resize into a layout.
+/// The harder half: a resize changes no signal the widget reads, only the rect it is placed at. A segment that took its rect without subscribing would keep drawing at the old one, which is the failure the force tick was covering for. Driven through a `WindowRoot`, which is what turns a resize into a layout.
 #[test]
 fn a_resize_repaints_without_being_told_to() {
     reset_layout_runtime();

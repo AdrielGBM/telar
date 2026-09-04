@@ -1,3 +1,7 @@
+//! The vocabulary every renderer shares: draw commands, styles, dirty tracking and the backend trait.
+//!
+//! Holds no rasterizer of its own — the software, hardware, terminal and document backends all consume these types, which is what lets a frame be composed once and drawn by any of them.
+
 mod command;
 pub mod culling;
 pub mod dirty;
@@ -17,6 +21,7 @@ mod shadow;
 mod style;
 mod style_pool;
 
+/// The control-point ratio that approximates a quarter circle with a cubic Bézier.
 pub const BEZIER_CIRCLE_K: f32 = 0.552_284_8;
 
 pub use command::DrawCommand;

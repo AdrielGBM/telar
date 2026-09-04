@@ -39,8 +39,7 @@ fn an_into_setter_converts_what_it_is_given() {
     assert_eq!(borrowed.text, owned.text);
 }
 
-/// The other half of that decision, and the reason it is opt-in: an unsuffixed literal reaching a generic
-/// parameter infers `f64`/`i32` and then needs a `From` that does not exist. A plain setter constrains it.
+/// The other half of that decision, and the reason it is opt-in: an unsuffixed literal reaching a generic parameter infers `f64`/`i32` and then needs a `From` that does not exist. A plain setter constrains it.
 #[test]
 fn a_plain_setter_takes_an_unsuffixed_literal() {
     assert_eq!(LabelProps::props().text("x").size(20.0).build().size, 20.0);
@@ -54,8 +53,7 @@ struct RangeProps {
     step: f32,
 }
 
-/// Two required props, and the parameters a setter does not touch stay generic — so a caller writes them in
-/// whatever order reads well, not the order the struct declares.
+/// Two required props, and the parameters a setter does not touch stay generic — so a caller writes them in whatever order reads well, not the order the struct declares.
 #[test]
 fn required_props_may_be_set_in_any_order() {
     let forward = RangeProps::props().low(0.0).high(10.0).step(0.5).build();
@@ -70,8 +68,7 @@ struct BareProps {
     flag: bool,
 }
 
-/// A struct whose every prop has a default takes no type parameters at all — the empty `<>` this would
-/// otherwise generate is not valid Rust.
+/// A struct whose every prop has a default takes no type parameters at all — the empty `<>` this would otherwise generate is not valid Rust.
 #[test]
 fn a_struct_with_no_required_props_still_builds() {
     assert!(!BareProps::props().build().flag);

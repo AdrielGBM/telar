@@ -1,21 +1,14 @@
 //! What a thing in an interface *is*, as opposed to where it is or what it looks like.
 //!
-//! One vocabulary, three answers. A screen reader on the desktop is told a box is the navigation; a document
-//! backend makes it a `<nav>`; a terminal has nothing to do with it yet and ignores it. None of the three is
-//! the source: the widget said what it was, once, and each target says that in its own idiom.
+//! One vocabulary, three answers. A screen reader on the desktop is told a box is the navigation; a document backend makes it a `<nav>`; a terminal has nothing to do with it yet and ignores it. None of the three is the source: the widget said what it was, once, and each target says that in its own idiom.
 //!
 //! ## Why these words and not HTML's
 //!
-//! The names here are the ARIA roles, which is what HTML's sectioning elements are a shorthand *for* —
-//! `<header>` is `banner`, `<nav>` is `navigation`, `<main>` is `main`. Taking the roles rather than the tags
-//! is what keeps this from being a web vocabulary that native has to translate out of: AccessKit models the
-//! same set, so the desktop mapping is as exact as the document one, and an application never writes a tag.
+//! The names here are the ARIA roles, which is what HTML's sectioning elements are a shorthand *for* — `<header>` is `banner`, `<nav>` is `navigation`, `<main>` is `main`. Taking the roles rather than the tags is what keeps this from being a web vocabulary that native has to translate out of: AccessKit models the same set, so the desktop mapping is as exact as the document one, and an application never writes a tag.
 //!
 //! ## Why it is its own crate
 //!
-//! `platform-core` and `renderer-core` are siblings — neither may depend on the other — and both need this.
-//! It lived in both, differently, which is how a checkbox came to be announced as a checkbox on the desktop
-//! and drawn as an anonymous box in a browser.
+//! `platform-core` and `renderer-core` are siblings — neither may depend on the other — and both need this. It lived in both, differently, which is how a checkbox came to be announced as a checkbox on the desktop and drawn as an anonymous box in a browser.
 
 #![forbid(unsafe_code)]
 
@@ -23,17 +16,14 @@ use std::sync::Arc;
 
 /// What a box is.
 ///
-/// Deliberately not open-ended. Each variant has to earn itself by changing what at least one target does
-/// with it — a role that lands on the same element with the same attributes and the same announcement is a
-/// role that does not exist.
+/// Deliberately not open-ended. Each variant has to earn itself by changing what at least one target does with it — a role that lands on the same element with the same attributes and the same announcement is a role that does not exist.
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug, Default)]
 pub enum Role {
-    /// A box that only groups. The overwhelming majority, and the right answer when nothing else fits:
-    /// saying nothing is better than saying something wrong.
+    /// A box that only groups. The overwhelming majority, and the right answer when nothing else fits: saying nothing is better than saying something wrong.
     #[default]
     Group,
 
-    // --- The regions a screen is made of. What a reader jumps between and a document sections with.
+    // The regions a screen is made of: what a reader jumps between and a document sections with.
     /// The screen's own banner: a title bar, a masthead, the row that identifies the application.
     Banner,
     /// A set of links or destinations.
@@ -61,18 +51,15 @@ pub enum Role {
     ScrollArea,
     /// A box whose content is drawn rather than laid out: a bitmap, vector art, an immediate-mode canvas.
     ///
-    /// Everything under it is geometry in the box's own coordinates. A target that draws pixels ignores the
-    /// distinction; one that builds a document cannot, because it can draw those but not place them.
+    /// Everything under it is geometry in the box's own coordinates. A target that draws pixels ignores the distinction; one that builds a document cannot, because it can draw those but not place them.
     Drawing,
     /// A window within the screen that takes the interaction until it is dismissed.
     Dialog,
 
-    // --- The things a person operates.
-    /// Something pressable, whatever it is drawn as. The right answer for anything whose whole meaning is
-    /// "activating this does something".
+    // The things a person operates.
+    /// Something pressable, whatever it is drawn as. The right answer for anything whose whole meaning is "activating this does something".
     Button,
-    /// A link. Where it goes is [`Semantics::link`], because that is data about the link rather than part
-    /// of what it is — and keeping it out is what lets a role stay `Copy` and free to compare.
+    /// A link. Where it goes is [`Semantics::link`], because that is data about the link rather than part of what it is — and keeping it out is what lets a role stay `Copy` and free to compare.
     Link,
     /// Carries a checked state that is part of what it is, not of what it looks like.
     CheckBox,
@@ -100,16 +87,14 @@ pub enum Role {
     Disclosure,
     /// How far along something is.
     ProgressBar,
-    /// Not a control at all: text the interface is showing. Never focusable — it is here because a reader
-    /// given only the buttons cannot say what the buttons are for.
+    /// Not a control at all: text the interface is showing. Never focusable — it is here because a reader given only the buttons cannot say what the buttons are for.
     Label,
 }
 
 impl Role {
     /// Whether this is one of the regions a screen is made of, rather than something operated or shown.
     ///
-    /// The distinction a document backend needs to decide between a sectioning element and a `<div>`, and
-    /// the one a reader needs to offer "jump to region".
+    /// The distinction a document backend needs to decide between a sectioning element and a `<div>`, and the one a reader needs to offer "jump to region".
     pub fn is_region(&self) -> bool {
         matches!(
             self,
@@ -145,11 +130,9 @@ impl Role {
         )
     }
 
-    /// The name this role goes by in markup and in a stylesheet — the ARIA role, which is also what an
-    /// application writes in `.rsx`.
+    /// The name this role goes by in markup and in a stylesheet — the ARIA role, which is also what an application writes in `.rsx`.
     ///
-    /// One table rather than one per target: a name that parses and a name that is announced must be the
-    /// same word, or an author has learned two vocabularies for one idea.
+    /// One table rather than one per target: a name that parses and a name that is announced must be the same word, or an author has learned two vocabularies for one idea.
     pub fn as_str(&self) -> &'static str {
         match self {
             Self::Group => "group",
@@ -189,9 +172,7 @@ impl Role {
 
     /// The role a name spells, for the one place a name arrives as text: what an application wrote.
     ///
-    /// Aliases are the words people reach for first. `nav` and `sidebar` are not ARIA — they are what an
-    /// author types — and pointing them at the role they mean is cheaper than being asked why `sidebar` is
-    /// spelled `complementary`.
+    /// Aliases are the words people reach for first. `nav` and `sidebar` are not ARIA — they are what an author types — and pointing them at the role they mean is cheaper than being asked why `sidebar` is spelled `complementary`.
     pub fn parse(name: &str) -> Option<Self> {
         Some(match name {
             "group" | "none" => Self::Group,
@@ -238,28 +219,23 @@ impl Role {
 
 /// What a box is, and what should be said about it.
 ///
-/// Carried alongside geometry rather than inside it: two boxes with the same rect can mean entirely
-/// different things, and the thing that draws them needs both.
+/// Carried alongside geometry rather than inside it: two boxes with the same rect can mean entirely different things, and the thing that draws them needs both.
 #[derive(Clone, PartialEq, Eq, Hash, Debug, Default)]
 pub struct Semantics {
     pub role: Role,
     /// The name assistive technology reads, when the box's own content is not it — an icon-only button.
     ///
-    /// Left `None` wherever the drawn text already says it, which is the common case and the one that cannot
-    /// fall out of step with what is on screen.
+    /// Left `None` wherever the drawn text already says it, which is the common case and the one that cannot fall out of step with what is on screen.
     pub label: Option<Arc<str>>,
     /// Where a [`Link`](Role::Link) goes. Meaningless on every other role, and absent there.
     pub link: Option<Arc<str>>,
     /// Whether the box is where the keyboard currently is.
     ///
-    /// A target that draws its own focus ring does not need telling; one that hands the box to a document
-    /// does, because the document has a focus of its own and the two must be the same box.
+    /// A target that draws its own focus ring does not need telling; one that hands the box to a document does, because the document has a focus of its own and the two must be the same box.
     pub focused: bool,
-    /// Whether a control carrying a checked state is in it. `None` for the roles that have no such state —
-    /// never a default of `false` for the ones that do, which announces every checkbox as unticked.
+    /// Whether a control carrying a checked state is in it. `None` for the roles that have no such state — never a default of `false` for the ones that do, which announces every checkbox as unticked.
     pub toggled: Option<bool>,
-    /// Whether the box is present but not operable. Announced rather than hidden: a control that is
-    /// genuinely not there is absent instead.
+    /// Whether the box is present but not operable. Announced rather than hidden: a control that is genuinely not there is absent instead.
     pub disabled: bool,
     /// Whether the box refuses pointer events, so what is drawn under it takes them instead.
     pub click_through: bool,

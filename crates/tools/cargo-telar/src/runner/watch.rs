@@ -1,3 +1,5 @@
+//! `cargo telar dev`: the watch loop, the rebuild, and the hot-reload channel to the running app.
+
 use std::fs::OpenOptions;
 use std::io::BufReader;
 use std::path::{Path, PathBuf};
@@ -28,10 +30,7 @@ fn inject_feature(args: &mut Vec<String>, feature: &str) {
 
 /// Runs a cargo build and re-points whatever it says about generated Rust back onto the `.rsx` it came from.
 ///
-/// stdout carries the JSON diagnostic stream and is consumed here; stderr is cargo's own progress and is
-/// left on the terminal, so a build still looks like a build. Every build goes through this, not only the
-/// failing ones — warnings used to be captured into a `String` that was read on the failure path alone,
-/// which made them invisible for a whole development session.
+/// stdout carries the JSON diagnostic stream and is consumed here; stderr is cargo's own progress and is left on the terminal, so a build still looks like a build. Every build goes through this, not only the failing ones — warnings used to be captured into a `String` that was read on the failure path alone, which made them invisible for a whole development session.
 fn build_with_diagnostics(cmd: &mut Command) -> (bool, diagnostics::Report) {
     cmd.arg("--color=always")
         .stdout(Stdio::piped())
@@ -46,8 +45,7 @@ fn build_with_diagnostics(cmd: &mut Command) -> (bool, diagnostics::Report) {
     (succeeded, report)
 }
 
-/// Adds `--message-format=json` unless the caller already chose a format, which cargo would reject as two
-/// of them rather than honour the later one.
+/// Adds `--message-format=json` unless the caller already chose a format, which cargo would reject as two of them rather than honour the later one.
 fn with_json_messages(args: &mut Vec<String>) {
     if !args.iter().any(|a| a.starts_with("--message-format")) {
         args.push("--message-format=json".to_string());
@@ -126,7 +124,7 @@ fn is_source_event(event: &notify::Event) -> bool {
     })
 }
 
-// An asset change (svg/png/jpg/jpeg) leaves every `.rsx` untouched, so cargo's fingerprint is unchanged and the baker never re-runs; these events need the `.rsx`-touch workaround below.
+// An asset change leaves every `.rsx` untouched, so cargo's fingerprint is unchanged and the baker never re-runs; these events need the touch workaround below.
 fn is_asset_event(event: &notify::Event) -> bool {
     if !matches!(
         event.kind,
@@ -142,7 +140,7 @@ fn is_asset_event(event: &notify::Event) -> bool {
     })
 }
 
-// Classifies an event for the watch loops: returns whether it should trigger a rebuild, and eagerly forces a re-bake when only an asset changed. Touching an asset's `.rsx` produces a `.rsx` event that is a source (not asset) event, so it never re-enters this touch path — no cascade.
+// Returns whether the event should trigger a rebuild, and eagerly forces a re-bake when only an asset changed. Touching an asset's `.rsx` produces a source event, so it never re-enters this path.
 fn note_event(event: &notify::Event, src_dirs: &[PathBuf]) -> bool {
     if !is_source_event(event) {
         return false;
@@ -153,7 +151,7 @@ fn note_event(event: &notify::Event, src_dirs: &[PathBuf]) -> bool {
     true
 }
 
-// Proc macros can't emit `cargo:rerun-if-changed` and read assets via `std::fs` (untracked by rustc), so an asset-only edit never re-runs the baker. Bumping the mtime of every watched `.rsx` (each wired into rustc's dep graph via `include_str!`) forces the recompile that re-bakes. Coarse for v1: it touches all `.rsx`, not just the one referencing the asset; a precise asset->`.rsx` manifest is a future refinement.
+// Proc macros cannot emit `cargo:rerun-if-changed` and read assets via `std::fs`, so an asset-only edit never re-runs the baker. Bumping the mtime of every watched `.rsx` forces the recompile that re-bakes. Coarse for now: it touches all of them, not just the one referencing the asset.
 fn touch_rsx_files(src_dirs: &[PathBuf]) {
     let now = SystemTime::now();
     for dir in src_dirs {
@@ -161,7 +159,7 @@ fn touch_rsx_files(src_dirs: &[PathBuf]) {
     }
 }
 
-// Recursive `.rsx` walk, parallel to telar-transpiler's find_rsx_files discovery walk but touching mtimes rather than collecting paths.
+// Parallel to the transpiler's discovery walk, but touching mtimes rather than collecting paths.
 fn touch_rsx_in_dir(dir: &Path, now: SystemTime) {
     let Ok(entries) = std::fs::read_dir(dir) else {
         return;
@@ -196,8 +194,7 @@ fn collect_src_dirs(workspace_root: &Path) -> Vec<PathBuf> {
         .collect()
 }
 
-/// The host triple's `CARGO_TARGET_<TRIPLE>_RUSTFLAGS`, which is where a direnv/flake shell usually puts a
-/// linker choice (target-scoped rather than global, so a cross build keeps its own toolchain's linker).
+/// The host triple's `CARGO_TARGET_<TRIPLE>_RUSTFLAGS`, which is where a direnv/flake shell usually puts a linker choice (target-scoped rather than global, so a cross build keeps its own toolchain's linker).
 fn host_target_rustflags() -> Option<String> {
     let output = Command::new("rustc").arg("-vV").output().ok()?;
     let text = String::from_utf8_lossy(&output.stdout);
@@ -214,9 +211,7 @@ fn host_target_rustflags() -> Option<String> {
 
 /// The flags this loop must build with, on top of whatever the developer already configured.
 ///
-/// Cargo reads rustflags from exactly one source and `RUSTFLAGS` outranks the rest, so setting it here
-/// silently discards the target-scoped tier — which is where a Nix shell or a `.envrc` puts `-fuse-ld=mold`.
-/// Folding that tier in when `RUSTFLAGS` is unset keeps the developer's choice instead of quietly undoing it.
+/// Cargo reads rustflags from exactly one source and `RUSTFLAGS` outranks the rest, so setting it here silently discards the target-scoped tier — which is where a Nix shell or a `.envrc` puts `-fuse-ld=mold`. Folding that tier in when `RUSTFLAGS` is unset keeps the developer's choice instead of quietly undoing it.
 fn hot_reload_rustflags() -> String {
     with_hot_reload_cfg(
         std::env::var("RUSTFLAGS")
@@ -227,7 +222,7 @@ fn hot_reload_rustflags() -> String {
 }
 
 fn with_hot_reload_cfg(inherited: Option<String>) -> String {
-    // Adding --cfg=telar_hot_reload changes the Cargo fingerprint, forcing a recompile so the proc macro re-runs with TELAR_HOT_RELOAD_BUILD=1 and generates the hot reload code.
+    // Adding the cfg changes the Cargo fingerprint, forcing a recompile so the proc macro re-runs with `TELAR_HOT_RELOAD_BUILD=1`.
     let flag = "--cfg=telar_hot_reload";
     match inherited {
         Some(existing) => format!("{existing} {flag}"),
@@ -236,11 +231,11 @@ fn with_hot_reload_cfg(inherited: Option<String>) -> String {
 }
 
 fn preview_rustflags() -> String {
-    // --cfg=telar_preview is in the fingerprint so Cargo always recompiles when switching between dev and preview, ensuring the proc-macro-generated _rsx_hot_create_app includes or omits the preview branch correctly.
+    // In the fingerprint, so Cargo recompiles when switching between dev and preview and the generated entrypoint includes or omits the preview branch correctly.
     format!("{} --cfg=telar_preview", hot_reload_rustflags())
 }
 
-// TCP loopback channel to the running app (instead of a unix socket, so hot reload works on non-Unix hosts). cargo-telar binds, the app connects once at startup (TELAR_HOT_PORT) and reads line events.
+// TCP loopback rather than a unix socket, so hot reload works on non-Unix hosts. cargo-telar binds and the app connects once at startup, then reads line events.
 struct HotChannel {
     listener: std::net::TcpListener,
     stream: Option<std::net::TcpStream>,
@@ -271,7 +266,7 @@ impl HotChannel {
     }
 
     fn notify_build_error(&mut self, message: &str) {
-        // Escaped rather than replaced: a code frame is full of `|`, so the ` | ` separator this used to substitute would be cut back apart at every gutter. Backslashes go first, or an escape in the message decodes as a line break.
+        // Escaped rather than replaced: a code frame is full of `|`, so a ` | ` separator would be cut apart at every gutter. Backslashes go first, or an escape in the message decodes as a line break.
         let escaped = message
             .replace('\\', "\\\\")
             .replace('\n', "\\n")
@@ -552,7 +547,7 @@ pub(crate) fn run_hot_loop(mode: HotMode, opts: HotLoopOpts) -> ! {
     let workspace_root = resolved.workspace_root.clone();
     let profile = profile_of(&rest);
 
-    // Gated on the manifest rather than on the built artifact: the dylib build differs from the plain one in both RUSTFLAGS and the generated sources, so running it for a package that can never produce a dylib compiles the crate graph twice per `cargo telar dev` and leaves each half stale for the next run.
+    // Gated on the manifest rather than the built artifact: the dylib build differs in both RUSTFLAGS and generated sources, so running it for a package that can never produce one compiles the crate graph twice per `cargo telar dev` and leaves each half stale.
     let hot_reload = !no_hot_reload && resolved.produces_cdylib;
     if !no_hot_reload && !hot_reload {
         eprintln!(
@@ -567,7 +562,6 @@ pub(crate) fn run_hot_loop(mode: HotMode, opts: HotLoopOpts) -> ! {
         let lib_path = package_lib_path(&workspace_root, &package_name, profile);
         let bin_path = package_bin_path(&workspace_root, &package_name, profile);
 
-        // Initial build (produces both binary and dylib).
         let mut build_args = vec!["build".to_string()];
         build_args.extend(rest.clone());
         for feature in features {
@@ -579,7 +573,7 @@ pub(crate) fn run_hot_loop(mode: HotMode, opts: HotLoopOpts) -> ! {
         build_cmd
             .args(&build_args)
             .env("TELAR_HOT_RELOAD_BUILD", "1")
-            // `telar`'s backend is resolved with `option_env!`, so it is a tracked build input: omitting it here would compile a different backend than the hot rebuilds and make the first of them recompile the graph.
+            // `telar`'s backend is resolved with `option_env!` and so is a tracked build input: omitting it would compile a different backend than the hot rebuilds.
             .env("TELAR_RENDERER_BACKEND", backend_value)
             .env("RUSTFLAGS", &rustflags);
         if is_preview {
@@ -612,7 +606,6 @@ pub(crate) fn run_hot_loop(mode: HotMode, opts: HotLoopOpts) -> ! {
                 workspace_root,
             );
         }
-        // Fallback if binary or lib not found: use process-restart watch.
     }
 
     watch_and_run(cargo_args, launch_envs, workspace_root);
@@ -622,10 +615,7 @@ pub(crate) fn run_hot_loop(mode: HotMode, opts: HotLoopOpts) -> ! {
 mod tests {
     use super::*;
 
-    /// The linker a Nix or direnv shell configures for the host target used to be dropped on the floor:
-    /// setting `RUSTFLAGS` here made Cargo stop reading the tier that carried it, so the one loop a developer
-    /// tunes their linker *for* was the one loop that ignored it. Choosing a linker is not this tool's call,
-    /// but discarding the choice already made is a bug.
+    /// The linker a Nix or direnv shell configures for the host target used to be dropped on the floor: setting `RUSTFLAGS` here made Cargo stop reading the tier that carried it, so the one loop a developer tunes their linker *for* was the one loop that ignored it. Choosing a linker is not this tool's call, but discarding the choice already made is a bug.
     #[test]
     fn a_shell_configured_linker_survives_into_the_hot_reload_build() {
         assert_eq!(
@@ -634,8 +624,7 @@ mod tests {
         );
     }
 
-    /// With nothing to inherit the cfg stands alone, so a bare shell does not get a leading space that would
-    /// read as an empty flag.
+    /// With nothing to inherit the cfg stands alone, so a bare shell does not get a leading space that would read as an empty flag.
     #[test]
     fn nothing_to_inherit_leaves_the_cfg_alone() {
         assert_eq!(with_hot_reload_cfg(None), "--cfg=telar_hot_reload");

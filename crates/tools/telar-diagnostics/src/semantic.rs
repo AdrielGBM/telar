@@ -1,29 +1,25 @@
+//! The checks past parsing: unknown attributes, unreachable branches and missing catalogue keys.
+
 use std::collections::HashSet;
 
 use telar_parser::{Element, RsxDocument, ViewNode};
 
 use crate::{Diagnostic, Span};
 
-/// A filesystem-free view of the project's baked i18n catalog, used to validate `t"key"` markup against the
-/// keys the catalog actually defines. Built by the analyzer's `ProjectInfo` from `parse_catalog`, so this
-/// crate never touches disk. `None` when the project has no catalog (i18n unused).
+/// A filesystem-free view of the project's baked i18n catalog, used to validate `t"key"` markup against the keys the catalog actually defines. Built by the analyzer's `ProjectInfo` from `parse_catalog`, so this crate never touches disk. `None` when the project has no catalog (i18n unused).
 pub struct CatalogView<'a> {
     pub keys: &'a HashSet<String>,
 }
 
-/// Everything the per-node checks read, gathered once. Passed by reference through the walk so adding a
-/// check does not mean threading another positional argument through every recursion site.
+/// Everything the per-node checks read, gathered once. Passed by reference through the walk so adding a check does not mean threading another positional argument through every recursion site.
 struct Ctx<'a> {
     defined_classes: HashSet<&'a str>,
     catalog: Option<&'a CatalogView<'a>>,
 }
 
-/// Runs the `.rsx` semantic checks (undefined style classes, unquoted captures, unknown i18n keys) over a
-/// parsed document, returning neutral diagnostics. `catalog` is `None` when the project has no translations.
+/// Runs the `.rsx` semantic checks (undefined style classes, unquoted captures, unknown i18n keys) over a parsed document, returning neutral diagnostics. `catalog` is `None` when the project has no translations.
 ///
-/// A *value* is not checked here at all: it is a Rust expression, and rustc judges it against the `.rsx`
-/// line the source map points at. The checks that remain are the ones about the markup's own vocabulary — a
-/// class nobody declared, an i18n key the catalogue does not hold.
+/// A *value* is not checked here at all: it is a Rust expression, and rustc judges it against the `.rsx` line the source map points at. The checks that remain are the ones about the markup's own vocabulary — a class nobody declared, an i18n key the catalogue does not hold.
 pub fn semantic_diagnostics(doc: &RsxDocument, catalog: Option<&CatalogView>) -> Vec<Diagnostic> {
     let mut diagnostics = Vec::new();
     let ctx = Ctx {
@@ -82,12 +78,9 @@ fn check_element(el: &Element, ctx: &Ctx, reactive: bool, diagnostics: &mut Vec<
     check_nodes(&el.children, ctx, reactive, diagnostics);
 }
 
-/// Flags a `t"key"` — as element content (`text t"nav.title"`) or as an attribute value
-/// (`btn label:t"buttons.save"`) — whose key the catalog does not define.
+/// Flags a `t"key"` — as element content (`text t"nav.title"`) or as an attribute value (`btn label:t"buttons.save"`) — whose key the catalog does not define.
 ///
-/// Worth catching here specifically: unlike the `t!` macro, which validates its key at compile time, a markup
-/// key that misses falls back to rendering the key string itself. So the only symptom is `nav.titel` showing
-/// up in the UI, with nothing failing anywhere.
+/// Worth catching here specifically: unlike the `t!` macro, which validates its key at compile time, a markup key that misses falls back to rendering the key string itself. So the only symptom is `nav.titel` showing up in the UI, with nothing failing anywhere.
 fn check_i18n_keys(el: &Element, ctx: &Ctx, span: &Span, diagnostics: &mut Vec<Diagnostic>) {
     let Some(catalog) = ctx.catalog else {
         return;
@@ -112,12 +105,9 @@ fn check_i18n_keys(el: &Element, ctx: &Ctx, span: &Span, diagnostics: &mut Vec<D
     // An attribute's catalogue lookup is `t!("…")` now, and the macro validates its own key.
 }
 
-/// Bindings a `[logic]` zone constructs from something that is certainly not `Copy`, with the line each was
-/// bound on.
+/// Bindings a `[logic]` zone constructs from something that is certainly not `Copy`, with the line each was bound on.
 ///
-/// Certainly, not probably: only shapes whose type is knowable from the text alone. Nothing here has type
-/// information, so a guess would warn about an `i32` a closure captures perfectly well, and a warning that
-/// fires on correct code is worse than none.
+/// Certainly, not probably: only shapes whose type is knowable from the text alone. Nothing here has type information, so a guess would warn about an `i32` a closure captures perfectly well, and a warning that fires on correct code is worse than none.
 fn non_copy_bindings(logic: &str) -> Vec<(String, usize)> {
     const CONSTRUCTORS: [&str; 8] = [
         "Rc::new(",
@@ -154,8 +144,7 @@ fn is_plain_ident(s: &str) -> bool {
         && !s.chars().next().is_some_and(|c| c.is_ascii_digit())
 }
 
-/// Every closure body the view contains, as raw text. Enough to ask which of them name a binding, which is
-/// all this check needs and all it can get without types.
+/// Every closure body the view contains, as raw text. Enough to ask which of them name a binding, which is all this check needs and all it can get without types.
 fn closure_bodies(nodes: &[ViewNode], out: &mut Vec<String>) {
     for node in nodes {
         match node {
@@ -187,10 +176,7 @@ fn closure_bodies(nodes: &[ViewNode], out: &mut Vec<String>) {
 
 /// Warns when a binding that cannot be `Copy` is captured, without its sigil, by more than one closure.
 ///
-/// The second closure to capture it finds it moved. rustc says so eventually and says it well — the terminal
-/// maps the error onto this line — but it says it after a compile, and its advice is to clone, which is the
-/// bookkeeping the sigil exists to remove. `$name` is the answer, and this is early enough to be the first
-/// place the author reads it.
+/// The second closure to capture it finds it moved. rustc says so eventually and says it well — the terminal maps the error onto this line — but it says it after a compile, and its advice is to clone, which is the bookkeeping the sigil exists to remove. `$name` is the answer, and this is early enough to be the first place the author reads it.
 fn unsigiled_captures(doc: &RsxDocument) -> Vec<Diagnostic> {
     let mut bodies = Vec::new();
     closure_bodies(&doc.view.nodes, &mut bodies);
@@ -265,8 +251,7 @@ mod capture_tests {
         assert!(found.is_empty(), "{found:?}");
     }
 
-    /// Nothing here knows types, so the check only fires on constructions whose type the text settles. A
-    /// `Copy` binding captured by two closures is correct code, and warning about it would be the worse error.
+    /// Nothing here knows types, so the check only fires on constructions whose type the text settles. A `Copy` binding captured by two closures is correct code, and warning about it would be the worse error.
     #[test]
     fn a_binding_that_might_be_copy_is_left_alone() {
         let found = warnings(

@@ -10,9 +10,7 @@ use crate::surface::{EnterMotion, IDENTITY, SurfaceTransition, apply_enter, ente
 
 /// Lays its content out against the window, because nothing above it will.
 ///
-/// A percent-sized tree resolves to nothing until something hands it a definite space, and Telar hands the
-/// tree a window rather than laying it out. Without this root the content's rects stay zero and the window
-/// is black forever, which looks exactly like a renderer that never drew.
+/// A percent-sized tree resolves to nothing until something hands it a definite space, and Telar hands the tree a window rather than laying it out. Without this root the content's rects stay zero and the window is black forever, which looks exactly like a renderer that never drew.
 ///
 /// [`ScrollPage`](crate::ScrollPage) is the same shape for a window that is one scrolling column.
 pub struct WindowRoot {
@@ -24,8 +22,7 @@ pub struct WindowRoot {
 impl WindowRoot {
     /// Lays `content`'s own node out against the window, adding nothing to the tree.
     ///
-    /// `content` must size itself to fill the window — a percent-sized box is the usual answer. For content
-    /// that sizes itself to its children instead, use [`WindowRoot::wrapping`].
+    /// `content` must size itself to fill the window — a percent-sized box is the usual answer. For content that sizes itself to its children instead, use [`WindowRoot::wrapping`].
     pub fn new(content: Box<dyn LayoutItem>) -> Self {
         Self {
             root: content.layout_node(),
@@ -34,8 +31,7 @@ impl WindowRoot {
         }
     }
 
-    /// Wraps `content` in a window-filling box and lays *that* out, for content that does not fill the
-    /// window on its own or that has to stretch inside a parent of a fixed size.
+    /// Wraps `content` in a window-filling box and lays *that* out, for content that does not fill the window on its own or that has to stretch inside a parent of a fixed size.
     pub fn wrapping(content: Box<dyn LayoutItem>) -> Result<Self, LayoutError> {
         let root = new_container(
             LayoutStyle::new()
@@ -55,8 +51,7 @@ impl WindowRoot {
         self.animate(SurfaceTransition::enter())
     }
 
-    /// Drives the root from a transition the *caller* owns, so it can also send the surface back out — see
-    /// [`SurfaceTransition::leave`].
+    /// Drives the root from a transition the *caller* owns, so it can also send the surface back out — see [`SurfaceTransition::leave`].
     pub fn animate(mut self, transition: SurfaceTransition) -> Self {
         self.transition = Some(transition);
         self
@@ -81,13 +76,11 @@ impl Component for WindowRoot {
         }
     }
 
-    /// Lays out first, then passes the resize on, so anything that has to run once the tree has real rects —
-    /// a scroll viewport that is its own layout root, a first-layout autofocus — sees it in that order.
+    /// Lays out first, then passes the resize on, so anything that has to run once the tree has real rects — a scroll viewport that is its own layout root, a first-layout autofocus — sees it in that order.
     ///
-    /// `Handled` regardless of what the content answered: the runner requests a redraw only for a handled
-    /// event (`runner::handler`), so reporting the content's `Ignored` would relayout and never repaint.
+    /// `Handled` regardless of what the content answered: the runner requests a redraw only for a handled event (`runner::handler`), so reporting the content's `Ignored` would relayout and never repaint.
     fn on_event(&mut self, event: &Event) -> EventResult {
-        // Before the press goes down the tree, so whatever is pressed takes focus back on its way through and only a press with nothing focusable under it leaves the keyboard unheld. The root is where this can be asked at all: a widget sees the events that reach it, and the whole point here is the press that reaches nobody.
+        // Before the press goes down the tree, so whatever is pressed takes focus back on the way through and only a press with nothing focusable under it leaves the keyboard unheld.
         if let Event::PointerPressed {
             x,
             y,
@@ -97,10 +90,7 @@ impl Component for WindowRoot {
         {
             crate::focus::blur_from_pointer(*x as f32, *y as f32);
         }
-        // Tab is answered by the box that holds focus, which leaves the first one: with nothing focused there
-        // is no box to answer and the key reached nobody, so the keyboard could never get *into* an interface
-        // it had not already been clicked into. The root is where this can be asked, and it asks last — a
-        // control that wants Tab for itself has already taken it.
+        // Tab is answered by the box that holds focus, which leaves the first one: with nothing focused the key reaches nobody. Asked last, so a control that wants Tab for itself has already taken it.
         if let Event::KeyPressed { key, modifiers } = event
             && matches!(key, platform_core::Key::Named(platform_core::NamedKey::Tab))
             && crate::focus::current().is_none()
@@ -176,9 +166,7 @@ mod tests {
 
     /// **A press that lands on nothing focusable takes the keyboard away.**
     ///
-    /// Focus was only ever *taken* — by a tap on a focusable, by Tab — so clicking away from a form left the
-    /// field with the caret still in it, still eating the keys, and still answering «somebody is typing» to an
-    /// application asking whether to run its shortcuts.
+    /// Focus was only ever *taken* — by a tap on a focusable, by Tab — so clicking away from a form left the field with the caret still in it, still eating the keys, and still answering «somebody is typing» to an application asking whether to run its shortcuts.
     #[test]
     fn a_press_on_nothing_lets_the_keyboard_go() {
         let mut root = window_with_a_focused_field();
@@ -188,8 +176,7 @@ mod tests {
         assert!(focus::current().is_none(), "el clic fuera no soltó el foco");
     }
 
-    /// And the other half, which is what keeps the rule from being a nuisance: a press that lands *on* the
-    /// field leaves it exactly where it was.
+    /// And the other half, which is what keeps the rule from being a nuisance: a press that lands *on* the field leaves it exactly where it was.
     #[test]
     fn a_press_on_the_field_leaves_it_holding_the_keyboard() {
         let mut root = window_with_a_focused_field();

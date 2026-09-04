@@ -1,3 +1,5 @@
+//! The fonts a renderer is built with: extra faces, raw bytes, and the families to prefer.
+
 /// Shared font configuration for both software and hardware renderers. Lets callers supply extra fonts, raw font bytes, a system fonts directory, and preferred sans-serif families without duplicating these fields across renderer-specific config structs.
 #[derive(Clone)]
 pub struct FontConfig {

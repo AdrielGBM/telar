@@ -1,10 +1,8 @@
 //! A render backend that draws nothing and remembers everything.
 //!
-//! For asserting on what an app actually drew from a test with no GPU adapter. Every other way to ask goes
-//! through pixels, which answers "does this look right" but never "was the shadow emitted at all".
+//! For asserting on what an app actually drew from a test with no GPU adapter. Every other way to ask goes through pixels, which answers "does this look right" but never "was the shadow emitted at all".
 //!
-//! It is also the in-tree proof that [`renderer_core::RendererFactory`] is a real seam: installed from outside
-//! the runtime, naming neither a window system nor a surface.
+//! It is also the in-tree proof that [`renderer_core::RendererFactory`] is a real seam: installed from outside the runtime, naming neither a window system nor a surface.
 
 use std::sync::{Arc, Mutex};
 
@@ -25,8 +23,7 @@ pub struct RecordedFrame {
 
 /// What a recorder has seen, readable from the thread that started it.
 ///
-/// Shared and locked because the renderer is moved onto the frame pipeline's render thread as soon as it is
-/// built: by the time a test looks, the backend belongs to another thread.
+/// Shared and locked because the renderer is moved onto the frame pipeline's render thread as soon as it is built: by the time a test looks, the backend belongs to another thread.
 #[derive(Clone, Default)]
 pub struct Recording(Arc<Mutex<Vec<RecordedFrame>>>);
 
@@ -53,8 +50,7 @@ impl Recording {
         self.0.lock().expect("recording lock").clear();
     }
 
-    /// A backend recording into this, for a caller driving a [`RenderBackend`] directly rather than installing
-    /// [`RecordingFactory`].
+    /// A backend recording into this, for a caller driving a [`RenderBackend`] directly rather than installing [`RecordingFactory`].
     pub fn backend(&self) -> RecordingRenderer {
         RecordingRenderer {
             recording: self.clone(),
@@ -105,8 +101,7 @@ impl RenderBackend for RecordingRenderer {
         Ok(())
     }
 
-    /// Claims to apply the scale itself, so the recording holds the frame in logical pixels as the tree composed
-    /// it — letting the pipeline pre-scale would make every assertion depend on the surface's DPI.
+    /// Claims to apply the scale itself, so the recording holds the frame in logical pixels as the tree composed it — letting the pipeline pre-scale would make every assertion depend on the surface's DPI.
     fn applies_scale_factor(&self) -> bool {
         true
     }

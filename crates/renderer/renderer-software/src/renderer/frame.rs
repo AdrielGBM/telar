@@ -1,3 +1,5 @@
+//! One frame, in three phases: plan the damage, clear what it covers, then replay the commands into it.
+
 use std::num::NonZeroU32;
 
 use geometry_core::Rect;
@@ -13,15 +15,13 @@ use super::pixels::{
 };
 use super::present::FrameOp;
 
-// Outcome of the planning phase: either the frame can be presented immediately (nothing visible
-// changed) or it must be cleared and re-rendered with the computed plan.
+// Either the frame can be presented immediately, nothing visible having changed, or it must be cleared and re-rendered with the computed plan.
 enum FrameAction {
     Present(FrameOp),
     Render(FramePlan),
 }
 
-// Everything the render phase needs from planning: how to classify the present, which on-screen
-// regions to clear/render (None = full frame), and the command hash used to key the expand cache.
+// How to classify the present, which on-screen regions to clear and render (`None` is the full frame), and the command hash keying the expand cache.
 struct FramePlan {
     frame_op: FrameOp,
     skip_rect: Option<SmallVec<[Rect; 8]>>,
@@ -33,19 +33,16 @@ where
     D: HasDisplayHandle,
     W: HasWindowHandle,
 {
-    // Planning phase: fast-path detection (skip-if-unchanged, scroll blit), dirty-rect computation,
-    // present classification, prev-frame bookkeeping, and the skip_rect expansion. Returns
-    // FrameAction::Present for the early-outs that only re-present the existing pixmap, or
-    // FrameAction::Render carrying the plan for a full clear + command replay.
+    // Fast-path detection, dirty-rect computation, present classification and `skip_rect` expansion. Returns `Present` for the early-outs that only re-present the existing pixmap.
     fn plan_frame(
         &mut self,
         commands: &[DrawCommand],
         clear_color: Option<Color>,
     ) -> Result<FrameAction, RendererError> {
-        // Poll background shadow workers and move finished pixmaps into their caches. Returns true if any completed this frame, in which case we must re-render even if the command list is unchanged so the newly-available shadow gets drawn.
+        // Returns true if any completed, in which case the frame must re-render even on an unchanged command list so the newly available shadow gets drawn.
         let shadow_arrived = self.poll_pending_shadows();
 
-        // Optimization 1: skip the entire render when nothing changed; just re-present the existing pixmap. A shadow that just finished computing forces a redraw so it can appear.
+        // Nothing changed, so re-present the existing pixmap. A shadow that just finished forces a redraw.
         if !shadow_arrived
             && commands == self.prev_commands.as_slice()
             && clear_color == self.prev_clear_color
@@ -53,7 +50,7 @@ where
             return Ok(FrameAction::Present(FrameOp::NoChange));
         }
 
-        // Optimization 2: scroll blit. When the only change is a single PushTransform ty-shift (a scroll event), shift the existing pixel rows in place and only re-render the exposed band plus any out-of-clip overlays that changed (e.g. the scrollbar).
+        // When the only change is a single transform y-shift, shift the existing rows in place and re-render only the exposed band plus any out-of-clip overlays that changed.
         let maybe_scroll = if !self.prev_commands.is_empty() {
             renderer_core::dirty::detect_scroll_blit(commands, &self.prev_commands)
         } else {
@@ -65,9 +62,9 @@ where
             }
         }
 
-        // Optimization 3: compute the on-screen regions that changed so we can clear and re-render only those. Disjoint changes (e.g. a header and a scrollbar) are kept as separate rects instead of a viewport-spanning union, so the untouched center can be skipped.
+        // Disjoint changes are kept as separate rects rather than a viewport-spanning union, so the untouched centre can be skipped.
         let dirty_rect: Option<SmallVec<[Rect; 8]>> = if let Some(ref sb) = maybe_scroll {
-            // Scroll blit case: only re-render the newly exposed band and any changed overlays.
+            // Scroll blit: only the newly exposed band and any changed overlays.
             let mut v: SmallVec<[Rect; 8]> = SmallVec::new();
             v.push(sb.exposed_band);
             v.extend(sb.extra_dirty.iter().copied());
@@ -82,7 +79,7 @@ where
 
         let clear_color_changed = clear_color != self.prev_clear_color;
 
-        // Classify this frame's damage for the present buffer: a bounded set of changed regions can refresh an aged buffer incrementally; a clear-color change or unbounded change re-swizzles fully. A scroll's whole clip moved, so it counts as damage covering the clip plus the displaced overlays. Built from the raw (un-expanded) dirty regions, which are exactly the visually-changed pixels.
+        // A bounded set of changed regions can refresh an aged buffer incrementally; a clear-colour or unbounded change re-swizzles fully. Built from the raw, un-expanded regions, which are exactly the changed pixels.
         let frame_op = if clear_color_changed {
             FrameOp::Full
         } else if let Some(ref sb) = maybe_scroll {
@@ -105,10 +102,10 @@ where
         }
         self.prev_clear_color = clear_color;
 
-        // Clear either the dirty regions only or the full pixmap when a structural change forces a full re-render; IMPORTANT: compute both the tiny-skia clear rect and the geometry rect used for command-skipping from the same clamped bounds because the naive (dr.x-1).max(0) / dr.width+2 formula shifts the rect right/down when dr has negative coordinates (off-screen content), so fill_rect would clear a larger on-screen area than `dr` describes — causing commands outside `dr` to have their pixels cleared and then be skipped, which makes them disappear.
+        // Both the tiny-skia clear rect and the geometry rect used for command-skipping come from the same clamped bounds: the naive `(dr.x - 1).max(0)` formula shifts the rect right and down for off-screen content, so the clear would wipe a larger area than `dr` describes and the commands over it would be skipped.
         let skip_rect: Option<SmallVec<[Rect; 8]>> = match dirty_rect {
             Some(drs) if !drs.is_empty() => {
-                // Precompute each command's window-space visual rect once so expanding every dirty region is O(rects + commands) rather than O(rects * commands).
+                // Precomputed once, so expanding every dirty region is O(rects + commands) rather than O(rects * commands).
                 let mut visual_rects: Vec<Rect> = Vec::with_capacity(commands.len());
                 renderer_core::for_each_with_matrix(commands, |cmd, matrix| {
                     if let Some(vr) =
@@ -130,14 +127,14 @@ where
                     if x1 <= x0 || y1 <= y0 {
                         continue;
                     }
-                    // Expand the region to fully contain every command it partially intersects: a partially-overlapping command is still fully redrawn, overwriting pixels of earlier commands that fall outside the region and won't be redrawn themselves.
+                    // A partially overlapping command is still fully redrawn, overwriting pixels of earlier commands that fall outside the region and will not be redrawn themselves.
                     let mut sr = Rect {
                         x: x0,
                         y: y0,
                         width: x1 - x0,
                         height: y1 - y0,
                     };
-                    // A single pass is insufficient when expansion brings new commands into range; iterate until the region stops growing (bounded by command count in the worst case, but converges in 1-2 passes in practice).
+                    // One pass is not enough when expansion brings new commands into range, so iterate until the region stops growing — bounded by the command count, and converging in one or two passes in practice.
                     loop {
                         let before = sr;
                         for vr in &visual_rects {
@@ -172,7 +169,7 @@ where
                     }
                 }
                 if out.is_empty() {
-                    // Every dirty region was off-screen — nothing visible changed.
+                    // Every dirty region was off-screen, so nothing visible changed.
                     return Ok(FrameAction::Present(FrameOp::NoChange));
                 }
                 Some(out)
@@ -180,7 +177,7 @@ where
             _ => None,
         };
 
-        // If the clear color changed, the dirty-rect only covers command-changed regions, leaving background areas untouched with stale pixels from the previous frame. Force a full clear.
+        // The dirty rect only covers command-changed regions, leaving background areas with stale pixels.
         let skip_rect = if clear_color_changed { None } else { skip_rect };
 
         Ok(FrameAction::Render(FramePlan {
@@ -190,11 +187,7 @@ where
         }))
     }
 
-    // Clear phase: fill either the given on-screen regions or the whole pixmap with the clear color.
-    // A transparent surface (`clear_color == None`) still clears its dirty regions to FULLY TRANSPARENT
-    // rather than skipping the clear — otherwise, when content shifts (e.g. adding/removing a bar module
-    // re-lays-out its neighbours), the pixels it vacated keep the previous frame and leave a ghost. The
-    // `Source` blend overwrites those pixels instead of compositing the new frame on top of the stale one.
+    // A transparent surface still clears its dirty regions to fully transparent rather than skipping the clear: otherwise pixels vacated by shifted content keep the previous frame and leave a ghost. The `Source` blend overwrites them instead of compositing the new frame over the stale one.
     fn clear_pixmap(
         &mut self,
         clear_color: Option<Color>,
@@ -226,15 +219,14 @@ where
         }
     }
 
-    // Render phase: replay the (fill-layer-expanded) command list into the pixmap, honoring the
-    // dirty-region skip, clip mask, matrix and layer stacks, and precomputed layer bounding boxes.
+    // Replays the expanded command list, honouring the dirty-region skip, the clip mask, the matrix and layer stacks, and the precomputed layer bounding boxes.
     fn run_commands(
         &mut self,
         commands: &[DrawCommand],
         skip_rect: &Option<SmallVec<[Rect; 8]>>,
         layer_bboxes: &[Option<(i32, i32, u32, u32)>],
     ) {
-        // Nesting depth of PushLayer commands skipped because their bbox doesn't overlap skip_rect; their pixels are already correct from apply_scroll_blit.
+        // Skipped because their bbox does not overlap `skip_rect`; their pixels are already correct from the blit.
         let mut skip_layer_depth: usize = 0;
 
         for (cmd_idx, cmd) in commands.iter().enumerate() {
@@ -277,16 +269,13 @@ where
                 continue;
             }
 
-            // One visual rect for the whole body: the dirty-region skip and every drawing arm ask the same
-            // question of the same command. `None` for the state commands (clip/matrix/layer), which is what
-            // keeps hoisting this safe — a state command has no bounds and must never be skipped.
+            // One visual rect for the whole body. `None` for the state commands, which is what keeps hoisting it safe: a state command has no bounds and must never be skipped.
             if let Some(vr) = renderer_core::culling::command_visual_rect(
                 cmd,
                 self.draw_state.cumulative_matrix,
                 &self.font_metrics,
             ) {
-                // Only at the top level: a layer is a fresh isolated pixmap rendered from scratch every frame,
-                // so all its commands must run regardless of which window-space region is dirty.
+                // Only at the top level: a layer is a fresh isolated pixmap rendered from scratch every frame, so all its commands must run whatever region is dirty.
                 if let Some(dirty_rects) = skip_rect
                     && !inside_layer
                     && dirty_rects.iter().all(|dr| !vr.overlaps(*dr))
@@ -444,7 +433,7 @@ where
                 }
                 DrawCommand::PushClip { rect, radius } => {
                     let prev_dirty = self.clip_mask_dirty;
-                    // Clip rects arrive in the emitting widget's local space; map through the active matrix so the clip composes with scroll/layout transforms (the mask is painted in window pixels).
+                    // Clip rects arrive in the emitting widget's local space, so map through the active matrix; the mask is painted in window pixels.
                     let clip_rect = renderer_core::transform_clip_rect(
                         self.draw_state.cumulative_matrix,
                         *rect,
@@ -507,7 +496,7 @@ where
                     opacity,
                     backdrop_blur,
                 } => {
-                    // During scroll_blit, skip layers outside the dirty region: their pixels are already correct from apply_scroll_blit and re-compositing would double-apply the layer's opacity.
+                    // Their pixels are already correct from the blit, and re-compositing would double-apply the layer's opacity.
                     if let Some(dirty_rects) = skip_rect {
                         if !inside_layer {
                             if let Some((ox, oy, bw, bh)) = layer_bboxes[cmd_idx] {
@@ -596,8 +585,7 @@ where
                         self.pixmap_pool.push(layer);
                     }
                 }
-                // Structure, for a backend whose output is a document. Every command inside carries the
-                // position it was laid out at, so skipping the markers draws the same frame.
+                // Structure, for a backend whose output is a document. Every command inside carries the position it was laid out at, so skipping the markers draws the same frame.
                 DrawCommand::PushElement { .. } | DrawCommand::PopElement => {}
             }
         }
@@ -609,8 +597,7 @@ where
     D: HasDisplayHandle,
     W: HasWindowHandle,
 {
-    // Build the caches up front on the thread that will draw, so the first frame doesn't pay for loading
-    // fonts mid-frame. `begin_frame` covers the same ground for a renderer nobody binds (the offscreen one).
+    // Built up front on the thread that will draw, so the first frame does not pay for loading fonts mid-frame.
     fn bind_to_render_thread(&mut self) {
         self.ensure_caches();
     }
@@ -631,7 +618,7 @@ where
         _scale_factor: f32,
         _generation: u64,
     ) -> Result<(), RendererError> {
-        // `scale_factor` and `generation` are ignored because draw commands arrive pre-scaled by the caller; software backend does not need to track them.
+        // Draw commands arrive pre-scaled, so the software backend tracks neither.
         self.ensure_caches();
 
         if width != self.width || height != self.height {
@@ -646,9 +633,9 @@ where
             self.prev_clear_color = None;
             self.expanded_commands_cache = None;
             self.layer_bounds_cache = None;
-            // Surface buffers are recreated on resize, so their age resets; drop the change log to avoid replaying onto a fresh buffer.
+            // Surface buffers are recreated on resize and their age resets, so the change log would replay onto a fresh buffer.
             self.present_history.clear();
-            // Headless mode has no surface to resize; the pixmap above is the only target.
+            // Headless has no surface to resize; the pixmap above is the only target.
             if let (Some(w), Some(h), Some(surface)) = (
                 NonZeroU32::new(width),
                 NonZeroU32::new(height),
@@ -663,8 +650,7 @@ where
         Ok(())
     }
 
-    // Only the headless (windowless) renderer keeps a CPU-side pixmap to hand back; the windowed path presents
-    // to its softbuffer surface and holds no readable pixmap, so it returns `None`.
+    // Only the headless renderer keeps a CPU-side pixmap to hand back; the windowed path presents to its softbuffer surface and holds none.
     fn read_rgba(&self) -> Option<Vec<u8>> {
         self.pixmap.as_ref().map(|p| p.data().to_vec())
     }
@@ -696,7 +682,7 @@ where
             }
         };
 
-        // Task 2.12: skip compute_layer_bounds when commands and dimensions haven't changed.
+        // Skipped when commands and dimensions have not changed.
         let layer_bboxes = {
             let commands: &[DrawCommand] = &self.expanded_commands_cache.as_ref().unwrap().1;
             let bbox_hash = hash_commands_with_dimensions(commands, self.width, self.height);
@@ -711,7 +697,7 @@ where
             }
         };
 
-        // Borrow split: the command loop needs `&mut self`, but the expanded list lives inside `self`. Move it out for the duration of the loop and restore it after, preserving the expand cache exactly.
+        // The command loop needs `&mut self` but the expanded list lives inside it, so it is moved out for the duration and restored after, preserving the expand cache exactly.
         let taken = std::mem::take(&mut self.expanded_commands_cache);
         self.run_commands(&taken.as_ref().unwrap().1, &skip_rect, &layer_bboxes);
         self.expanded_commands_cache = taken;

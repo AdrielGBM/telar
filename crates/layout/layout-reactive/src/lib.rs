@@ -1,3 +1,5 @@
+//! Layout made reactive: a taffy tree whose node rects are signals, so a widget re-renders when its box moves.
+
 mod context;
 mod direction;
 

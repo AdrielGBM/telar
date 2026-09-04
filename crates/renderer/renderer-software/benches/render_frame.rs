@@ -1,6 +1,4 @@
-//! Baseline for the software backend's `render_frame` on a dense, HiDPI-sized UI frame, captured
-//! before `render_frame` is decomposed. Runs fully headless (offscreen `Pixmap`, no window/softbuffer)
-//! so it works in environments with only a GPU render node and no display server.
+//! Baseline for the software backend's `render_frame` on a dense, HiDPI-sized UI frame, captured before `render_frame` is decomposed. Runs fully headless (offscreen `Pixmap`, no window/softbuffer) so it works in environments with only a GPU render node and no display server.
 
 use std::hint::black_box;
 use std::sync::Arc;
@@ -17,9 +15,7 @@ use telar_renderer_software::{SoftwareRenderer, SoftwareRendererConfig};
 const WIDTH: u32 = 1280;
 const HEIGHT: u32 = 800;
 
-/// A dense widget-tree frame: a grid of panels (fill + stroke border + shadow), labels, path icons
-/// and separators, wrapped in a few opacity layers and a scroll-style clip. A handful of style/path
-/// `Arc`s are reused across the whole list — the realistic case for a UI tree.
+/// A dense widget-tree frame: a grid of panels (fill + stroke border + shadow), labels, path icons and separators, wrapped in a few opacity layers and a scroll-style clip. A handful of style/path `Arc`s are reused across the whole list — the realistic case for a UI tree.
 fn dense_ui() -> Vec<DrawCommand> {
     let panel_fill: Arc<RectStyle> = Arc::new(
         RectStyle::default()
@@ -31,7 +27,7 @@ fn dense_ui() -> Vec<DrawCommand> {
             .with_border(Border::uniform(Color::from_rgb_u8(70, 78, 96), 1.5))
             .with_radius(BorderRadius::all(6.0)),
     );
-    // Small blur/spread so the shadow pixmap stays under the async threshold and is computed inline (deterministic, no background threads).
+    // Small enough to stay under the async threshold and be computed inline, with no background threads.
     let card_shadow: Arc<RectStyle> = Arc::new(
         RectStyle::default()
             .with_fill(Color::from_rgb_u8(24, 27, 35))
@@ -62,7 +58,6 @@ fn dense_ui() -> Vec<DrawCommand> {
 
     let mut cmds = Vec::with_capacity(2048);
 
-    // Top bar as an opacity layer with its own title text and separator line.
     cmds.push(DrawCommand::PushLayer {
         opacity: 0.96,
         backdrop_blur: 0.0,
@@ -84,7 +79,6 @@ fn dense_ui() -> Vec<DrawCommand> {
     });
     cmds.push(DrawCommand::PopLayer);
 
-    // Scrollable content region: a clip plus a shift matrix, then a grid of cards.
     cmds.push(DrawCommand::PushClip {
         rect: Rect::new(0.0, 56.0, WIDTH as f32, HEIGHT as f32 - 56.0),
         radius: BorderRadius::zero(),
@@ -104,12 +98,10 @@ fn dense_ui() -> Vec<DrawCommand> {
             let y = 8.0 + row as f32 * (cell_h + gap);
             let card = Rect::new(x, y, cell_w, cell_h);
 
-            // Shadowed card background.
             cmds.push(DrawCommand::Rect {
                 rect: card,
                 style: card_shadow.clone(),
             });
-            // Inner panel with a nested opacity layer to exercise layer compositing on some cards.
             let layered = (row + col) % 3 == 0;
             if layered {
                 cmds.push(DrawCommand::PushLayer {
@@ -125,7 +117,6 @@ fn dense_ui() -> Vec<DrawCommand> {
                 rect: Rect::new(x + 6.0, y + 6.0, cell_w - 12.0, cell_h - 12.0),
                 style: panel_border.clone(),
             });
-            // Icon.
             cmds.push(DrawCommand::PushMatrix {
                 matrix: [1.0, 0.0, 0.0, 1.0, x + 16.0, y + 16.0],
             });
@@ -134,7 +125,6 @@ fn dense_ui() -> Vec<DrawCommand> {
                 style: icon_style.clone(),
             });
             cmds.push(DrawCommand::PopMatrix);
-            // Two text lines.
             cmds.push(DrawCommand::Text {
                 spans: None,
                 text: label.clone(),
@@ -147,7 +137,6 @@ fn dense_ui() -> Vec<DrawCommand> {
                 rect: Rect::new(x + 16.0, y + 64.0, cell_w - 32.0, 20.0),
                 style: label_style.clone(),
             });
-            // Divider.
             cmds.push(DrawCommand::Line {
                 p1: Point::new(x + 16.0, y + 48.0),
                 p2: Point::new(x + cell_w - 16.0, y + 48.0),
@@ -172,7 +161,6 @@ fn bench_render_frame(c: &mut Criterion) {
         SoftwareRendererConfig::default(),
     );
 
-    // Smoke test: a headless render must land visible pixels in the pixmap (not empty, not all-zero).
     renderer.begin_frame(WIDTH, HEIGHT, 1.0, 0).unwrap();
     renderer
         .render_frame(&cmds, Some(Color::from_rgb_u8(15, 16, 22)))
@@ -188,7 +176,7 @@ fn bench_render_frame(c: &mut Criterion) {
 
     let mut group = c.benchmark_group("render_frame_sw");
     group.bench_function("dense_ui", |b| {
-        // Toggle the clear color every iteration so render_frame's skip-if-unchanged fast path never short-circuits the benchmark; each iteration renders the full scene.
+        // So `render_frame`'s skip-if-unchanged fast path never short-circuits the benchmark.
         let mut toggle = false;
         b.iter(|| {
             let clear = if toggle {

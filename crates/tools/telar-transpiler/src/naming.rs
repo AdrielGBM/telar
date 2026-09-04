@@ -11,12 +11,10 @@ pub fn to_snake_case(name: &str) -> String {
     let mut prev_was_sep = false;
     for (i, c) in name.chars().enumerate() {
         if is_separator(c) {
-            // collapse consecutive separators into one `_`, but only if we have output so far
             if !out.is_empty() {
                 prev_was_sep = true;
             }
         } else if c.is_ascii_alphanumeric() {
-            // prefix a leading digit with `_` to keep identifiers valid
             if i == 0 && c.is_ascii_digit() {
                 out.push('_');
             }
@@ -39,7 +37,6 @@ pub fn to_pascal_case(name: &str) -> String {
         if is_separator(c) {
             next_upper = true;
         } else if c.is_ascii_alphanumeric() {
-            // prefix a leading digit with `_`; the digit itself is not capitalized
             if first_char && c.is_ascii_digit() {
                 out.push('_');
             }
@@ -87,13 +84,9 @@ pub(crate) fn is_ident(s: &str) -> bool {
     chars.all(|c| c == '_' || c.is_ascii_alphanumeric())
 }
 
-/// If `bytes[i]` opens a string, raw string, char literal or comment, returns the index just past it, so an
-/// identifier scan skips its contents — a name embedded in `"text"` or `// note` is not a real reference to
-/// it. A `'a` lifetime tick (no closing quote) is left alone; escaped char literals (`'\n'`) are handled.
-/// Shared by [`contains_ident`] and [`replace_whole_word`] so both agree on what is code.
+/// If `bytes[i]` opens a string, raw string, char literal or comment, returns the index just past it, so an identifier scan skips its contents — a name embedded in `"text"` or `// note` is not a real reference to it. A `'a` lifetime tick (no closing quote) is left alone; escaped char literals (`'\n'`) are handled. Shared by [`contains_ident`] and [`replace_whole_word`] so both agree on what is code.
 ///
-/// A `//` ends at its newline, not at the end of the input: these scanners run over whole `[logic]` blocks,
-/// where swallowing the rest of the snippet would hide every signal declared after the first comment.
+/// A `//` ends at its newline, not at the end of the input: these scanners run over whole `[logic]` blocks, where swallowing the rest of the snippet would hide every signal declared after the first comment.
 pub(crate) fn literal_or_comment_end(bytes: &[u8], i: usize) -> Option<usize> {
     match bytes[i] {
         b'/' if bytes.get(i + 1) == Some(&b'/') => Some(
@@ -109,7 +102,7 @@ pub(crate) fn literal_or_comment_end(bytes: &[u8], i: usize) -> Option<usize> {
             }
             Some((j + 2).min(bytes.len()))
         }
-        // `r"…"` / `r#"…"#`: no escapes inside, so the terminator is the quote plus as many `#` as opened it.
+        // `r"…"` / `r#"…"#` have no escapes, so the terminator is the quote plus as many `#` as opened it.
         b'r' if matches!(bytes.get(i + 1), Some(&b'"') | Some(&b'#')) => {
             let hashes = bytes[i + 1..].iter().take_while(|&&b| b == b'#').count();
             if bytes.get(i + 1 + hashes) != Some(&b'"') {
@@ -145,8 +138,7 @@ pub(crate) fn literal_or_comment_end(bytes: &[u8], i: usize) -> Option<usize> {
     }
 }
 
-/// Whether `code` references `ident` as a whole-word identifier, skipping string/char literals and line
-/// comments (a name that appears only inside `"..."` or after `//` is not a reference).
+/// Whether `code` references `ident` as a whole-word identifier, skipping string/char literals and line comments (a name that appears only inside `"..."` or after `//` is not a reference).
 pub(crate) fn contains_ident(code: &str, ident: &str) -> bool {
     let bytes = code.as_bytes();
     let mut i = 0;
@@ -173,7 +165,7 @@ pub(crate) fn contains_ident(code: &str, ident: &str) -> bool {
 mod tests {
     use super::*;
 
-    // A `//` used to skip to the end of the whole snippet, so on a multi-line `[logic]` block every signal declared after the first comment read as absent.
+    // Regression: `//` skipped to the end of the whole snippet, so on a multi-line `[logic]` block every signal declared after the first comment read as absent.
     #[test]
     fn a_line_comment_hides_only_its_own_line() {
         assert!(contains_ident("// count\nlet x = count;", "count"));
@@ -227,7 +219,6 @@ mod tests {
 
     #[test]
     fn snake_strips_unknown_chars() {
-        // chars that are not alphanumeric and not separators are silently dropped
         assert_eq!(to_snake_case("btn@primary"), "btnprimary");
     }
 
@@ -256,13 +247,11 @@ mod tests {
 
     #[test]
     fn pascal_leading_digit_prefixed() {
-        // digit cannot be uppercased; prefix with `_` so the identifier is valid
         assert_eq!(to_pascal_case("3d"), "_3d");
     }
 
     #[test]
     fn pascal_strips_non_alphanumeric_non_sep() {
-        // `@` is not a separator, so no word boundary is introduced; `card` is appended as-is
         assert_eq!(to_pascal_case("info@card"), "Infocard");
     }
 
@@ -279,7 +268,6 @@ mod tests {
             !contains_ident("charging_glyph.get()", "charging"),
             "prefix is not a whole word"
         );
-        // The reported bug: a signal name embedded in a string literal is not a reference.
         assert!(!contains_ident(
             "if c { \"battery-charging\" } else { \"x\" }",
             "charging"
@@ -288,7 +276,6 @@ mod tests {
             !contains_ident("x + 1 // reset charging", "charging"),
             "comment is not code"
         );
-        // A char literal must not hide a real following reference.
         assert!(contains_ident(
             "if c == 'x' { charging.set(true) }",
             "charging"
@@ -301,7 +288,6 @@ mod tests {
             replace_whole_word("charging.get()", "charging", "c2"),
             "c2.get()"
         );
-        // The string literal keeps its `charging`; only the real identifier is renamed.
         assert_eq!(
             replace_whole_word("charging = \"battery-charging\"", "charging", "c2"),
             "c2 = \"battery-charging\""
@@ -310,7 +296,6 @@ mod tests {
             replace_whole_word("charging.set(0) // charging", "charging", "c2"),
             "c2.set(0) // charging"
         );
-        // A prefix must not be renamed.
         assert_eq!(
             replace_whole_word("charging_glyph", "charging", "c2"),
             "charging_glyph"
@@ -319,8 +304,7 @@ mod tests {
 
     #[test]
     fn replace_whole_word_leaves_a_struct_literal_field_alone() {
-        // The shape every form's save closure has: a field and the signal holding it share a name, and the
-        // clone rewrite used to rename both — leaving a struct literal naming a field that does not exist.
+        // Regression: a field and the signal holding it share a name, and the clone rewrite renamed both, leaving a struct literal naming a field that does not exist.
         assert_eq!(
             replace_whole_word("Config { vim: vim.peek() }", "vim", "vim_rsx_mv"),
             "Config { vim: vim_rsx_mv.peek() }"
@@ -329,7 +313,6 @@ mod tests {
             replace_whole_word("C { a: 1, vim: vim.peek() }", "vim", "v2"),
             "C { a: 1, vim: v2.peek() }"
         );
-        // A type annotation is not a field name, and a path is not a colon.
         assert_eq!(
             replace_whole_word("let vim: bool = vim.peek();", "vim", "v2"),
             "let v2: bool = v2.peek();"
@@ -339,9 +322,7 @@ mod tests {
 
     #[test]
     fn replace_whole_word_leaves_a_field_of_the_same_name_alone() {
-        // An application store whose fields are named after the locals reading them is the normal shape, not
-        // an odd one: `let tool = memo(move || store().tool.get())` renamed the FIELD and produced a
-        // `no field tool_rsx_mv` against generated code.
+        // Regression: `let tool = memo(move || store().tool.get())` renamed the field and produced `no field tool_rsx_mv` against generated code.
         assert_eq!(
             replace_whole_word("store().tool.get()", "tool", "tool_rsx_mv"),
             "store().tool.get()"
@@ -350,9 +331,7 @@ mod tests {
             replace_whole_word("tool.set(s.tool.get())", "tool", "t2"),
             "t2.set(s.tool.get())"
         );
-        // A method call by the same name is a method, not the binding.
         assert_eq!(replace_whole_word("x.count()", "count", "c2"), "x.count()");
-        // A spread and a range really do read the binding, so `..` is not a field access.
         assert_eq!(
             replace_whole_word("Config { ..base }", "base", "b2"),
             "Config { ..b2 }"
@@ -361,10 +340,7 @@ mod tests {
     }
 }
 
-/// Replaces every whole-word occurrence of identifier `from` with `to`, leaving string/char literals and
-/// line comments untouched (a `from` inside `"..."` or after `//` is not an identifier, so rewriting it
-/// would corrupt the text). Skipping the same regions as [`contains_ident`] keeps detection and rewrite in
-/// agreement. A struct literal's field name is skipped for the same reason — see [`is_struct_field_name`].
+/// Replaces every whole-word occurrence of identifier `from` with `to`, leaving string/char literals and line comments untouched (a `from` inside `"..."` or after `//` is not an identifier, so rewriting it would corrupt the text). Skipping the same regions as [`contains_ident`] keeps detection and rewrite in agreement. A struct literal's field name is skipped for the same reason — see [`is_struct_field_name`].
 pub(crate) fn replace_whole_word(s: &str, from: &str, to: &str) -> String {
     let bytes = s.as_bytes();
     let mut result = String::with_capacity(s.len());
@@ -392,17 +368,9 @@ pub(crate) fn replace_whole_word(s: &str, from: &str, to: &str) -> String {
     result
 }
 
-/// Whether the identifier at `start` names a field in a struct literal (`Config { volume: volume.peek() }`)
-/// rather than a binding. Renaming it there produces a struct that has no such field — which is what a form's
-/// save closure writes on nearly every line, since a field and the signal holding it want the same name.
-/// Whether this identifier sits behind a `.`, which makes it a field or a method and never a variable.
+/// Whether the identifier at `start` names a field in a struct literal (`Config { volume: volume.peek() }`) rather than a binding. Renaming it there produces a struct that has no such field — which is what a form's save closure writes on nearly every line, since a field and the signal holding it want the same name. Whether this identifier sits behind a `.`, which makes it a field or a method and never a variable.
 ///
-/// The clone rewrite renames a captured binding wherever it is *read*, and a read is a name standing on its
-/// own — `store().tool` names a field of whatever `store()` returned, not the local called `tool`. Renaming
-/// it produced a `no field \`tool_rsx_mv\`` pointing at generated code the author never wrote, and it took a
-/// local and a field merely sharing a name, which in an application store is the normal case rather than the
-/// odd one. `..` is excluded because a struct-update spread (`Config { ..base }`) or a range really does read
-/// the binding.
+/// The clone rewrite renames a captured binding wherever it is *read*, and a read is a name standing on its own — `store().tool` names a field of whatever `store()` returned, not the local called `tool`. Renaming it produced a `no field \`tool_rsx_mv\`` pointing at generated code the author never wrote, and it took a local and a field merely sharing a name, which in an application store is the normal case rather than the odd one. `..` is excluded because a struct-update spread (`Config { ..base }`) or a range really does read the binding.
 fn is_field_access(bytes: &[u8], start: usize) -> bool {
     start > 0 && bytes[start - 1] == b'.' && !(start > 1 && bytes[start - 2] == b'.')
 }

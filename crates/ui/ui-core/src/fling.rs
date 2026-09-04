@@ -1,14 +1,8 @@
 //! What a scroll keeps doing after the finger lets go.
 //!
-//! A drag that ends while still moving does not stop where it was released: it carries on and slows down,
-//! and every platform's scroll does this because a list that stops dead reads as one that caught on
-//! something. Telar's own scroll had none — measured on a phone, three offsets over thirty-four milliseconds
-//! and then nothing.
+//! A drag that ends while still moving does not stop where it was released: it carries on and slows down, and every platform's scroll does this because a list that stops dead reads as one that caught on something. Telar's own scroll had none — measured on a phone, three offsets over thirty-four milliseconds and then nothing.
 //!
-//! Not an [`Animated`](motion_core::Animated), and the difference is the point: an animation eases a value
-//! between two endpoints it knows in advance. A fling has no endpoint. It has a velocity, a decay, and a
-//! bound it may or may not reach — where it stops is an outcome, not an input. So it integrates itself
-//! against the same frame clock animations use, and stops when it runs out or hits the end of the content.
+//! Not an [`Animated`](motion_core::Animated), and the difference is the point: an animation eases a value between two endpoints it knows in advance. A fling has no endpoint. It has a velocity, a decay, and a bound it may or may not reach — where it stops is an outcome, not an input. So it integrates itself against the same frame clock animations use, and stops when it runs out or hits the end of the content.
 
 use std::cell::Cell;
 use std::rc::Rc;
@@ -23,10 +17,7 @@ const MIN_VELOCITY: f32 = 90.0;
 
 /// Fraction of the velocity left after one second.
 ///
-/// `0.998` per millisecond, which is what the platforms settled on and comes to this over a second. A decay
-/// rather than a duration, so a hard flick travels further than a gentle one without either being timed —
-/// and measured on a phone: at `0.002` a fling covered a hundred and fifty pixels and was over in a tenth of
-/// a second, which reads as the list snagging rather than gliding.
+/// `0.998` per millisecond, which is what the platforms settled on and comes to this over a second. A decay rather than a duration, so a hard flick travels further than a gentle one without either being timed — and measured on a phone: at `0.002` a fling covered a hundred and fifty pixels and was over in a tenth of a second, which reads as the list snagging rather than gliding.
 const RETAINED_PER_SECOND: f32 = 0.135;
 
 /// Below this a frame moves the content by well under a pixel, which is a stop.
@@ -34,8 +25,7 @@ const STOP_VELOCITY: f32 = 40.0;
 
 /// The velocity a gesture leaves behind, as a rolling estimate.
 ///
-/// Rolling rather than the last delta alone: a finger lifting often reports one short move as it goes, and a
-/// fling built from that one sample stops almost immediately no matter how fast the gesture was.
+/// Rolling rather than the last delta alone: a finger lifting often reports one short move as it goes, and a fling built from that one sample stops almost immediately no matter how fast the gesture was.
 #[derive(Default)]
 pub(crate) struct Velocity {
     estimate: f32,
@@ -51,8 +41,7 @@ impl Velocity {
             .replace(now)
             .map(|last| now.duration_since(last).as_secs_f32())
             .unwrap_or_default();
-        // A gap means the gesture paused, and a pause is a stop: whatever it was doing before is not what it
-        // is doing now.
+        // A gap means the gesture paused, and a pause is a stop.
         if seconds <= 0.0 || seconds > 0.1 {
             self.estimate = 0.0;
             return;
@@ -76,8 +65,7 @@ impl Velocity {
 /// One scroll offset carrying on under its own momentum.
 pub(crate) struct Fling {
     offset: RwSignal<f32>,
-    /// Where it may travel between, read once when the fling starts: the content does not resize under a
-    /// gesture nobody is making.
+    /// Where it may travel between, read once when the fling starts: the content does not resize under a gesture nobody is making.
     bounds: (f32, f32),
     velocity: Cell<f32>,
     last: Cell<Option<Instant>>,
@@ -87,8 +75,7 @@ pub(crate) struct Fling {
 impl Fling {
     /// Starts `offset` moving at `velocity` logical pixels a second, within `bounds`.
     ///
-    /// `None` where there is nothing to carry: too slow to mean anything, or already against the edge it is
-    /// heading for.
+    /// `None` where there is nothing to carry: too slow to mean anything, or already against the edge it is heading for.
     pub(crate) fn start(
         offset: RwSignal<f32>,
         velocity: f32,
@@ -116,8 +103,7 @@ impl Fling {
         Some(fling)
     }
 
-    /// Ends it where it stands. What stops a fling is a hand on the screen, and the offset it had reached is
-    /// the offset it keeps.
+    /// Ends it where it stands. What stops a fling is a hand on the screen, and the offset it had reached is the offset it keeps.
     pub(crate) fn stop(&self) {
         self.stopped.set(true);
     }
@@ -207,7 +193,6 @@ mod tests {
         let later = offset.peek();
         assert!(later > after_two, "it should still be travelling");
 
-        // Each stretch covers less ground than the one before it, which is what slowing down is.
         let first = after_two;
         let second = later - after_two;
         assert!(second < first * 8.0, "it should be decaying, not coasting");
@@ -255,8 +240,7 @@ mod tests {
 
 /// How much of the distance left is still uncovered after one second.
 ///
-/// A notch lands in about a tenth of a second, which is roughly what a browser takes and is short enough that
-/// the movement reads as the wheel's own rather than as the list lagging behind it.
+/// A notch lands in about a tenth of a second, which is roughly what a browser takes and is short enough that the movement reads as the wheel's own rather than as the list lagging behind it.
 const GLIDE_REMAINING_PER_SECOND: f32 = 1e-9;
 
 /// Under half a pixel from the target is arrived.
@@ -264,10 +248,7 @@ const GLIDE_EPSILON: f32 = 0.5;
 
 /// One scroll offset easing towards where a wheel asked it to be.
 ///
-/// The opposite problem to a [`Fling`], and the reason they are different types rather than one: a notch says
-/// exactly how far to go and nothing about how fast, so this knows its destination from the start and a fling
-/// never does. What it borrows is the frame clock — a wheel that jumps its whole notch in one frame gives no
-/// sense of which way the content went, which is why every desktop platform animates the gap.
+/// The opposite problem to a [`Fling`], and the reason they are different types rather than one: a notch says exactly how far to go and nothing about how fast, so this knows its destination from the start and a fling never does. What it borrows is the frame clock — a wheel that jumps its whole notch in one frame gives no sense of which way the content went, which is why every desktop platform animates the gap.
 pub(crate) struct Glide {
     offset: RwSignal<f32>,
     target: Cell<f32>,
@@ -301,9 +282,7 @@ impl Glide {
 
     /// Adds another notch to what this one is already covering, and says whether it could take it.
     ///
-    /// Turning the wheel again mid-glide means *further*, not *instead*: restarting from where the content
-    /// happens to have reached loses the ground the first notch had not covered yet, so a fast series of
-    /// notches would travel less than the same notches turned slowly.
+    /// Turning the wheel again mid-glide means *further*, not *instead*: restarting from where the content happens to have reached loses the ground the first notch had not covered yet, so a fast series of notches would travel less than the same notches turned slowly.
     pub(crate) fn extend(&self, delta: f32, bounds: (f32, f32)) -> bool {
         if self.stopped.get() {
             return false;
@@ -363,8 +342,7 @@ mod glide_tests {
         }
     }
 
-    /// The gap is widest at the start, so the first frame already covers a good part of the notch. A glide
-    /// that eased in from nothing would read as the wheel not having taken.
+    /// The gap is widest at the start, so the first frame already covers a good part of the notch. A glide that eased in from nothing would read as the wheel not having taken.
     #[test]
     fn a_notch_starts_moving_on_the_frame_after_it_is_turned() {
         let offset = reactive_core::signal(0.0);
@@ -387,9 +365,7 @@ mod glide_tests {
         assert!(glide.is_settled());
     }
 
-    /// Turning again mid-glide means further, not instead: restarting from wherever the content had reached
-    /// would drop the ground the first notch had not covered, so spinning the wheel fast would travel less
-    /// than turning it slowly.
+    /// Turning again mid-glide means further, not instead: restarting from wherever the content had reached would drop the ground the first notch had not covered, so spinning the wheel fast would travel less than turning it slowly.
     #[test]
     fn a_second_notch_adds_to_the_first_rather_than_replacing_it() {
         let offset = reactive_core::signal(0.0);

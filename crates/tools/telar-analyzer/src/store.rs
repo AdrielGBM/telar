@@ -1,13 +1,17 @@
+//! The open documents: the live text, and the last version that parsed.
+
 use lsp_types::Uri;
 use std::collections::HashMap;
 use telar_diagnostics::Diagnostic;
 use telar_parser::{RsxDocument, parse};
 
+/// The last version of a document that parsed, kept so completion survives a mid-edit buffer.
 pub struct ParsedDocument {
     pub source: String,
     pub document: RsxDocument,
 }
 
+/// The open documents: each one's live text, and its last good parse.
 pub struct Store {
     docs: HashMap<Uri, ParsedDocument>,
     // The current buffer text, updated on every edit even when it fails to parse. `docs` only holds the last good parse (so completion/hover keep working mid-edit), but formatting must operate on the live text — otherwise it could reformat a stale version and clobber the user's edits.

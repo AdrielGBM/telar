@@ -1,3 +1,5 @@
+//! Backdrop blur, and the sigma at which it switches from a Gaussian to the dual-filter chain.
+
 use wgpu::{Device, TextureFormat};
 
 mod dual_filter;
@@ -14,18 +16,18 @@ pub(crate) struct BlurParams {
 
 pub(crate) struct BlurPipeline {
     pipeline: wgpu::RenderPipeline,
-    // Kawase dual-filter pipelines, used for sigma > DUAL_FILTER_SIGMA_THRESHOLD to cut GPU bandwidth versus the separable Gaussian.
+    // Used above `DUAL_FILTER_SIGMA_THRESHOLD` to cut GPU bandwidth versus the separable Gaussian.
     downsample_pipeline: wgpu::RenderPipeline,
     upsample_pipeline: wgpu::RenderPipeline,
     sampler: wgpu::Sampler,
     bind_group_layout: wgpu::BindGroupLayout,
     format: TextureFormat,
     use_immediates: bool,
-    // Pool of intermediate textures keyed by (width, height). The intermediate is rewritten every horizontal pass (loaded with Clear), so leftover contents from a previous use are harmless.
+    // Keyed by (width, height). The intermediate is loaded with Clear every horizontal pass, so leftover contents are harmless.
     intermediate_pool: Vec<(wgpu::Texture, wgpu::TextureView, u32, u32)>,
 }
 
-// Above this sigma the separable Gaussian samples too many texels at full resolution; switch to the Kawase dual-filter chain instead.
+// Above this sigma the separable Gaussian samples too many texels at full resolution.
 const DUAL_FILTER_SIGMA_THRESHOLD: f32 = 3.0;
 
 impl BlurPipeline {

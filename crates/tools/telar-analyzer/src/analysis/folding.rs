@@ -5,6 +5,7 @@
 use lsp_types::{FoldingRange, FoldingRangeKind};
 use telar_parser::{header_section, is_preview_header};
 
+/// The foldable regions: each section, and each indentation block inside it.
 pub fn folding_ranges(source: &str) -> Vec<FoldingRange> {
     let lines: Vec<&str> = source.lines().collect();
     let mut ranges = Vec::new();
@@ -98,14 +99,11 @@ mod tests {
 
     #[test]
     fn folds_sections_and_nested_blocks() {
-        // 0:[logic] 1:let 2:[style] 3:@card 4:width 5:gap 6:[view] 7:col 8:text 9:text
         let src = "[logic]\nlet x = 1;\n[style]\n@card\n    width: 240\n    gap: 8\n[view]\ncol\n    text \"a\"\n    text \"b\"\n";
         let folds = folding_ranges(src);
-        // Section folds.
         assert!(has(&folds, 0, 1), "[logic] section:\n{folds:?}");
         assert!(has(&folds, 2, 5), "[style] section:\n{folds:?}");
         assert!(has(&folds, 6, 9), "[view] section:\n{folds:?}");
-        // Indentation folds (the @card block and the col block).
         assert!(has(&folds, 3, 5), "@card block:\n{folds:?}");
         assert!(has(&folds, 7, 9), "col block:\n{folds:?}");
     }
@@ -114,7 +112,6 @@ mod tests {
     fn preview_section_is_foldable() {
         let src = "[view]\ncol\n\n[preview \"Tall\"]\nbox\n    text \"hi\"\n";
         let folds = folding_ranges(src);
-        // The preview section spans its header to its last body line.
         assert!(has(&folds, 3, 5), "[preview] section:\n{folds:?}");
     }
 }

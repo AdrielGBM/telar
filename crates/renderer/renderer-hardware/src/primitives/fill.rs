@@ -1,4 +1,6 @@
-// Intermediate fill encoding parameterized over the gradient stop count `N`: rect/text consume 4 slots (rect.wgsl), paths consume 8 (path.wgsl). Not a GPU type itself — its fields are copied into the `#[repr(C)]` instance/storage structs.
+//! The fill encoding every instanced pipeline shares, solid and gradient alike.
+
+/// Intermediate fill encoding parameterised over the gradient stop count: rect and text consume 4 slots, paths 8. Not a GPU type: its fields are copied into the `#[repr(C)]` instance structs.
 pub(crate) struct EncodedFill<const N: usize> {
     pub fill_type: u32,
     pub fill_color: [f32; 4],
@@ -50,7 +52,7 @@ pub(crate) fn encode_fill_style<const N: usize>(
             let mut positions = [0.0f32; N];
             let mut colors = [[0.0f32; 4]; N];
             let active = g.stops.active();
-            // The instanced/storage shader holds only N gradient slots; clamp to avoid an out-of-bounds write when core carries more stops than this encoder can hold.
+            // The shader holds only N gradient slots, so clamp to avoid an out-of-bounds write when core carries more.
             debug_assert!(
                 active.len() <= N,
                 "fill encoder supports at most {N} gradient stops"

@@ -10,6 +10,7 @@ use lsp_types::{
 };
 use telar_parser::{header_section, is_preview_header};
 
+/// The quick fixes offered at a position, such as creating a `[style]` class a view names but does not define.
 pub fn code_actions(
     source: &str,
     uri: &Uri,
@@ -17,7 +18,6 @@ pub fn code_actions(
 ) -> Vec<CodeActionOrCommand> {
     let mut actions = Vec::new();
     for diag in diagnostics {
-        // Undefined style class → create it in `[style]`.
         if let Some(class) = between(&diag.message, "Style class `@", "`")
             && let Some(edit) = insert_into_style(source, uri, &format!("@{class}\n    "))
         {
@@ -142,7 +142,6 @@ mod tests {
         assert!(a.title.contains("@missing"), "title: {}", a.title);
         let edits = a.edit.as_ref().unwrap().changes.as_ref().unwrap()[&uri].clone();
         assert!(edits[0].new_text.contains("@missing"));
-        // Inserted after the last [style] content line (`    width: 240`, 0-based line 4).
         assert_eq!(edits[0].range.start.line, 4);
     }
 

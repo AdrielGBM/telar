@@ -1,6 +1,4 @@
-//! Ad-hoc visual harness: renders a scene headless and writes a PNG to `TELAR_VISUAL_OUT`, so a
-//! render change can be eyeballed (open the PNG) instead of only hashed. Run with:
-//!   TELAR_VISUAL_OUT=/path/out.png cargo test -p renderer-software --test visual_check -- --nocapture
+//! Ad-hoc visual harness: renders a scene headless and writes a PNG to `TELAR_VISUAL_OUT`, so a render change can be eyeballed (open the PNG) instead of only hashed. Run with: TELAR_VISUAL_OUT=/path/out.png cargo test -p renderer-software --test visual_check -- --nocapture
 
 mod common;
 
@@ -27,7 +25,6 @@ fn visual_check_png() {
     let muted = Color::from_rgb_u8(150, 155, 168);
     let para = "This is a long paragraph that wraps across several lines so that line clamping and ellipsis truncation have something to actually cut off at the boundary.";
 
-    // Each block: a label, then the paragraph in a 300px-wide box with a given clamp.
     let block = |cmds: &mut Vec<DrawCommand>, label: &str, y: f32, style: TextStyle| {
         cmds.push(DrawCommand::Text {
             spans: None,

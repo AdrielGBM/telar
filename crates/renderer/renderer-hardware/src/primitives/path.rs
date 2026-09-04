@@ -1,3 +1,5 @@
+//! The path pipeline: lyon-tessellated geometry drawn as indexed triangles.
+
 use std::sync::Arc;
 
 use renderer_cache::{Cache, Policy};
@@ -149,10 +151,7 @@ fn geom_bytes(geom: &CachedGeom) -> usize {
 
 /// Tessellated fill and stroke geometry, keyed by the path and the options it was tessellated under.
 ///
-/// Two [`Cache`]s where this used to be two maps, two `VecDeque`s of `(key, frame)`, a frame counter and a
-/// `last_frame` per entry — machinery that existed to answer "has anything used this lately", including the subtle
-/// part where a queued eviction had to be skipped if the entry had been touched since. It also bounded nothing but
-/// age: a frame full of complex paths could tessellate without limit.
+/// Two [`Cache`]s where this used to be two maps, two `VecDeque`s of `(key, frame)`, a frame counter and a `last_frame` per entry — machinery that existed to answer "has anything used this lately", including the subtle part where a queued eviction had to be skipped if the entry had been touched since. It also bounded nothing but age: a frame full of complex paths could tessellate without limit.
 pub(crate) struct PathTessCache {
     fill: Cache<FillGeomKey, CachedGeom>,
     stroke: Cache<StrokeGeomKey, CachedGeom>,
@@ -333,7 +332,7 @@ pub(crate) fn prepare_path(
 
         if let Some(geom) = cache.stroke.get(&stroke_key) {
             let stroke_fill_index = out_fill_data.len() as u32;
-            // The stroke gets its own fill-data entry, so it resolves its paint the same way the fill does. Flattening it to `solid_color()` here silently painted a gradient stroke in its first stop.
+            // The stroke gets its own fill-data entry, so it resolves paint the same way the fill does. Flattening it to `solid_color()` painted a gradient stroke in its first stop.
             out_fill_data.push(PathFillData::from_fill_style(s.paint));
             emit_cached_geom(geom, stroke_fill_index, out_vertices, out_indices);
         }

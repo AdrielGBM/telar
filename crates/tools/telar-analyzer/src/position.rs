@@ -1,5 +1,8 @@
+//! Which section of a `.rsx` a position falls in.
+
 pub use telar_parser::{Section, find_section_at};
 
+/// A parser line as an LSP range spanning that whole line.
 pub fn parser_line_to_lsp_range(parser_line: usize) -> lsp_types::Range {
     let line = parser_line.saturating_sub(1) as u32;
     lsp_types::Range {

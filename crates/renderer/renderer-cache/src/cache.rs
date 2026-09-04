@@ -1,3 +1,5 @@
+//! The bounded LRU every renderer cache is an instance of.
+
 use std::cell::Cell;
 use std::hash::{Hash, Hasher};
 use std::num::NonZeroUsize;
@@ -9,9 +11,7 @@ use rustc_hash::{FxBuildHasher, FxHasher};
 
 use crate::Policy;
 
-/// How many offered-once keys the admission table remembers while waiting to see whether anything asks again. Keys
-/// are stored as one `u64` each, so the whole table is a few tens of KB; past it the oldest are forgotten and their
-/// values simply pay admission again.
+/// How many offered-once keys the admission table remembers while waiting to see whether anything asks again. Keys are stored as one `u64` each, so the whole table is a few tens of KB; past it the oldest are forgotten and their values simply pay admission again.
 const ADMISSION_TABLE_ENTRIES: usize = 4096;
 
 /// Floor on the gap between idle sweeps, so a cache with a short horizon does not walk itself on every access.
@@ -30,12 +30,9 @@ pub struct CacheStat {
 
 /// A value and the moment it was last handed out.
 ///
-/// LRU order alone cannot answer "has anything wanted this lately": it ranks entries against each other, so a cache
-/// that never fills keeps its coldest entry forever. In a shell that runs for days that is the difference between a
-/// bounded cache and one holding a folder name read twice last Tuesday.
+/// LRU order alone cannot answer "has anything wanted this lately": it ranks entries against each other, so a cache that never fills keeps its coldest entry forever. In a shell that runs for days that is the difference between a bounded cache and one holding a folder name read twice last Tuesday.
 ///
-/// `Cell` because a weight-budgeted cache cannot hand out `&mut V` — mutating a value would change its weight behind
-/// the budget's back — so the timestamp has to be writable through a shared reference.
+/// `Cell` because a weight-budgeted cache cannot hand out `&mut V` — mutating a value would change its weight behind the budget's back — so the timestamp has to be writable through a shared reference.
 struct Tracked<V> {
     value: V,
     last_used: Cell<Instant>,
@@ -57,18 +54,11 @@ fn key_hash<K: Hash>(key: &K) -> u64 {
     hasher.finish()
 }
 
-/// The one cache every Telar renderer backend draws from: a weight-budgeted LRU that also evicts by idle age and can
-/// require a second sighting before it keeps anything.
+/// The one cache every Telar renderer backend draws from: a weight-budgeted LRU that also evicts by idle age and can require a second sighting before it keeps anything.
 ///
-/// One type rather than one per backend because the backends had drifted into opposite policies for the same
-/// content — the GPU side evicting by frame age with no size cap at all, the CPU side by byte budget with no notion
-/// of age — and because four of the GPU caches were hand-rolled reimplementations of the same map-plus-eviction-queue,
-/// each with its own handling of entries re-touched since they were queued. What varies between caches is the
-/// [`Policy`] and how a value is weighed, which is why both are arguments rather than types.
+/// One type rather than one per backend because the backends had drifted into opposite policies for the same content — the GPU side evicting by frame age with no size cap at all, the CPU side by byte budget with no notion of age — and because four of the GPU caches were hand-rolled reimplementations of the same map-plus-eviction-queue, each with its own handling of entries re-touched since they were queued. What varies between caches is the [`Policy`] and how a value is weighed, which is why both are arguments rather than types.
 ///
-/// The budget is honoured to within one byte per resident entry: the underlying `clru` counts entry *count* alongside
-/// weight when deciding whether a value fits. On the smallest budget here that is a fraction of a percent, and it
-/// errs toward holding less than asked rather than more.
+/// The budget is honoured to within one byte per resident entry: the underlying `clru` counts entry *count* alongside weight when deciding whether a value fits. On the smallest budget here that is a fraction of a percent, and it errs toward holding less than asked rather than more.
 pub struct Cache<K, V> {
     entries: CLruCache<K, Tracked<V>, FxBuildHasher, Scale<V>>,
     admission: Option<CLruCache<u64, (), FxBuildHasher>>,
@@ -80,9 +70,7 @@ pub struct Cache<K, V> {
 impl<K: Eq + Hash, V> Cache<K, V> {
     /// Builds a cache bounded by `policy`, sizing entries with `weigh`.
     ///
-    /// `weigh` is a function rather than a trait implementation so a cache can weigh a foreign type — a `Pixmap`, a
-    /// GPU texture — without a newtype standing in the way, and so the four weight-scale structs this replaced
-    /// collapse into four one-line closures at their construction sites.
+    /// `weigh` is a function rather than a trait implementation so a cache can weigh a foreign type — a `Pixmap`, a GPU texture — without a newtype standing in the way, and so the four weight-scale structs this replaced collapse into four one-line closures at their construction sites.
     pub fn new(policy: Policy, weigh: fn(&V) -> usize) -> Self {
         let capacity = NonZeroUsize::new(policy.capacity.max(1)).unwrap();
         let entries = CLruCache::with_config(
@@ -116,9 +104,7 @@ impl<K: Eq + Hash, V> Cache<K, V> {
 
     /// Offers `value` to the cache, returning whether it was kept.
     ///
-    /// `false` means either that admission held it back — the first sighting of a key under
-    /// [`Policy::admit_on_second_use`] — or that the value alone weighs more than the whole budget. Callers get the
-    /// value they were going to draw either way; only whether a later frame finds it again is at stake.
+    /// `false` means either that admission held it back — the first sighting of a key under [`Policy::admit_on_second_use`] — or that the value alone weighs more than the whole budget. Callers get the value they were going to draw either way; only whether a later frame finds it again is at stake.
     pub fn insert(&mut self, key: K, value: V) -> bool {
         self.sweep_if_due();
         if let Some(admission) = &mut self.admission {
@@ -139,8 +125,7 @@ impl<K: Eq + Hash, V> Cache<K, V> {
             .is_ok()
     }
 
-    /// Whether `key` is resident, without promoting it. A [`get`](Self::get) that discards its result would count as
-    /// a use and reorder eviction; this does not.
+    /// Whether `key` is resident, without promoting it. A [`get`](Self::get) that discards its result would count as a use and reorder eviction; this does not.
     pub fn contains(&self, key: &K) -> bool {
         self.entries.peek(key).is_some()
     }
@@ -156,9 +141,7 @@ impl<K: Eq + Hash, V> Cache<K, V> {
         }
     }
 
-    /// Drops everything nothing has asked for within the policy's idle horizon, regardless of when the last sweep
-    /// ran. Accessing the cache sweeps on its own schedule; call this to reclaim at a moment the cache cannot see,
-    /// such as a surface being hidden or a process going idle with no frames left to draw.
+    /// Drops everything nothing has asked for within the policy's idle horizon, regardless of when the last sweep ran. Accessing the cache sweeps on its own schedule; call this to reclaim at a moment the cache cannot see, such as a surface being hidden or a process going idle with no frames left to draw.
     pub fn sweep(&mut self) {
         let Some(idle) = self.idle else {
             return;
@@ -198,8 +181,7 @@ impl<K: Eq + Hash, V> Cache<K, V> {
 
     /// Raises the budget to `capacity`, leaving it alone if it is already at least that large.
     ///
-    /// Grows only, because a surface-derived budget has to serve every surface sharing the cache: one that shrank to
-    /// whichever surface drew last would evict, on a bar's frame, what a full-screen window still needs.
+    /// Grows only, because a surface-derived budget has to serve every surface sharing the cache: one that shrank to whichever surface drew last would evict, on a bar's frame, what a full-screen window still needs.
     pub fn grow_to(&mut self, capacity: usize) {
         if capacity > self.entries.capacity() {
             self.entries
@@ -244,7 +226,6 @@ mod tests {
         cache.insert(1, vec![0; 40]);
         cache.insert(2, vec![0; 40]);
 
-        // Promotes 1 over 2, so the next insert has to drop 2 to fit.
         assert!(cache.get(&1).is_some());
         cache.insert(3, vec![0; 40]);
 
@@ -274,9 +255,7 @@ mod tests {
 
     /// Only ever sleeps *past* the horizon, never up to some fraction of it.
     ///
-    /// `thread::sleep` guarantees a floor, not a duration: a loaded CI runner turned a 60 ms sleep into more than
-    /// 120 ms and evicted an entry this test had asserted was still there. Oversleeping cannot break "this should
-    /// be gone" — only "this should still be here", which is why that direction is tested without a clock at all.
+    /// `thread::sleep` guarantees a floor, not a duration: a loaded CI runner turned a 60 ms sleep into more than 120 ms and evicted an entry this test had asserted was still there. Oversleeping cannot break "this should be gone" — only "this should still be here", which is why that direction is tested without a clock at all.
     #[test]
     fn the_idle_sweep_drops_what_nothing_asked_for() {
         let idle = Duration::from_millis(50);

@@ -1,3 +1,5 @@
+//! [`slider`]: a track and thumb dragged, or stepped with the arrow keys, over a range.
+
 use std::rc::Rc;
 use telar_macros::Props;
 
@@ -26,16 +28,10 @@ fn track_box(width: f32) -> LayoutStyle {
     LayoutStyle::new().width(width).height(track_height())
 }
 
-/// A drag-driven `min..=max` control: a rounded track, an accent fill up to `value`, and a thumb positioned by
-/// it. This is the canonical demo of the `on_drag` primitive (see `StyledContainer::on_drag`): the widget just
-/// encapsulates the press/move -> value mapping (and the fill/thumb repaint) an app would otherwise wire up by
-/// hand. High-level sugar over the primitives; lives in `ui-components`, not the kernel, so an app can drop it.
-/// `value` is `Option` so `Props` can derive `Default`: `None` is uncontrolled (the widget owns its own
-/// signal), `Some` is caller-bound.
+/// A drag-driven `min..=max` control: a rounded track, an accent fill up to `value`, and a thumb positioned by it. This is the canonical demo of the `on_drag` primitive (see `StyledContainer::on_drag`): the widget just encapsulates the press/move -> value mapping (and the fill/thumb repaint) an app would otherwise wire up by hand. High-level sugar over the primitives; lives in `ui-components`, not the kernel, so an app can drop it. `value` is `Option` so `Props` can derive `Default`: `None` is uncontrolled (the widget owns its own signal), `Some` is caller-bound.
 #[derive(Props)]
 pub struct SliderProps {
-    /// Bound value, reported in `min..=max` (out-of-range inputs are clamped on every drag report, not here).
-    /// `None` (the default) is uncontrolled — the widget makes its own `signal(min)`.
+    /// Bound value, reported in `min..=max` (out-of-range inputs are clamped on every drag report, not here). `None` (the default) is uncontrolled — the widget makes its own `signal(min)`.
     #[props(some, into, default)]
     pub value: Option<RwSignal<f32>>,
     /// Fill/thumb accent. `Color::TRANSPARENT` (the default) means "unset": fall back to the theme accent.
@@ -50,12 +46,10 @@ pub struct SliderProps {
     /// Lower bound of the reported value. Default `0.0`.
     #[props(default)]
     pub min: f32,
-    /// Upper bound of the reported value. Default `1.0`. If `max <= min` (the degenerate/unset state), the
-    /// slider falls back to `min=0.0, max=1.0` rather than dividing by zero.
+    /// Upper bound of the reported value. Default `1.0`. If `max <= min` (the degenerate/unset state), the slider falls back to `min=0.0, max=1.0` rather than dividing by zero.
     #[props(default)]
     pub max: f32,
-    /// Quantization step applied to the reported value. `0.0` (the default) means "unset" — continuous, no
-    /// snapping, following the same `0.0 == unset` sentinel convention as `width`.
+    /// Quantization step applied to the reported value. `0.0` (the default) means "unset" — continuous, no snapping, following the same `0.0 == unset` sentinel convention as `width`.
     #[props(default)]
     pub step: f32,
     /// A small caption stacked above the track; omitted entirely (no extra row) when empty.
@@ -66,6 +60,7 @@ pub struct SliderProps {
     pub on_change: Option<Rc<dyn Fn(f32)>>,
 }
 
+/// A track and thumb dragged, or stepped with the arrow keys, over a range.
 pub fn slider(props: SliderProps, _children: Children) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let SliderProps {
         value,
@@ -78,19 +73,17 @@ pub fn slider(props: SliderProps, _children: Children) -> Result<Box<dyn LayoutI
         label,
         on_change,
     } = props;
-    // Degenerate/unset bounds (max <= min) fall back to the historical 0.0..=1.0 range instead of dividing by zero below.
+    // Degenerate bounds fall back to 0.0..=1.0 rather than dividing by zero below.
     let (min, max) = if max <= min { (0.0, 1.0) } else { (min, max) };
     // Uncontrolled: own the value so the slider still works when the caller binds no signal.
     let value = value.unwrap_or_else(|| signal(min));
     let width = if width > 0.0 { width } else { 220.0 };
-    // Shared across the fill and thumb style closures (a `Rc<dyn Fn>` is not `Clone`, an `Rc` handle is).
-    // The drag and the arrow keys are two ways into one commit, so the callback has to reach both.
+    // Shared across the fill and thumb closures: an `Rc<dyn Fn>` is not `Clone`, an `Rc` handle is. The drag and the arrow keys are two ways into one commit, so the callback has to reach both.
     let key_on_change = on_change.clone();
     let announced_value = value;
     let commit_value = value;
 
-    // The fill: an `absolute_fill` child (so it exactly overlays the track) scaled horizontally from the left
-    // edge by `value` — cheaper than relaying out a narrower box on every drag move.
+    // An `absolute_fill` child, so it exactly overlays the track, scaled horizontally from the left edge — cheaper than relaying out a narrower box on every drag move.
     let fill_value = value;
     let fill_color = color.clone();
     let fill = StyledContainer::new(
@@ -105,14 +98,11 @@ pub fn slider(props: SliderProps, _children: Children) -> Result<Box<dyn LayoutI
     )?
     .with_transform(move |r| {
         let t = ((fill_value.get() - min) / (max - min)).clamp(0.0, 1.0);
-        // `box_transform` only pivots scale on the rect centre; a progress bar needs the left edge pinned
-        // (so it grows rightward from x=0), which needs the raw matrix instead.
+        // `box_transform` only pivots scale on the rect centre; a progress bar needs the left edge pinned, which needs the raw matrix.
         Some(Transform::scale_around(t, 1.0, r.x, r.y + r.height / 2.0).to_array())
     });
 
-    // The thumb: a normal in-flow child (the only one, since the fill above is out of flow), so it lands at
-    // the track's top-left by default; a translate then carries it to `value`'s position and re-centres it
-    // vertically against the (thinner) track.
+    // A normal in-flow child, so it lands at the track's top-left; a translate then carries it to the value's position and re-centres it against the thinner track.
     let thumb_value = value;
     let thumb_color = color.clone();
     let thumb = StyledContainer::new(
@@ -145,9 +135,7 @@ pub fn slider(props: SliderProps, _children: Children) -> Result<Box<dyn LayoutI
         vec![box_item(fill), box_item(thumb)],
     )?
     .styled_by(move || track_box(width))
-    // A slider you can reach but not move is not operable, so the arrows are half of what makes it a control.
-    // One step per press, or a twentieth of the range when the caller named no step — the granularity a
-    // continuous value has to invent for a keyboard, which only ever hands it whole presses.
+    // A slider you can reach but not move is not operable. One step per press, or a twentieth of the range when the caller named none — the granularity a continuous value has to invent for a keyboard.
     .control(Role::Slider)
     .valued({
         let value = announced_value;
@@ -177,11 +165,11 @@ pub fn slider(props: SliderProps, _children: Children) -> Result<Box<dyn LayoutI
         }
     })
     .on_drag(move |px, _py| {
-        // `px` is already local to the track (`on_drag` reports widget-local coords), so no rect subtraction here.
+        // `on_drag` reports widget-local coords, so no rect subtraction is needed.
         let t = (px / width).clamp(0.0, 1.0);
         let mut v = min + t * (max - min);
         if step > 0.0 {
-            // Snap to the nearest step, then re-clamp — rounding can walk a boundary value just past min/max.
+            // Rounding can walk a boundary value just past min or max.
             let steps = ((v - min) / step).round();
             v = (min + steps * step).clamp(min, max);
         }
@@ -207,12 +195,10 @@ mod tests {
     use super::*;
     use crate::harness::{moved, press, release};
 
-    // Lays `node` out inside a 300×100 root and returns its laid-out rect, for computing drag points on the track.
     fn lay_out(node: NodeId) -> Rect {
         crate::harness::lay_out(node, 300.0, 100.0)
     }
 
-    // The core contract: dragging to the track's midpoint maps to value ≈ 0.5, and to the far edge maps to 1.0.
     #[test]
     fn drag_to_midpoint_sets_value_half() {
         crate::test_support::fresh_layout_runtime();
@@ -240,7 +226,7 @@ mod tests {
         widget.on_event(&release((rect.x + 200.0) as f64, (rect.y + 4.0) as f64));
     }
 
-    // An unset `value` prop must fall back to a working internal signal (uncontrolled mode), not panic.
+    // An unset `value` prop must fall back to a working internal signal, not panic.
     #[test]
     fn uncontrolled_slider_builds_with_default_value() {
         crate::test_support::fresh_layout_runtime();
@@ -248,7 +234,6 @@ mod tests {
         assert!(result.is_ok());
     }
 
-    // on_change fires with the same mapped value the bound signal receives.
     #[test]
     fn on_change_fires_with_mapped_value() {
         let seen: Rc<Cell<f32>> = Rc::new(Cell::new(-1.0));
@@ -272,7 +257,6 @@ mod tests {
         );
     }
 
-    // A custom min/max range reports the drag in that range, not normalized 0..1.
     #[test]
     fn custom_range_maps_midpoint_to_range_midpoint() {
         crate::test_support::fresh_layout_runtime();
@@ -297,7 +281,6 @@ mod tests {
         );
     }
 
-    // A non-zero `step` snaps the reported value to the nearest step, not the raw continuous mapping.
     #[test]
     fn step_snaps_value_to_nearest_step() {
         crate::test_support::fresh_layout_runtime();
@@ -324,7 +307,6 @@ mod tests {
         );
     }
 
-    // A `label` wraps the track in a labelled column instead of panicking.
     #[test]
     fn label_builds_without_panicking() {
         crate::test_support::fresh_layout_runtime();

@@ -1,20 +1,19 @@
+//! The `Props` derive: a typed builder whose `build()` exists only once every required prop is set.
+
 use proc_macro2::TokenStream as TokenStream2;
 use quote::{format_ident, quote};
 use syn::spanned::Spanned;
 use syn::{Data, DeriveInput, Expr, Fields, Ident, Type};
 
-/// One prop, and the only two things the builder needs to know about it: whether omitting it is legal, and
-/// whether its setter coerces.
+/// One prop, and the only two things the builder needs to know about it: whether omitting it is legal, and whether its setter coerces.
 struct Prop {
     name: Ident,
     ty: Type,
-    /// `None` for a required prop. `Some(None)` for `#[props(default)]`, `Some(Some(expr))` for
-    /// `#[props(default = expr)]`.
+    /// `None` for a required prop. `Some(None)` for `#[props(default)]`, `Some(Some(expr))` for `#[props(default = expr)]`.
     default: Option<Option<Expr>>,
     /// `#[props(into)]`: the setter takes `impl Into<T>` rather than `T`.
     into: bool,
-    /// `#[props(some)]`: the field is `Option<Inner>` and the setter takes the `Inner`, wrapping it. What
-    /// makes "this prop was given" the callee's business rather than the caller's.
+    /// `#[props(some)]`: the field is `Option<Inner>` and the setter takes the `Inner`, wrapping it. What makes "this prop was given" the callee's business rather than the caller's.
     some: bool,
 }
 
@@ -25,17 +24,9 @@ impl Prop {
 
     /// The setter's parameter type and the expression that stores it.
     ///
-    /// **`impl Into<T>` is opt-in, and that is not timidity.** A generic parameter leaves a literal's type
-    /// unconstrained, so it falls back — `.size(20.0)` infers `f64` and needs `f32: From<f64>`, which does
-    /// not exist (a warning today, a hard error soon), and `.span(5)` infers `i32` and needs
-    /// `u32: From<i32>`, which is an error already. Coercion is right for a prop whose type exists to accept
-    /// several shapes, `Reactive<T>` above all; it is wrong for a plain number. Declaring it means forgetting
-    /// it fails loudly on the author's line instead of quietly bending a literal.
-    /// **`some` and `into` are separate knobs because they answer separate questions.** `Option<Reactive<
-    /// String>>` wants both — the caller writes `hint:"⌘Z"` and means `Some(Reactive::from(…))`. But
-    /// `Option<Box<dyn Fn(u32)>>` wants only `some`: a boxed closure reaches its `dyn` type by unsizing,
-    /// which is a coercion at a known parameter type and not an `Into` a generic can find. Folding them into
-    /// one attribute makes one of those two cases impossible to express.
+    /// **`impl Into<T>` is opt-in, and that is not timidity.** A generic parameter leaves a literal's type unconstrained, so it falls back — `.size(20.0)` infers `f64` and needs `f32: From<f64>`, which does not exist (a warning today, a hard error soon), and `.span(5)` infers `i32` and needs `u32: From<i32>`, which is an error already. Coercion is right for a prop whose type exists to accept several shapes, `Reactive<T>` above all; it is wrong for a plain number. Declaring it means forgetting it fails loudly on the author's line instead of quietly bending a literal.
+    ///
+    /// **`some` and `into` are separate knobs because they answer separate questions.** `Option<Reactive< String>>` wants both — the caller writes `hint:"⌘Z"` and means `Some(Reactive::from(…))`. But `Option<Box<dyn Fn(u32)>>` wants only `some`: a boxed closure reaches its `dyn` type by unsizing, which is a coercion at a known parameter type and not an `Into` a generic can find. Folding them into one attribute makes one of those two cases impossible to express.
     fn setter_param(&self) -> (TokenStream2, TokenStream2) {
         let ty = &self.ty;
         let inner = self.some.then(|| option_inner(ty)).flatten();
@@ -56,18 +47,13 @@ impl Prop {
     }
 }
 
+/// Expands the `Props` derive into the builder, its markers and the `build` that needs them all set.
 pub fn expand(input: DeriveInput) -> Result<TokenStream2, syn::Error> {
     let props = collect(&input)?;
     let (name, vis) = (&input.ident, &input.vis);
     let builder = format_ident!("{name}Builder");
     let required: Vec<&Prop> = props.iter().filter(|p| p.is_required()).collect();
-    // One marker per required prop, generated here rather than imported from a runtime crate: the deriving
-    // crate would have to name that crate, and `ui-components` cannot name `telar` without a cycle. Per prop
-    // rather than one shared marker because the name lands in the error — rustc reports the builder type it
-    // could not find `build` on, so `RowPropsBuilder<RowPropsMissingLabel>` says which prop was forgotten.
-    //
-    // Named after the struct as well, because two props structs in one module are ordinary — a Rust module
-    // that holds two components — and a marker named only after the prop made that a redefinition.
+    // One marker per required prop, generated here rather than imported from a runtime crate: the deriving crate would have to name that crate, and `ui-components` cannot name `telar` without a cycle. Per prop rather than one shared marker because the name lands in the error, so `RowPropsBuilder<RowPropsMissingLabel>` says which prop was forgotten. Named after the struct too, because two props structs in one module are ordinary and a marker named only after the prop collided.
     let markers: Vec<Ident> = required
         .iter()
         .map(|p| format_ident!("{name}Missing{}", pascal(&p.name)))
@@ -78,9 +64,7 @@ pub fn expand(input: DeriveInput) -> Result<TokenStream2, syn::Error> {
             .position(|r| r.name == prop.name)
             .map(|i| markers[i].clone())
     };
-    // One type parameter per required prop, standing in for that prop's own type once it is set. The marker
-    // *is* the field's value until then, so `build` — which exists only where every parameter is the real
-    // type — reads the fields straight out, with nothing to unwrap and no state that can contradict itself.
+    // One type parameter per required prop, standing in for that prop's type once it is set. The marker is the field's value until then, so `build` — which exists only where every parameter is the real type — reads the fields straight out, with nothing to unwrap.
     let slots: Vec<Ident> = (0..required.len()).map(|i| format_ident!("S{i}")).collect();
     let slot_of = |prop: &Prop| {
         required
@@ -133,9 +117,7 @@ pub fn expand(input: DeriveInput) -> Result<TokenStream2, syn::Error> {
         }
     });
 
-    // A required prop's setter moves one parameter from the marker to the real type and leaves the others
-    // generic, so the chain may be written in any order — and calling it twice finds no method, because the
-    // second call would need a builder whose slot is still `Missing`.
+    // A required prop's setter moves one parameter from the marker to the real type and leaves the others generic, so the chain may be written in any order — and calling it twice finds no method, because the second call would need a builder whose slot is still `Missing`.
     let required_setters = required.iter().map(|target| {
         let (name, ty) = (&target.name, &target.ty);
         let others: Vec<&Ident> = slots
@@ -178,10 +160,7 @@ pub fn expand(input: DeriveInput) -> Result<TokenStream2, syn::Error> {
         quote! { #field: self.#field }
     });
 
-    // A `Clone` of its own rather than a derive the author writes, because a props struct that cannot be
-    // cloned cannot reach a closure that runs again — and `[view]` puts one around any node whose layout is
-    // computed. This is also why a handler prop is an `Rc<dyn Fn…>` and not a `Box`: a unique box has no
-    // second owner to give.
+    // A `Clone` of its own rather than a derive the author writes, because a props struct that cannot be cloned cannot reach a closure that runs again, and `[view]` puts one around any node whose layout is computed. This is also why a handler prop is an `Rc<dyn Fn…>`: a unique box has no second owner to give.
     let cloned = props.iter().map(|p| {
         let field = &p.name;
         quote! { #field: ::core::clone::Clone::clone(&self.#field) }
@@ -189,8 +168,7 @@ pub fn expand(input: DeriveInput) -> Result<TokenStream2, syn::Error> {
 
     Ok(quote! {
         #(
-            /// Stands in for a required prop that has not been set, and names it in the error when `build`
-            /// turns out not to exist.
+            /// Stands in for a required prop that has not been set, and names it in the error when `build` turns out not to exist.
             #[doc(hidden)]
             #vis struct #markers;
         )*
@@ -200,8 +178,7 @@ pub fn expand(input: DeriveInput) -> Result<TokenStream2, syn::Error> {
         }
 
         impl #name {
-            /// Starts a props builder. Every optional prop already holds its default; a required one holds
-            /// the `Missing` marker, and `build` does not exist until none are left.
+            /// Starts a props builder. Every optional prop already holds its default; a required one holds the `Missing` marker, and `build` does not exist until none are left.
             pub fn props() -> #builder #all_missing {
                 #builder { #(#seeded),* }
             }
@@ -227,8 +204,7 @@ pub fn expand(input: DeriveInput) -> Result<TokenStream2, syn::Error> {
     })
 }
 
-/// `<A, B>`, or nothing at all when the list is empty — `Foo<>` is not valid Rust, and a props struct whose
-/// every field has a default produces exactly that.
+/// `<A, B>`, or nothing at all when the list is empty — `Foo<>` is not valid Rust, and a props struct whose every field has a default produces exactly that.
 fn angled(args: impl Iterator<Item = TokenStream2>) -> TokenStream2 {
     let args: Vec<TokenStream2> = args.collect();
     match args.is_empty() {
@@ -267,8 +243,7 @@ fn collect(input: &DeriveInput) -> Result<Vec<Prop>, syn::Error> {
         .collect()
 }
 
-/// Reads `#[props(…)]`: `default`, `default = expr`, `into`, in any combination. No attribute at all means a
-/// required prop whose setter takes its type exactly.
+/// Reads `#[props(…)]`: `default`, `default = expr`, `into`, in any combination. No attribute at all means a required prop whose setter takes its type exactly.
 type Attrs = (Option<Option<Expr>>, bool, bool);
 
 fn read_attrs(field: &syn::Field) -> Result<Attrs, syn::Error> {

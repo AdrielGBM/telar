@@ -1,3 +1,5 @@
+//! [`Text`]: the measured text leaf, optically centred in the box its parent gave it.
+
 use std::cell::RefCell;
 use std::rc::Rc;
 use std::sync::Arc;
@@ -13,24 +15,22 @@ use crate::context::mark_dirty;
 use crate::impl_leaf_widget;
 use crate::layout_leaf::LayoutLeaf;
 
-/// The run the glyph band is measured from: a capital, an x-height letter and a descender, which between
-/// them span the extent a Latin face actually draws in. Any string of the same style is then centred by the
-/// same amount, which is what puts a row of labels on one baseline.
+/// The run the glyph band is measured from: a capital, an x-height letter and a descender, which between them span the extent a Latin face actually draws in. Any string of the same style is then centred by the same amount, which is what puts a row of labels on one baseline.
 const REFERENCE: &str = "Hxg";
 /// Room the reference cannot fill: it is three characters, and cosmic-text overflows on an unbounded one.
 const REFERENCE_WIDTH: f32 = 1_000.0;
 
+/// The measured text leaf, optically centred in the box its parent gave it.
 pub struct Text {
     content: Rc<dyn Fn() -> String>,
-    // The byte ranges that restyle themselves, or `None` for a paragraph that does not have any.
+    // The byte ranges that restyle themselves, or `None` for a paragraph without any.
     spans: Option<Rc<dyn Fn() -> Vec<Span>>>,
     cached_content: RefCell<(String, Arc<str>)>,
-    // Glyph-band memo for optical vertical centering: font_size bits -> (ink_top, ink_height, line_height).
-    // Keyed on the size and not on the text, because the band is measured from a reference run — see `view`.
+    // font_size bits -> (ink_top, ink_height, line_height). Keyed on size and not on text, because the band is measured from a reference run.
     cached_ink: RefCell<Option<(u32, f32, f32, f32)>>,
     style: Rc<dyn Fn() -> TextStyle>,
     leaf: LayoutLeaf,
-    // Held for its subscription: without it a measured leaf keeps the width the previous string wanted, and `view` shapes the new one into that box — a label that grew soft-wraps into a slot built for the old text.
+    // Held for its subscription: without it a measured leaf keeps the width the previous string wanted, and a label that grew soft-wraps into a slot built for the old text.
     _remeasure: Option<Effect>,
 }
 
@@ -41,12 +41,9 @@ enum StyleSource {
 }
 
 impl Text {
-    /// A text leaf whose height is measured from its content at the resolved width, so the box grows to fit
-    /// however many lines the text wraps into and pushes following siblings down instead of overflowing.
+    /// A text leaf whose height is measured from its content at the resolved width, so the box grows to fit however many lines the text wraps into and pushes following siblings down instead of overflowing.
     ///
-    /// There is no fixed-height counterpart: an explicit `height` in `layout_style` pins the box, which is
-    /// what the second constructor was for. Choosing between them by whether the markup happened to write a
-    /// height meant the same label measured or did not depending on a detail of how it was asked for.
+    /// There is no fixed-height counterpart: an explicit `height` in `layout_style` pins the box, which is what the second constructor was for. Choosing between them by whether the markup happened to write a height meant the same label measured or did not depending on a detail of how it was asked for.
     pub fn new(
         content_fn: impl Fn() -> String + 'static,
         layout_style: LayoutStyle,
@@ -62,13 +59,9 @@ impl Text {
 
     /// A text styled by what the tree above it declared, amended by whatever it says for itself.
     ///
-    /// The amendment takes the inherited style and returns the final one, rather than naming properties,
-    /// because a leaf has two kinds of thing to say: an override of something inherited (`font_size`) and a
-    /// clamp that could never be inherited (`max_lines`). One closure carries both, and it is the shape a
-    /// caller already amends a `RectStyle` with.
+    /// The amendment takes the inherited style and returns the final one, rather than naming properties, because a leaf has two kinds of thing to say: an override of something inherited (`font_size`) and a clamp that could never be inherited (`max_lines`). One closure carries both, and it is the shape a caller already amends a `RectStyle` with.
     ///
-    /// [`new`](Self::new) is the opt-out: passing a whole `TextStyle` is the honest way to say the tree above
-    /// has no business in this one.
+    /// [`new`](Self::new) is the opt-out: passing a whole `TextStyle` is the honest way to say the tree above has no business in this one.
     pub fn declaring(
         content_fn: impl Fn() -> String + 'static,
         layout_style: LayoutStyle,
@@ -82,8 +75,7 @@ impl Text {
         )
     }
 
-    /// [`new`](Self::new) with byte ranges that style themselves differently from the paragraph — a bold
-    /// word, a coloured link — shaped and wrapped as one text rather than as separate widgets.
+    /// [`new`](Self::new) with byte ranges that style themselves differently from the paragraph — a bold word, a coloured link — shaped and wrapped as one text rather than as separate widgets.
     pub fn spanned(
         content_fn: impl Fn() -> String + 'static,
         spans_fn: impl Fn() -> Vec<Span> + 'static,
@@ -104,7 +96,7 @@ impl Text {
         layout_style: LayoutStyle,
         source: StyleSource,
     ) -> Result<Self, LayoutError> {
-        // The node does not exist until the leaf is registered, and the measure closure handed to that call already reads the style: a cell filled the moment the node exists lets the style close over a node older than itself.
+        // The node does not exist until the leaf is registered, and that call's measure closure already reads the style, so the cell lets the style close over a node older than itself.
         let node_cell = Rc::new(std::cell::Cell::new(None::<layout_core::NodeId>));
         let style: Rc<dyn Fn() -> TextStyle> = match source {
             StyleSource::Complete(style_fn) => style_fn,
@@ -125,16 +117,16 @@ impl Text {
         let measure_spans = spans_fn.clone();
         let measure = Box::new(move |max_width: f32| {
             let s = (measure_style)();
-            // Measured with its spans, because they change the extent: a box measured without them wraps differently from the text drawn into it.
+            // Spans change the extent, so a box measured without them wraps differently from the text drawn into it.
             let spans = measure_spans.as_ref().map(|f| f());
             crate::text_metrics::measure_text(&(measure_content)(), spans.as_deref(), max_width, &s)
         });
 
-        // Stretch overrides any parent align-items (e.g. center) so text always fills the parent's cross-axis width instead of collapsing to 0.
+        // Stretch overrides any parent align-items, so text fills the cross axis instead of collapsing to 0.
         let (node, rect) =
             crate::context::new_measured_leaf(layout_style.align_self_stretch(), measure)?;
         node_cell.set(Some(node));
-        // Reads through the measure closure so it subscribes to exactly the signals the measure depends on, and keeps the string it last dirtied for: a signal re-set to its own value would otherwise cost a shaping pass and a relayout of the surface for nothing.
+        // Read through the measure closure, so it subscribes to exactly what the measure depends on: a signal re-set to its own value would otherwise cost a shaping pass and a relayout for nothing.
         let dirty_content = Rc::clone(&content_fn);
         let measured = RefCell::new(Option::<String>::None);
         let remeasure = effect(move || {
@@ -180,16 +172,7 @@ impl Component for Text {
             }
         };
         let style = (self.style)();
-        // Optically center the glyph band within the leaf. A text leaf stretches to fill its parent's cross
-        // axis (`align_self_stretch`), and the font's line box reserves ascent room for accents that a run
-        // never uses — so line-box-centered text sits visibly high next to an icon.
-        //
-        // The band is measured from a fixed REFERENCE run and not from this text, and that distinction is
-        // the whole point: it makes the offset a property of the *font at this size*, which every label in
-        // the same style then shares. Centering each string on its own ink instead moved it by whether it
-        // happened to contain a descender — so `Modeling` and `Setup` sat on one baseline and `Simulation`
-        // and `Results` sat 1.5px below it, in the same row of tabs. A row of labels that does not share a
-        // baseline is the kind of wrong that is obvious once seen and invisible until then.
+        // A text leaf stretches to fill its parent's cross axis, and the font's line box reserves ascent room a run never uses, so line-box-centred text sits visibly high next to an icon. The band is measured from a fixed reference run, which makes the offset a property of the font at this size and shared by every label in the style — centring each string on its own ink moved it by whether it held a descender.
         let (ink_top, ink_height, reference_line) = {
             let key = style.font_size.to_bits();
             let mut cache = self.cached_ink.borrow_mut();
@@ -205,29 +188,17 @@ impl Component for Text {
                 }
             }
         };
-        // Centre the whole block, then nudge it by how far the glyph band sits off the middle of **one**
-        // line box. Splitting it that way is what makes it work for more than one line: the nudge is a
-        // property of the font at this size, so it applies once however many lines there are, while
-        // centring against the band alone would push an N-line block down by (N-1)/2 lines — which is what
-        // a two-line tooltip did, sinking its second line out of the bubble.
+        // Centre the whole block, then nudge by how far the band sits off the middle of one line box. The nudge is a property of the font, so it applies once however many lines there are; centring against the band alone would push an N-line block down by (N-1)/2 lines.
         let (_, text_height) = crate::text_metrics::measure_text(&text, None, r.width, &style);
         let nudge = if ink_height > 0.0 {
             reference_line / 2.0 - ink_top - ink_height / 2.0
         } else {
             0.0
         };
-        // Rounded onto the pixel grid. Centring lands on a half pixel whenever the box and the text differ
-        // by an odd amount, and a glyph drawn half a row down is resampled across two rows: it does not move,
-        // it goes **soft**. Which is why it looked like a placement bug — the same bubble was crisp beside a
-        // button and blurred under one, because the sideways placement centres on the trigger and contributed
-        // its own half pixel, cancelling this one. Vertical position is the axis to snap; horizontal subpixel
-        // placement is what keeps letter spacing even, and the shaper bins it on purpose.
-        // Within the leaf, always. The nudge is a *centring* refinement, and a box no taller than one line
-        // has nothing to centre in: applying it there walks the glyphs out through the top of the box the
-        // layout reserved for them, so a `pad:6` label inked at row 5.
+        // Snapped to the pixel grid: centring lands on a half pixel whenever box and text differ by an odd amount, and a glyph drawn half a row down is resampled across two rows and goes soft. Only the vertical axis — horizontal subpixel placement is what keeps letter spacing even. Clamped within the leaf, since a box no taller than one line has nothing to centre in and the nudge would walk glyphs out through its top.
         let slack = (r.height - text_height).max(0.0);
         let y = ((slack / 2.0 + nudge).clamp(0.0, slack)).round();
-        // Render the full line box so nothing clips.
+        // The full line box, so nothing clips.
         let line_height = text_height;
         let spans: Option<std::sync::Arc<[Span]>> =
             self.spans.as_ref().map(|f| std::sync::Arc::from(f()));
@@ -266,8 +237,7 @@ mod tests {
     use reactive_core::signal;
     use renderer_core::Color;
 
-    // Auto-height text must reserve more vertical space when it is narrower (more wrapped lines), so
-    // following content is pushed down instead of overlapped.
+    // Narrower auto-height text wraps to more lines and must reserve the space, or following content overlaps it.
     #[test]
     fn auto_text_height_grows_when_narrower() {
         let long = "This is a deliberately long paragraph of text that wraps onto several \
@@ -299,10 +269,7 @@ mod tests {
 
     /// Two labels of the same style sit on the same baseline, whatever letters they happen to contain.
     ///
-    /// They did not: the optical centring measured each string's own ink, and a string with a descender has
-    /// ink reaching lower than one without — so `Setup` and `Simulation`, side by side in a row of tabs at
-    /// the same size in the same box, were drawn 2.5px apart. Measuring the band from a reference run makes
-    /// the offset a property of the font at that size, which every label in the style then shares.
+    /// They did not: the optical centring measured each string's own ink, and a string with a descender has ink reaching lower than one without — so `Setup` and `Simulation`, side by side in a row of tabs at the same size in the same box, were drawn 2.5px apart. Measuring the band from a reference run makes the offset a property of the font at that size, which every label in the style then shares.
     #[test]
     fn two_labels_of_one_style_share_a_baseline_whatever_letters_they_have() {
         reset_layout_runtime();
@@ -348,12 +315,7 @@ mod tests {
 
     /// Text lands on a whole pixel row, whatever its box measures.
     ///
-    /// Centring puts it on a half pixel whenever the box and the text differ by an odd amount, and a glyph
-    /// drawn half a row down does not move — it is resampled across two rows and goes **soft**. It read as a
-    /// *placement* bug: the same bubble was crisp beside a button and blurred under one, because the sideways
-    /// placement centres on its trigger and happened to contribute a second half pixel that cancelled this
-    /// one. Only the vertical axis is snapped; horizontal subpixel placement is what keeps letter spacing
-    /// even, and the shaper bins it deliberately.
+    /// Centring puts it on a half pixel whenever the box and the text differ by an odd amount, and a glyph drawn half a row down does not move — it is resampled across two rows and goes **soft**. It read as a *placement* bug: the same bubble was crisp beside a button and blurred under one, because the sideways placement centres on its trigger and happened to contribute a second half pixel that cancelled this one. Only the vertical axis is snapped; horizontal subpixel placement is what keeps letter spacing even, and the shaper bins it deliberately.
     #[test]
     fn text_lands_on_a_whole_pixel_row() {
         fn text_y(node: &RenderNode) -> Option<f32> {
@@ -394,9 +356,7 @@ mod tests {
 
     /// The optical nudge never walks the glyphs out of the box the layout reserved for them.
     ///
-    /// The nudge centres the glyph band, and a box no taller than one line has nothing to centre in — so
-    /// applying it there put the text at a negative `y`. A `pad:6` status line then inked at row 5, one row
-    /// above its own padding, which is how an out-of-tree app found this.
+    /// The nudge centres the glyph band, and a box no taller than one line has nothing to centre in — so applying it there put the text at a negative `y`. A `pad:6` status line then inked at row 5, one row above its own padding, which is how an out-of-tree app found this.
     #[test]
     fn text_stays_inside_a_box_that_is_exactly_one_line_tall() {
         fn text_rect(node: &RenderNode) -> Option<Rect> {
@@ -438,10 +398,7 @@ mod tests {
 
     /// A block that wraps sits where its box is, not half a line below it.
     ///
-    /// Optical centring works on the glyph band, and the band is measured from a one-line reference — so
-    /// centring an N-line block against it pushes the block down by (N-1)/2 lines. A two-line tooltip
-    /// description came out sunk, with its second line hanging out of the bubble. Centring the *block* and
-    /// nudging by the one-line correction is what makes the two cases the same case.
+    /// Optical centring works on the glyph band, and the band is measured from a one-line reference — so centring an N-line block against it pushes the block down by (N-1)/2 lines. A two-line tooltip description came out sunk, with its second line hanging out of the bubble. Centring the *block* and nudging by the one-line correction is what makes the two cases the same case.
     #[test]
     fn a_wrapped_block_is_not_pushed_down_by_the_lines_it_gained() {
         reset_layout_runtime();
@@ -496,10 +453,7 @@ mod tests {
 
     /// A label that grows re-measures, instead of being shaped into the width the previous string wanted.
     ///
-    /// The regression it guards is invisible in the widget tree and obvious on screen: a measured leaf is
-    /// dirtied by the layout runtime, never by a content closure, so a bar chip whose title went from
-    /// "Desktop" to a full window title kept the narrow box the short one had measured — and `view` soft-wrapped
-    /// the long title into it, spilling several lines out of a chip one line tall.
+    /// The regression it guards is invisible in the widget tree and obvious on screen: a measured leaf is dirtied by the layout runtime, never by a content closure, so a bar chip whose title went from "Desktop" to a full window title kept the narrow box the short one had measured — and `view` soft-wrapped the long title into it, spilling several lines out of a chip one line tall.
     #[test]
     fn a_measured_label_re_measures_when_its_content_changes() {
         reset_layout_runtime();

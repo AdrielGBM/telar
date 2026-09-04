@@ -1,14 +1,8 @@
 //! `Surface` — one RSX surface's complete per-surface world.
 //!
-//! A surface (a window, or a Wayland layer-surface) owns a set of thread-local worlds: its layout tree,
-//! overlay registry, focus state, input region, force-tick, and window-command queue. Under M3 several
-//! surfaces share one UI thread and one reactive runtime, so those worlds are swappable: the runner
-//! activates a surface with [`Surface::enter`] around its build/event/frame, and the reactive flush
-//! re-enters the surface that owns each effect through the hook this module installs into reactive-core.
+//! A surface (a window, or a Wayland layer-surface) owns a set of thread-local worlds: its layout tree, overlay registry, focus state, input region, force-tick, and window-command queue. Under M3 several surfaces share one UI thread and one reactive runtime, so those worlds are swappable: the runner activates a surface with [`Surface::enter`] around its build/event/frame, and the reactive flush re-enters the surface that owns each effect through the hook this module installs into reactive-core.
 //!
-//! Single-window apps never build a `Surface`: the reactive current-surface stays [`SurfaceHandle::NONE`],
-//! every effect captures `NONE`, and `enter` is a no-op — so they run against the ambient thread-local
-//! worlds exactly as before, at zero added cost.
+//! Single-window apps never build a `Surface`: the reactive current-surface stays [`SurfaceHandle::NONE`], every effect captures `NONE`, and `enter` is a no-op — so they run against the ambient thread-local worlds exactly as before, at zero added cost.
 
 use std::cell::{Cell, RefCell};
 use std::collections::HashMap;
@@ -25,8 +19,7 @@ use ui_tree::{OverlayContext, OverlayGuard};
 use crate::focus::{FocusContext, FocusGuard};
 use crate::input_region::{InputRegionContext, InputRegionGuard};
 
-/// The complete per-surface world plus its reactive [`SurfaceHandle`]. Build one per window/layer-surface
-/// with [`Surface::new`]; activate it with [`Surface::enter`].
+/// The complete per-surface world plus its reactive [`SurfaceHandle`]. Build one per window/layer-surface with [`Surface::new`]; activate it with [`Surface::enter`].
 pub struct Surface {
     handle: SurfaceHandle,
     layout: LayoutContext,
@@ -39,9 +32,7 @@ pub struct Surface {
 }
 
 impl Surface {
-    /// Allocates a fresh, inactive surface world with a unique handle and registers it so the reactive
-    /// flush can re-enter it for its effects. The returned `Rc` is the sole owner; the registry keeps only a
-    /// `Weak`, so dropping the `Rc` tears the surface down (and unregisters it).
+    /// Allocates a fresh, inactive surface world with a unique handle and registers it so the reactive flush can re-enter it for its effects. The returned `Rc` is the sole owner; the registry keeps only a `Weak`, so dropping the `Rc` tears the surface down (and unregisters it).
     pub fn new() -> Rc<Self> {
         install_enter_hook();
         let handle = next_handle();
@@ -63,12 +54,10 @@ impl Surface {
         self.handle
     }
 
-    /// Activates this surface's world until the returned guard drops, which restores the previously-active
-    /// world. The swapped worlds are independent thread-locals, so restore order among them is irrelevant;
-    /// nesting `enter`s is fine.
+    /// Activates this surface's world until the returned guard drops, which restores the previously-active world. The swapped worlds are independent thread-locals, so restore order among them is irrelevant; nesting `enter`s is fine.
     #[must_use = "the surface is only active while this guard is alive"]
     pub fn enter(&self) -> SurfaceGuard {
-        // Set the reactive current-surface first so any effect registered while active captures this handle.
+        // Set first, so any effect registered while active captures this handle.
         let prev_surface = set_current_surface(self.handle);
         SurfaceGuard {
             _layout: self.layout.enter(),
@@ -83,10 +72,7 @@ impl Surface {
 
     /// Activates the ambient world — the one that exists before any [`Surface`] is built.
     ///
-    /// A single-window app never builds a surface, so its whole tree is owned by
-    /// [`SurfaceHandle::NONE`] and its effects have to re-enter *this*. Without it they run against
-    /// whichever surface happened to be entered when the signal fired, which is a live case as soon as one
-    /// app has both — a window tree that never built a surface and a [`TextureUi`] that did.
+    /// A single-window app never builds a surface, so its whole tree is owned by [`SurfaceHandle::NONE`] and its effects have to re-enter *this*. Without it they run against whichever surface happened to be entered when the signal fired, which is a live case as soon as one app has both — a window tree that never built a surface and a [`TextureUi`] that did.
     ///
     /// [`TextureUi`]: https://docs.rs/telar/latest/telar/struct.TextureUi.html
     #[must_use = "the ambient world is only active while this guard is alive"]
@@ -106,7 +92,7 @@ impl Surface {
 
 impl Drop for Surface {
     fn drop(&mut self) {
-        // Entered while disposing, because an owner's teardown reaches into the surface-local worlds this struct is about to drop — a cascade declaration withdrawn against whichever surface happened to be active would land on somebody else's layout tree.
+        // Entered while disposing: an owner's teardown reaches into the surface-local worlds about to be dropped, and a withdrawal against whichever surface happened to be active would land on another's layout tree.
         {
             let _entered = self.enter();
             dispose_surface_owners(self.handle);
@@ -117,8 +103,7 @@ impl Drop for Surface {
     }
 }
 
-/// Restores the previously-active surface world when dropped. The per-world guards each restore their own
-/// (independent) thread-local; `_prev_surface` restores the reactive current-surface.
+/// Restores the previously-active surface world when dropped. The per-world guards each restore their own (independent) thread-local; `_prev_surface` restores the reactive current-surface.
 #[must_use = "the surface is only active while this guard is alive"]
 pub struct SurfaceGuard {
     _layout: LayoutGuard,
@@ -139,11 +124,10 @@ impl Drop for RestoreSurface {
 }
 
 thread_local! {
-    // Weak, not Rc: an Rc here would keep every surface alive forever and its Drop (which unregisters) would
-    // never run. The hook upgrades on demand.
+    // Weak, not Rc: an Rc would keep every surface alive forever and its unregistering `Drop` would never run.
     static SURFACES: RefCell<HashMap<SurfaceHandle, Weak<Surface>>> =
         RefCell::new(HashMap::new());
-    // Handle 0 is SurfaceHandle::NONE (the ambient/no-surface world), so real surfaces start at 1.
+    // Handle 0 is `SurfaceHandle::NONE`, the ambient world, so real surfaces start at 1.
     static NEXT_HANDLE: Cell<u64> = const { Cell::new(1) };
     static HOOK_INSTALLED: Cell<bool> = const { Cell::new(false) };
 }
@@ -156,9 +140,7 @@ fn next_handle() -> SurfaceHandle {
     })
 }
 
-/// Installs (once per thread) the reactive-core enter-hook: given the handle an effect captured, look up its
-/// surface and activate its full world for the duration of the effect. Returns a no-op when the surface is
-/// gone (e.g. torn down while a stale effect was still scheduled).
+/// Installs (once per thread) the reactive-core enter-hook: given the handle an effect captured, look up its surface and activate its full world for the duration of the effect. Returns a no-op when the surface is gone (e.g. torn down while a stale effect was still scheduled).
 fn install_enter_hook() {
     HOOK_INSTALLED.with(|installed| {
         if installed.replace(true) {
@@ -188,7 +170,7 @@ mod tests {
 
     use super::Surface;
 
-    // While the parent links lived in a single ambient map, namesakes from different surfaces overwrote each other and a climb begun in one surface walked another's tree — which is how a shell with eleven surfaces found an "ancestor" that was a sibling elsewhere, and hung climbing to a root that was not on that path.
+    // Regression: with the parent links in one ambient map, namesakes from different surfaces overwrote each other, so a climb begun in one surface walked another's tree and hung looking for a root not on its path.
     #[test]
     fn one_surfaces_parent_links_never_answer_for_another() {
         use layout_reactive::{LayoutStyle, new_container, parent};
@@ -218,8 +200,6 @@ mod tests {
         assert_ne!(parent(child_in_b), Some(host_in_a));
     }
 
-    // Two surfaces on one thread keep isolated layout worlds, and an effect built under surface A re-enters A
-    // when a shared signal set "from" surface B triggers it (the M3 owner-scope contract, end-to-end).
     #[test]
     fn effect_reenters_its_surface_layout_world() {
         use layout_reactive::{
@@ -233,11 +213,8 @@ mod tests {
         assert_ne!(a.handle(), b.handle());
         assert!(!a.handle().is_none());
 
-        // A shared signal (lives in the shared runtime) plus a node built inside each surface.
         let shared = signal(0i32);
 
-        // Build an effect under A that, on change, creates a node in A's layout world and records the handle
-        // it ran under.
         let ran_under: Rc<RefCell<Vec<u64>>> = Rc::new(RefCell::new(Vec::new()));
         let ran_c = Rc::clone(&ran_under);
         let read = shared.read_only();
@@ -253,7 +230,6 @@ mod tests {
 
         ran_under.borrow_mut().clear();
 
-        // Set the shared signal while B is active. The flush must re-enter A for A's effect.
         {
             let _g = b.enter();
             shared.set(1);
@@ -264,7 +240,6 @@ mod tests {
             "A's effect must run under A's surface, not B's"
         );
 
-        // A's node is laid out in A's world; B's world does not know it.
         {
             let _g = a.enter();
             compute_layout(
@@ -284,7 +259,7 @@ mod tests {
         }
     }
 
-    // An effect that belongs to no surface has a world of its own — the ambient one — and must re-enter it when it fires. Every effect of a single-window app is one of these: the runner builds no `Surface` for one. Left un-restored they ran against whichever surface happened to be active, so a window widget re-rendering during another tree's event dispatch resolved its layout in that tree's world and found nothing there.
+    // An effect belonging to no surface has the ambient world, and every effect of a single-window app is one: the runner builds no `Surface`. Left un-restored they ran against whichever surface was active.
     #[test]
     fn an_effect_owned_by_no_surface_reenters_the_ambient_world() {
         use layout_reactive::{
@@ -295,7 +270,6 @@ mod tests {
 
         use super::Surface;
 
-        // Built with no surface active, so both the node and the effect below belong to the ambient world.
         let (ambient_node, _) = new_leaf(LayoutStyle::new().width(42.0).height(10.0)).unwrap();
         compute_layout(
             ambient_node,
@@ -328,9 +302,6 @@ mod tests {
         );
     }
 
-    // Per-surface DI/context (services-core `provide`/`inject`): each surface resolves its own value, and an
-    // effect built under one surface injects THAT surface's context even when fired while another is active
-    // (owner-scope re-entry now swaps the service scope too). This is what lets an app carry per-window config.
     #[test]
     fn provide_inject_is_per_surface_and_survives_into_effects() {
         use std::cell::RefCell;
@@ -378,9 +349,6 @@ mod tests {
         );
     }
 
-    // T-3.1 / T-8.2: a global signal (theme/locale/motion are thread-local singletons — shared across
-    // surfaces on the one UI thread) written once re-runs every surface's effects, each under its OWN
-    // surface context. This is what makes a single dark-mode toggle update all windows correctly.
     #[test]
     fn global_signal_reruns_all_surfaces_each_under_its_context() {
         use std::cell::RefCell;
@@ -389,10 +357,8 @@ mod tests {
         let a = Surface::new();
         let b = Surface::new();
 
-        // A shared "global" signal, standing in for the theme/locale signal both surfaces read.
         let global = signal(0i32);
 
-        // Each surface registers an effect reading the global signal; each records the surface it ran under.
         let log: Rc<RefCell<Vec<(char, u64)>>> = Rc::new(RefCell::new(Vec::new()));
 
         let log_a = Rc::clone(&log);
@@ -417,7 +383,6 @@ mod tests {
 
         log.borrow_mut().clear();
 
-        // A single global write re-runs both surfaces' effects, each under its own context.
         global.set(1);
 
         let entries = log.borrow().clone();

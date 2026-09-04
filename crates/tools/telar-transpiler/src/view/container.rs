@@ -23,18 +23,12 @@ impl ViewGen<'_> {
         self.emit_styled_container(el, true)
     }
 
-    /// Emits a `col`/`row`/`grid` or a `box` Container, collecting children and wiring declarative paint,
-    /// transform, hover and event closures. `box` (`always_style`) is always a StyledContainer so it can
-    /// carry a background; a `col`/`row` only upgrades from a plain Container when it carries paint (inline
-    /// or class-borne) or one of the styling attrs below.
+    /// Emits a `col`/`row`/`grid` or a `box` Container, collecting children and wiring declarative paint, transform, hover and event closures. `box` (`always_style`) is always a StyledContainer so it can carry a background; a `col`/`row` only upgrades from a plain Container when it carries paint (inline or class-borne) or one of the styling attrs below.
     fn emit_styled_container(&mut self, el: &Element, always_style: bool) -> ChildEmit {
         let var = self.next_variable_name(&el.tag);
         let pad = self.indent_str();
         let style = self.make_layout_style(&el.tag, &el.classes, &el.attributes);
-        // A computed layout prop (`width:$dock_w`, `inset_start:seat(&desk, id).x`) makes the whole style
-        // reactive: the node keeps an effect that re-resolves it, because a `LayoutStyle` is a value handed
-        // to the tree once, not a closure the renderer re-runs. Paint needs no equivalent — see
-        // `StyledContainer::styled_by`.
+        // A computed layout prop makes the whole style reactive: `LayoutStyle` is a value handed to the tree once, not a closure the renderer re-runs, so the node keeps an effect that re-resolves it.
         let reactive = self.reactive_layout_values(&el.tag, &el.attributes);
         let styled_by = if reactive.is_empty() {
             String::new()
@@ -45,10 +39,7 @@ impl ViewGen<'_> {
                 self.clone_captures(&raw, format!("move || {style}"))
             )
         };
-        // `cursor:pointer` names a variant; anything else is the expression it is, so a box whose shape is
-        // worked out — one strip that runs either way — says so on its own line instead of being split in two.
-        // A value that reads something reactive becomes a reading, so the shape follows it the way a colour
-        // does, rather than being decided once while the box was built.
+        // `cursor:pointer` names a variant; anything else is the expression it is, and a reactive value becomes a reading so the shape follows it the way a colour does.
         let cursor = el
             .attributes
             .iter()
@@ -69,7 +60,7 @@ impl ViewGen<'_> {
                 }
             })
             .unwrap_or_default();
-        // `drag_button(secondary auxiliary)` — the buttons that may start this box's drag, on top of the primary one that always can. Commas are taken as separators too, for the one-token `drag_button:secondary,auxiliary` spelling that predates the parenthesized form.
+        // Commas are separators too, for the `drag_button:secondary,auxiliary` spelling predating the paren form.
         let drag_button = el
             .attributes
             .iter()
@@ -83,8 +74,6 @@ impl ViewGen<'_> {
                     .collect::<String>()
             })
             .unwrap_or_default();
-        // `drag_threshold:4` — how far a press must travel before it is a drag rather than a click. A value
-        // like every other: a literal, or the expression that works it out from whatever the box is sized by.
         let drag_threshold = el
             .attributes
             .iter()
@@ -98,8 +87,7 @@ impl ViewGen<'_> {
                 )
             })
             .unwrap_or_default();
-        // What the box is, where it is more than a box. Emitted on a plain `Container` too, so saying a
-        // `col` is the navigation does not silently turn it into a styled box.
+        // Emitted on a plain `Container` too, so calling a `col` the navigation does not turn it into a styled box.
         let role = el
             .attributes
             .iter()
@@ -107,7 +95,6 @@ impl ViewGen<'_> {
             .and_then(|a| crate::registry::role_variant(a.value.text().trim()))
             .map(|variant| format!(".role(::telar::Role::{variant})"))
             .unwrap_or_default();
-        // A bare flag, like `absolute`: an attribute with no value is the assertion itself.
         let click_through = el
             .attributes
             .iter()
@@ -147,11 +134,10 @@ impl ViewGen<'_> {
         let transitions: HashMap<String, String> = specs.into_iter().collect();
         let mut hoists: Vec<String> = Vec::new();
         let transform_call = self.transform_call(el, &transitions, &mut hoists);
-        // What this container says about the text below it. A `col font_size:11` draws no text of its own —
-        // it names the size everything under it starts from, the way `body { font-size }` does.
+        // What the container says about the text below it: `col font_size:11` draws no text, it names the size everything under it starts from.
         let declaring = self.declaring_call(&attrs, &transitions, &mut hoists);
 
-        // These trailing calls carry only on a StyledContainer, so any one of them forces the upgrade; `on_press` is excluded here because its closure form wires on a plain Container too — `on_press_forwarded` above covers the other case. `box` (`always_style`) skips the check.
+        // Any of these forces the StyledContainer upgrade. `on_press` is excluded because its closure form wires on a plain Container; `on_press_forwarded` covers the other case.
         let styling = format!(
             "{hover_call}{active_call}{disabled_call}{focus_ring}{disabled}{transform_call}{on_hover}{on_pointer_move}{on_key}{on_drag}{on_drag_end}{on_scroll}{on_focus}{on_long_press}{on_alt_press}{cursor}{drag_button}{drag_threshold}{click_through}"
         );
@@ -179,17 +165,14 @@ impl ViewGen<'_> {
 
         let children =
             self.emit_children_collection(&mut code, &child_emits, &inner_pad, mode, &[]);
-        // A reactive fragment among the children routes them all through `from_slots`, so they interleave in
-        // this container's node and inherit its flex direction (transparent `for`/`if`).
+        // Routing through `from_slots` lets the children interleave in this node and inherit its flex direction.
         let ctor = if mode == ChildMode::Slots {
             "from_slots"
         } else {
             "new"
         };
         emit_transition_prelude(&mut code, &inner_pad, &errors, &hoists);
-        // `track_rect:$sig` needs the node, which only exists once the widget is built, so it binds the widget
-        // first and chains `keeping` onto it — the effect that mirrors the laid-out rect belongs to this widget
-        // and to nothing longer-lived.
+        // `track_rect:$sig` needs the node, which exists only once the widget is built, so the effect is chained onto it with `keeping` rather than anything longer-lived.
         let track = self.track_rect_tail(el, &inner_pad);
         let bind = if track.is_empty() {
             ""
@@ -217,16 +200,13 @@ impl ViewGen<'_> {
         ChildEmit::Simple { name: var, code }
     }
 
-    /// Emits an `overlay` as an `Overlay` widget: a top-layer, out-of-flow portal (see `ui_core::Overlay`).
-    /// Children are collected like a container; layout attrs (`align`/`justify`/`pad`) position the content
-    /// within the viewport-filling layer.
+    /// Emits an `overlay` as an `Overlay` widget: a top-layer, out-of-flow portal (see `ui_core::Overlay`). Children are collected like a container; layout attrs (`align`/`justify`/`pad`) position the content within the viewport-filling layer.
     pub(super) fn emit_overlay(&mut self, el: &Element) -> ChildEmit {
         let var = self.next_variable_name("overlay");
         let pad = self.indent_str();
         let style = self.make_layout_style("overlay", &el.classes, &el.attributes);
 
-        // `Overlay::new` takes a plain child vec (no `from_slots`), so a reactive `for`/`if` here stays a
-        // boxed `ReactiveList` rather than a transparent fragment: cap the mode at `Vec`, never `Slots`.
+        // `Overlay::new` takes a plain child vec, so a reactive region here stays a boxed `ReactiveList`.
         let mode = if el.children.iter().any(forces_child_vec) {
             ChildMode::Vec
         } else {
@@ -248,14 +228,9 @@ impl ViewGen<'_> {
         ChildEmit::Simple { name: var, code }
     }
 
-    /// Builds one trailing `.on_X_style(...)` from an `X_style(...)` attribute — the paint swap for a state,
-    /// written as a mini list of paint props (`hover_style(fill:x stroke:y)`). Reuses `rect_style_pieces`, so a
-    /// `$signal` colour is cloned into the closure just like the base style. Transitions are deliberately not
-    /// applied to a state variant.
+    /// Builds one trailing `.on_X_style(...)` from an `X_style(...)` attribute — the paint swap for a state, written as a mini list of paint props (`hover_style(fill:x stroke:y)`). Reuses `rect_style_pieces`, so a `$signal` colour is cloned into the closure just like the base style. Transitions are deliberately not applied to a state variant.
     ///
-    /// `base` is prepended to the overrides so `rect_style_pieces`. first-match `find` picks the state value over
-    /// the base one. The focus ring passes an empty `base`: what the ring does not name comes from whichever
-    /// state won underneath it at paint time, not from the base style at build time.
+    /// `base` is prepended to the overrides so `rect_style_pieces`. first-match `find` picks the state value over the base one. The focus ring passes an empty `base`: what the ring does not name comes from whichever state won underneath it at paint time, not from the base style at build time.
     fn state_style_call(&mut self, el: &Element, key: &str, method: &str, base: &[Attr]) -> String {
         let Some(attr) = el.attributes.iter().find(|a| a.key == key) else {
             return String::new();
@@ -269,15 +244,12 @@ impl ViewGen<'_> {
 
     /// Builds the trailing `.disabled(...)` from a `disabled:` attribute.
     ///
-    /// A closure rather than a value, so a `$signal` is re-read instead of frozen at construction — the same
-    /// treatment a reactive colour or string prop gets, and deliberately *not* the layout path: `width:$sig`
-    /// re-runs the whole `LayoutStyle`, and whether a control is usable is not a layout property.
+    /// A closure rather than a value, so a `$signal` is re-read instead of frozen at construction — the same treatment a reactive colour or string prop gets, and deliberately *not* the layout path: `width:$sig` re-runs the whole `LayoutStyle`, and whether a control is usable is not a layout property.
     fn disabled_call(&self, el: &Element) -> String {
         let Some(attr) = el.attributes.iter().find(|a| a.key == "disabled") else {
             return String::new();
         };
         let value = attr.value.text().trim();
-        // A bare `disabled` flag is the HTML spelling, and means it always is.
         if attr.value.is_flag() {
             return ".disabled(|| true)".to_string();
         }
@@ -288,20 +260,13 @@ impl ViewGen<'_> {
         )
     }
 
-    /// Builds a trailing `.{method}(...)` from a closure-valued attribute (`on_press`/`on_hover`/`on_key`/
-    /// `on_drag`/`on_focus`/`on_long_press`), or an empty string when the attribute is absent. `$name` signals are cloned into the closure,
-    /// `$handle` reads are rewritten to the bare handle, and a `$`-free closure keeps its source span.
+    /// Builds a trailing `.{method}(...)` from a closure-valued attribute (`on_press`/`on_hover`/`on_key`/ `on_drag`/`on_focus`/`on_long_press`), or an empty string when the attribute is absent. `$name` signals are cloned into the closure, `$handle` reads are rewritten to the bare handle, and a `$`-free closure keeps its source span.
     fn closure_attr_call(&self, el: &Element, key: &str, method: &str) -> String {
         let Some(attr) = el.attributes.iter().find(|a| a.key == key) else {
             return String::new();
         };
-        // A value that is not a closure literal is an `Option<handler>` the caller is forwarding, and it wires
-        // through the `maybe_` form so `None` leaves the box untouched. A wrapper component has no other way to
-        // say "only if my caller gave me one": a no-op stand-in still reports the event handled, which turns a
-        // chip with nothing to do into one that swallows the click.
+        // A non-closure value is an `Option<handler>` being forwarded, and the `maybe_` form leaves the box untouched on `None`. A no-op stand-in would report the event handled and swallow the click.
         if !attr.value.is_closure() {
-            // The delimiting parens come off here rather than at the call, so the span still covers the
-            // expression and nothing wider.
             let text = attr.value.text().trim();
             let (offset, inner) = match super::redundant_parens(text) {
                 Some(inner) => (1, inner),
@@ -313,10 +278,7 @@ impl ViewGen<'_> {
         format!(".{method}({})", self.emit_closure_value(attr))
     }
 
-    /// Desugars a closure-valued attribute into a `move` closure: `$name` signals are cloned in, `$handle`
-    /// reads are rewritten to the bare handle, and a `$`-free closure keeps its source span (so LSP
-    /// completion works inside it). Shared by `closure_attr_call` (element event attrs) and the component
-    /// closure-prop arm, which wrap the result as `.method(..)` and `Box::new(..)` respectively.
+    /// Desugars a closure-valued attribute into a `move` closure: `$name` signals are cloned in, `$handle` reads are rewritten to the bare handle, and a `$`-free closure keeps its source span (so LSP completion works inside it). Shared by `closure_attr_call` (element event attrs) and the component closure-prop arm, which wrap the result as `.method(..)` and `Box::new(..)` respectively.
     pub(super) fn emit_closure_value(&self, attr: &Attr) -> String {
         let closure = substitute_handles(&normalize_closure(attr.value.text()));
         // A `$` substitution breaks the byte-for-byte span, so only a `$`-free closure carries a marker.
@@ -332,21 +294,11 @@ impl ViewGen<'_> {
         self.closure_attr_call(el, "on_press", "on_press")
     }
 
-    /// Builds the trailing `.with_transform(...)` from a box's declarative transform attributes (`rotate`
-    /// in degrees, `scale`/`scale_x`/`scale_y`, `translate_x`/`translate_y`), or an empty string when there
-    /// are none. `scale` sets both axes unless an axis-specific value overrides it. Values may be `$signal`
-    /// reads (a `rotate:$angle` animates), so they are substituted and their signals cloned into the closure;
-    /// every value is cast to `f32` so integer and float literals both type-check.
-    /// `track_rect:$sig` — mirror this element's laid-out rect into `sig`, so a sibling can be positioned or
-    /// painted from where this one ended up.
+    /// Builds the trailing `.with_transform(...)` from a box's declarative transform attributes (`rotate` in degrees, `scale`/`scale_x`/`scale_y`, `translate_x`/`translate_y`), or an empty string when there are none. `scale` sets both axes unless an axis-specific value overrides it. Values may be `$signal` reads (a `rotate:$angle` animates), so they are substituted and their signals cloned into the closure; every value is cast to `f32` so integer and float literals both type-check. `track_rect:$sig` — mirror this element's laid-out rect into `sig`, so a sibling can be positioned or painted from where this one ended up.
     ///
-    /// `track_layout` hands back the node's own rect signal; this copies it into the author's signal, which is
-    /// what makes the value reachable from the rest of their `[view]` and `[logic]`. The mirroring effect is
-    /// kept on the widget, so it stops when the widget goes rather than firing at a node that is gone.
+    /// `track_layout` hands back the node's own rect signal; this copies it into the author's signal, which is what makes the value reachable from the rest of their `[view]` and `[logic]`. The mirroring effect is kept on the widget, so it stops when the widget goes rather than firing at a node that is gone.
     ///
-    /// The copy is guarded, which is the difference between a rect somebody can build on and one nothing can
-    /// afford to read: a signal notifies on every write, so an unguarded mirror wakes each of its readers on
-    /// every frame the layout runs, whether or not the rectangle moved.
+    /// The copy is guarded, which is the difference between a rect somebody can build on and one nothing can afford to read: a signal notifies on every write, so an unguarded mirror wakes each of its readers on every frame the layout runs, whether or not the rectangle moved.
     fn track_rect_tail(&self, el: &Element, pad: &str) -> String {
         let Some(attr) = el.attributes.iter().find(|a| a.key == "track_rect") else {
             return String::new();
@@ -398,7 +350,7 @@ impl ViewGen<'_> {
         let scale_y = raw("scale_y").or(scale).unwrap_or_else(|| "1".into());
         let tx = raw("translate_x").unwrap_or_else(|| "0".into());
         let ty = raw("translate_y").unwrap_or_else(|| "0".into());
-        // Paired with the property each value came from, so a `transition(…)` names the axis it animates. `scale` stands in for both axes when neither was given its own value, matching how the value itself resolves.
+        // `scale` stands in for both axes when neither was given its own value, matching how the value resolves.
         let axis_prop = |own: &'static str| match transitions.contains_key(own) {
             true => own,
             false => "scale",
@@ -427,9 +379,7 @@ impl ViewGen<'_> {
         format!(".with_transform({call})")
     }
 
-    /// The `Paint::Gradient(…)` a `fill:linear(…)` or `fill:radial(…)` builds, or `None` for a fill that is a
-    /// plain colour. Uses the paint closure's `r` for the absolute points a gradient needs; see
-    /// [`crate::gradient`] for the value's own shape.
+    /// The `Paint::Gradient(…)` a `fill:linear(…)` or `fill:radial(…)` builds, or `None` for a fill that is a plain colour. Uses the paint closure's `r` for the absolute points a gradient needs; see [`crate::gradient`] for the value's own shape.
     pub(super) fn box_gradient_paint(&self, attrs: &[Attr]) -> Option<String> {
         let value = attrs.iter().find(|a| a.key == "fill")?.value.text().trim();
         let (kind, args) = crate::gradient::split_call(value)?;
@@ -451,9 +401,7 @@ impl ViewGen<'_> {
     }
 }
 
-/// Parses a `hover(...)` inner value — a whitespace-separated list of `key:value` paint props — into
-/// `Attr`s. Paint values carry no spaces (color tokens, `#hex`, numbers), so a simple split suffices.
-/// A token without a `:` (a bare flag) is ignored: hover overrides are always keyed paint props.
+/// Parses a `hover(...)` inner value — a whitespace-separated list of `key:value` paint props — into `Attr`s. Paint values carry no spaces (color tokens, `#hex`, numbers), so a simple split suffices. A token without a `:` (a bare flag) is ignored: hover overrides are always keyed paint props.
 fn parse_inline_paint_attrs(value: &str) -> Vec<Attr> {
     value
         .split_whitespace()

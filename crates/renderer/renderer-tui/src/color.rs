@@ -2,8 +2,7 @@
 
 use renderer_core::Color;
 
-/// An opaque cell colour. The buffer never stores alpha: every paint composites against what is already
-/// there, exactly as the raster backends do, so what reaches the terminal is a finished colour.
+/// An opaque cell colour. The buffer never stores alpha: every paint composites against what is already there, exactly as the raster backends do, so what reaches the terminal is a finished colour.
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Default)]
 pub struct Rgb {
     pub r: u8,
@@ -24,8 +23,7 @@ impl Rgb {
         Self { r, g, b }
     }
 
-    /// `src` over `self`, in sRGB with straight alpha — the same space and the same formula the raster
-    /// backends blend in, so a colour that looks a certain way on the desktop looks that way here.
+    /// `src` over `self`, in sRGB with straight alpha — the same space and the same formula the raster backends blend in, so a colour that looks a certain way on the desktop looks that way here.
     pub fn under(self, src: Color) -> Self {
         let a = src.a.clamp(0.0, 1.0);
         if a >= 1.0 {
@@ -63,9 +61,7 @@ pub enum ColorDepth {
 }
 
 impl ColorDepth {
-    /// What the environment says the terminal can do. Reads `COLORTERM` first because it is the only
-    /// variable that answers the question directly; `TERM` is a database key, not a capability list, and
-    /// terminals that support 24-bit colour routinely still report `xterm-256color`.
+    /// What the environment says the terminal can do. Reads `COLORTERM` first because it is the only variable that answers the question directly; `TERM` is a database key, not a capability list, and terminals that support 24-bit colour routinely still report `xterm-256color`.
     pub fn detect() -> Self {
         let var = |k: &str| std::env::var(k).unwrap_or_default().to_ascii_lowercase();
         let colorterm = var("COLORTERM");
@@ -107,9 +103,7 @@ fn dist2(a: Rgb, b: Rgb) -> u32 {
     d(a.r, b.r) + d(a.g, b.g) + d(a.b, b.b)
 }
 
-/// The nearest xterm-256 index, choosing between the colour cube and the grey ramp by actual distance
-/// rather than by guessing which one a colour "is" — a near-grey blue lands in the cube, a true grey in
-/// the ramp, and neither needs a special case.
+/// The nearest xterm-256 index, choosing between the colour cube and the grey ramp by actual distance rather than by guessing which one a colour "is" — a near-grey blue lands in the cube, a true grey in the ramp, and neither needs a special case.
 pub fn to_ansi256(c: Rgb) -> u8 {
     let cube_idx = (
         nearest_cube_axis(c.r),
@@ -138,8 +132,7 @@ pub fn to_ansi256(c: Rgb) -> u8 {
     }
 }
 
-/// The 16 base colours as most terminals actually render them (the xterm defaults). Used only to pick the
-/// nearest index — the terminal draws with its own palette, which is the point.
+/// The 16 base colours as most terminals actually render them (the xterm defaults). Used only to pick the nearest index — the terminal draws with its own palette, which is the point.
 const ANSI16: [Rgb; 16] = [
     Rgb { r: 0, g: 0, b: 0 },
     Rgb { r: 205, g: 0, b: 0 },
@@ -199,6 +192,7 @@ const ANSI16: [Rgb; 16] = [
     },
 ];
 
+/// The nearest of the sixteen ANSI colours.
 pub fn to_ansi16(c: Rgb) -> u8 {
     let mut best = 0u8;
     let mut best_d = u32::MAX;

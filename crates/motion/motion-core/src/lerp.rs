@@ -1,13 +1,10 @@
+//! [`Lerp`]: what it means to interpolate a value, and the implementations for the geometry types.
+
 use geometry_core::{BorderRadius, Color, Point, Rect, Transform};
 
 /// Interpolation plus the minimal vector-space operations the engine needs.
 ///
-/// `lerp` powers tweens; `add`/`sub`/`scale`/`zero`/`magnitude_sq` let the spring
-/// integrate in value space (component-wise). Keeping both on one trait means
-/// `Animated<T>` needs only `T: Lerp` for tweens and springs alike. Spring velocity
-/// is stored as a `T` in value space, so f32 springs are exact physical springs and
-/// vector types integrate per component; `Color` springs therefore run in
-/// sRGB-component space while `Color` tweens use the perceptual Oklch path in `lerp`.
+/// `lerp` powers tweens; `add`/`sub`/`scale`/`zero`/`magnitude_sq` let the spring integrate in value space (component-wise). Keeping both on one trait means `Animated<T>` needs only `T: Lerp` for tweens and springs alike. Spring velocity is stored as a `T` in value space, so f32 springs are exact physical springs and vector types integrate per component; `Color` springs therefore run in sRGB-component space while `Color` tweens use the perceptual Oklch path in `lerp`.
 pub trait Lerp: Clone {
     /// Interpolate between `self` (t=0) and `other` (t=1).
     fn lerp(&self, other: &Self, t: f32) -> Self;
@@ -333,7 +330,6 @@ mod tests {
 
     #[test]
     fn color_lerp_hue_takes_short_arc() {
-        // Red (h~29 deg) to yellow (h~110 deg): the midpoint hue must land in the orange arc between them, not swing the long way through blue.
         let mid = Color::RED.lerp(&Color::rgb(1.0, 1.0, 0.0), 0.5);
         let (_, chroma, hue, _) = mid.to_oklcha();
         assert!(
@@ -348,7 +344,6 @@ mod tests {
 
     #[test]
     fn color_lerp_achromatic_endpoint_carries_the_other_hue() {
-        // Gray -> red: intermediate stays on red's hue instead of a spurious swing.
         let mid = Color::rgb(0.5, 0.5, 0.5).lerp(&Color::RED, 0.5);
         let (_, chroma, hue, _) = mid.to_oklcha();
         let (_, _, red_hue, _) = Color::RED.to_oklcha();

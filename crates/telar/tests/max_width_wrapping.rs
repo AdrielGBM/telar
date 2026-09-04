@@ -1,13 +1,8 @@
 //! Whether the max-width two-pass in `layout-reactive` still buys anything, measured against real text.
 //!
-//! `compute_layout` lifts every max-width box's width pin, lays out, pins each box to the width it resolved
-//! to, and lays out again. It was written against taffy 0.11, where a wrapping child inside a capped box was
-//! measured at taffy's uncapped one-line intrinsic estimate and came out one line tall however long the copy
-//! was. The unit test beside the pass already passes without it on taffy 0.13 — but with a synthetic measure
-//! function, which is not the case the workaround was written for.
+//! `compute_layout` lifts every max-width box's width pin, lays out, pins each box to the width it resolved to, and lays out again. It was written against taffy 0.11, where a wrapping child inside a capped box was measured at taffy's uncapped one-line intrinsic estimate and came out one line tall however long the copy was. The unit test beside the pass already passes without it on taffy 0.13 — but with a synthetic measure function, which is not the case the workaround was written for.
 //!
-//! This is that case: a full-width page, a capped band inside it, and a paragraph long enough that its height
-//! is a question. It runs through the shaper the runner installs, so what is measured is what is drawn.
+//! This is that case: a full-width page, a capped band inside it, and a paragraph long enough that its height is a question. It runs through the shaper the runner installs, so what is measured is what is drawn.
 
 use telar::{
     AvailableSpace, Color, Container, LayoutItem, LayoutStyle, Text, TextStyle, box_item,
@@ -58,8 +53,7 @@ fn a_capped_band_is_as_wide_as_its_cap() {
     assert_eq!(band(None).width, PAGE, "and an uncapped one fills it");
 }
 
-/// The bug the two-pass exists for. Copy measured at the page's width instead of the band's needs fewer
-/// lines and comes out shorter, so the two heights differ — and the capped one has to be the taller.
+/// The bug the two-pass exists for. Copy measured at the page's width instead of the band's needs fewer lines and comes out shorter, so the two heights differ — and the capped one has to be the taller.
 #[test]
 fn a_capped_band_is_as_tall_as_its_copy_wrapped_at_the_cap() {
     let capped = band(Some(BAND));

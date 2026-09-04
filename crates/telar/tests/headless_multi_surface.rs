@@ -1,8 +1,4 @@
-//! Integration test for the M3 multi-surface contract: drive N real rsx apps in one run through
-//! `run_multi_with_platform` + `HeadlessPlatform`. All surfaces share **one** thread and one reactive
-//! runtime, each with its own `Surface` world; each renders a distinct color at a distinct size and its
-//! pixels are captured by SurfaceId — proving N surfaces render isolated on a single shared-runtime thread
-//! with no cross-talk (T-8.1).
+//! Integration test for the M3 multi-surface contract: drive N real rsx apps in one run through `run_multi_with_platform` + `HeadlessPlatform`. All surfaces share **one** thread and one reactive runtime, each with its own `Surface` world; each renders a distinct color at a distinct size and its pixels are captured by SurfaceId — proving N surfaces render isolated on a single shared-runtime thread with no cross-talk (T-8.1).
 
 mod common;
 
@@ -16,7 +12,6 @@ use telar::{AppConfig, AppPathsProvider, Color, SurfaceId, WindowConfig, run_mul
 
 #[test]
 fn headless_multi_surface_renders_isolated_trees() {
-    // Distinct color per surface; each surface gets its own size too, to catch any surface/config mix-up.
     let specs: [(SurfaceId, [u8; 3], u32, u32); 3] = [
         (SurfaceId(0), [200, 40, 40], 32, 24),
         (SurfaceId(1), [40, 200, 40], 48, 16),
@@ -35,7 +30,6 @@ fn headless_multi_surface_renders_isolated_trees() {
         })
         .collect();
 
-    // The color each surface's app paints, shared read-only across the surface threads.
     let colors: Arc<HashMap<SurfaceId, [u8; 3]>> =
         Arc::new(specs.iter().map(|(id, rgb, _, _)| (*id, *rgb)).collect());
 
@@ -69,9 +63,7 @@ fn headless_multi_surface_renders_isolated_trees() {
     }
 }
 
-// T-4.2 quarantine: when one surface's app panics during build, it must be unmounted while the other surface
-// still renders — proving a panic in one surface on the shared UI thread does not tumble the rest. (Effective
-// only under panic=unwind, as tests run; a panic=abort release build aborts instead of catching.)
+// A panic in one surface on the shared UI thread must unmount only that surface. Effective only under `panic=unwind`, as tests run.
 #[test]
 fn headless_multi_surface_quarantines_a_panicking_surface() {
     let good = SurfaceId(0);

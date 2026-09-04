@@ -1,3 +1,5 @@
+//! COLR glyphs: the colour-font path swash cannot rasterize, and the flag that skips looking for one.
+
 use super::TextShaper;
 use super::cache::{hash_text, text_style_bits};
 use super::make_buffer;
@@ -6,8 +8,7 @@ use geometry_core::Rect;
 use renderer_core::{Color, TextStyle};
 use std::sync::Arc;
 
-/// A COLR color glyph swash could not rasterize (commonly emoji, but COLR v1 also covers colored
-/// icons and decorative glyphs). Collected by the software renderer for skrifa COLR fallback rendering.
+/// A COLR color glyph swash could not rasterize (commonly emoji, but COLR v1 also covers colored icons and decorative glyphs). Collected by the software renderer for skrifa COLR fallback rendering.
 pub struct ColrGlyph {
     pub font_id: fontdb::ID,
     pub glyph_id: u32,
@@ -18,8 +19,7 @@ pub struct ColrGlyph {
 }
 
 impl TextShaper {
-    /// Collects glyphs swash could not rasterize (COLR color glyphs, e.g. emoji) so the software
-    /// renderer can re-rasterize them via the skrifa COLR fallback.
+    /// Collects glyphs swash could not rasterize (COLR color glyphs, e.g. emoji) so the software renderer can re-rasterize them via the skrifa COLR fallback.
     pub fn collect_colr_glyphs(
         &mut self,
         text: &str,
@@ -30,7 +30,7 @@ impl TextShaper {
         if text.is_empty() {
             return;
         }
-        // Plain UI text (no emoji / COLR glyphs) is the overwhelmingly common case. Once a (text, font_size) is known to shape to zero COLR glyphs, skip the whole buffer build + per-glyph swash probe. COLR-ness depends only on the font + codepoint, never on rect/wrap, so this flag is layout-independent.
+        // Plain UI text is the overwhelmingly common case, so once a (text, font_size) is known to shape to zero COLR glyphs the whole buffer build and per-glyph probe is skipped. COLR-ness depends only on the font and codepoint, never on rect or wrap, so the flag is layout-independent.
         let flag_key = (
             hash_text(text),
             style.font_size.to_bits(),
@@ -49,7 +49,7 @@ impl TextShaper {
                     .swash_cache
                     .get_image(&mut self.font_system, physical.cache_key)
                 {
-                    // swash returns None for COLR v1 glyphs it cannot rasterize, OR Some with zero-size placement for fonts (like NotoColorEmoji on Android) that store empty outlines in the glyf table while actual rendering lives in COLR.
+                    // swash returns `None` for COLR v1 glyphs it cannot rasterize, or `Some` with a zero-size placement for fonts that store empty outlines in `glyf` while the real rendering lives in COLR.
                     None => true,
                     Some(img) => img.placement.width == 0 && img.placement.height == 0,
                 };
@@ -65,13 +65,12 @@ impl TextShaper {
                 }
             }
         }
-        // Record whether this text produced any COLR glyph so later calls can short-circuit.
+        // Recorded so later calls can short-circuit.
         self.has_colr_cache.insert(flag_key, out.len() > start_len);
     }
 
-    /// Rasterizes a COLR v1 color glyph swash could not handle, returning atlas-ready data
-    /// `(w, h, placement_left, placement_top, straight-alpha RGBA8, is_color_glyph=true)`.
-    // pub(super): called from `shaper::layout`, a sibling module, as the fallback when swash can't rasterize a glyph.
+    /// Rasterizes a COLR v1 color glyph swash could not handle, returning atlas-ready data `(w, h, placement_left, placement_top, straight-alpha RGBA8, is_color_glyph=true)`.
+    // `pub(super)` for `shaper::layout`, as the fallback when swash cannot rasterize a glyph.
     pub(super) fn rasterize_colr_atlas_glyph(
         &mut self,
         cache_key: CacheKey,
@@ -97,9 +96,7 @@ impl TextShaper {
         ))
     }
 
-    /// Cached raw font bytes + face index for `font_id`, for the software COLR fallback. Routes the
-    /// software path through the same per-font cache the GPU atlas path uses, so emoji bytes (often
-    /// several MB, e.g. NotoColorEmoji) are read once instead of re-read and copied on every frame.
+    /// Cached raw font bytes + face index for `font_id`, for the software COLR fallback. Routes the software path through the same per-font cache the GPU atlas path uses, so emoji bytes (often several MB, e.g. NotoColorEmoji) are read once instead of re-read and copied on every frame.
     pub fn colr_font_bytes(&mut self, font_id: fontdb::ID) -> Option<Arc<(Vec<u8>, u32)>> {
         self.colr_font_bytes_impl(font_id)
     }

@@ -7,8 +7,7 @@ use super::geom::{cell_center, mapped, sample};
 use super::{CellRect, Painter};
 use crate::cell::{Attrs, Grapheme};
 
-/// Which way a border line leaves a cell. A cell's set of directions is what picks its character, so
-/// corners, edges, junctions and a one-cell-wide box all fall out of the same table.
+/// Which way a border line leaves a cell. A cell's set of directions is what picks its character, so corners, edges, junctions and a one-cell-wide box all fall out of the same table.
 mod side {
     pub const UP: u8 = 1 << 0;
     pub const DOWN: u8 = 1 << 1;
@@ -16,8 +15,7 @@ mod side {
     pub const RIGHT: u8 = 1 << 3;
 }
 
-/// The box-drawing characters for one weight of line. Unicode has no rounded heavy corners, so the heavy
-/// set uses square ones and a rounded heavy border simply reads as square.
+/// The box-drawing characters for one weight of line. Unicode has no rounded heavy corners, so the heavy set uses square ones and a rounded heavy border simply reads as square.
 struct BoxChars {
     horizontal: char,
     vertical: char,
@@ -101,8 +99,7 @@ impl Painter<'_> {
             self.hairline(rect, style);
             return;
         }
-        // The shadow is dropped rather than approximated. A terminal has no sub-cell falloff, so the only
-        // thing to draw is a hard band of colour offset from the box — which reads as a second box.
+        // The shadow is dropped rather than approximated. A terminal has no sub-cell falloff, so the only thing to draw is a hard band of colour offset from the box — which reads as a second box.
         if let Some(fill) = &style.fill {
             let paint = mapped(fill, self.matrix(), self.scale());
             for row in cells.row0..cells.row1 {
@@ -125,8 +122,7 @@ impl Painter<'_> {
         paint: &renderer_core::Paint,
         radius: renderer_core::BorderRadius,
     ) {
-        // A border's weight is categorical here: a hairline and a two-pixel rule are both one cell of line,
-        // so the only distinction a terminal can carry is light versus heavy.
+        // A border's weight is categorical here: a hairline and a two-pixel rule are both one cell of line, so the only distinction a terminal can carry is light versus heavy.
         let thickest = widths.iter().copied().fold(0.0f32, f32::max) * self.scale();
         let chars = if thickest >= self.cell.width * 0.5 {
             &HEAVY
@@ -206,8 +202,7 @@ impl Painter<'_> {
         self.stroke_segment(a, b, color);
     }
 
-    /// One straight run, walked in cells. The character says which way the run is heading, which is as much
-    /// direction as a cell can carry.
+    /// One straight run, walked in cells. The character says which way the run is heading, which is as much direction as a cell can carry.
     fn stroke_segment(&mut self, a: Point, b: Point, color: Color) {
         let from = (self.cell.col_at(a.x), self.cell.row_at(a.y));
         let to = (self.cell.col_at(b.x), self.cell.row_at(b.y));
@@ -316,8 +311,7 @@ impl Painter<'_> {
         }
     }
 
-    /// Cells for a rect already in window space — the path pipeline maps its own points, so it must not be
-    /// mapped a second time.
+    /// Cells for a rect already in window space — the path pipeline maps its own points, so it must not be mapped a second time.
     fn cells_of_window(&self, rect: Rect) -> CellRect {
         CellRect::of(rect, self.cell).intersect(CellRect {
             col0: 0,
@@ -328,8 +322,7 @@ impl Painter<'_> {
     }
 }
 
-/// Flattens a path's curves into polylines in window space. The tolerance is a fraction of a cell, since a
-/// curve smoother than one cell is indistinguishable from a straight line here.
+/// Flattens a path's curves into polylines in window space. The tolerance is a fraction of a cell, since a curve smoother than one cell is indistinguishable from a straight line here.
 fn flatten(
     data: &PathData,
     transform: &geometry_core::Transform,
@@ -412,8 +405,7 @@ fn cubic(a: Point, c1: Point, c2: Point, b: Point, t: f32) -> Point {
     )
 }
 
-/// The character for a run heading `(dc, dr)` cells. A run within 30° of an axis reads as that axis; the
-/// rest are the two diagonals.
+/// The character for a run heading `(dc, dr)` cells. A run within 30° of an axis reads as that axis; the rest are the two diagonals.
 fn run_char(dc: i32, dr: i32) -> char {
     match (dc.abs(), dr.abs()) {
         (0, 0) => '·',
@@ -427,10 +419,7 @@ fn run_char(dc: i32, dr: i32) -> char {
 impl Painter<'_> {
     /// A rect thinner than a cell, drawn as the line it is.
     ///
-    /// Rounding both edges to the same column is the right answer for a box — it is what makes neighbours
-    /// tile — but it erases everything a UI draws at hairline width: a text caret, a one-pixel divider, a
-    /// separator between rows. Those are not boxes that happen to be small; they are lines, and a terminal
-    /// has characters for lines.
+    /// Rounding both edges to the same column is the right answer for a box — it is what makes neighbours tile — but it erases everything a UI draws at hairline width: a text caret, a one-pixel divider, a separator between rows. Those are not boxes that happen to be small; they are lines, and a terminal has characters for lines.
     fn hairline(&mut self, rect: Rect, style: &RectStyle) {
         let Some(fill) = &style.fill else {
             return;

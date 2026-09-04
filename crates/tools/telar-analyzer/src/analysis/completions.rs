@@ -1,3 +1,5 @@
+//! Completion: what may be written at the cursor, decided from the `.rsx` section it is in.
+
 use crate::analysis::occurrences::declared_signals;
 use crate::position::{Section, find_section_at};
 use crate::project::ProjectInfo;
@@ -7,6 +9,7 @@ use std::path::Path;
 use telar_parser::RsxDocument;
 use telar_transpiler::{color_attr_keys, color_keywords, is_control_flow_keyword, tag_attr_keys};
 
+/// What may be written at the cursor: an element name, an attribute key, a colour or a class.
 pub enum CompletionKind {
     ElementName,
     AttributeKey(String),
@@ -15,6 +18,7 @@ pub enum CompletionKind {
     SignalRef,
 }
 
+/// What kind of completion the cursor is in, decided from the `.rsx` section around it.
 pub fn completion_context(source: &str, line: u32, character: u32) -> Option<CompletionKind> {
     if find_section_at(source, line) != Section::View {
         return None;
@@ -80,6 +84,7 @@ fn in_quoted_string(prefix: &str) -> bool {
     in_str
 }
 
+/// The built-in tags, plus the components discoverable from `dir`.
 pub fn element_name_items(dir: Option<&Path>) -> Vec<CompletionItem> {
     let builtin_set: HashSet<&str> = telar_transpiler::builtin_tags()
         .iter()
@@ -123,10 +128,12 @@ fn attribute_items(keys: &[&str]) -> Vec<CompletionItem> {
         .collect()
 }
 
+/// The attribute keys a tag accepts.
 pub fn attribute_key_items(tag: &str) -> Vec<CompletionItem> {
     attribute_items(&tag_attr_keys(tag))
 }
 
+/// The colour keywords, plus the project theme's own tokens.
 pub fn color_items(project: Option<&ProjectInfo>) -> Vec<CompletionItem> {
     let mut seen: HashSet<String> = HashSet::new();
     let mut items: Vec<CompletionItem> = Vec::new();
@@ -145,7 +152,6 @@ pub fn color_items(project: Option<&ProjectInfo>) -> Vec<CompletionItem> {
             push(field.clone(), &mut items, &mut seen);
         }
     }
-    // Keyword colors (`white`/`black`/`transparent`), offered alongside the theme fields.
     for keyword in color_keywords() {
         push(keyword.to_string(), &mut items, &mut seen);
     }
@@ -153,6 +159,7 @@ pub fn color_items(project: Option<&ProjectInfo>) -> Vec<CompletionItem> {
     items
 }
 
+/// The `[style]` classes this document declares.
 pub fn style_class_items(doc: &RsxDocument) -> Vec<CompletionItem> {
     doc.style
         .classes

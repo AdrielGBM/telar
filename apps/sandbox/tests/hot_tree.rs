@@ -1,9 +1,6 @@
-//! The split-runtime regression test: with the app loaded as a real dylib (host and app linking separate
-//! reactive/layout/motion copies), does a click alone keep re-composing frames?
+//! The split-runtime regression test: with the app loaded as a real dylib (host and app linking separate reactive/layout/motion copies), does a click alone keep re-composing frames?
 //!
-//! This is the condition no in-process test can reproduce, and the one that made an entrance transition sit at
-//! opacity 0 — a black page — until the user moved the mouse. It needs a dylib built the way `cargo telar dev`
-//! builds one, so it is `#[ignore]`d by default. To run it:
+//! This is the condition no in-process test can reproduce, and the one that made an entrance transition sit at opacity 0 — a black page — until the user moved the mouse. It needs a dylib built the way `cargo telar dev` builds one, so it is `#[ignore]`d by default. To run it:
 //!
 //! ```text
 //! TELAR_HOT_RELOAD_BUILD=1 RUSTFLAGS=--cfg=telar_hot_reload cargo build -p sandbox --features sandbox/dev --lib
@@ -33,9 +30,7 @@ fn dylib_path() -> PathBuf {
         .join(name)
 }
 
-/// The reload ownership order: the tree the dylib allocated has to be released *into that dylib* while it is
-/// still mapped, which is why the runner nulls its tree before it replaces the app. Getting it backwards frees
-/// dylib memory through an unmapped `release` shim — a segfault, not a test failure, so this is a crash guard.
+/// The reload ownership order: the tree the dylib allocated has to be released *into that dylib* while it is still mapped, which is why the runner nulls its tree before it replaces the app. Getting it backwards frees dylib memory through an unmapped `release` shim — a segfault, not a test failure, so this is a crash guard.
 #[test]
 #[ignore = "needs a hot-reload dylib built first; see the module docs"]
 fn the_dylib_tree_composes_and_is_released_before_its_library() {
@@ -90,7 +85,6 @@ fn a_click_keeps_recomposing_frames_with_the_app_in_a_dylib() {
     handler.on_redraw(&window);
     handler.about_to_wait();
 
-    // Click nav item 5 in the rail, then stop touching the input entirely.
     let (x, y) = (110.0, 489.0);
     for event in [
         Event::PointerPressed {
@@ -111,8 +105,7 @@ fn a_click_keeps_recomposing_frames_with_the_app_in_a_dylib() {
         handler.about_to_wait();
     }
 
-    // Frames with no input at all: the transition must keep producing *different* pixels. Frozen pixels are the
-    // bug — the host re-sending the commands composed for the animation's first value.
+    // Frames with no input at all: the transition must keep producing *different* pixels. Frozen pixels are the bug — the host re-sending the commands composed for the animation's first value.
     let mut distinct = 0;
     let mut previous: Option<Vec<u8>> = None;
     for _ in 0..12 {

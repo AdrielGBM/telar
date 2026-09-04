@@ -1,10 +1,12 @@
+//! Guards over shaping, measurement, the caches and the pixel raster's grid.
+
 use super::cache::{hash_text, text_style_bits};
 use super::*;
 use geometry_core::Rect;
 use renderer_core::TextWrap;
 use renderer_core::{Color, Declared, Span, TextStyle};
 
-// Text positions are logical, so a multi-line block must occupy the same vertical extent regardless of the device scale factor. cosmic-text's `physical` adds the y-offset unscaled, so passing the line baseline there unscaled collapsed every line onto the first one at high-DPI (e.g. Android).
+// Text positions are logical, so a multi-line block must occupy the same vertical extent at any scale factor. cosmic-text's `physical` adds the y-offset unscaled, which collapsed every line onto the first.
 #[test]
 fn line_layout_is_scale_independent() {
     let mut sh = TextShaper::new();
@@ -30,7 +32,6 @@ fn line_layout_is_scale_independent() {
     );
 }
 
-// A larger line_height must measure to a taller box so multi-line text reserves the extra vertical space. Guarded on a real measured height so a font-less CI machine can't turn a vacuous 0==0 into a false pass.
 #[test]
 fn larger_line_height_increases_measured_height() {
     let mut sh = TextShaper::new();
@@ -47,10 +48,7 @@ fn larger_line_height_increases_measured_height() {
     );
 }
 
-// `max_lines` must cut the shaped paragraph to that many visual lines, and `ellipsis` must mark the cut with
-// `…` rather than dropping the tail in silence. Every clamped label in the tree rests on this and nothing
-// asserted it: the only test that named ellipsis was a PNG utility that never runs. Guarded on text that
-// really wrapped past the clamp, so a font-less machine skips instead of passing vacuously.
+// `max_lines` must cut the shaped paragraph and `ellipsis` must mark the cut rather than dropping the tail in silence. Every clamped label rests on this and nothing asserted it. Guarded on text that really wrapped past the clamp, so a font-less machine skips instead of passing vacuously.
 #[test]
 fn max_lines_cuts_the_shaped_lines_and_ellipsis_marks_the_cut() {
     let mut sh = TextShaper::new();
@@ -90,8 +88,6 @@ fn max_lines_cuts_the_shaped_lines_and_ellipsis_marks_the_cut() {
     );
 }
 
-// The clamp has to reach `measure` too: a label reserves the box `measure_text` reports, so a height measured
-// as if the dropped lines were still there leaves a hole under every truncated label.
 #[test]
 fn max_lines_clamps_the_measured_height() {
     let mut sh = TextShaper::new();
@@ -113,11 +109,10 @@ fn max_lines_clamps_the_measured_height() {
     );
 }
 
-// Default spacing keeps the exact packed style bits (so existing keys and the byte-golden are untouched), while any non-default line_height or letter_spacing yields distinct bits so cached measures/rasters aren't reused across spacing. Pure bit math: font-independent.
+// Default spacing keeps the exact packed style bits, so existing keys and the byte-golden are untouched, while any non-default spacing yields distinct bits. Pure bit math, so font-independent.
 #[test]
 fn text_style_bits_default_unchanged_and_spacing_perturbs() {
     let base = TextStyle::new(16.0, Color::BLACK);
-    // The packed layout for a plain 400-weight style is exactly the weight value.
     assert_eq!(text_style_bits(&base), 400);
     let bits_default = text_style_bits(&base);
     let bits_lh = text_style_bits(&base.clone().with_line_height(1.5));
@@ -133,7 +128,6 @@ fn text_style_bits_default_unchanged_and_spacing_perturbs() {
         bits_pixel, bits_default,
         "the raster grid must perturb the bits, or a smooth raster is served to a pixel style"
     );
-    // Two families are two sets of glyphs for one string: a shared key serves one face's raster for the other.
     let bits_family = text_style_bits(&base.clone().with_font_family("LanaPixel"));
     let bits_other = text_style_bits(&base.clone().with_font_family("Inter"));
     assert_ne!(
@@ -143,7 +137,7 @@ fn text_style_bits_default_unchanged_and_spacing_perturbs() {
     assert_ne!(bits_family, bits_other, "two families must not share a key");
 }
 
-// Coverage under the pixel raster is ink or nothing: a glyph half-covering a pixel is the grid the artist drew being taken apart. Skipped rather than failed on a font-less machine, where nothing is inked at all.
+// Coverage under the pixel raster is ink or nothing: a glyph half-covering a pixel is the grid the artist drew being taken apart. Skipped on a font-less machine, where nothing is inked at all.
 #[test]
 fn pixel_raster_leaves_no_partial_coverage() {
     let mut sh = TextShaper::new();
@@ -177,7 +171,7 @@ fn pixel_raster_leaves_no_partial_coverage() {
     );
 }
 
-// The other half of the grid, and the half that does not show in a `PhysicalGlyph`'s integer coordinates: the fractional part of a glyph's origin rides in its cache key as a quarter-pixel bin the rasterizer bakes into the image. Rounding before the binning is what collapses those four rasters into one, so the same glyph half a pixel further along is that glyph moved rather than a differently-offset one.
+// The half that does not show in a `PhysicalGlyph`'s integer coordinates: the fractional part of a glyph's origin rides in its cache key as a quarter-pixel bin. Rounding before the binning collapses those four rasters into one.
 #[test]
 fn pixel_raster_collapses_the_subpixel_bins_smooth_keeps() {
     let mut sh = TextShaper::new();
@@ -209,7 +203,7 @@ fn pixel_raster_collapses_the_subpixel_bins_smooth_keeps() {
     );
 }
 
-// A pixel-raster glyph must not land in the atlas slot of the smooth raster of the same glyph at the same size — the two are different pictures, and the atlas is keyed by cosmic-text's `CacheKey`. Shaping with `PIXEL_FONT` is what keeps them apart, so it has to reach the shaped glyphs.
+// A pixel-raster glyph must not land in the atlas slot of the smooth raster of the same glyph at the same size: the two are different pictures, and the atlas is keyed by cosmic-text's `CacheKey`.
 #[test]
 fn pixel_raster_shapes_under_its_own_cache_key() {
     let mut sh = TextShaper::new();
@@ -280,7 +274,7 @@ fn measure_text_empty_returns_zero() {
 
 #[test]
 fn measure_cache_keeps_hot_entry_past_cap() {
-    // The old policy cleared the whole cache at 1000 entries, evicting even constantly-used keys. The LRU must keep a re-touched "hot" entry alive while cold ones flood past the cap. Pure cache bookkeeping: independent of whether fonts are installed.
+    // The old policy cleared the whole cache at 1000 entries, evicting even constantly-used keys. The LRU must keep a re-touched entry alive while cold ones flood past the cap.
     let cap_entries = limits::TEXT_MEASURE.capacity / limits::SMALL_ENTRY_BYTES;
     let mut sh = TextShaper::new();
     let hot = "hot text that stays warm";
@@ -294,7 +288,6 @@ fn measure_cache_keeps_hot_entry_past_cap() {
     sh.measure_text(hot, None, 200.0, &style);
     for i in 0..(cap_entries as u32 + 50) {
         sh.measure_text(&format!("cold entry {i}"), None, 200.0, &style);
-        // Keep the hot entry most-recently-used so the LRU never evicts it.
         sh.measure_text(hot, None, 200.0, &style);
     }
     assert!(sh.measure_cache.contains(&hot_key));
@@ -303,7 +296,7 @@ fn measure_cache_keeps_hot_entry_past_cap() {
 
 #[test]
 fn collect_colr_gating_records_and_skips() {
-    // The first call records a has-COLR flag for (text, font_size); a later call with a cached `false` must short-circuit (no re-shaping, empty result). Both halves are font-independent: the flag VALUE depends on installed fonts, but that a flag is recorded and that a false flag skips collection do not.
+    // The first call records a has-COLR flag; a later call with a cached `false` must short-circuit. Both halves are font-independent, even though the flag's value is not.
     let mut sh = TextShaper::new();
     let text = "ui label";
     let style = TextStyle::new(16.0, Color::BLACK);
@@ -323,7 +316,6 @@ fn collect_colr_gating_records_and_skips() {
         "first call must record the COLR flag"
     );
 
-    // Force the "no COLR glyphs" flag and confirm the next call short-circuits to an empty result.
     sh.has_colr_cache.insert(flag_key, false);
     let mut out2 = Vec::new();
     sh.collect_colr_glyphs(text, rect, &style, &mut out2);
@@ -333,9 +325,7 @@ fn collect_colr_gating_records_and_skips() {
     );
 }
 
-// The clock case, end to end: admission itself is covered in `renderer-cache`, so what matters here is that
-// `rasterize` is actually wired to it — the previous arrangement applied admission in the shaper and then had the
-// software backend keep an unconditional second copy, which made the policy a no-op where it counted.
+// The clock case end to end. Admission itself is covered in `renderer-cache`, so what matters here is that `rasterize` is wired to it: the previous arrangement applied admission in the shaper and kept an unconditional second copy in the software backend, making the policy a no-op where it counted.
 #[test]
 fn a_string_rasterized_once_is_not_kept_and_a_second_sighting_keeps_it() {
     let mut shaper = TextShaper::new();
@@ -362,8 +352,7 @@ fn a_string_rasterized_once_is_not_kept_and_a_second_sighting_keeps_it() {
     );
 }
 
-// Trimming the glyph rasters is all-or-nothing, so the risk is not that it fails to fire but that it fires when it
-// should not: clearing a shell's working set costs re-rasterizing every glyph still on screen.
+// Trimming the glyph rasters is all-or-nothing, so the risk is not that it fails to fire but that it fires when it should not: clearing a shell's working set costs re-rasterizing every glyph still on screen.
 #[test]
 fn an_idle_sweep_keeps_the_glyph_rasters_a_shell_actually_uses() {
     let mut sh = TextShaper::new();
@@ -386,9 +375,7 @@ fn an_idle_sweep_keeps_the_glyph_rasters_a_shell_actually_uses() {
     );
 }
 
-// The shaping cache takes no admission: its entries are a couple of hundred bytes, so the budget bounds them without
-// help, and making a string shape twice to save those bytes would trade the expensive half of drawing text for the
-// cheap half.
+// The shaping cache takes no admission: its entries are a couple of hundred bytes, so the budget bounds them without help, and making a string shape twice would trade the expensive half of drawing text for the cheap half.
 #[test]
 fn shaped_positions_are_kept_on_the_first_sighting() {
     let mut shaper = TextShaper::new();
@@ -405,7 +392,7 @@ fn shaped_positions_are_kept_on_the_first_sighting() {
     assert_eq!(shaper.shaping_cache.len(), 1);
 }
 
-// N lines measure N line heights. The box used to be anchored on the last line's *baseline*, which counted the ascent on top of the line height and left every text block reserving a constant slab it never drew into — nearly half the box at UI sizes. Read as a ratio so it holds for whatever face the machine resolves, and skipped where no font draws at all.
+// N lines measure N line heights. The box used to be anchored on the last line's baseline, which counted the ascent on top of the line height and left every block reserving a slab it never drew into. Read as a ratio so it holds for whatever face the machine resolves.
 #[test]
 fn a_text_box_measures_its_line_heights_and_nothing_more() {
     let mut sh = TextShaper::new();
@@ -420,7 +407,6 @@ fn a_text_box_measures_its_line_heights_and_nothing_more() {
         "one line should measure one line height ({line_height}), not {one}"
     );
 
-    // A width narrow enough to force a wrap, so the second line's contribution is the line height too.
     let (_, two) = sh.measure_text("Una línea que no cabe entera", None, 60.0, &style);
     let lines = (two / line_height).round();
     assert!(lines >= 2.0, "the text did not wrap: {two}");
@@ -431,8 +417,7 @@ fn a_text_box_measures_its_line_heights_and_nothing_more() {
     );
 }
 
-/// A label that is a token, not prose: it keeps one line whatever width the box offers, and measures the
-/// width it actually needs. Wrapping it is how a status bar turns "object mode" into two stacked words.
+/// A label that is a token, not prose: it keeps one line whatever width the box offers, and measures the width it actually needs. Wrapping it is how a status bar turns "object mode" into two stacked words.
 #[test]
 fn a_no_wrap_style_measures_one_line_however_narrow_the_box() {
     let style = TextStyle::new(14.0, Color::BLACK);
@@ -454,7 +439,6 @@ fn a_no_wrap_style_measures_one_line_however_narrow_the_box() {
     );
 }
 
-// Driven off two families the machine actually has, so this tests face selection rather than font installation.
 #[test]
 fn a_named_family_shapes_in_that_face() {
     let mut sh = TextShaper::new();
@@ -491,9 +475,7 @@ fn a_named_family_shapes_in_that_face() {
     );
 }
 
-// The merge's reason for existing: a clamped mixed paragraph gets the `…` a clamped plain one always got.
-// The rich path could not — it held one `&str` per run, and cutting across runs to append an ellipsis was
-// never written, so a clamped notification body did nothing and said nothing.
+// The merge's reason for existing: a clamped mixed paragraph gets the `…` a clamped plain one always got. The rich path could not — it held one `&str` per run, and cutting across runs to append an ellipsis was never written, so a clamped notification body did nothing and said nothing.
 #[test]
 fn a_clamped_paragraph_is_elided_whether_or_not_it_has_spans() {
     let mut sh = TextShaper::new();
@@ -505,7 +487,6 @@ fn a_clamped_paragraph_is_elided_whether_or_not_it_has_spans() {
         height: 10_000.0,
     };
     let base = TextStyle::new(16.0, Color::BLACK).with_clamp(2, true);
-    // A bold word early on, so the paragraph is genuinely spanned where the clamp is not.
     let spans = [Span::new(0..5, Declared::default().with_font_weight(700))];
 
     let plain = make_buffer(&mut sh.font_system, text, None, rect, &base);
@@ -530,8 +511,7 @@ fn a_clamped_paragraph_is_elided_whether_or_not_it_has_spans() {
     );
 }
 
-// A span restyles its own bytes and nothing else, which is what makes it a cascade child rather than a
-// separate widget: the text either side of it keeps the paragraph's style.
+// A span restyles its own bytes and nothing else, which is what makes it a cascade child rather than a separate widget.
 #[test]
 fn a_span_restyles_only_its_own_range() {
     let mut sh = TextShaper::new();
@@ -558,8 +538,7 @@ fn a_span_restyles_only_its_own_range() {
     }
 }
 
-// A span may set a size of its own — something a `TextRun` could not express at all, which is why
-// `hogar-shell` keeps its notification summary and body as two widgets instead of one paragraph.
+// A span may set a size of its own, which a `TextRun` could not express at all.
 #[test]
 fn a_span_can_change_the_size_mid_paragraph() {
     let mut sh = TextShaper::new();

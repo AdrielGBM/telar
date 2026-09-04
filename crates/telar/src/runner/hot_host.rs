@@ -11,6 +11,7 @@ use crate::prefs::UserPrefs;
 
 use super::handler::build_app_handler;
 
+/// Runs the dev host: a window whose application comes from a dylib and is swapped on each rebuild.
 pub fn run_hot_reload_host(
     lib_path: &str,
     hot_port: &str,
@@ -52,8 +53,7 @@ pub fn run_hot_reload_host(
     if let Some(custom) = initial_app.window_config() {
         window = custom;
     }
-    // Share the one field literal with `run_with_platform` (via build_app_handler); only the hot-reload
-    // receiver differs from a normal single-window handler.
+    // Share the one field literal with `run_with_platform` (via build_app_handler); only the hot-reload receiver differs from a normal single-window handler.
     let mut handler = build_app_handler::<WinitWindow, crate::dev_tools::DevTools>(
         Box::new(initial_app),
         paths,

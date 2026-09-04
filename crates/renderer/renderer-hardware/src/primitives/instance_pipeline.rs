@@ -1,3 +1,5 @@
+//! The shared instanced-draw scaffolding each primitive pipeline is built on.
+
 pub(crate) struct InstancePipeline<I: bytemuck::Pod> {
     pub(crate) instances_buffer: wgpu::Buffer,
     pub(crate) instances_bind_group: wgpu::BindGroup,
@@ -77,11 +79,9 @@ impl<I: bytemuck::Pod> InstancePipeline<I> {
     }
 }
 
-/// Uploads `pending` into the pipeline's instance buffer when its contents changed since the last frame,
-/// remembering the hash in `prev_hash`; an empty batch resets the hash so the next non-empty one uploads.
+/// Uploads `pending` into the pipeline's instance buffer when its contents changed since the last frame, remembering the hash in `prev_hash`; an empty batch resets the hash so the next non-empty one uploads.
 ///
-/// Four pipelines asked exactly this in four byte-identical blocks, differing only in which buffer and which
-/// remembered hash they named.
+/// Four pipelines asked exactly this in four byte-identical blocks, differing only in which buffer and which remembered hash they named.
 pub(crate) fn upload_instances<I: bytemuck::Pod>(
     device: &wgpu::Device,
     queue: &wgpu::Queue,

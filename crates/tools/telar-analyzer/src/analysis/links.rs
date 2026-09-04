@@ -7,6 +7,7 @@ use telar_parser::{RsxDocument, ViewNode};
 
 use crate::text::offset_to_position;
 
+/// The asset paths in the document that resolve to a file, made clickable.
 pub fn document_links(doc: &RsxDocument, source: &str, file_dir: &Path) -> Vec<DocumentLink> {
     let mut out = Vec::new();
     collect(&doc.view.nodes, source, file_dir, &mut out);
@@ -90,11 +91,9 @@ mod tests {
         let doc = parse(src).unwrap();
         let links = document_links(&doc, src, &dir);
 
-        // Only the existing local asset is linked.
         assert_eq!(links.len(), 1);
         let target = links[0].target.as_ref().unwrap().as_str();
         assert!(target.ends_with("logo.png"), "target: {target}");
-        // The range covers the path value (`logo.png`, 8 chars), not the quotes.
         assert_eq!(
             links[0].range.end.character - links[0].range.start.character,
             8

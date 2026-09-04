@@ -1,3 +1,5 @@
+//! Converting a diagnostic into the LSP shape an editor reads.
+
 use lsp_types::{Diagnostic as LspDiagnostic, DiagnosticSeverity, Position, Range};
 
 use crate::{Diagnostic, Severity};

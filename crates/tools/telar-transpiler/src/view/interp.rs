@@ -33,9 +33,7 @@ impl ViewGen<'_> {
         format!("move || format!({}, {args_joined})", rust_str(&fmt))
     }
 
-    /// The runtime catalog-lookup expression for an i18n key written in markup (`t"key"`). Reads the active
-    /// locale reactively, so wrapping it in a `move ||` content/label closure makes the widget live-switch on a
-    /// language change. Markup keys take no arguments (parameterized strings use the Rust `t!` macro).
+    /// The runtime catalog-lookup expression for an i18n key written in markup (`t"key"`). Reads the active locale reactively, so wrapping it in a `move ||` content/label closure makes the widget live-switch on a language change. Markup keys take no arguments (parameterized strings use the Rust `t!` macro).
     pub(super) fn i18n_lookup(&self, key: &str) -> String {
         format!(
             "telar::i18n::translate(&{}, {}, &[])",
@@ -50,13 +48,11 @@ impl ViewGen<'_> {
         if trimmed.is_empty() {
             return format!("{{ {expr} }}");
         }
-        // A `$ident` is a reactive read (`ident.get()`). Substitution rewrites the text, so a `$` expression gets no verbatim span; a `$`-free expression is copied byte-for-byte (a plain, non-reactive value) and keeps its source span for LSP mapping.
+        // Substitution rewrites the text, so a `$` expression gets no verbatim span; a `$`-free one is copied byte-for-byte and keeps its source span for LSP mapping.
         if trimmed.contains('$') {
             return format!("{{ {} }}", substitute_reads(trimmed));
         }
-        // Nor does an expression carrying a string literal of its own. The parser hands the content back
-        // unescaped, so a `"` here was `\"` in the `.rsx` — two bytes where the generated Rust has one, and
-        // every offset after it is off by that much. The span is dropped rather than made to lie.
+        // Nor an expression carrying a string literal: the parser hands content back unescaped, so a `"` here was `\"` in the `.rsx` and every offset after it is off by one. The span is dropped rather than made to lie.
         if trimmed.contains('"') {
             return format!("{{ {trimmed} }}");
         }
@@ -81,21 +77,16 @@ impl ViewGen<'_> {
     /// 7. No `theme_type` → file-local `COLOR_*` constant (declared in `[style]`, or rustc catches the missing symbol if undeclared).
     pub(super) fn color_expr(&self, value: &str) -> String {
         let v = value.trim();
-        // The parens a value needs to hold a space are the markup's delimiters, not part of the expression.
         let v = super::redundant_parens(v).unwrap_or(v);
         if v.starts_with('#') {
             return hex_to_color_expr(v);
         }
-        // A lone `$ident` is a direct signal read; anything more complex falls through to the expression arm.
         if let Some(ident) = v.strip_prefix('$')
             && is_ident(ident)
         {
             return format!("{ident}.get()");
         }
-        // A computed color expression (call / method chain / arithmetic) yielding a `Color`, with `$signal`
-        // reads made reactive. Comes before the `Color::`/keyword arms so a state-driven paint like
-        // `chip_fill($snapshot, id)` — or a verbatim `Color::from_rgb_u8(..)` — is emitted whole, not treated
-        // as a token.
+        // Before the `Color::`/keyword arms, so a state-driven paint like `chip_fill($snapshot, id)` is emitted whole rather than treated as a token.
         if v.contains('(') || v.contains('$') {
             return substitute_reads(v);
         }
@@ -108,11 +99,6 @@ impl ViewGen<'_> {
         if self.is_local(v) {
             return v.to_string();
         }
-        // Anything else is a Rust expression, spliced as written. There used to be a ladder here — a
-        // `[style]` constant, then a theme token, then *any* remaining name as a field on the theme — and
-        // its last rung meant `color:typo` compiled to `use_theme::<T>().typo` and failed in rustc against
-        // generated code. A name that resolves to nothing now fails on the author's own line, which is what
-        // a Rust expression does everywhere else.
         v.to_string()
     }
 

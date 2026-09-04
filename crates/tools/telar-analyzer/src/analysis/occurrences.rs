@@ -84,6 +84,7 @@ fn component_token(source: &str, line: u32, character: u32) -> Option<(usize, &s
     Some((lead, token))
 }
 
+/// The component tag under the cursor, if it is on one.
 pub fn component_at(source: &str, line: u32, character: u32) -> Option<String> {
     component_token(source, line, character).map(|(_, token)| token.to_string())
 }

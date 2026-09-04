@@ -1,14 +1,8 @@
 //! Where a node actually *is* on screen, once the scroll viewports around it are accounted for.
 //!
-//! Scrolling is a render transform, not a relayout: a scroll area moves its content by rewriting a matrix and
-//! leaves the layout tree exactly where it was. That makes `absolute_rect` — which reads laid-out positions —
-//! report where a node *would* be at scroll zero, which is wrong for anything positioned against the node's
-//! visible spot. Anchored overlays are the case that matters: a dropdown opened from a trigger scrolled 200px
-//! down would otherwise appear 200px below its button.
+//! Scrolling is a render transform, not a relayout: a scroll area moves its content by rewriting a matrix and leaves the layout tree exactly where it was. That makes `absolute_rect` — which reads laid-out positions — report where a node *would* be at scroll zero, which is wrong for anything positioned against the node's visible spot. Anchored overlays are the case that matters: a dropdown opened from a trigger scrolled 200px down would otherwise appear 200px below its button.
 //!
-//! Each scroll area registers its content subtree here with the offset signals driving it, and
-//! [`visible_rect`] subtracts every registered offset whose subtree contains the node — so nested scrolls
-//! compose without either of them knowing about the other.
+//! Each scroll area registers its content subtree here with the offset signals driving it, and [`visible_rect`] subtracts every registered offset whose subtree contains the node — so nested scrolls compose without either of them knowing about the other.
 
 use std::cell::RefCell;
 use std::mem::ManuallyDrop;
@@ -25,14 +19,13 @@ pub struct ScrollRegionId(u64);
 
 struct ScrollRegion {
     id: ScrollRegionId,
-    /// Root of the scrolled subtree — the scroll's *content* node, not its viewport leaf. The content is laid
-    /// out as its own root rather than as a child of the viewport, so the viewport is not its ancestor.
+    /// Root of the scrolled subtree — the scroll's *content* node, not its viewport leaf. The content is laid out as its own root rather than as a child of the viewport, so the viewport is not its ancestor.
     content: NodeId,
     offset_x: RwSignal<f32>,
     offset_y: RwSignal<f32>,
 }
 
-// ManuallyDrop keeps these TLS slots trivially-destructible: registering a TLS destructor from a hot-reloaded dylib would make dlclose unsafe (same constraint as `dismiss` and `named_overlay`).
+// `ManuallyDrop` keeps these slots trivially destructible: a TLS destructor registered from a hot-reloaded dylib would make `dlclose` unsafe.
 thread_local! {
     static REGIONS: ManuallyDrop<RefCell<Vec<ScrollRegion>>> = ManuallyDrop::new(RefCell::new(Vec::new()));
     static NEXT_ID: ManuallyDrop<RefCell<u64>> = ManuallyDrop::new(RefCell::new(0));
@@ -65,11 +58,9 @@ pub fn unregister_scroll_region(id: ScrollRegionId) {
     REGIONS.with(|regions| regions.borrow_mut().retain(|r| r.id != id));
 }
 
-/// The rect `node` occupies on screen: its laid-out window-absolute rect shifted by the current offset of
-/// every scroll viewport it sits inside. `None` when the node has not been laid out under a window root.
+/// The rect `node` occupies on screen: its laid-out window-absolute rect shifted by the current offset of every scroll viewport it sits inside. `None` when the node has not been laid out under a window root.
 ///
-/// Offsets are read without subscribing, because this answers "where is it right now" for a caller that is
-/// positioning something at that moment (an overlay being opened), not one that wants to follow the scroll.
+/// Offsets are read without subscribing, because this answers "where is it right now" for a caller that is positioning something at that moment (an overlay being opened), not one that wants to follow the scroll.
 pub fn visible_rect(node: NodeId) -> Option<Rect> {
     let mut rect = absolute_rect(node)?;
     REGIONS.with(|regions| {
@@ -97,8 +88,7 @@ mod tests {
         REGIONS.with(|regions| regions.borrow_mut().clear());
     }
 
-    /// A trigger inside a scrolled subtree must report where it is *drawn*, not where it was laid out — the
-    /// whole reason an anchored dropdown was landing under the wrong place.
+    /// A trigger inside a scrolled subtree must report where it is *drawn*, not where it was laid out — the whole reason an anchored dropdown was landing under the wrong place.
     #[test]
     fn a_scrolled_node_reports_its_on_screen_position() {
         reset_layout_runtime();
@@ -139,7 +129,6 @@ mod tests {
             "scrolling moves a node, it does not resize it"
         );
 
-        // Scrolling back restores the laid-out position, and withdrawing stops the adjustment entirely.
         y.set(0.0);
         assert_eq!(visible_rect(trigger), Some(laid_out));
         y.set(80.0);
@@ -172,8 +161,7 @@ mod tests {
         assert_eq!(shifted.x, laid_out.x - 5.0);
     }
 
-    /// A node outside a registered subtree is untouched by that scroll — otherwise every overlay in the app
-    /// would shift whenever any unrelated pane scrolled.
+    /// A node outside a registered subtree is untouched by that scroll — otherwise every overlay in the app would shift whenever any unrelated pane scrolled.
     #[test]
     fn a_node_outside_the_region_is_unaffected() {
         reset_layout_runtime();

@@ -1,3 +1,5 @@
+//! [`SvgData`]: an SVG as either a vector display list or a rasterized fallback, fitted per use.
+
 #[cfg(feature = "dynamic-svg")]
 mod bake;
 #[cfg(feature = "dynamic-svg")]
@@ -28,6 +30,7 @@ pub use bake::bake_to_source;
 
 #[derive(Debug, Clone, thiserror::Error)]
 #[error("failed to parse SVG: {0}")]
+/// An SVG could not be parsed or converted.
 pub struct SvgError(String);
 
 // Memo key: (width bits, height bits, tint as packed rgba bits or None, stroke-width override bits or None, object-fit discriminant). f32 goes through `to_bits` so it is Eq/Hash.
@@ -39,7 +42,6 @@ type MemoKey = (u32, u32, Option<[u32; 4]>, Option<u32>, u8);
 pub struct SvgData {
     // Content-derived (not a counter) so rebuilding the same SVG keeps a stable id for downstream caches.
     id: u64,
-    // Intrinsic size in px.
     size: (f32, f32),
     source: SvgSource,
     memo: Mutex<FxHashMap<MemoKey, Arc<Vec<DrawCommand>>>>,
@@ -51,14 +53,9 @@ enum SvgSource {
     Baked(BakedSvg),
 }
 
-/// A pre-converted SVG in intrinsic viewBox space, with original colors and no letterbox fit applied.
-/// One command of a baked vector list: exactly the three shapes `vector::convert_group` produces, and no
-/// others.
+/// A pre-converted SVG in intrinsic viewBox space, with original colors and no letterbox fit applied. One command of a baked vector list: exactly the three shapes `vector::convert_group` produces, and no others.
 ///
-/// A `Vec<DrawCommand>` said the same thing in a comment, and three walkers over it each answered a
-/// different way when handed something else — one panicked, one cloned it through with a debug assertion,
-/// one hashed a marker byte — while the public constructor accepted any command at all. Narrowing the type
-/// deletes the question: every walk is exhaustive and there is no unexpected command to disagree about.
+/// A `Vec<DrawCommand>` said the same thing in a comment, and three walkers over it each answered a different way when handed something else — one panicked, one cloned it through with a debug assertion, one hashed a marker byte — while the public constructor accepted any command at all. Narrowing the type deletes the question: every walk is exhaustive and there is no unexpected command to disagree about.
 #[derive(Debug, Clone, PartialEq)]
 pub enum VectorCommand {
     Path {
@@ -73,8 +70,7 @@ pub enum VectorCommand {
 }
 
 impl VectorCommand {
-    /// The renderer's own command for this one. Total in this direction — every vector command is a draw
-    /// command, which is why the narrowing costs nothing at the point of use.
+    /// The renderer's own command for this one. Total in this direction — every vector command is a draw command, which is why the narrowing costs nothing at the point of use.
     pub(crate) fn to_draw(&self) -> DrawCommand {
         match self {
             VectorCommand::Path { data, style } => DrawCommand::Path {

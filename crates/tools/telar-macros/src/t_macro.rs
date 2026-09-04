@@ -1,9 +1,6 @@
 //! The `t!("key", name = expr, ..)` translation macro.
 //!
-//! Validates the key (and its arguments) against the on-disk catalog at expansion time — an unknown key or a
-//! mismatched argument is a `compile_error!`, the build-time-safety payoff of the baked-catalog approach — then
-//! emits a runtime `telar::i18n::translate` call. The catalog is referenced by path (`crate::__rsx_i18n::CATALOG`)
-//! at the call site, never stored, so it always resolves to the current dylib under hot reload.
+//! Validates the key (and its arguments) against the on-disk catalog at expansion time — an unknown key or a mismatched argument is a `compile_error!`, the build-time-safety payoff of the baked-catalog approach — then emits a runtime `telar::i18n::translate` call. The catalog is referenced by path (`crate::__rsx_i18n::CATALOG`) at the call site, never stored, so it always resolves to the current dylib under hot reload.
 
 use std::cell::RefCell;
 use std::collections::HashMap;
@@ -42,8 +39,7 @@ impl Parse for TInput {
 }
 
 thread_local! {
-    // One build process expands every `t!` in the crate; cache the parsed catalog so hundreds of call sites
-    // don't each re-read the locale files. Keyed by package root; a fresh process (next build) starts empty.
+    // One build process expands every `t!` in the crate; cache the parsed catalog so hundreds of call sites don't each re-read the locale files. Keyed by package root; a fresh process (next build) starts empty.
     static CATALOG_CACHE: RefCell<HashMap<PathBuf, Rc<Result<Option<CatalogModel>, String>>>> =
         RefCell::new(HashMap::new());
 }

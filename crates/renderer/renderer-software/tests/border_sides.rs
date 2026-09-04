@@ -1,8 +1,6 @@
 //! What a per-side border has to be true of, asserted on the pixels the rasterizer actually produced.
 //!
-//! The unit tests around `border_inner_shape` prove the geometry; these prove it reached the buffer. The two
-//! failures worth catching here are the ones a geometry test cannot see: a side the author left at zero
-//! painted anyway, and the ring collapsing so that nothing is painted at all.
+//! The unit tests around `border_inner_shape` prove the geometry; these prove it reached the buffer. The two failures worth catching here are the ones a geometry test cannot see: a side the author left at zero painted anyway, and the ring collapsing so that nothing is painted at all.
 
 use std::sync::Arc;
 
@@ -36,8 +34,7 @@ fn render(style: RectStyle) -> Vec<u8> {
     renderer.read_rgba().expect("a frame was rendered").to_vec()
 }
 
-/// The red channel at a pixel — the border here is pure red, and the background pure black, so this reads as
-/// "how much border landed on this pixel".
+/// The red channel at a pixel — the border here is pure red, and the background pure black, so this reads as "how much border landed on this pixel".
 fn red_at(pixels: &[u8], x: u32, y: u32) -> u8 {
     pixels[((y * W + x) * 4) as usize]
 }
@@ -49,8 +46,7 @@ fn bordered(widths: [f32; 4]) -> RectStyle {
     })
 }
 
-/// The whole feature in one assertion: a rule under a header paints its own edge and leaves the other three
-/// alone. A border that ignored the sides would light up all four.
+/// The whole feature in one assertion: a rule under a header paints its own edge and leaves the other three alone. A border that ignored the sides would light up all four.
 #[test]
 fn a_bottom_border_paints_the_bottom_edge_and_nothing_else() {
     let pixels = render(bordered([0.0, 0.0, 1.0, 0.0]));
@@ -68,8 +64,7 @@ fn a_bottom_border_paints_the_bottom_edge_and_nothing_else() {
     }
 }
 
-/// The same box under the uniform form still frames all four sides, so the per-side path did not become the
-/// only path.
+/// The same box under the uniform form still frames all four sides, so the per-side path did not become the only path.
 #[test]
 fn a_uniform_border_still_frames_the_whole_box() {
     let pixels = render(bordered([1.0; 4]));
@@ -88,8 +83,7 @@ fn a_uniform_border_still_frames_the_whole_box() {
     assert_eq!(red_at(&pixels, 20, 20), 0, "the middle is still interior");
 }
 
-/// Two sides at different thicknesses, which is what the four-value shorthand is for and what a single
-/// "which sides" flag could never express.
+/// Two sides at different thicknesses, which is what the four-value shorthand is for and what a single "which sides" flag could never express.
 #[test]
 fn sides_keep_their_own_thicknesses() {
     let pixels = render(bordered([4.0, 0.0, 1.0, 0.0]));
@@ -116,8 +110,7 @@ fn a_rounded_box_keeps_the_arc_its_one_side_runs_into() {
     );
 }
 
-/// The degenerate end of the range: a border thicker than the box it frames has no interior to punch out, so
-/// it fills the box rather than vanishing.
+/// The degenerate end of the range: a border thicker than the box it frames has no interior to punch out, so it fills the box rather than vanishing.
 #[test]
 fn a_border_thicker_than_its_box_fills_it() {
     let pixels = render(bordered([30.0, 0.0, 30.0, 0.0]));
@@ -130,8 +123,7 @@ fn a_border_thicker_than_its_box_fills_it() {
     }
 }
 
-/// The fill stops where the border starts on the sides that have one, and reaches the edge on the sides that
-/// do not — the same interior both backends derive from `border_inner_shape`.
+/// The fill stops where the border starts on the sides that have one, and reaches the edge on the sides that do not — the same interior both backends derive from `border_inner_shape`.
 #[test]
 fn the_fill_meets_the_border_only_where_there_is_one() {
     let mut style = bordered([0.0, 0.0, 6.0, 0.0]);

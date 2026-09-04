@@ -1,12 +1,12 @@
+//! The project around the open file: its root, its theme, and its i18n catalogue.
+
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 
+/// The project around an open file: its root, its theme tokens and its i18n keys.
 pub struct ProjectInfo {
     pub root: PathBuf,
-    /// Where to look for *other components*, which is a wider question than [`Self::root`] answers. A crate's
-    /// `telar.toml` scopes its theme type and its i18n catalog — both genuinely per crate — but components are
-    /// shared across a workspace, and anchoring their search on the nearest `telar.toml` makes one defined in a
-    /// sibling crate invisible to completion and go-to-definition. Falls back to `root` outside a workspace.
+    /// Where to look for *other components*, which is a wider question than [`Self::root`] answers. A crate's `telar.toml` scopes its theme type and its i18n catalog — both genuinely per crate — but components are shared across a workspace, and anchoring their search on the nearest `telar.toml` makes one defined in a sibling crate invisible to completion and go-to-definition. Falls back to `root` outside a workspace.
     pub component_root: PathBuf,
     pub theme_type: Option<String>,
     pub theme_fields: HashSet<String>,
@@ -15,8 +15,7 @@ pub struct ProjectInfo {
 }
 
 impl ProjectInfo {
-    /// The same for the i18n catalog. `None` when the project has no translations at all, so a project that
-    /// never opted into i18n gets no key diagnostics rather than one per `t"…"`.
+    /// The same for the i18n catalog. `None` when the project has no translations at all, so a project that never opted into i18n gets no key diagnostics rather than one per `t"…"`.
     pub fn catalog_view(&self) -> Option<telar_diagnostics::CatalogView<'_>> {
         if self.i18n_keys.is_empty() {
             return None;

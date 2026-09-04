@@ -1,13 +1,8 @@
 //! Moving a selection through a list with the keyboard, the same way in every list that has one.
 //!
-//! It is deliberately *not* the focus system. That answers "which widget receives keys" — one focusable per
-//! widget, driven by Tab. This answers "which row of a list is selected", which is one focusable holding a
-//! cursor over N rows, and the two compose: a search field keeps focus while these keys drive the list
-//! underneath it.
+//! It is deliberately *not* the focus system. That answers "which widget receives keys" — one focusable per widget, driven by Tab. This answers "which row of a list is selected", which is one focusable holding a cursor over N rows, and the two compose: a search field keeps focus while these keys drive the list underneath it.
 //!
-//! The important half of the contract is the negative one: **everything [`KeyNav::interpret`] returns `None`
-//! for must still reach a focused text field as typing.** A list that swallows `j` cannot also be searched,
-//! which is why the vim bindings are off unless a caller asks for them.
+//! The important half of the contract is the negative one: **everything [`KeyNav::interpret`] returns `None` for must still reach a focused text field as typing.** A list that swallows `j` cannot also be searched, which is why the vim bindings are off unless a caller asks for them.
 
 use platform_core::{Key, NamedKey};
 
@@ -29,8 +24,7 @@ pub enum KeyNavMove {
     Previous,
     First,
     Last,
-    /// One row down in a grid — a whole column count, not one tile. Same as [`KeyNavMove::Next`] in a single-column
-    /// list, which is what lets one `apply` serve both.
+    /// One row down in a grid — a whole column count, not one tile. Same as [`KeyNavMove::Next`] in a single-column list, which is what lets one `apply` serve both.
     NextRow,
     PreviousRow,
     /// Run the selected row.
@@ -41,16 +35,13 @@ pub enum KeyNavMove {
 
 /// How a list reads keys: the arrows always, and optionally the vim bindings on top.
 ///
-/// `vim` is off by default because a list that swallows `j` cannot also be typed into, and hyprshell's biggest
-/// list — the launcher — is a search field. A surface with no text input can turn it on freely; one with a
-/// field should only do so if its user asked for it.
+/// `vim` is off by default because a list that swallows `j` cannot also be typed into, and hyprshell's biggest list — the launcher — is a search field. A surface with no text input can turn it on freely; one with a field should only do so if its user asked for it.
 #[derive(Clone, Copy)]
 pub struct KeyNav {
     pub vim: bool,
     /// The list runs along the screen's horizontal, so Left/Right move it rather than Up/Down.
     pub horizontal: bool,
-    /// The list wraps into rows, so it uses *both* pairs of arrows: Left/Right for one tile and Up/Down for a
-    /// whole row. Only a grid can, which is why it is a mode rather than the default.
+    /// The list wraps into rows, so it uses *both* pairs of arrows: Left/Right for one tile and Up/Down for a whole row. Only a grid can, which is why it is a mode rather than the default.
     pub grid: bool,
 }
 
@@ -67,8 +58,7 @@ impl KeyNav {
         self
     }
 
-    /// What `key` asks the list to do, or `None` when it is not a navigation key — which is the important half
-    /// of the contract: everything this returns `None` for must still reach a focused text field as typing.
+    /// What `key` asks the list to do, or `None` when it is not a navigation key — which is the important half of the contract: everything this returns `None` for must still reach a focused text field as typing.
     pub fn interpret(self, key: &Key) -> Option<KeyNavMove> {
         let (forward, back) = if self.horizontal {
             (NamedKey::ArrowRight, NamedKey::ArrowLeft)
@@ -101,7 +91,7 @@ impl KeyNav {
         if !self.vim {
             return None;
         }
-        // Vim's own pairs, and the readline pair every terminal user already has in their fingers. `G` before `g` because the shift-key distinction is the whole difference between them.
+        // Vim's own pairs plus the readline pair. `G` before `g`, since the shift distinction is their whole difference.
         let (down, up) = if self.grid {
             (KeyNavMove::NextRow, KeyNavMove::PreviousRow)
         } else {
@@ -126,17 +116,14 @@ impl KeyNav {
 
 /// Where a move lands, given the current index and how many rows there are.
 ///
-/// Wraps at both ends: a list short enough to see all of is faster to reach the bottom of by pressing up once,
-/// and a list too long to see wraps rather than sticking silently, which reads as the key not working.
+/// Wraps at both ends: a list short enough to see all of is faster to reach the bottom of by pressing up once, and a list too long to see wraps rather than sticking silently, which reads as the key not working.
 pub fn key_nav_apply(current: usize, count: usize, movement: KeyNavMove) -> usize {
     key_nav_apply_grid(current, count, 1, movement)
 }
 
-/// Where a move lands in a grid `columns` tiles wide. A single column is a list, which is why [`key_nav_apply`] is this
-/// with `columns = 1` rather than a second implementation.
+/// Where a move lands in a grid `columns` tiles wide. A single column is a list, which is why [`key_nav_apply`] is this with `columns = 1` rather than a second implementation.
 ///
-/// A row move off the bottom lands on the nearest tile below where there is one — a partial last row is still a
-/// row — and wraps to the same column otherwise, matching the horizontal rule.
+/// A row move off the bottom lands on the nearest tile below where there is one — a partial last row is still a row — and wraps to the same column otherwise, matching the horizontal rule.
 pub fn key_nav_apply_grid(
     current: usize,
     count: usize,
@@ -228,7 +215,6 @@ mod tests {
             Some(KeyNavMove::Cancel)
         );
 
-        // The half that matters: with vim off, a letter is typing and must reach the search field.
         assert_eq!(arrows().interpret(&character('j')), None);
         assert_eq!(arrows().interpret(&character('k')), None);
         assert_eq!(arrows().interpret(&character('G')), None);
@@ -298,12 +284,11 @@ mod tests {
             0,
             "an empty list has nowhere to go"
         );
-        // A selection left over from a longer list is clamped rather than wrapping off a stale index — the launcher's results shrink on every keystroke.
+        // Clamped rather than wrapping off a stale index: a launcher's results shrink on every keystroke.
         assert_eq!(key_nav_apply(9, 3, KeyNavMove::Next), 0);
         assert_eq!(key_nav_apply(9, 3, KeyNavMove::Previous), 1);
 
-        // A list is a one-column grid, so a row move is a step: the launcher's rows and its wallpaper grid share
-        // one `apply` and must not need to know which they are.
+        // A list is a one-column grid, so a row move is a step and neither caller needs to know which it is.
         assert_eq!(key_nav_apply(0, 3, KeyNavMove::NextRow), 1);
         assert_eq!(key_nav_apply(2, 3, KeyNavMove::PreviousRow), 1);
         assert_eq!(key_nav_apply(2, 3, KeyNavMove::NextRow), 0, "still wraps");
@@ -333,7 +318,6 @@ mod tests {
             Some(KeyNavMove::Activate)
         );
 
-        // With vim off — the launcher's default, since the grid sits under a search field — a letter is typing.
         assert_eq!(grid.interpret(&character('j')), None);
         assert_eq!(grid.interpret(&character('h')), None);
 
@@ -350,9 +334,6 @@ mod tests {
     /// Nine tiles in three columns, plus the awkward case a wallpaper folder always ends in: a partial last row.
     #[test]
     fn a_row_move_crosses_a_whole_row_and_a_partial_one_is_still_a_row() {
-        // 0 1 2
-        // 3 4 5
-        // 6 7 8
         assert_eq!(key_nav_apply_grid(0, 9, 3, KeyNavMove::NextRow), 3);
         assert_eq!(key_nav_apply_grid(4, 9, 3, KeyNavMove::PreviousRow), 1);
         assert_eq!(
@@ -371,13 +352,10 @@ mod tests {
             "and back to the bottom of it"
         );
 
-        // 0 1 2
-        // 3 4
-        // Down from 2 has no tile of its own below, but there *is* a row: landing on 4 beats not moving.
+        // 0 1 2 / 3 4: down from 2 has no tile of its own below, but there is a row, and landing on 4 beats not moving.
         assert_eq!(key_nav_apply_grid(2, 5, 3, KeyNavMove::NextRow), 4);
         assert_eq!(key_nav_apply_grid(1, 5, 3, KeyNavMove::NextRow), 4);
         assert_eq!(key_nav_apply_grid(0, 5, 3, KeyNavMove::NextRow), 3);
-        // Up from the top column 2 finds the bottom-most tile in that column, which is on the row above the gap.
         assert_eq!(key_nav_apply_grid(2, 5, 3, KeyNavMove::PreviousRow), 2);
         assert_eq!(key_nav_apply_grid(1, 5, 3, KeyNavMove::PreviousRow), 4);
         assert_eq!(
@@ -386,7 +364,6 @@ mod tests {
             "the last row wraps to the first"
         );
 
-        // One row: a row move has nowhere to go and must stay put rather than run off the end.
         assert_eq!(key_nav_apply_grid(1, 3, 3, KeyNavMove::NextRow), 1);
         assert_eq!(key_nav_apply_grid(1, 3, 3, KeyNavMove::PreviousRow), 1);
         assert_eq!(key_nav_apply_grid(0, 0, 4, KeyNavMove::NextRow), 0);

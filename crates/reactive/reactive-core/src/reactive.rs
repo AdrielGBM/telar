@@ -4,27 +4,15 @@ use std::rc::Rc;
 
 use crate::{Memo, ReadSignal, RwSignal};
 
-/// A value a widget re-reads every time it renders: a constant, a signal, or a derivation, erased into one
-/// type so the widget's field does not have to name which.
+/// A value a widget re-reads every time it renders: a constant, a signal, or a derivation, erased into one type so the widget's field does not have to name which.
 ///
-/// **What this is for.** A component that declares `RwSignal<T>` can only be fed a signal, so an application
-/// with a value computed from two services has nothing to hand it and re-implements the widget instead. One
-/// that declares `T` freezes at construction. `Reactive<T>` is the field type for a prop that must *read*
-/// state, and the call site writes whatever it has: `label:"Save"`, `label:name`, `label:total`.
+/// **What this is for.** A component that declares `RwSignal<T>` can only be fed a signal, so an application with a value computed from two services has nothing to hand it and re-implements the widget instead. One that declares `T` freezes at construction. `Reactive<T>` is the field type for a prop that must *read* state, and the call site writes whatever it has: `label:"Save"`, `label:name`, `label:total`.
 ///
-/// **Reading, never writing.** A prop the widget writes back — a checkbox's `checked`, a field's `value` —
-/// stays `RwSignal<T>`, because there is nothing for a reading closure to write to. That distinction is the
-/// component's own declaration, which is the point: the caller writes the handle either way and the compiler
-/// decides what it meant.
+/// **Reading, never writing.** A prop the widget writes back — a checkbox's `checked`, a field's `value` — stays `RwSignal<T>`, because there is nothing for a reading closure to write to. That distinction is the component's own declaration, which is the point: the caller writes the handle either way and the compiler decides what it meant.
 ///
-/// **Why the conversions are a list and not `impl Source`.** [`crate::Source`] is the same idea as a trait,
-/// and `impl<S: Source<Value = T>> From<S> for Reactive<T>` would be the tidy spelling — but it overlaps
-/// `From<T>` the moment a plain value implements `Source`, which `f32` and `bool` already do, and Rust has no
-/// way to prove two impls disjoint. So the conversions are enumerated. A closure is the one case the list
-/// cannot hold, for the same coherence reason, and it gets [`Reactive::of`].
-/// **A constant is held as itself, not as a closure returning it.** Most props are given a literal, and
-/// boxing one would put an allocation and a virtual call on every `gap:8` in the corpus for a value that
-/// cannot change. The enum is what lets a prop be uniformly readable without charging for it.
+/// **Why the conversions are a list and not `impl Source`.** [`crate::Source`] is the same idea as a trait, and `impl<S: Source<Value = T>> From<S> for Reactive<T>` would be the tidy spelling — but it overlaps `From<T>` the moment a plain value implements `Source`, which `f32` and `bool` already do, and Rust has no way to prove two impls disjoint. So the conversions are enumerated. A closure is the one case the list cannot hold, for the same coherence reason, and it gets [`Reactive::of`].
+///
+/// **A constant is held as itself, not as a closure returning it.** Most props are given a literal, and boxing one would put an allocation and a virtual call on every `gap:8` in the corpus for a value that cannot change. The enum is what lets a prop be uniformly readable without charging for it.
 pub enum Reactive<T> {
     Const(T),
     Read(Rc<dyn Fn() -> T>),
@@ -85,8 +73,7 @@ impl<T: Clone + 'static> From<Memo<T>> for Reactive<T> {
     }
 }
 
-/// The literal a call site actually writes. Without it every `label:"Save"` would need a `.to_string()`,
-/// which is the six lines of preamble the old `string_fields` table existed to avoid.
+/// The literal a call site actually writes. Without it every `label:"Save"` would need a `.to_string()`, which is the six lines of preamble the old `string_fields` table existed to avoid.
 impl From<&'static str> for Reactive<String> {
     fn from(text: &'static str) -> Self {
         Self::of(move || text.to_string())

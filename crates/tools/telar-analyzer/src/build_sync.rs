@@ -24,8 +24,7 @@ pub struct GeneratedTarget {
     pub path: PathBuf,
     /// Generated Rust code.
     pub code: String,
-    /// Where every part of [`Self::code`] came from — the lines, and the verbatim spans that make a column
-    /// mean something. One value rather than two halves, because the two are only ever right together.
+    /// Where every part of [`Self::code`] came from — the lines, and the verbatim spans that make a column mean something. One value rather than two halves, because the two are only ever right together.
     pub map: SourceMap,
 }
 
@@ -39,10 +38,9 @@ pub fn generated_target(
     let src_dir = root.join("src");
     let rel = telar_transpiler::relative_output_path(rsx_path, &src_dir)?;
     let stem = telar_transpiler::component_name(rsx_path);
-    // Match the macro: baked `src:"..."` paths resolve against the project asset root, not the `.rsx` dir.
+    // Matches the macro: baked `src:"…"` paths resolve against the project asset root, not the `.rsx` dir.
     let assets_root = telar_transpiler::assets_root(&root);
-    // No cross-file pre-pass: the editor mirrors the build exactly because neither one needs to know what
-    // any other file declares. A component call spells names, and the callee's own type answers for them.
+    // No cross-file pre-pass: the editor mirrors the build exactly, because neither needs to know what any other file declares. A component call spells names, and the callee's own type answers for them.
     let result =
         telar_transpiler::transpile_source(source, &stem, theme_type, Some(assets_root.as_path()))
             .ok()?;
@@ -64,8 +62,7 @@ pub fn sync_build_file(rsx_path: &Path, source: &str, theme_type: Option<&str>) 
     write_if_changed(&path.with_extension("rs.map"), &map.to_json());
 }
 
-/// The `<crate>/.telar/build/` path segment that marks a generated file (platform separators).
-/// Splits `<crate>/.telar/build/<rel>.rs` into (`<crate>`, `<rel>.rs`). Component-based instead of string matching so Windows paths with mixed `/`/`\` separators still classify.
+/// The `<crate>/.telar/build/` path segment that marks a generated file (platform separators). Splits `<crate>/.telar/build/<rel>.rs` into (`<crate>`, `<rel>.rs`). Component-based instead of string matching so Windows paths with mixed `/`/`\` separators still classify.
 fn split_at_build_dir(path: &Path) -> Option<(PathBuf, PathBuf)> {
     let comps: Vec<std::path::Component> = path.components().collect();
     let pos = comps

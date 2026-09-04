@@ -1,3 +1,5 @@
+//! Turning a parsed SVG into the Rust literal the transpiler bakes into generated code.
+
 use std::sync::Arc;
 
 use usvg::tiny_skia_path::Transform as SkiaTransform;

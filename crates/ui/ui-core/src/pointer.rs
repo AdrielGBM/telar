@@ -1,3 +1,5 @@
+//! Pointer state and dispatch: which buttons are down, what is occluded, and how an event reaches children.
+
 use std::cell::Cell;
 
 use geometry_core::Rect;
@@ -6,10 +8,7 @@ use ui_tree::EventResult;
 
 /// Which pointer buttons are held right now.
 ///
-/// The pointer's half of [`crate::modifiers`], and there for the same reason: a gesture that behaves one way
-/// per button has to ask, and the callbacks it is written against report *where* the pointer is, not *what*
-/// started it. A modeller is the case — drag to orbit, right-drag to pan — and widening `on_drag` to carry a
-/// button would make the whole catalogue pay for a question two widgets ask.
+/// The pointer's half of [`crate::modifiers`], and there for the same reason: a gesture that behaves one way per button has to ask, and the callbacks it is written against report *where* the pointer is, not *what* started it. A modeller is the case — drag to orbit, right-drag to pan — and widening `on_drag` to carry a button would make the whole catalogue pay for a question two widgets ask.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct PointerButtons {
     pub primary: bool,
@@ -46,23 +45,21 @@ impl PointerButtons {
 }
 
 thread_local! {
-    /// Set while a move is being dispatched into a subtree that something else is drawn over. See
-    /// [`pointer_occluded`].
+    /// Set while a move is being dispatched into a subtree that something else is drawn over. See [`pointer_occluded`].
     static OCCLUDED: Cell<bool> = const { Cell::new(false) };
     static BUTTONS: Cell<PointerButtons> = const {
         Cell::new(PointerButtons { primary: false, secondary: false, auxiliary: false })
     };
 }
 
-/// Records what `event` says about the buttons. The runner calls this for every event before dispatch, so a
-/// handler running on this very event already sees the state it establishes.
+/// Records what `event` says about the buttons. The runner calls this for every event before dispatch, so a handler running on this very event already sees the state it establishes.
 pub fn observe_pointer(event: &Event) {
     BUTTONS.with(|b| {
         let mut held = b.get();
         match event {
             Event::PointerPressed { button, .. } => *held.slot(button) = true,
             Event::PointerReleased { button, .. } => *held.slot(button) = false,
-            // A window that loses focus never sends the releases for what was down. `CursorLeft` is deliberately not here: crossing the border does not lift a button, and forgetting it would leave a live drag unable to say which button started it.
+            // A window that loses focus never sends the releases for what was down. `CursorLeft` is deliberately absent: crossing the border does not lift a button, and a live drag would lose which button started it.
             Event::FocusChanged { is_focused: false } => held = PointerButtons::default(),
             _ => return,
         }
@@ -82,11 +79,7 @@ pub fn reset_pointer() {
 
 /// Whether the move being dispatched right now landed on something drawn in front of this widget.
 ///
-/// A move is broadcast to every child, not only the one under the pointer, because a widget that armed a
-/// press or began a drag has to keep receiving them after the pointer leaves its box (pointer capture). That
-/// is right for the gesture and wrong for hover: two overlapping boxes would both read the same move as
-/// *the pointer is over me*, and a viewport would highlight the face behind the panel the user is pointing
-/// at. The container marks the covered subtrees as it broadcasts, and the widgets that track hover ask here.
+/// A move is broadcast to every child, not only the one under the pointer, because a widget that armed a press or began a drag has to keep receiving them after the pointer leaves its box (pointer capture). That is right for the gesture and wrong for hover: two overlapping boxes would both read the same move as *the pointer is over me*, and a viewport would highlight the face behind the panel the user is pointing at. The container marks the covered subtrees as it broadcasts, and the widgets that track hover ask here.
 pub(crate) fn pointer_occluded() -> bool {
     OCCLUDED.with(|c| c.get())
 }
@@ -99,8 +92,7 @@ impl Drop for OccludedGuard {
     }
 }
 
-/// Marks everything dispatched until the guard drops as covered. Set-only on the way down: a subtree inside
-/// something covered is covered too, whatever its own children are stacked like.
+/// Marks everything dispatched until the guard drops as covered. Set-only on the way down: a subtree inside something covered is covered too, whatever its own children are stacked like.
 fn occlude() -> OccludedGuard {
     OccludedGuard(OCCLUDED.with(|c| c.replace(true)))
 }
@@ -115,15 +107,12 @@ pub(crate) fn pointer_coords(event: &Event) -> Option<(f64, f64)> {
     }
 }
 
-/// Applies the full affine inverse of `matrix` to all pointer-coordinate events. Returns `None` for
-/// non-pointer events or when `matrix` is degenerate (det ≈ 0), so callers fall back to the original.
+/// Applies the full affine inverse of `matrix` to all pointer-coordinate events. Returns `None` for non-pointer events or when `matrix` is degenerate (det ≈ 0), so callers fall back to the original.
 ///
-/// Public because a component that paints a subtree under a [`RenderNode::Transform`] it chose itself — a
-/// hand-placed rail or panel, rather than a laid-out one — has to put the same transform's inverse on the
-/// events it forwards there, or its hit-testing drifts from what is on screen.
+/// Public because a component that paints a subtree under a [`RenderNode::Transform`](ui_tree::RenderNode::Transform) it chose itself — a hand-placed rail or panel, rather than a laid-out one — has to put the same transform's inverse on the events it forwards there, or its hit-testing drifts from what is on screen.
 pub fn transform_pointer(event: &Event, matrix: [f32; 6]) -> Option<Event> {
     let inv = geometry_core::Transform::from_array(matrix).invert()?;
-    // Map in f64 so pointer coordinates keep their precision; Transform::apply would round-trip through f32.
+    // In f64 so pointer coordinates keep their precision; `Transform::apply` would round-trip through f32.
     let apply = |world_x: f64, world_y: f64| -> (f64, f64) {
         let local_x = inv.a as f64 * world_x + inv.c as f64 * world_y + inv.e as f64;
         let local_y = inv.b as f64 * world_x + inv.d as f64 * world_y + inv.f as f64;
@@ -166,8 +155,7 @@ pub fn transform_pointer(event: &Event, matrix: [f32; 6]) -> Option<Event> {
                 source: source.clone(),
             })
         }
-        // The delta is untouched: it is a distance in wheel notches or screen pixels, not a point in the
-        // space this maps out of. Only where the wheel turned moves with the subtree.
+        // The delta is a distance in notches or pixels, not a point in the space this maps out of. Only where the wheel turned moves with the subtree.
         Event::Scrolled { delta, x, y } => {
             let (local_x, local_y) = apply(*x, *y);
             Some(Event::Scrolled {
@@ -184,7 +172,7 @@ pub(crate) fn offset_pointer(event: &Event, dx: f64, dy: f64) -> Option<Event> {
     transform_pointer(event, [1.0, 0.0, 0.0, 1.0, dx as f32, dy as f32])
 }
 
-// Returns a reference to `event` when the pointer is inside `rect`, or None when it is outside. Non-pointer events always pass through (returns Some). Callers use None to short-circuit to Ignored.
+/// Returns `event` when the pointer is inside `rect`, or `None` when it is outside; non-pointer events always pass through. Callers use `None` to short-circuit to `Ignored`.
 pub(crate) fn clip_pointer_event<'a>(event: &'a Event, rect: Rect) -> Option<&'a Event> {
     match pointer_coords(event) {
         Some((x, y)) if !rect.contains(x as f32, y as f32) => None,
@@ -197,17 +185,12 @@ pub(crate) fn dispatch_container_event(
     event: &Event,
 ) -> EventResult {
     let _dispatching = crate::disposal::dispatching();
-    // Moves AND releases broadcast to every child regardless of position: a widget that armed a press or
-    // began a drag inside its bounds must still receive the release even when the pointer has since moved
-    // outside (pointer-capture semantics). Each widget's release handler is guarded by its own armed/drag
-    // state, so broadcasting never double-fires an unrelated widget. Hit-testing (below) applies to presses
-    // and to the wheel, where the target is chosen by where the pointer is.
+    // Moves and releases broadcast to every child regardless of position, so a widget that armed a press inside its bounds still gets the release once the pointer has left (pointer capture). Each handler is guarded by its own armed state, so this never double-fires. Hit-testing below applies to presses and the wheel.
     if matches!(
         event,
         Event::PointerMoved { .. } | Event::PointerReleased { .. }
     ) {
-        // The topmost child containing the point is the one the pointer is *over*; every other child is
-        // dispatched the same move (its gesture may still be running) but under the occlusion mark.
+        // The topmost child containing the point is the one the pointer is over; the others get the same move for gestures still running, but under the occlusion mark.
         let over = pointer_coords(event).and_then(|(x, y)| {
             children.iter().rposition(|c| {
                 c.rect
@@ -218,11 +201,7 @@ pub(crate) fn dispatch_container_event(
         });
         let mut any_handled = false;
         for (i, child) in children.iter().enumerate() {
-            // Covered means something is drawn *over* it, so only a later sibling occludes an earlier one.
-            // Comparing for inequality instead marked the children drawn on top as covered too, which is
-            // invisible while every sibling is opaque — the topmost is always the last — and wrong the moment
-            // one is not: a `click_through` bar declines to shadow the pane under it and was then told the
-            // pane was shadowing *it*, so nothing inside it could be hovered.
+            // Covered means drawn over, so only a later sibling occludes an earlier one. Comparing for inequality also marked the children on top as covered — invisible while every sibling is opaque, and wrong the moment one is not: a `click_through` bar was told the pane beneath was shadowing it.
             let _covered = (over.is_some_and(|top| top > i)).then(occlude);
             if child.owning(|| child.item.borrow_mut().on_event(event)) == EventResult::Handled {
                 any_handled = true;
@@ -237,29 +216,14 @@ pub(crate) fn dispatch_container_event(
     let Some((x, y)) = pointer_coords(event).map(|(x, y)| (x as f32, y as f32)) else {
         return dispatch_to_children(children, event);
     };
-    // Back to front, because that is the order they are painted in: where two children overlap, the one
-    // drawn on top is the one the user aimed at, and it takes the event whether or not it wants it — a box
-    // covers what is behind it, exactly as a browser hit-tests. Falling sideways to a covered sibling is
-    // what made a wheel over a floating panel zoom the pane underneath it. In flow layout siblings cannot
-    // overlap and none of this is observable; `absolute` is what makes it real.
+    // Back to front, the order they are painted in: where two children overlap, the one on top takes the event whether or not it wants it. Falling sideways to a covered sibling is what made a wheel over a floating panel zoom the pane underneath. Only `absolute` makes this observable.
     for child in children.iter_mut().rev() {
         // A child with no laid-out rect cannot be hit-tested, so it is offered the event but never blocks.
         let rect = child.rect.as_ref().map(|sig| sig.get());
-        // **A box that misses the point may still hold one that does**, and that is not an edge case: a child
-        // laid out absolutely is *painted* where the layout put it rather than inside its parent, so a parent
-        // of no size — the box an overlay hangs from — was painted through and hit-tested around. What it held
-        // was on screen and unreachable, which is the one asymmetry a pointer must never have: paint follows
-        // the laid-out rect, so hit-testing follows it too.
-        //
-        // The miss still costs the child the right to *block*: only a box the point is really in covers what
-        // is behind it. And a subtree offered a point outside itself can only be taken by something the point
-        // is genuinely in — every press and drag arms against the widget's own rect (`press::arm`,
-        // `drag::press`), and everything that clips refuses a pointer outside its cut (`ClippedItem`, a
-        // scroll's viewport).
+        // A box that misses the point may still hold one that does: an absolutely laid-out child is painted where the layout put it rather than inside its parent, so a parent of no size was painted through and hit-tested around. The miss still costs the child the right to block — only a box the point is really in covers what is behind it — and every press, drag and clip refuses a pointer outside its own rect.
         let inside = rect.is_none_or(|r| r.contains(x, y));
         let result = child.owning(|| child.item.borrow_mut().on_event(event));
-        // A widget that is not there for hit-testing purposes (an overlay, routed by its own registry) lets
-        // the search carry on to whatever it was drawn over.
+        // A widget that is not there for hit-testing (an overlay, routed by its own registry) lets the search carry on to whatever it was drawn over.
         if result == EventResult::Handled
             || (inside && rect.is_some() && child.item.borrow().pointer_opaque())
         {
@@ -295,9 +259,7 @@ mod tests {
     use std::rc::Rc;
     use ui_tree::Component;
 
-    /// A panel floating over a pane covers it: a wheel that lands on the panel is not the pane's, whether or
-    /// not the panel wants it. Without this the pane — declared first, painted underneath — takes the event
-    /// that visually belongs to what is drawn on top of it.
+    /// A panel floating over a pane covers it: a wheel that lands on the panel is not the pane's, whether or not the panel wants it. Without this the pane — declared first, painted underneath — takes the event that visually belongs to what is drawn on top of it.
     #[test]
     fn a_covering_sibling_takes_the_pointer_from_the_one_beneath() {
         reset_layout_runtime();
@@ -348,10 +310,7 @@ mod tests {
         );
     }
 
-    /// **What is painted is what can be pressed.** An overlay hangs its marks from a box of no size, so the
-    /// marks are laid out absolutely and drawn far from the parent that owns them. Hit-testing used to stop at
-    /// the parent's own rect, so every one of them was visible and unreachable — and a `lazy` block, which is
-    /// exactly such a box, took a whole editor's areas out of the pointer's reach without changing a pixel.
+    /// **What is painted is what can be pressed.** An overlay hangs its marks from a box of no size, so the marks are laid out absolutely and drawn far from the parent that owns them. Hit-testing used to stop at the parent's own rect, so every one of them was visible and unreachable — and a `lazy` block, which is exactly such a box, took a whole editor's areas out of the pointer's reach without changing a pixel.
     #[test]
     fn a_box_of_no_size_does_not_swallow_what_it_holds() {
         use platform_core::PointerSource;
@@ -408,8 +367,7 @@ mod tests {
         );
     }
 
-    /// The same rule for hover: the pane still receives the move (a drag it started must keep tracking) but
-    /// must not read a move over the panel as *the pointer is over me*.
+    /// The same rule for hover: the pane still receives the move (a drag it started must keep tracking) but must not read a move over the panel as *the pointer is over me*.
     #[test]
     fn a_covered_pane_is_not_hovered_by_a_move_over_the_panel() {
         use platform_core::PointerSource;
@@ -457,10 +415,7 @@ mod tests {
         assert_eq!(at.get(), None, "the panel is in front of it there");
     }
 
-    /// A readout drawn over a pane is there to be *read*, not to be pointed at: `click_through` is the box
-    /// saying so. Both halves of the rule have to let go of it — the wheel must reach the pane under it, and
-    /// a move over it must still count as a move over the pane, or the operation the readout is describing
-    /// stops the moment the pointer passes beneath it.
+    /// A readout drawn over a pane is there to be *read*, not to be pointed at: `click_through` is the box saying so. Both halves of the rule have to let go of it — the wheel must reach the pane under it, and a move over it must still count as a move over the pane, or the operation the readout is describing stops the moment the pointer passes beneath it.
     #[test]
     fn a_click_through_label_does_not_stand_between_the_pointer_and_the_pane() {
         use platform_core::PointerSource;
@@ -518,10 +473,7 @@ mod tests {
         );
     }
 
-    /// The other half of `click_through`, and the half that made it useless on its own: a control *inside* a
-    /// click-through bar still hovers. The bar declining to shadow the pane is not the pane shadowing the bar
-    /// — the bar is the one drawn on top. A floating toolbar over a canvas is exactly this shape, and without
-    /// it none of its buttons could be pointed at.
+    /// The other half of `click_through`, and the half that made it useless on its own: a control *inside* a click-through bar still hovers. The bar declining to shadow the pane is not the pane shadowing the bar — the bar is the one drawn on top. A floating toolbar over a canvas is exactly this shape, and without it none of its buttons could be pointed at.
     #[test]
     fn a_control_inside_a_click_through_bar_is_still_hovered() {
         use platform_core::PointerSource;
@@ -583,10 +535,7 @@ mod tests {
         );
     }
 
-    /// Crossing the window border does not lift a button. A drag that outlives the border — which is the
-    /// point of measuring one from its press — asks this registry which button started it on every move, and
-    /// clearing here would answer "none" in the middle of the gesture. Losing the *focus* is the case where
-    /// the release genuinely never arrives, and that one still clears.
+    /// Crossing the window border does not lift a button. A drag that outlives the border — which is the point of measuring one from its press — asks this registry which button started it on every move, and clearing here would answer "none" in the middle of the gesture. Losing the *focus* is the case where the release genuinely never arrives, and that one still clears.
     #[test]
     fn cursor_leaving_the_window_does_not_forget_a_held_button() {
         use platform_core::{PointerButton, PointerSource};

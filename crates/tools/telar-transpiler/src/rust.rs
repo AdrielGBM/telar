@@ -1,23 +1,16 @@
 //! What a Rust expression names, read by parsing it.
 //!
-//! Every value in `[view]` is Rust now, and two questions about one keep coming up: which names in it are
-//! *free* — bound by the surrounding scope rather than by the expression itself — and, given that, which of
-//! those a `move` closure has to clone in.
+//! Every value in `[view]` is Rust now, and two questions about one keep coming up: which names in it are *free* — bound by the surrounding scope rather than by the expression itself — and, given that, which of those a `move` closure has to clone in.
 //!
-//! Both used to be answered by scanning the text for a word. That cannot tell a binding from a field, a
-//! method, or a path segment: with a local named `x`, `seat(&desk, id).x` looked like a use of it, and the
-//! emitted clone was a compile error against generated code. `syn` answers honestly, and it is the same
-//! parser rustc's front end uses, so the two agree by construction.
+//! Both used to be answered by scanning the text for a word. That cannot tell a binding from a field, a method, or a path segment: with a local named `x`, `seat(&desk, id).x` looked like a use of it, and the emitted clone was a compile error against generated code. `syn` answers honestly, and it is the same parser rustc's front end uses, so the two agree by construction.
 
 use std::collections::HashSet;
 
 use syn::visit::Visit;
 
-/// The free identifiers of `expr` — every single-segment path it names that it does not itself bind — or
-/// `None` when the text is not a Rust expression.
+/// The free identifiers of `expr` — every single-segment path it names that it does not itself bind — or `None` when the text is not a Rust expression.
 ///
-/// `None` is not a failure to report: an attribute value can be half-written mid-keystroke, and a caller
-/// that cannot parse falls back to its own scan rather than dropping a capture the closure needs.
+/// `None` is not a failure to report: an attribute value can be half-written mid-keystroke, and a caller that cannot parse falls back to its own scan rather than dropping a capture the closure needs.
 pub(crate) fn free_idents(expr: &str) -> Option<Vec<String>> {
     let parsed: syn::Expr = Fallback::forced(|| syn::parse_str(expr)).ok()?;
     let mut visitor = FreeIdents {
@@ -30,11 +23,7 @@ pub(crate) fn free_idents(expr: &str) -> Option<Vec<String>> {
 
 /// Parses with proc-macro2's own lexer for the length of one call.
 ///
-/// The transpiler runs inside the `app!` proc macro, where proc-macro2 hands `parse_str` to *rustc's*
-/// lexer — and rustc reports a lexer error by emitting it, not by returning it. So a `.rsx` holding
-/// `stroke_width:'0 0 2 0'` or a sentence with an `I"` in it aborted the build with a diagnostic about the
-/// macro call, from a parse whose only purpose was to ask a question and accept "I don't know" for an
-/// answer. Forced to the fallback, the same parse returns `Err` and the caller takes its other branch.
+/// The transpiler runs inside the `app!` proc macro, where proc-macro2 hands `parse_str` to *rustc's* lexer — and rustc reports a lexer error by emitting it, not by returning it. So a `.rsx` holding `stroke_width:'0 0 2 0'` or a sentence with an `I"` in it aborted the build with a diagnostic about the macro call, from a parse whose only purpose was to ask a question and accept "I don't know" for an answer. Forced to the fallback, the same parse returns `Err` and the caller takes its other branch.
 ///
 /// Restored on drop, so the generated code `app!` parses back at the end keeps the compiler's real spans.
 struct Fallback;
@@ -76,8 +65,7 @@ impl FreeIdents {
         self.bound.pop();
     }
 
-    /// Every name a pattern introduces. `syn` gives `PatIdent` for each one, including inside tuples,
-    /// slices and struct patterns, so the walk is the whole of it.
+    /// Every name a pattern introduces. `syn` gives `PatIdent` for each one, including inside tuples, slices and struct patterns, so the walk is the whole of it.
     fn bind_pattern(&mut self, pat: &syn::Pat) {
         struct Binder<'a>(&'a mut FreeIdents);
         impl<'ast> Visit<'ast> for Binder<'_> {
@@ -92,8 +80,7 @@ impl FreeIdents {
 
 impl<'ast> Visit<'ast> for FreeIdents {
     fn visit_expr_path(&mut self, node: &'ast syn::ExprPath) {
-        // A multi-segment path (`crate::scale::md`, `Variant::Primary`) names an item, never a local, and
-        // `self` is the receiver rather than a capture.
+        // A multi-segment path names an item, never a local, and `self` is the receiver rather than a capture.
         if node.qself.is_none()
             && let Some(ident) = node.path.get_ident()
         {
@@ -171,8 +158,7 @@ impl<'ast> Visit<'ast> for FreeIdents {
         });
     }
 
-    /// A macro's tokens are not parsed as an expression, so nothing is claimed about what they name — the
-    /// caller's scan covers `format!("{x}")` and its kin.
+    /// A macro's tokens are not parsed as an expression, so nothing is claimed about what they name — the caller's scan covers `format!("{x}")` and its kin.
     fn visit_macro(&mut self, _: &'ast syn::Macro) {}
 }
 
@@ -209,13 +195,11 @@ mod tests {
         );
     }
 
-    /// `$` is the markup's sugar and not Rust, so a value still carrying one has to be substituted before
-    /// it can be read — saying so is what keeps the caller's fallback scan reachable.
+    /// `$` is the markup's sugar and not Rust, so a value still carrying one has to be substituted before it can be read — saying so is what keeps the caller's fallback scan reachable.
     #[test]
     fn text_that_is_not_an_expression_says_so_instead_of_guessing() {
         assert_eq!(free_idents("$count.get()"), None);
         assert_eq!(free_idents("col gap:8"), None);
-        // `12px` is a suffixed literal: syntactically an expression, and rustc's to reject.
         assert_eq!(idents("12px"), Vec::<String>::new());
     }
 }

@@ -1,11 +1,12 @@
+//! The `ThemeTokens` derive: forwarding a theme's fields to the catalogue's token trait.
+
 use proc_macro2::TokenStream as TokenStream2;
 use quote::quote;
 use std::collections::HashMap;
 use syn::spanned::Spanned;
 use syn::{Data, DeriveInput, Expr, Fields, Ident, Token, punctuated::Punctuated};
 
-/// The tokens whose built-in is a hard-coded constant, and therefore the ones a theme that stays silent
-/// contradicts on screen: a component answering 4px next to bars the user configured to 10.
+/// The tokens whose built-in is a hard-coded constant, and therefore the ones a theme that stays silent contradicts on screen: a component answering 4px next to bars the user configured to 10.
 const REQUIRED: &[&str] = &[
     "primary",
     "on_primary",
@@ -27,8 +28,7 @@ const REQUIRED: &[&str] = &[
     "highlight_high",
 ];
 
-/// `radius_sm`/`radius_md`/`radius_lg` derive from `radius`, so silence is the right answer rather than a
-/// contradiction — a theme moves the base and the steps follow.
+/// `radius_sm`/`radius_md`/`radius_lg` derive from `radius`, so silence is the right answer rather than a contradiction — a theme moves the base and the steps follow.
 const DERIVED: &[&str] = &[
     "radius_sm",
     "radius_md",
@@ -39,9 +39,7 @@ const DERIVED: &[&str] = &[
     "spacing_xl",
 ];
 
-/// Tokens a silent theme does not contradict, because their built-in adds nothing to the screen rather than
-/// asserting a number beside one the theme chose. `root` is the theme's row at the top of the document: say
-/// nothing and the document keeps its own, which is exactly right.
+/// Tokens a silent theme does not contradict, because their built-in adds nothing to the screen rather than asserting a number beside one the theme chose. `root` is the theme's row at the top of the document: say nothing and the document keeps its own, which is exactly right.
 const OPTIONAL: &[&str] = &["root"];
 
 fn is_token(name: &str) -> bool {
@@ -135,6 +133,7 @@ fn return_type(token: &str) -> TokenStream2 {
     }
 }
 
+/// Expands the `ThemeTokens` derive, forwarding a theme's fields to the catalogue's token trait.
 pub fn expand(input: DeriveInput) -> syn::Result<TokenStream2> {
     let options = parse_struct_attrs(&input)?;
     let from_fields = parse_fields(&input)?;
@@ -213,8 +212,7 @@ mod tests {
         assert!(out.contains("fn primary"), "emits the token methods");
     }
 
-    /// The regression this derive exists for: a fixed built-in that contradicts the theme around it has to
-    /// stop the build rather than reach the screen.
+    /// The regression this derive exists for: a fixed built-in that contradicts the theme around it has to stop the build rather than reach the screen.
     #[test]
     fn an_unanswered_token_is_a_compile_error() {
         let err = expand_str(&FULL.replace("radius: f32,", "")).expect_err("radius has no answer");
@@ -256,16 +254,14 @@ mod tests {
         assert!(out.contains("dim"), "emits the expression");
     }
 
-    /// The three radius steps derive from `radius`, so silence there is the theme following its own base
-    /// rather than a built-in contradicting it.
+    /// The three radius steps derive from `radius`, so silence there is the theme following its own base rather than a built-in contradicting it.
     #[test]
     fn the_radius_scale_is_not_required() {
         let out = expand_str(FULL).expect("valid");
         assert!(!out.contains("fn radius_md"), "left to derive from radius");
     }
 
-    /// A metric step is an `f32`; answering one with the colour branch would not compile at the call site,
-    /// which is a long way from the attribute that caused it.
+    /// A metric step is an `f32`; answering one with the colour branch would not compile at the call site, which is a long way from the attribute that caused it.
     #[test]
     fn a_spacing_step_is_typed_as_a_metric() {
         let out = expand_str(&format!("#[theme(spacing_lg = 20.0)] {FULL}")).expect("valid");

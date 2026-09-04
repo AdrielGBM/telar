@@ -1,3 +1,5 @@
+//! The virtual file system the generated Rust is overlaid into, so the analyzer sees the live buffer.
+
 use std::path::{Path, PathBuf};
 
 use ra_ap_ide_db::ChangeWithProcMacros;

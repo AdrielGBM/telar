@@ -1,3 +1,5 @@
+//! Filling and stroking vector geometry, with its shadow cached against the path's content hash.
+
 use std::sync::Arc;
 
 use geometry_core::Rect;
@@ -8,8 +10,7 @@ use crate::primitives::{fill_to_paint, to_skia_line_cap, to_skia_line_join};
 
 /// Whether a path encloses any pixels, which is what makes filling it mean something.
 ///
-/// A stroke of the same path is still worth drawing — that is what gives a flat chart its line — so this
-/// gates the fill alone.
+/// A stroke of the same path is still worth drawing — that is what gives a flat chart its line — so this gates the fill alone.
 fn has_area(path: &tiny_skia::Path) -> bool {
     let bounds = path.bounds();
     bounds.width() > 0.0 && bounds.height() > 0.0
@@ -57,17 +58,15 @@ fn hash_path_data(data: &renderer_core::PathData) -> u64 {
 
 #[derive(Hash, Eq, PartialEq, Clone)]
 pub(crate) struct PathShadowCacheKey {
-    // Content hash of path vertices instead of Rc pointer: stable even when the Rc is recreated each frame with the same geometry (e.g. transform-animated paths).
+    // A content hash rather than the `Rc` pointer: stable even when the `Rc` is recreated each frame with the same geometry.
     path_hash: u64,
     blur_radius_bits: u32,
     spread_bits: u32,
     color: [u8; 4],
-    /// Whether the shadow fills, and under which rule. A path drawn only as a stroke casts a hollow shadow; the
-    /// same path filled casts a solid one, and the two used to share an entry.
+    /// Whether the shadow fills, and under which rule. A path drawn only as a stroke casts a hollow shadow; the same path filled casts a solid one, and the two used to share an entry.
     has_fill: bool,
     even_odd: bool,
-    /// The stroke's width, cap and join, or `None` when the path is not stroked. Width above all: a hairline and a
-    /// ten-pixel stroke cast visibly different shadows from identical geometry.
+    /// The stroke's width, cap and join, or `None` when the path is not stroked. Width above all: a hairline and a ten-pixel stroke cast visibly different shadows from identical geometry.
     stroke: Option<(u32, u8, u8)>,
 }
 
@@ -165,7 +164,7 @@ pub(crate) fn draw_path(
             let stroke_style = style.stroke;
             let has_fill = style.fill.is_some();
 
-            // Drawing the shadow shape only needs the path geometry, a tinted paint, and Copy style fields; this lets the work run on a background thread for large shadows. The async variant owns clones of the path and paint so the worker outlives this call.
+            // Drawing the shadow shape needs only the geometry, a tinted paint and Copy fields, so the work can run on a background thread. The async variant owns clones so the worker outlives this call.
             let draw_path_shadow =
                 move |tmp_pmap: &mut tiny_skia::Pixmap,
                       path: &tiny_skia::Path,
@@ -203,7 +202,7 @@ pub(crate) fn draw_path(
                 transform,
                 clip,
                 || {
-                    // The worker needs its own path and paint; the inline closure can borrow the ones the fill below still uses.
+                    // The worker needs its own path and paint; the inline closure can borrow the ones the fill still uses.
                     let async_path = path.clone();
                     let async_paint = shadow_paint.clone();
                     (
@@ -219,10 +218,7 @@ pub(crate) fn draw_path(
         }
     }
 
-    // A path with no area covers no pixel, so filling it changes nothing — but tiny_skia treats being asked
-    // as a mistake and warns once per frame for as long as the shape stays flat. These paths come from data
-    // rather than from a stylesheet, so flat is ordinary: a chart over a run of equal readings, or a glyph
-    // whose outline is a single straight stroke.
+    // A path with no area covers no pixel, but tiny_skia treats being asked as a mistake and warns once per frame while the shape stays flat. These paths come from data rather than a stylesheet, so flat is ordinary: a chart over equal readings, or a glyph whose outline is one straight stroke.
     if let Some(fill_style) = style.fill
         && has_area(&path)
     {

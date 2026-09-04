@@ -1,3 +1,5 @@
+//! The preview host: rendering one component's `[preview]` blocks in isolation.
+
 #[cfg(feature = "preview-headless")]
 use crate::AppConfig;
 use crate::{
@@ -5,15 +7,14 @@ use crate::{
     ScrollPage, Text, TextStyle, reset_layout_runtime,
 };
 
+/// An app that renders one component's `[preview]` blocks instead of its own root.
 pub struct PreviewApp {
     pub entries: Vec<PreviewEntry>,
 }
 
-/// A tree preview is dropped into the page as it is; a surface preview is first given the two things a
-/// compositor would give it — a definite size to lay out against, and the root that plays its enter transition.
+/// A tree preview is dropped into the page as it is; a surface preview is first given the two things a compositor would give it — a definite size to lay out against, and the root that plays its enter transition.
 ///
-/// The size goes on a box *around* the root rather than on the root itself: [`WindowRoot::wrapping`] fills its
-/// parent by design (that is how a surface's content stretches to its window), so it needs a parent with a size.
+/// The size goes on a box *around* the root rather than on the root itself: [`WindowRoot::wrapping`] fills its parent by design (that is how a surface's content stretches to its window), so it needs a parent with a size.
 fn mounted(
     content: Box<dyn LayoutItem>,
     surface: Option<crate::PreviewSurface>,
@@ -91,10 +92,7 @@ impl App for PreviewApp {
         Box::new(page)
     }
 
-    /// A page light enough to read dark ink on, or dark enough to read light ink on — decided by the installed
-    /// theme rather than fixed, because a component drawn for a dark surface is invisible on a light page and
-    /// that reads as a broken preview rather than as a mismatched background. `ThemeTokens` has no page-background
-    /// token to ask for directly, so the ink's own lightness is the proxy.
+    /// A page light enough to read dark ink on, or dark enough to read light ink on — decided by the installed theme rather than fixed, because a component drawn for a dark surface is invisible on a light page and that reads as a broken preview rather than as a mismatched background. `ThemeTokens` has no page-background token to ask for directly, so the ink's own lightness is the proxy.
     fn clear_color(&self) -> Option<Color> {
         let ink = crate::use_theme_tokens().ink();
         let light_ink = ink.r * 0.299 + ink.g * 0.587 + ink.b * 0.114 > 0.5;
@@ -108,10 +106,7 @@ impl App for PreviewApp {
 
 /// Renders every `[preview]` entry to its own PNG under `out_dir` on the headless backend, then exits.
 ///
-/// The third answer, and the one an out-of-tree backend wants: [`crate::try_run_test`] proves a component builds
-/// and lays out but never draws a pixel, and the preview window draws but needs a desktop window a shell has
-/// no way to open. Each entry gets its own file rather than one page of all of them, so a name identifies a
-/// preview and a golden-image run can compare them one at a time.
+/// The third answer, and the one an out-of-tree backend wants: [`crate::try_run_test`] proves a component builds and lays out but never draws a pixel, and the preview window draws but needs a desktop window a shell has no way to open. Each entry gets its own file rather than one page of all of them, so a name identifies a preview and a golden-image run can compare them one at a time.
 #[cfg(feature = "preview-headless")]
 pub fn run_preview_png(
     entries: Vec<PreviewEntry>,
@@ -136,7 +131,7 @@ pub fn run_preview_png(
             sanitize(&format!("{}-{}", entry.component_name, entry.preview_name))
         ));
         let sink: platform_headless::FrameSink = Arc::new(Mutex::new(None));
-        // The headless platform paces at a real 60fps, so a handful of frames covers an enter transition settling — a preview captured on the first frame shows every animation at its start value.
+        // The headless platform paces at a real 60fps, so a handful of frames lets an enter transition settle — a preview captured on the first frame shows every animation at its start value.
         let platform = platform_headless::HeadlessPlatform::new(width, height)
             .with_frames(PREVIEW_FRAMES)
             .capture_into(sink.clone());

@@ -1,15 +1,8 @@
 //! Build-time i18n catalog baker.
 //!
-//! Discovers translation files — a project-wide `locales/<tag>.toml` (or `locales/<tag>/*.toml`), and/or
-//! per-module `src/**/i18n/<tag>.toml` co-located with each module, all configurable via `[telar.i18n]` in
-//! `telar.toml` — parses each into a keyed set of messages, and serializes
-//! the merged catalog to a Rust source string (`pub static CATALOG: telar::i18n::Catalog = ..;`) of pure
-//! `&'static` data — the same host-only "parse once, emit `&'static`" approach as the svg baker. The parsed
-//! [`CatalogModel`] is also queryable so the `t!` macro and markup emitters can validate keys and arguments at
-//! compile time.
+//! Discovers translation files — a project-wide `locales/<tag>.toml` (or `locales/<tag>/*.toml`), and/or per-module `src/**/i18n/<tag>.toml` co-located with each module, all configurable via `[telar.i18n]` in `telar.toml` — parses each into a keyed set of messages, and serializes the merged catalog to a Rust source string (`pub static CATALOG: telar::i18n::Catalog = ..;`) of pure `&'static` data — the same host-only "parse once, emit `&'static`" approach as the svg baker. The parsed [`CatalogModel`] is also queryable so the `t!` macro and markup emitters can validate keys and arguments at compile time.
 //!
-//! The model and the TOML grammar are `i18n-core`'s, shared with the runtime loader an app without any `.rsx`
-//! file uses. What is baker-only is here: discovery, and serialization to Rust source.
+//! The model and the TOML grammar are `i18n-core`'s, shared with the runtime loader an app without any `.rsx` file uses. What is baker-only is here: discovery, and serialization to Rust source.
 
 use std::path::{Path, PathBuf};
 
@@ -18,17 +11,14 @@ pub use i18n_core::{CatalogModel, MessageModel, PartModel, parse_message};
 
 /// The crate-root module the baked catalog is wired under, and the path every `t!`/markup call site references.
 pub const I18N_MODULE: &str = "__rsx_i18n";
+/// Where generated code reaches the baked catalogue.
 pub const I18N_CATALOG_PATH: &str = "crate::__rsx_i18n::CATALOG";
 
-/// How the catalog is discovered, from `[telar.i18n]` in `telar.toml` (with back-compat fallbacks to the older
-/// `[telar] locales` / `[telar] default_locale`). Both discovery sources may be active at once; set either name to
-/// `""` to disable it.
+/// How the catalog is discovered, from `[telar.i18n]` in `telar.toml` (with back-compat fallbacks to the older `[telar] locales` / `[telar] default_locale`). Both discovery sources may be active at once; set either name to `""` to disable it.
 struct I18nConfig {
-    /// Project-wide catalog directory joined onto the package root (default `"locales"`): holds `<tag>.toml` or
-    /// `<tag>/<module>.toml`. `""` disables it.
+    /// Project-wide catalog directory joined onto the package root (default `"locales"`): holds `<tag>.toml` or `<tag>/<module>.toml`. `""` disables it.
     root: String,
-    /// Directory name discovered recursively under `src/` for co-located, per-module catalogs (default
-    /// `"i18n"`): every `src/**/<scan>/<tag>.toml` contributes to locale `<tag>`. `""` disables it.
+    /// Directory name discovered recursively under `src/` for co-located, per-module catalogs (default `"i18n"`): every `src/**/<scan>/<tag>.toml` contributes to locale `<tag>`. `""` disables it.
     scan: String,
     /// Fallback locale when the active one lacks a key. `None` → `"en"` if present, else the first tag.
     default: Option<String>,
@@ -60,8 +50,7 @@ fn read_i18n_config(package_root: &Path) -> I18nConfig {
     }
 }
 
-/// The locale files that feed the catalog, sorted — used to emit `include_str!` rerun triggers so editing a
-/// translation re-bakes, exactly like editing a `.rsx` file.
+/// The locale files that feed the catalog, sorted — used to emit `include_str!` rerun triggers so editing a translation re-bakes, exactly like editing a `.rsx` file.
 pub fn catalog_files(package_root: &Path) -> Vec<PathBuf> {
     catalog_sources(package_root)
         .into_iter()
@@ -69,11 +58,7 @@ pub fn catalog_files(package_root: &Path) -> Vec<PathBuf> {
         .collect()
 }
 
-/// Every `(locale tag, file)` that feeds the catalog, sorted and de-duplicated. Collected from two places
-/// (either configurable in `telar.toml`, both on by default): the project-wide `locales/` directory (a
-/// `<tag>.toml` per language, or a `<tag>/` subdir of per-module files), and — scanned recursively under
-/// `src/` — every `i18n/<tag>.toml` co-located with a module (`src/modules/battery/i18n/en.toml`). A locale is
-/// its file stem; all files for a tag merge into one keyspace.
+/// Every `(locale tag, file)` that feeds the catalog, sorted and de-duplicated. Collected from two places (either configurable in `telar.toml`, both on by default): the project-wide `locales/` directory (a `<tag>.toml` per language, or a `<tag>/` subdir of per-module files), and — scanned recursively under `src/` — every `i18n/<tag>.toml` co-located with a module (`src/modules/battery/i18n/en.toml`). A locale is its file stem; all files for a tag merge into one keyspace.
 fn catalog_sources(package_root: &Path) -> Vec<(String, PathBuf)> {
     let cfg = read_i18n_config(package_root);
     let mut sources = Vec::new();
@@ -99,8 +84,7 @@ fn catalog_sources(package_root: &Path) -> Vec<(String, PathBuf)> {
     sources
 }
 
-/// Discovers `<tag>.toml` (single file per locale) and `<tag>/*.toml` (a subdir of per-module files, merged)
-/// directly under `root`, appending each as `(tag, file)`.
+/// Discovers `<tag>.toml` (single file per locale) and `<tag>/*.toml` (a subdir of per-module files, merged) directly under `root`, appending each as `(tag, file)`.
 fn discover_root_dir(root: &Path, sources: &mut Vec<(String, PathBuf)>) {
     let Ok(dir) = std::fs::read_dir(root) else {
         return;
@@ -122,8 +106,7 @@ fn discover_root_dir(root: &Path, sources: &mut Vec<(String, PathBuf)>) {
     }
 }
 
-/// Parses the catalog for `package_root`. Returns `Ok(None)` when no translation files are found (i18n unused),
-/// and `Err` for a malformed catalog (bad TOML, non-string message, a key defined twice for one locale).
+/// Parses the catalog for `package_root`. Returns `Ok(None)` when no translation files are found (i18n unused), and `Err` for a malformed catalog (bad TOML, non-string message, a key defined twice for one locale).
 pub fn parse_catalog(package_root: &Path) -> Result<Option<CatalogModel>, String> {
     let sources = catalog_sources(package_root);
     if sources.is_empty() {
@@ -145,8 +128,7 @@ pub fn parse_catalog(package_root: &Path) -> Result<Option<CatalogModel>, String
     CatalogModel::from_sources(&borrowed, default.as_deref()).map(Some)
 }
 
-/// Serializes the catalog to a Rust source module. Types are referenced through the `telar::i18n` facade so the
-/// generated file compiles with the same `rsx` dependency every generated `.rsx` file has.
+/// Serializes the catalog to a Rust source module. Types are referenced through the `telar::i18n` facade so the generated file compiles with the same `rsx` dependency every generated `.rsx` file has.
 pub fn to_source(model: &CatalogModel) -> String {
     let mut s = String::new();
     s.push_str("pub static CATALOG: Catalog = Catalog {\n");
@@ -175,8 +157,7 @@ pub fn to_source(model: &CatalogModel) -> String {
     }
     s.push_str("    ],\n};\n");
 
-    // Imported by what the body actually mentions: a catalogue with no interpolation and no plurals would
-    // otherwise warn on two unused names, in a file its author cannot edit.
+    // Imported by what the body mentions: a catalogue with no interpolation and no plurals would otherwise warn on two unused names, in a file its author cannot edit.
     let mut names = vec!["Catalog", "Entry", "Message"];
     names.extend(
         ["Part", "PluralCategory"]
@@ -215,9 +196,7 @@ fn ser_message(message: &MessageModel) -> String {
     }
 }
 
-/// The Rust variant name for a category written in a catalog. Which *category* a name spells is
-/// [`PluralCategory::parse`]'s decision, shared with the runtime loader; only the spelling of the emitted
-/// variant is the baker's.
+/// The Rust variant name for a category written in a catalog. Which *category* a name spells is [`PluralCategory::parse`]'s decision, shared with the runtime loader; only the spelling of the emitted variant is the baker's.
 fn ser_category(name: &str) -> &'static str {
     match PluralCategory::parse(name).unwrap_or(PluralCategory::Other) {
         PluralCategory::Zero => "Zero",
@@ -293,7 +272,6 @@ mod tests {
     fn merges_per_module_files_in_a_locale_dir() {
         let root = std::env::temp_dir().join(format!("rsx_i18n_multi_{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&root);
-        // `en` is split across per-module files under `locales/en/`; `es` stays a single file.
         std::fs::create_dir_all(root.join("locales/en")).unwrap();
         std::fs::write(
             root.join("locales/en/settings.toml"),
@@ -315,10 +293,8 @@ mod tests {
         assert_eq!(model.locales, vec!["en", "es"]);
         assert!(model.contains_key("settings.title"));
         assert!(model.contains_key("battery.full"));
-        // Both the split `en` files and the single `es` file merged into one keyspace.
         assert!(catalog_files(&root).len() == 3);
 
-        // A key defined twice for the same locale (across files) is a hard error.
         std::fs::write(
             root.join("locales/en/dup.toml"),
             "[settings]\ntitle = \"Oops\"\n",
@@ -334,7 +310,6 @@ mod tests {
     fn discovers_co_located_module_catalogs() {
         let root = std::env::temp_dir().join(format!("rsx_i18n_colo_{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&root);
-        // Per-module catalogs co-located under `src/**/i18n/`, plus a project-wide `locales/` for shared keys.
         std::fs::create_dir_all(root.join("src/modules/battery/i18n")).unwrap();
         std::fs::create_dir_all(root.join("src/modules/settings/i18n")).unwrap();
         std::fs::create_dir_all(root.join("locales")).unwrap();
@@ -364,8 +339,6 @@ mod tests {
             "project-wide locales/ still merges alongside the scan"
         );
 
-        // `[telar.i18n] scan = "translations"` renames the co-located dir; `i18n/` is then ignored. The es locale
-        // now comes only from the project-wide root, so `default = "es"` still resolves.
         std::fs::write(root.join("locales/es.toml"), "[common]\non = \"Sí\"\n").unwrap();
         std::fs::write(
             root.join("telar.toml"),

@@ -7,8 +7,7 @@ use crate::registry;
 use super::signals::{rust_str, substitute_reads, wrap_signal_clones};
 use super::{ChildEmit, ViewGen, expr_marker};
 
-/// The shared `fit:` attribute (CSS `object-fit`) for `img`/`svg`, as a reactive `ObjectFit` closure. An
-/// absent `fit:` preserves the aspect ratio and letterboxes, matching the widget default.
+/// The shared `fit:` attribute (CSS `object-fit`) for `img`/`svg`, as a reactive `ObjectFit` closure. An absent `fit:` preserves the aspect ratio and letterboxes, matching the widget default.
 fn fit_closure(attributes: &[Attr]) -> String {
     let variant = attributes
         .iter()
@@ -76,10 +75,7 @@ impl ViewGen<'_> {
 
         let layout_style = self.make_layout_style("img", &el.classes, &el.attributes);
 
-        // Rounding is the picture's own, not a parent's: clipping to a rounded box would need a container per
-        // image, and a thumbnail grid is where that cost lands hardest. Resolved by the same helper a `box`
-        // uses, so a picture takes the per-corner form and theme tokens on the same terms rather than on the
-        // narrower ones this call site used to allow.
+        // The picture's own rounding, not a parent's: clipping to a rounded box would need a container per image, which costs most in a thumbnail grid.
         let rounds = el
             .attributes
             .iter()
@@ -141,14 +137,7 @@ impl ViewGen<'_> {
         ChildEmit::Simple { name: var, code }
     }
 
-    /// Resolves `color:` into a `move || Option<Color>` closure, sharing `fill`/`stroke`/`color`'s
-    /// [`color_expr`](ViewGen::color_expr) resolution: a bare theme token (`color:accent`), a `$signal`
-    /// read, an inline `#hex`, a CSS keyword, and an arbitrary color expression (`color:theme().primary`,
-    /// recognized by its `(`) all resolve identically — so an icon takes its ink from a theme token the same way
-    /// text takes `color:`. A token re-reads `use_theme` on every `view()`, so a runtime theme switch
-    /// recolors the glyph; any `$signal` referenced is cloned into the closure via `wrap_signal_clones`
-    /// so the outer handle stays usable, mirroring `box fill:$sig`. Missing or empty `color` keeps the
-    /// SVG's own colors (`None`).
+    /// Resolves `color:` into a `move || Option<Color>` closure, sharing `fill`/`stroke`/`color`'s [`color_expr`](ViewGen::color_expr) resolution: a bare theme token (`color:accent`), a `$signal` read, an inline `#hex`, a CSS keyword, and an arbitrary color expression (`color:theme().primary`, recognized by its `(`) all resolve identically — so an icon takes its ink from a theme token the same way text takes `color:`. A token re-reads `use_theme` on every `view()`, so a runtime theme switch recolors the glyph; any `$signal` referenced is cloned into the closure via `wrap_signal_clones` so the outer handle stays usable, mirroring `box fill:$sig`. Missing or empty `color` keeps the SVG's own colors (`None`).
     fn svg_color_closure(&self, color_attr: Option<&Attr>) -> String {
         let Some(a) = color_attr else {
             return "|| None".to_string();
@@ -171,9 +160,7 @@ impl ViewGen<'_> {
             return "|| None".to_string();
         }
         let expr = substitute_reads(&crate::style::number_or(v, "1.0"));
-        // `.into()` rather than `Some(…)`, so both a width and an already-optional one work: std gives
-        // `From<T> for Option<T>` and the identity `From<T> for T`, and `with_stroke`'s parameter fixes the
-        // target. A theme that carries "no override" as `None` can then be passed straight through.
+        // `.into()` rather than `Some(…)`, so a width and an already-optional one both work — std gives `From<T> for Option<T>` and the identity, and `with_stroke`'s parameter fixes the target.
         wrap_signal_clones(&[v], format!("move || ({expr}).into()"))
     }
 

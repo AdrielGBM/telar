@@ -1,3 +1,5 @@
+//! The ambient services an application reaches for without naming a backend: the clipboard, file dialogs and the per-app directories.
+
 pub mod app_paths;
 pub mod clipboard;
 pub mod dialogs;

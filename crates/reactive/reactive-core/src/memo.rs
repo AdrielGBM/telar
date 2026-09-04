@@ -1,3 +1,5 @@
+//! [`Memo`]: a derived value recomputed on demand and only notified onward when it actually changed.
+
 use std::cell::RefCell;
 use std::marker::PhantomData;
 use std::rc::Rc;
@@ -19,12 +21,9 @@ struct MemoInner<T> {
 
 /// A derived value, recomputed when what it reads moves.
 ///
-/// `Copy`, like the signal handles, and for the same reason: the handle is an id into the runtime's arena
-/// and the *owner* is what disposes it. It used to be `Rc`-backed and kept alive by whoever read it, which
-/// is why it was the one handle a `.rsx` view still had to clone by hand.
+/// `Copy`, like the signal handles, and for the same reason: the handle is an id into the runtime's arena and the *owner* is what disposes it. It used to be `Rc`-backed and kept alive by whoever read it, which is why it was the one handle a `.rsx` view still had to clone by hand.
 ///
-/// The `Rc<RefCell<…>>` did not disappear so much as move: it is the *value* the arena slot holds, reached
-/// through the id, so the memo's own state still has one owner while the handle has none.
+/// The `Rc<RefCell<…>>` did not disappear so much as move: it is the *value* the arena slot holds, reached through the id, so the memo's own state still has one owner while the handle has none.
 pub struct Memo<T: 'static> {
     id: SignalId,
     _marker: PhantomData<T>,
@@ -36,7 +35,7 @@ impl<T: 'static> Clone for Memo<T> {
     }
 }
 
-// Hand-written rather than derived: `#[derive(Copy)]` would demand `T: Copy`, and the parameter only names what the memo computes — it is never stored in the handle.
+// Hand-written rather than derived: `#[derive(Copy)]` would demand `T: Copy`, and the parameter only names what the memo computes, never what the handle stores.
 impl<T: 'static> Copy for Memo<T> {}
 
 type Shared<T> = Rc<RefCell<MemoInner<T>>>;
@@ -83,13 +82,14 @@ impl<T: Clone + 'static> Memo<T> {
     }
 }
 
+/// A derived value recomputed when its sources change, notifying onward only when the result differs.
 pub fn memo<T: PartialEq + 'static>(f: impl Fn() -> T + 'static) -> Memo<T> {
     let inner: Shared<T> = Rc::new(RefCell::new(MemoInner {
         state: MemoState::Dirty,
         subscribers: SmallVec::new(),
     }));
 
-    // The arena slot owns the state, so the memo is disposed with its owner like everything else. The closure holds a `Weak` rather than the slot's id, because the recompute runs during a flush that may come after disposal — a `Weak` that fails to upgrade says so, where a stale id would only panic.
+    // The arena slot owns the state, so the memo is disposed with its owner. The closure holds a `Weak` rather than the slot's id, because the recompute runs during a flush that may come after disposal — a `Weak` that fails to upgrade says so, where a stale id would only panic.
     let weak = Rc::downgrade(&inner);
     let effect_f: Box<dyn Fn()> = Box::new(move || {
         let Some(inner) = weak.upgrade() else {
@@ -127,7 +127,7 @@ pub fn memo<T: PartialEq + 'static>(f: impl Fn() -> T + 'static) -> Memo<T> {
     });
 
     let id = runtime::create_signal_storage(inner);
-    // Registered as a pure effect so it runs before user effects during flush. Nothing holds its id: the owner active here recorded it, and that is what disposes it.
+    // Registered as a pure effect, so it runs before user effects during flush. Nothing holds its id: the owner active here recorded it, and that is what disposes it.
     let effect_id = runtime::register_pure_effect(effect_f);
     runtime::run_effect(effect_id);
 

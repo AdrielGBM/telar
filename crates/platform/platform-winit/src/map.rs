@@ -1,3 +1,5 @@
+//! Translating winit's events into Telar's, and the input state that translation needs.
+
 use platform_core::{Event, PointerButton, PointerSource, ScrollDelta};
 use winit::event::{ElementState, MouseScrollDelta, Touch, TouchPhase, WindowEvent};
 use winit::event::{Modifiers, MouseButton as WinitMouseButton};
@@ -5,9 +7,7 @@ use winit::keyboard::{Key as WinitKey, KeyLocation, NamedKey as WinitNamedKey};
 
 /// Translates a winit logical key into a [`platform_core::Key`], resolving the keypad from `location`.
 ///
-/// Both backends go through here so a key can never reach one and not the other. `location` is what
-/// separates the keypad from the digit row: winit reports `Numpad7` as the character `"7"` and only the
-/// location says which key was struck.
+/// Both backends go through here so a key can never reach one and not the other. `location` is what separates the keypad from the digit row: winit reports `Numpad7` as the character `"7"` and only the location says which key was struck.
 pub fn map_key(key: &WinitKey, location: KeyLocation) -> Option<platform_core::Key> {
     if location == KeyLocation::Numpad
         && let Some(nk) = map_numpad(key)
@@ -49,8 +49,8 @@ fn map_numpad(key: &WinitKey) -> Option<platform_core::NamedKey> {
     Some(nk)
 }
 
-// Shared winit->platform_core translation used by every winit backend (desktop + android). Keeping the
-// NamedKey table in one place avoids the two-backend hazard where a new key is added to one match only.
+// Shared winit->platform_core translation used by every winit backend (desktop + android). Keeping the NamedKey table in one place avoids the two-backend hazard where a new key is added to one match only.
+/// Translates a winit named key, returning `None` for one Telar has no spelling for.
 pub fn map_named_key(key: WinitNamedKey) -> Option<platform_core::NamedKey> {
     let nk = match key {
         WinitNamedKey::Enter => platform_core::NamedKey::Enter,
@@ -98,6 +98,7 @@ pub fn map_named_key(key: WinitNamedKey) -> Option<platform_core::NamedKey> {
     Some(nk)
 }
 
+/// Translates a winit mouse button, returning `None` for one Telar has no spelling for.
 pub fn map_mouse_button(button: WinitMouseButton) -> Option<platform_core::PointerButton> {
     match button {
         WinitMouseButton::Left => Some(platform_core::PointerButton::Primary),
@@ -107,6 +108,7 @@ pub fn map_mouse_button(button: WinitMouseButton) -> Option<platform_core::Point
     }
 }
 
+/// Translates winit's modifier state into Telar's.
 pub fn map_modifiers(mods: &Modifiers) -> platform_core::ModifiersState {
     platform_core::ModifiersState {
         is_shift: mods.state().shift_key(),
@@ -126,8 +128,7 @@ mod tests {
         WinitKey::Character(SmolStr::new(s))
     }
 
-    /// The keypad and the digit row send the same logical key; only the location tells them apart. An
-    /// application that binds Numpad 7 to a view means that key and not the 7 above the letters.
+    /// The keypad and the digit row send the same logical key; only the location tells them apart. An application that binds Numpad 7 to a view means that key and not the 7 above the letters.
     #[test]
     fn the_keypad_is_its_own_set_of_keys() {
         assert_eq!(
@@ -144,8 +145,7 @@ mod tests {
         );
     }
 
-    /// With Num Lock off the OS says the keypad's 1 is `End`, and that is what it reports: overriding it
-    /// would take the arrows away from someone navigating with the keypad.
+    /// With Num Lock off the OS says the keypad's 1 is `End`, and that is what it reports: overriding it would take the arrows away from someone navigating with the keypad.
     #[test]
     fn a_keypad_key_without_num_lock_stays_what_the_os_calls_it() {
         assert_eq!(
@@ -155,17 +155,13 @@ mod tests {
     }
 }
 
-// What a mapped winit `WindowEvent` means at the platform level, decoupled from *how* it's applied. The
-// single-window runner applies it to a handler directly; the multi-window runner forwards it to that
-// surface's worker thread. Keeping the mapping here (and the application at the call site) lets both share
-// the exact same winit→platform translation.
+// What a mapped winit `WindowEvent` means at the platform level, decoupled from how it is applied. Keeping the mapping here and the application at the call site lets the single- and multi-window runners share one translation.
 /// Lines one detent of a mouse wheel is worth.
 ///
-/// Every winit backend reports a notch as one line, and one line is a fifth of what a browser moves for the
-/// same flick of the finger — which is what turning a wheel here felt like against any other window on the
-/// screen. The number is the browsers' hundred pixels over the runtime's twenty-pixel line.
+/// Every winit backend reports a notch as one line, and one line is a fifth of what a browser moves for the same flick of the finger — which is what turning a wheel here felt like against any other window on the screen. The number is the browsers' hundred pixels over the runtime's twenty-pixel line.
 const LINES_PER_NOTCH: f32 = 5.0;
 
+/// What a mapped window event means at the platform level, apart from how it is applied.
 pub enum SurfaceIntent {
     // Deliver this platform event to the handler.
     Event(Event),
@@ -175,10 +171,7 @@ pub enum SurfaceIntent {
     Redraw,
     // Deliver `WindowCloseRequested`, then close this surface.
     Close(Event),
-    // A finger that moved: the scroll it amounts to, then the move itself.
-    //
-    // Both, because a drag is both. The list under the finger scrolls while a slider under that same finger
-    // tracks the movement, and a backend delivering only one of the two broke whichever widget needed the other.
+    // A finger that moved: the scroll it amounts to, then the move itself. Both, because a drag is both — the list under the finger scrolls while a slider under that same finger tracks the movement.
     Dragged(Event, Event),
     // State-only (e.g. `ModifiersChanged`) or an unmapped event — nothing to deliver.
     Ignore,
@@ -186,17 +179,14 @@ pub enum SurfaceIntent {
 
 /// Where a finger was last seen, so the next report can be told as the distance it covered.
 ///
-/// A touch screen reports positions; a scroll is made of deltas. Nothing in winit turns one into the other, so
-/// a backend wanting a finger to scroll has to remember the last point itself — and while only one of them did,
-/// dragging a list moved nothing anywhere else.
+/// A touch screen reports positions; a scroll is made of deltas. Nothing in winit turns one into the other, so a backend wanting a finger to scroll has to remember the last point itself — and while only one of them did, dragging a list moved nothing anywhere else.
 #[derive(Default)]
 pub struct TouchDrag {
     last: Option<(f64, f64, u64)>,
 }
 
 impl TouchDrag {
-    // How far this finger has come since it was last seen. `None` for one arriving mid-gesture, and for a
-    // second finger landing while the first is still down: the distance between two fingers is not a scroll.
+    // How far this finger has come since it was last seen. `None` for one arriving mid-gesture, and for a second finger landing while the first is still down: the distance between two fingers is not a scroll.
     fn advance(&mut self, x: f64, y: f64, id: u64) -> Option<(f32, f32)> {
         let moved = self
             .last
@@ -210,8 +200,8 @@ impl TouchDrag {
     }
 }
 
-// Pure winit `WindowEvent` → [`SurfaceIntent`] translation, updating this surface's cursor/scale/modifiers.
-// No handler and no window side effects, so it can run on the winit thread while the handler lives elsewhere.
+// Pure winit `WindowEvent` → [`SurfaceIntent`] translation, updating this surface's cursor/scale/modifiers. No handler and no window side effects, so it can run on the winit thread while the handler lives elsewhere.
+/// Translates one winit window event, updating the input state it depends on.
 pub fn map_window_event(
     event: WindowEvent,
     cursor_position: &mut (f64, f64),
@@ -391,8 +381,7 @@ mod touch_tests {
         drag(&mut touch, 0.0, 0.0);
         drag(&mut touch, 0.0, 50.0);
         touch.end();
-        // Without the reset the next gesture opens with the jump from wherever the last one ended, which on a
-        // long page is the whole list moving at once.
+        // Without the reset the next gesture opens with the jump from wherever the last one ended, which on a long page is the whole list moving at once.
         assert_eq!(drag(&mut touch, 0.0, 400.0), None);
     }
 

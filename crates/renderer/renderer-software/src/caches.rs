@@ -1,14 +1,8 @@
 //! The caches every surface draws from, held once per thread rather than once per renderer.
 //!
-//! What belongs here is decided by the key, not by the size: a cache addressed by *content* — a glyph, an image,
-//! a shadow's geometry — answers the same question for every surface, so one copy serves all of them. State
-//! addressed by *surface* — the framebuffer, the clip mask, the previous frame's commands — stays on the
-//! renderer, where it belongs.
+//! What belongs here is decided by the key, not by the size: a cache addressed by *content* — a glyph, an image, a shadow's geometry — answers the same question for every surface, so one copy serves all of them. State addressed by *surface* — the framebuffer, the clip mask, the previous frame's commands — stays on the renderer, where it belongs.
 //!
-//! Thread-local rather than behind a lock because a [`crate::SoftwareRenderer`] is already thread-bound (it owns
-//! a softbuffer `Surface`, which is not `Send`), so a mutex would buy nothing but contention on the frame path.
-//! An app that renders surfaces on several threads gets one set per thread — no sharing across them, but no
-//! worse than a set per renderer either.
+//! Thread-local rather than behind a lock because a [`crate::SoftwareRenderer`] is already thread-bound (it owns a softbuffer `Surface`, which is not `Send`), so a mutex would buy nothing but contention on the frame path. An app that renders surfaces on several threads gets one set per thread — no sharing across them, but no worse than a set per renderer either.
 
 use std::cell::RefCell;
 use std::collections::HashMap;
@@ -23,8 +17,7 @@ use crate::primitives::image::ShadowCacheKey;
 use crate::primitives::path::PathShadowCacheKey;
 use crate::primitives::text::TextShadowCacheKey;
 
-/// What one cached pixmap costs. The whole reason these caches are bounded by bytes and not by count: a 4K image is
-/// ~33 MiB, so an entry cap would let any of them grow into the gigabytes.
+/// What one cached pixmap costs. The whole reason these caches are bounded by bytes and not by count: a 4K image is ~33 MiB, so an entry cap would let any of them grow into the gigabytes.
 pub(crate) fn pixmap_bytes(pixmap: &Pixmap) -> usize {
     pixmap.data().len()
 }
@@ -34,11 +27,11 @@ pub(crate) struct SharedCaches {
     pub(crate) shadow_cache: Cache<ShadowCacheKey, Pixmap>,
     pub(crate) text_shadow_cache: Cache<TextShadowCacheKey, Pixmap>,
     pub(crate) path_shadow_cache: Cache<PathShadowCacheKey, Pixmap>,
-    // In-flight background shadow work. Kept beside the cache each one drains into: a worker spawned for a surface produces a pixmap keyed by geometry alone, so whichever surface asks next should get it.
+    // Kept beside the cache each one drains into: a worker spawned for a surface produces a pixmap keyed by geometry alone, so whichever surface asks next should get it.
     pub(crate) pending_shadows: HashMap<ShadowCacheKey, mpsc::Receiver<Pixmap>>,
     pub(crate) pending_text_shadows: HashMap<TextShadowCacheKey, mpsc::Receiver<Pixmap>>,
     pub(crate) pending_path_shadows: HashMap<PathShadowCacheKey, mpsc::Receiver<Pixmap>>,
-    // The last shadow of each kind actually drawn, with the size it was drawn at, so a re-keyed one can stand in with it while its blur is in flight instead of leaving a hole (see `blit_cached_shadow_async`).
+    // The last shadow of each kind actually drawn, with its size, so a re-keyed one can stand in while its blur is in flight instead of leaving a hole.
     pub(crate) recent_shadow: Option<(ShadowCacheKey, u32, u32)>,
     pub(crate) recent_text_shadow: Option<(TextShadowCacheKey, u32, u32)>,
     pub(crate) recent_path_shadow: Option<(PathShadowCacheKey, u32, u32)>,
@@ -86,8 +79,7 @@ pub(crate) fn init(config: &SoftwareRendererConfig) {
     });
 }
 
-/// Whether this thread has built its caches yet. Lets a test tell "the constructor seeded the wrong thread"
-/// apart from "the drawing thread seeded itself", which is the whole point of deferring [`init`].
+/// Whether this thread has built its caches yet. Lets a test tell "the constructor seeded the wrong thread" apart from "the drawing thread seeded itself", which is the whole point of deferring [`init`].
 #[cfg(test)]
 pub(crate) fn initialised() -> bool {
     CACHES.with_borrow(|slot| slot.is_some())
@@ -95,13 +87,9 @@ pub(crate) fn initialised() -> bool {
 
 /// Drops everything no frame has asked for within each cache's idle horizon.
 ///
-/// The caches sweep themselves as they are used, which is enough while frames keep coming. It is not enough for a
-/// shell that has drawn nothing for an hour: with no accesses there is no sweep, and the high-water mark stands.
+/// The caches sweep themselves as they are used, which is enough while frames keep coming. It is not enough for a shell that has drawn nothing for an hour: with no accesses there is no sweep, and the high-water mark stands.
 ///
-/// Sweeps **the calling thread's** caches, since that is where they live. An on-screen surface's caches belong to
-/// its render thread, which sweeps itself once it has been idle (`RenderBackend::sweep_idle_caches`) — calling
-/// this from the UI thread would not reach them. What it is for is the caches a thread built by rasterising
-/// directly: `telar::rasterize`, previews, offscreen renderers.
+/// Sweeps **the calling thread's** caches, since that is where they live. An on-screen surface's caches belong to its render thread, which sweeps itself once it has been idle (`RenderBackend::sweep_idle_caches`) — calling this from the UI thread would not reach them. What it is for is the caches a thread built by rasterising directly: `telar::rasterize`, previews, offscreen renderers.
 pub fn sweep_idle() {
     with_caches(|c| {
         c.text_shaper.sweep_idle();

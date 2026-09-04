@@ -1,3 +1,5 @@
+//! Packaging a Debian `.deb`.
+
 use std::process::Command;
 
 use super::super::config::{TelarConfig, resolve_package};

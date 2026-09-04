@@ -1,3 +1,7 @@
+//! The Telar facade: the one crate an application depends on.
+//!
+//! Re-exports the widget catalogue, the reactive primitives and the geometry types, and carries the runner that turns a mounted tree into a window.
+
 mod macros;
 
 pub mod config;
@@ -89,17 +93,13 @@ pub use tree::{Frame, HotTree, LocalTree, UiTree};
 // Named in the tree shims the `app!` macro exports, so it has to be reachable through the facade.
 #[cfg(feature = "runtime")]
 pub use ui_tree::SegmentNodeInfo;
-// Always-on, no feature gate (D2 in docs/animations.md): kernel functionality, not an opt-in module. The transpiler emits `motion::Animated`/`motion::tween`/`motion::spring`/`motion::Easing` paths against this re-export.
+// Always on: kernel functionality, not an opt-in module. The transpiler emits `motion::` paths against this.
 pub use motion_core as motion;
-// Always-on for the same reason as `motion`: the transpiler emits `i18n::translate` paths and the baked
-// `crate::__rsx_i18n` catalog module references `i18n::{Catalog, Message, Part, Entry}`, so the facade must
-// always expose them. Inert unless the app has a `locales/` catalog — nothing is baked or linked otherwise.
+// Always on for the same reason: the transpiler emits `i18n::` paths and the baked catalog module names these types. Inert unless the app has a `locales/` catalog.
 #[cfg(feature = "runtime")]
 pub use direction::follow_locale_direction;
 pub use i18n_core as i18n;
-// `set_catalog` is app lifecycle, like `set_locale`, so it belongs at the root. Its lookup — `i18n::t` — is
-// deliberately not re-exported here: `t` at the facade root is already the `t!` macro, and a second `t` that
-// resolves at runtime rather than at expansion is a name nobody could read at a glance.
+// App lifecycle, like `set_locale`, so it belongs at the root. Its lookup `i18n::t` is deliberately not re-exported: `t` here is already the `t!` macro, and a second `t` resolving at runtime would be unreadable.
 pub use i18n_core::set_catalog;
 pub use i18n_core::{current_locale, detect_system_locale, set_locale, use_locale};
 #[cfg(feature = "runtime")]
@@ -109,17 +109,13 @@ pub use platform_core::{
 };
 #[cfg(feature = "watch")]
 pub use watch::watch_path;
-// The seam for an application that renders its own GPU content: it borrows the device Telar draws with, and
-// re-exports the `wgpu` both sides must agree on. **Depend on `telar::gpu::wgpu`, not on `wgpu` directly**:
-// two `wgpu` versions in one binary are two incompatible `Device` types, and the error names neither crate.
+// The seam for an application rendering its own GPU content: it borrows the device Telar draws with, and re-exports the `wgpu` both sides must agree on. Two `wgpu` versions in one binary are two incompatible `Device` types, and the error names neither crate.
 #[cfg(feature = "hardware")]
 pub use renderer_hardware::gpu;
 // The same seam facing the other way: Telar composing into a texture the application owns.
 #[cfg(feature = "hardware")]
 pub use texture_ui::{TextureUi, TextureUiError};
-// Backend-author API: an out-of-tree `Platform` (e.g. a Wayland layer-shell backend) implements `Platform`
-// and `Window` against these, driving a full rsx app via `run_with_platform` without depending on
-// `platform-core` directly.
+// Backend-author API: an out-of-tree `Platform` implements these and drives a full app through `run_with_platform` without depending on `platform-core` directly.
 #[cfg(feature = "runtime")]
 pub use platform_core::{
     EventHandler, ModifiersState, MultiSurfacePlatform, Platform, PlatformError, PointerButton,
@@ -153,7 +149,7 @@ pub use renderer_core::{
     Semantics, Shadow, ShapeStyle, Span, Stroke, TextAlign, TextShadow, TextStyle, TextWrap,
     for_each_with_matrix, hash_draw_commands, measure_text, transform_clip_rect,
 };
-// Backend-author API, the drawing half: a frontend implements `RendererFactory`, installs it with `run_with_platform_and_renderer`, and installs `TextMetrics` for whatever "how wide is this string" means on its surface.
+// The drawing half of the backend-author API: a frontend implements `RendererFactory` and installs a `TextMetrics` for whatever "how wide is this string" means on its surface.
 #[cfg(feature = "runtime")]
 pub use renderer_core::{
     FontConfig, RenderBackend, RendererBuild, RendererFactory, TextMetrics,
@@ -162,36 +158,27 @@ pub use renderer_core::{
 
 /// Whether `family` names a font installed on this system.
 ///
-/// Both [`AppConfig::font_family`](crate::AppConfig::font_family) and
-/// [`TextStyle::with_font_family`](crate::TextStyle::with_font_family) take any name and fall back silently
-/// when the family is not installed, so this is how an application warns instead. Answered by the database
-/// the text shaper already loaded — asking it costs nothing, where a second `fontdb` is a full system font
-/// scan and a second answer that can disagree with the one the text is shaped in.
+/// Both [`AppConfig::font_family`](crate::AppConfig::font_family) and [`TextStyle::with_font_family`](crate::TextStyle::with_font_family) take any name and fall back silently when the family is not installed, so this is how an application warns instead. Answered by the database the text shaper already loaded — asking it costs nothing, where a second `fontdb` is a full system font scan and a second answer that can disagree with the one the text is shaped in.
 #[cfg(feature = "runtime")]
 pub fn font_family_available(family: &str) -> bool {
     renderer_text::font_family_available(family)
 }
 
-/// Installs the glyph-shaping text measurer, for code that lays out text with no runner behind it — a layout test,
-/// or a tool that composes a tree only to measure it.
+/// Installs the glyph-shaping text measurer, for code that lays out text with no runner behind it — a layout test, or a tool that composes a tree only to measure it.
 ///
-/// An app never needs this: the runner installs it on resume with the app's own fonts. Nothing happens if a measurer
-/// is already installed.
+/// An app never needs this: the runner installs it on resume with the app's own fonts. Nothing happens if a measurer is already installed.
 #[cfg(feature = "runtime")]
 pub fn install_default_text_metrics() {
     renderer_core::set_default_text_metrics(renderer_text::ShaperMetrics);
 }
 
-/// What the CPU renderer's caches are holding, and a way to make them let go. Exposed so an app can answer "is the
-/// memory in the renderer?" from outside the renderer, which nothing short of a heap profiler could do before.
+/// What the CPU renderer's caches are holding, and a way to make them let go. Exposed so an app can answer "is the memory in the renderer?" from outside the renderer, which nothing short of a heap profiler could do before.
 #[cfg(feature = "software")]
 pub use renderer_software::{CacheStat, cache_stats, sweep_idle as sweep_renderer_caches};
 pub use services_core::app_paths as paths;
 pub use services_core::{AppPathsProvider, NoPaths};
 pub use services_core::{Clipboard, clipboard, clipboard_text, set_clipboard, set_clipboard_text};
-// Available in every GUI build, not opt-in: `ui_core::Surface` composes the per-surface service scope, so
-// `runtime` pulls in ui-core which turns on services-core/di. A non-GUI build (the `cargo-telar` tool depends on
-// `rsx` with default-features off) has no ui-core, hence no `di`, hence nothing to re-export.
+// Available in every GUI build rather than opt-in: `ui_core::Surface` composes the per-surface service scope, so `runtime` turns on services-core/di. A non-GUI build has no ui-core and nothing to re-export.
 #[cfg(feature = "http-assets")]
 pub use async_assets::HttpAssetSource;
 #[cfg(feature = "runtime")]
@@ -231,9 +218,7 @@ pub use ui_core::{
 
 /// Empties the layout runtime for a fresh tree, and installs the glyph measurer if nothing installed one.
 ///
-/// The measurer rides along because sizing text is part of laying it out, and this is the first call every tree
-/// makes: a tree built with no runner behind it — a layout test, a tool measuring a page — would otherwise have to
-/// ask for one separately. A frontend that installed its own keeps it; see [`install_default_text_metrics`].
+/// The measurer rides along because sizing text is part of laying it out, and this is the first call every tree makes: a tree built with no runner behind it — a layout test, a tool measuring a page — would otherwise have to ask for one separately. A frontend that installed its own keeps it; see [`install_default_text_metrics`].
 #[cfg(feature = "runtime")]
 pub fn reset_layout_runtime() {
     install_default_text_metrics();
@@ -259,6 +244,7 @@ pub use ui_components::{
 };
 
 #[cfg(feature = "runtime")]
+/// Offers an event to the overlay registry first, returning whether an overlay consumed it.
 pub fn dispatch_overlays(event: &Event) -> bool {
     ui_core::dispatch_overlays(event) == EventResult::Handled
 }
@@ -281,9 +267,7 @@ pub use raster::rasterize;
 #[cfg(feature = "dev")]
 pub use hot_state::{hot_restore_json, hot_signal, hot_snapshot_json, probe};
 
-/// Without `dev` there is no dylib swap to survive, so the key is inert and this degrades to a plain signal.
-/// The bounds match the `dev` build's so a type that compiles here cannot fail once hot-reload is on — letting
-/// hand-written app state (a navigation stack, an active locale) be declared once instead of behind a `cfg`.
+/// Without `dev` there is no dylib swap to survive, so the key is inert and this degrades to a plain signal. The bounds match the `dev` build's so a type that compiles here cannot fail once hot-reload is on — letting hand-written app state (a navigation stack, an active locale) be declared once instead of behind a `cfg`.
 #[cfg(all(feature = "runtime", not(feature = "dev")))]
 pub fn hot_signal<T>(key: &str, init: T) -> reactive_core::RwSignal<T>
 where
@@ -319,8 +303,7 @@ pub use runner::{SurfaceWindow, run_with_platform_and_renderer};
     not(target_arch = "wasm32")
 ))]
 pub use runner::{open_window, run_app_windowed, run_desktop_app_with_name};
-// The frontend an app actually starts on. Not gated on `desktop`: choosing between the frontends a build
-// has is the whole point of it, and a terminal-only build has no window to open.
+// The frontend an app actually starts on. Not gated on `desktop`: choosing between the frontends a build has is the whole point of it, and a terminal-only build has no window to open.
 #[cfg(all(feature = "runtime", not(target_os = "android")))]
 pub use runner::run_app_with_name;
 #[cfg(all(feature = "runtime", feature = "tui", not(target_os = "android")))]

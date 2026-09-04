@@ -1,21 +1,13 @@
 //! The map from generated Rust back to the `.rsx` that produced it, and the single place that reads it.
 //!
-//! Two tools need this and they used to have half of it each. The editor got the whole map in memory and
-//! could underline the exact expression rustc complained about; the CLI got a sidecar carrying only the line
-//! numbers, so `cargo telar check` underlined whole lines however precise rustc had been. Persisting the
-//! other half is what closes that, and putting the mapping itself here is what keeps the two from drifting
-//! into two answers for the same question.
+//! Two tools need this and they used to have half of it each. The editor got the whole map in memory and could underline the exact expression rustc complained about; the CLI got a sidecar carrying only the line numbers, so `cargo telar check` underlined whole lines however precise rustc had been. Persisting the other half is what closes that, and putting the mapping itself here is what keeps the two from drifting into two answers for the same question.
 
 use serde::{Deserialize, Serialize};
 use telar_parser::{Section, find_section_at};
 
-/// A `[view]` Rust expression copied byte-for-byte from the `.rsx` into the generated Rust, so
-/// `gen_start + (offset - rsx_start)` maps a generated offset onto the source on a UTF-8 char boundary.
+/// A `[view]` Rust expression copied byte-for-byte from the `.rsx` into the generated Rust, so `gen_start + (offset - rsx_start)` maps a generated offset onto the source on a UTF-8 char boundary.
 ///
-/// Only verbatim fragments get one — interpolation `{expr}`, `if`/`let` expressions, verbatim closure and
-/// pass-through attribute values. A fragment the transpiler rewrote into something else (a `for` pattern it
-/// re-tokenized, a numeric or colour attribute it converted) produces none, and that absence is the signal
-/// that its columns mean nothing.
+/// Only verbatim fragments get one — interpolation `{expr}`, `if`/`let` expressions, verbatim closure and pass-through attribute values. A fragment the transpiler rewrote into something else (a `for` pattern it re-tokenized, a numeric or colour attribute it converted) produces none, and that absence is the signal that its columns mean nothing.
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 pub struct ExprSpan {
     /// Byte offset of the fragment's start in the `.rsx` source.
@@ -29,8 +21,7 @@ pub struct ExprSpan {
 /// Everything the generated Rust knows about where it came from.
 #[derive(Debug, Default, Clone, Serialize, Deserialize)]
 pub struct SourceMap {
-    /// Per generated line (0-based), the 0-based `.rsx` line it originated from, or `None` for boilerplate
-    /// and transpiler-injected lines.
+    /// Per generated line (0-based), the 0-based `.rsx` line it originated from, or `None` for boilerplate and transpiler-injected lines.
     pub lines: Vec<Option<u32>>,
     /// The verbatim fragments, which are what make a *column* trustworthy rather than just a line.
     pub exprs: Vec<ExprSpan>,
@@ -41,9 +32,7 @@ pub struct SourceMap {
 pub enum RsxSpan {
     /// A byte range in the `.rsx`, trustworthy down to the column.
     Exact { start: u32, end: u32 },
-    /// A 0-based `.rsx` line and nothing narrower. The transpiler rewrote this line into something with no
-    /// column correspondence, and a narrow range would underline text that has nothing to do with the error —
-    /// which is worse than underlining the line.
+    /// A 0-based `.rsx` line and nothing narrower. The transpiler rewrote this line into something with no column correspondence, and a narrow range would underline text that has nothing to do with the error — which is worse than underlining the line.
     Line(u32),
 }
 
@@ -62,10 +51,7 @@ impl SourceMap {
 
     /// Maps a byte range in the generated Rust back onto the `.rsx`.
     ///
-    /// Three outcomes, and the difference between the last two is the whole point. A verbatim `[view]`
-    /// fragment maps byte for byte through its [`ExprSpan`]. A `[logic]` line maps by line plus the
-    /// indentation the transpiler added, which holds because `[logic]` is transpiled 1:1. Anything else in
-    /// `[view]` widens to its line. A generated line with no origin at all — boilerplate — maps to nothing.
+    /// Three outcomes, and the difference between the last two is the whole point. A verbatim `[view]` fragment maps byte for byte through its [`ExprSpan`]. A `[logic]` line maps by line plus the indentation the transpiler added, which holds because `[logic]` is transpiled 1:1. Anything else in `[view]` widens to its line. A generated line with no origin at all — boilerplate — maps to nothing.
     pub fn locate(
         &self,
         generated: &str,
@@ -94,8 +80,7 @@ impl SourceMap {
         let Some(rsx_line_start) = line_start(rsx, rsx_line as usize) else {
             return Some(RsxSpan::Line(rsx_line));
         };
-        // Leading whitespace is spaces and tabs, so its byte width is also its column count — the delta is the
-        // same number whichever space the caller goes on to render in.
+        // Leading whitespace is spaces and tabs, so its byte width is also its column count.
         let delta = leading_ws(&generated[gen_line_start..])
             .saturating_sub(leading_ws(&rsx[rsx_line_start..]));
         let rsx_line_end = rsx_line_start + nth_line(rsx, rsx_line as usize).map_or(0, str::len);
@@ -150,8 +135,7 @@ fn leading_ws(text: &str) -> usize {
 mod tests {
     use super::*;
 
-    /// The half that was already persisted, unchanged: a `[logic]` line is transpiled 1:1 under a fixed
-    /// indent, so rustc's columns come back by subtracting it.
+    /// The half that was already persisted, unchanged: a `[logic]` line is transpiled 1:1 under a fixed indent, so rustc's columns come back by subtracting it.
     #[test]
     fn a_logic_span_comes_back_minus_the_indent_the_transpiler_added() {
         let rsx = "[logic]\nlet count = signal(0);\n\n[view]\ncolumn\n";
@@ -170,8 +154,7 @@ mod tests {
         );
     }
 
-    /// The half that was not, and the reason this module exists: a verbatim `[view]` expression is the same
-    /// bytes in both files, so rustc's columns land on it exactly.
+    /// The half that was not, and the reason this module exists: a verbatim `[view]` expression is the same bytes in both files, so rustc's columns land on it exactly.
     #[test]
     fn a_verbatim_view_expression_maps_byte_for_byte() {
         let rsx = "[view]\ncol\n    text \"{name}\"\n";
@@ -196,8 +179,7 @@ mod tests {
         );
     }
 
-    /// And the case that has to stay wide. A `[view]` line the transpiler rewrote has no column
-    /// correspondence at all, so the honest answer is the line.
+    /// And the case that has to stay wide. A `[view]` line the transpiler rewrote has no column correspondence at all, so the honest answer is the line.
     #[test]
     fn a_rewritten_view_line_widens_to_the_whole_line() {
         let rsx = "[logic]\nlet x = 1;\n\n[view]\ntext \"hi\"\n";
@@ -241,8 +223,7 @@ mod tests {
         );
     }
 
-    /// A multibyte line ahead of the span: the offsets are bytes throughout, so nothing has to agree about
-    /// what a column is.
+    /// A multibyte line ahead of the span: the offsets are bytes throughout, so nothing has to agree about what a column is.
     #[test]
     fn offsets_stay_right_after_a_multibyte_line() {
         let rsx = "[logic]\nlet título = 1;\nlet n = 2;\n";

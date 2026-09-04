@@ -1,8 +1,11 @@
+//! [`Paint`]: a solid colour or a gradient, and what every fill and stroke resolves to.
+
 use crate::Color;
 
 use super::gradient::Gradient;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
+/// What a fill or stroke is drawn with: a solid colour or a gradient.
 pub enum Paint {
     Solid(Color),
     Gradient(Gradient),
@@ -28,8 +31,7 @@ impl Paint {
 
     /// The same paint at a fraction of the opacity it already had.
     ///
-    /// Scales the alpha rather than setting one, so quieting something already quiet makes it quieter rather
-    /// than louder — which is what a caller means when the paint is one it was handed rather than one it chose.
+    /// Scales the alpha rather than setting one, so quieting something already quiet makes it quieter rather than louder — which is what a caller means when the paint is one it was handed rather than one it chose.
     pub fn faded(self, factor: f32) -> Self {
         match self {
             Paint::Solid(c) => Paint::Solid(c.with_alpha(c.a * factor)),
@@ -42,6 +44,7 @@ impl Paint {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+/// How a stroke ends.
 pub enum LineCap {
     #[default]
     Butt,
@@ -50,6 +53,7 @@ pub enum LineCap {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+/// How two stroke segments meet.
 pub enum LineJoin {
     #[default]
     Miter,
@@ -58,6 +62,7 @@ pub enum LineJoin {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+/// Which side of a self-intersecting path counts as inside.
 pub enum FillRule {
     #[default]
     Winding,
@@ -95,6 +100,7 @@ impl Stroke {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
+/// A drop shadow: its colour, offset, blur and spread.
 pub struct Shadow {
     pub offset_x: f32,
     pub offset_y: f32,

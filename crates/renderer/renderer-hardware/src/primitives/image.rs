@@ -1,3 +1,5 @@
+//! The image pipeline: sampled quads, batched by texture.
+
 use wgpu::Device;
 
 use super::InstancePipeline;
@@ -8,8 +10,7 @@ pub(crate) struct ImageInstance {
     pub dest_rect: [f32; 4],
 }
 
-/// The per-surface half of drawing images: instance buffers and a pipeline that bakes in this surface's format
-/// and sample count. The uploaded textures it samples are shared — see [`crate::caches::SharedImages`].
+/// The per-surface half of drawing images: instance buffers and a pipeline that bakes in this surface's format and sample count. The uploaded textures it samples are shared — see [`crate::caches::SharedImages`].
 pub(crate) struct ImagePipeline {
     pub(crate) instances: InstancePipeline<ImageInstance>,
     pub(crate) pipeline: wgpu::RenderPipeline,

@@ -1,11 +1,6 @@
 //! Fine-grained reactive segments (T-1.1 / F010).
 //!
-//! Today the whole app is one effect that re-runs `app.root().view()` — recursing every component —
-//! on any tracked signal, so a single hover/animation costs O(tree). A `Segment` instead mounts a
-//! component with its OWN effect that flattens only that component's `view()` into its own command
-//! buffer. A parent references a child via `RenderNode::Boundary` (a cheap `Rc` clone) instead of
-//! calling `child.view()`, so the parent's effect never re-runs the child, and a child's signal
-//! change re-runs only the child. The flat command list is composed lazily at collect time.
+//! Today the whole app is one effect that re-runs `app.root().view()` — recursing every component — on any tracked signal, so a single hover/animation costs O(tree). A `Segment` instead mounts a component with its OWN effect that flattens only that component's `view()` into its own command buffer. A parent references a child via `RenderNode::Boundary` (a cheap `Rc` clone) instead of calling `child.view()`, so the parent's effect never re-runs the child, and a child's signal change re-runs only the child. The flat command list is composed lazily at collect time.
 
 use std::cell::{Cell, Ref, RefCell};
 use std::rc::Rc;
@@ -20,32 +15,26 @@ use crate::render_node::RenderNode;
 /// (index into `own` where the child's commands splice, child segment, whether inside an `Overlay`).
 type ChildSlots = Vec<(usize, Rc<Segment>, bool)>;
 
-/// One entry on the flatten work stack: a node to process, or a marker that closes the current overlay
-/// region (pushed after an `Overlay`'s children so the region's end position is recorded once they are all
-/// flattened). Kept private to the flatten walk. The `Node` variant dwarfs `EndOverlay`, but boxing it
-/// would add an allocation on the hot flatten path for no real memory win (the stack is short-lived).
+/// One entry on the flatten work stack: a node to process, or a marker that closes the current overlay region (pushed after an `Overlay`'s children so the region's end position is recorded once they are all flattened). Kept private to the flatten walk. The `Node` variant dwarfs `EndOverlay`, but boxing it would add an allocation on the hot flatten path for no real memory win (the stack is short-lived).
 #[allow(clippy::large_enum_variant)]
 enum Step {
     Node(RenderNode),
     EndOverlay,
 }
 
+/// One component's reactive boundary: its own flattened commands, the children spliced into them, and the effect that keeps both current.
 pub struct Segment {
-    // Human-readable widget type name, captured at mount for the devtools tree inspector.
+    // Captured at mount for the devtools tree inspector.
     name: &'static str,
-    // This component's own flattened commands, excluding children (spliced in at compose time), each with
-    // whether it belongs to an `Overlay` region (hoisted to the top layer at compose time). One list rather
-    // than two of the same length: the flag was compared in a second pass that allocated a `Vec<bool>` per
-    // re-render to answer what the per-command comparison already knows.
+    // This component's own flattened commands, excluding children, each with whether it belongs to an overlay region. One list rather than two of the same length: the flag was compared in a second pass that allocated a `Vec<bool>` per re-render to answer what the per-command comparison already knows.
     own_commands: Rc<RefCell<Vec<(DrawCommand, bool)>>>,
-    // Child splice points in emission order (see [`ChildSlots`]).
+    // Child splice points in emission order.
     child_slots: Rc<RefCell<ChildSlots>>,
-    // Set by the effect when this segment's output changes; cleared when composed. This lives on the Segment object (not a thread-local) so it works across the hot-reload dylib boundary: a dylib segment's effect sets it and the binary's compose/dirty-check read the same `Cell` — whereas a thread-local generation would be a separate duplicated instance per side.
+    // Set by the effect when this segment's output changes; cleared when composed.
     is_dirty: Rc<Cell<bool>>,
 }
 
-/// A node emitted by [`Segment::walk`]: one mounted component, with its pre-order id, widget name,
-/// nesting depth, and the bounding rect of its own draw commands unioned with all descendants'.
+/// A node emitted by [`Segment::walk`]: one mounted component, with its pre-order id, widget name, nesting depth, and the bounding rect of its own draw commands unioned with all descendants'.
 #[derive(Clone, Debug)]
 pub struct SegmentNodeInfo {
     pub id: u64,
@@ -54,8 +43,7 @@ pub struct SegmentNodeInfo {
     pub rect: Rect,
 }
 
-/// Unions two rects, treating any zero/negative-area rect as empty so `empty ∪ r == r` — a leaf with
-/// no draw commands must not drag its parent's box to the origin.
+/// Unions two rects, treating any zero/negative-area rect as empty so `empty ∪ r == r` — a leaf with no draw commands must not drag its parent's box to the origin.
 fn union_nonempty(a: Rect, b: Rect) -> Rect {
     let a_empty = a.width <= 0.0 || a.height <= 0.0;
     let b_empty = b.width <= 0.0 || b.height <= 0.0;
@@ -67,17 +55,12 @@ fn union_nonempty(a: Rect, b: Rect) -> Rect {
 }
 
 impl Segment {
-    /// Mounts `component` as a reactive segment with its own effect: the effect re-runs (and bumps
-    /// the thread-local render generation) only when a signal read by this component's `view()`
-    /// changes — so a leaf's signal change costs O(this component), not O(tree).
+    /// Mounts `component` as a reactive segment with its own effect: the effect re-runs (and bumps the thread-local render generation) only when a signal read by this component's `view()` changes — so a leaf's signal change costs O(this component), not O(tree).
     pub fn mount<C: Component + 'static>(component: C) -> Rc<Segment> {
         Self::mount_dyn(Rc::new(RefCell::new(component)))
     }
 
-    /// As `mount`, but takes an already-shared component so a parent can also hold it for event
-    /// dispatch. The view path borrows it immutably; events borrow it mutably. These normally never
-    /// overlap (dispatch is batched, so flushes happen after it), but a re-entrant flush during
-    /// dispatch would otherwise panic, so the render is skipped when the component is borrowed.
+    /// As `mount`, but takes an already-shared component so a parent can also hold it for event dispatch. The view path borrows it immutably; events borrow it mutably. These normally never overlap (dispatch is batched, so flushes happen after it), but a re-entrant flush during dispatch would otherwise panic, so the render is skipped when the component is borrowed.
     pub fn mount_dyn(component: Rc<RefCell<dyn Component>>) -> Rc<Segment> {
         let name = component
             .try_borrow()
@@ -86,10 +69,7 @@ impl Segment {
         Self::mount_fn_named(name, move || component.try_borrow().ok().map(|c| c.view()))
     }
 
-    /// Core mount: `render` produces this segment's `RenderNode`, or `None` to keep the previous render
-    /// unchanged (used when the underlying widget is mid event-dispatch and cannot be borrowed — borrowing it
-    /// then would panic, so we leave the last frame's commands in place and a later flush re-runs us). `name`
-    /// is what the devtools tree inspector shows.
+    /// Core mount: `render` produces this segment's `RenderNode`, or `None` to keep the previous render unchanged (used when the underlying widget is mid event-dispatch and cannot be borrowed — borrowing it then would panic, so we leave the last frame's commands in place and a later flush re-runs us). `name` is what the devtools tree inspector shows.
     pub fn mount_fn_named(
         name: &'static str,
         render: impl Fn() -> Option<RenderNode> + 'static,
@@ -97,7 +77,7 @@ impl Segment {
         let own_commands: Rc<RefCell<Vec<(DrawCommand, bool)>>> = Default::default();
         let child_slots: Rc<RefCell<ChildSlots>> = Default::default();
         let stack: Rc<RefCell<Vec<Step>>> = Default::default();
-        // Starts dirty so the first compose includes this segment.
+        // Starts dirty, so the first compose includes this segment.
         let is_dirty = Rc::new(Cell::new(true));
 
         let own_c = Rc::clone(&own_commands);
@@ -114,7 +94,7 @@ impl Segment {
             drop(stk);
             drop(own);
             let mut slots = slots_c.borrow_mut();
-            // The boundary structure also changes the output, even if own commands are identical.
+            // The boundary structure also changes the output, even when the commands are identical.
             let slots_changed = slots.len() != new_slots.len()
                 || slots
                     .iter()
@@ -146,19 +126,15 @@ impl Segment {
         self.name
     }
 
-    /// Emits this segment's subtree in pre-order (parent before children) into `out`. See
-    /// [`Segment::collect`] for how ids, depth, and bounding rects are computed.
+    /// Emits this segment's subtree in pre-order (parent before children) into `out`. See `Segment::collect` for how ids, depth, and bounding rects are computed.
     pub fn walk(&self, out: &mut Vec<SegmentNodeInfo>) {
         self.collect(0, out);
     }
 
-    /// Recursively appends one [`SegmentNodeInfo`] per segment in pre-order. `id` is the pre-order
-    /// index, so a consumer can select by both row index and canvas hit-test. Returns this subtree's
-    /// bounding rect (own draw commands unioned with all descendants') so a container highlights its
-    /// whole subtree, not just its own commands.
+    /// Recursively appends one [`SegmentNodeInfo`] per segment in pre-order. `id` is the pre-order index, so a consumer can select by both row index and canvas hit-test. Returns this subtree's bounding rect (own draw commands unioned with all descendants') so a container highlights its whole subtree, not just its own commands.
     fn collect(&self, depth: usize, out: &mut Vec<SegmentNodeInfo>) -> Rect {
         let idx = out.len();
-        // Push before recursing so the parent precedes its children and keeps the pre-order id.
+        // Pushed before recursing, so the parent precedes its children and keeps the pre-order id.
         out.push(SegmentNodeInfo {
             id: idx as u64,
             name: self.name,
@@ -168,9 +144,7 @@ impl Segment {
 
         let mut bounds = Rect::default();
         for (cmd, _) in self.own_commands.borrow().iter() {
-            // The renderer's own answer to "what does this command paint", rather than a second list of
-            // arms: the local copy knew four commands, so a spanned paragraph contributed nothing and a
-            // notification card — whose whole body is one — inspected as an empty rect.
+            // The renderer's own answer to what a command paints, rather than a second list of arms: the local copy knew four commands, so a spanned paragraph contributed nothing and a notification card inspected as an empty rect.
             let Some(rect) = renderer_core::culling::command_visual_rect(
                 cmd,
                 geometry_core::Transform::IDENTITY.to_array(),
@@ -190,9 +164,7 @@ impl Segment {
     }
 }
 
-/// Flattens one segment's `RenderNode` into its own command list, in place: `RenderNode::Boundary` records a
-/// child-splice point instead of emitting the child's commands, which is what keeps a parent's re-render off
-/// its children. Returns whether that list changed.
+/// Flattens one segment's `RenderNode` into its own command list, in place: `RenderNode::Boundary` records a child-splice point instead of emitting the child's commands, which is what keeps a parent's re-render off its children. Returns whether that list changed.
 fn flatten_segment(
     root: RenderNode,
     out: &mut Vec<(DrawCommand, bool)>,
@@ -203,13 +175,12 @@ fn flatten_segment(
     stack.push(Step::Node(root));
     let mut pos: usize = 0;
     let mut changed = false;
-    // Nesting depth of `Overlay` regions; > 0 means the commands/children emitted now are hoisted content.
+    // Greater than 0 means the commands emitted now are hoisted content.
     let mut overlay_depth: usize = 0;
 
     macro_rules! emit_command {
         ($command:expr) => {{
-            // The layering is compared with the command: a subtree that moved into an overlay emits the same
-            // commands and still changes the output.
+            // The layering is compared with the command, so a subtree that moved into an overlay emits the same commands and still changes the output.
             let entry = ($command, overlay_depth > 0);
             if pos < out.len() {
                 if out[pos] != entry {
@@ -272,9 +243,7 @@ fn flatten_segment(
                     backdrop_blur
                 });
             }
-            // Opens and closes the box in the command stream, so the structure survives the flattening the
-            // way a clip's does — and is compared by the same per-command diff, so a widget that moved to a
-            // different parent counts as changed output.
+            // Opens and closes the box in the command stream, so the structure survives flattening the way a clip's does, and a widget that moved to a different parent counts as changed output.
             RenderNode::Element { element, children } => {
                 stack.push(Step::Node(RenderNode::Primitive(DrawCommand::PopElement)));
                 for child in children.into_iter().rev() {
@@ -282,7 +251,7 @@ fn flatten_segment(
                 }
                 emit_command!(DrawCommand::PushElement { element });
             }
-            // Everything emitted until the matching EndOverlay marker is overlay content (hoisted at compose).
+            // Everything until the matching `EndOverlay` marker is overlay content.
             RenderNode::Overlay { children } => {
                 overlay_depth += 1;
                 stack.push(Step::EndOverlay);
@@ -290,8 +259,7 @@ fn flatten_segment(
                     stack.push(Step::Node(child));
                 }
             }
-            // The child's commands are owned by its own segment; record where they splice in, plus whether
-            // this splice point sits inside an overlay region.
+            // The child's commands are owned by its own segment, so record where they splice in and whether the splice point sits inside an overlay region.
             RenderNode::Boundary { child } => slots.push((pos, child, overlay_depth > 0)),
         }
     }
@@ -303,13 +271,7 @@ fn flatten_segment(
     changed
 }
 
-/// Lazily composes a segment subtree into a flat command list, splicing each child's current
-/// commands at its recorded position. O(total commands) but only cheap clones — the expensive
-/// `view()` + flatten already ran (per segment) and is skipped for unchanged segments.
-/// Composes a segment subtree into `out`, routing any command that belongs to an `Overlay` region into
-/// `overlay_out` instead — so overlays land at the end of the final list (drawn on top, free of any
-/// ancestor clip/transform). `in_overlay` propagates that state into child segments spliced within an
-/// overlay. See [`SegmentRoot::commands`] for the final `out ++ overlay_out` concatenation.
+/// Lazily composes a segment subtree into a flat command list, splicing each child's current commands at its recorded position. O(total commands) but only cheap clones — the expensive `view()` + flatten already ran (per segment) and is skipped for unchanged segments. Composes a segment subtree into `out`, routing any command that belongs to an `Overlay` region into `overlay_out` instead — so overlays land at the end of the final list (drawn on top, free of any ancestor clip/transform). `in_overlay` propagates that state into child segments spliced within an overlay. See [`SegmentRoot::commands`] for the final `out ++ overlay_out` concatenation.
 pub(crate) fn compose_into(
     seg: &Segment,
     out: &mut Vec<DrawCommand>,
@@ -337,8 +299,7 @@ pub(crate) fn compose_into(
     }
 }
 
-/// Whether any segment in the subtree has changed since the last compose. O(segments) — cheaper than
-/// a full O(commands) recompose, so it gates whether a recompose is needed.
+/// Whether any segment in the subtree has changed since the last compose. O(segments) — cheaper than a full O(commands) recompose, so it gates whether a recompose is needed.
 fn any_dirty(seg: &Segment) -> bool {
     if seg.is_dirty.get() {
         return true;
@@ -349,13 +310,11 @@ fn any_dirty(seg: &Segment) -> bool {
         .any(|(_, child, _)| any_dirty(child))
 }
 
-/// Top-level holder for a segment tree (analog of `ComponentList`): exposes the composed commands.
-/// Change detection uses per-segment dirty flags (shared across the hot-reload boundary) rather than
-/// a thread-local generation, which would be duplicated per side.
+/// Top-level holder for a segment tree (analog of `ComponentList`): exposes the composed commands. Change detection uses per-segment dirty flags (shared across the hot-reload boundary) rather than a thread-local generation, which would be duplicated per side.
 pub struct SegmentRoot {
     root: Rc<Segment>,
     cached: RefCell<Vec<DrawCommand>>,
-    // Bumped each time the composed output is rebuilt; consumers use it for an O(1) "did content change" compare (e.g. the HW idle-blit).
+    // Consumers use it for an O(1) "did content change" test.
     compose_generation: Cell<u64>,
     cache_valid: Cell<bool>,
 }
@@ -392,8 +351,7 @@ impl SegmentRoot {
         if !self.cache_valid.get() || any_dirty(&self.root) {
             let mut cached = self.cached.borrow_mut();
             cached.clear();
-            // Overlay content is routed aside during compose, then appended so it draws on top of (and
-            // outside any clip of) the main tree.
+            // Routed aside during compose, then appended so it draws on top of, and outside any clip of, the main tree.
             let mut overlay: Vec<DrawCommand> = Vec::new();
             compose_into(&self.root, &mut cached, &mut overlay, false); // clears dirty flags as it walks
             cached.extend(overlay);
@@ -453,7 +411,6 @@ mod tests {
     #[test]
     fn flatten_nested_groups_and_empties() {
         let root = SegmentRoot::mount(Nested);
-        // 4 rects; Empty and nested groups contribute nothing structural.
         assert_eq!(root.commands().len(), 4);
     }
 
@@ -467,7 +424,6 @@ mod tests {
             Segment::mount(Leaf { x: sb }),
         ];
         let root = SegmentRoot::mount(Parent { children });
-        // 2 children × 2 rects each.
         assert_eq!(root.commands().len(), 4);
     }
 
@@ -490,7 +446,6 @@ mod tests {
         let root = SegmentRoot::mount(WithOverlay);
         let cmds = root.commands();
         let xs: Vec<f32> = cmds.iter().map(cmd_x).collect();
-        // The overlay's rect(2) is emitted between rect(1) and rect(3) but composes last (drawn on top).
         assert_eq!(xs, vec![1.0, 3.0, 2.0]);
     }
 
@@ -505,7 +460,6 @@ mod tests {
 
     #[test]
     fn overlay_hoists_child_segment() {
-        // An overlay whose content is a child segment: the child's commands must hoist too.
         let child = Segment::mount(Leaf { x: signal(9.0) }); // emits rect(9), rect(14)
         let root = SegmentRoot::mount(OverlayParent { child });
         let cmds = root.commands();
@@ -563,7 +517,7 @@ mod tests {
         );
     }
 
-    // Regression probe for the sandbox counter's frozen "Double:" memo: replicates the runner's exact batch bracketing (new_events begin → on_event set → handled end/begin flush → commands → about_to_wait end) around a memo-reading segment.
+    // Regression probe for the frozen memo: replicates the runner's exact batching.
     #[test]
     fn memo_dependent_segment_updates_with_runner_batching() {
         use reactive_core::{begin_batch, end_batch, memo};
@@ -585,8 +539,6 @@ mod tests {
         );
     }
 
-    // A widget whose view() color tracks `theme` and whose on_event writes `sel` — like a nav button
-    // reading the theme and flipping its own hover/selection state on a pointer event.
     struct ThemedButton {
         theme: RwSignal<f32>,
         sel: RwSignal<i32>,
@@ -613,17 +565,11 @@ mod tests {
         }
     }
 
-    // A segment must keep its reactive subscriptions across event dispatch. The one hard invariant that
-    // guarantees it: dispatch must be BATCHED, so a signal written by a handler flushes only after the
-    // widget's borrow is released. If dispatch runs UNBATCHED, the write flushes synchronously while the
-    // widget is still borrowed — the segment's effect can't borrow it to re-render, skips, and drops its
-    // theme subscription (the hot-reload theme-freeze: the app dylib's runtime was never batched). This
-    // pins both halves: unbatched loses the subscription; batched preserves it.
+    // A segment must keep its reactive subscriptions across event dispatch, and the invariant guaranteeing it is that dispatch is batched: a signal written by a handler then flushes only after the widget's borrow is released. Unbatched, the write flushes mid-borrow, the segment's effect cannot borrow the widget to re-render, and the subscription is dropped.
     #[test]
     fn dispatch_must_be_batched_or_segment_drops_subscriptions() {
         use reactive_core::{batch, signal};
 
-        // Unbatched dispatch: the handler's write flushes mid-borrow → subscription to `theme` is lost.
         {
             let theme = signal(0.2f32);
             let sel = signal(0i32);
@@ -648,7 +594,6 @@ mod tests {
             );
         }
 
-        // Batched dispatch (what the fix guarantees for the app dylib's runtime): subscription is preserved.
         {
             let theme = signal(0.2f32);
             let sel = signal(0i32);
@@ -692,19 +637,13 @@ mod tests {
         }
     }
 
-    // T-5.2: a segment reading `Animated::get()` must see the ticker's interpolated value in the
-    // SAME `commands()` call once `motion_core::tick` has run — mirroring the runner, which flushes
-    // right after tick() so tree.commands() reflects the tick within one frame (docs/animations.md
-    // "Ticker integration in the runner"). No sleeps: a fixed base `Instant` advanced by explicit
-    // `Duration`s drives the tween deterministically.
+    // A segment reading `Animated::get()` must see the ticker's interpolated value in the same `commands()` call once `tick` has run, mirroring the runner. A fixed base `Instant` advanced by explicit `Duration`s drives the tween deterministically, with no sleeps.
     #[test]
     fn animated_get_reflects_tick_in_commands_and_settles() {
         use std::time::Duration;
         use web_time::Instant;
 
-        // Isolate this test's ticker state: the registry is thread-local and other tests on a
-        // reused libtest thread must not leak active animations into this one (mirrors the
-        // `fresh()` helper in motion-core's own tests).
+        // The registry is thread-local, so other tests on a reused libtest thread must not leak active animations into this one.
         motion_core::reset();
         motion_core::set_scale(1.0);
 
@@ -714,7 +653,6 @@ mod tests {
         );
         let root = SegmentRoot::mount(AnimatedLeaf { x: anim });
 
-        // Baseline compose at the resting value.
         assert_eq!(animated_rect_x(&root), 0.0);
         let g0 = root.generation();
 
@@ -725,7 +663,6 @@ mod tests {
         );
 
         let base = Instant::now();
-        // First tick only establishes t0 (no dt to integrate yet); nothing should change or recompose.
         motion_core::tick(base);
         assert_eq!(
             root.generation(),
@@ -734,10 +671,7 @@ mod tests {
         );
         assert_eq!(animated_rect_x(&root), 0.0);
 
-        // Halfway through the tween: commands() must reflect the interpolated value in this same tick.
-        // generation() only bumps inside commands()'s lazy recompose, so read the value first and
-        // capture the generation right after — capturing it beforehand would still show the stale
-        // pre-tick generation and make the `assert_ne!` below vacuous.
+        // `generation()` only bumps inside the lazy recompose, so read the value first and capture the generation right after: capturing it beforehand would show the stale pre-tick generation and make the assert vacuous.
         motion_core::tick(base + Duration::from_millis(50));
         let mid_x = animated_rect_x(&root);
         let g1 = root.generation();
@@ -747,7 +681,6 @@ mod tests {
         );
         assert_ne!(g1, g0, "an in-flight tick must bump the compose generation");
 
-        // Full duration: the tween settles and deregisters.
         motion_core::tick(base + Duration::from_millis(100));
         let end_x = animated_rect_x(&root);
         let g2 = root.generation();
@@ -758,7 +691,6 @@ mod tests {
             "a settled tween must deregister"
         );
 
-        // An extra tick after settling integrates nothing and must not recompose again.
         motion_core::tick(base + Duration::from_millis(200));
         assert_eq!(animated_rect_x(&root), 10.0);
         assert_eq!(

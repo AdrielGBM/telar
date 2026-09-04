@@ -1,3 +1,5 @@
+//! Decoding a bitmap into the premultiplied pixels a renderer draws.
+
 use renderer_core::Color;
 #[cfg(feature = "dynamic-image")]
 use renderer_core::ImageData;
@@ -5,6 +7,7 @@ use renderer_core::ImageData;
 #[cfg(feature = "dynamic-image")]
 #[derive(Debug, Clone, thiserror::Error)]
 #[error("failed to decode image: {0}")]
+/// A bitmap could not be decoded.
 pub struct ImageError(String);
 
 /// Multiplies a premultiplied-RGBA8 buffer by `tint` (srcIn): the buffer's alpha is the source coverage, and the tint's own alpha scales it.
@@ -22,9 +25,7 @@ pub(crate) fn apply_tint_premultiplied(pixels: &mut [u8], tint: Color) {
 
 /// Decodes image bytes into premultiplied RGBA8 at runtime.
 ///
-/// Which formats it understands is a build decision: PNG and JPEG always, plus whatever `image-*` feature the
-/// application turned on. A format nobody enabled comes back as an error here rather than failing to compile,
-/// so an app that opens files the user chose should say which formats it means.
+/// Which formats it understands is a build decision: PNG and JPEG always, plus whatever `image-*` feature the application turned on. A format nobody enabled comes back as an error here rather than failing to compile, so an app that opens files the user chose should say which formats it means.
 #[cfg(feature = "dynamic-image")]
 pub fn decode(bytes: &[u8]) -> Result<ImageData, ImageError> {
     let (rgba, w, h) = decode_rgba8(bytes)?;
@@ -66,10 +67,7 @@ pub(crate) fn byte_string_literal(bytes: &[u8]) -> String {
 
 /// The format knobs, checked where it matters: that turning one on actually reaches `image`.
 ///
-/// A feature that forwards nowhere looks identical to one that works — `decode` keeps compiling either way,
-/// and the difference only shows as `unsupported format` on a user's file. GIF stands in for all thirteen: it
-/// is behind `image-gif` exactly as the others are behind theirs, and `image` can encode it, so the test can
-/// make its own input instead of carrying hand-written bytes for a format nobody can read in review.
+/// A feature that forwards nowhere looks identical to one that works — `decode` keeps compiling either way, and the difference only shows as `unsupported format` on a user's file. GIF stands in for all thirteen: it is behind `image-gif` exactly as the others are behind theirs, and `image` can encode it, so the test can make its own input instead of carrying hand-written bytes for a format nobody can read in review.
 #[cfg(all(test, feature = "image-gif"))]
 mod format_features {
     #[test]

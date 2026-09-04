@@ -1,5 +1,4 @@
-//! Trailing `[preview "Name" …]` sections. Each header is a `Section::Preview` line; its body is
-//! the following `Section::View` markup, parsed with the same view machinery as `[view]`.
+//! Trailing `[preview "Name" …]` sections. Each header is a `Section::Preview` line; its body is the following `Section::View` markup, parsed with the same view machinery as `[view]`.
 
 use super::view::read_quoted;
 use super::{Parser, split_once_colon};
@@ -32,8 +31,7 @@ impl Parser {
         Ok(previews)
     }
 
-    /// Collects one preview's body: the `Section::View` markup at its own base indentation, stopping
-    /// at the next preview header (a `Section::Preview` line) or EOF.
+    /// Collects one preview's body: the `Section::View` markup at its own base indentation, stopping at the next preview header (a `Section::Preview` line) or EOF.
     fn parse_preview_body(&mut self) -> Result<Vec<ViewNode>, ParseError> {
         self.skip_blank_view_lines();
         let base = match self.lines.get(self.pos) {
@@ -44,14 +42,12 @@ impl Parser {
     }
 }
 
-/// Parses a `[preview "Name" key:value flag …]` header into its name and options. The name is a
-/// required quoted string; options are `key:value` pairs (or bare flags with an empty value).
+/// Parses a `[preview "Name" key:value flag …]` header into its name and options. The name is a required quoted string; options are `key:value` pairs (or bare flags with an empty value).
 fn parse_preview_header(
     content: &str,
     line: usize,
 ) -> Result<(String, Vec<StyleProp>), ParseError> {
-    // The lexer only classifies a line as `Section::Preview` when `strip_preview_header` matches, so
-    // the bracket/`preview`-keyword shape is already guaranteed; only name + options remain to parse.
+    // The lexer only classifies a line as `Section::Preview` when the header shape matches, so only the name and options remain to parse.
     let rest = strip_preview_header(content).unwrap_or("");
 
     let chars: Vec<char> = rest.chars().collect();
@@ -74,7 +70,6 @@ fn parse_preview_header(
                 key: k.trim().to_string(),
                 value: v.trim().to_string(),
             }),
-            // A bare flag carries an empty value.
             None => options.push(StyleProp {
                 key: token.to_string(),
                 value: String::new(),

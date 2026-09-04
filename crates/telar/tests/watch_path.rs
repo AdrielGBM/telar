@@ -1,8 +1,6 @@
-//! Integration test for `watch_path`: a real file change, a real platform watcher, and the callback landing
-//! on the thread that asked for it.
+//! Integration test for `watch_path`: a real file change, a real platform watcher, and the callback landing on the thread that asked for it.
 //!
-//! Nothing here can be unit-tested — the whole point of the helper is the hop from the watcher's thread to
-//! the UI thread, and a test that stubbed the watcher would assert only that `spawn_stream` works.
+//! Nothing here can be unit-tested — the whole point of the helper is the hop from the watcher's thread to the UI thread, and a test that stubbed the watcher would assert only that `spawn_stream` works.
 
 use std::cell::Cell;
 use std::rc::Rc;
@@ -17,8 +15,7 @@ fn scratch(name: &str) -> std::path::PathBuf {
     dir
 }
 
-/// Drains delivered task values until `hits` stops rising, or gives up. Stands in for the runner's per-frame
-/// `drain_tasks`.
+/// Drains delivered task values until `hits` stops rising, or gives up. Stands in for the runner's per-frame `drain_tasks`.
 fn settle_until(hits: &Rc<Cell<usize>>, want: usize, timeout: Duration) -> usize {
     let deadline = Instant::now() + timeout;
     while hits.get() < want && Instant::now() < deadline {
@@ -50,8 +47,7 @@ fn a_write_under_the_watched_directory_reaches_the_ui_thread() {
     let _ = std::fs::remove_dir_all(&dir);
 }
 
-/// A cancelled watch stops calling back. Without this the `Task` would be decoration: the callback usually
-/// writes a signal belonging to state the caller is in the middle of tearing down.
+/// A cancelled watch stops calling back. Without this the `Task` would be decoration: the callback usually writes a signal belonging to state the caller is in the middle of tearing down.
 #[test]
 fn a_cancelled_watch_stops_reporting() {
     let dir = scratch("cancel");
@@ -75,10 +71,7 @@ fn a_cancelled_watch_stops_reporting() {
 
 /// **Reading a watched file is not a change to it.**
 ///
-/// The platform reports opens and reads alongside the writes — inotify is asked for `IN_OPEN` — so a watcher
-/// that forwards every event it is handed answers "something changed" to a caller that was only looking. A
-/// caller that re-reads the tree when told to then tells itself to re-read it, and one reading on a frame
-/// loop never stops.
+/// The platform reports opens and reads alongside the writes — inotify is asked for `IN_OPEN` — so a watcher that forwards every event it is handed answers "something changed" to a caller that was only looking. A caller that re-reads the tree when told to then tells itself to re-read it, and one reading on a frame loop never stops.
 #[test]
 fn reading_a_watched_file_is_not_a_change() {
     let dir = scratch("read");

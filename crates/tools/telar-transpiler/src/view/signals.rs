@@ -39,7 +39,6 @@ pub(super) fn parse_interpolation(content: &str) -> Vec<Segment> {
                     segments.push(Segment::Literal(std::mem::take(&mut literal)));
                 }
                 let mut expr = String::new();
-                // The expression text begins one byte past this `{`.
                 let byte_offset = idx + c.len_utf8();
                 for (_, ec) in chars.by_ref() {
                     if ec == '}' {
@@ -86,9 +85,7 @@ pub(super) fn pattern_idents(pattern: &str) -> Vec<String> {
         .collect()
 }
 
-/// Renders a Rust string literal, escaping quotes, backslashes, and control chars. Newlines/tabs are
-/// escaped (not emitted raw) so a decoded newline in `.rsx` content stays a single line in the generated
-/// source — [`crate::view::resolve_source_map`] splits the body on `\n`, so a raw newline would desync it.
+/// Renders a Rust string literal, escaping quotes, backslashes, and control chars. Newlines/tabs are escaped (not emitted raw) so a decoded newline in `.rsx` content stays a single line in the generated source — [`crate::view::resolve_source_map`] splits the body on `\n`, so a raw newline would desync it.
 pub(crate) fn rust_str(s: &str) -> String {
     let mut out = String::with_capacity(s.len() + 2);
     out.push('"');
@@ -111,8 +108,7 @@ pub(super) fn closure_marker(attr: Option<&Attr>) -> String {
     let Some(attr) = attr else {
         return String::new();
     };
-    // The span covers the closure, not the parens the value needed to hold its spaces: a diagnostic should
-    // underline `|| toggle()`, not `(|| toggle())`.
+    // The span covers the closure, not the markup's delimiting parens: a diagnostic should underline `|| toggle()`, not `(|| toggle())`.
     let text = attr.value.text();
     let trimmed = text.trim_start();
     let (trimmed, delimiters) = match super::redundant_parens(trimmed) {
@@ -128,8 +124,7 @@ pub(super) fn closure_marker(attr: Option<&Attr>) -> String {
 
 /// The parser strips `on_press:` leaving `|| expr` or `|ev| expr`. Ensure the value is a closure; wrap bare expressions in a zero-arg closure. Then desugar a lone compound-assignment on a signal.
 pub(super) fn normalize_closure(value: &str) -> String {
-    // The parens a closure needs to hold its spaces are the value's delimiters, not part of the closure, so
-    // they come off first: `on_press:(|| f())` and a bare `|| f()` are the same thing.
+    // The markup's delimiting parens are not part of the closure: `on_press:(|| f())` and `|| f()` are the same.
     let v = value.trim();
     let v = super::redundant_parens(v).unwrap_or(v);
     let closure = if v.starts_with('|') {
@@ -140,10 +135,7 @@ pub(super) fn normalize_closure(value: &str) -> String {
     rewrite_compound_assign(&closure)
 }
 
-/// Sugar: a closure whose body is a single compound assignment on a signal (`|| $count += 1`, and the
-/// single-statement block form `|| { $count += 1 }`) is rewritten to `|| $count.update(|__v| *__v += (1))`.
-/// The `$` is kept so signal-cloning and [`substitute_handles`] still see the handle. Anything more
-/// complex (multiple statements, no compound operator, not a signal target) is returned unchanged.
+/// Sugar: a closure whose body is a single compound assignment on a signal (`|| $count += 1`, and the single-statement block form `|| { $count += 1 }`) is rewritten to `|| $count.update(|__v| *__v += (1))`. The `$` is kept so signal-cloning and [`substitute_handles`] still see the handle. Anything more complex (multiple statements, no compound operator, not a signal target) is returned unchanged.
 fn rewrite_compound_assign(closure: &str) -> String {
     // `closure` starts with `|` (guaranteed by `normalize_closure`); split off its `||` / `|args|` head.
     let Some(bar) = closure[1..].find('|') else {
@@ -152,7 +144,6 @@ fn rewrite_compound_assign(closure: &str) -> String {
     let params_end = bar + 2;
     let params = &closure[..params_end];
     let mut body = closure[params_end..].trim();
-    // Accept a single-statement block wrapper: `{ $x += 1 }`.
     if body.starts_with('{') && body.ends_with('}') && body.len() >= 2 {
         body = body[1..body.len() - 1].trim();
         body = body.strip_suffix(';').unwrap_or(body).trim();
@@ -182,8 +173,7 @@ fn rewrite_compound_assign(closure: &str) -> String {
     if rhs.is_empty() {
         return closure.to_string();
     }
-    // No parens around `rhs`: compound-assignment is Rust's lowest precedence, so `*__v *= a + b`
-    // already binds as `*__v *= (a + b)` — wrapping would only trip `unused_parens`.
+    // Compound assignment is Rust's lowest precedence, so `*__v *= a + b` already binds correctly and parens would only trip `unused_parens`.
     format!("{params} ${ident}.update(|__v| *__v {op} {rhs})")
 }
 
@@ -192,11 +182,9 @@ pub(crate) fn substitute_reads(s: &str) -> String {
     substitute_dollar(s, true)
 }
 
-/// Replaces every `$ident` in `s` with the bare `ident` (the signal handle), for closure bodies where
-/// `$count.update(…)` means the handle and `$` only marks it for cloning.
+/// Replaces every `$ident` in `s` with the bare `ident` (the signal handle), for closure bodies where `$count.update(…)` means the handle and `$` only marks it for cloning.
 ///
-/// `$theme` is the exception, because a theme handle has no second use: reading it is the only thing anyone
-/// can do with one, so `$theme.primary` means the same read wherever it is written.
+/// `$theme` is the exception, because a theme handle has no second use: reading it is the only thing anyone can do with one, so `$theme.primary` means the same read wherever it is written.
 pub(super) fn substitute_handles(s: &str) -> String {
     substitute_dollar(s, false)
 }
@@ -225,9 +213,7 @@ pub(super) fn signal_idents(s: &str) -> Vec<String> {
         .collect()
 }
 
-/// Every `$ident` marker in `s` as a `(dollar, end)` byte span. Only an ASCII `$` followed by an identifier
-/// start counts as a marker; a byte-wise walk cannot split a multi-byte char, since no continuation byte is
-/// ASCII.
+/// Every `$ident` marker in `s` as a `(dollar, end)` byte span. Only an ASCII `$` followed by an identifier start counts as a marker; a byte-wise walk cannot split a multi-byte char, since no continuation byte is ASCII.
 fn dollar_spans(s: &str) -> impl Iterator<Item = (usize, usize)> {
     let bytes = s.as_bytes();
     let mut i = 0;
@@ -251,27 +237,16 @@ fn dollar_spans(s: &str) -> impl Iterator<Item = (usize, usize)> {
     })
 }
 
-/// The distinct identifiers a `move` closure must clone so its captures stay independent of the outer
-/// bindings: every `$name` signal referenced across `snippets` (raw, still carrying `$`), deduped,
-/// followed by any `loop_variables` a snippet uses (also deduped against the signals). Pass `&[]` for
-/// `loop_variables` at a call site with no loop scope (e.g. the free-standing [`wrap_signal_clones`]);
-/// the three clone emitters ([`wrap_signal_clones`], `clone_bindings`, `opacity_closure`) all format
-/// this list for their own context (block wrapper / standalone statements / inline prefix).
+/// The distinct identifiers a `move` closure must clone so its captures stay independent of the outer bindings: every `$name` signal referenced across `snippets` (raw, still carrying `$`), deduped, followed by any `loop_variables` a snippet uses (also deduped against the signals). Pass `&[]` for `loop_variables` at a call site with no loop scope (e.g. the free-standing [`wrap_signal_clones`]); the three clone emitters ([`wrap_signal_clones`], `clone_bindings`, `opacity_closure`) all format this list for their own context (block wrapper / standalone statements / inline prefix).
 pub(super) fn captured_idents(snippets: &[&str], loop_variables: &[String]) -> Vec<String> {
     captured_idents_with(snippets, loop_variables, &[])
 }
 
 /// The same, plus the `[logic]` bindings the snippets name.
 ///
-/// **A rebuilding closure needs every capture, not just the reactive ones.** Signals and loop variables were
-/// enough while a subtree was built once; a region that runs again cannot *move* anything it names, and a
-/// plain binding — an `Arc<ImageData>` behind `img src:gradient`, a drawing behind `canvas paint:…` — is
-/// exactly what a plain binding is. Cloning it is the same answer already given to a signal, applied to the
-/// rest of the scope.
+/// **A rebuilding closure needs every capture, not just the reactive ones.** Signals and loop variables were enough while a subtree was built once; a region that runs again cannot *move* anything it names, and a plain binding — an `Arc<ImageData>` behind `img src:gradient`, a drawing behind `canvas paint:…` — is exactly what a plain binding is. Cloning it is the same answer already given to a signal, applied to the rest of the scope.
 ///
-/// A binding that is not `Clone` cannot survive a region that rebuilds, and saying so at the clone is the
-/// honest place: the alternative is a move-out-of-`Fn` error pointing at generated code the author never
-/// wrote.
+/// A binding that is not `Clone` cannot survive a region that rebuilds, and saying so at the clone is the honest place: the alternative is a move-out-of-`Fn` error pointing at generated code the author never wrote.
 pub(super) fn captured_idents_with(
     snippets: &[&str],
     loop_variables: &[String],
@@ -291,11 +266,9 @@ pub(super) fn captured_idents_with(
         .collect();
     for var in loop_variables.iter().chain(locals) {
         let used = snippets.iter().zip(&named).any(|(s, free)| match free {
-            // The expression parsed, so what it names is known rather than matched: `seat(&desk, id).x` does
-            // not use a binding called `x`, and a clone of one is a compile error in generated code.
+            // The expression parsed, so `seat(&desk, id).x` is known not to use a binding called `x` — cloning one would be a compile error in generated code.
             Some(free) => free.contains(var),
-            // It did not — a macro's tokens, a half-written value mid-keystroke. A missed capture is a move
-            // out of an `Fn`, which is worse than a clone nobody needed, so the scan stands in.
+            // It did not parse (macro tokens, a half-written value). A missed capture is a move out of an `Fn`, which is worse than a clone nobody needed.
             None => contains_ident(s, var),
         });
         if used && !idents.contains(var) {
@@ -307,8 +280,7 @@ pub(super) fn captured_idents_with(
 
 /// The same as [`wrap_signal_clones`], with the view's loop variables and `[logic]` bindings in scope.
 ///
-/// A closure that re-runs cannot *move* what it names, and a computed layout value names whatever the author
-/// had in scope — `inset_start:seat(&desk, id).x` captures `desk` and `id`, neither of which carries a `$`.
+/// A closure that re-runs cannot *move* what it names, and a computed layout value names whatever the author had in scope — `inset_start:seat(&desk, id).x` captures `desk` and `id`, neither of which carries a `$`.
 impl ViewGen<'_> {
     pub(super) fn clone_captures(&self, raw_values: &[&str], closure_expr: String) -> String {
         let idents = captured_idents_with(raw_values, &self.loop_variables, &self.locals);
@@ -318,12 +290,11 @@ impl ViewGen<'_> {
 
 /// Wraps a `move` closure literal in a block that clones every `$name` signal referenced (raw, still carrying `$`) across `raw_values` first, generalized for `color_expr` callers, whose reads (e.g. `accent.get()`) are embedded inside an already-built closure string rather than assembled inline. A no-op when none of `raw_values` reference a signal, so a purely static/theme color emits the closure unchanged.
 pub(super) fn wrap_signal_clones(raw_values: &[&str], closure_expr: String) -> String {
-    // No loop scope is available here (free function), so loop variables are captured by move as before.
+    // No loop scope is available in a free function, so loop variables are captured by move.
     clone_block(&captured_idents(raw_values, &[]), closure_expr)
 }
 
-/// Prefixes a closure literal with one `let x = x.clone();` per name, inside a block so the whole thing is
-/// still an expression. A no-op when there is nothing to clone.
+/// Prefixes a closure literal with one `let x = x.clone();` per name, inside a block so the whole thing is still an expression. A no-op when there is nothing to clone.
 fn clone_block(idents: &[String], closure_expr: String) -> String {
     if idents.is_empty() {
         return closure_expr;
@@ -348,9 +319,7 @@ fn collect_snippets(nodes: &[ViewNode], out: &mut Vec<String>) {
     for node in nodes {
         match node {
             ViewNode::Element(el) => {
-                // A text node's content is prose, and only its `{…}` holes are source. Pushing the whole
-                // string made `syn` lex a sentence — where an `I"` or a stray exponent is a hard lexer error
-                // inside a proc macro, not a `Result` a caller can fall back from.
+                // Only the `{…}` holes are source. Pushing the whole string made `syn` lex prose, where an `I"` or a stray exponent is a hard lexer error inside a proc macro rather than a `Result`.
                 if let Some(content) = &el.content {
                     for segment in parse_interpolation(content) {
                         if let Segment::Expr { text, .. } = segment {
@@ -359,10 +328,7 @@ fn collect_snippets(nodes: &[ViewNode], out: &mut Vec<String>) {
                     }
                 }
                 for attr in &el.attributes {
-                    // A quoted value is the author's data, never source: `component_attr_expr` hands it
-                    // through as a string literal with no `$` substitution, so a `$name` inside one is text.
-                    // Scanning it anyway made a documentation string mentioning `$x` clone a binding called
-                    // `x` that the file never had.
+                    // A quoted value is data, handed through as a string literal with no `$` substitution. Scanning it made a doc string mentioning `$x` clone a binding called `x` that the file never had.
                     if !attr.value.is_quoted() {
                         out.push(attr.value.text().to_string());
                     }
@@ -396,7 +362,6 @@ fn collect_snippets(nodes: &[ViewNode], out: &mut Vec<String>) {
                 }
             }
             ViewNode::LetStmt(stmt) => out.push(stmt.source.clone()),
-            // A note reads nothing, so nothing it names is cloned into a closure.
             ViewNode::Comment(_) => {}
         }
     }
@@ -415,8 +380,7 @@ pub(super) fn clone_block_multiline(idents: &[String], closure: String, pad: &st
     out
 }
 
-/// Assembles a `&[(pos, color)]` gradient stops expression from the resolved `from`, `to`, and optional `mid`/`mid_pos` values.
-/// Keys that contribute to a container's paint (`RectStyle`) rather than its layout. Used to pick which class props to merge into an element's paint attributes.
+/// Assembles a `&[(pos, color)]` gradient stops expression from the resolved `from`, `to`, and optional `mid`/`mid_pos` values. Keys that contribute to a container's paint (`RectStyle`) rather than its layout. Used to pick which class props to merge into an element's paint attributes.
 pub(crate) fn is_paint_key(key: &str) -> bool {
     matches!(
         key,
@@ -460,8 +424,7 @@ pub(super) fn has_paint(pattrs: &[Attr]) -> bool {
             a.key.as_str(),
             "fill" | "stroke" | "radius" | "opacity"
         ) || a.key.starts_with("shadow")
-            // A corner counts the way `radius` does; a side does not, the way `stroke_width` does not — a
-            // thickness with no colour to paint is not yet anything to see.
+            // A corner counts the way `radius` does; a side does not, the way `stroke_width` does not.
             || is_corner_key(&a.key)
     })
 }
@@ -481,7 +444,6 @@ pub(super) fn build_rect_style(
             .map(|g| format!("Some({g})"))
             .or_else(|| solid_fill.map(|f| format!("Some(Paint::Solid({f}))")))
             .unwrap_or_else(|| "None".to_string());
-        // Spelled out only when the box named an edge; otherwise the plain `stroke_width` on all four sides.
         let widths_s =
             border_widths.unwrap_or_else(|| format!("[{}; 4]", format_f32(stroke_width)));
         let border_s = match stroke {

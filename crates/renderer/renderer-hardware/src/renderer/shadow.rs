@@ -1,4 +1,6 @@
-// Geometry source for a shadow op: text shadows draw glyph instances, path shadows draw indexed vertices.
+//! Shadow pre-passes: rendering a blurred shape once and caching it against its geometry.
+
+/// Text shadows draw glyph instances, path shadows draw indexed vertices.
 pub(super) enum ShadowKind {
     Text {
         instance_start: u32,
@@ -18,7 +20,7 @@ pub(super) struct ShadowOp {
     pub(super) dest: [f32; 4],
 }
 
-// Cache-key discriminator mirroring ShadowKind: text keys on instance range + instance hash, path keys on index range + geometry hash.
+// Mirrors `ShadowKind`: text keys on instance range plus instance hash, path on index range plus geometry hash.
 #[derive(Hash, PartialEq, Eq, Clone)]
 pub(super) enum ShadowCacheKind {
     Text {

@@ -1,3 +1,5 @@
+//! Timing functions, and the cubic-Bézier solver behind the CSS-named ones.
+
 /// Timing function mapping normalized time `t` in `[0, 1]` to eased progress.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum Easing {

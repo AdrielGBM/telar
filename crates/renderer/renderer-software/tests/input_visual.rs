@@ -1,7 +1,4 @@
-//! Visual harness for the `Input` primitive: builds a focused text field (a bordered box wrapping an
-//! `Input`), lays it out, taps it to focus, and renders the flattened scene headless to `TELAR_VISUAL_OUT`.
-//! No-op without the env var (so it never gates CI). Run:
-//!   TELAR_VISUAL_OUT=/tmp/input.png cargo test -p renderer-software --test input_visual -- --nocapture
+//! Visual harness for the `Input` primitive: builds a focused text field (a bordered box wrapping an `Input`), lays it out, taps it to focus, and renders the flattened scene headless to `TELAR_VISUAL_OUT`. No-op without the env var (so it never gates CI). Run: TELAR_VISUAL_OUT=/tmp/input.png cargo test -p renderer-software --test input_visual -- --nocapture
 
 mod common;
 
@@ -26,7 +23,6 @@ fn input_visual_png() {
     let ink = Color::from_rgb_u8(230, 232, 240);
     reset_layout_runtime();
 
-    // A text field: a bordered, padded box wrapping the bare `Input` primitive (the box supplies the look).
     let value = signal("Hello, rsx".to_string());
     let input = Input::new(
         value,
@@ -49,7 +45,6 @@ fn input_visual_png() {
         vec![box_item(input)],
     )
     .unwrap();
-    // Center the field in the frame with an outer container.
     let root = new_container(
         LayoutStyle::new()
             .flex_column()
@@ -67,7 +62,6 @@ fn input_visual_png() {
     .unwrap();
 
     let mut list = ComponentList::new(RootHolder { field });
-    // Tap inside the field to focus it, so the caret is drawn (at the end of the text).
     let tap = |x: f64, y: f64, pressed: bool| {
         if pressed {
             Event::PointerPressed {
@@ -109,7 +103,6 @@ fn slider_visual_png() {
     let (w, h) = (360u32, 120u32);
     reset_layout_runtime();
 
-    // Track: a rounded bar; the thumb is a child offset by translate_x (as the `on_drag` demo drives it).
     let value = 0.4f32;
     let thumb = StyledContainer::new(
         LayoutStyle::new().width(16.0).height(16.0),
@@ -172,7 +165,6 @@ fn overlay_visual_png() {
     let ink = Color::from_rgb_u8(230, 232, 240);
     reset_layout_runtime();
 
-    // Page content behind: a filled panel with a label near the top.
     let label = Text::new(
         || "Page content behind".to_string(),
         LayoutStyle::new().height(20.0),
@@ -190,7 +182,6 @@ fn overlay_visual_png() {
     )
     .unwrap();
 
-    // A centered dialog inside an overlay: should draw on top of the page, escaping its layout.
     let dialog_label = Text::new(
         || "Overlay on top".to_string(),
         LayoutStyle::new().height(22.0),
@@ -213,9 +204,7 @@ fn overlay_visual_png() {
     )
     .unwrap();
 
-    // Portal flow (as in the app): lay out the page first so it becomes the overlay host, THEN build the
-    // overlay so it attaches to that host and fills the viewport — even though it is nested here under a
-    // small wrapper (proving it escapes its parent, not just when it is a viewport-sized child).
+    // Lay the page out first so it becomes the overlay host, then build the overlay so it attaches there and fills the viewport — even nested under a small wrapper, proving it escapes its parent.
     let wrapper = Container::new(LayoutStyle::new().flex_column(), vec![box_item(page)]).unwrap();
     compute_layout(
         wrapper.layout_node(),
@@ -224,7 +213,6 @@ fn overlay_visual_png() {
     )
     .unwrap();
 
-    // Built after layout → portals to the host (the wrapper) and fills the viewport.
     let overlay = Overlay::new(
         LayoutStyle::new()
             .flex_column()
@@ -249,8 +237,7 @@ fn overlay_visual_png() {
     common::save_png(&out, w, h, &rgba);
 }
 
-// Renders the page (wrapper) plus the portaled overlay; the overlay's content is laid out via the host,
-// not this tree, so it is rendered here purely by referencing its view.
+// The overlay's content is laid out via the host, not this tree, so it is rendered here purely by referencing its view.
 struct OverlayRoot {
     wrapper: Container,
     overlay: Overlay,
@@ -261,7 +248,7 @@ impl ui_tree::Component for OverlayRoot {
     }
 }
 
-// A tiny root Component that owns the field and renders it (ComponentList needs a single root).
+// `ComponentList` needs a single root.
 struct RootHolder {
     field: StyledContainer,
 }

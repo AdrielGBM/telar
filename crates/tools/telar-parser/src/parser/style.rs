@@ -22,8 +22,7 @@ impl Parser {
                 let class = self.parse_style_class()?;
                 section.classes.push(class);
             } else {
-                // `[style]` is classes — named bundles of properties, which are reuse. A constant was a
-                // second evaluation model with a namespace of its own, and `[logic]` is already Rust.
+                // `[style]` is classes — named bundles of properties, which are reuse. A constant was a second evaluation model with a namespace of its own, and `[logic]` is already Rust.
                 let name = line.content.split(':').next().unwrap_or("").trim();
                 return Err(ParseError {
                     message: format!(
@@ -42,11 +41,9 @@ impl Parser {
         let header = &self.lines[self.pos];
         let header_line = header.number;
         let header_indent = header.indent;
-        // Strip the leading `@` sigil; the rest is the class name (and any inline props).
         let after_sigil = header.content[1..].to_string();
         self.pos += 1;
 
-        // Inline form: `@badge: padding_x:6 padding_y:2 radius:6`
         if let Some((name, rest)) = split_once_colon(&after_sigil) {
             let name = name.trim().to_string();
             let props = parse_inline_props(rest.trim(), header_line)?;
@@ -57,7 +54,6 @@ impl Parser {
             });
         }
 
-        // Multi-line form: name is the rest of the header, props are indented lines.
         let name = after_sigil.trim().to_string();
         if name.is_empty() {
             return Err(ParseError {
@@ -108,9 +104,7 @@ impl Parser {
     }
 }
 
-/// `#` is reserved for hex colors in `.rsx`, so any `#`-prefixed value must be a well-formed hex.
-/// Catches typos (`#zzz`, `#12`) at parse time instead of silently rendering them as black.
-/// `pub(super)` because `view::parse_element_header` validates attribute values with it too.
+/// `#` is reserved for hex colors in `.rsx`, so any `#`-prefixed value must be a well-formed hex. Catches typos (`#zzz`, `#12`) at parse time instead of silently rendering them as black. `pub(super)` because `view::parse_element_header` validates attribute values with it too.
 pub(super) fn check_hex_value(value: &str, line: usize) -> Result<(), ParseError> {
     if value.starts_with('#') && crate::parse_hex(value).is_none() {
         return Err(ParseError {
@@ -123,8 +117,7 @@ pub(super) fn check_hex_value(value: &str, line: usize) -> Result<(), ParseError
     Ok(())
 }
 
-/// Validates a style-class property `key: value`: the value must be present and, when it is a hex
-/// color, well-formed.
+/// Validates a style-class property `key: value`: the value must be present and, when it is a hex color, well-formed.
 fn check_style_prop_value(key: &str, value: &str, line: usize) -> Result<(), ParseError> {
     if value.is_empty() {
         return Err(ParseError {

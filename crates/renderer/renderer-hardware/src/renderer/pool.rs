@@ -1,6 +1,8 @@
+//! The scratch-texture pool layers and blur passes borrow from, bucketed by size and format.
+
 use crate::primitives::Viewport;
 
-// Prefer Rgba8Unorm: shaders output sRGB-encoded values so the GPU must NOT apply sRGB encoding on write. Bgra8Unorm is the fallback for drivers (e.g. some macOS/DX12 paths) that don't expose Rgba8Unorm.
+// Prefer Rgba8Unorm: shaders output sRGB-encoded values, so the GPU must not encode again on write. Bgra8Unorm is the fallback for drivers that do not expose it.
 pub(super) fn preferred_format(capabilities: &wgpu::SurfaceCapabilities) -> wgpu::TextureFormat {
     capabilities
         .formats
@@ -37,7 +39,7 @@ pub(super) fn create_viewport_pool_slot(
     (buffer, bind_group)
 }
 
-// Borrows a scratch texture matching (width, height, format) from the pool, or creates a fresh one on miss. The returned tuple must be handed back via return_pooled_texture once the frame's GPU work is recorded so it can be reused next frame.
+// The returned tuple must be handed back via `return_pooled_texture` once the frame's GPU work is recorded.
 pub(super) fn take_pooled_texture(
     device: &wgpu::Device,
     pool: &mut Vec<(
@@ -83,7 +85,7 @@ pub(super) fn take_pooled_texture(
     (width, height, format, texture, view)
 }
 
-// Returns a scratch texture to the pool for reuse, bounded to max_per_size entries per (width, height, format) so memory does not grow without limit.
+// Bounded to `max_per_size` entries per bucket, so memory does not grow without limit.
 pub(super) fn return_pooled_texture(
     pool: &mut Vec<(
         u32,
@@ -111,7 +113,7 @@ pub(super) fn return_pooled_texture(
     }
 }
 
-// Round size up to the nearest multiple of 64 so pool textures are reused across subpixel-layout variations that produce slightly different exact dimensions.
+// Rounded up to a multiple of 64, so pool textures are reused across subpixel-layout variations that produce slightly different exact dimensions.
 pub(super) fn bucket_size(size: u32) -> u32 {
     const B: u32 = 64;
     size.div_ceil(B) * B
@@ -127,11 +129,9 @@ pub(super) struct PooledTexture {
     pub(super) bucket_height: u32,
 }
 
-/// The MSAA and resolve pair for a layer at `bucket_w`×`bucket_h`: reused from `pool` when it holds a
-/// matching bucket, freshly created when it does not.
+/// The MSAA and resolve pair for a layer at `bucket_w`×`bucket_h`: reused from `pool` when it holds a matching bucket, freshly created when it does not.
 ///
-/// Takes the pool by reference rather than reading it off the renderer, so the layer pool and the shadow
-/// capture pool — which asked the same question in the same twenty-two lines — can both call it.
+/// Takes the pool by reference rather than reading it off the renderer, so the layer pool and the shadow capture pool — which asked the same question in the same twenty-two lines — can both call it.
 pub(super) fn take_layer_textures(
     pool: &mut Vec<PooledTexture>,
     pipeline: &crate::primitives::layer::LayerPipeline,

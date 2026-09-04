@@ -1,13 +1,8 @@
 //! Arbitrary drawing, as the SVG that draws it.
 //!
-//! A box a document can *place* is a box CSS lays out; a shape a document can only *draw* is an SVG. Every
-//! primitive Telar has that is not a box arrives here — artwork, a bitmap, whatever an immediate-mode canvas
-//! put on the surface — in the coordinates of the element that holds it, which is exactly what an `<svg>`
-//! with no `viewBox` reads its children in.
+//! A box a document can *place* is a box CSS lays out; a shape a document can only *draw* is an SVG. Every primitive Telar has that is not a box arrives here — artwork, a bitmap, whatever an immediate-mode canvas put on the surface — in the coordinates of the element that holds it, which is exactly what an `<svg>` with no `viewBox` reads its children in.
 //!
-//! Built as one string and handed over whole. The alternative — reconciling shape elements one by one, as
-//! the boxes are — would be paying for identity that nothing here has: a canvas rebuilds its artwork from
-//! scratch every time it is asked, so there is no shape to move, only a picture to replace.
+//! Built as one string and handed over whole. The alternative — reconciling shape elements one by one, as the boxes are — would be paying for identity that nothing here has: a canvas rebuilds its artwork from scratch every time it is asked, so there is no shape to move, only a picture to replace.
 
 use geometry_core::{Point, Rect};
 use renderer_core::{
@@ -54,8 +49,7 @@ impl Drawing {
         if let Some(filter) = filter {
             attr(&mut attrs, "filter", &format!("url(#{filter})"));
         }
-        // A border sits inside the box, where a stroke straddles the edge it is given: half of it is drawn
-        // outside, so the shape it is drawn on is the box already pulled in by that half.
+        // A border sits inside the box, where a stroke straddles the edge it is given, so the shape it is drawn on is the box already pulled in by half the stroke.
         let inset = match &style.border {
             Some(border) if border.is_visible() => {
                 let width = border.widths[0];
@@ -88,8 +82,7 @@ impl Drawing {
                 out.push_str("/>");
                 self.body.push_str(&out);
             }
-            // Four different corners is not a shape `<rect>` can be: SVG carries one radius, so the outline
-            // is drawn instead.
+            // SVG carries one radius, so four different corners is not a shape `<rect>` can be and the outline is drawn.
             None => {
                 self.body.push_str(&format!(
                     "<path d=\"{}\"{attrs}/>",
@@ -103,9 +96,7 @@ impl Drawing {
         if text.is_empty() {
             return;
         }
-        // Laid out by the browser rather than placed as an SVG `<text>`: wrapping, alignment, line height and
-        // the clamp are all things a Telar text style can ask for and an SVG text run cannot do, and the CSS
-        // that answers them is the same CSS a text in a box already gets.
+        // Laid out by the browser rather than placed as an SVG `<text>`: wrapping, alignment, line height and the clamp are all things a Telar text style can ask for and an SVG text run cannot do.
         let mut css = String::new();
         crate::paint::text_style(style, &mut css);
         self.body.push_str(&format!(
@@ -157,8 +148,7 @@ impl Drawing {
         ));
     }
 
-    /// A bitmap already resolved to something the document can load — `object-fit` was applied when `rect`
-    /// was computed, so the picture is stretched to exactly it.
+    /// A bitmap already resolved to something the document can load — `object-fit` was applied when `rect` was computed, so the picture is stretched to exactly it.
     pub fn image(&mut self, href: &str, rect: Rect, raster: Raster) {
         let rendering = match raster {
             Raster::Pixel => " style=\"image-rendering:pixelated\"",
@@ -269,8 +259,7 @@ impl Drawing {
 
     fn drop_shadow(&mut self, s: renderer_core::Shadow) -> String {
         let id = self.def_id();
-        // A blur radius is the width of the whole falloff, where a Gaussian is described by its deviation;
-        // the same halving CSS does for `box-shadow`.
+        // A blur radius is the width of the whole falloff, where a Gaussian is described by its deviation — the same halving CSS does for `box-shadow`.
         self.defs.push_str(&format!(
             "<filter id=\"{id}\" x=\"-50%\" y=\"-50%\" width=\"200%\" height=\"200%\"><feDropShadow dx=\"{}\" dy=\"{}\" stdDeviation=\"{}\" flood-color=\"{}\"/></filter>",
             round(s.offset_x),
@@ -289,14 +278,9 @@ impl Drawing {
 
 /// A box's gradient frame, as a picture of the ring it is.
 ///
-/// Every other frame here is an inset `box-shadow`, which follows the radius and takes no room from the box
-/// — but a shadow carries a colour, and a gradient is not one. So the ring is drawn: the box's own outline
-/// with the inner edge punched out of it under the even-odd rule, which is the shape the rasterising
-/// backends fill for the same border.
+/// Every other frame here is an inset `box-shadow`, which follows the radius and takes no room from the box — but a shadow carries a colour, and a gradient is not one. So the ring is drawn: the box's own outline with the inner edge punched out of it under the even-odd rule, which is the shape the rasterising backends fill for the same border.
 ///
-/// Drawn in the box's own corner rather than where it stands on the surface, so the picture can be laid over
-/// it as a background of exactly its size — and the gradient moves with it, since its points were measured
-/// against the rect the widget drew.
+/// Drawn in the box's own corner rather than where it stands on the surface, so the picture can be laid over it as a background of exactly its size — and the gradient moves with it, since its points were measured against the rect the widget drew.
 pub fn frame_svg(
     rect: Rect,
     radius: BorderRadius,
@@ -305,7 +289,7 @@ pub fn frame_svg(
 ) -> String {
     let outer = Rect::new(0.0, 0.0, rect.width, rect.height);
     let mut d = rounded_outline(outer, radius);
-    // No interior means the frame swallowed the box, and the outer outline alone is the whole of it.
+    // No interior means the frame swallowed the box, so the outer outline is the whole of it.
     if let Some((inner, inner_radius)) = renderer_core::border_inner_shape(outer, radius, widths) {
         d.push_str(&rounded_outline(inner, inner_radius));
     }
@@ -344,8 +328,7 @@ fn gradient_def(id: &str, g: &Gradient) -> String {
             )
         })
         .collect();
-    // User space, not the default object bounding box: the points are the ones the widget drew with, in the
-    // same coordinates as the shape they paint.
+    // User space, not the default object bounding box: the points are the ones the widget drew with.
     match g.kind {
         GradientKind::Linear { start, end } => format!(
             "<linearGradient id=\"{id}\" gradientUnits=\"userSpaceOnUse\" x1=\"{}\" y1=\"{}\" x2=\"{}\" y2=\"{}\">{stops}</linearGradient>",
@@ -459,8 +442,7 @@ fn attr(out: &mut String, name: &str, value: &str) {
     out.push('"');
 }
 
-/// Markup-safe text. Every string that reaches this file is one the application chose — a label, a font
-/// family, a path a picture was loaded from — so none of it can be assumed to be markup already.
+/// Markup-safe text. Every string that reaches this file is one the application chose — a label, a font family, a path a picture was loaded from — so none of it can be assumed to be markup already.
 fn escape(value: &str) -> String {
     if !value.contains(['&', '<', '>', '"', '\'']) {
         return value.to_string();
@@ -717,9 +699,7 @@ mod tests {
         assert_eq!(d.finish(), "");
     }
 
-    /// The ring the rasterising backends fill, as a picture that can be laid over the box: outer outline,
-    /// inner outline, even-odd. Drawn in the box's own corner, and the gradient moved to meet it — measured
-    /// where the widget drew it, the colours would have started off the left edge of the picture.
+    /// The ring the rasterising backends fill, as a picture that can be laid over the box: outer outline, inner outline, even-odd. Drawn in the box's own corner, and the gradient moved to meet it — measured where the widget drew it, the colours would have started off the left edge of the picture.
     #[test]
     fn a_gradient_frame_is_a_ring_drawn_in_the_box_s_own_corner() {
         let svg = frame_svg(
@@ -743,8 +723,7 @@ mod tests {
         assert!(svg.contains("A6 6 0 0 1"), "{svg}");
     }
 
-    /// A frame thicker than the box it frames has no interior to punch out, and the outline alone is the
-    /// whole of it — a second subpath of nothing would have cut a hole under the even-odd rule.
+    /// A frame thicker than the box it frames has no interior to punch out, and the outline alone is the whole of it — a second subpath of nothing would have cut a hole under the even-odd rule.
     #[test]
     fn a_frame_that_swallows_its_box_is_the_outline_alone() {
         let svg = frame_svg(

@@ -1,3 +1,5 @@
+//! The raster fallback, for SVG features no vector primitive can express.
+
 use std::sync::Arc;
 
 use geometry_core::Rect;

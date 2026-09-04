@@ -1,3 +1,5 @@
+//! [`checkbox`]: a box and its label, toggling a bound boolean.
+
 use std::rc::Rc;
 
 use telar_macros::Props;
@@ -10,11 +12,7 @@ use ui_core::{Children, LayoutItem, StyledContainer, box_item};
 
 use crate::shared;
 
-/// A labelled checkbox: an 18px box that fills with the accent and shows a check while its bound `checked`
-/// signal is on; tapping the row toggles it (and fires `on_toggle`). High-level sugar over the primitives
-/// (`box` + `on_press` + a reactive fill); lives in `ui-components`, not the kernel, so an app can drop it.
-/// `checked` is `Option` so `Props` can derive `Default`: `None` is uncontrolled (the widget owns its own
-/// signal), `Some` is caller-bound.
+/// A labelled checkbox: an 18px box that fills with the accent and shows a check while its bound `checked` signal is on; tapping the row toggles it (and fires `on_toggle`). High-level sugar over the primitives (`box` + `on_press` + a reactive fill); lives in `ui-components`, not the kernel, so an app can drop it. `checked` is `Option` so `Props` can derive `Default`: `None` is uncontrolled (the widget owns its own signal), `Some` is caller-bound.
 #[derive(Props)]
 pub struct CheckboxProps {
     /// Bound checked state. `None` (the default) is uncontrolled — the widget makes its own `signal(false)`.
@@ -30,6 +28,7 @@ pub struct CheckboxProps {
     pub on_toggle: Option<Rc<dyn Fn(bool)>>,
 }
 
+/// A box and its label, toggling a bound boolean.
 pub fn checkbox(
     props: CheckboxProps,
     _children: Children,
@@ -63,7 +62,6 @@ pub fn checkbox(
         vec![],
     )?;
 
-    // The 18px box: an accent fill when checked, else a bordered white square, with the check centred inside.
     let box_checked = checked;
     let control = StyledContainer::new(
         LayoutStyle::new()
@@ -87,7 +85,6 @@ pub fn checkbox(
         vec![box_item(mark)],
     )?;
 
-    // The whole row is the tap target (box + label); a tap flips the bound signal and reports the new state.
     let toggle_checked = checked;
     let announced = checked;
     shared::labelled_control(

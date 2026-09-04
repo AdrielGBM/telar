@@ -1,8 +1,11 @@
+//! Where an Android app's files live, resolved from the activity.
+
 use std::path::PathBuf;
 
 use android_activity::AndroidApp;
 use services_core::AppPathsProvider;
 
+/// The app's config, cache and data directories, resolved from the activity.
 pub struct AndroidPathsProvider {
     app: AndroidApp,
 }

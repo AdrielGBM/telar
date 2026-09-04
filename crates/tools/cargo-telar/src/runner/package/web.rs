@@ -1,3 +1,5 @@
+//! Packaging for the browser: the wasm bundle and the page that loads it.
+
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
@@ -8,12 +10,9 @@ use crate::runner::config::{TelarConfig, resolve_package, split_android_flag};
 /// The name `wasm-bindgen` gives its output, and what the generated page imports.
 const BUNDLE: &str = "app";
 
-/// Builds the app for the browser: a wasm module, the JavaScript that instantiates it, and a page that
-/// starts it.
+/// Builds the app for the browser: a wasm module, the JavaScript that instantiates it, and a page that starts it.
 ///
-/// Three tools rather than one, because that is what the toolchain is: cargo produces a wasm module whose
-/// imports are `wasm-bindgen`'s ABI, `wasm-bindgen` writes the JavaScript that satisfies them, and `wasm-opt`
-/// shrinks the result. The first two are required; the third is skipped with a note if it is not installed.
+/// Three tools rather than one, because that is what the toolchain is: cargo produces a wasm module whose imports are `wasm-bindgen`'s ABI, `wasm-bindgen` writes the JavaScript that satisfies them, and `wasm-opt` shrinks the result. The first two are required; the third is skipped with a note if it is not installed.
 pub(crate) fn build_web(
     cargo_args: Vec<String>,
     config: TelarConfig,
@@ -51,8 +50,7 @@ pub(crate) fn build_web_bundle(
     if release {
         build_args.push("--release".to_string());
     }
-    // Reached through `telar/` rather than a feature of the app's own, so any project builds for the web
-    // without first declaring one.
+    // Reached through `telar/` rather than a feature of the app's own, so any project builds for the web without first declaring one.
     build_args.push("--features".to_string());
     build_args.push("telar/web".to_string());
 
@@ -148,8 +146,7 @@ fn optimise(module: &Path, release: bool) {
 
 /// Writes the page that starts the app, unless the project brought its own.
 ///
-/// A project that wants control puts a `web/index.html` beside its manifest, and this leaves it alone: the
-/// generated one is a starting point, not a thing to fight.
+/// A project that wants control puts a `web/index.html` beside its manifest, and this leaves it alone: the generated one is a starting point, not a thing to fight.
 fn write_page(out: &Path, app_name: &str, renderer: Option<WebRenderer>) -> Result<(), String> {
     let page = out.join("index.html");
     let provided = Path::new("web").join("index.html");
@@ -163,8 +160,7 @@ fn write_page(out: &Path, app_name: &str, renderer: Option<WebRenderer>) -> Resu
 }
 
 fn default_page(app_name: &str, renderer: Option<WebRenderer>) -> String {
-    // Stamped on the element rather than compiled in, so the same bundle can be loaded either way — and a
-    // `?telar-renderer=` on the URL still wins over it.
+    // Stamped on the element rather than compiled in, so the same bundle can be loaded either way — and a `?telar-renderer=` on the URL still wins over it.
     let choice = renderer
         .map(|r| format!(" data-telar-renderer=\"{}\"", r.as_str()))
         .unwrap_or_default();
@@ -187,8 +183,7 @@ fn default_page(app_name: &str, renderer: Option<WebRenderer>) -> String {
     <div id="telar-root"{choice}></div>
     <script type="module">
       import init from './{BUNDLE}.js';
-      // `init` instantiates the module and returns its exports; `telar_start` is the entry `telar::app!`
-      // generates for this target.
+      // `init` instantiates the module and returns its exports; `telar_start` is the entry `telar::app!` generates for this target.
       const wasm = await init();
       wasm.telar_start();
     </script>

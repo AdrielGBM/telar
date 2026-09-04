@@ -1,13 +1,8 @@
 //! Native file dialogs.
 //!
-//! Every dialog here BLOCKS the thread it runs on until the user answers — a portal round-trip on Linux,
-//! a modal panel elsewhere — so none of them runs on the UI thread. Each spawns the chooser on a worker
-//! and hands the answer back through [`reactive_core::spawn_task`], which delivers on the UI thread with
-//! the reactive runtime already entered: the callback can write a signal directly, and the frame that
-//! follows shows it.
+//! Every dialog here BLOCKS the thread it runs on until the user answers — a portal round-trip on Linux, a modal panel elsewhere — so none of them runs on the UI thread. Each spawns the chooser on a worker and hands the answer back through [`reactive_core::spawn_task`], which delivers on the UI thread with the reactive runtime already entered: the callback can write a signal directly, and the frame that follows shows it.
 //!
-//! The returned [`Task`] cancels the callback (not the dialog — the OS owns that window once it is up),
-//! which is what a surface tearing down while a dialog is open wants.
+//! The returned [`Task`] cancels the callback (not the dialog — the OS owns that window once it is up), which is what a surface tearing down while a dialog is open wants.
 
 use std::path::PathBuf;
 
@@ -15,9 +10,7 @@ use reactive_core::{Task, spawn_task};
 use services_core::file_dialogs;
 pub use services_core::{FileDialog, FileFilter};
 
-/// Runs `pick` on a worker and delivers its answer to `on_done` on the UI thread. With no chooser
-/// installed (headless, Android) the answer is the empty one, delivered the same way — a caller never has
-/// to branch on whether the platform has dialogs.
+/// Runs `pick` on a worker and delivers its answer to `on_done` on the UI thread. With no chooser installed (headless, Android) the answer is the empty one, delivered the same way — a caller never has to branch on whether the platform has dialogs.
 fn ask<T, P, F>(pick: P, on_done: F) -> Task
 where
     T: Default + Send + 'static,

@@ -2,16 +2,11 @@
 
 use crate::{Memo, ReadSignal, RwSignal, memo};
 
-/// Anything a derivation — or a widget — can read reactively: either handle on a signal, or a value already
-/// derived once.
+/// Anything a derivation — or a widget — can read reactively: either handle on a signal, or a value already derived once.
 ///
-/// One trait rather than a `derive`/`derive_from`/`map` family, because the difference between them was never
-/// about behaviour: a widget reading a service, a read handle, or something derived all want the same thing,
-/// and three spellings of it only meant picking the wrong one and chasing a type error.
+/// One trait rather than a `derive`/`derive_from`/`map` family, because the difference between them was never about behaviour: a widget reading a service, a read handle, or something derived all want the same thing, and three spellings of it only meant picking the wrong one and chasing a type error.
 ///
-/// A widget that takes `impl Source<Value = T>` instead of `RwSignal<T>` can be fed a derivation. One that
-/// takes the signal cannot, and that is how a catalogue ends up re-implemented next to it — a card wanting a
-/// percentage computed from two services has nothing to hand a widget that insists on a signal it can write.
+/// A widget that takes `impl Source<Value = T>` instead of `RwSignal<T>` can be fed a derivation. One that takes the signal cannot, and that is how a catalogue ends up re-implemented next to it — a card wanting a percentage computed from two services has nothing to hand a widget that insists on a signal it can write.
 pub trait Source {
     type Value;
     fn read(&self) -> Self::Value;
@@ -38,8 +33,7 @@ impl<T: Clone + 'static> Source for Memo<T> {
     }
 }
 
-/// A plain value reads as itself, so a widget taking a [`Source`] still accepts a constant without the caller
-/// wrapping it in a signal that will never change.
+/// A plain value reads as itself, so a widget taking a [`Source`] still accepts a constant without the caller wrapping it in a signal that will never change.
 impl Source for f32 {
     type Value = f32;
     fn read(&self) -> f32 {
@@ -56,11 +50,7 @@ impl Source for bool {
 
 /// A value derived from another, recomputed when its source moves.
 ///
-/// **A derivation is a [`Memo`], never a signal written by an effect**, though the reason has changed. It used
-/// to be that an unbound `effect(…)` deregistered where it was made and the derived value never moved again.
-/// Both now belong to the owner that built them and live exactly as long, so what is left is the plain one: a
-/// memo *is* the derived value, where a signal written by an effect is a second copy of it that has to be
-/// kept in step.
+/// **A derivation is a [`Memo`], never a signal written by an effect**, though the reason has changed. It used to be that an unbound `effect(…)` deregistered where it was made and the derived value never moved again. Both now belong to the owner that built them and live exactly as long, so what is left is the plain one: a memo *is* the derived value, where a signal written by an effect is a second copy of it that has to be kept in step.
 pub fn derive<S, U>(source: S, map: impl Fn(S::Value) -> U + 'static) -> Memo<U>
 where
     S: Source + 'static,
@@ -69,8 +59,7 @@ where
     memo(move || map(source.read()))
 }
 
-/// [`derive`] over two sources, recomputed when either moves — a label that reads a level and whether it is
-/// charging, and has to follow both.
+/// [`derive`](fn@derive) over two sources, recomputed when either moves — a label that reads a level and whether it is charging, and has to follow both.
 pub fn derive_pair<A, B, U>(
     first: A,
     second: B,
@@ -116,8 +105,7 @@ mod tests {
         assert_eq!(label.get(), "11+");
     }
 
-    /// The regression this exists for. Deriving through a signal written by an effect seeds correctly and then
-    /// goes dead the moment the handle drops.
+    /// The regression this exists for. Deriving through a signal written by an effect seeds correctly and then goes dead the moment the handle drops.
     #[test]
     fn a_derivation_outlives_the_call_that_made_it() {
         reset_runtime();

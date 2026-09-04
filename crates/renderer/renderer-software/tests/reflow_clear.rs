@@ -1,6 +1,4 @@
-//! Regression: on a TRANSPARENT surface (clear_color None), the incremental damage path must still clear
-//! the pixels a moved element vacated. Otherwise a reflow — e.g. adding/removing a bar module shifts its
-//! neighbours — leaves the old frame behind as a ghost ("the icon after the icon").
+//! Regression: on a TRANSPARENT surface (clear_color None), the incremental damage path must still clear the pixels a moved element vacated. Otherwise a reflow — e.g. adding/removing a bar module shifts its neighbours — leaves the old frame behind as a ghost ("the icon after the icon").
 
 use std::sync::Arc;
 
@@ -26,7 +24,6 @@ fn transparent_surface_clears_vacated_pixels_on_reflow() {
         style: Arc::new(RectStyle::default().with_fill(Color::from_rgb_u8(200, 100, 80))),
     };
 
-    // Frame 0: chip at the left. Transparent surface → clear_color None.
     r.begin_frame(w, h, 1.0, 0).unwrap();
     r.render_frame(&[chip(0.0)], None).unwrap();
     let f0 = r.read_rgba().unwrap().to_vec();
@@ -40,7 +37,6 @@ fn transparent_surface_clears_vacated_pixels_on_reflow() {
         "right side still transparent in frame 0"
     );
 
-    // Frame 1: the chip reflows to the right (same renderer → incremental damage path).
     r.begin_frame(w, h, 1.0, 1).unwrap();
     r.render_frame(&[chip(40.0)], None).unwrap();
     let f1 = r.read_rgba().unwrap().to_vec();

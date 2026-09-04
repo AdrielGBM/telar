@@ -14,14 +14,10 @@ use crossterm::terminal::{
 };
 use crossterm::{cursor, execute};
 
-/// Whether a terminal is currently in application mode. Read by the panic hook, which has no other way to
-/// know whether there is anything to undo — and undoing nothing must be harmless, because the hook runs
-/// on every panic in the process.
+/// Whether a terminal is currently in application mode. Read by the panic hook, which has no other way to know whether there is anything to undo — and undoing nothing must be harmless, because the hook runs on every panic in the process.
 static ACTIVE: AtomicBool = AtomicBool::new(false);
 
-/// Owns the terminal's application mode. Restoring is done by `Drop` **and** by a panic hook, because a
-/// panic that unwinds past the drop — or one in a thread that aborts the process — would otherwise leave
-/// the user with a terminal in raw mode, no cursor, and no echo: a shell they cannot type into.
+/// Owns the terminal's application mode. Restoring is done by `Drop` **and** by a panic hook, because a panic that unwinds past the drop — or one in a thread that aborts the process — would otherwise leave the user with a terminal in raw mode, no cursor, and no echo: a shell they cannot type into.
 pub struct TerminalMode {
     keyboard_enhanced: bool,
 }
@@ -41,8 +37,7 @@ impl TerminalMode {
         if mouse {
             execute!(out, EnableMouseCapture)?;
         }
-        // Key *release* and unambiguous modifier reporting only exist under the kitty keyboard protocol.
-        // Without it a terminal reports presses alone, which is why the event mapping cannot assume releases.
+        // Key *release* and unambiguous modifier reporting only exist under the kitty keyboard protocol. Without it a terminal reports presses alone, which is why the event mapping cannot assume releases.
         let keyboard_enhanced = supports_keyboard_enhancement().unwrap_or(false);
         if keyboard_enhanced {
             execute!(
@@ -58,8 +53,7 @@ impl TerminalMode {
         Ok(Self { keyboard_enhanced })
     }
 
-    /// Whether the terminal reports key releases. A backend that assumes it does on a terminal that does not
-    /// leaves every key stuck down.
+    /// Whether the terminal reports key releases. A backend that assumes it does on a terminal that does not leaves every key stuck down.
     pub fn reports_key_releases(&self) -> bool {
         self.keyboard_enhanced
     }
@@ -74,7 +68,7 @@ impl Drop for TerminalMode {
     }
 }
 
-/// Undoes everything [`TerminalMode::enter`] did. Idempotent, and safe to call having entered nothing.
+/// Undoes everything `TerminalMode::enter` did. Idempotent, and safe to call having entered nothing.
 pub fn restore() {
     if !ACTIVE.swap(false, Ordering::SeqCst) {
         return;
@@ -104,8 +98,7 @@ fn install_panic_hook() {
     });
 }
 
-/// The terminal's size in cells. Falls back to a conventional 80×24 when it cannot be asked — a pipe, or a
-/// terminal that answers nothing — so an app still lays out rather than collapsing to zero.
+/// The terminal's size in cells. Falls back to a conventional 80×24 when it cannot be asked — a pipe, or a terminal that answers nothing — so an app still lays out rather than collapsing to zero.
 pub fn size() -> (u16, u16) {
     crossterm::terminal::size()
         .map(|(cols, rows)| (cols.max(1), rows.max(1)))

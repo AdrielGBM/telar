@@ -1,9 +1,6 @@
 //! A text shadow big enough to be blurred off-thread must not blink out when the string changes.
 //!
-//! The shadow cache is keyed on the text, so a clock re-keys its shadow every minute. Past
-//! `ASYNC_SHADOW_THRESHOLD` the blur moves to a worker and the result lands a frame or two later — and the
-//! frames in between used to draw no shadow at all, which on a desktop clock reads as the shadow blinking
-//! once a minute.
+//! The shadow cache is keyed on the text, so a clock re-keys its shadow every minute. Past `ASYNC_SHADOW_THRESHOLD` the blur moves to a worker and the result lands a frame or two later — and the frames in between used to draw no shadow at all, which on a desktop clock reads as the shadow blinking once a minute.
 
 use std::sync::Arc;
 
@@ -15,8 +12,7 @@ use telar_renderer_software::{SoftwareRenderer, SoftwareRendererConfig};
 const W: u32 = 640;
 const H: u32 = 320;
 
-/// Big enough that the shadow pixmap clears `ASYNC_SHADOW_THRESHOLD` (80 000 px) and takes the worker path —
-/// the only path this test is about.
+/// Big enough that the shadow pixmap clears `ASYNC_SHADOW_THRESHOLD` (80 000 px) and takes the worker path — the only path this test is about.
 fn clock_like(text: &str) -> Vec<DrawCommand> {
     vec![DrawCommand::Text {
         spans: None,
@@ -57,7 +53,7 @@ fn a_rekeyed_text_shadow_keeps_drawing_while_its_blur_is_in_flight() {
         SoftwareRendererConfig::default(),
     );
 
-    // Settle the first shadow: the worker needs a few frames to land its result in the cache.
+    // The worker needs a few frames to land its result in the cache.
     let mut settled = 0;
     for _ in 0..200 {
         settled = draw(&mut renderer, "15:47");
@@ -71,8 +67,7 @@ fn a_rekeyed_text_shadow_keeps_drawing_while_its_blur_is_in_flight() {
         "the async shadow never landed, so this test proves nothing"
     );
 
-    // The minute rolls over: new text, new cache key, blur back on a worker. This is the frame that used to
-    // come out with no shadow at all.
+    // New text, new cache key, blur back on a worker: the frame that used to come out with no shadow at all.
     let during = draw(&mut renderer, "15:48");
 
     assert!(

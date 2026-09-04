@@ -1,3 +1,5 @@
+//! Renaming a component: its file, its markup usages and its Rust references, in one workspace edit.
+
 use std::path::PathBuf;
 
 use lsp_types::*;
@@ -11,10 +13,7 @@ use super::Backend;
 impl Backend {
     /// Renames a component (`<feature_card>` → `<new_name>`): the defining `.rsx` file, every markup usage (native cross-file scan), and every hand-written Rust reference to the generated `fn` / `Props` (via the embedded analyzer). Returns a `document_changes` edit so the file rename rides along with the text edits. `None` if the new name is not a valid identifier or no defining file is found.
     ///
-    /// Three kinds of occurrence, because a component name lives in three places: the tag in `[view]`, the
-    /// module segment of the `use` line that imports it (both from the workspace `.rsx` index — the segment
-    /// is a file name, which rust-analyzer never sees change), and the generated `fn`/`Props` in real Rust,
-    /// which is rust-analyzer's own rename mapped back through the source map.
+    /// Three kinds of occurrence, because a component name lives in three places: the tag in `[view]`, the module segment of the `use` line that imports it (both from the workspace `.rsx` index — the segment is a file name, which rust-analyzer never sees change), and the generated `fn`/`Props` in real Rust, which is rust-analyzer's own rename mapped back through the source map.
     pub(crate) async fn rename_component(
         &self,
         old_name: &str,
@@ -22,7 +21,7 @@ impl Backend {
         uri: &Uri,
         theme: Option<String>,
     ) -> Option<WorkspaceEdit> {
-        // The new name becomes a file stem + fn identifier, so it must be a bare identifier.
+        // The new name becomes a file stem and fn identifier, so it must be a bare identifier.
         let valid = !new_name.is_empty()
             && new_name
                 .chars()
@@ -45,7 +44,7 @@ impl Backend {
             std::collections::HashMap::new();
         let mut def_uri: Option<Uri> = None;
         for loc in refs {
-            // The (0,0) marker `component_references` emits for the defining file is the file itself, not a text occurrence — capture it for the rename op, never as an edit.
+            // The (0,0) marker `component_references` emits for the defining file is the file itself, not a text occurrence, so it is captured for the rename op and never as an edit.
             if loc.range.start == loc.range.end {
                 def_uri = Some(loc.uri);
             } else {
@@ -129,7 +128,7 @@ impl Backend {
         let props_type = to_pascal_case(&old_name) + "Props";
         let new_props = to_pascal_case(&new_name) + "Props";
 
-        // Offsets of the generated definition names (`fn NAME(` skips "fn "; `struct NAME` skips "struct ").
+        // `fn NAME(` skips "fn "; `struct NAME` skips "struct ".
         let Some(fn_offset) = target.code.find(&format!("fn {fn_name}(")).map(|i| i + 3) else {
             return edits;
         };
@@ -174,7 +173,7 @@ impl Backend {
 
         for (refs, replacement) in [(fn_refs, new_fn.as_str()), (props_refs, new_props.as_str())] {
             for r in refs {
-                // The generated module is rebuilt from the `.rsx`; only real source files need editing.
+                // The generated module is rebuilt from the `.rsx`, so only real source files need editing.
                 if crate::build_sync::is_generated_build_file(&r.path) {
                     continue;
                 }

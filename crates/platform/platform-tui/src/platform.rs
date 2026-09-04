@@ -12,23 +12,19 @@ use crate::window::TuiWindow;
 
 /// How long the loop waits for input before looking at the frame again when nothing is animating.
 ///
-/// A terminal offers no way to interrupt a blocking read from another thread, so a reactive change with no
-/// keystroke behind it — a finished task, a timer — is picked up on the next turn rather than immediately.
-/// Long enough that an idle app costs nothing measurable, short enough that the delay is not felt.
+/// A terminal offers no way to interrupt a blocking read from another thread, so a reactive change with no keystroke behind it — a finished task, a timer — is picked up on the next turn rather than immediately. Long enough that an idle app costs nothing measurable, short enough that the delay is not felt.
 const IDLE_POLL: Duration = Duration::from_millis(30);
 
 #[derive(Clone, Debug)]
+/// How the terminal surface is sized and coloured.
 pub struct TuiPlatformConfig {
-    /// How many logical pixels one cell stands for. Must match what the renderer was built with, or the
-    /// window reports a size the frames do not fill.
+    /// How many logical pixels one cell stands for. Must match what the renderer was built with, or the window reports a size the frames do not fill.
     pub cell_width: f32,
     pub cell_height: f32,
     pub mouse: bool,
     /// Whether Ctrl+C asks the application to close.
     ///
-    /// On by default, because raw mode turns Ctrl+C from a signal into an ordinary key: an app that does not
-    /// bind it would otherwise have no way out at all, and the user would need another terminal to kill it.
-    /// An app that wants the chord for itself turns this off and handles the key.
+    /// On by default, because raw mode turns Ctrl+C from a signal into an ordinary key: an app that does not bind it would otherwise have no way out at all, and the user would need another terminal to kill it. An app that wants the chord for itself turns this off and handles the key.
     pub quit_on_ctrl_c: bool,
 }
 
@@ -43,6 +39,7 @@ impl Default for TuiPlatformConfig {
     }
 }
 
+/// The terminal backend: an alternate screen, raw mode, and a cell grid for a surface.
 pub struct TuiPlatform {
     config: TuiPlatformConfig,
 }
@@ -92,9 +89,7 @@ impl Platform for TuiPlatform {
 
         let result = self.drive(&mut handler, &window, &mut mapper);
 
-        // The handler owns the renderer, whose thread writes to the same terminal this is about to restore.
-        // Dropping it here joins that thread first, so the last frame cannot land after the alternate screen
-        // is gone and scribble over the user's shell.
+        // The handler owns the renderer, whose thread writes to the terminal this is about to restore. Dropping it here joins that thread first, so the last frame cannot land after the alternate screen is gone.
         handler.on_suspend();
         drop(handler);
         drop(mode);

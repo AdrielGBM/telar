@@ -1,3 +1,5 @@
+//! [`text_field`]: a bordered, labelled box around the bare `Input` primitive.
+
 use std::rc::Rc;
 
 use crate::shared;
@@ -29,18 +31,13 @@ fn field_box(width: f32) -> LayoutStyle {
         .padding_vertical(pad_y())
 }
 
-/// A labelled, bordered text input: the `Input` primitive (kernel, unstyled) wrapped in a padded/rounded
-/// box (see the raw `box fill:surface_alt stroke:border radius:8 pad_x:12 pad_y:10 > input` pattern in
-/// `apps/sandbox/src/features/reactivity.rsx`), with an optional caption label stacked above it. High-level
-/// sugar; lives in `ui-components`, not the kernel, so an app can drop it or ship its own.
+/// A labelled, bordered text input: the `Input` primitive (kernel, unstyled) wrapped in a padded/rounded box (see the raw `box fill:surface_alt stroke:border radius:8 pad_x:12 pad_y:10 > input` pattern in `apps/sandbox/src/features/reactivity.rsx`), with an optional caption label stacked above it. High-level sugar; lives in `ui-components`, not the kernel, so an app can drop it or ship its own.
 #[derive(Props)]
 pub struct TextFieldProps {
-    /// `None` (the default) makes the field uncontrolled: it owns an internal `signal(String::new())`.
-    /// `Some` binds it to a caller-owned signal (a controlled field), like `button`'s reactive props.
+    /// `None` (the default) makes the field uncontrolled: it owns an internal `signal(String::new())`. `Some` binds it to a caller-owned signal (a controlled field), like `button`'s reactive props.
     #[props(some, into, default)]
     pub value: Option<RwSignal<String>>,
-    /// Muted text shown in the box in place of the `Input` while `value` is empty — see the module's
-    /// `text_field` doc for the swap's focus limitation.
+    /// Muted text shown in the box in place of the `Input` while `value` is empty — see the module's `text_field` doc for the swap's focus limitation.
     #[props(into, default)]
     pub placeholder: Reactive<String>,
     /// A small caption stacked above the box; omitted entirely (no extra row) when empty.
@@ -49,9 +46,7 @@ pub struct TextFieldProps {
     /// Box width in logical px. `0.0` (the default) means "unset" and resolves to `DEFAULT_WIDTH`.
     #[props(default)]
     pub width: f32,
-    /// The entered text's colour. `Color::TRANSPARENT` (the default) means "unset", and leaves the field in
-    /// whatever the region around it is written in. A closure (re-read every frame) so a theme token or
-    /// `$signal` colour re-colours live, like `button`'s `fill`/`outline`.
+    /// The entered text's colour. `Color::TRANSPARENT` (the default) means "unset", and leaves the field in whatever the region around it is written in. A closure (re-read every frame) so a theme token or `$signal` colour re-colours live, like `button`'s `fill`/`outline`.
     #[props(into, default = Reactive::of(|| Color::TRANSPARENT))]
     pub color: Reactive<Color>,
     /// Runs when Enter is pressed while the field is focused.
@@ -59,10 +54,7 @@ pub struct TextFieldProps {
     pub on_submit: Option<Rc<dyn Fn()>>,
 }
 
-/// Builds a `text_field`: a bordered/padded box around `ui_core::Input`, swapping in a muted placeholder
-/// muted hint via the `Input`'s own `placeholder` while the value is empty — the field stays a live,
-/// always-mounted `Input`, so it is tappable/typable from a cold start (no swapped-in `Text` that would
-/// refuse focus).
+/// Builds a `text_field`: a bordered/padded box around `ui_core::Input`, swapping in a muted placeholder muted hint via the `Input`'s own `placeholder` while the value is empty — the field stays a live, always-mounted `Input`, so it is tappable/typable from a cold start (no swapped-in `Text` that would refuse focus).
 pub fn text_field(
     props: TextFieldProps,
     _children: Children,
@@ -78,9 +70,7 @@ pub fn text_field(
     let value = value.unwrap_or_else(|| signal(String::new()));
     let width = if width > 0.0 { width } else { DEFAULT_WIDTH };
 
-    // Always a live `Input` (with a muted placeholder shown while empty) so the field is tappable/typable
-    // from a cold start — a swapped-in placeholder `Text` takes no focus, so an empty field couldn't be
-    // clicked to begin typing.
+    // Always a live `Input` with a muted placeholder, so the field is typable from a cold start: a swapped-in placeholder `Text` takes no focus, leaving an empty field impossible to click into.
     let mut input = Input::declaring(value, LayoutStyle::new(), move |t| {
         let t = shared::control_text(t, 1.0);
         match color.get() {
@@ -126,9 +116,7 @@ mod tests {
     use crate::harness::press;
     use ui_core::{ComponentList, compute_layout, new_container, track_layout};
 
-    // Lays a `text_field` out inside a fixed-size root and returns it plus its absolute box rect (the
-    // outermost node's rect, valid only when `label` is empty — a labelled field's outer node is the
-    // wrapping column instead, offset above the box by the caption row).
+    // Returns the field and its absolute box rect. Valid only when `label` is empty: a labelled field's outer node is the wrapping column, offset above the box by the caption row.
     fn laid_out_field(props: TextFieldProps) -> (Box<dyn LayoutItem>, geometry_core::Rect) {
         crate::test_support::fresh_layout_runtime();
         let field = text_field(props, Children::default()).unwrap();
@@ -152,8 +140,7 @@ mod tests {
             .any(|c| matches!(c, DrawCommand::Text { text, .. } if text.as_ref() == needle))
     }
 
-    /// The §1.4 bug, made unwritable: a properties panel that says its region is 11px used to get a field at
-    /// 14.98 among 11px labels, with no attribute to correct it — `TextFieldProps` has no size.
+    /// The §1.4 bug, made unwritable: a properties panel that says its region is 11px used to get a field at 14.98 among 11px labels, with no attribute to correct it — `TextFieldProps` has no size.
     #[test]
     fn a_field_takes_the_size_the_region_around_it_declared() {
         let value = signal("hi".to_string());
@@ -193,7 +180,7 @@ mod tests {
             .expect("the field drew its value");
         assert_eq!(size, 11.0);
 
-        // The box is sized before the field has a parent to inherit from, so this half of the fix arrives by effect; within a pixel because taffy rounds, and 4px clear of the 39.6 an unfollowed box would have kept.
+        // The box is sized before the field has a parent to inherit from, so this half arrives by effect. Within a pixel because taffy rounds, and 4px clear of the 39.6 an unfollowed box would have kept.
         let height = track_layout(box_node).unwrap().get().height;
         assert!(
             (height - (2.0 * pad_y() + 11.0 * shared::LINE_LEADING)).abs() < 1.0,
@@ -201,7 +188,6 @@ mod tests {
         );
     }
 
-    // A controlled, non-empty value renders through the real Input (not the placeholder).
     #[test]
     fn controlled_value_renders_as_input_text() {
         let value = signal("hi".to_string());
@@ -210,8 +196,6 @@ mod tests {
         assert!(find_text(&tree.commands(), "hi"));
     }
 
-    // An empty field swaps in the muted placeholder Text instead of the Input — the documented limitation
-    // (see `text_field`'s doc comment): it is inert here, not a focusable Input.
     #[test]
     fn empty_value_renders_placeholder() {
         let (field, _) = laid_out_field(TextFieldProps::props().placeholder("Search…").build());
@@ -219,8 +203,6 @@ mod tests {
         assert!(find_text(&tree.commands(), "Search…"));
     }
 
-    // Tapping inside a non-empty (so Input-backed) field focuses it, and a subsequent keypress edits the
-    // bound signal — dispatched through the whole component tree via `ComponentList`, like a real app.
     #[test]
     fn typing_into_a_focused_field_edits_the_bound_signal() {
         let value = signal("a".to_string());
@@ -239,7 +221,6 @@ mod tests {
         assert_eq!(value.get(), "az");
     }
 
-    // Enter, while focused, fires the field's on_submit.
     #[test]
     fn enter_fires_on_submit_while_focused() {
         use std::cell::Cell;
@@ -267,7 +248,6 @@ mod tests {
         assert!(fired.get(), "Enter while focused should fire on_submit");
     }
 
-    // A `label` stacks a caption above the box instead of the box being the field's only node.
     #[test]
     fn label_adds_a_caption_row_above_the_box() {
         let (field, _) = laid_out_field(

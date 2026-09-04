@@ -1,3 +1,5 @@
+//! Blitting a bitmap into the pixmap, fitted and clipped.
+
 use std::sync::Arc;
 
 use geometry_core::Rect;
@@ -11,11 +13,7 @@ pub(crate) type ShadowCache = Cache<ShadowCacheKey, tiny_skia::Pixmap>;
 
 /// Blits `data` into `rect`, straight from the pixels the caller already owns.
 ///
-/// There is no cache here, because `ImageData` is one: an `Arc`, addressed by a hash of its own content, held
-/// alive by whoever is drawing it. The cache that used to sit here stored `data.pixels.clone()` — the same bytes
-/// a second time, so a wallpaper cost twice what it should, which a heap profile showed as the same ~12 MB
-/// attributed once to the app and once to the renderer. Since `ImageData` is premultiplied RGBA on construction,
-/// which is exactly what `PixmapRef` expects, the blit can borrow those bytes and copy nothing.
+/// There is no cache here, because `ImageData` is one: an `Arc`, addressed by a hash of its own content, held alive by whoever is drawing it. The cache that used to sit here stored `data.pixels.clone()` — the same bytes a second time, so a wallpaper cost twice what it should, which a heap profile showed as the same ~12 MB attributed once to the app and once to the renderer. Since `ImageData` is premultiplied RGBA on construction, which is exactly what `PixmapRef` expects, the blit can borrow those bytes and copy nothing.
 pub(crate) fn draw_image(
     pixmap: &mut tiny_skia::Pixmap,
     data: &Arc<ImageData>,

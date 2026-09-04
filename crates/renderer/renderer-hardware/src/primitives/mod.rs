@@ -1,3 +1,5 @@
+//! One pipeline per primitive, plus the vertex and instance formats they share.
+
 pub(crate) mod image;
 pub(crate) mod layer;
 pub(crate) mod line;

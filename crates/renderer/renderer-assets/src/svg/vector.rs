@@ -1,3 +1,5 @@
+//! Converting a usvg tree into draw commands, and deciding when a feature forces the raster fallback.
+
 use geometry_core::Point;
 
 use usvg::tiny_skia_path::{Point as SkiaPoint, Transform as SkiaTransform};

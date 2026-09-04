@@ -1,3 +1,5 @@
+//! [`ComponentList`]: the mounted tree, and the entry point a runner dispatches events and asks frames of.
+
 use std::cell::{Ref, RefCell};
 use std::rc::Rc;
 
@@ -8,8 +10,9 @@ use renderer_core::DrawCommand;
 use crate::component::{Component, EventResult};
 use crate::segment::{self, Segment, SegmentRoot};
 
+/// The mounted tree: what a runner dispatches events into and asks each frame's commands of.
 pub struct ComponentList {
-    // Shared with the root segment: the segment borrows it immutably to render; on_event borrows it mutably. They never overlap because event dispatch is batched (flush happens after on_event).
+    // Shared with the root segment, which borrows it immutably to render while `on_event` borrows it mutably.
     root: Rc<RefCell<dyn Component>>,
     segment_root: SegmentRoot,
 }
@@ -43,12 +46,7 @@ impl ComponentList {
     }
 
     pub fn on_event(&mut self, event: &Event) -> EventResult {
-        // Batch so any signals mutated by handlers flush their effects AFTER on_event returns (and releases the borrow_mut), never re-entering a segment effect mid-borrow.
-        // Overlay priority routing (blocking a modal's background) is NOT done here: it must run on the
-        // side that owns the overlay registry, which under hot reload is the app dylib, not the host that
-        // holds this `ComponentList`. The runner consults it via `App::dispatch_overlays` (bridged across
-        // the dylib boundary like `relayout`) before calling this, and skips this call when an overlay
-        // consumed the event. See `overlay_dispatch` and `crate::app::App::dispatch_overlays`.
+        // So signals mutated by handlers flush their effects after `on_event` returns and releases the borrow. Overlay priority routing is not done here: it must run on the side that owns the overlay registry, which under hot reload is the app dylib rather than the host holding this `ComponentList`. The runner consults it via `App::dispatch_overlays` before calling this, and skips this call when an overlay consumed it.
         batch(|| self.root.borrow_mut().on_event(event))
     }
 }
