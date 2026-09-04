@@ -176,6 +176,9 @@ fn default_page(app_name: &str, renderer: Option<WebRenderer>) -> String {
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <title>{app_name}</title>
     <style>
+      /* What the page is before the app has drawn anything, and what shows through an overscroll once it
+         has. Without it both are white on a system asking for dark. */
+      html {{ color-scheme: light dark; }}
       html, body {{ margin: 0; height: 100%; overflow: hidden; }}
       #telar-root {{ width: 100vw; height: 100vh; }}
     </style>

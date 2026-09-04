@@ -26,6 +26,19 @@ pub fn color(c: Color) -> String {
     }
 }
 
+/// Which of the two schemes a surface of this colour belongs to, as CSS `color-scheme` spells it.
+///
+/// Weighted by what each channel contributes to how bright a colour looks rather than averaged: a saturated
+/// blue and a saturated yellow average the same and are nothing alike to look at, and a theme built on
+/// either would have been handed the wrong one.
+pub fn scheme_of(c: Color) -> &'static str {
+    if 0.2126 * c.r + 0.7152 * c.g + 0.0722 * c.b < 0.5 {
+        "dark"
+    } else {
+        "light"
+    }
+}
+
 /// A number with at most three decimals, so an animated value does not churn the string every frame with
 /// digits nobody can see.
 pub fn round(value: f32) -> String {
@@ -365,6 +378,17 @@ mod tests {
     #[test]
     fn a_transparent_colour_keeps_its_alpha() {
         assert_eq!(color(Color::rgba(0.0, 0.0, 0.0, 0.5)), "rgba(0,0,0,0.5)");
+    }
+
+    /// The whole point of telling the browser which scheme a surface is: the two are told apart by how bright
+    /// the colour looks, not by which channel happens to be largest.
+    #[test]
+    fn a_surface_is_the_scheme_its_own_brightness_makes_it() {
+        assert_eq!(scheme_of(Color::from_hex("#0e1017").unwrap()), "dark");
+        assert_eq!(scheme_of(Color::from_hex("#f6f7fb").unwrap()), "light");
+        // A saturated blue and a saturated yellow average the same and are nothing alike to look at.
+        assert_eq!(scheme_of(Color::rgba(0.0, 0.0, 1.0, 1.0)), "dark");
+        assert_eq!(scheme_of(Color::rgba(1.0, 1.0, 0.0, 1.0)), "light");
     }
 
     /// A gradient is not a colour, and `box-shadow` takes one: written there the declaration was invalid and

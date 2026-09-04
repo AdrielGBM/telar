@@ -37,9 +37,9 @@ impl RenderBackend for DomRenderer {
     fn render_frame(
         &mut self,
         commands: &[DrawCommand],
-        _clear_color: Option<Color>,
+        clear_color: Option<Color>,
     ) -> Result<(), RendererError> {
-        self.reconciler.frame(commands);
+        self.reconciler.frame(commands, clear_color);
         Ok(())
     }
 

@@ -11,7 +11,7 @@
 //! so what covered what on a canvas covers the same thing here.
 
 use geometry_core::Rect;
-use renderer_core::{DrawCommand, Element, Role};
+use renderer_core::{Color, DrawCommand, Element, Role};
 use rustc_hash::FxHashMap;
 use wasm_bindgen::JsCast;
 use wasm_bindgen::prelude::Closure;
@@ -47,11 +47,18 @@ fn audit_requested() -> bool {
 /// One rule rather than a declaration per box per frame, and the base font is the one the measurer assumes,
 /// so a paragraph is drawn in the face it was measured in.
 ///
+/// `color-scheme` is what dresses everything the browser draws itself and Telar cannot reach — the selection
+/// band, an autofill panel, the overlay scrollbar a nested document keeps. Declared here it follows the
+/// system, which is what an app that named no background of its own is doing too; one that named a colour
+/// overrides it from that colour (see `paint_host`). `color` goes with it because the rule
+/// below makes every box inherit one: without it a box that draws no text of its own inherited the page's
+/// black, under a dark theme as much as a light one.
+///
 /// The scrollbars go too, and not for looks: a native one takes width out of the box it is in, layout never
 /// reserved it, and the sidebar came out fifteen pixels narrower than every rect hit-testing reads — with a
 /// horizontal scrollbar underneath for the fifteen pixels that no longer fitted. The scrolling stays the
 /// browser's; only the bar is Telar's, as it is on every other target.
-const RESET: &str = "[data-telar]{font:400 16px sans-serif}\
+const RESET: &str = "[data-telar]{font:400 16px sans-serif;color-scheme:light dark;color:CanvasText}\
 [data-telar] *{margin:0;border:0;padding:0;background:none;font:inherit;color:inherit;\
 text-align:inherit;text-decoration:none;box-sizing:border-box;appearance:none;scrollbar-width:none;\
 -webkit-appearance:none;outline:none}\
@@ -191,6 +198,8 @@ pub struct Reconciler {
     open: Vec<Open>,
     /// Whether each box also carries the rect layout computed for it, for a test that compares the two.
     audit: bool,
+    /// The surface background last written to the host, so an unchanged frame writes nothing.
+    background: String,
     /// Whether a box claimed the keyboard this frame, so a frame where none did can put it back.
     claimed_focus: bool,
     /// The one editable element the browser will type into, parked over whichever field holds the keyboard.
@@ -211,6 +220,7 @@ impl Reconciler {
         let entry = crate::entry::TextEntry::new(&document, &host);
         Ok(Self {
             audit: audit_requested(),
+            background: String::new(),
             claimed_focus: false,
             entry,
             entry_target: None,
@@ -222,7 +232,8 @@ impl Reconciler {
         })
     }
 
-    pub fn frame(&mut self, commands: &[DrawCommand]) {
+    pub fn frame(&mut self, commands: &[DrawCommand], clear: Option<Color>) {
+        self.paint_host(clear);
         self.seen.clear();
         self.open.clear();
         // The host is the outermost frame, so a top-level element is placed in it by the same code that
@@ -248,6 +259,43 @@ impl Reconciler {
         }
         self.retire();
         self.keep_the_keyboard();
+    }
+
+    /// The surface's own background, as a property of the element the app fills.
+    ///
+    /// Every other backend is handed this as the colour to clear to before anything is drawn. A document has
+    /// no clear, and nothing else in the frame stands for it: an application states its background once, in
+    /// `clear_color`, and its root box paints panels and text over a surface it never fills itself. Dropped,
+    /// that surface was whatever the page happened to be — white, for the generated one — so a dark theme
+    /// arrived as its own dark panels on a white page, and switching themes recoloured everything except the
+    /// thing behind it.
+    ///
+    /// Set property by property rather than through the `style` attribute: the host also carries the
+    /// positioning the reconcile needs and whatever cursor the app last asked for, and writing the attribute
+    /// whole would take both off.
+    ///
+    /// The scheme is told from the colour, not from the media query, so an application whose theme was picked
+    /// by hand rather than followed from the system still gets a browser dressed to match it.
+    fn paint_host(&mut self, clear: Option<Color>) {
+        // A fully transparent clear is an application asking to see the page through it, which is the same
+        // thing as naming no background at all.
+        let clear = clear.filter(|color| color.a > 0.0);
+        let declared = clear.map(paint::color).unwrap_or_default();
+        if self.background == declared {
+            return;
+        }
+        let style = self.host.style();
+        match clear {
+            Some(color) => {
+                let _ = style.set_property("background-color", &declared);
+                let _ = style.set_property("color-scheme", paint::scheme_of(color));
+            }
+            None => {
+                let _ = style.remove_property("background-color");
+                let _ = style.remove_property("color-scheme");
+            }
+        }
+        self.background = declared;
     }
 
     /// Everything that is not an element boundary: what the open box paints.
