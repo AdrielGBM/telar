@@ -270,12 +270,32 @@ pub(crate) fn open_shared_gpu() -> Result<SharedGpu, RendererError> {
     pollster::block_on(shared_gpu(wgpu::Backends::all())).cloned()
 }
 
+/// What the instance is allowed to switch on for itself.
+///
+/// A debug build normally asks for the validation layers and `VK_EXT_debug_utils`, which is the right
+/// default everywhere it works. It does not work here: several Android Vulkan loaders *advertise*
+/// `VK_EXT_debug_utils` and then hand back no entry point for it, and the loader that asked panics inside a
+/// function that cannot unwind — so the process aborts before the first frame, and a debug build of any
+/// Telar app simply would not start on the phone.
+///
+/// Left alone on every other target: losing the validation layers is a real cost, and it is only paid where
+/// the alternative is not running at all.
+fn instance_flags() -> wgpu::InstanceFlags {
+    let flags = wgpu::InstanceFlags::from_build_config();
+    if cfg!(target_os = "android") {
+        flags.difference(wgpu::InstanceFlags::DEBUG | wgpu::InstanceFlags::VALIDATION)
+    } else {
+        flags
+    }
+}
+
 async fn shared_gpu(backends: wgpu::Backends) -> Result<&'static SharedGpu, RendererError> {
     if let Some(gpu) = SHARED_GPU.get() {
         return Ok(gpu);
     }
     let instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
         backends,
+        flags: instance_flags(),
         ..wgpu::InstanceDescriptor::new_without_display_handle()
     });
     // No `compatible_surface`: the shared adapter serves every window, and on a normal single-compositor
