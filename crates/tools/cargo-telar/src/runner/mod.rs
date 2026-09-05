@@ -304,6 +304,11 @@ fn build_cargo_args(
 ///
 /// The feature goes through `telar/` rather than a feature of the app's own, so any project reaches a frontend without first declaring one; the environment variable is what picks between the frontends a build ends up with, since a default build still has the windowed one compiled in.
 fn select_frontend(target: Target, cargo_args: &mut Vec<String>) -> bool {
+    if target == Target::Android {
+        cargo_args.push("--features".to_string());
+        cargo_args.push("telar/android".to_string());
+        return false;
+    }
     if target != Target::Tui {
         return false;
     }

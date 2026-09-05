@@ -15,7 +15,6 @@ default = ["runtime", "desktop", "hardware", "software"]
 
 runtime = [
     "dep:platform-core",
-    "dep:platform-android",
     "dep:renderer-core",
     "dep:renderer-assets",
     "dep:reactive-core",
@@ -42,6 +41,10 @@ hardware = ["runtime", "shaper", "dep:renderer-hardware", "dep:platform-headless
 software = ["runtime", "shaper", "dep:renderer-software"]
 
 desktop = ["runtime", "dep:platform-desktop"]
+# Opt-in like every other frontend. It was the one `runtime` brought in unconditionally, which on an Android
+# target linked winit and a NativeActivity the app might never open — the case that matters is a terminal build
+# under Termux, which is an ordinary command-line process with no activity behind it.
+android = ["runtime", "dep:platform-android"]
 # Exposes `rasterize`: draw commands in, pixels out, with no window and no GPU.
 platform-headless = ["runtime", "software", "dep:platform-headless"]
 

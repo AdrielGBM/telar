@@ -34,6 +34,9 @@ desktop = ["telar/desktop", "telar/hardware", "telar/software"]
 dev = ["telar/dev"]
 # Runs the same app in the terminal. `TELAR_TARGET=tui` picks it when the desktop frontend is also compiled in.
 tui = ["telar/tui"]
+# The Android frontend, which `telar` no longer brings in with `runtime`. `cargo telar --target android`
+# passes it for you; a bare `cargo apk build` needs it named.
+android = ["telar/android"]
 # The browser, both ways it can draw. Only meaningful for a wasm32 build.
 web = ["telar/web"]
 # The browser drawing as a document alone: no GPU, no shaper, and no faces to carry for one.

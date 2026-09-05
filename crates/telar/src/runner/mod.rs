@@ -1,6 +1,6 @@
 //! The runners: what turns a mounted tree, a platform and a renderer into a running application.
 
-#[cfg(target_os = "android")]
+#[cfg(all(feature = "android", target_os = "android"))]
 mod android;
 #[cfg(all(
     feature = "desktop",
@@ -56,7 +56,7 @@ const HW_KEEPALIVE_INTERVAL: std::time::Duration = std::time::Duration::from_sec
 // Only the in-flight frame and the one the render thread is consuming are ever live, so the free-list stays tiny; a larger cap would only hold memory.
 const COMMAND_BUF_POOL_CAP: usize = 3;
 
-#[cfg(target_os = "android")]
+#[cfg(all(feature = "android", target_os = "android"))]
 pub use android::run_android_app_with_name;
 #[cfg(all(
     feature = "desktop",
