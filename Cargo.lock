@@ -5070,10 +5070,18 @@ dependencies = [
 name = "sandbox"
 version = "0.1.8"
 dependencies = [
+ "criterion",
+ "pollster 1.0.1",
  "serde",
  "telar",
  "telar-platform-core",
  "telar-platform-headless",
+ "telar-renderer-core",
+ "telar-renderer-hardware",
+ "telar-renderer-software",
+ "telar-renderer-text",
+ "telar-renderer-tui",
+ "telar-ui-core",
  "tracing-subscriber",
 ]
 

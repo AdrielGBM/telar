@@ -40,8 +40,20 @@ web = ["telar/web"]
 web-dom = ["telar/web-dom"]
 
 [dev-dependencies]
+criterion = "0.8.2"
 platform-core = { workspace = true }
 platform-headless = { workspace = true }
+pollster = "1.0.1"
+renderer-core.workspace = true
+renderer-hardware.workspace = true
+renderer-software.workspace = true
+renderer-text.workspace = true
+renderer-tui.workspace = true
+ui-core.workspace = true
+
+[[bench]]
+name = "frontend_frame"
+harness = false
 
 [package.metadata.android]
 package = "com.example.telar.sandbox"
