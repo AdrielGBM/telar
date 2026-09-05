@@ -89,7 +89,7 @@ impl RenderBackend for TuiRenderer {
             _ => self.config.assumed_background,
         };
         self.back.clear(base);
-        Painter::new(&mut self.back, self.config.cell).paint(commands);
+        Painter::new(&mut self.back, self.config.cell, self.config.depth).paint(commands);
 
         self.out.clear();
         self.back

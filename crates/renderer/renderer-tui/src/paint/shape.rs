@@ -92,6 +92,38 @@ impl BoxChars {
     }
 }
 
+/// Whether a cell centre falls inside a rounded rectangle, which is how a fill decides whether it claims a corner cell.
+///
+/// A terminal has no sub-cell coverage, so a corner is not softened: a cell is in the shape or it is not, and the question is asked at its centre — the same point the gradient sampler already asks for a cell's colour. Under about a cell of radius this changes nothing, which is why a square box and a lightly rounded one still fill identically; a pill or a circle is where it starts to tell, and where a fill that ignored the radius drew a plain rectangle.
+fn in_rounded_rect(p: Point, r: Rect, radius: renderer_core::BorderRadius, scale: f32) -> bool {
+    if p.x < r.x || p.x > r.x + r.width || p.y < r.y || p.y > r.y + r.height {
+        return false;
+    }
+    // No radius may exceed half the shorter side, or opposite corners would overlap and the shape would fold through itself.
+    let limit = r.width.min(r.height) / 2.0;
+    let corner = |v: f32| (v * scale).clamp(0.0, limit);
+    let (tl, tr, br, bl) = (
+        corner(radius.top_left),
+        corner(radius.top_right),
+        corner(radius.bottom_right),
+        corner(radius.bottom_left),
+    );
+    let inside = |cx: f32, cy: f32, rad: f32| (p.x - cx).hypot(p.y - cy) <= rad;
+    if p.x < r.x + tl && p.y < r.y + tl {
+        return inside(r.x + tl, r.y + tl, tl);
+    }
+    if p.x > r.x + r.width - tr && p.y < r.y + tr {
+        return inside(r.x + r.width - tr, r.y + tr, tr);
+    }
+    if p.x > r.x + r.width - br && p.y > r.y + r.height - br {
+        return inside(r.x + r.width - br, r.y + r.height - br, br);
+    }
+    if p.x < r.x + bl && p.y > r.y + r.height - bl {
+        return inside(r.x + bl, r.y + r.height - bl, bl);
+    }
+    true
+}
+
 impl Painter<'_> {
     pub(crate) fn rect(&mut self, rect: Rect, style: &RectStyle) {
         let cells = self.cells_of(rect);
@@ -102,17 +134,51 @@ impl Painter<'_> {
         // The shadow is dropped rather than approximated. A terminal has no sub-cell falloff, so the only thing to draw is a hard band of colour offset from the box — which reads as a second box.
         if let Some(fill) = &style.fill {
             let paint = mapped(fill, self.matrix(), self.scale());
+            let shape = (!style.radius.is_zero())
+                .then(|| renderer_core::transform_clip_rect(self.matrix(), rect));
             for row in cells.row0..cells.row1 {
                 for col in cells.col0..cells.col1 {
                     let p = cell_center(col, row, self.cell);
-                    self.blend_bg(col, row, sample(&paint, p.x, p.y));
+                    if let Some(shape) = shape
+                        && !in_rounded_rect(p, shape, style.radius, self.scale())
+                    {
+                        continue;
+                    }
+                    self.fill_cell(col, row, sample(&paint, p.x, p.y));
                 }
             }
         }
         if let Some((paint, widths)) = style.painted_border() {
             let paint = mapped(&paint, self.matrix(), self.scale());
-            self.border(cells, widths, &paint, style.radius);
+            if !self.mark(cells, style, &paint) {
+                self.border(cells, widths, &paint, style.radius);
+            }
         }
+    }
+
+    /// A bordered box with no room inside it is a mark, not a frame. Returns whether it drew one.
+    ///
+    /// A checkbox, a radio and a switch's knob are each a box a cell or two across. Framing one leaves nothing between the frame and itself — the border characters *are* the entire control, and `+|` is what a two-column box with four borders comes to. A terminal has characters for exactly this, and which one is right falls out of the box's own style rather than out of knowing what widget it belongs to: a radius of half its shorter side is a circle and anything less is a square, and a fill is what makes it "on".
+    fn mark(&mut self, cells: CellRect, style: &RectStyle, paint: &renderer_core::Paint) -> bool {
+        if cells.rows() > 1 || cells.cols() > 2 {
+            return false;
+        }
+        // The pill test, as every rasteriser asks it: a radius of half the shorter side is a circle. Asking it of the cell instead made a checkbox's small corner rounding read as round, so a checkbox and a radio drew the same glyph.
+        let shorter =
+            (cells.cols() as f32 * self.cell.width).min(cells.rows() as f32 * self.cell.height);
+        let round = style.radius.top_left * self.scale() * 2.0 >= shorter;
+        let glyph = if round { '\u{25cb}' } else { '\u{25a1}' };
+        // Always the outline, never a filled variant: the fill was already laid into this cell's background by `rect`, so "on" reads the way it does on every other backend — by the colour behind the mark — and a fill that merely gives the control a surface is not mistaken for one that means checked.
+        let p = cell_center(cells.col0, cells.row0, self.cell);
+        let colour = sample(paint, p.x, p.y);
+        self.put_glyph(
+            cells.col0,
+            cells.row0,
+            Grapheme::from(glyph),
+            colour,
+            Attrs::NONE,
+        );
+        true
     }
 
     fn border(
@@ -151,13 +217,13 @@ impl Painter<'_> {
                 mask[idx(col, row)] |= m;
             }
         };
-        if widths[0] > 0.0 {
+        // A box one row tall has no row to put a rule on that is not also its content's row. Drawing one there gives `+--text--+`, a frame struck through the very thing it frames — so a single-row box keeps its uprights and drops its rules, which is what `| text |` is.
+        let single_row = last_row == cells.row0;
+        if widths[0] > 0.0 && !single_row {
             horizontal(&mut mask, cells.row0);
         }
-        if widths[2] > 0.0 && last_row != cells.row0 {
+        if widths[2] > 0.0 && !single_row {
             horizontal(&mut mask, last_row);
-        } else if widths[2] > 0.0 {
-            horizontal(&mut mask, cells.row0);
         }
 
         let vertical = |mask: &mut Vec<u8>, col: i32| {

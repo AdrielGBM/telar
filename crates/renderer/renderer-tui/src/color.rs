@@ -61,6 +61,25 @@ pub enum ColorDepth {
 }
 
 impl ColorDepth {
+    /// The alpha this palette can actually show.
+    ///
+    /// The blend itself is exact and stays exact; what fails is where its result lands. Below roughly a tenth of a channel every value quantises to the nearest palette entry, which on a dark ground *is* the ground — so a box at 15% opacity came out byte-identical to what was behind it, and the section demonstrating opacity read as broken rather than as faint.
+    ///
+    /// This raises the floor without moving the top: nothing stays nothing, full stays full, and the range between is squeezed into what the palette can still tell apart. Truecolor has 24 bits and needs none of it, so the exact case pays nothing for the inexact one.
+    pub fn compress_alpha(self, alpha: f32) -> f32 {
+        let floor = match self {
+            Self::TrueColor => return alpha,
+            Self::Ansi256 => 0.25,
+            Self::Ansi16 => 0.35,
+        };
+        if alpha <= 0.0 {
+            return 0.0;
+        }
+        floor + alpha.min(1.0) * (1.0 - floor)
+    }
+}
+
+impl ColorDepth {
     /// What the environment says the terminal can do. Reads `COLORTERM` first because it is the only variable that answers the question directly; `TERM` is a database key, not a capability list, and terminals that support 24-bit colour routinely still report `xterm-256color`.
     pub fn detect() -> Self {
         let var = |k: &str| std::env::var(k).unwrap_or_default().to_ascii_lowercase();
