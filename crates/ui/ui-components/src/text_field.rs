@@ -21,7 +21,7 @@ fn pad_y() -> f32 {
 const DEFAULT_WIDTH: f32 = 300.0;
 
 fn line_box(text_size: f32) -> LayoutStyle {
-    LayoutStyle::new().height(text_size * shared::LINE_LEADING)
+    LayoutStyle::new().height(ui_core::single_line_box(text_size))
 }
 fn field_box(width: f32) -> LayoutStyle {
     LayoutStyle::new()
@@ -29,6 +29,8 @@ fn field_box(width: f32) -> LayoutStyle {
         .width(width)
         .padding_horizontal(pad_x())
         .padding_vertical(pad_y())
+        // The border below is unconditional, and on a surface that draws one in whole cells it needs a cell to draw in — without it a field whose padding quantised away had its frame and its own text on the same row.
+        .bordered()
 }
 
 /// A labelled, bordered text input: the `Input` primitive (kernel, unstyled) wrapped in a padded/rounded box (see the raw `box fill:surface_alt stroke:border radius:8 pad_x:12 pad_y:10 > input` pattern in `apps/sandbox/src/features/reactivity.rsx`), with an optional caption label stacked above it. High-level sugar; lives in `ui-components`, not the kernel, so an app can drop it or ship its own.
@@ -183,7 +185,7 @@ mod tests {
         // The box is sized before the field has a parent to inherit from, so this half arrives by effect. Within a pixel because taffy rounds, and 4px clear of the 39.6 an unfollowed box would have kept.
         let height = track_layout(box_node).unwrap().get().height;
         assert!(
-            (height - (2.0 * pad_y() + 11.0 * shared::LINE_LEADING)).abs() < 1.0,
+            (height - (2.0 * pad_y() + ui_core::single_line_box(11.0))).abs() < 1.0,
             "the box closes down to the text instead of keeping the room the theme's size wanted, got {height}"
         );
     }

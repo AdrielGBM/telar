@@ -42,6 +42,11 @@ pub fn run_tui_app_with_name<A: App>(
     app_name: &str,
 ) {
     renderer_core::set_text_metrics(CellMetrics::new(options.cell));
+    // Declared before the tree exists, because it is honoured where sizes are authored: a `LayoutStyle` built under the default unit grid would keep the fractional padding this is here to remove. See `geometry_core::grid`.
+    geometry_core::set_layout_grid(geometry_core::LayoutGrid::new(
+        options.cell.width,
+        options.cell.height,
+    ));
     // A cell is the smallest step this surface can show, so easing across a wheel notch would repaint the screen several times to draw the same rows.
     ui_tree::set_smooth_wheel(false);
     services_core::set_clipboard(Arc::new(OscClipboard::new()));

@@ -93,8 +93,6 @@ pub(crate) fn radius_md() -> f32 {
 pub(crate) fn spacing() -> f32 {
     use_theme_tokens().spacing() * theme_core::control_scale()
 }
-/// A single line's box height, as a multiple of the text in it.
-pub(crate) const LINE_LEADING: f32 = 1.4;
 /// A caption's share of the text it labels.
 pub(crate) const CAPTION_RATIO: f32 = 0.85;
 /// A title's share of the body text around it.
@@ -163,7 +161,7 @@ pub(crate) fn heading_style(inherited: TextStyle) -> TextStyle {
 }
 
 fn caption_box(text_size: f32) -> LayoutStyle {
-    LayoutStyle::new().height(text_size * LINE_LEADING)
+    LayoutStyle::new().height(ui_core::single_line_box(text_size))
 }
 
 fn caption_column(width: f32) -> LayoutStyle {

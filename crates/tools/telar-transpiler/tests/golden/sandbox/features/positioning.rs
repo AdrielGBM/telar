@@ -270,7 +270,7 @@ pub fn positioning(props: PositioningProps, children: Children) -> Result<Box<dy
                                                 { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(12.0).with_color(theme.get().muted) },
                                             )?
                                         };
-                                        StyledContainer::new(LayoutStyle::new().flex_column().min_height(72.0).width(130.0).padding_all(10.0), { let theme = theme.clone(); move |_| RectStyle { fill: Some(Paint::Solid(theme.get().surface_alt)), border: Some(Border { paint: Paint::Solid(theme.get().border), widths: [1.0; 4] }), shadow: None, radius: BorderRadius::all(8.0) } }, children![__text_3])?
+                                        StyledContainer::new(LayoutStyle::new().flex_column().min_height(72.0).width(130.0).padding_all(10.0).bordered(), { let theme = theme.clone(); move |_| RectStyle { fill: Some(Paint::Solid(theme.get().surface_alt)), border: Some(Border { paint: Paint::Solid(theme.get().border), widths: [1.0; 4] }), shadow: None, radius: BorderRadius::all(8.0) } }, children![__text_3])?
                                     };
                                     let __sbox_11 = {
                                         let __text_4 = {
@@ -280,7 +280,7 @@ pub fn positioning(props: PositioningProps, children: Children) -> Result<Box<dy
                                                 { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(12.0).with_color(theme.get().muted) },
                                             )?
                                         };
-                                        StyledContainer::new(LayoutStyle::new().flex_column().min_height(72.0).width(130.0).padding_all(10.0), { let theme = theme.clone(); move |_| RectStyle { fill: Some(Paint::Solid(theme.get().surface_alt)), border: Some(Border { paint: Paint::Solid(theme.get().border), widths: [1.0; 4] }), shadow: None, radius: BorderRadius::all(8.0) } }, children![__text_4])?
+                                        StyledContainer::new(LayoutStyle::new().flex_column().min_height(72.0).width(130.0).padding_all(10.0).bordered(), { let theme = theme.clone(); move |_| RectStyle { fill: Some(Paint::Solid(theme.get().surface_alt)), border: Some(Border { paint: Paint::Solid(theme.get().border), widths: [1.0; 4] }), shadow: None, radius: BorderRadius::all(8.0) } }, children![__text_4])?
                                     };
                                     Container::new(LayoutStyle::new().flex_row().gap(10.0).align_items(AlignItems::START), children![__sbox_10, __sbox_11])?
                                 };
@@ -419,7 +419,7 @@ pub fn positioning(props: PositioningProps, children: Children) -> Result<Box<dy
                                                             { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(12.0).with_color(theme.get().muted) },
                                                         )?
                                                     };
-                                                    StyledContainer::new(LayoutStyle::new().flex_column().width(150.0).height(44.0).align_items(AlignItems::CENTER).justify_content(JustifyContent::CENTER), { let theme = theme.clone(); move |_| RectStyle { fill: Some(Paint::Solid(theme.get().surface_alt)), border: Some(Border { paint: Paint::Solid(theme.get().border), widths: [1.0; 4] }), shadow: None, radius: BorderRadius::all(8.0) } }, children![__text_9])?
+                                                    StyledContainer::new(LayoutStyle::new().flex_column().width(150.0).height(44.0).align_items(AlignItems::CENTER).justify_content(JustifyContent::CENTER).bordered(), { let theme = theme.clone(); move |_| RectStyle { fill: Some(Paint::Solid(theme.get().surface_alt)), border: Some(Border { paint: Paint::Solid(theme.get().border), widths: [1.0; 4] }), shadow: None, radius: BorderRadius::all(8.0) } }, children![__text_9])?
                                                 };
                                                 Ok(box_item(__sbox_13))
                                             }

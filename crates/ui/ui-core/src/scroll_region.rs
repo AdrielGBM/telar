@@ -58,6 +58,14 @@ pub fn unregister_scroll_region(id: ScrollRegionId) {
     REGIONS.with(|regions| regions.borrow_mut().retain(|r| r.id != id));
 }
 
+/// The offset a scrolled subtree is actually displaced by: the signal's value put on the surface's grid.
+///
+/// Every reader of a scroll offset goes through this — the transform that draws the content, the pointer mapping that hit-tests it, and the overlay anchoring that positions against it — so the three cannot disagree. A surface that quantises would otherwise draw the content at one offset and click it at another, up to half a step apart, and the offset is the one free variable that decides which cell every box below it rounds into.
+pub fn snapped_offset(x: f32, y: f32) -> (f32, f32) {
+    let grid = geometry_core::layout_grid();
+    (grid.snap_pos_x(x), grid.snap_pos_y(y))
+}
+
 /// The rect `node` occupies on screen: its laid-out window-absolute rect shifted by the current offset of every scroll viewport it sits inside. `None` when the node has not been laid out under a window root.
 ///
 /// Offsets are read without subscribing, because this answers "where is it right now" for a caller that is positioning something at that moment (an overlay being opened), not one that wants to follow the scroll.
@@ -66,8 +74,9 @@ pub fn visible_rect(node: NodeId) -> Option<Rect> {
     REGIONS.with(|regions| {
         for region in regions.borrow().iter() {
             if is_descendant_of(node, region.content) {
-                rect.x -= region.offset_x.peek();
-                rect.y -= region.offset_y.peek();
+                let (dx, dy) = snapped_offset(region.offset_x.peek(), region.offset_y.peek());
+                rect.x -= dx;
+                rect.y -= dy;
             }
         }
     });

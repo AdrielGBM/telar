@@ -257,15 +257,15 @@ pub fn paths(props: PathsProps, children: Children) -> Result<Box<dyn LayoutItem
                                 let __row_0 = {
                                     let __path_0 = {
                                         let __path_data = std::sync::Arc::new(PathData::new().move_to(Point::new(0.0, 0.0)).line_to(Point::new(100.0, 0.0)).line_to(Point::new(50.0, 80.0)).close());
-                                        Path::static_data(LayoutStyle::new().width(100.0).height(80.0), __path_data, { let theme = theme.clone(); move || PathStyle { fill: Some(Paint::Solid(theme.get().primary)), stroke: Some(Stroke::new(theme.get().ink, 2.0)), shadow: None, fill_rule: FillRule::Winding } })?
+                                        Path::static_data(LayoutStyle::new().width(100.0).height(80.0).bordered(), __path_data, { let theme = theme.clone(); move || PathStyle { fill: Some(Paint::Solid(theme.get().primary)), stroke: Some(Stroke::new(theme.get().ink, 2.0)), shadow: None, fill_rule: FillRule::Winding } })?
                                     };
                                     let __path_1 = {
                                         let __path_data = std::sync::Arc::new(PathData::new().move_to(Point::new(6.0, 42.0)).line_to(Point::new(34.0, 70.0)).line_to(Point::new(74.0, 14.0)));
-                                        Path::static_data(LayoutStyle::new().width(80.0).height(80.0), __path_data, { let theme = theme.clone(); move || PathStyle { fill: None, stroke: Some(Stroke::new(theme.get().success, 7.0)), shadow: None, fill_rule: FillRule::Winding } })?
+                                        Path::static_data(LayoutStyle::new().width(80.0).height(80.0).bordered(), __path_data, { let theme = theme.clone(); move || PathStyle { fill: None, stroke: Some(Stroke::new(theme.get().success, 7.0)), shadow: None, fill_rule: FillRule::Winding } })?
                                     };
                                     let __path_2 = {
                                         let __path_data = std::sync::Arc::new(PathData::new().move_to(Point::new(40.0, 2.0)).line_to(Point::new(50.0, 30.0)).line_to(Point::new(80.0, 30.0)).line_to(Point::new(56.0, 48.0)).line_to(Point::new(64.0, 78.0)).line_to(Point::new(40.0, 60.0)).line_to(Point::new(16.0, 78.0)).line_to(Point::new(24.0, 48.0)).line_to(Point::new(0.0, 30.0)).line_to(Point::new(30.0, 30.0)).close());
-                                        Path::static_data(LayoutStyle::new().width(80.0).height(80.0), __path_data, { let theme = theme.clone(); move || PathStyle { fill: Some(Paint::Solid(theme.get().warning)), stroke: Some(Stroke::new(theme.get().ink, 1.0)), shadow: None, fill_rule: FillRule::Winding } })?
+                                        Path::static_data(LayoutStyle::new().width(80.0).height(80.0).bordered(), __path_data, { let theme = theme.clone(); move || PathStyle { fill: Some(Paint::Solid(theme.get().warning)), stroke: Some(Stroke::new(theme.get().ink, 1.0)), shadow: None, fill_rule: FillRule::Winding } })?
                                     };
                                     Container::new(LayoutStyle::new().flex_row().gap(28.0).align_items(AlignItems::CENTER), children![__path_0, __path_1, __path_2])?
                                 };

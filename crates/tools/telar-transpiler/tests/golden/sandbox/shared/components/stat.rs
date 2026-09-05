@@ -32,7 +32,7 @@ pub fn stat(props: StatProps, children: Children) -> Result<Box<dyn LayoutItem>,
                 { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(12.0).with_color(theme.get().muted) },
             )?
         };
-        StyledContainer::new(LayoutStyle::new().flex_column().flex_grow(1.0).min_width(130.0).padding_all(18.0).gap(4.0).align_items(AlignItems::CENTER), { let theme = theme.clone(); move |_| RectStyle { fill: Some(Paint::Solid(theme.get().surface)), border: Some(Border { paint: Paint::Solid(theme.get().border), widths: [1.0; 4] }), shadow: None, radius: BorderRadius::all(14.0) } }, children![__text_0, __text_1])?
+        StyledContainer::new(LayoutStyle::new().flex_column().flex_grow(1.0).min_width(130.0).padding_all(18.0).gap(4.0).align_items(AlignItems::CENTER).bordered(), { let theme = theme.clone(); move |_| RectStyle { fill: Some(Paint::Solid(theme.get().surface)), border: Some(Border { paint: Paint::Solid(theme.get().border), widths: [1.0; 4] }), shadow: None, radius: BorderRadius::all(14.0) } }, children![__text_0, __text_1])?
     };
     Ok(Box::new(__sbox_0))
 }

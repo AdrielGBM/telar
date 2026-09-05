@@ -188,10 +188,12 @@ fn handle_scroll_event(
             return EventResult::Ignored;
         }
         // Offered to the content first, in content space, so an inner scroll area under the pointer consumes it first.
+        let (inner_x, inner_y) =
+            crate::scroll_region::snapped_offset(scroll_x.get(), scroll_y.get());
         let inner = offset_pointer(
             event,
-            viewport.x as f64 - scroll_x.get() as f64,
-            viewport.y as f64 - scroll_y.get() as f64,
+            viewport.x as f64 - inner_x as f64,
+            viewport.y as f64 - inner_y as f64,
         );
         if content
             .borrow_mut()
@@ -221,8 +223,10 @@ fn handle_scroll_event(
         return EventResult::Ignored;
     };
 
-    let scroll_offset_x = scroll_x.get() as f64;
-    let scroll_offset_y = scroll_y.get() as f64;
+    let (snapped_x, snapped_y) =
+        crate::scroll_region::snapped_offset(scroll_x.get(), scroll_y.get());
+    let scroll_offset_x = snapped_x as f64;
+    let scroll_offset_y = snapped_y as f64;
     let adjusted = offset_pointer(
         event,
         viewport.x as f64 - scroll_offset_x,
@@ -455,7 +459,8 @@ impl ScrollCore {
         let (dx, dy) = if owns_scroll {
             (0.0, 0.0)
         } else {
-            (viewport.x - scroll_x, viewport.y - scroll_y)
+            let (sx, sy) = crate::scroll_region::snapped_offset(scroll_x, scroll_y);
+            (viewport.x - sx, viewport.y - sy)
         };
         let scrollable = RenderNode::clip(
             viewport,

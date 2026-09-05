@@ -59,7 +59,7 @@ pub fn pointer(props: PointerProps, children: Children) -> Result<Box<dyn Layout
                                                 { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(12.0).with_color(theme.get().ink) },
                                             )?
                                         };
-                                        StyledContainer::new(LayoutStyle::new().flex_column().padding_horizontal(14.0).padding_vertical(10.0), { let theme = theme.clone(); move |_| RectStyle { fill: Some(Paint::Solid(theme.get().surface_alt)), border: Some(Border { paint: Paint::Solid(theme.get().border), widths: [1.0; 4] }), shadow: None, radius: BorderRadius::all(8.0) } }, children![__text_0])?.cursor(Cursor::Pointer)
+                                        StyledContainer::new(LayoutStyle::new().flex_column().padding_horizontal(14.0).padding_vertical(10.0).bordered(), { let theme = theme.clone(); move |_| RectStyle { fill: Some(Paint::Solid(theme.get().surface_alt)), border: Some(Border { paint: Paint::Solid(theme.get().border), widths: [1.0; 4] }), shadow: None, radius: BorderRadius::all(8.0) } }, children![__text_0])?.cursor(Cursor::Pointer)
                                     };
                                     let __sbox_1 = {
                                         let __text_1 = {
@@ -69,7 +69,7 @@ pub fn pointer(props: PointerProps, children: Children) -> Result<Box<dyn Layout
                                                 { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(12.0).with_color(theme.get().ink) },
                                             )?
                                         };
-                                        StyledContainer::new(LayoutStyle::new().flex_column().padding_horizontal(14.0).padding_vertical(10.0), { let theme = theme.clone(); move |_| RectStyle { fill: Some(Paint::Solid(theme.get().surface_alt)), border: Some(Border { paint: Paint::Solid(theme.get().border), widths: [1.0; 4] }), shadow: None, radius: BorderRadius::all(8.0) } }, children![__text_1])?.cursor(Cursor::Crosshair)
+                                        StyledContainer::new(LayoutStyle::new().flex_column().padding_horizontal(14.0).padding_vertical(10.0).bordered(), { let theme = theme.clone(); move |_| RectStyle { fill: Some(Paint::Solid(theme.get().surface_alt)), border: Some(Border { paint: Paint::Solid(theme.get().border), widths: [1.0; 4] }), shadow: None, radius: BorderRadius::all(8.0) } }, children![__text_1])?.cursor(Cursor::Crosshair)
                                     };
                                     let __sbox_2 = {
                                         let __text_2 = {
@@ -79,7 +79,7 @@ pub fn pointer(props: PointerProps, children: Children) -> Result<Box<dyn Layout
                                                 { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(12.0).with_color(theme.get().ink) },
                                             )?
                                         };
-                                        StyledContainer::new(LayoutStyle::new().flex_column().padding_horizontal(14.0).padding_vertical(10.0), { let theme = theme.clone(); move |_| RectStyle { fill: Some(Paint::Solid(theme.get().surface_alt)), border: Some(Border { paint: Paint::Solid(theme.get().border), widths: [1.0; 4] }), shadow: None, radius: BorderRadius::all(8.0) } }, children![__text_2])?.cursor(Cursor::Grab)
+                                        StyledContainer::new(LayoutStyle::new().flex_column().padding_horizontal(14.0).padding_vertical(10.0).bordered(), { let theme = theme.clone(); move |_| RectStyle { fill: Some(Paint::Solid(theme.get().surface_alt)), border: Some(Border { paint: Paint::Solid(theme.get().border), widths: [1.0; 4] }), shadow: None, radius: BorderRadius::all(8.0) } }, children![__text_2])?.cursor(Cursor::Grab)
                                     };
                                     let __sbox_3 = {
                                         let __text_3 = {
@@ -89,7 +89,7 @@ pub fn pointer(props: PointerProps, children: Children) -> Result<Box<dyn Layout
                                                 { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(12.0).with_color(theme.get().ink) },
                                             )?
                                         };
-                                        StyledContainer::new(LayoutStyle::new().flex_column().padding_horizontal(14.0).padding_vertical(10.0), { let theme = theme.clone(); move |_| RectStyle { fill: Some(Paint::Solid(theme.get().surface_alt)), border: Some(Border { paint: Paint::Solid(theme.get().border), widths: [1.0; 4] }), shadow: None, radius: BorderRadius::all(8.0) } }, children![__text_3])?.cursor(Cursor::ColResize)
+                                        StyledContainer::new(LayoutStyle::new().flex_column().padding_horizontal(14.0).padding_vertical(10.0).bordered(), { let theme = theme.clone(); move |_| RectStyle { fill: Some(Paint::Solid(theme.get().surface_alt)), border: Some(Border { paint: Paint::Solid(theme.get().border), widths: [1.0; 4] }), shadow: None, radius: BorderRadius::all(8.0) } }, children![__text_3])?.cursor(Cursor::ColResize)
                                     };
                                     let __sbox_4 = {
                                         let __text_4 = {
@@ -99,7 +99,7 @@ pub fn pointer(props: PointerProps, children: Children) -> Result<Box<dyn Layout
                                                 { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(12.0).with_color(theme.get().ink) },
                                             )?
                                         };
-                                        StyledContainer::new(LayoutStyle::new().flex_column().padding_horizontal(14.0).padding_vertical(10.0), { let theme = theme.clone(); move |_| RectStyle { fill: Some(Paint::Solid(theme.get().surface_alt)), border: Some(Border { paint: Paint::Solid(theme.get().border), widths: [1.0; 4] }), shadow: None, radius: BorderRadius::all(8.0) } }, children![__text_4])?.cursor(Cursor::NotAllowed)
+                                        StyledContainer::new(LayoutStyle::new().flex_column().padding_horizontal(14.0).padding_vertical(10.0).bordered(), { let theme = theme.clone(); move |_| RectStyle { fill: Some(Paint::Solid(theme.get().surface_alt)), border: Some(Border { paint: Paint::Solid(theme.get().border), widths: [1.0; 4] }), shadow: None, radius: BorderRadius::all(8.0) } }, children![__text_4])?.cursor(Cursor::NotAllowed)
                                     };
                                     Container::new(LayoutStyle::new().flex_row().gap(10.0).flex_wrap(), children![__sbox_0, __sbox_1, __sbox_2, __sbox_3, __sbox_4])?
                                 };
@@ -248,7 +248,7 @@ pub fn pointer(props: PointerProps, children: Children) -> Result<Box<dyn Layout
                                 let mut __slots = Slots::new();
                                 let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
                                 let __sbox_9 = {
-                                    StyledContainer::new(LayoutStyle::new().flex_column().height(96.0).width(SizeDimension::Percent(1.0)), { let theme = theme.clone(); move |_| RectStyle { fill: Some(Paint::Solid(theme.get().surface_alt)), border: Some(Border { paint: Paint::Solid(theme.get().border), widths: [1.0; 4] }), shadow: None, radius: BorderRadius::all(10.0) } }, children![])?.on_pointer_move({ let at_x = at_x.clone(); let at_y = at_y.clone(); move |x, y| { at_x.set(x); at_y.set(y) } }).cursor(Cursor::Crosshair)
+                                    StyledContainer::new(LayoutStyle::new().flex_column().height(96.0).width(SizeDimension::Percent(1.0)).bordered(), { let theme = theme.clone(); move |_| RectStyle { fill: Some(Paint::Solid(theme.get().surface_alt)), border: Some(Border { paint: Paint::Solid(theme.get().border), widths: [1.0; 4] }), shadow: None, radius: BorderRadius::all(10.0) } }, children![])?.on_pointer_move({ let at_x = at_x.clone(); let at_y = at_y.clone(); move |x, y| { at_x.set(x); at_y.set(y) } }).cursor(Cursor::Crosshair)
                                 };
                                 __children.push(box_item(__sbox_9));
                                 let __text_8 = {
@@ -303,7 +303,7 @@ pub fn pointer(props: PointerProps, children: Children) -> Result<Box<dyn Layout
                                 let mut __slots = Slots::new();
                                 let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
                                 let __sbox_10 = {
-                                    StyledContainer::new(LayoutStyle::new().flex_column().height(80.0).width(SizeDimension::Percent(1.0)), { let theme = theme.clone(); move |_| RectStyle { fill: Some(Paint::Solid(theme.get().surface_alt)), border: Some(Border { paint: Paint::Solid(theme.get().border), widths: [1.0; 4] }), shadow: None, radius: BorderRadius::all(10.0) } }, children![])?.active_style({ let theme = theme.clone(); move |_| RectStyle { fill: Some(Paint::Solid(theme.get().primary)), border: Some(Border { paint: Paint::Solid(theme.get().border), widths: [1.0; 4] }), shadow: None, radius: BorderRadius::all(10.0) } }).on_drag({ let at_x = at_x.clone(); move |x, _y| at_x.set(x) }).on_drag_end({ let settled = settled.clone(); move |x, y| settled.set(format!("{x:.0}, {y:.0}")) }).cursor(Cursor::Grab)
+                                    StyledContainer::new(LayoutStyle::new().flex_column().height(80.0).width(SizeDimension::Percent(1.0)).bordered(), { let theme = theme.clone(); move |_| RectStyle { fill: Some(Paint::Solid(theme.get().surface_alt)), border: Some(Border { paint: Paint::Solid(theme.get().border), widths: [1.0; 4] }), shadow: None, radius: BorderRadius::all(10.0) } }, children![])?.active_style({ let theme = theme.clone(); move |_| RectStyle { fill: Some(Paint::Solid(theme.get().primary)), border: Some(Border { paint: Paint::Solid(theme.get().border), widths: [1.0; 4] }), shadow: None, radius: BorderRadius::all(10.0) } }).on_drag({ let at_x = at_x.clone(); move |x, _y| at_x.set(x) }).on_drag_end({ let settled = settled.clone(); move |x, y| settled.set(format!("{x:.0}, {y:.0}")) }).cursor(Cursor::Grab)
                                 };
                                 __children.push(box_item(__sbox_10));
                                 let __text_9 = {
@@ -360,7 +360,7 @@ pub fn pointer(props: PointerProps, children: Children) -> Result<Box<dyn Layout
                                             { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(12.0).with_color(theme.get().muted) },
                                         )?
                                     };
-                                    StyledContainer::new(LayoutStyle::new().flex_column().height(72.0).width(SizeDimension::Percent(1.0)), { let theme = theme.clone(); move |_| RectStyle { fill: Some(Paint::Solid(theme.get().surface_alt)), border: Some(Border { paint: Paint::Solid(theme.get().border), widths: [1.0; 4] }), shadow: None, radius: BorderRadius::all(10.0) } }, children![__text_10])?.on_drag({ let at_x = at_x.clone(); move |x, _y| at_x.set(x) }).cursor(Cursor::Grab).drag_button(PointerButton::Secondary).drag_button(PointerButton::Auxiliary)
+                                    StyledContainer::new(LayoutStyle::new().flex_column().height(72.0).width(SizeDimension::Percent(1.0)).bordered(), { let theme = theme.clone(); move |_| RectStyle { fill: Some(Paint::Solid(theme.get().surface_alt)), border: Some(Border { paint: Paint::Solid(theme.get().border), widths: [1.0; 4] }), shadow: None, radius: BorderRadius::all(10.0) } }, children![__text_10])?.on_drag({ let at_x = at_x.clone(); move |x, _y| at_x.set(x) }).cursor(Cursor::Grab).drag_button(PointerButton::Secondary).drag_button(PointerButton::Auxiliary)
                                 };
                                 __children.push(box_item(__sbox_11));
                                 __slots.extend_default(__children);
@@ -412,7 +412,7 @@ pub fn pointer(props: PointerProps, children: Children) -> Result<Box<dyn Layout
                                             { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(12.0).with_color(theme.get().muted) },
                                         )?
                                     };
-                                    StyledContainer::new(LayoutStyle::new().flex_column().height(80.0).width(SizeDimension::Percent(1.0)), { let theme = theme.clone(); move |_| RectStyle { fill: Some(Paint::Solid(theme.get().surface_alt)), border: Some(Border { paint: Paint::Solid(theme.get().border), widths: [1.0; 4] }), shadow: None, radius: BorderRadius::all(10.0) } }, children![__text_11])?.on_scroll({ let wheel = wheel.clone(); move |_dx, dy| wheel.set(wheel.get() + dy) }).on_alt_press({ let alt = alt.clone(); move |button| alt.set(format!("{button:?}")) })
+                                    StyledContainer::new(LayoutStyle::new().flex_column().height(80.0).width(SizeDimension::Percent(1.0)).bordered(), { let theme = theme.clone(); move |_| RectStyle { fill: Some(Paint::Solid(theme.get().surface_alt)), border: Some(Border { paint: Paint::Solid(theme.get().border), widths: [1.0; 4] }), shadow: None, radius: BorderRadius::all(10.0) } }, children![__text_11])?.on_scroll({ let wheel = wheel.clone(); move |_dx, dy| wheel.set(wheel.get() + dy) }).on_alt_press({ let alt = alt.clone(); move |button| alt.set(format!("{button:?}")) })
                                 };
                                 __children.push(box_item(__sbox_12));
                                 let __row_2 = {

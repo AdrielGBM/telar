@@ -421,7 +421,7 @@ pub fn reactivity(props: ReactivityProps, children: Children) -> Result<Box<dyn 
                                             };
                                             let __sbox_3 = {
                                                 let __input_0 = Input::declaring(panel_note.clone(), LayoutStyle::new().height(15.0 * 1.4), { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(15.0).with_color(theme.get().ink) })?;
-                                                StyledContainer::new(LayoutStyle::new().flex_column().padding_horizontal(theme.get().gutter).padding_vertical(12.0).width(300.0), { let theme = theme.clone(); move |_| RectStyle { fill: Some(Paint::Solid(theme.get().surface_alt)), border: Some(Border { paint: Paint::Solid(theme.get().border), widths: [1.0; 4] }), shadow: None, radius: BorderRadius::all(8.0) } }, children![__input_0])?.styled_by({ let theme = theme.clone(); move || LayoutStyle::new().flex_column().padding_horizontal(theme.get().gutter).padding_vertical(12.0).width(300.0) })
+                                                StyledContainer::new(LayoutStyle::new().flex_column().padding_horizontal(theme.get().gutter).padding_vertical(12.0).width(300.0).bordered(), { let theme = theme.clone(); move |_| RectStyle { fill: Some(Paint::Solid(theme.get().surface_alt)), border: Some(Border { paint: Paint::Solid(theme.get().border), widths: [1.0; 4] }), shadow: None, radius: BorderRadius::all(8.0) } }, children![__input_0])?.styled_by({ let theme = theme.clone(); move || LayoutStyle::new().flex_column().padding_horizontal(theme.get().gutter).padding_vertical(12.0).width(300.0).bordered() })
                                             };
                                             Container::new(LayoutStyle::new().flex_column().gap(8.0), children![__text_9, __sbox_3])?
                                         };
@@ -475,12 +475,12 @@ pub fn reactivity(props: ReactivityProps, children: Children) -> Result<Box<dyn 
                                 let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
                                 let __sbox_4 = {
                                     let __input_1 = Input::declaring(name.clone(), LayoutStyle::new().height(15.0 * 1.4), { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(15.0).with_color(theme.get().ink) })?;
-                                    StyledContainer::new(LayoutStyle::new().flex_column().padding_horizontal(12.0).padding_vertical(10.0).width(300.0), { let theme = theme.clone(); move |_| RectStyle { fill: Some(Paint::Solid(theme.get().surface_alt)), border: Some(Border { paint: Paint::Solid(theme.get().border), widths: [1.0; 4] }), shadow: None, radius: BorderRadius::all(8.0) } }, children![__input_1])?
+                                    StyledContainer::new(LayoutStyle::new().flex_column().padding_horizontal(12.0).padding_vertical(10.0).width(300.0).bordered(), { let theme = theme.clone(); move |_| RectStyle { fill: Some(Paint::Solid(theme.get().surface_alt)), border: Some(Border { paint: Paint::Solid(theme.get().border), widths: [1.0; 4] }), shadow: None, radius: BorderRadius::all(8.0) } }, children![__input_1])?
                                 };
                                 __children.push(box_item(__sbox_4));
                                 let __sbox_5 = {
                                     let __input_2 = Input::declaring(email.clone(), LayoutStyle::new().height(15.0 * 1.4), { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(15.0).with_color(theme.get().ink) })?;
-                                    StyledContainer::new(LayoutStyle::new().flex_column().padding_horizontal(12.0).padding_vertical(10.0).width(300.0), { let theme = theme.clone(); move |_| RectStyle { fill: Some(Paint::Solid(theme.get().surface_alt)), border: Some(Border { paint: Paint::Solid(theme.get().border), widths: [1.0; 4] }), shadow: None, radius: BorderRadius::all(8.0) } }, children![__input_2])?
+                                    StyledContainer::new(LayoutStyle::new().flex_column().padding_horizontal(12.0).padding_vertical(10.0).width(300.0).bordered(), { let theme = theme.clone(); move |_| RectStyle { fill: Some(Paint::Solid(theme.get().surface_alt)), border: Some(Border { paint: Paint::Solid(theme.get().border), widths: [1.0; 4] }), shadow: None, radius: BorderRadius::all(8.0) } }, children![__input_2])?
                                 };
                                 __children.push(box_item(__sbox_5));
                                 let __text_10 = {
@@ -676,7 +676,7 @@ pub fn reactivity(props: ReactivityProps, children: Children) -> Result<Box<dyn 
                                                 )?
                                             };
                                             let __node_39 = button(ButtonProps::props().label("Close").outline(Reactive::of({ let theme = theme.clone(); move || theme.get().primary })).on_press(std::rc::Rc::new({ let show_modal = show_modal.clone(); move || show_modal.set(false) })).build(), Children::default())?;
-                                            StyledContainer::new(LayoutStyle::new().flex_column().padding_all(24.0).gap(12.0), { let theme = theme.clone(); move |_| RectStyle { fill: Some(Paint::Solid(theme.get().surface)), border: Some(Border { paint: Paint::Solid(theme.get().border), widths: [1.0; 4] }), shadow: None, radius: BorderRadius::all(12.0) } }, children![__text_13, __text_14, __node_39])?.on_press(move || ())
+                                            StyledContainer::new(LayoutStyle::new().flex_column().padding_all(24.0).gap(12.0).bordered(), { let theme = theme.clone(); move |_| RectStyle { fill: Some(Paint::Solid(theme.get().surface)), border: Some(Border { paint: Paint::Solid(theme.get().border), widths: [1.0; 4] }), shadow: None, radius: BorderRadius::all(12.0) } }, children![__text_13, __text_14, __node_39])?.on_press(move || ())
                                         };
                                         StyledContainer::new(LayoutStyle::new().flex_column().flex_grow(1.0).align_items(AlignItems::CENTER).justify_content(JustifyContent::CENTER), move |_| RectStyle::default().with_fill(Color::rgba(0.0 / 255.0, 0.0 / 255.0, 0.0 / 255.0, 128.0 / 255.0)).with_radius(BorderRadius::zero()), children![__sbox_10])?.on_press({ let show_modal = show_modal.clone(); move || show_modal.set(false) })
                                     };

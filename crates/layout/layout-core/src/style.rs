@@ -7,6 +7,8 @@ use taffy::{
 
 pub use taffy::{AlignItems, AvailableSpace, JustifyContent};
 
+use geometry_core::LayoutGrid;
+
 use crate::direction::Direction;
 use crate::track::TemplateTrack;
 
@@ -43,6 +45,56 @@ impl From<SizeDimension> for LengthPercentage {
             SizeDimension::Auto => LengthPercentage::length(0.0),
         }
     }
+}
+
+/// Every definite length a style is given, put on the surface's grid before taffy ever sees it.
+///
+/// Here rather than in the painter because a box has to *be* a whole number of steps, not merely be drawn as one. A backend that quantises rounds each edge of a box independently — the only way two boxes sharing an edge share a cell rather than leaving a seam — which makes the steps a box covers `round((y + h) / step) - round(y / step)`: a function of where it is as well as how big it is. Snap `h` and that collapses to `h / step` for every `y`, so a box keeps its size while it scrolls and two identical boxes agree wherever they landed.
+///
+/// It also buys symmetry for free. `padding_vertical` sets top and bottom from one value, so snapping that value gives the same cells above and below by construction; it was rounding the two *edges* separately that let one side absorb a cell the other did not.
+///
+/// Percentages and `auto` pass through untouched: both resolve against a container this cannot see, and a percentage of a snapped parent is the parent's problem, not this one's.
+/// The pixels a length resolves to, or zero for a percentage — which cannot be resolved without the containing block, and treating it as no room is the safe half of the guess: the border gets its cell and the box is a shade roomier than it had to be.
+fn length_of(v: LengthPercentage) -> f32 {
+    let raw = v.into_raw();
+    if raw.tag() == taffy::CompactLength::LENGTH_TAG {
+        raw.value()
+    } else {
+        0.0
+    }
+}
+
+fn snapped(d: SizeDimension, f: impl Fn(LayoutGrid, f32) -> f32) -> SizeDimension {
+    match d {
+        SizeDimension::Px(v) => {
+            let grid = geometry_core::layout_grid();
+            if grid.is_unit() {
+                d
+            } else {
+                SizeDimension::Px(f(grid, v))
+            }
+        }
+        other => other,
+    }
+}
+
+fn size_x(d: impl Into<SizeDimension>) -> SizeDimension {
+    snapped(d.into(), |g, v| g.snap_size_x(v))
+}
+fn size_y(d: impl Into<SizeDimension>) -> SizeDimension {
+    snapped(d.into(), |g, v| g.snap_size_y(v))
+}
+fn space_x(d: impl Into<SizeDimension>) -> SizeDimension {
+    snapped(d.into(), |g, v| g.snap_space_x(v))
+}
+fn space_y(d: impl Into<SizeDimension>) -> SizeDimension {
+    snapped(d.into(), |g, v| g.snap_space_y(v))
+}
+fn pos_x(d: impl Into<SizeDimension>) -> SizeDimension {
+    snapped(d.into(), |g, v| g.snap_pos_x(v))
+}
+fn pos_y(d: impl Into<SizeDimension>) -> SizeDimension {
+    snapped(d.into(), |g, v| g.snap_pos_y(v))
 }
 
 /// For margin and inset, where `auto` is a real answer: it is what centres a block and what leaves an edge unpinned.
@@ -205,13 +257,13 @@ impl LayoutStyle {
 
     /// Inset from the top edge, for a node already taken out of flow. Physical, not logical: `top` does not swap under RTL the way [`inset_start`](Self::inset_start) does.
     pub fn inset_top(mut self, size: impl Into<SizeDimension>) -> Self {
-        self.inner.inset.top = size.into().into();
+        self.inner.inset.top = pos_y(size).into();
         self
     }
 
     /// Inset from the bottom edge, for a node already taken out of flow.
     pub fn inset_bottom(mut self, size: impl Into<SizeDimension>) -> Self {
-        self.inner.inset.bottom = size.into().into();
+        self.inner.inset.bottom = pos_y(size).into();
         self
     }
 
@@ -226,7 +278,7 @@ impl LayoutStyle {
     }
 
     pub fn width(mut self, dim: impl Into<SizeDimension>) -> Self {
-        self.inner.size.width = dim.into().into();
+        self.inner.size.width = size_x(dim).into();
         self
     }
 
@@ -241,27 +293,27 @@ impl LayoutStyle {
     }
 
     pub fn height(mut self, dim: impl Into<SizeDimension>) -> Self {
-        self.inner.size.height = dim.into().into();
+        self.inner.size.height = size_y(dim).into();
         self
     }
 
     pub fn min_width(mut self, dim: impl Into<SizeDimension>) -> Self {
-        self.inner.min_size.width = dim.into().into();
+        self.inner.min_size.width = size_x(dim).into();
         self
     }
 
     pub fn min_height(mut self, dim: impl Into<SizeDimension>) -> Self {
-        self.inner.min_size.height = dim.into().into();
+        self.inner.min_size.height = size_y(dim).into();
         self
     }
 
     pub fn max_width(mut self, dim: impl Into<SizeDimension>) -> Self {
-        self.inner.max_size.width = dim.into().into();
+        self.inner.max_size.width = size_x(dim).into();
         self
     }
 
     pub fn max_height(mut self, dim: impl Into<SizeDimension>) -> Self {
-        self.inner.max_size.height = dim.into().into();
+        self.inner.max_size.height = size_y(dim).into();
         self
     }
 
@@ -281,59 +333,63 @@ impl LayoutStyle {
     }
 
     pub fn padding_all(mut self, size: impl Into<SizeDimension>) -> Self {
-        let value: LengthPercentage = size.into().into();
+        let d = size.into();
+        // Snapped per axis, not once: the two steps differ, and a cell is taller than it is wide.
+        let (x, y): (LengthPercentage, LengthPercentage) = (space_x(d).into(), space_y(d).into());
         self.inner.padding = taffy::geometry::Rect {
-            left: value,
-            right: value,
-            top: value,
-            bottom: value,
+            left: x,
+            right: x,
+            top: y,
+            bottom: y,
         };
         self
     }
 
     pub fn padding_horizontal(mut self, size: impl Into<SizeDimension>) -> Self {
-        let value: LengthPercentage = size.into().into();
+        let value: LengthPercentage = space_x(size).into();
         self.inner.padding.left = value;
         self.inner.padding.right = value;
         self
     }
 
     pub fn padding_vertical(mut self, size: impl Into<SizeDimension>) -> Self {
-        let value: LengthPercentage = size.into().into();
+        let value: LengthPercentage = space_y(size).into();
         self.inner.padding.top = value;
         self.inner.padding.bottom = value;
         self
     }
 
     pub fn padding_top(mut self, size: impl Into<SizeDimension>) -> Self {
-        self.inner.padding.top = size.into().into();
+        self.inner.padding.top = space_y(size).into();
         self
     }
 
     pub fn padding_bottom(mut self, size: impl Into<SizeDimension>) -> Self {
-        self.inner.padding.bottom = size.into().into();
+        self.inner.padding.bottom = space_y(size).into();
         self
     }
 
     pub fn padding_left(mut self, px: f32) -> Self {
-        self.inner.padding.left = LengthPercentage::length(px);
+        self.inner.padding.left =
+            LengthPercentage::length(geometry_core::layout_grid().snap_space_x(px));
         self
     }
 
     pub fn padding_right(mut self, px: f32) -> Self {
-        self.inner.padding.right = LengthPercentage::length(px);
+        self.inner.padding.right =
+            LengthPercentage::length(geometry_core::layout_grid().snap_space_x(px));
         self
     }
 
     /// Padding on the edge the text starts from — `left` under [`Direction::Ltr`], `right` under [`Direction::Rtl`].
     pub fn padding_start(mut self, size: impl Into<SizeDimension>) -> Self {
-        self.logical.padding_start = Some(size.into());
+        self.logical.padding_start = Some(space_x(size));
         self
     }
 
     /// Padding on the edge the text runs towards — `right` under [`Direction::Ltr`], `left` under [`Direction::Rtl`].
     pub fn padding_end(mut self, size: impl Into<SizeDimension>) -> Self {
-        self.logical.padding_end = Some(size.into());
+        self.logical.padding_end = Some(space_x(size));
         self
     }
 
@@ -347,25 +403,25 @@ impl LayoutStyle {
 
     /// Margin on the edge the block axis starts from — the top, in every writing mode this engine supports.
     pub fn margin_block_start(mut self, size: impl Into<SizeDimension>) -> Self {
-        self.inner.margin.top = size.into().into();
+        self.inner.margin.top = space_y(size).into();
         self
     }
 
     /// Margin on the edge the block axis ends at — the bottom.
     pub fn margin_block_end(mut self, size: impl Into<SizeDimension>) -> Self {
-        self.inner.margin.bottom = size.into().into();
+        self.inner.margin.bottom = space_y(size).into();
         self
     }
 
     /// Margin on the edge the text starts from — `left` under [`Direction::Ltr`], `right` under [`Direction::Rtl`].
     pub fn margin_inline_start(mut self, size: impl Into<SizeDimension>) -> Self {
-        self.logical.margin_start = Some(size.into());
+        self.logical.margin_start = Some(space_x(size));
         self
     }
 
     /// Margin on the edge the text runs towards — `right` under [`Direction::Ltr`], `left` under [`Direction::Rtl`].
     pub fn margin_inline_end(mut self, size: impl Into<SizeDimension>) -> Self {
-        self.logical.margin_end = Some(size.into());
+        self.logical.margin_end = Some(space_x(size));
         self
     }
 
@@ -373,38 +429,62 @@ impl LayoutStyle {
     ///
     /// The one place that is right: placing an in-flow box at an x already worked out in physical viewport coordinates — a dropdown panel under its trigger, a picker under its anchor. Those come from a laid-out rect, so mirroring them under RTL would put the panel on the wrong side of the screen. For a margin that is part of a box's own spacing, use [`margin_inline_start`](Self::margin_inline_start).
     pub fn margin_from_left(mut self, px: f32) -> Self {
-        self.inner.margin.left = LengthPercentageAuto::length(px);
+        self.inner.margin.left =
+            LengthPercentageAuto::length(geometry_core::layout_grid().snap_pos_x(px));
         self
     }
 
     /// Inset from the edge the text starts from, for a node already taken out of flow (see [`absolute_fill`](Self::absolute_fill)); ignored on an in-flow node, as `inset` is in CSS.
     pub fn inset_start(mut self, size: impl Into<SizeDimension>) -> Self {
-        self.logical.inset_start = Some(size.into());
+        self.logical.inset_start = Some(pos_x(size));
         self
     }
 
     /// Inset from the edge the text runs towards, for a node already taken out of flow.
     pub fn inset_end(mut self, size: impl Into<SizeDimension>) -> Self {
-        self.logical.inset_end = Some(size.into());
+        self.logical.inset_end = Some(pos_x(size));
+        self
+    }
+
+    /// Reserves the room a painted stroke takes on a surface that draws it in whole cells.
+    ///
+    /// On a raster backend a stroke is drawn inside the box and costs no layout at all — a one-pixel rule overlaps the padding and nobody notices. A terminal has no sub-cell line: a border claims an entire cell on each side. A box laid out with no room for one therefore has its own frame and its content competing for the same row, and below three rows the text is drawn on top of the frame.
+    ///
+    /// Nothing on a unit grid, so a desktop window keeps exactly the geometry it had.
+    pub fn bordered(mut self) -> Self {
+        let grid = geometry_core::layout_grid();
+        if grid.is_unit() {
+            return self;
+        }
+        // Only what the padding does not already give. A raster backend draws a stroke *inside* the box, overlapping whatever padding is there, and the cell equivalent is a frame in the outermost cell — so a box already padded by a cell or more has the room and reserving another would double its frame for nothing. Read from `self`, which is why this belongs after the padding calls in a builder chain.
+        let short = |declared: LengthPercentage, step: f32| {
+            LengthPercentage::length((step - length_of(declared)).max(0.0))
+        };
+        self.inner.border = taffy::geometry::Rect {
+            left: short(self.inner.padding.left, grid.x),
+            right: short(self.inner.padding.right, grid.x),
+            top: short(self.inner.padding.top, grid.y),
+            bottom: short(self.inner.padding.bottom, grid.y),
+        };
         self
     }
 
     pub fn gap(mut self, size: impl Into<SizeDimension>) -> Self {
-        let value: LengthPercentage = size.into().into();
+        let d = size.into();
         self.inner.gap = taffy::geometry::Size {
-            width: value,
-            height: value,
+            width: space_x(d).into(),
+            height: space_y(d).into(),
         };
         self
     }
 
     pub fn gap_x(mut self, size: impl Into<SizeDimension>) -> Self {
-        self.inner.gap.width = size.into().into();
+        self.inner.gap.width = space_x(size).into();
         self
     }
 
     pub fn gap_y(mut self, size: impl Into<SizeDimension>) -> Self {
-        self.inner.gap.height = size.into().into();
+        self.inner.gap.height = space_y(size).into();
         self
     }
 
@@ -536,6 +616,51 @@ impl Edge {
 impl Default for LayoutStyle {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+#[cfg(test)]
+mod border_reservation {
+    use super::*;
+    use geometry_core::{LayoutGrid, set_layout_grid};
+
+    fn border_of(style: LayoutStyle) -> (f32, f32) {
+        (
+            length_of(style.inner.border.left),
+            length_of(style.inner.border.top),
+        )
+    }
+
+    /// The whole of the rule: a stroke needs one cell per side, and padding already supplies cells. Only the shortfall is reserved, so a roomy box does not pay twice for its own frame.
+    #[test]
+    fn a_border_reserves_only_what_the_padding_does_not_give() {
+        set_layout_grid(LayoutGrid::new(8.0, 16.0));
+
+        let bare = LayoutStyle::new().bordered();
+        assert_eq!(
+            border_of(bare),
+            (8.0, 16.0),
+            "an unpadded box needs the whole cell"
+        );
+
+        let padded = LayoutStyle::new().padding_all(16.0).bordered();
+        assert_eq!(
+            border_of(padded),
+            (0.0, 0.0),
+            "a box padded a cell already has room for its frame"
+        );
+
+        let roomy = LayoutStyle::new().padding_all(32.0).bordered();
+        assert_eq!(border_of(roomy), (0.0, 0.0), "and so does a roomier one");
+
+        set_layout_grid(LayoutGrid::UNIT);
+    }
+
+    /// A surface that can put an edge anywhere draws a stroke inside the box for free, exactly as it did before any of this existed.
+    #[test]
+    fn a_unit_grid_reserves_nothing() {
+        set_layout_grid(LayoutGrid::UNIT);
+        assert_eq!(border_of(LayoutStyle::new().bordered()), (0.0, 0.0));
     }
 }
 

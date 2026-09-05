@@ -311,7 +311,21 @@ impl ViewGen<'_> {
                 expr.push_str(&call);
             }
         }
+        // `stroke` stays a paint key everywhere else — the registry offers it as one and `rect_style_pieces` emits it as one. It is added here rather than through `layout_prop_call` for exactly that reason: what a stroke costs is a property of the surface, not of the attribute, and only `LayoutStyle::bordered` knows the surface.
+        if self.declares_stroke(classes, attrs) {
+            expr.push_str(".bordered()");
+        }
         expr
+    }
+
+    /// Whether this element paints a stroke, inline or through any of its classes.
+    fn declares_stroke(&self, classes: &[String], attrs: &[Attr]) -> bool {
+        attrs.iter().any(|a| a.key == "stroke")
+            || classes.iter().any(|name| {
+                self.classes
+                    .iter()
+                    .any(|c| &c.name == name && c.props.iter().any(|p| p.key == "stroke"))
+            })
     }
 
     /// The raw values of this element's layout attributes that are not literals, so the caller can wrap the style expression in an effect. Empty means the style is a constant and the node needs none.

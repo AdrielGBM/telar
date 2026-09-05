@@ -79,7 +79,7 @@ pub fn shadows(props: ShadowsProps, children: Children) -> Result<Box<dyn Layout
                             };
                             Container::new(LayoutStyle::new().flex_row().gap(20.0).flex_wrap().align_items(AlignItems::CENTER), children![__col_1, __col_2, __col_3])?
                         };
-                        StyledContainer::new(LayoutStyle::new().flex_column().padding_all(24.0), { let theme = theme.clone(); move |_| RectStyle { fill: Some(Paint::Solid(theme.get().surface_alt)), border: Some(Border { paint: Paint::Solid(theme.get().border), widths: [1.0; 4] }), shadow: None, radius: BorderRadius::all(12.0) } }, children![__row_0])?
+                        StyledContainer::new(LayoutStyle::new().flex_column().padding_all(24.0).bordered(), { let theme = theme.clone(); move |_| RectStyle { fill: Some(Paint::Solid(theme.get().surface_alt)), border: Some(Border { paint: Paint::Solid(theme.get().border), widths: [1.0; 4] }), shadow: None, radius: BorderRadius::all(12.0) } }, children![__row_0])?
                     };
                     __children.push(box_item(__sbox_0));
                     let __node_2 = code_line(CodeLineProps::props().code("box shadow_y:6 shadow_blur:16 shadow_color:#00000033").build(), Children::default())?;

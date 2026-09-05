@@ -41,7 +41,7 @@ pub fn feature_card(props: FeatureCardProps, children: Children) -> Result<Box<d
                 { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(13.0).with_color(theme.get().muted) },
             )?
         };
-        StyledContainer::new(LayoutStyle::new().flex_column().flex_grow(1.0).min_width(170.0).padding_all(20.0).gap(8.0), { let theme = theme.clone(); move |_| RectStyle { fill: Some(Paint::Solid(theme.get().surface)), border: Some(Border { paint: Paint::Solid(theme.get().border), widths: [1.0; 4] }), shadow: None, radius: BorderRadius::all(16.0) } }, children![__text_0, __text_1, __text_2])?
+        StyledContainer::new(LayoutStyle::new().flex_column().flex_grow(1.0).min_width(170.0).padding_all(20.0).gap(8.0).bordered(), { let theme = theme.clone(); move |_| RectStyle { fill: Some(Paint::Solid(theme.get().surface)), border: Some(Border { paint: Paint::Solid(theme.get().border), widths: [1.0; 4] }), shadow: None, radius: BorderRadius::all(16.0) } }, children![__text_0, __text_1, __text_2])?
     };
     Ok(Box::new(__sbox_0))
 }

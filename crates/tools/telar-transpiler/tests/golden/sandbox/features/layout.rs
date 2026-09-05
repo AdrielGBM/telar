@@ -364,7 +364,7 @@ pub fn layout(props: LayoutProps, children: Children) -> Result<Box<dyn LayoutIt
                                                         { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(13.0).with_color(theme.get().ink) },
                                                     )?
                                                 };
-                                                StyledContainer::new(LayoutStyle::new().flex_column().padding_horizontal(14.0).padding_vertical(10.0), { let theme = theme.clone(); move |_| RectStyle { fill: Some(Paint::Solid(theme.get().surface_alt)), border: Some(Border { paint: Paint::Solid(theme.get().border), widths: [1.0; 4] }), shadow: None, radius: BorderRadius::all(8.0) } }, children![__text_3])?
+                                                StyledContainer::new(LayoutStyle::new().flex_column().padding_horizontal(14.0).padding_vertical(10.0).bordered(), { let theme = theme.clone(); move |_| RectStyle { fill: Some(Paint::Solid(theme.get().surface_alt)), border: Some(Border { paint: Paint::Solid(theme.get().border), widths: [1.0; 4] }), shadow: None, radius: BorderRadius::all(8.0) } }, children![__text_3])?
                                             };
                                             __children.push(box_item(__sbox_19));
                                         }

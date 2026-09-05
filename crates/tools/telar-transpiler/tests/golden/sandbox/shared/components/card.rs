@@ -26,7 +26,7 @@ pub fn card(props: CardProps, children: Children) -> Result<Box<dyn LayoutItem>,
         let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
         __children.extend(__slots.take("header"));
         __children.extend(__slots.take_default());
-        StyledContainer::new(LayoutStyle::new().flex_column().padding_all(props.pad).gap(props.gap), { let theme = theme.clone(); move |_| RectStyle { fill: Some(Paint::Solid(theme.get().surface)), border: Some(Border { paint: Paint::Solid(theme.get().border), widths: [1.0; 4] }), shadow: None, radius: BorderRadius::all(12.0) } }, __children)?.styled_by({ let props = props.clone(); move || LayoutStyle::new().flex_column().padding_all(props.pad).gap(props.gap) })
+        StyledContainer::new(LayoutStyle::new().flex_column().padding_all(props.pad).gap(props.gap).bordered(), { let theme = theme.clone(); move |_| RectStyle { fill: Some(Paint::Solid(theme.get().surface)), border: Some(Border { paint: Paint::Solid(theme.get().border), widths: [1.0; 4] }), shadow: None, radius: BorderRadius::all(12.0) } }, __children)?.styled_by({ let props = props.clone(); move || LayoutStyle::new().flex_column().padding_all(props.pad).gap(props.gap).bordered() })
     };
     Ok(Box::new(__sbox_0))
 }

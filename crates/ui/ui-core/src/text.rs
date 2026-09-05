@@ -152,7 +152,8 @@ impl Text {
         content_fn: impl Fn() -> String + 'static,
         style_fn: impl Fn() -> TextStyle + 'static,
     ) -> Result<Self, LayoutError> {
-        let height = style_fn().font_size * 1.4;
+        // Asked of the installed measurer rather than multiplied out here: a terminal draws one glyph per cell whatever size the text claims, so its answer is a cell — and a title at 32px reserving 44.8px of box for a single row of glyphs is how a big letter used to push everything below it out of the grid.
+        let height = crate::text_metrics::single_line_box(style_fn().font_size);
         Text::new(content_fn, LayoutStyle::new().height(height), style_fn)
     }
 }

@@ -153,6 +153,8 @@ pub use renderer_core::{
 };
 // The drawing half of the backend-author API: a frontend implements `RendererFactory` and installs a `TextMetrics` for whatever "how wide is this string" means on its surface.
 #[cfg(feature = "runtime")]
+pub use geometry_core::{LayoutGrid, layout_grid, set_layout_grid};
+#[cfg(feature = "runtime")]
 pub use renderer_core::{
     FontConfig, RenderBackend, RendererBuild, RendererFactory, TextMetrics,
     set_default_text_metrics, set_text_metrics,

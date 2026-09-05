@@ -48,6 +48,7 @@ mod svg;
 mod text;
 mod text_area;
 mod text_metrics;
+pub use text_metrics::{SINGLE_LINE_LEADING, single_line_box};
 mod virtual_list;
 mod window_root;
 

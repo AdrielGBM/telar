@@ -26,12 +26,14 @@ impl Default for CellSize {
 
 impl CellSize {
     /// The column a logical x falls in. Rounds, and callers round *both* edges of a box rather than its width, so two boxes that touch in logical space still touch in cells.
+    ///
+    /// Half **up** rather than half away from zero, so that adding a whole number of cells to a coordinate adds the same whole number of columns to the answer. `f32::round` changes direction at the origin and breaks that for anything scrolled past it — see `geometry_core::LayoutGrid`.
     pub fn col_at(self, x: f32) -> i32 {
-        (x / self.width).round() as i32
+        (x / self.width + 0.5).floor() as i32
     }
 
     pub fn row_at(self, y: f32) -> i32 {
-        (y / self.height).round() as i32
+        (y / self.height + 0.5).floor() as i32
     }
 
     pub fn cols_in(self, width: f32) -> u16 {
