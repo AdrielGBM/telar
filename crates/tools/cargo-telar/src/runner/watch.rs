@@ -1,19 +1,17 @@
 //! `cargo telar dev`: the watch loop, the rebuild, and the hot-reload channel to the running app.
 
-use std::fs::OpenOptions;
 use std::io::BufReader;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::sync::mpsc;
-use std::time::{Duration, Instant, SystemTime};
+use std::time::{Duration, Instant};
 
 use notify::{Config as NotifyConfig, EventKind, RecommendedWatcher, RecursiveMode, Watcher};
 use telar_transpiler::ASSET_KINDS;
 
 use super::android::{android_install_and_launch, make_android_cmd};
 use super::config::{
-    CargoManifest, TelarConfig, WindowConfig, backend_as_str, expand_member, resolve_package,
-    split_android_flag,
+    TelarConfig, WindowConfig, backend_as_str, resolve_package, split_android_flag,
 };
 use super::diagnostics;
 use super::package::{package_bin_path, package_lib_path, profile_of};
@@ -116,7 +114,8 @@ fn is_asset_extension(ext: &str) -> bool {
         .any(|kind| kind.extensions.contains(&ext))
 }
 
-fn is_source_event(event: &notify::Event) -> bool {
+// Whether the event should trigger a rebuild. Assets need no special handling any more: the macro emits an `include_bytes!` per baked asset, so cargo sees the edit as a real dependency, and the bake before each rebuild refreshes the artifact it reads.
+fn note_event(event: &notify::Event) -> bool {
     if !matches!(
         event.kind,
         EventKind::Modify(_) | EventKind::Create(_) | EventKind::Remove(_)
@@ -129,72 +128,33 @@ fn is_source_event(event: &notify::Event) -> bool {
     })
 }
 
-// An asset change leaves every `.rsx` untouched, so cargo's fingerprint is unchanged and the baker never re-runs; these events need the touch workaround below.
-fn is_asset_event(event: &notify::Event) -> bool {
-    if !matches!(
-        event.kind,
-        EventKind::Modify(_) | EventKind::Create(_) | EventKind::Remove(_)
-    ) {
-        return false;
-    }
-    event
-        .paths
+// Every directory an edit can come from: each member's `src/`, the asset root, and the catalog directory. The last two sit outside `src/` by default, so watching only `src/` meant editing an asset or a translation raised no event at all — not one that was handled badly, one that never arrived.
+fn collect_watch_dirs(workspace_root: &Path) -> Vec<PathBuf> {
+    let mut dirs: Vec<PathBuf> = super::bake::member_dirs(workspace_root)
+        .into_iter()
+        .flat_map(|member| {
+            [
+                Some(member.join("src")),
+                Some(telar_transpiler::assets_root(&member)),
+                telar_transpiler::locales_root(&member),
+            ]
+        })
+        .flatten()
+        .filter(|dir| dir.is_dir())
+        .collect();
+    dirs.sort();
+    dirs.dedup();
+    // Each watch is recursive, and `[telar] assets` may point inside `src/` — watching both would deliver every edit twice and rebuild twice for one keystroke.
+    let nested: Vec<PathBuf> = dirs
         .iter()
-        .any(|p| is_asset_extension(p.extension().and_then(|e| e.to_str()).unwrap_or("")))
-}
-
-// Returns whether the event should trigger a rebuild, and eagerly forces a re-bake when only an asset changed. Touching an asset's `.rsx` produces a source event, so it never re-enters this path.
-fn note_event(event: &notify::Event, src_dirs: &[PathBuf]) -> bool {
-    if !is_source_event(event) {
-        return false;
-    }
-    if is_asset_event(event) {
-        touch_rsx_files(src_dirs);
-    }
-    true
-}
-
-// Proc macros cannot emit `cargo:rerun-if-changed` and read assets via `std::fs`, so an asset-only edit never re-runs the baker. Bumping the mtime of every watched `.rsx` forces the recompile that re-bakes. Coarse for now: it touches all of them, not just the one referencing the asset.
-fn touch_rsx_files(src_dirs: &[PathBuf]) {
-    let now = SystemTime::now();
-    for dir in src_dirs {
-        touch_rsx_in_dir(dir, now);
-    }
-}
-
-// Parallel to the transpiler's discovery walk, but touching mtimes rather than collecting paths.
-fn touch_rsx_in_dir(dir: &Path, now: SystemTime) {
-    let Ok(entries) = std::fs::read_dir(dir) else {
-        return;
-    };
-    for entry in entries.flatten() {
-        let path = entry.path();
-        if path.is_dir() {
-            touch_rsx_in_dir(&path, now);
-        } else if path.extension().and_then(|e| e.to_str()) == Some("rsx") {
-            // write(true) opens without truncating; set_modified needs the file opened for writing.
-            if let Ok(file) = OpenOptions::new().write(true).open(&path) {
-                let _ = file.set_modified(now);
-            }
-        }
-    }
-}
-
-fn collect_src_dirs(workspace_root: &Path) -> Vec<PathBuf> {
-    let manifest_path = workspace_root.join("Cargo.toml");
-    let Ok(content) = std::fs::read_to_string(&manifest_path) else {
-        return vec![];
-    };
-    let Ok(manifest) = toml::from_str::<CargoManifest>(&content) else {
-        return vec![];
-    };
-    let members = manifest.workspace.map(|w| w.members).unwrap_or_default();
-    members
-        .iter()
-        .flat_map(|pattern| expand_member(workspace_root, pattern))
-        .map(|member| member.join("src"))
-        .filter(|src| src.is_dir())
-        .collect()
+        .filter(|dir| {
+            dirs.iter()
+                .any(|other| *dir != other && dir.starts_with(other))
+        })
+        .cloned()
+        .collect();
+    dirs.retain(|dir| !nested.contains(dir));
+    dirs
 }
 
 /// The host triple's `CARGO_TARGET_<TRIPLE>_RUSTFLAGS`, which is where a direnv/flake shell usually puts a linker choice (target-scoped rather than global, so a cross build keeps its own toolchain's linker).
@@ -301,7 +261,7 @@ fn make_watcher(
 ) -> RecommendedWatcher {
     let mut watcher = RecommendedWatcher::new(tx, NotifyConfig::default())
         .expect("[cargo-telar] failed to create file watcher");
-    for src_dir in collect_src_dirs(workspace_root) {
+    for src_dir in collect_watch_dirs(workspace_root) {
         watcher
             .watch(&src_dir, RecursiveMode::Recursive)
             .unwrap_or_else(|e| {
@@ -325,7 +285,6 @@ fn watch_and_hot_reload(
 ) -> ! {
     let (tx, rx) = mpsc::channel::<notify::Result<notify::Event>>();
     let _watcher = make_watcher(tx, &workspace_root);
-    let src_dirs = collect_src_dirs(&workspace_root);
 
     eprintln!("[cargo-telar] Starting with hot reload...");
     let mut child = Command::new(&bin_path)
@@ -350,7 +309,7 @@ fn watch_and_hot_reload(
         }
 
         while let Ok(Ok(event)) = rx.try_recv() {
-            if note_event(&event, &src_dirs) {
+            if note_event(&event) {
                 last_event = Instant::now();
                 pending_rebuild = true;
             }
@@ -382,7 +341,7 @@ fn watch_and_hot_reload(
         }
 
         if let Ok(Ok(event)) = rx.recv_timeout(Duration::from_millis(50)) {
-            if note_event(&event, &src_dirs) {
+            if note_event(&event) {
                 last_event = Instant::now();
                 pending_rebuild = true;
             }
@@ -397,7 +356,6 @@ fn watch_and_run(
 ) -> ! {
     let (tx, rx) = mpsc::channel::<notify::Result<notify::Event>>();
     let _watcher = make_watcher(tx, &workspace_root);
-    let src_dirs = collect_src_dirs(&workspace_root);
 
     loop {
         eprintln!("[cargo-telar] Starting...");
@@ -426,7 +384,7 @@ fn watch_and_run(
                     eprintln!("[cargo-telar] Process exited ({code}). Watching for changes...");
                     loop {
                         match rx.recv() {
-                            Ok(Ok(event)) if note_event(&event, &src_dirs) => {
+                            Ok(Ok(event)) if note_event(&event) => {
                                 while rx.try_recv().is_ok() {}
                                 eprintln!("[cargo-telar] Change detected, restarting...");
                                 break 'watch;
@@ -440,7 +398,7 @@ fn watch_and_run(
             }
 
             while let Ok(Ok(event)) = rx.try_recv() {
-                if note_event(&event, &src_dirs) {
+                if note_event(&event) {
                     last_event = Instant::now();
                     pending_restart = true;
                 }
@@ -455,7 +413,7 @@ fn watch_and_run(
             }
 
             if let Ok(Ok(event)) = rx.recv_timeout(Duration::from_millis(50)) {
-                if note_event(&event, &src_dirs) {
+                if note_event(&event) {
                     last_event = Instant::now();
                     pending_restart = true;
                 }
@@ -634,5 +592,86 @@ mod tests {
     #[test]
     fn nothing_to_inherit_leaves_the_cfg_alone() {
         assert_eq!(with_hot_reload_cfg(None), "--cfg=telar_hot_reload");
+    }
+    fn watch_probe(name: &str) -> PathBuf {
+        let root =
+            std::env::temp_dir().join(format!("cargo_telar_watch_{name}_{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        for dir in ["src", "assets", "locales"] {
+            std::fs::create_dir_all(root.join(dir)).unwrap();
+        }
+        std::fs::write(root.join("Cargo.toml"), "[package]\nname = \"solo\"\n").unwrap();
+        root
+    }
+
+    /// The bug this replaced: only `<member>/src` was watched, so editing `assets/badge.svg` or a translation raised no event at all.
+    #[test]
+    fn the_asset_and_locale_roots_are_watched_too() {
+        let root = watch_probe("dirs");
+
+        let dirs = collect_watch_dirs(&root);
+
+        assert!(dirs.contains(&root.join("src")), "{dirs:?}");
+        assert!(dirs.contains(&root.join("assets")), "{dirs:?}");
+        assert!(dirs.contains(&root.join("locales")), "{dirs:?}");
+
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    /// A project from `cargo telar new` has no `[workspace]` table, and the old walk read members only — so it watched nothing whatsoever.
+    #[test]
+    fn a_lone_package_is_watched_at_all() {
+        let root = watch_probe("lone");
+        assert!(!collect_watch_dirs(&root).is_empty());
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    /// Directories that do not exist are not handed to the watcher, which would only log a failure for each.
+    #[test]
+    fn absent_directories_are_left_out() {
+        let root = watch_probe("absent");
+        std::fs::remove_dir_all(root.join("locales")).unwrap();
+
+        let dirs = collect_watch_dirs(&root);
+
+        assert!(!dirs.contains(&root.join("locales")), "{dirs:?}");
+        assert!(dirs.contains(&root.join("assets")), "{dirs:?}");
+
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    /// `[telar] assets` may point inside `src/`, and both watches are recursive — the inner one would make every edit arrive twice.
+    #[test]
+    fn a_directory_inside_another_is_not_watched_separately() {
+        let root = watch_probe("nested");
+        std::fs::create_dir_all(root.join("src/shared/assets")).unwrap();
+        std::fs::write(
+            root.join("telar.toml"),
+            "[telar]\nassets = \"src/shared/assets\"\n",
+        )
+        .unwrap();
+
+        let dirs = collect_watch_dirs(&root);
+
+        assert!(dirs.contains(&root.join("src")), "{dirs:?}");
+        assert!(
+            !dirs.contains(&root.join("src/shared/assets")),
+            "the asset root is already covered by the recursive watch on src/: {dirs:?}"
+        );
+
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    /// An asset edit has to reach the rebuild on its own now: nothing touches `.rsx` mtimes any more, and the `include_bytes!` the macro emits is what makes cargo see it.
+    #[test]
+    fn an_asset_extension_is_a_rebuild_event() {
+        let event = notify::Event {
+            kind: EventKind::Modify(notify::event::ModifyKind::Data(
+                notify::event::DataChange::Content,
+            )),
+            paths: vec![PathBuf::from("/p/assets/badge.webp")],
+            attrs: Default::default(),
+        };
+        assert!(note_event(&event));
     }
 }

@@ -31,7 +31,7 @@ pub(crate) fn bake_workspace() {
     }
 }
 
-fn member_dirs(workspace_root: &Path) -> Vec<PathBuf> {
+pub(super) fn member_dirs(workspace_root: &Path) -> Vec<PathBuf> {
     let manifest = std::fs::read_to_string(workspace_root.join("Cargo.toml"))
         .ok()
         .and_then(|content| toml::from_str::<CargoManifest>(&content).ok());

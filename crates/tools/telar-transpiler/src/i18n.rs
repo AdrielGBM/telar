@@ -50,6 +50,12 @@ fn read_i18n_config(package_root: &Path) -> I18nConfig {
     }
 }
 
+/// The project-wide catalog directory (`locales/` by default, `[telar.i18n] root`), or `None` when it is disabled. Mirrors [`crate::assets_root`]: a caller that needs the *directory* — a file watcher, say — must not have to infer it from the files that happen to be in it today, or adding the first `.toml` to an empty one goes unnoticed. The per-module catalogs the `scan` setting finds are under `src/`, so nothing else needs exposing.
+pub fn locales_root(package_root: &Path) -> Option<PathBuf> {
+    let root = read_i18n_config(package_root).root;
+    (!root.is_empty()).then(|| package_root.join(root))
+}
+
 /// The locale files that feed the catalog, sorted — used to emit `include_str!` rerun triggers so editing a translation re-bakes, exactly like editing a `.rsx` file.
 pub fn catalog_files(package_root: &Path) -> Vec<PathBuf> {
     catalog_sources(package_root)

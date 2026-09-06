@@ -33,7 +33,7 @@ pub use discovery::{
 pub use error::TranspileError;
 pub use i18n::{
     CatalogModel, I18N_CATALOG_PATH, I18N_MODULE, MessageModel, PartModel, catalog_files,
-    parse_catalog, parse_message, to_source as bake_catalog_to_source,
+    locales_root, parse_catalog, parse_message, to_source as bake_catalog_to_source,
 };
 pub use paths::{find_ancestor_dir, find_telar_root, find_workspace_root};
 pub use registry::{
