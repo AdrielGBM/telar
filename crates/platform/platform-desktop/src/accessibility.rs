@@ -5,7 +5,7 @@
 //! Built only while something is listening. Every desktop accessibility API works this way, and it is what makes the cost honest: with no assistive technology attached, nothing here runs at all.
 
 use accesskit::{
-    Action, ActionRequest, Node, NodeId, Rect as AkRect, Role as AkRole, Toggled, Tree, TreeId,
+    Action, ActionRequest, Node, NodeId, Rect as AkRect, Role as AkRole, Toggled, TreeId, TreeInfo,
     TreeUpdate,
 };
 use platform_core::{AccessNode, Role};
@@ -67,7 +67,7 @@ pub(crate) fn tree_update(nodes: &[AccessNode], title: &str) -> TreeUpdate {
     updates.push((ROOT, root));
     TreeUpdate {
         nodes: updates,
-        tree: Some(Tree::new(ROOT)),
+        tree: Some(TreeInfo::new(ROOT)),
         tree_id: TreeId::ROOT,
         focus,
     }

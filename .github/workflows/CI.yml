@@ -70,7 +70,7 @@ jobs:
       # crate generates glue for, which is why the version is written out here rather than resolved.
       - name: Install wasm-bindgen-test-runner
         run: |
-          curl -fsSL https://github.com/rustwasm/wasm-bindgen/releases/download/0.2.126/wasm-bindgen-0.2.126-x86_64-unknown-linux-musl.tar.gz \
+          curl -fsSL https://github.com/rustwasm/wasm-bindgen/releases/download/0.2.127/wasm-bindgen-0.2.127-x86_64-unknown-linux-musl.tar.gz \
             | tar -xz --strip-components=1 -C ~/.cargo/bin
       - name: Taffy against the browser
         # Chrome and its driver are already on the runner; `CHROMEWEBDRIVER` is where the image puts the latter.

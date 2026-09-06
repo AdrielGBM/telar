@@ -91,15 +91,18 @@ fn css_of(style: &Style) -> Css {
         }
     }
 
+    for (property, value) in [("width", style.size.width), ("height", style.size.height)] {
+        if let Some(value) = dimension(value) {
+            css.push(property, &value);
+        }
+    }
     for (property, value) in [
-        ("width", style.size.width),
-        ("height", style.size.height),
         ("min-width", style.min_size.width),
         ("min-height", style.min_size.height),
         ("max-width", style.max_size.width),
         ("max-height", style.max_size.height),
     ] {
-        if let Some(value) = dimension(value) {
+        if let Some(value) = auto_length(value) {
             css.push(property, &value);
         }
     }
@@ -303,7 +306,7 @@ fn length_of(compact: CompactLength) -> Option<String> {
     }
 }
 
-/// A size, or nothing when it is `auto` — which is what CSS starts every one of these at, and what `max-width` does not even accept as a value.
+/// A size, or nothing when it is `auto` — which is what CSS starts it at.
 fn dimension(value: Dimension) -> Option<String> {
     let compact = value.into_raw();
     if compact.tag() == CompactLength::AUTO_TAG {

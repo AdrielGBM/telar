@@ -572,7 +572,7 @@ impl LayoutStyle {
             style.display = Display::None;
         }
         if let Some(min_height) = logical.min_height_override {
-            style.min_size.height = Dimension::length(min_height);
+            style.min_size.height = LengthPercentageAuto::length(min_height);
         }
         let (start, end) = if direction.is_rtl() {
             (Edge::Right, Edge::Left)
@@ -784,13 +784,19 @@ mod tests {
     #[test]
     fn style_max_width_sets_dimension() {
         let style = LayoutStyle::new().max_width(200.0);
-        assert_eq!(style.inner.max_size.width, Dimension::length(200.0));
+        assert_eq!(
+            style.inner.max_size.width,
+            LengthPercentageAuto::length(200.0)
+        );
     }
 
     #[test]
     fn style_max_height_sets_dimension() {
         let style = LayoutStyle::new().max_height(150.0);
-        assert_eq!(style.inner.max_size.height, Dimension::length(150.0));
+        assert_eq!(
+            style.inner.max_size.height,
+            LengthPercentageAuto::length(150.0)
+        );
     }
 
     #[test]

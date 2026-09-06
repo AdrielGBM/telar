@@ -59,7 +59,7 @@
               pkgs.pnpm
               pkgs.pkg-config
               # Must match the pinned `wasm-bindgen` crate version, or the generated glue is rejected.
-              pkgs.wasm-bindgen-cli_0_2_126
+              pkgs.wasm-bindgen-cli_0_2_127
               pkgs.binaryen
               # What `wasm-bindgen-test-runner` drives: the browser tests are the only place Taffy is held to
               # what CSS actually lays out, and without a driver `cargo test --target wasm32-unknown-unknown`

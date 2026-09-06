@@ -330,21 +330,28 @@ impl LayoutEngine {
                     width: available_width.into(),
                     height: available_height.into(),
                 },
-                |known, available, _node, context, _style| {
-                    let Some(measure) = context else {
-                        return taffy::geometry::Size::ZERO;
-                    };
-                    // Width to wrap against: a resolved width wins, else the definite available width, else a large bound so MaxContent stays single-line.
-                    let width = known.width.unwrap_or(match available.width {
-                        taffy::AvailableSpace::Definite(w) => w,
-                        taffy::AvailableSpace::MaxContent => 1.0e6,
-                        taffy::AvailableSpace::MinContent => 0.0,
-                    });
-                    let (mw, mh) = measure(width);
-                    taffy::geometry::Size {
-                        width: known.width.unwrap_or(mw),
-                        height: known.height.unwrap_or(mh),
-                    }
+                |inputs, _node, context, style| {
+                    taffy::compute_leaf_layout(
+                        inputs,
+                        style,
+                        |_, _| 0.0,
+                        |known, available| {
+                            let Some(measure) = context else {
+                                return taffy::geometry::Size::ZERO;
+                            };
+                            // Width to wrap against: a resolved width wins, else the definite available width, else a large bound so MaxContent stays single-line.
+                            let width = known.width.unwrap_or(match available.width {
+                                taffy::AvailableSpace::Definite(w) => w,
+                                taffy::AvailableSpace::MaxContent => 1.0e6,
+                                taffy::AvailableSpace::MinContent => 0.0,
+                            });
+                            let (mw, mh) = measure(width);
+                            taffy::geometry::Size {
+                                width: known.width.unwrap_or(mw),
+                                height: known.height.unwrap_or(mh),
+                            }
+                        },
+                    )
                 },
             )
             .map_err(LayoutError::from)
