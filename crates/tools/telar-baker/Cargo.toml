@@ -15,6 +15,4 @@ repository = { workspace = true }
 # compiles once per machine, so paying for every format here is what lets `cargo-telar` and `telar-analyzer`
 # bake whatever an `.rsx` points at without asking an app to widen its own runtime decoder for it.
 renderer-assets = { workspace = true, features = ["bake"] }
-# `default-features = false`: only `AssetKind` and its registry are needed here, none of the transpiler's own
-# baking machinery — that machinery is what this crate exists to replace.
-telar-transpiler = { workspace = true, default-features = false }
+telar-transpiler = { workspace = true }

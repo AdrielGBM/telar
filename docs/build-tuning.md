@@ -68,16 +68,14 @@ host's linker instead of the NDK's. `lld` works the same way with `-fuse-ld=lld`
 and needs none of this; MSVC takes no `-fuse-ld=` at all. `cargo telar doctor` reports whether one is
 installed; it never selects or installs anything.
 
-## Turning the asset baker off
+## Where assets are baked
 
-`bake-assets` is on by default and turns `svg src:"…"` / `img src:"…"` into Rust source at build time. The
-baker (usvg, resvg, `image`) compiles into the proc-macro **host**, never into your binary — but it is about
-66 crates that a project with no baked asset never uses, and skipping them is the largest single cut
-available to a cold build:
+`svg src:"…"` and `img src:"…"` become Rust source at build time, and **`cargo telar` produces it, not the
+compiler**. The baker — usvg, resvg, `image`, about 66 crates — lives in the CLI, so it compiles once per
+machine instead of once per project: no build of yours carries it, on any target, whether or not you bake
+an asset. That is the largest single cut available to a cold build, and it needs no feature to claim.
 
-```toml
-telar = { version = "0.1", default-features = false, features = ["tui"] }
-```
-
-An `.rsx` that then bakes an asset fails to compile with a message naming the feature, rather than drawing
-nothing at runtime.
+The artifact lands in `.telar/assets.rs` and `.telar/assets.json`, and `cargo telar check` / `dev` /
+`build` / `test` / `preview` refresh it before they invoke cargo. A plain `cargo build` does not: if the
+artifact is missing or older than the asset, the macro fails with a message naming `cargo telar bake`
+rather than drawing nothing at runtime. Add it to CI ahead of whatever compiles your app.

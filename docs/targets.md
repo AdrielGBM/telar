@@ -17,7 +17,7 @@ and no row below that pays for another:
 | Android | `["android"]` | 297 |
 | Nothing — draw commands in, pixels out | `["headless"]` | 219 |
 
-Counted with `cargo tree -e normal` on each target, with the default `bake-assets` on. The spread is the
+Counted with `cargo tree -e normal` on each target. The spread is the
 point: a desktop build is mostly wgpu and its shader toolchain, and a terminal build links neither.
 
 `cargo telar new --target <name>` writes the manifest for you. Switching later is one word in `Cargo.toml`,

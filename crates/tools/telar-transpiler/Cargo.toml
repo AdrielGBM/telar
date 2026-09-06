@@ -11,12 +11,6 @@ license = { workspace = true }
 repository = { workspace = true }
 
 [dependencies]
-# The build-time asset baker, behind `bake-assets`. usvg/resvg/image compile into the proc-macro HOST only,
-# never the app binary, and with everything on: this runs on the machine doing the compiling, where a text
-# stack costs seconds rather than megabytes over a network, and it is what lets a baked SVG keep its text
-# whatever the app's own build turned off. Optional because it is ~66 crates that a project with no baked
-# `src:"…"` asset never uses.
-renderer-assets = { workspace = true, features = ["bake"], optional = true }
 serde = { workspace = true, features = ["derive"] }
 serde_json = "1.0.151"
 # The catalog model and its TOML grammar, shared with the runtime loader: the baker adds discovery and
@@ -30,10 +24,3 @@ proc-macro2 = "1.0.107"
 
 [dev-dependencies]
 semantics-core = { workspace = true }
-
-[features]
-default = ["bake-assets"]
-
-## Turning `src:"…"` SVG and image assets into Rust source at build time. On by default; off drops the
-## baker's ~66 host crates, and an `.rsx` that bakes an asset then fails to compile with a message saying so.
-bake-assets = ["dep:renderer-assets"]

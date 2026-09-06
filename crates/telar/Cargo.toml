@@ -18,7 +18,7 @@ all-features = true
 rustdoc-args = ["--cfg", "docsrs"]
 
 [features]
-default = ["desktop", "bake-assets"]
+default = ["desktop"]
 
 #! ## Targets
 #!
@@ -35,7 +35,7 @@ default = ["desktop", "bake-assets"]
 #! | `android` | An Android `NativeActivity` | 297 |
 #! | `headless` | No surface at all: draw commands in, pixels out | 219 |
 #!
-#! Counted with `cargo tree -e normal` on each target, with `bake-assets` on. The spread is the point:
+#! Counted with `cargo tree -e normal` on each target. The spread is the point:
 #! nothing here is bundled, so a build carries the target it named and no other.
 
 ## A native window on Linux, macOS and Windows, drawn by the GPU where there is one and the CPU where
@@ -98,12 +98,6 @@ runtime-catalog = ["i18n-core/runtime-catalog"]
 ## Filesystem watching delivered on the UI thread. Opt-in: an application that reloads nothing should not
 ## link a platform file-notification backend.
 watch = ["runtime", "dep:notify"]
-
-## Turning `src:"…"` assets into Rust source at build time. **On by default**, and host-side only — the
-## baker (usvg, resvg, `image`) compiles into the proc-macro, never into the application binary. Turning
-## it off drops ~66 crates from every build; an `.rsx` that then bakes an asset fails to compile rather
-## than failing at runtime.
-bake-assets = ["telar-macros/bake-assets"]
 
 #! ## Set by the tooling
 #!

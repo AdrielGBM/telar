@@ -18,9 +18,3 @@ proc-macro2 = "1"
 quote = "1"
 syn = { version = "3", features = ["full"] }
 telar-transpiler = { workspace = true }
-
-[features]
-default = ["bake-assets"]
-
-## Forwards to `telar-transpiler/bake-assets`: turning `src:"…"` assets into Rust source at build time.
-bake-assets = ["telar-transpiler/bake-assets"]

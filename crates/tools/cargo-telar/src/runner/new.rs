@@ -127,7 +127,6 @@ path = "src/main.rs"
 # desktop window, and it would otherwise ride along into a build that asked for the terminal or a browser.
 telar = {{ version = "{TELAR_VERSION}", default-features = false, features = [
     "runtime",
-    "bake-assets",
     "components",
 ] }}
 
