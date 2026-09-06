@@ -420,7 +420,7 @@ fn invocation_dir(file: &Path, src_dir: &Path) -> Option<PathBuf> {
 fn transpile_project(theme_type_str: Option<&str>) -> Result<TranspileOutput, TokenStream2> {
     let manifest_dir = std::env::var("CARGO_MANIFEST_DIR")
         .map(PathBuf::from)
-        .map_err(|_| quote! { compile_error!("CARGO_MANIFEST_DIR not set") })?;
+        .map_err(|_| quote! { compile_error!("CARGO_MANIFEST_DIR not set"); })?;
 
     // A hot-reload build emits different code for the same `.rsx`, so it needs its own output dir: sharing one has the two flavours — and the analyzer's live mirror, which always writes the plain one — overwrite each other on every build, leaving each cargo unit permanently stale.
     let flavour = if hot_reload_build() {
@@ -431,7 +431,7 @@ fn transpile_project(theme_type_str: Option<&str>) -> Result<TranspileOutput, To
     let generated_dir = manifest_dir.join(".telar").join(flavour);
     if let Err(e) = std::fs::create_dir_all(&generated_dir) {
         let msg = format!("Failed to create {}: {e}", generated_dir.display());
-        return Err(quote! { compile_error!(#msg) });
+        return Err(quote! { compile_error!(#msg); });
     }
 
     let src_dir = manifest_dir.join("src");
@@ -450,7 +450,7 @@ fn transpile_project(theme_type_str: Option<&str>) -> Result<TranspileOutput, To
             Ok(s) => s,
             Err(e) => {
                 let msg = format!("Failed to read {}: {e}", rsx_file.display());
-                return Err(quote! { compile_error!(#msg) });
+                return Err(quote! { compile_error!(#msg); });
             }
         };
 
@@ -462,11 +462,11 @@ fn transpile_project(theme_type_str: Option<&str>) -> Result<TranspileOutput, To
                 Ok(r) => r,
                 Err(telar_transpiler::TranspileError::Parse(ref pe)) => {
                     let msg = format!("{}:{}: {}", rsx_file.display(), pe.line, pe.message);
-                    return Err(quote! { compile_error!(#msg) });
+                    return Err(quote! { compile_error!(#msg); });
                 }
                 Err(e) => {
                     let msg = format!("Failed to transpile {}: {e}", rsx_file.display());
-                    return Err(quote! { compile_error!(#msg) });
+                    return Err(quote! { compile_error!(#msg); });
                 }
             };
 
@@ -479,7 +479,7 @@ fn transpile_project(theme_type_str: Option<&str>) -> Result<TranspileOutput, To
         if let Some(parent) = out_path.parent() {
             if let Err(e) = std::fs::create_dir_all(parent) {
                 let msg = format!("Failed to create {}: {e}", parent.display());
-                return Err(quote! { compile_error!(#msg) });
+                return Err(quote! { compile_error!(#msg); });
             }
         }
 
@@ -490,7 +490,7 @@ fn transpile_project(theme_type_str: Option<&str>) -> Result<TranspileOutput, To
         if needs_write {
             if let Err(e) = std::fs::write(&out_path, &result.rust_code) {
                 let msg = format!("Failed to write {}: {e}", out_path.display());
-                return Err(quote! { compile_error!(#msg) });
+                return Err(quote! { compile_error!(#msg); });
             }
         }
 
@@ -549,7 +549,7 @@ fn transpile_project(theme_type_str: Option<&str>) -> Result<TranspileOutput, To
         let modtree_dir = generated_dir.join("__modules");
         if let Err(e) = std::fs::create_dir_all(&modtree_dir) {
             let msg = format!("Failed to create {}: {e}", modtree_dir.display());
-            return Err(quote! { compile_error!(#msg) });
+            return Err(quote! { compile_error!(#msg); });
         }
         let (modules_src, modtree_written) = match telar_transpiler::discover_rust_modules(
             &src_dir,
@@ -561,7 +561,7 @@ fn transpile_project(theme_type_str: Option<&str>) -> Result<TranspileOutput, To
             Ok(s) => s,
             Err(e) => {
                 let msg = format!("Failed to write the auto-discovered module tree: {e}");
-                return Err(quote! { compile_error!(#msg) });
+                return Err(quote! { compile_error!(#msg); });
             }
         };
         written_files.extend(modtree_written);
