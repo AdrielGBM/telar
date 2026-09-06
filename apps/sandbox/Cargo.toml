@@ -47,7 +47,7 @@ web-dom = ["telar/web-dom"]
 criterion = "0.8.2"
 platform-core = { workspace = true }
 platform-headless = { workspace = true }
-pollster = "1.0.1"
+pollster = "0.4"
 renderer-core.workspace = true
 renderer-hardware.workspace = true
 renderer-software.workspace = true
