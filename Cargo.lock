@@ -5581,6 +5581,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "telar-baker"
+version = "0.1.8"
+dependencies = [
+ "telar-renderer-assets",
+ "telar-transpiler",
+]
+
+[[package]]
 name = "telar-diagnostics"
 version = "0.1.8"
 dependencies = [

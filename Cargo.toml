@@ -35,6 +35,7 @@ members = [
     "crates/tools/telar-analyzer",
     "crates/tools/telar-diagnostics",
     "crates/tools/telar-macros",
+    "crates/tools/telar-baker",
     "apps/sandbox",
     "apps/landing",
     "crates/ui/ui-components",
@@ -74,6 +75,7 @@ default-members = [
     "crates/tools/telar-transpiler",
     "crates/tools/telar-diagnostics",
     "crates/tools/telar-macros",
+    "crates/tools/telar-baker",
     "apps/sandbox",
     "crates/telar-dynamic",
 ]
@@ -180,6 +182,7 @@ navigate-core = { package = "telar-navigate-core", path = "crates/navigate/navig
 # so a default left on drags wgpu and a glyph shaper into a page that draws as a document and calls neither.
 telar = { path = "crates/telar", version = "0.1.8", default-features = false }
 telar-diagnostics = { path = "crates/tools/telar-diagnostics", version = "0.1.8" }
+telar-baker = { path = "crates/tools/telar-baker", version = "0.1.8" }
 telar-dynamic = { path = "crates/telar-dynamic", version = "0.1.8" }
 telar-parser = { path = "crates/tools/telar-parser", version = "0.1.8" }
 # `default-features = false` here so each consumer says whether it needs the build-time asset baker. A member
