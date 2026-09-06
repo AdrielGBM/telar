@@ -7,6 +7,20 @@ on:
     branches: [main]
 
 jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo fmt --all -- --check
+      # Not `-D warnings`: the tree carries 247 of them today. This catches the `deny`-level lints, which is
+      # what went unnoticed for two days when a `never_loop` in `telar-macros` stopped clippy reaching
+      # anything downstream of it.
+      - run: cargo clippy --workspace --all-targets --exclude telar-platform-android
+
   check-desktop:
     runs-on: ubuntu-latest
     steps:
