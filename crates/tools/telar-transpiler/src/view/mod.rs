@@ -19,6 +19,7 @@ use std::path::{Path, PathBuf};
 
 use telar_parser::{Attr, Element, IfBlock, StyleClass, ViewNode};
 
+use crate::assets::asset_kind_for_tag;
 use crate::naming::contains_ident;
 use crate::registry::ValueKind;
 pub(crate) use signals::{is_paint_key, rust_str, substitute_reads};
@@ -332,19 +333,20 @@ impl<'a> ViewGen<'a> {
     }
 
     fn next_variable_name(&mut self, tag: &str) -> String {
-        let prefix = match tag {
-            "text" => "text",
-            "col" | "column" => "col",
-            "row" => "row",
-            "box" => "sbox",
-            "overlay" => "overlay",
-            "lazy" => "lazy",
-            "img" | "image" => "img",
-            "input" => "input",
-            "svg" => "svg",
-            "path" => "path",
-            "canvas" => "canvas",
-            _ => "node",
+        let prefix = match asset_kind_for_tag(tag) {
+            Some(kind) => kind.var_prefix,
+            None => match tag {
+                "text" => "text",
+                "col" | "column" => "col",
+                "row" => "row",
+                "box" => "sbox",
+                "overlay" => "overlay",
+                "lazy" => "lazy",
+                "input" => "input",
+                "path" => "path",
+                "canvas" => "canvas",
+                _ => "node",
+            },
         };
         let count = self.counters.entry(prefix.to_string()).or_insert(0);
         let name = format!("__{prefix}_{count}");
@@ -583,15 +585,20 @@ impl<'a> ViewGen<'a> {
     }
 
     fn emit_element_inner(&mut self, el: &Element) -> ChildEmit {
+        if let Some(kind) = asset_kind_for_tag(&el.tag) {
+            return match kind.id {
+                "svg" => self.emit_svg(el),
+                "image" => self.emit_image(el),
+                _ => unreachable!("asset kind ids are svg and image"),
+            };
+        }
         match el.tag.as_str() {
             "text" => self.emit_text(el),
             "col" | "row" | "grid" => self.emit_container(el),
             "box" => self.emit_box(el),
             "overlay" => self.emit_overlay(el),
             "lazy" => self.emit_lazy(el),
-            "img" | "image" => self.emit_image(el),
             "input" => self.emit_input(el),
-            "svg" => self.emit_svg(el),
             "path" => self.emit_path(el),
             "canvas" => self.emit_canvas(el),
             "scroll" => self.emit_scroll(el),

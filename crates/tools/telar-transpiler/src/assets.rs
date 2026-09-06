@@ -24,6 +24,8 @@ pub struct AssetKind {
     pub placeholder: &'static str,
     /// The `static` name prefix for a baked instance of this kind, so each one gets a unique `BAKED_*_N` binding.
     pub static_prefix: &'static str,
+    /// The `__<prefix>_N` local variable name codegen assigns to a widget of this kind, shared by every tag spelling in [`Self::tags`].
+    pub var_prefix: &'static str,
     /// Human-readable name for diagnostics (e.g. "cannot bake {label} asset").
     pub label: &'static str,
     /// File extensions that name this kind, without the leading dot.
@@ -38,6 +40,7 @@ pub const ASSET_KINDS: &[AssetKind] = &[
         data_ty: "SvgData",
         placeholder: "__svg_data",
         static_prefix: "BAKED_SVG",
+        var_prefix: "svg",
         label: "SVG",
         extensions: &["svg"],
     },
@@ -48,6 +51,7 @@ pub const ASSET_KINDS: &[AssetKind] = &[
         data_ty: "ImageData",
         placeholder: "__img_data",
         static_prefix: "BAKED_IMG",
+        var_prefix: "img",
         label: "image",
         extensions: &["png", "jpg", "jpeg"],
     },

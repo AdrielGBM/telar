@@ -28,7 +28,7 @@ fn image_asset() -> &'static AssetKind {
 
 impl ViewGen<'_> {
     pub(super) fn emit_image(&mut self, el: &Element) -> ChildEmit {
-        let var = self.next_variable_name("img");
+        let var = self.next_variable_name(&el.tag);
         let pad = self.indent_str();
 
         let (setup, data_fn) =
@@ -73,7 +73,7 @@ impl ViewGen<'_> {
 
     /// Mirrors `emit_image`: the `src` resolves either to a build-time-baked static asset (quoted `src:"path"`) or a verbatim `Arc<SvgData>` expression (dynamic). `color` is optional and, unlike `src`, is embedded directly in its closure since a `Color` is cheap to recompute per call.
     pub(super) fn emit_svg(&mut self, el: &Element) -> ChildEmit {
-        let var = self.next_variable_name("svg");
+        let var = self.next_variable_name(&el.tag);
         let pad = self.indent_str();
 
         let (setup, data_fn) =

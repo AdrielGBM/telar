@@ -8,6 +8,7 @@ use std::sync::mpsc;
 use std::time::{Duration, Instant, SystemTime};
 
 use notify::{Config as NotifyConfig, EventKind, RecommendedWatcher, RecursiveMode, Watcher};
+use telar_transpiler::ASSET_KINDS;
 
 use super::android::{android_install_and_launch, make_android_cmd};
 use super::config::{
@@ -109,6 +110,12 @@ fn apply_dev_window_env(envs: &mut Vec<(String, String)>, window: &WindowConfig)
     }
 }
 
+fn is_asset_extension(ext: &str) -> bool {
+    ASSET_KINDS
+        .iter()
+        .any(|kind| kind.extensions.contains(&ext))
+}
+
 fn is_source_event(event: &notify::Event) -> bool {
     if !matches!(
         event.kind,
@@ -117,10 +124,8 @@ fn is_source_event(event: &notify::Event) -> bool {
         return false;
     }
     event.paths.iter().any(|p| {
-        matches!(
-            p.extension().and_then(|e| e.to_str()).unwrap_or(""),
-            "rs" | "rsx" | "toml" | "svg" | "png" | "jpg" | "jpeg"
-        )
+        let ext = p.extension().and_then(|e| e.to_str()).unwrap_or("");
+        matches!(ext, "rs" | "rsx" | "toml") || is_asset_extension(ext)
     })
 }
 
@@ -132,12 +137,10 @@ fn is_asset_event(event: &notify::Event) -> bool {
     ) {
         return false;
     }
-    event.paths.iter().any(|p| {
-        matches!(
-            p.extension().and_then(|e| e.to_str()).unwrap_or(""),
-            "svg" | "png" | "jpg" | "jpeg"
-        )
-    })
+    event
+        .paths
+        .iter()
+        .any(|p| is_asset_extension(p.extension().and_then(|e| e.to_str()).unwrap_or("")))
 }
 
 // Returns whether the event should trigger a rebuild, and eagerly forces a re-bake when only an asset changed. Touching an asset's `.rsx` produces a source event, so it never re-enters this path.
