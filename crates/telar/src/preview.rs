@@ -165,10 +165,7 @@ pub fn run_preview_png(
             failed += 1;
             continue;
         };
-        match image::RgbaImage::from_raw(width, height, pixels)
-            .ok_or_else(|| "frame size does not match the window".to_string())
-            .and_then(|img| img.save(&file).map_err(|e| e.to_string()))
-        {
+        match renderer_software::save_premultiplied_rgba8_png(pixels, width, height, &file) {
             Ok(()) => {
                 written += 1;
                 println!("  ok    {label}  → {}", file.display());

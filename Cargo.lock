@@ -5513,7 +5513,6 @@ name = "telar"
 version = "0.1.8"
 dependencies = [
  "document-features",
- "image",
  "libc",
  "libloading",
  "notify",

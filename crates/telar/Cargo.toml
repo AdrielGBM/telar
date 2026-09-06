@@ -126,9 +126,8 @@ dev = ["runtime", "desktop-bare", "dep:libloading", "dep:serde_json"]
 ## The preview host that renders `[preview]` blocks in a window. Injected by `cargo telar preview`.
 preview = ["runtime", "desktop-bare"]
 
-## Rendering those previews to PNG with no window, which is `cargo telar test`. `headless` plus a PNG
-## encoder, the only thing `image` is here for.
-preview-headless = ["headless", "dep:image"]
+## Rendering those previews to PNG with no window, which is `cargo telar test`.
+preview-headless = ["headless"]
 
 ## Test helpers an out-of-tree application needs to assert on what its tree drew, plus the GPU gate that
 ## keeps a pixel test from passing having asserted nothing.
@@ -226,7 +225,6 @@ image-webp = ["dynamic-image", "renderer-assets?/image-webp"]
 
 [dependencies]
 document-features = { version = "0.2.12", optional = true }
-image = { version = "0.25.10", default-features = false, features = ["png"], optional = true }
 libloading = { version = "0.8", optional = true }
 notify = { workspace = true, optional = true }
 raw-window-handle = { workspace = true }
