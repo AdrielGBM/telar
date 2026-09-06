@@ -12,12 +12,13 @@ use syn::{FnArg, Ident, ItemFn, Pat, Result, parse2};
 pub fn expand(item: TokenStream2) -> Result<TokenStream2> {
     let function: ItemFn = parse2(item)?;
     let signature = &function.sig;
-    for (what, span) in [
+    if let Some((what, span)) = [
         signature.asyncness.map(|a| ("async", a.span())),
         signature.constness.map(|c| ("const", c.span())),
     ]
     .into_iter()
     .flatten()
+    .next()
     {
         return Err(syn::Error::new(
             span,
