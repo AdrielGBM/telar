@@ -54,7 +54,8 @@ mod window_root;
 
 #[cfg(feature = "async-assets")]
 pub use async_asset::{
-    AssetCache, AssetDecoder, AssetError, AssetKey, AssetSource, AssetState, AssetTransport, Reply,
+    AssetCache, AssetDecoder, AssetError, AssetKey, AssetLoader, AssetSource, AssetState,
+    AssetTransport, Reply,
 };
 pub use border::{logical_border_radius, logical_border_widths};
 pub use canvas::Canvas;

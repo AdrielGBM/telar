@@ -1,10 +1,13 @@
 //! The reactive seam for assets that resolve later, and the transport-agnostic vocabulary — a key, an error, and the transport/cache/decoder roles — that an implementor assembles into one.
 //!
-//! [`AssetState`] and [`AssetSource`] are the older, still-supported shape: one method per asset format, with transport, caching and decoding folded together inside a single implementor like `HttpAssetSource`. [`AssetTransport`], [`AssetCache`] and [`AssetDecoder`] are the shape a new resource type should target instead — bytes in, bytes cached, bytes decoded, with no method to add anywhere for a format nobody asked for. A future loader assembles the three into the same `Loading` → `Ready`/`Failed` contract `AssetSource` exposes today.
+//! [`AssetState`] and [`AssetSource`] are the older, still-supported shape: one method per asset format, with transport, caching and decoding folded together inside a single implementor like `HttpAssetSource`. [`AssetTransport`], [`AssetCache`] and [`AssetDecoder`] are the shape a new resource type should target instead — bytes in, bytes cached, bytes decoded, with no method to add anywhere for a format nobody asked for. [`AssetLoader`] assembles the three into the same `Loading` → `Ready`/`Failed` contract `AssetSource` exposes today.
 
+use std::cell::{Cell, RefCell};
+use std::collections::{HashMap, VecDeque};
+use std::rc::Rc;
 use std::sync::Arc;
 
-use reactive_core::ReadSignal;
+use reactive_core::{Emitter, ReadSignal, RwSignal, Task, signal, spawn_stream};
 use renderer_assets::SvgData;
 
 /// The lifecycle of an asynchronously-resolved asset. Kept inside a signal so a widget re-renders as the state advances from `Loading` to `Ready`/`Failed`.
@@ -140,6 +143,177 @@ pub trait AssetDecoder: Send + Sync + 'static {
     fn decode(&self, bytes: &[u8]) -> Result<Self::Output, AssetError>;
 }
 
+/// How many requests an [`AssetLoader`] lets sit open against its transport before the rest wait in line.
+const DEFAULT_MAX_IN_FLIGHT: usize = 1;
+
+/// The state one [`AssetLoader`] shares with every request it has in flight, kept behind an `Rc` so a request's completion callback can reach back into it without having to keep the loader itself alive.
+struct Inner<V: Clone + Send + 'static> {
+    transport: Arc<dyn AssetTransport>,
+    cache: Option<Arc<dyn AssetCache>>,
+    decoder: Arc<dyn AssetDecoder<Output = V>>,
+    states: RefCell<HashMap<String, RwSignal<AssetState<V>>>>,
+    queue: RefCell<VecDeque<String>>,
+    in_flight: Cell<usize>,
+    max_in_flight: Cell<usize>,
+    tasks: RefCell<HashMap<String, Task>>,
+}
+
+impl<V: Clone + Send + 'static> Inner<V> {
+    fn enqueue(self: &Rc<Self>, id: String) {
+        if self.in_flight.get() < self.max_in_flight.get() {
+            self.start(id);
+        } else {
+            self.queue.borrow_mut().push_back(id);
+        }
+    }
+
+    /// Resolves `id` through the cache, then the transport, and writes whichever lands first into its signal.
+    ///
+    /// One job on `reactive_core`'s task pool per request rather than a worker that loops waiting on the next one: a native target runs it on a pooled thread that retires when idle, a web target queues it as a microtask, and neither is asked to park on a channel the way a perpetual worker's `recv_timeout` would.
+    fn start(self: &Rc<Self>, id: String) {
+        self.in_flight.set(self.in_flight.get() + 1);
+        let key = AssetKey::new(self.decoder.kind(), id.clone());
+
+        let cache = self.cache.clone();
+        let transport = Arc::clone(&self.transport);
+        let decoder = Arc::clone(&self.decoder);
+
+        let store = Rc::clone(self);
+        let item_id = id.clone();
+        let end_store = Rc::clone(self);
+        let end_id = id.clone();
+
+        // `on_end` fires once every clone of `out` handed to `transport.load` has dropped — immediately for a cache hit, or whenever the transport's own `reply` eventually runs, sync or not. That is what lets one job stand for the whole request instead of just the part that starts it.
+        let task = spawn_stream(
+            move |out: Emitter<Result<V, AssetError>>| {
+                if let Some(bytes) = cache.as_deref().and_then(|c| c.get(&key))
+                    && let Ok(value) = decoder.decode(&bytes)
+                {
+                    out.emit(Ok(value));
+                    return;
+                }
+                let out_reply = out.clone();
+                let decoder_reply = Arc::clone(&decoder);
+                let cache_reply = cache.clone();
+                let reply_key = key.clone();
+                transport.load(
+                    &key,
+                    Box::new(move |result| {
+                        out_reply.emit(decode_and_cache(
+                            result,
+                            decoder_reply.as_ref(),
+                            cache_reply.as_deref(),
+                            &reply_key,
+                        ));
+                    }),
+                );
+            },
+            move |outcome: Result<V, AssetError>| {
+                if let Some(signal) = store.states.borrow().get(&item_id) {
+                    signal.set(match outcome {
+                        Ok(value) => AssetState::Ready(value),
+                        Err(_) => AssetState::Failed,
+                    });
+                }
+            },
+            move || {
+                end_store.tasks.borrow_mut().remove(&end_id);
+                end_store.in_flight.set(end_store.in_flight.get() - 1);
+                if let Some(next) = end_store.queue.borrow_mut().pop_front() {
+                    end_store.start(next);
+                }
+            },
+        );
+
+        self.tasks.borrow_mut().insert(id, task);
+    }
+}
+
+/// The cache write sits behind the same `?` that already proved the bytes decoded, so a failed decode cannot reach [`AssetCache::put`] by construction — not by a caller remembering to check first, the way the worker this replaces relied on an `if` for the same guarantee.
+fn decode_and_cache<V: Clone + Send + 'static>(
+    result: Result<Vec<u8>, AssetError>,
+    decoder: &dyn AssetDecoder<Output = V>,
+    cache: Option<&dyn AssetCache>,
+    key: &AssetKey,
+) -> Result<V, AssetError> {
+    let bytes = result?;
+    let value = decoder.decode(&bytes)?;
+    if let Some(cache) = cache {
+        cache.put(key, &bytes);
+    }
+    Ok(value)
+}
+
+/// Resolves ids into `V` through a cache-then-transport pipeline, reactively: [`get`](Self::get) returns at once with a signal that advances `Loading` → `Ready`/`Failed` as the answer arrives.
+///
+/// A concrete type where [`AssetSource`] is a trait: nothing here needs to be dyn-safe, so [`get_or`](Self::get_or) takes its fallback as a plain `impl FnOnce` instead of paying the object-safety cost that method's shape puts on `AssetSource`. One loader serves one [`AssetDecoder::Output`] — an application with both SVGs and bitmaps builds two, sharing a transport and a cache between them if it wants to.
+///
+/// Every read for an id already loading or loaded shares the request that started it, so a screen full of the same icon costs one transport call, not one per widget that asked. Requests beyond [`with_max_in_flight`](Self::with_max_in_flight) — 1 by default — queue and start as earlier ones finish, so the loader throttles concurrency itself rather than leaving that to the transport.
+///
+/// `!Send` by construction: it holds the signals it hands out, and those live on the UI thread. Construct it there and keep it there — a `thread_local!`, or a field of the app — the same way `HttpAssetSource` does today. Dropping it cancels every request still in flight, so nothing it started can write into a signal nobody can read anymore.
+pub struct AssetLoader<V: Clone + Send + 'static> {
+    inner: Rc<Inner<V>>,
+}
+
+impl<V: Clone + Send + 'static> AssetLoader<V> {
+    /// A loader over `transport`, decoding through `decoder` and, when given, keeping resolved bytes in `cache`.
+    pub fn new(
+        transport: Arc<dyn AssetTransport>,
+        cache: Option<Arc<dyn AssetCache>>,
+        decoder: Arc<dyn AssetDecoder<Output = V>>,
+    ) -> Self {
+        Self {
+            inner: Rc::new(Inner {
+                transport,
+                cache,
+                decoder,
+                states: RefCell::new(HashMap::new()),
+                queue: RefCell::new(VecDeque::new()),
+                in_flight: Cell::new(0),
+                max_in_flight: Cell::new(DEFAULT_MAX_IN_FLIGHT),
+                tasks: RefCell::new(HashMap::new()),
+            }),
+        }
+    }
+
+    /// How many requests may be open against the transport at once; the rest wait their turn. Clamped to at least 1.
+    pub fn with_max_in_flight(self, max: usize) -> Self {
+        self.inner.max_in_flight.set(max.max(1));
+        self
+    }
+
+    /// A reactive handle to the asset named `id`. Reading it subscribes the caller and, on first ask, starts resolving it; a later call for the same id returns the same signal instead of asking the transport again.
+    pub fn get(&self, id: &str) -> ReadSignal<AssetState<V>> {
+        if let Some(existing) = self.inner.states.borrow().get(id) {
+            return existing.read_only();
+        }
+        let handle = signal(AssetState::Loading);
+        let read = handle.read_only();
+        self.inner
+            .states
+            .borrow_mut()
+            .insert(id.to_string(), handle);
+        self.inner.enqueue(id.to_string());
+        read
+    }
+
+    /// The resolved asset, or `fallback()` while it is still loading or has failed. Reads reactively, so a widget calling this re-renders once the asset lands.
+    pub fn get_or(&self, id: &str, fallback: impl FnOnce() -> V) -> V {
+        match self.get(id).get() {
+            AssetState::Ready(value) => value,
+            _ => fallback(),
+        }
+    }
+}
+
+impl<V: Clone + Send + 'static> Drop for AssetLoader<V> {
+    fn drop(&mut self) {
+        for (_, task) in self.inner.tasks.borrow_mut().drain() {
+            task.cancel();
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -207,5 +381,205 @@ mod tests {
             AssetState::<&'static Catalog>::Loading,
             AssetState::<&'static Catalog>::Loading
         );
+    }
+}
+
+#[cfg(test)]
+mod loader_tests {
+    use std::collections::HashMap;
+    use std::sync::Mutex;
+    use std::time::Duration;
+
+    use web_time::Instant;
+
+    use super::*;
+    use reactive_core::drain_tasks;
+
+    /// Never actually resolves: `load` records the call and parks the `reply` until the test releases it, so a test can tell "the transport was asked" apart from "the transport already answered".
+    #[derive(Default)]
+    struct GatedTransport {
+        calls: Mutex<Vec<AssetKey>>,
+        pending: Mutex<Vec<(AssetKey, Reply)>>,
+    }
+
+    impl AssetTransport for GatedTransport {
+        fn load(&self, key: &AssetKey, reply: Reply) {
+            self.calls.lock().unwrap().push(key.clone());
+            self.pending.lock().unwrap().push((key.clone(), reply));
+        }
+    }
+
+    impl GatedTransport {
+        fn call_count(&self) -> usize {
+            self.calls.lock().unwrap().len()
+        }
+
+        fn resolve_all_ok(&self, bytes: &[u8]) {
+            let pending = std::mem::take(&mut *self.pending.lock().unwrap());
+            for (_, reply) in pending {
+                reply(Ok(bytes.to_vec()));
+            }
+        }
+    }
+
+    struct PanicTransport;
+    impl AssetTransport for PanicTransport {
+        fn load(&self, _key: &AssetKey, _reply: Reply) {
+            panic!("the cache should have answered before the transport was ever asked");
+        }
+    }
+
+    #[derive(Default)]
+    struct SpyCache {
+        stored: Mutex<HashMap<AssetKey, Vec<u8>>>,
+        puts: Mutex<Vec<AssetKey>>,
+    }
+
+    impl AssetCache for SpyCache {
+        fn get(&self, key: &AssetKey) -> Option<Vec<u8>> {
+            self.stored.lock().unwrap().get(key).cloned()
+        }
+        fn put(&self, key: &AssetKey, bytes: &[u8]) {
+            self.puts.lock().unwrap().push(key.clone());
+            self.stored
+                .lock()
+                .unwrap()
+                .insert(key.clone(), bytes.to_vec());
+        }
+    }
+
+    struct EchoDecoder;
+    impl AssetDecoder for EchoDecoder {
+        fn kind(&self) -> &'static str {
+            "echo"
+        }
+        type Output = Arc<str>;
+        fn decode(&self, bytes: &[u8]) -> Result<Self::Output, AssetError> {
+            std::str::from_utf8(bytes)
+                .map(Arc::from)
+                .map_err(|e| AssetError(e.to_string()))
+        }
+    }
+
+    fn wait_until(mut done: impl FnMut() -> bool, timeout: Duration) {
+        let deadline = Instant::now() + timeout;
+        while !done() {
+            assert!(Instant::now() < deadline, "condition never became true");
+            std::thread::sleep(Duration::from_millis(2));
+        }
+    }
+
+    /// Drains delivered task values, standing in for the runner's per-frame `drain_tasks`, until `read` leaves `Loading` or the timeout gives up.
+    fn settle<V: Clone + Send + 'static>(read: &ReadSignal<AssetState<V>>, timeout: Duration) {
+        let deadline = Instant::now() + timeout;
+        loop {
+            drain_tasks();
+            if !matches!(read.get(), AssetState::Loading) || Instant::now() > deadline {
+                return;
+            }
+            std::thread::sleep(Duration::from_millis(2));
+        }
+    }
+
+    #[test]
+    fn a_first_read_returns_loading_without_blocking() {
+        let loader: AssetLoader<Arc<str>> = AssetLoader::new(
+            Arc::new(GatedTransport::default()),
+            None,
+            Arc::new(EchoDecoder),
+        );
+
+        assert!(matches!(loader.get("greeting").get(), AssetState::Loading));
+    }
+
+    #[test]
+    fn repeated_reads_of_the_same_id_share_one_transport_call() {
+        let transport = Arc::new(GatedTransport::default());
+        let loader: AssetLoader<Arc<str>> = AssetLoader::new(
+            Arc::clone(&transport) as Arc<dyn AssetTransport>,
+            None,
+            Arc::new(EchoDecoder),
+        );
+
+        let reads: Vec<_> = (0..5).map(|_| loader.get("hello")).collect();
+
+        wait_until(|| transport.call_count() == 1, Duration::from_secs(5));
+        transport.resolve_all_ok(b"hi");
+        settle(&reads[0], Duration::from_secs(5));
+
+        assert_eq!(transport.call_count(), 1);
+        for read in &reads {
+            assert!(matches!(read.get(), AssetState::Ready(_)));
+        }
+    }
+
+    #[test]
+    fn a_failed_decode_never_reaches_cache_put() {
+        let transport = Arc::new(GatedTransport::default());
+        let cache = Arc::new(SpyCache::default());
+        let loader: AssetLoader<Arc<str>> = AssetLoader::new(
+            Arc::clone(&transport) as Arc<dyn AssetTransport>,
+            Some(Arc::clone(&cache) as Arc<dyn AssetCache>),
+            Arc::new(EchoDecoder),
+        );
+
+        let read = loader.get("bad");
+        wait_until(|| transport.call_count() == 1, Duration::from_secs(5));
+        transport.resolve_all_ok(&[0xff, 0xfe]);
+        settle(&read, Duration::from_secs(5));
+
+        assert!(matches!(read.get(), AssetState::Failed));
+        assert!(
+            cache.puts.lock().unwrap().is_empty(),
+            "a decode failure must never reach AssetCache::put"
+        );
+    }
+
+    #[test]
+    fn a_cache_hit_never_reaches_the_transport() {
+        let cache = Arc::new(SpyCache::default());
+        let key = AssetKey::new(EchoDecoder.kind(), "cached");
+        cache
+            .stored
+            .lock()
+            .unwrap()
+            .insert(key, b"already here".to_vec());
+
+        let loader: AssetLoader<Arc<str>> = AssetLoader::new(
+            Arc::new(PanicTransport),
+            Some(Arc::clone(&cache) as Arc<dyn AssetCache>),
+            Arc::new(EchoDecoder),
+        );
+
+        let read = loader.get("cached");
+        settle(&read, Duration::from_secs(5));
+
+        assert!(matches!(read.get(), AssetState::Ready(_)));
+    }
+
+    /// The in-flight limit governs the queue, not merely deduplication: two *distinct* ids must not both reach the transport at once when the default cap is 1.
+    #[test]
+    fn a_second_distinct_id_waits_for_the_first_to_finish() {
+        let transport = Arc::new(GatedTransport::default());
+        let loader: AssetLoader<Arc<str>> = AssetLoader::new(
+            Arc::clone(&transport) as Arc<dyn AssetTransport>,
+            None,
+            Arc::new(EchoDecoder),
+        );
+
+        let a = loader.get("a");
+        let _b = loader.get("b");
+
+        wait_until(|| transport.call_count() >= 1, Duration::from_secs(5));
+        std::thread::sleep(Duration::from_millis(20));
+        assert_eq!(
+            transport.call_count(),
+            1,
+            "a second id must wait its turn rather than starting alongside the first"
+        );
+
+        transport.resolve_all_ok(b"x");
+        settle(&a, Duration::from_secs(5));
+        wait_until(|| transport.call_count() == 2, Duration::from_secs(5));
     }
 }
