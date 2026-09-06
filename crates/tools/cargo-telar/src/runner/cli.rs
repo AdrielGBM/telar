@@ -29,6 +29,8 @@ pub(crate) enum TelarCommand {
     Test(TestArgs),
     /// Type-check the project, reporting `.rsx` errors on their own lines
     Check(CheckArgs),
+    /// Bake every `.rsx` asset reference into `.telar/assets.rs`, so no project build runs the baker itself
+    Bake,
     /// Check the development environment
     Doctor,
     /// Format every `.rsx` and `.rs` file in the project

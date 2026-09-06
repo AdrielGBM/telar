@@ -5,6 +5,7 @@ use std::process::Command;
 use clap::Parser;
 
 mod android;
+mod bake;
 mod check;
 mod cli;
 mod config;
@@ -18,6 +19,7 @@ mod watch;
 mod web_dev;
 
 use android::build_android_package;
+use bake::bake_workspace;
 use check::run_check_cmd;
 use cli::{
     BuildArgs, BuildFormat, Cli, CommonArgs, DevArgs, DevtoolsArg, HotArgs, PreviewArgs, Target,
@@ -35,13 +37,26 @@ use web_dev::run_web_dev;
 /// Dispatches a `cargo telar` invocation to its subcommand.
 pub fn run(args: Vec<String>) {
     let cli = Cli::parse_from(std::iter::once("cargo-telar".to_string()).chain(args));
-    match cli.command.unwrap_or_else(default_dev_command) {
+    let command = cli.command.unwrap_or_else(default_dev_command);
+    // The one place `cargo telar` bakes, rather than at each of the nine sites that spawn `cargo`; the four excluded here compile nothing.
+    if !matches!(
+        command,
+        TelarCommand::New(_)
+            | TelarCommand::Doctor
+            | TelarCommand::Fmt(_)
+            | TelarCommand::Migrate(_)
+            | TelarCommand::Bake
+    ) {
+        bake_workspace();
+    }
+    match command {
         TelarCommand::New(args) => run_new_cmd(args),
         TelarCommand::Dev(args) => run_dev_cmd(args),
         TelarCommand::Preview(args) => run_preview_cmd(args),
         TelarCommand::Build(args) => run_build_cmd(args),
         TelarCommand::Test(args) => run_test_cmd(args),
         TelarCommand::Check(args) => run_check_cmd(args),
+        TelarCommand::Bake => bake_workspace(),
         TelarCommand::Doctor => run_doctor_cmd(),
         TelarCommand::Fmt(args) => run_fmt_cmd(args),
         TelarCommand::Migrate(args) => run_migrate_cmd(args),
