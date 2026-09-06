@@ -12,6 +12,7 @@ mod diagnostics;
 mod doctor;
 mod fmt;
 mod migrate;
+mod new;
 mod package;
 mod watch;
 mod web_dev;
@@ -26,6 +27,7 @@ use config::load_config;
 use doctor::run_doctor_cmd;
 use fmt::run_fmt_cmd;
 use migrate::run_migrate_cmd;
+use new::run_new_cmd;
 use package::{build_appimage, build_deb, build_desktop_dir, build_dmg, build_nsis, build_web};
 use watch::{HotLoopOpts, HotMode, run_hot_loop};
 use web_dev::run_web_dev;
@@ -34,6 +36,7 @@ use web_dev::run_web_dev;
 pub fn run(args: Vec<String>) {
     let cli = Cli::parse_from(std::iter::once("cargo-telar".to_string()).chain(args));
     match cli.command.unwrap_or_else(default_dev_command) {
+        TelarCommand::New(args) => run_new_cmd(args),
         TelarCommand::Dev(args) => run_dev_cmd(args),
         TelarCommand::Preview(args) => run_preview_cmd(args),
         TelarCommand::Build(args) => run_build_cmd(args),

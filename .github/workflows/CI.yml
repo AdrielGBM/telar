@@ -55,6 +55,43 @@ jobs:
       # `cfg`'d to nothing off wasm, so every other check here passes with them broken.
       - run: cargo check -p sandbox --lib --target wasm32-unknown-unknown --features telar/web
 
+  # `cargo telar new` is the first command a new user runs, and nothing else in this file compiles what it
+  # writes: the `.rsx`, the theme derive and the app root live as string constants inside `cargo-telar`,
+  # where a rename in the facade breaks them with nothing to notice. The generated projects are patched onto
+  # this checkout rather than the published crate, so a break lands here instead of on the next person.
+  scaffold:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Generate a project per target, compile the two that need no extra toolchain
+        run: |
+          # Outside the repo so a generated project cannot pick up the workspace's lockfile, and shared
+          # between them so the second compile reuses the first one's dependencies. Scoped to the scaffold's
+          # own builds rather than exported, or building `cargo-telar` itself would leave the cached dir too.
+          scaffold_target="$RUNNER_TEMP/scaffold-target"
+          for target in desktop tui web android; do
+            dir="$RUNNER_TEMP/scaffold-$target"
+            rm -rf "$dir"
+            echo "::group::cargo telar new --target $target"
+            cargo run -q -p cargo-telar -- new "$dir" --target "$target"
+            {
+              echo
+              echo '[patch.crates-io]'
+              echo "telar = { path = \"$GITHUB_WORKSPACE/crates/telar\" }"
+            } >> "$dir/Cargo.toml"
+            # Resolving alone validates every `telar/<feature>` the manifest names, including the three
+            # targets this project did not start on — a renamed feature fails here, compiling nothing.
+            cargo metadata --format-version 1 --manifest-path "$dir/Cargo.toml" > /dev/null
+            case "$target" in
+              desktop | tui)
+                CARGO_TARGET_DIR="$scaffold_target" cargo check --manifest-path "$dir/Cargo.toml"
+                ;;
+            esac
+            echo "::endgroup::"
+          done
+
   test:
     strategy:
       fail-fast: false

@@ -17,6 +17,8 @@ pub(crate) struct Cli {
 
 #[derive(Subcommand)]
 pub(crate) enum TelarCommand {
+    /// Create a new project that already names one target
+    New(NewArgs),
     /// Start the app with hot reload (default)
     Dev(DevArgs),
     /// Show all component previews with hot reload
@@ -33,6 +35,19 @@ pub(crate) enum TelarCommand {
     Fmt(FmtArgs),
     /// Rewrite every `.rsx` file into the one value grammar
     Migrate(MigrateArgs),
+}
+
+/// The whole of choosing a target: the generated `Cargo.toml` names one and lists the other three, each a single word.
+#[derive(clap::Args)]
+pub(crate) struct NewArgs {
+    /// Directory to create the project in; its last segment is the package name
+    pub(crate) path: std::path::PathBuf,
+    /// Package name, when it should differ from the directory
+    #[arg(long)]
+    pub(crate) name: Option<String>,
+    /// Target platform the project starts on
+    #[arg(long, value_enum, default_value = "desktop")]
+    pub(crate) target: Target,
 }
 
 /// Idempotent by construction: a file already in the new grammar comes out byte-identical, so running it twice is safe and `--check` is how a CI says a project is migrated.
@@ -141,7 +156,9 @@ pub(crate) struct BuildArgs {
 
 #[derive(Clone, Copy, PartialEq, Eq, ValueEnum)]
 pub(crate) enum Target {
+    /// A native window on Linux, macOS or Windows.
     Desktop,
+    /// An Android device or emulator.
     Android,
     /// The terminal the command was run from.
     Tui,
