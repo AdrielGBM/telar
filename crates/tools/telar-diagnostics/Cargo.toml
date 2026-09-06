@@ -15,4 +15,4 @@ repository = { workspace = true }
 [dependencies]
 lsp-types = "0.97"
 telar-parser = { workspace = true }
-telar-transpiler = { workspace = true }
+telar-transpiler = { workspace = true, features = ["bake-assets"] }

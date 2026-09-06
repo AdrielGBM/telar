@@ -174,6 +174,7 @@ pub struct ViewGen<'a> {
     /// Monotonic counter for the hoisted `__transition_N` animation handles.
     transition_count: usize,
     /// Directory of the `.rsx` being transpiled, used to resolve static `svg`/`img` asset paths for build-time baking. `None` (e.g. an in-memory transpile) makes a static `src:"path"` yield a `compile_error!`.
+    #[cfg_attr(not(feature = "bake-assets"), allow(dead_code))]
     base_dir: Option<PathBuf>,
     /// Monotonic counter for the hoisted `BAKED_*_N` static asset handles, unique per component so two baked assets never share a `static` name.
     baked_asset_count: usize,

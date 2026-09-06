@@ -219,7 +219,17 @@ impl ViewGen<'_> {
         (setup, data_fn)
     }
 
+    /// The same question with the baker compiled out: every `src:"…"` is a compile error naming the feature that would have answered it, rather than a widget that silently draws nothing.
+    #[cfg(not(feature = "bake-assets"))]
+    fn bake_asset_expr(&self, rel: &str, kind: MediaKind) -> Result<String, String> {
+        Err(format!(
+            "rsx: cannot bake {} asset `{rel}`: this build has the `bake-assets` feature turned off. Enable `telar/bake-assets` to bake `src:\"…\"` assets at build time.",
+            kind.label()
+        ))
+    }
+
     /// Reads and bakes the asset at `rel` into a Rust expression that reconstructs its native data (`SvgData`/`ImageData`), or an error message describing the failed resolution/parse.
+    #[cfg(feature = "bake-assets")]
     fn bake_asset_expr(&self, rel: &str, kind: MediaKind) -> Result<String, String> {
         let Some(base) = self.base_dir.as_deref() else {
             return Err(format!(

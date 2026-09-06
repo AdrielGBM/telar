@@ -11,7 +11,7 @@ license = { workspace = true }
 repository = { workspace = true }
 
 [features]
-default = ["runtime", "desktop", "hardware", "software"]
+default = ["runtime", "desktop", "hardware", "software", "bake-assets"]
 
 runtime = [
     "dep:platform-core",
@@ -88,6 +88,12 @@ runtime-catalog = ["i18n-core/runtime-catalog"]
 # Filesystem watching delivered on the UI thread. Opt-in: an app that reloads nothing should not link a
 # platform file-notification backend.
 watch = ["runtime", "dep:notify"]
+
+## Turning `src:"…"` assets into Rust source at build time. **On by default**, and host-side only — the
+## baker (usvg, resvg, `image`) compiles into the proc-macro, never into the application binary. Turning
+## it off drops ~66 crates from every build; an `.rsx` that then bakes an asset fails to compile rather
+## than failing at runtime.
+bake-assets = ["telar-macros/bake-assets"]
 
 svg = ["ui-core?/svg"]
 dynamic-svg = ["svg", "renderer-assets?/dynamic-svg"]

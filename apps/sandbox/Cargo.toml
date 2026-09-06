@@ -19,6 +19,7 @@ path = "src/main.rs"
 # Everything named here is what the app needs whichever frontend it runs on; the rest is under `[features]`.
 telar = { workspace = true, features = [
     "runtime",
+    "bake-assets",
     "dynamic-svg",
     "components",
     "navigate",

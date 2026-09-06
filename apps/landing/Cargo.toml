@@ -15,7 +15,7 @@ path = "src/main.rs"
 
 [dependencies]
 # The workspace turns telar's default features off, so the frontend is this app's `default` to name.
-telar = { workspace = true, features = ["runtime", "components"] }
+telar = { workspace = true, features = ["runtime", "bake-assets", "components"] }
 tracing-subscriber = { workspace = true, features = ["env-filter"] }
 
 [features]
