@@ -10,15 +10,16 @@ and no row below that pays for another:
 
 | Your app runs in | `default = [...]` | Crates compiled |
 | --- | --- | --- |
-| A desktop window (Linux, macOS, Windows) | `["desktop"]` | 413 |
-| The terminal it was launched from | `["tui"]` | 162 |
-| A browser, drawing as a document | `["web-dom"]` | 164 |
-| A browser, document **and** WebGPU canvas | `["web"]` | 230 |
-| Android | `["android"]` | 297 |
-| Nothing — draw commands in, pixels out | `["headless"]` | 219 |
+| A desktop window (Linux, macOS, Windows) | `["desktop"]` | 406 |
+| The terminal it was launched from | `["tui"]` | 106 |
+| A browser, drawing as a document | `["web-dom"]` | 81 |
+| A browser, document **and** WebGPU canvas | `["web"]` | 213 |
+| Android | `["android"]` | 327 |
+| Nothing — draw commands in, pixels out | `["headless"]` | 192 |
 
-Counted with `cargo tree -e normal` on each target. The spread is the
-point: a desktop build is mostly wgpu and its shader toolchain, and a terminal build links neither.
+Counted with `cargo tree -p telar --no-default-features --features "<target>" -e normal --target all`,
+so every platform's dependencies are in the figure at once. The spread is the point: a desktop build is
+mostly wgpu and its shader toolchain, and a terminal build links neither.
 
 `cargo telar new --target <name>` writes the manifest for you. Switching later is one word in `Cargo.toml`,
 or `--target` on the command line for a one-off.
@@ -137,6 +138,11 @@ The cost is additive, so this is worth doing when you ship both and not worth do
 
 ## The rest of the features
 
-Everything beyond the target — the widget catalogue, navigation, SVG, HTTP assets, i18n at runtime — is
-listed with what it costs at **<https://docs.rs/telar#feature-flags>**. Most applications name a target,
-`components`, and nothing else.
+Everything beyond the target — the widget catalogue, navigation, SVG, i18n — is listed with what it costs
+at **<https://docs.rs/telar#feature-flags>**. Most applications name a target, `components`, and nothing
+else.
+
+Decoding at runtime is not among them. `telar` draws an SVG or an image that was baked from `src:"…"`, and
+holds no parser for either; reading one whose bytes arrive while the app runs — off disk, over HTTP — is
+[`telar-dynamic`](https://docs.rs/telar-dynamic), a separate dependency you add on purpose, one feature per
+format and transport. Nothing in the table above pays for it.

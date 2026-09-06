@@ -28,15 +28,16 @@ default = ["desktop"]
 #!
 #! | Feature | Surface | Crates in the build graph |
 #! | --- | --- | --- |
-#! | `desktop` | A native window on Linux, macOS and Windows *(default)* | 413 |
-#! | `tui` | The terminal the app was launched from | 162 |
-#! | `web-dom` | A browser, drawing as a document | 164 |
-#! | `web` | A browser, document **and** WebGPU canvas | 230 |
-#! | `android` | An Android `NativeActivity` | 297 |
-#! | `headless` | No surface at all: draw commands in, pixels out | 219 |
+#! | `desktop` | A native window on Linux, macOS and Windows *(default)* | 406 |
+#! | `tui` | The terminal the app was launched from | 106 |
+#! | `web-dom` | A browser, drawing as a document | 81 |
+#! | `web` | A browser, document **and** WebGPU canvas | 213 |
+#! | `android` | An Android `NativeActivity` | 327 |
+#! | `headless` | No surface at all: draw commands in, pixels out | 192 |
 #!
-#! Counted with `cargo tree -e normal` on each target. The spread is the point:
-#! nothing here is bundled, so a build carries the target it named and no other.
+#! Counted with `cargo tree -p telar --no-default-features --features "<target>" -e normal --target all`,
+#! so every platform's dependencies are in the figure at once. The spread is the point: nothing here is
+#! bundled, so a build carries the target it named and no other.
 
 ## A native window on Linux, macOS and Windows, drawn by the GPU where there is one and the CPU where
 ## there is not. Enabled by `default`.

@@ -102,14 +102,14 @@ Telar is a set of small crates behind one facade, and a build carries the target
 
 | Your app runs in | `default = [...]` | Crates compiled |
 | --- | --- | --- |
-| A desktop window (Linux, macOS, Windows) | `["desktop"]` | 413 |
-| The terminal it was launched from | `["tui"]` | 162 |
-| A browser, drawing as a document | `["web-dom"]` | 164 |
-| A browser, document **and** WebGPU canvas | `["web"]` | 230 |
-| Android | `["android"]` | 297 |
-| Nothing — draw commands in, pixels out | `["headless"]` | 219 |
+| A desktop window (Linux, macOS, Windows) | `["desktop"]` | 406 |
+| The terminal it was launched from | `["tui"]` | 106 |
+| A browser, drawing as a document | `["web-dom"]` | 81 |
+| A browser, document **and** WebGPU canvas | `["web"]` | 213 |
+| Android | `["android"]` | 327 |
+| Nothing — draw commands in, pixels out | `["headless"]` | 192 |
 
-Counted with `cargo tree -e normal` on each target. Every row is complete on its own: naming it is the whole of the choice, and no row pays for another — a desktop build is mostly wgpu and its shader toolchain, and a terminal build links neither. Switching later is one word in `Cargo.toml`.
+Counted with `cargo tree -p telar --no-default-features --features "<target>" -e normal --target all`, so every platform's dependencies are in the figure at once. Every row is complete on its own: naming it is the whole of the choice, and no row pays for another — a desktop build is mostly wgpu and its shader toolchain, and a terminal build links neither. Switching later is one word in `Cargo.toml`.
 
 Per-target guides, and how to ship two targets from one codebase, are in **[docs/targets.md](docs/targets.md)**.
 
@@ -170,6 +170,9 @@ Everything here is either always present or one word away. Nothing is bundled.
 - **A widget catalogue** — buttons, fields, selects, menus, modals, tabs, sliders, and the rest. → `components`
 - **Navigation** — a reactive page stack with animated transitions. → `navigate`
 - **Images and SVG** — baked into the binary at build time out of `src:"…"`, with no parser in the binary. → `svg`
+- **Translation catalogs** baked the same way, with `t!` validating keys and arguments at compile time.
+
+Both are baked by the CLI, not by the compiler: build through `cargo telar check`/`dev`/`build`/`test`, or run `cargo telar bake` first. A plain `cargo build` on a project that uses either fails with a message naming that command, rather than compiling something stale. It is what keeps the decoders and the TOML parser out of every project's own build.
 - **Assets that arrive later**, behind a transport-agnostic reactive seam: a signal that advances `Loading` → `Ready`/`Failed`, with the transport, the cache and the decoder each yours to choose. → `async-assets`
 - **Decoders and transports for that seam** — SVG, bitmaps, translation catalogs, over HTTP or from a directory — in the companion crate [`telar-dynamic`](crates/telar-dynamic), one feature each. Yours plugs in the same way.
 - **Hot reload** in `cargo telar dev`, and an in-app devtools overlay for inspecting the live component tree. *(the CLI sets this one)*
