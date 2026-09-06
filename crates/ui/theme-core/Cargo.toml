@@ -6,7 +6,7 @@ rust-version = { workspace = true }
 description = "Theme tokens and reactive light/dark mode for Telar."
 keywords = ["telar", "theme", "dark-mode", "ui", "gui"]
 categories = ["gui"]
-readme = { workspace = true }
+readme = "README.md"
 license = { workspace = true }
 repository = { workspace = true }
 

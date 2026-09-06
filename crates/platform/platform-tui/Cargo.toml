@@ -6,7 +6,7 @@ rust-version = { workspace = true }
 description = "Terminal window, input and event loop for Telar's platform abstraction."
 keywords = ["telar", "tui", "terminal", "platform", "crossterm"]
 categories = ["command-line-interface", "os", "gui"]
-readme = { workspace = true }
+readme = "README.md"
 license = { workspace = true }
 repository = { workspace = true }
 

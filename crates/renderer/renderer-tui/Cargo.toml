@@ -6,7 +6,7 @@ rust-version = { workspace = true }
 description = "Terminal renderer for Telar: draw commands composited into a character-cell grid."
 keywords = ["telar", "tui", "terminal", "renderer", "ansi"]
 categories = ["command-line-interface", "rendering", "gui"]
-readme = { workspace = true }
+readme = "README.md"
 license = { workspace = true }
 repository = { workspace = true }
 

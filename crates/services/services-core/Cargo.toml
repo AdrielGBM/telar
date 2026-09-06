@@ -6,7 +6,7 @@ rust-version = { workspace = true }
 description = "Platform path providers and an optional dependency-injection scope for Telar."
 keywords = ["telar", "services", "paths", "di", "ui"]
 categories = ["gui", "filesystem"]
-readme = { workspace = true }
+readme = "README.md"
 license = { workspace = true }
 repository = { workspace = true }
 

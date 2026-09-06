@@ -6,7 +6,7 @@ rust-version = { workspace = true }
 description = "What a thing in a Telar interface is: the roles a screen reader, a document and a terminal all describe the same box with."
 keywords = ["telar", "accessibility", "semantics", "aria", "gui"]
 categories = ["accessibility", "gui"]
-readme = { workspace = true }
+readme = "README.md"
 license = { workspace = true }
 repository = { workspace = true }
 

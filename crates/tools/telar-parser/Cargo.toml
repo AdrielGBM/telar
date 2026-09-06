@@ -6,7 +6,7 @@ rust-version = { workspace = true }
 description = "Hand-written parser for Telar's .rsx component files."
 keywords = ["telar", "rsx", "parser", "ui", "dsl"]
 categories = ["parser-implementations", "gui"]
-readme = { workspace = true }
+readme = "README.md"
 license = { workspace = true }
 repository = { workspace = true }
 

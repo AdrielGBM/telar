@@ -6,7 +6,7 @@ rust-version = { workspace = true }
 description = "Browser surface, input and animation-frame loop for Telar's platform abstraction."
 keywords = ["telar", "web", "wasm", "platform", "gui"]
 categories = ["wasm", "gui", "web-programming"]
-readme = { workspace = true }
+readme = "README.md"
 license = { workspace = true }
 repository = { workspace = true }
 

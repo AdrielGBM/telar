@@ -6,7 +6,7 @@ rust-version = { workspace = true }
 description = "Platform abstraction for Telar: window, event and event-loop traits."
 keywords = ["telar", "platform", "window", "events", "gui"]
 categories = ["gui", "os"]
-readme = { workspace = true }
+readme = "README.md"
 license = { workspace = true }
 repository = { workspace = true }
 

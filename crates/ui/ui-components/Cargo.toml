@@ -6,7 +6,7 @@ rust-version = { workspace = true }
 description = "First-party widget catalogue for Telar: buttons, inputs, chips, accordions and more."
 keywords = ["telar", "ui", "gui", "widgets", "components"]
 categories = ["gui"]
-readme = { workspace = true }
+readme = "README.md"
 license = { workspace = true }
 repository = { workspace = true }
 

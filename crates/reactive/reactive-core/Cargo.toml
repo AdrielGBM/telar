@@ -6,7 +6,7 @@ rust-version = { workspace = true }
 description = "Fine-grained reactive graph for Telar: signals, memos, effects and batching."
 keywords = ["telar", "reactive", "signals", "state", "ui"]
 categories = ["gui", "rust-patterns", "data-structures"]
-readme = { workspace = true }
+readme = "README.md"
 license = { workspace = true }
 repository = { workspace = true }
 

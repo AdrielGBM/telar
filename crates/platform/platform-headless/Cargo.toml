@@ -6,7 +6,7 @@ rust-version = { workspace = true }
 description = "Headless platform backend for Telar: offscreen windows for tests and benchmarks."
 keywords = ["telar", "headless", "platform", "testing", "gui"]
 categories = ["gui", "development-tools::testing"]
-readme = { workspace = true }
+readme = "README.md"
 license = { workspace = true }
 repository = { workspace = true }
 

@@ -6,7 +6,7 @@ rust-version = { workspace = true }
 description = "Decodes SVG and raster assets into Telar's drawing vocabulary, at runtime or baked at build time."
 keywords = ["telar", "svg", "image", "assets", "rendering"]
 categories = ["rendering::data-formats", "multimedia::images", "graphics"]
-readme = { workspace = true }
+readme = "README.md"
 license = { workspace = true }
 repository = { workspace = true }
 

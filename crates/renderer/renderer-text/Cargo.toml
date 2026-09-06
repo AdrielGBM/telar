@@ -6,7 +6,7 @@ rust-version = { workspace = true }
 description = "Text shaping, glyph atlas and COLR glyph rendering for Telar, built on cosmic-text."
 keywords = ["telar", "text", "font", "shaping", "rendering"]
 categories = ["rendering", "text-processing", "graphics"]
-readme = { workspace = true }
+readme = "README.md"
 license = { workspace = true }
 repository = { workspace = true }
 

@@ -6,7 +6,7 @@ rust-version = { workspace = true }
 description = "One byte-budgeted cache with admission and idle eviction, shared by every Telar renderer backend."
 keywords = ["telar", "cache", "lru", "renderer", "memory"]
 categories = ["caching", "rendering", "memory-management"]
-readme = { workspace = true }
+readme = "README.md"
 license = { workspace = true }
 repository = { workspace = true }
 

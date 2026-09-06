@@ -6,7 +6,7 @@ rust-version = { workspace = true }
 description = "Widget kernel for Telar: containers, text, input handling, scrolling and canvas primitives."
 keywords = ["telar", "ui", "gui", "widgets", "reactive"]
 categories = ["gui"]
-readme = { workspace = true }
+readme = "README.md"
 license = { workspace = true }
 repository = { workspace = true }
 

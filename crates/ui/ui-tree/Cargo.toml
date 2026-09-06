@@ -6,7 +6,7 @@ rust-version = { workspace = true }
 description = "Component and render-node tree for Telar, with event dispatch and overlay routing."
 keywords = ["telar", "ui", "gui", "tree", "components"]
 categories = ["gui", "data-structures"]
-readme = { workspace = true }
+readme = "README.md"
 license = { workspace = true }
 repository = { workspace = true }
 

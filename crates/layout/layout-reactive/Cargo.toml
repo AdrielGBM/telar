@@ -6,7 +6,7 @@ rust-version = { workspace = true }
 description = "Reactive layout context for Telar: signal-driven writing direction and layout state."
 keywords = ["telar", "layout", "reactive", "ui", "rtl"]
 categories = ["gui"]
-readme = { workspace = true }
+readme = "README.md"
 license = { workspace = true }
 repository = { workspace = true }
 

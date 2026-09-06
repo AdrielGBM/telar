@@ -6,7 +6,7 @@ rust-version = { workspace = true }
 description = "Document renderer for Telar: a frame reconciled into real DOM elements laid out by CSS."
 keywords = ["telar", "web", "wasm", "dom", "renderer"]
 categories = ["wasm", "gui", "web-programming"]
-readme = { workspace = true }
+readme = "README.md"
 license = { workspace = true }
 repository = { workspace = true }
 
