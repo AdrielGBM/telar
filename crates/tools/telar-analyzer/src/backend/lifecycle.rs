@@ -32,7 +32,12 @@ impl Backend {
             // Mirrors the live buffer to its generated `.rs`, so rust-analyzer analyses the in-flight text and completion is live rather than one `cargo check` behind.
             let theme = project.as_ref().and_then(|p| p.theme_type.clone());
             if let Some(rsx_path) = file_path.as_deref() {
-                crate::build_sync::sync_build_file(rsx_path, &parsed.source, theme.as_deref());
+                crate::build_sync::sync_build_file(
+                    rsx_path,
+                    &parsed.source,
+                    &parsed.document,
+                    theme.as_deref(),
+                );
             }
             (semantic, parsed.source.clone(), theme)
         };

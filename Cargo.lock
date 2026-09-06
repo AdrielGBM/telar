@@ -5573,6 +5573,7 @@ dependencies = [
  "ra_ap_vfs",
  "serde",
  "serde_json",
+ "telar-baker",
  "telar-diagnostics",
  "telar-parser",
  "telar-transpiler",
