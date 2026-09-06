@@ -44,3 +44,7 @@ features = [
     "Window",
     "Location",
 ]
+
+[target.'cfg(target_arch = "wasm32")'.dev-dependencies]
+layout-core.workspace = true
+wasm-bindgen-test.workspace = true

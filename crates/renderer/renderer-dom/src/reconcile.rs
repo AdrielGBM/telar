@@ -26,8 +26,13 @@ const RESET_ID: &str = "telar-reset";
 /// Written only when the page asks for it, because the whole claim of this backend is that the two agree — and a claim nothing checks is a claim that quietly stops being true. Off by default: it is an attribute written per box per frame, which is exactly the cost this reconcile exists to avoid.
 const AUDIT_ATTRIBUTE: &str = "data-telar-rect";
 const AUDIT_QUERY: &str = "telar-audit";
+/// The same request made of the host element, for a page that does not own its query string — and for the test that compares the two rects, which runs at whatever URL its harness serves it from.
+const AUDIT_OPT_IN: &str = "data-telar-audit";
 
-fn audit_requested() -> bool {
+fn audit_requested(host: &web_sys::HtmlElement) -> bool {
+    if host.has_attribute(AUDIT_OPT_IN) {
+        return true;
+    }
     web_sys::window()
         .and_then(|window| window.location().search().ok())
         .is_some_and(|search| search.contains(AUDIT_QUERY))
@@ -207,7 +212,7 @@ impl Reconciler {
         install_reset(&document);
         let entry = crate::entry::TextEntry::new(&document, &host);
         Ok(Self {
-            audit: audit_requested(),
+            audit: audit_requested(&host),
             background: String::new(),
             root_paint: Vec::new(),
             root_painted: 0,

@@ -1,0 +1,6 @@
+# A wasm test module is not a program the host can execute, so `cargo test --target wasm32-unknown-unknown`
+# hands it to `wasm-bindgen-test-runner`, which serves it to a browser over a driver. The runner ships with
+# the pinned `wasm-bindgen-cli` in the dev shell; the browser it drives comes from `CHROMEDRIVER`, which the
+# shell sets too. Nothing else is affected: a build or a `cargo check` for wasm never invokes a runner.
+[target.wasm32-unknown-unknown]
+runner = "wasm-bindgen-test-runner"

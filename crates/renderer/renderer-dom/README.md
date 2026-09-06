@@ -13,3 +13,16 @@ internals.
 
 - API documentation: <https://docs.rs/telar-renderer-dom>
 - The framework, and where to start: <https://github.com/AdrielGBM/telar>
+
+## Running the browser test
+
+`tests/layout_parity.rs` lays one tree out twice — once through Taffy, once as the CSS this crate writes —
+and compares every box against `getBoundingClientRect`. It needs a real browser, so it runs on the wasm
+target through `wasm-bindgen-test-runner`:
+
+```sh
+cargo test -p telar-renderer-dom --target wasm32-unknown-unknown
+```
+
+The dev shell provides the runner, a headless Chromium and the `CHROMEDRIVER` that drives it; the flags the
+browser is started with are in `webdriver.json` beside this file. Set `NO_HEADLESS=1` to watch it happen.

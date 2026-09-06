@@ -61,6 +61,11 @@
               # Must match the pinned `wasm-bindgen` crate version, or the generated glue is rejected.
               pkgs.wasm-bindgen-cli_0_2_126
               pkgs.binaryen
+              # What `wasm-bindgen-test-runner` drives: the browser tests are the only place Taffy is held to
+              # what CSS actually lays out, and without a driver `cargo test --target wasm32-unknown-unknown`
+              # has nowhere to run the module.
+              pkgs.chromedriver
+              pkgs.ungoogled-chromium
             ];
             buildInputs = desktopDeps;
             ANDROID_HOME = "${androidSdk}/libexec/android-sdk";
@@ -68,6 +73,7 @@
             RUST_SRC_PATH = "${rustToolchain}/lib/rustlib/src/rust/library";
             # Host-target-scoped rather than RUSTFLAGS so the aarch64-linux-android build keeps the NDK's own linker.
             "CARGO_TARGET_${pkgs.stdenv.hostPlatform.rust.cargoEnvVarTarget}_RUSTFLAGS" = "-C link-arg=-fuse-ld=mold";
+            CHROMEDRIVER = "${pkgs.chromedriver}/bin/chromedriver";
             LD_LIBRARY_PATH = pkgs.lib.makeLibraryPath desktopDeps;
           };
         });
