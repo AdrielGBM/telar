@@ -19,3 +19,9 @@ serde = { workspace = true, features = ["derive"] }
 serde_json = "1.0.151"
 telar-parser = { workspace = true }
 telar-transpiler = { workspace = true }
+
+[dev-dependencies]
+# Only to ask which formats it decodes, for the test that holds `ASSET_KINDS` to it. `default-features = false`
+# because the answer must be whatever `renderer-assets` turned on, which cargo unifies into this same build —
+# naming the formats again here would be a second list to keep in step, which is the bug the test exists to catch.
+image = { version = "0.25.10", default-features = false }

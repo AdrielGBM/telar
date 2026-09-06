@@ -55,7 +55,11 @@ pub const ASSET_KINDS: &[AssetKind] = &[
         static_prefix: "BAKED_IMG",
         var_prefix: "img",
         label: "image",
-        extensions: &["png", "jpg", "jpeg"],
+        // Every format the CLI's baker decodes, not the subset an app's own runtime does — this is what a watcher asks "is that file an asset", and a short list means editing a `.webp` raises no event. `telar-baker`'s `registry_lists_every_readable_format` holds the two in step; the transpiler cannot ask `image` itself without linking it.
+        extensions: &[
+            "avif", "bmp", "exr", "ff", "gif", "hdr", "ico", "jpeg", "jpg", "pam", "pbm", "pgm",
+            "png", "pnm", "ppm", "qoi", "tga", "tif", "tiff", "webp",
+        ],
     },
 ];
 

@@ -5586,6 +5586,7 @@ dependencies = [
 name = "telar-baker"
 version = "0.1.8"
 dependencies = [
+ "image",
  "serde",
  "serde_json",
  "telar-parser",
