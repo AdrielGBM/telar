@@ -2,6 +2,7 @@
 
 #![warn(rustdoc::broken_intra_doc_links)]
 
+mod assets;
 mod codegen;
 mod discovery;
 mod edges;
@@ -18,6 +19,7 @@ mod style;
 mod transition;
 mod view;
 
+pub use assets::{ASSET_KINDS, AssetKind, asset_kind_for_tag};
 pub use codegen::{TranspiledSource, transpile_source};
 pub use discovery::{
     assets_root, auto_modules_enabled, collect_files_by_ext, component_name, discover_rust_modules,

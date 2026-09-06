@@ -2,6 +2,7 @@
 
 use telar_parser::{Attr, Element, Value};
 
+use crate::assets::{AssetKind, asset_kind_for_tag};
 use crate::registry;
 
 use super::signals::{rust_str, substitute_reads, wrap_signal_clones};
@@ -17,41 +18,12 @@ fn fit_closure(attributes: &[Attr]) -> String {
     format!("move || {variant}")
 }
 
-/// Which media widget a `src` binding is for; selects the runtime data type, the baked-asset `static` prefix, the missing-`src` placeholder identifier, and the baker used at build time.
-#[derive(Clone, Copy)]
-enum MediaKind {
-    Svg,
-    Image,
+fn svg_asset() -> &'static AssetKind {
+    asset_kind_for_tag("svg").expect("svg is a registered asset kind")
 }
 
-impl MediaKind {
-    fn placeholder(self) -> &'static str {
-        match self {
-            MediaKind::Svg => "__svg_data",
-            MediaKind::Image => "__img_data",
-        }
-    }
-
-    fn label(self) -> &'static str {
-        match self {
-            MediaKind::Svg => "SVG",
-            MediaKind::Image => "image",
-        }
-    }
-
-    fn data_ty(self) -> &'static str {
-        match self {
-            MediaKind::Svg => "SvgData",
-            MediaKind::Image => "ImageData",
-        }
-    }
-
-    fn static_prefix(self) -> &'static str {
-        match self {
-            MediaKind::Svg => "BAKED_SVG",
-            MediaKind::Image => "BAKED_IMG",
-        }
-    }
+fn image_asset() -> &'static AssetKind {
+    asset_kind_for_tag("image").expect("image is a registered asset kind")
 }
 
 impl ViewGen<'_> {
@@ -59,10 +31,8 @@ impl ViewGen<'_> {
         let var = self.next_variable_name("img");
         let pad = self.indent_str();
 
-        let (setup, data_fn) = self.media_src_binding(
-            el.attributes.iter().find(|a| a.key == "src"),
-            MediaKind::Image,
-        );
+        let (setup, data_fn) =
+            self.media_src_binding(el.attributes.iter().find(|a| a.key == "src"), image_asset());
 
         let raster = el
             .attributes
@@ -106,10 +76,8 @@ impl ViewGen<'_> {
         let var = self.next_variable_name("svg");
         let pad = self.indent_str();
 
-        let (setup, data_fn) = self.media_src_binding(
-            el.attributes.iter().find(|a| a.key == "src"),
-            MediaKind::Svg,
-        );
+        let (setup, data_fn) =
+            self.media_src_binding(el.attributes.iter().find(|a| a.key == "src"), svg_asset());
 
         let color_fn = self.svg_color_closure(el.attributes.iter().find(|a| a.key == "color"));
         let stroke = el.attributes.iter().find(|a| a.key == "stroke");
@@ -170,7 +138,11 @@ impl ViewGen<'_> {
     /// - Non-quoted `src:$signal` (or any expression referencing a `$signal`) is a *reactive* handle: `data_fn` re-reads it on every `view()` so the glyph/image swaps when the bound state changes — the path adaptive icons need (a battery/wifi glyph that tracks its level). Signals are cloned into the closure via `wrap_signal_clones` so the outer handle stays usable, mirroring `svg color:$sig` / `box fill:$sig`.
     /// - Non-quoted, `$`-free `src:expr` is a constant `Arc<Data>` handle: `setup` hoists it into `__src` once and `data_fn` clones the (cheap) handle. The verbatim span marker is preserved so the analyzer can resolve/rename the symbol inside `expr`.
     /// - Missing, empty, or written in a form that cannot name an asset (a bare flag, a `t"…"` key) falls back to an undefined placeholder identifier, so rustc's "cannot find value" error lands on this `.rsx` line via the source map.
-    fn media_src_binding(&mut self, src_attr: Option<&Attr>, kind: MediaKind) -> (String, String) {
+    fn media_src_binding(
+        &mut self,
+        src_attr: Option<&Attr>,
+        kind: &'static AssetKind,
+    ) -> (String, String) {
         let pad = self.indent_str();
         match src_attr.map(|a| (a, &a.value)) {
             Some((_, Value::Quoted(path))) if !path.trim().is_empty() => {
@@ -191,14 +163,19 @@ impl ViewGen<'_> {
                 )
             }
             _ => (
-                format!("{pad}    let __src = {}.clone();\n", kind.placeholder()),
+                format!("{pad}    let __src = {}.clone();\n", kind.placeholder),
                 "move || __src.clone()".to_string(),
             ),
         }
     }
 
     /// Bakes the static asset at `rel` (relative to the `.rsx`'s directory) into a shared `static LazyLock<Arc<Data>>` and returns its `(setup, data_fn)`. A read/parse/decode failure becomes a `compile_error!` in the `data_fn` closure, whose `!`-typed body unifies with the widget's `Fn() -> Arc<Data>` bound so no secondary type errors leak.
-    fn bake_asset_binding(&mut self, rel: &str, kind: MediaKind, pad: &str) -> (String, String) {
+    fn bake_asset_binding(
+        &mut self,
+        rel: &str,
+        kind: &'static AssetKind,
+        pad: &str,
+    ) -> (String, String) {
         let expr = match self.bake_asset_expr(rel, kind) {
             Ok(expr) => expr,
             Err(msg) => {
@@ -210,8 +187,8 @@ impl ViewGen<'_> {
         };
         let n = self.baked_asset_count;
         self.baked_asset_count += 1;
-        let static_name = format!("{}_{n}", kind.static_prefix());
-        let data_ty = kind.data_ty();
+        let static_name = format!("{}_{n}", kind.static_prefix);
+        let data_ty = kind.data_ty;
         let setup = format!(
             "{pad}    static {static_name}: std::sync::LazyLock<std::sync::Arc<{data_ty}>> = std::sync::LazyLock::new(|| std::sync::Arc::new({expr}));\n"
         );
@@ -221,25 +198,25 @@ impl ViewGen<'_> {
 
     /// The same question with the baker compiled out: every `src:"…"` is a compile error naming the feature that would have answered it, rather than a widget that silently draws nothing.
     #[cfg(not(feature = "bake-assets"))]
-    fn bake_asset_expr(&self, rel: &str, kind: MediaKind) -> Result<String, String> {
+    fn bake_asset_expr(&self, rel: &str, kind: &'static AssetKind) -> Result<String, String> {
         Err(format!(
             "rsx: cannot bake {} asset `{rel}`: this build has the `bake-assets` feature turned off. Enable `telar/bake-assets` to bake `src:\"…\"` assets at build time.",
-            kind.label()
+            kind.label
         ))
     }
 
     /// Reads and bakes the asset at `rel` into a Rust expression that reconstructs its native data (`SvgData`/`ImageData`), or an error message describing the failed resolution/parse.
     #[cfg(feature = "bake-assets")]
-    fn bake_asset_expr(&self, rel: &str, kind: MediaKind) -> Result<String, String> {
+    fn bake_asset_expr(&self, rel: &str, kind: &'static AssetKind) -> Result<String, String> {
         let Some(base) = self.base_dir.as_deref() else {
             return Err(format!(
                 "rsx: cannot bake {} asset `{rel}`: no base directory is available for this .rsx",
-                kind.label()
+                kind.label
             ));
         };
         let path = base.join(rel);
-        match kind {
-            MediaKind::Svg => {
+        match kind.id {
+            "svg" => {
                 let content = std::fs::read_to_string(&path).map_err(|e| {
                     format!(
                         "rsx: SVG asset `{rel}` not found at {}: {e}",
@@ -249,7 +226,7 @@ impl ViewGen<'_> {
                 renderer_assets::bake_to_source(&content)
                     .map_err(|e| format!("rsx: failed to bake SVG asset `{rel}`: {e}"))
             }
-            MediaKind::Image => {
+            "image" => {
                 let bytes = std::fs::read(&path).map_err(|e| {
                     format!(
                         "rsx: image asset `{rel}` not found at {}: {e}",
@@ -259,6 +236,7 @@ impl ViewGen<'_> {
                 renderer_assets::bake_image_to_source(&bytes)
                     .map_err(|e| format!("rsx: failed to bake image asset `{rel}`: {e}"))
             }
+            _ => unreachable!("asset kind ids are svg and image"),
         }
     }
 }
