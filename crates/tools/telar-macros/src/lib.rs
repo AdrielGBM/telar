@@ -607,7 +607,7 @@ fn transpile_project(theme_type_str: Option<&str>) -> Result<TranspileOutput, To
         include_stmts.extend(quote! {
             #[path = #path_str]
             #[allow(dead_code)]
-            // A crate invokes this once per module owning `.rsx`, and each one loads this same file on purpose: a baked `src:"…"` resolves `crate::__rsx_assets::ASSET_…`, so the module has to exist wherever an asset is referenced.
+            // A crate invokes this once per module owning `.rsx`, and each one loads this same file on purpose: a baked `src:"…"` resolves `crate::__rsx_assets::ASSET_…`, so the module has to exist wherever an asset is referenced. Which also means an invocation in a submodule declares it at `crate::that::module::__rsx_assets` and the reference does not resolve — a known limit, shared with `__rsx_i18n` below, and the reason both are invoked at the crate root.
             #[allow(clippy::duplicate_mod)]
             pub mod #mod_ident;
         });

@@ -6,7 +6,9 @@ use std::path::{Path, PathBuf};
 
 use super::config::{CargoManifest, expand_member, find_package_dir};
 
-/// Bakes every workspace member's `.rsx` asset references. Called once from [`super::run`], before dispatching to any subcommand that goes on to invoke `cargo`, and again from each of `watch.rs`'s two loops, which spawn their own `cargo` per rebuild.
+/// Bakes every workspace member's `.rsx` asset references and translation catalogs.
+///
+/// Called once from [`super::run`], before dispatching to any subcommand that goes on to invoke `cargo`, and again from each of `watch.rs`'s two loops, which spawn their own `cargo` per rebuild. **Every place in this binary that spawns `cargo` is a build route**, and a build route that has not baked compiles against a stale artifact — or, since the macro checks hashes, fails. A new one either calls this first or sits downstream of a call that did.
 pub(crate) fn bake_workspace() {
     let dir = find_package_dir(&[]);
     let workspace_root = telar_transpiler::find_workspace_root(&dir).unwrap_or_else(|| dir.clone());
