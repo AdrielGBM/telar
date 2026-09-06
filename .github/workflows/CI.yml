@@ -55,6 +55,29 @@ jobs:
       # `cfg`'d to nothing off wasm, so every other check here passes with them broken.
       - run: cargo check -p sandbox --lib --target wasm32-unknown-unknown --features telar/web
 
+  # The document renderer is the one backend that positions nothing itself: CSS does, from what each box asked
+  # layout for. Nothing but a browser can say whether that lands where Taffy computed, so this leg is where the
+  # claim is actually checked — see `crates/renderer/renderer-dom/tests/layout_parity.rs`.
+  parity-web-dom:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+      - uses: Swatinem/rust-cache@v2
+      # The runner that serves the test module to a browser. Must be the release the pinned `wasm-bindgen`
+      # crate generates glue for, which is why the version is written out here rather than resolved.
+      - name: Install wasm-bindgen-test-runner
+        run: |
+          curl -fsSL https://github.com/rustwasm/wasm-bindgen/releases/download/0.2.126/wasm-bindgen-0.2.126-x86_64-unknown-linux-musl.tar.gz \
+            | tar -xz --strip-components=1 -C ~/.cargo/bin
+      - name: Taffy against the browser
+        # Chrome and its driver are already on the runner; `CHROMEWEBDRIVER` is where the image puts the latter.
+        run: |
+          export CHROMEDRIVER="$CHROMEWEBDRIVER/chromedriver"
+          cargo test -p telar-renderer-dom --target wasm32-unknown-unknown
+
   # `cargo telar new` is the first command a new user runs, and nothing else in this file compiles what it
   # writes: the `.rsx`, the theme derive and the app root live as string constants inside `cargo-telar`,
   # where a rename in the facade breaks them with nothing to notice. The generated projects are patched onto
