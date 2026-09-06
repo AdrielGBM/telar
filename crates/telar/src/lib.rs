@@ -1,8 +1,17 @@
 //! The Telar facade: the one crate an application depends on.
 //!
 //! Re-exports the widget catalogue, the reactive primitives and the geometry types, and carries the runner that turns a mounted tree into a window.
-
+//!
+//! # Feature flags
+//!
+//! Enable one target and stop. The list below is long because nothing is bundled, not because a build
+//! carries it: a terminal app links about 160 crates where a desktop one links about 410.
+#![cfg_attr(
+    feature = "document-features",
+    doc = document_features::document_features!()
+)]
 #![warn(rustdoc::broken_intra_doc_links)]
+#![cfg_attr(docsrs, feature(doc_auto_cfg))]
 
 mod macros;
 

@@ -4,7 +4,7 @@
 //!
 //! The novel part hot-reload never needed is **compositing two runtimes into one window**: the plugin flattens its own view tree to a self-contained `Vec<DrawCommand>` ([`PluginInstance::paint`]) and hands it back; the host translates + clips those commands into the plugin's sub-rect and splices them into its own frame. No offscreen texture, no shared GPU device — the host's renderer paints everything in one pass.
 //!
-//! Layering: this module is app-agnostic. A plugin author implements [`EmbeddedApp`] (or an adapter to it) and calls the [`plugin!`](crate::plugin) macro to export the shims. The host calls [`load_plugin`] and drives the returned [`LoadedPlugin`]. Nothing here knows about any particular app.
+//! Layering: this module is app-agnostic. A plugin author implements [`EmbeddedApp`] (or an adapter to it) and calls the [`plugin!`](crate::plugin!) macro to export the shims. The host calls [`load_plugin`] and drives the returned [`LoadedPlugin`]. Nothing here knows about any particular app.
 
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -53,9 +53,9 @@ pub fn composite(rect: Rect, image_salt: u64, mut commands: DrawList) -> RenderN
     )
 }
 
-/// An embeddable rsx UI a host can drive as a plugin. The generic union of "build a view tree, render it, handle events, run per-frame background work, and present a title/icon" — no app-specific semantics. A concrete app (or an adapter over one) implements this; the [`plugin!`](crate::plugin) macro exports it.
+/// An embeddable rsx UI a host can drive as a plugin. The generic union of "build a view tree, render it, handle events, run per-frame background work, and present a title/icon" — no app-specific semantics. A concrete app (or an adapter over one) implements this; the [`plugin!`](crate::plugin!) macro exports it.
 ///
-/// Lifecycle the driver enforces: [`build`](Self::build) runs once, inside the plugin's freshly-entered [`Surface`], so the content's layout nodes land in *this* surface's world; afterwards [`layout_root`] is the node the driver sizes to the host's sub-rect.
+/// Lifecycle the driver enforces: [`build`](Self::build) runs once, inside the plugin's freshly-entered [`Surface`], so the content's layout nodes land in *this* surface's world; afterwards [`layout_root`](Self::layout_root) is the node the driver sizes to the host's sub-rect.
 pub trait EmbeddedApp: 'static {
     /// Build the content's layout tree. Called once by the driver with the plugin's surface active, so nodes are allocated in this surface's layout world. [`layout_root`](Self::layout_root) must be valid after it.
     fn build(&mut self);

@@ -10,6 +10,13 @@ readme = { workspace = true }
 license = { workspace = true }
 repository = { workspace = true }
 
+# docs.rs builds with everything on so the whole surface is visible: a default-features build documents a
+# desktop app and silently hides the terminal, browser and Android frontends. `--cfg docsrs` is what turns
+# on the per-item "Available on crate feature ..." badges.
+[package.metadata.docs.rs]
+all-features = true
+rustdoc-args = ["--cfg", "docsrs"]
+
 [features]
 default = ["desktop", "bake-assets"]
 
@@ -127,6 +134,8 @@ preview-headless = ["headless", "dep:image"]
 ## keeps a pixel test from passing having asserted nothing.
 testing = ["runtime"]
 
+## Renders this feature list into the crate documentation. docs.rs only; never enable it yourself.
+document-features = ["dep:document-features"]
 
 #! ## Embedding
 #!
@@ -216,6 +225,7 @@ image-tiff = ["dynamic-image", "renderer-assets?/image-tiff"]
 image-webp = ["dynamic-image", "renderer-assets?/image-webp"]
 
 [dependencies]
+document-features = { version = "0.2.12", optional = true }
 image = { version = "0.25.10", default-features = false, features = ["png"], optional = true }
 libloading = { version = "0.9.0", optional = true }
 notify = { workspace = true, optional = true }
@@ -273,6 +283,7 @@ renderer-record = { workspace = true }
 unexpected_cfgs = { level = "warn", check-cfg = [
     'cfg(telar_hot_reload)',
     'cfg(telar_preview)',
+    'cfg(docsrs)',
 ] }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
