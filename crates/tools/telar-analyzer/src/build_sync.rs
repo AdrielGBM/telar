@@ -38,12 +38,11 @@ pub fn generated_target(
     let src_dir = root.join("src");
     let rel = telar_transpiler::relative_output_path(rsx_path, &src_dir)?;
     let stem = telar_transpiler::component_name(rsx_path);
-    // Matches the macro: baked `src:"…"` paths resolve against the project asset root, not the `.rsx` dir.
-    let assets_root = telar_transpiler::assets_root(&root);
+    // The same artifact the macro reads, so the mirror shows the same `src:"…"` errors the build will. Two limits until the analyzer bakes for itself: a stale artifact shows them on every keystroke, and this is *this binary's* version rather than the `telar` the project resolves — so a project pinning an older `telar` sees a version mismatch that its own build would not report.
+    let assets = telar_transpiler::AssetContext::load(&root, env!("CARGO_PKG_VERSION"));
     // No cross-file pre-pass: the editor mirrors the build exactly, because neither needs to know what any other file declares. A component call spells names, and the callee's own type answers for them.
     let result =
-        telar_transpiler::transpile_source(source, &stem, theme_type, Some(assets_root.as_path()))
-            .ok()?;
+        telar_transpiler::transpile_source(source, &stem, theme_type, Some(&assets)).ok()?;
     let out_path = root.join(".telar").join("build").join(&rel);
     Some(GeneratedTarget {
         path: out_path,

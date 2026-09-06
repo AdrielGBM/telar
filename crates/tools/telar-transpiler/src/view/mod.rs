@@ -15,11 +15,10 @@ mod text;
 
 use std::collections::HashMap;
 use std::fmt::Write;
-use std::path::{Path, PathBuf};
 
 use telar_parser::{Attr, Element, IfBlock, StyleClass, ViewNode};
 
-use crate::assets::asset_kind_for_tag;
+use crate::assets::{AssetContext, asset_kind_for_tag};
 use crate::naming::contains_ident;
 use crate::registry::ValueKind;
 pub(crate) use signals::{is_paint_key, rust_str, substitute_reads};
@@ -174,11 +173,8 @@ pub struct ViewGen<'a> {
     loop_variables: Vec<String>,
     /// Monotonic counter for the hoisted `__transition_N` animation handles.
     transition_count: usize,
-    /// Directory of the `.rsx` being transpiled, used to resolve static `svg`/`img` asset paths for build-time baking. `None` (e.g. an in-memory transpile) makes a static `src:"path"` yield a `compile_error!`.
-    #[cfg_attr(not(feature = "bake-assets"), allow(dead_code))]
-    base_dir: Option<PathBuf>,
-    /// Monotonic counter for the hoisted `BAKED_*_N` static asset handles, unique per component so two baked assets never share a `static` name.
-    baked_asset_count: usize,
+    /// The package's baked asset artifact, which a static `svg`/`img` `src:"path"` resolves against. `None` (e.g. an in-memory transpile with no package to anchor it) makes such a `src:` yield a `compile_error!`.
+    assets: Option<&'a AssetContext>,
     /// Signatures of every component in the workspace, so `emit_component_call` emits optional props and the slot argument correctly. `None` falls back to the per-file heuristic. Stack of child accumulators (see [`ChildSink`]); the top is the one an emitted `if`/`for` body pushes into. Pushed before a container's children are emitted, popped after.
     child_sinks: Vec<ChildSink>,
     /// `[logic]` bindings a lone-identifier prop names more than once in this view, so the first call site cannot move what the second still needs. Computed once from the whole view in [`Self::generate_root`].
@@ -195,7 +191,7 @@ impl<'a> ViewGen<'a> {
     pub fn with_theme(
         classes: &'a [StyleClass],
         theme_type: Option<&str>,
-        base_dir: Option<&Path>,
+        assets: Option<&'a AssetContext>,
     ) -> Self {
         Self {
             classes,
@@ -206,8 +202,7 @@ impl<'a> ViewGen<'a> {
             indent: 1,
             loop_variables: Vec::new(),
             transition_count: 0,
-            base_dir: base_dir.map(Path::to_path_buf),
-            baked_asset_count: 0,
+            assets,
             child_sinks: Vec::new(),
             host_rows: Vec::new(),
             multi_referenced: Vec::new(),

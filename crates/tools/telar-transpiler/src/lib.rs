@@ -21,9 +21,9 @@ mod view;
 
 pub use assets::{
     ASSET_ARTIFACT_FORMAT, ASSET_KINDS, ASSETS_INDEX_FILENAME, ASSETS_MODULE,
-    ASSETS_SOURCE_FILENAME, ArtifactHandshake, AssetEntry, AssetIndex, AssetKind, BakedAsset,
-    GeneratedAssets, asset_kind_for_id, asset_kind_for_tag, check_artifact, content_hash,
-    generate_assets, read_index, static_name_for_path, write_generated,
+    ASSETS_SOURCE_FILENAME, ArtifactHandshake, AssetContext, AssetEntry, AssetIndex, AssetKind,
+    BakedAsset, GeneratedAssets, asset_kind_for_id, asset_kind_for_tag, check_artifact,
+    content_hash, generate_assets, read_index, static_name_for_path, write_generated,
 };
 pub use codegen::{TranspiledSource, transpile_source};
 pub use discovery::{
@@ -1730,31 +1730,47 @@ col @card
         assert!(code.contains("theme.get().primary"));
     }
 
+    /// A package with one baked asset, laid out the way the CLI leaves it: the source file under `assets/` and the index under `.telar/`.
+    fn baked_package(name: &str, kind: &str, rel: &str, content: &[u8]) -> std::path::PathBuf {
+        let root = std::env::temp_dir().join(format!("rsx_assets_{name}_{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(root.join("assets")).unwrap();
+        std::fs::create_dir_all(root.join(".telar")).unwrap();
+        std::fs::write(root.join("assets").join(rel), content).unwrap();
+        let index = AssetIndex {
+            format: ASSET_ARTIFACT_FORMAT,
+            producer: "test".to_string(),
+            telar_version: env!("CARGO_PKG_VERSION").to_string(),
+            entries: vec![AssetEntry {
+                kind: kind.to_string(),
+                path: rel.to_string(),
+                hash: content_hash(content),
+                static_name: static_name_for_path(rel),
+            }],
+        };
+        std::fs::write(root.join(".telar/assets.json"), index.to_json()).unwrap();
+        root
+    }
+
     #[test]
-    fn quoted_svg_src_bakes_static_asset_at_build_time() {
-        let base = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures");
+    fn quoted_svg_src_references_the_baked_artifact() {
+        let root = baked_package("svg_ref", "svg", "icon.svg", b"<svg/>");
+        let assets = AssetContext::load(&root, env!("CARGO_PKG_VERSION"));
         let src = "[view]\ncol\n    svg src:\"icon.svg\" color:Color::WHITE width:24 height:24\n";
-        let code = transpile_source(src, "demo", None, Some(base.as_path()))
+        let code = transpile_source(src, "demo", None, Some(&assets))
             .unwrap()
             .rust_code;
 
+        let name = static_name_for_path("icon.svg");
         assert!(
-            code.contains("SvgData::from_baked_vector("),
-            "quoted src should bake to a vector SvgData:\n{code}"
+            code.contains(&format!(
+                "move || std::sync::Arc::clone(&crate::__rsx_assets::{name})"
+            )),
+            "data_fn should clone the artifact's static:\n{code}"
         );
         assert!(
-            code.contains(
-                "static BAKED_SVG_0: std::sync::LazyLock<std::sync::Arc<SvgData>> = std::sync::LazyLock::new(|| std::sync::Arc::new("
-            ),
-            "missing baked LazyLock static:\n{code}"
-        );
-        assert!(
-            code.contains("move || std::sync::Arc::clone(&BAKED_SVG_0)"),
-            "data_fn should clone the shared Arc:\n{code}"
-        );
-        assert!(
-            !code.contains("::renderer_core::") && !code.contains("::geometry_core::"),
-            "baked expression must use bare type names:\n{code}"
+            !code.contains("from_baked_vector") && !code.contains("LazyLock"),
+            "the transpiler must decode nothing and hoist no static of its own:\n{code}"
         );
         assert!(
             code.contains("move || Some(Color::WHITE)"),
@@ -1762,23 +1778,121 @@ col @card
         );
         assert!(
             !code.contains("let __src ="),
-            "baked asset must not hoist a dynamic __src:\n{code}"
+            "a static asset must not hoist a dynamic __src:\n{code}"
         );
+
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    /// Two uses of one asset share the artifact's single `static`. The macro used to hoist a `BAKED_SVG_N` per use site, so the same 24 KB of path data was compiled in three times for three icons.
+    #[test]
+    fn two_uses_of_one_asset_share_a_single_static() {
+        let root = baked_package("svg_shared", "svg", "icon.svg", b"<svg/>");
+        let assets = AssetContext::load(&root, env!("CARGO_PKG_VERSION"));
+        let src = "[view]\ncol\n    svg src:\"icon.svg\"\n    svg src:\"icon.svg\"\n";
+        let code = transpile_source(src, "demo", None, Some(&assets))
+            .unwrap()
+            .rust_code;
+
+        let name = static_name_for_path("icon.svg");
+        assert_eq!(code.matches(&name).count(), 2, "{code}");
+
+        let _ = std::fs::remove_dir_all(&root);
     }
 
     #[test]
-    fn quoted_svg_src_missing_file_emits_compile_error() {
-        let base = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures");
-        let src = "[view]\nsvg src:\"does_not_exist.svg\" width:24\n";
-        let code = transpile_source(src, "demo", None, Some(base.as_path()))
-            .unwrap()
-            .rust_code;
+    fn a_src_with_no_artifact_at_all_names_the_bake_command() {
+        let root = std::env::temp_dir().join(format!("rsx_assets_unbaked_{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(&root).unwrap();
+        let assets = AssetContext::load(&root, env!("CARGO_PKG_VERSION"));
+        let code = transpile_source(
+            "[view]\nsvg src:\"icon.svg\" width:24\n",
+            "demo",
+            None,
+            Some(&assets),
+        )
+        .unwrap()
+        .rust_code;
+
         assert!(
             code.contains("compile_error!(")
-                && code.contains("does_not_exist.svg")
-                && code.contains("not found"),
-            "a missing asset should surface a compile_error:\n{code}"
+                && code.contains("icon.svg")
+                && code.contains("cargo telar bake"),
+            "an unbaked asset should name the command that bakes it:\n{code}"
         );
+
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn a_src_the_artifact_does_not_list_names_the_bake_command() {
+        let root = baked_package("svg_unlisted", "svg", "icon.svg", b"<svg/>");
+        let assets = AssetContext::load(&root, env!("CARGO_PKG_VERSION"));
+        let code = transpile_source(
+            "[view]\nsvg src:\"other.svg\" width:24\n",
+            "demo",
+            None,
+            Some(&assets),
+        )
+        .unwrap()
+        .rust_code;
+
+        assert!(
+            code.contains("compile_error!(")
+                && code.contains("other.svg")
+                && code.contains("cargo telar bake"),
+            "an asset absent from the index should name the command that adds it:\n{code}"
+        );
+
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    /// The check that makes an edited asset a compile error rather than a build that silently keeps drawing what was baked last week — the whole reason the macro emits an `include_bytes!` per entry.
+    #[test]
+    fn an_asset_edited_since_the_bake_is_a_compile_error() {
+        let root = baked_package("svg_stale", "svg", "icon.svg", b"<svg/>");
+        std::fs::write(root.join("assets/icon.svg"), b"<svg viewBox=\"0 0 1 1\"/>").unwrap();
+        let assets = AssetContext::load(&root, env!("CARGO_PKG_VERSION"));
+        let code = transpile_source(
+            "[view]\nsvg src:\"icon.svg\" width:24\n",
+            "demo",
+            None,
+            Some(&assets),
+        )
+        .unwrap()
+        .rust_code;
+
+        assert!(
+            code.contains("compile_error!(")
+                && code.contains("icon.svg")
+                && code.contains("has changed since it was baked"),
+            "an edited asset should name itself and the command:\n{code}"
+        );
+
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn an_artifact_baked_for_another_telar_names_both_commands() {
+        let root = baked_package("svg_version", "svg", "icon.svg", b"<svg/>");
+        let assets = AssetContext::load(&root, "0.0.1-other");
+        let code = transpile_source(
+            "[view]\nsvg src:\"icon.svg\" width:24\n",
+            "demo",
+            None,
+            Some(&assets),
+        )
+        .unwrap()
+        .rust_code;
+
+        assert!(
+            code.contains("cargo install cargo-telar --version 0.0.1-other")
+                && code.contains("cargo telar bake"),
+            "a version mismatch should name the telar the project builds, not this crate's:\n{code}"
+        );
+
+        let _ = std::fs::remove_dir_all(&root);
     }
 
     #[test]

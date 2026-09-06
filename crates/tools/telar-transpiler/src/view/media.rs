@@ -2,7 +2,7 @@
 
 use telar_parser::{Attr, Element, Value};
 
-use crate::assets::{AssetKind, asset_kind_for_tag};
+use crate::assets::{AssetContext, AssetKind, asset_kind_for_tag};
 use crate::registry;
 
 use super::signals::{rust_str, substitute_reads, wrap_signal_clones};
@@ -134,19 +134,19 @@ impl ViewGen<'_> {
 
     /// Resolves a media widget's `src` attribute into `(setup, data_fn)` fragments that slot into its construction block.
     ///
-    /// - Quoted, non-empty `src:"path"` is a static asset baked at build time: `setup` declares a `static LazyLock<Arc<Data>>` built once, `data_fn` clones the shared `Arc` per reactive call.
+    /// - Quoted, non-empty `src:"path"` is a static asset the CLI baked: `data_fn` clones the `Arc` the artifact's `static` holds, and `setup` is empty — the payload lives once per crate in the generated module, not once per use site as it did when the macro baked it.
     /// - Non-quoted `src:$signal` (or any expression referencing a `$signal`) is a *reactive* handle: `data_fn` re-reads it on every `view()` so the glyph/image swaps when the bound state changes — the path adaptive icons need (a battery/wifi glyph that tracks its level). Signals are cloned into the closure via `wrap_signal_clones` so the outer handle stays usable, mirroring `svg color:$sig` / `box fill:$sig`.
     /// - Non-quoted, `$`-free `src:expr` is a constant `Arc<Data>` handle: `setup` hoists it into `__src` once and `data_fn` clones the (cheap) handle. The verbatim span marker is preserved so the analyzer can resolve/rename the symbol inside `expr`.
     /// - Missing, empty, or written in a form that cannot name an asset (a bare flag, a `t"…"` key) falls back to an undefined placeholder identifier, so rustc's "cannot find value" error lands on this `.rsx` line via the source map.
     fn media_src_binding(
-        &mut self,
+        &self,
         src_attr: Option<&Attr>,
         kind: &'static AssetKind,
     ) -> (String, String) {
         let pad = self.indent_str();
         match src_attr.map(|a| (a, &a.value)) {
             Some((_, Value::Quoted(path))) if !path.trim().is_empty() => {
-                self.bake_asset_binding(path.trim(), kind, &pad)
+                (String::new(), self.static_asset_data_fn(path.trim(), kind))
             }
             Some((a, Value::Expr(expr) | Value::Directive(expr))) if !expr.trim().is_empty() => {
                 let v = expr.trim();
@@ -169,74 +169,15 @@ impl ViewGen<'_> {
         }
     }
 
-    /// Bakes the static asset at `rel` (relative to the `.rsx`'s directory) into a shared `static LazyLock<Arc<Data>>` and returns its `(setup, data_fn)`. A read/parse/decode failure becomes a `compile_error!` in the `data_fn` closure, whose `!`-typed body unifies with the widget's `Fn() -> Arc<Data>` bound so no secondary type errors leak.
-    fn bake_asset_binding(
-        &mut self,
-        rel: &str,
-        kind: &'static AssetKind,
-        pad: &str,
-    ) -> (String, String) {
-        let expr = match self.bake_asset_expr(rel, kind) {
-            Ok(expr) => expr,
-            Err(msg) => {
-                return (
-                    String::new(),
-                    format!("move || compile_error!({})", rust_str(&msg)),
-                );
-            }
+    /// The `data_fn` for a static `src:"rel"`: a clone of the `static` the baked artifact declares for it. Nothing is read or decoded here — an asset the artifact cannot answer for becomes a `compile_error!` naming the command that bakes it, and that call's `!`-typed result unifies with the widget's `Fn() -> Arc<Data>` bound, so no secondary type errors leak from it.
+    fn static_asset_data_fn(&self, rel: &str, kind: &'static AssetKind) -> String {
+        let resolved = match self.assets {
+            Some(assets) => assets.resolve(kind, rel),
+            None => Err(AssetContext::detached_message(kind, rel)),
         };
-        let n = self.baked_asset_count;
-        self.baked_asset_count += 1;
-        let static_name = format!("{}_{n}", kind.static_prefix);
-        let data_ty = kind.data_ty;
-        let setup = format!(
-            "{pad}    static {static_name}: std::sync::LazyLock<std::sync::Arc<{data_ty}>> = std::sync::LazyLock::new(|| std::sync::Arc::new({expr}));\n"
-        );
-        let data_fn = format!("move || std::sync::Arc::clone(&{static_name})");
-        (setup, data_fn)
-    }
-
-    /// The same question with the baker compiled out: every `src:"…"` is a compile error naming the feature that would have answered it, rather than a widget that silently draws nothing.
-    #[cfg(not(feature = "bake-assets"))]
-    fn bake_asset_expr(&self, rel: &str, kind: &'static AssetKind) -> Result<String, String> {
-        Err(format!(
-            "rsx: cannot bake {} asset `{rel}`: this build has the `bake-assets` feature turned off. Enable `telar/bake-assets` to bake `src:\"…\"` assets at build time.",
-            kind.label
-        ))
-    }
-
-    /// Reads and bakes the asset at `rel` into a Rust expression that reconstructs its native data (`SvgData`/`ImageData`), or an error message describing the failed resolution/parse.
-    #[cfg(feature = "bake-assets")]
-    fn bake_asset_expr(&self, rel: &str, kind: &'static AssetKind) -> Result<String, String> {
-        let Some(base) = self.base_dir.as_deref() else {
-            return Err(format!(
-                "rsx: cannot bake {} asset `{rel}`: no base directory is available for this .rsx",
-                kind.label
-            ));
-        };
-        let path = base.join(rel);
-        match kind.id {
-            "svg" => {
-                let content = std::fs::read_to_string(&path).map_err(|e| {
-                    format!(
-                        "rsx: SVG asset `{rel}` not found at {}: {e}",
-                        path.display()
-                    )
-                })?;
-                renderer_assets::bake_to_source(&content)
-                    .map_err(|e| format!("rsx: failed to bake SVG asset `{rel}`: {e}"))
-            }
-            "image" => {
-                let bytes = std::fs::read(&path).map_err(|e| {
-                    format!(
-                        "rsx: image asset `{rel}` not found at {}: {e}",
-                        path.display()
-                    )
-                })?;
-                renderer_assets::bake_image_to_source(&bytes)
-                    .map_err(|e| format!("rsx: failed to bake image asset `{rel}`: {e}"))
-            }
-            _ => unreachable!("asset kind ids are svg and image"),
+        match resolved {
+            Ok(path) => format!("move || std::sync::Arc::clone(&{path})"),
+            Err(msg) => format!("move || compile_error!({})", rust_str(&msg)),
         }
     }
 }

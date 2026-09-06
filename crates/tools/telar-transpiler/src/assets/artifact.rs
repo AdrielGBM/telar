@@ -13,10 +13,10 @@
 //! own — both flavours reference the same `.telar/assets.rs`.
 //!
 //! [`check_artifact`] decides *whether* a `format`/`telar_version` mismatch exists and which of the two it
-//! is; it does not decide what a caller should do about it or how to phrase that for a human (macro
-//! expansion, `telar-analyzer`, and `cargo-telar` each want their own wording and severity — that's a later
-//! task). Turning file bytes into a [`BakedAsset`] in the first place is the baker's job, not this module's
-//! — this module only defines the shape both sides agree on, and reads, writes, and validates it.
+//! is; it does not decide what a caller should do about it or how to phrase that for a human — that is
+//! [`crate::AssetContext`]'s job. Turning file bytes into a [`BakedAsset`] in the first place is the
+//! baker's job, not this module's — this module only defines the shape both sides agree on, and reads,
+//! writes, and validates it.
 
 use std::path::Path;
 
@@ -27,7 +27,7 @@ use serde::{Deserialize, Serialize};
 /// mandatory, not discretionary: [`check_artifact`] treats any mismatch here as fatal on its own, without
 /// even looking at `telar_version`, because a shape it can't parse makes that second comparison moot.
 /// Compared against an index's own [`AssetIndex::format`] by [`check_artifact`].
-pub const ASSET_ARTIFACT_FORMAT: u32 = 1;
+pub const ASSET_ARTIFACT_FORMAT: u32 = 2;
 
 /// The module every baked `static` is wired under once a macro declares `#[path = "…/assets.rs"] pub mod
 /// __rsx_assets;`, mirroring [`crate::I18N_MODULE`]. Unused by this module itself — the generated source
@@ -162,7 +162,6 @@ pub fn generate_assets(
     let mut seen_paths = std::collections::BTreeSet::new();
     let mut seen_static_names: std::collections::BTreeMap<String, &str> =
         std::collections::BTreeMap::new();
-    let mut used_types: Vec<&'static str> = Vec::new();
     let mut body = String::new();
 
     for asset in ordered {
@@ -178,9 +177,6 @@ pub fn generate_assets(
                 asset.path
             ));
         }
-        if !used_types.contains(&kind.data_ty) {
-            used_types.push(kind.data_ty);
-        }
         body.push_str(&format!(
             "pub static {static_name}: LazyLock<Arc<{}>> = LazyLock::new(|| Arc::new({}));\n",
             kind.data_ty, asset.init_expr
@@ -193,12 +189,10 @@ pub fn generate_assets(
         });
     }
 
-    used_types.sort_unstable();
-    let mut source = String::from("#[allow(unused_imports)] use std::sync::{Arc, LazyLock};\n");
-    if !used_types.is_empty() {
-        source.push_str(&format!("use telar::{{{}}};\n", used_types.join(", ")));
-    }
-    source.push('\n');
+    // A glob, and the same one every transpiled component file opens with: an `init_expr` names whatever types its baker chose (`VectorCommand`, `PathData`, `Point`, …), which is not derivable from the asset kind.
+    let mut source = String::from(
+        "#![allow(clippy::all)]\n#[allow(unused_imports)] use telar::*;\n#[allow(unused_imports)] use std::sync::{Arc, LazyLock};\n\n",
+    );
     source.push_str(&body);
 
     Ok(GeneratedAssets {
@@ -392,7 +386,7 @@ mod tests {
             generated.source
         );
         assert!(
-            generated.source.contains("use telar::{SvgData};"),
+            generated.source.contains("use telar::*;"),
             "{}",
             generated.source
         );
@@ -402,11 +396,19 @@ mod tests {
         assert_eq!(generated.index.format, ASSET_ARTIFACT_FORMAT);
     }
 
+    /// A baker chooses the types its `init_expr` names, and nothing about the asset kind predicts them — an SVG bakes into `VectorCommand`/`PathData`/`Point`, none of which is its `data_ty`. Importing only the kinds in play left the module referring to types it had not imported.
     #[test]
-    fn only_the_kinds_actually_used_are_imported() {
-        let generated = generate_assets(&[svg_asset("a.svg", b"1")], "test", "0.1.8").unwrap();
+    fn the_generated_module_imports_telar_wholesale() {
+        let asset = BakedAsset {
+            kind: "svg".to_string(),
+            path: "a.svg".to_string(),
+            content: b"1".to_vec(),
+            init_expr: "SvgData::from_baked_vector((1.0, 1.0), vec![VectorCommand::Path { data: PathData::new() }])"
+                .to_string(),
+        };
+        let generated = generate_assets(&[asset], "test", "0.1.8").unwrap();
         assert!(
-            !generated.source.contains("ImageData"),
+            generated.source.contains("use telar::*;"),
             "{}",
             generated.source
         );

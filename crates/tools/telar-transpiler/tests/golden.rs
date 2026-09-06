@@ -40,11 +40,17 @@ fn golden_dir() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/golden")
 }
 
-/// Transpiles one package exactly the way `app!` does: the same component name (the file stem), the same asset root. There is no pre-pass to match any more — a file transpiles knowing only itself.
+/// Transpiles one package exactly the way `app!` does: the same component name (the file stem), the same baked artifact. There is no pre-pass to match any more — a file transpiles knowing only itself.
 fn transpile_project(project: &Project) -> Vec<(PathBuf, TranspiledSource)> {
     let manifest = workspace_root().join(project.manifest);
     let src_dir = manifest.join("src");
-    let assets_root = telar_transpiler::assets_root(&manifest);
+    let assets = telar_transpiler::AssetContext::load(&manifest, env!("CARGO_PKG_VERSION"));
+    // Without it every `src:"…"` snapshots as a `compile_error!` telling you to bake — a diff that says nothing about the transpiler, over a snapshot that would then be wrong for everyone who did bake.
+    assert!(
+        assets.index().is_some(),
+        "{} has no usable baked asset artifact — run `cargo run -p cargo-telar -- bake` first",
+        project.name
+    );
     let mut files = telar_transpiler::find_rsx_files(&src_dir);
     files.sort();
     assert!(
@@ -63,7 +69,7 @@ fn transpile_project(project: &Project) -> Vec<(PathBuf, TranspiledSource)> {
                 &source,
                 &stem,
                 Some(project.theme),
-                Some(assets_root.as_path()),
+                Some(&assets),
             )
             .unwrap_or_else(|e| panic!("{} failed to transpile: {e}", rsx.display()));
             let rel = telar_transpiler::relative_output_path(&rsx, &src_dir)

@@ -1,9 +1,8 @@
 //! The codegen engine: turns a parsed [`RsxDocument`] into compilable Rust source, wiring the `[logic]`, `[style]`, `[view]`, and `[preview]` zones together with a per-line source map.
 
-use std::path::Path;
-
 use telar_parser::{RsxDocument, ViewNode};
 
+use crate::assets::AssetContext;
 use crate::error::TranspileError;
 use crate::naming::{
     contains_ident, literal_or_comment_end, preview_entries_const_name, replace_whole_word,
@@ -162,8 +161,8 @@ pub(crate) struct TranspileInput<'a> {
     pub component_name: &'a str,
     /// Concrete theme type path (e.g. `SandboxTheme`). When set, the generated view binds `theme` as a `telar::Theme<Type>` handle, which `$theme.field` reads.
     pub theme_type: Option<&'a str>,
-    /// Directory of the `.rsx` being transpiled, used to resolve static `svg`/`img` asset paths (`src:"path"`) for build-time baking. `None` when no filesystem anchor is available (e.g. some analyzer/test paths), in which case a static asset yields a `compile_error!`.
-    pub base_dir: Option<&'a Path>,
+    /// The package's baked asset artifact, which static `svg`/`img` paths (`src:"path"`) resolve against. `None` when no package anchors this transpile (e.g. some analyzer/test paths), in which case a static asset yields a `compile_error!`.
+    pub assets: Option<&'a AssetContext>,
 }
 
 /// The generated Rust source for one `.rsx` file.
@@ -176,21 +175,21 @@ pub struct TranspiledSource {
     pub expr_spans: Vec<ExprSpan>,
 }
 
-/// Parses `source` and generates Rust for `component_name`, resolving `[style]` colors through `theme_type` when provided so theme switching at runtime takes effect. `base_dir` is the directory of the `.rsx` (its parent), against which static `svg`/`img` asset paths are resolved and baked at build time.
+/// Parses `source` and generates Rust for `component_name`, resolving `[style]` colors through `theme_type` when provided so theme switching at runtime takes effect. `assets` is the package's baked artifact, against which static `svg`/`img` `src:"path"` references are resolved.
 ///
 /// **It takes no registry, and that is the point.** A call site used to need the callee's shape — which props it declared, which were optional, which took a closure, whether it accepted children — so every `.rsx` in the workspace had to be scanned before any one of them could be transpiled. Every component takes the same two arguments now, and the props builder answers the rest in the callee's own type, so a file transpiles knowing nothing but itself.
 pub fn transpile_source(
     source: &str,
     component_name: &str,
     theme_type: Option<&str>,
-    base_dir: Option<&Path>,
+    assets: Option<&AssetContext>,
 ) -> Result<TranspiledSource, TranspileError> {
     let document = telar_parser::parse(source)?;
     transpile(TranspileInput {
         document: &document,
         component_name,
         theme_type,
-        base_dir,
+        assets,
     })
 }
 
@@ -247,7 +246,7 @@ fn transpile(input: TranspileInput<'_>) -> Result<TranspiledSource, TranspileErr
 
     let style_section = generate_style_section(&doc.style, input.theme_type);
 
-    let mut view_gen = ViewGen::with_theme(&doc.style.classes, input.theme_type, input.base_dir)
+    let mut view_gen = ViewGen::with_theme(&doc.style.classes, input.theme_type, input.assets)
         .with_locals(scan_locals(logic_source))
         .with_signals(signals.iter().map(|s| s.name.clone()).collect());
     let view_body = view_gen.generate_root(&doc.view.nodes);
@@ -444,8 +443,7 @@ fn transpile(input: TranspileInput<'_>) -> Result<TranspiledSource, TranspileErr
         // One build fn per preview, so a prop-taking component can be previewed through its markup body.
         for (i, preview) in doc.previews.iter().enumerate() {
             let pfn = format!("{fn_name}_preview_{i}");
-            let mut pgen =
-                ViewGen::with_theme(&doc.style.classes, input.theme_type, input.base_dir);
+            let mut pgen = ViewGen::with_theme(&doc.style.classes, input.theme_type, input.assets);
             let pbody = pgen.generate_root(&preview.body);
             code.push("\n", None);
             code.push("#[allow(dead_code, unused_variables, unused_mut)]\n", None);

@@ -436,8 +436,8 @@ fn transpile_project(theme_type_str: Option<&str>) -> Result<TranspileOutput, To
 
     let src_dir = manifest_dir.join("src");
     let rsx_files = telar_transpiler::find_rsx_files(&src_dir);
-    // Baked `src:"..."` asset paths resolve against one project asset root (default `./assets`), not each `.rsx`'s own directory — see `[telar] assets` in telar.toml.
-    let assets_root = telar_transpiler::assets_root(&manifest_dir);
+    // This crate's own version, because it is the one whose generated code the artifact's `assets.rs` calls into. `telar` and `telar-macros` share the workspace version, but the handshake compares against whoever loads the module, not whoever wrote the check.
+    let assets = telar_transpiler::AssetContext::load(&manifest_dir, env!("CARGO_PKG_VERSION"));
 
     let mut include_stmts = TokenStream2::new();
     let mut rerun_stmts = TokenStream2::new();
@@ -456,22 +456,19 @@ fn transpile_project(theme_type_str: Option<&str>) -> Result<TranspileOutput, To
 
         let stem = telar_transpiler::component_name(&rsx_file);
 
-        let result = match telar_transpiler::transpile_source(
-            &source,
-            &stem,
-            theme_type_str,
-            Some(assets_root.as_path()),
-        ) {
-            Ok(r) => r,
-            Err(telar_transpiler::TranspileError::Parse(ref pe)) => {
-                let msg = format!("{}:{}: {}", rsx_file.display(), pe.line, pe.message);
-                return Err(quote! { compile_error!(#msg) });
-            }
-            Err(e) => {
-                let msg = format!("Failed to transpile {}: {e}", rsx_file.display());
-                return Err(quote! { compile_error!(#msg) });
-            }
-        };
+        let result =
+            match telar_transpiler::transpile_source(&source, &stem, theme_type_str, Some(&assets))
+            {
+                Ok(r) => r,
+                Err(telar_transpiler::TranspileError::Parse(ref pe)) => {
+                    let msg = format!("{}:{}: {}", rsx_file.display(), pe.line, pe.message);
+                    return Err(quote! { compile_error!(#msg) });
+                }
+                Err(e) => {
+                    let msg = format!("Failed to transpile {}: {e}", rsx_file.display());
+                    return Err(quote! { compile_error!(#msg) });
+                }
+            };
 
         // Mirror the source tree under .telar/build/ so files in different directories never collide. find_rsx_files only yields paths under src_dir, so None is unreachable here.
         let Some(rel_out) = telar_transpiler::relative_output_path(rsx_file, &src_dir) else {
@@ -607,6 +604,29 @@ fn transpile_project(theme_type_str: Option<&str>) -> Result<TranspileOutput, To
         }
         Ok(None) => {}
         Err(msg) => return Err(quote! { compile_error!(#msg) }),
+    }
+
+    // The module every static `src:"…"` resolves into, wired like the i18n catalog. Declared only when the artifact is usable: against a stale or missing one the error belongs on the `.rsx` line naming the asset, which is where `AssetContext` puts it, not inside generated code nobody wrote.
+    if let Some(module_file) = assets.module_file() {
+        let path_str = module_file.to_string_lossy().to_string();
+        let mod_ident = Ident::new(telar_transpiler::ASSETS_MODULE, Span::call_site());
+        include_stmts.extend(quote! {
+            #[path = #path_str]
+            #[allow(dead_code)]
+            // A crate invokes this once per module owning `.rsx`, and each one loads this same file on purpose: a baked `src:"…"` resolves `crate::__rsx_assets::ASSET_…`, so the module has to exist wherever an asset is referenced.
+            #[allow(clippy::duplicate_mod)]
+            pub mod #mod_ident;
+        });
+    }
+
+    // What makes cargo re-expand this macro when an asset or the index changes. A proc macro cannot emit `cargo:rerun-if-changed`, so without these an edited asset reaches nothing: the build kept compiling whatever was baked into the last expansion. `include_bytes!` for the assets themselves, since a PNG is not UTF-8.
+    if let Some(index_file) = assets.index_file() {
+        let path_str = index_file.to_string_lossy().to_string();
+        rerun_stmts.extend(quote! { const _: &str = include_str!(#path_str); });
+    }
+    for asset_file in assets.tracked_files() {
+        let path_str = asset_file.to_string_lossy().to_string();
+        rerun_stmts.extend(quote! { const _: &[u8] = include_bytes!(#path_str); });
     }
 
     // Only reached once the whole project transpiled without error, so `written_files` is complete: anything else under the generated directory is what an earlier run wrote for a `.rsx` that is gone now.
