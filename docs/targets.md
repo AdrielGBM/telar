@@ -62,7 +62,8 @@ and no glyph shaper — a terminal has its own font and Telar does not get a say
 this build is a third of a desktop one.
 
 Boxes, fills, strokes and text render; anything that needs subpixel geometry (gradients, shadows, arbitrary
-paths, images) is approximated or dropped, because a cell is the smallest thing a terminal can colour.
+paths, images) is approximated or dropped, because a cell is the smallest thing a terminal can colour — a
+picture comes back as half blocks, two colours to a cell.
 
 ## Browser
 
