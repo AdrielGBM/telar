@@ -5589,6 +5589,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "telar-dynamic"
+version = "0.1.8"
+dependencies = [
+ "telar-geometry-core",
+ "telar-i18n-core",
+ "telar-reactive-core",
+ "telar-renderer-assets",
+ "telar-renderer-core",
+ "telar-ui-core",
+]
+
+[[package]]
 name = "telar-geometry-core"
 version = "0.1.8"
 

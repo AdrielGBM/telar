@@ -1,0 +1,19 @@
+[package]
+name = "telar-dynamic"
+version = { workspace = true }
+edition = { workspace = true }
+rust-version = { workspace = true }
+description = "Runtime decoders and transports for Telar assets: the formats and the sources a Telar application resolves at run time rather than baking at build time."
+keywords = ["telar", "assets", "svg", "image", "loader"]
+categories = ["gui", "multimedia::images", "asynchronous"]
+readme = "README.md"
+license = { workspace = true }
+repository = { workspace = true }
+
+[dependencies]
+geometry-core.workspace = true
+i18n-core.workspace = true
+reactive-core.workspace = true
+renderer-assets.workspace = true
+renderer-core.workspace = true
+ui-core = { workspace = true, features = ["async-assets"] }
