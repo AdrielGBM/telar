@@ -169,8 +169,9 @@ Everything here is either always present or one word away. Nothing is bundled.
 - **Two renderers** — a CPU rasterizer on `tiny-skia` and a GPU one on `wgpu`, behind the same drawing vocabulary. `desktop` and `android` bring both, and `backend = "auto"` picks per machine.
 - **A widget catalogue** — buttons, fields, selects, menus, modals, tabs, sliders, and the rest. → `components`
 - **Navigation** — a reactive page stack with animated transitions. → `navigate`
-- **Images and SVG** — baked into the binary at build time, or parsed at runtime. → `svg` · `dynamic-svg` · `dynamic-image`
-- **Assets over HTTP**, behind a transport-agnostic reactive seam. → `http-assets`
+- **Images and SVG** — baked into the binary at build time out of `src:"…"`, with no parser in the binary. → `svg`
+- **Assets that arrive later**, behind a transport-agnostic reactive seam: a signal that advances `Loading` → `Ready`/`Failed`, with the transport, the cache and the decoder each yours to choose. → `async-assets`
+- **Decoders and transports for that seam** — SVG, bitmaps, translation catalogs, over HTTP or from a directory — in the companion crate [`telar-dynamic`](crates/telar-dynamic), one feature each. Yours plugs in the same way.
 - **Hot reload** in `cargo telar dev`, and an in-app devtools overlay for inspecting the live component tree. *(the CLI sets this one)*
 - **Packaging** to native installers per platform, plus Android APKs. → `cargo telar build --format …`
 
@@ -195,7 +196,7 @@ telar = "0.1.8"
 
 Everything behind it — the reactive graph, the layout engine, the renderers, the platform backends, the `.rsx` pipeline — is a separate `telar-*` crate. They are published because Cargo requires every dependency of a published crate to be published too, not because an application names them; the split is what lets a terminal build skip a GPU renderer. Reach for one directly only if you are writing a frontend or a tool against Telar's internals.
 
-The one exception is [`cargo-telar`](crates/tools/cargo-telar), which is a binary you install rather than a dependency.
+Two exceptions. [`cargo-telar`](crates/tools/cargo-telar) is a binary you install rather than a dependency. And [`telar-dynamic`](crates/telar-dynamic) is a second dependency, for an application that decodes an asset at run time rather than baking it: the facade owns the seam and ships no implementation of it, so the decoders and transports live there, one feature each.
 
 <details>
 <summary><b>The crates behind the facade</b></summary>
@@ -212,7 +213,8 @@ The one exception is [`cargo-telar`](crates/tools/cargo-telar), which is a binar
 | [`telar-renderer-core`](crates/renderer/renderer-core) | Draw commands, culling, dirty tracking |
 | [`telar-renderer-software`](crates/renderer/renderer-software) · [`telar-renderer-hardware`](crates/renderer/renderer-hardware) | CPU and wgpu backends |
 | [`telar-renderer-tui`](crates/renderer/renderer-tui) · [`telar-renderer-dom`](crates/renderer/renderer-dom) · [`telar-renderer-web`](crates/renderer/renderer-web) | Terminal cells, browser elements, browser canvas |
-| [`telar-renderer-text`](crates/renderer/renderer-text) · [`telar-renderer-assets`](crates/renderer/renderer-assets) | Text shaping and glyph atlas; SVG/PNG/JPEG decoding and baking |
+| [`telar-renderer-text`](crates/renderer/renderer-text) · [`telar-renderer-assets`](crates/renderer/renderer-assets) | Text shaping and glyph atlas; SVG parsing and build-time asset baking |
+| [`telar-dynamic`](crates/telar-dynamic) | Runtime asset decoders and transports — the one crate here an application depends on directly |
 | [`telar-renderer-cache`](crates/renderer/renderer-cache) · [`telar-renderer-record`](crates/renderer/renderer-record) | The shared byte-budgeted cache; a backend that records instead of drawing |
 | [`telar-platform-core`](crates/platform/platform-core) and `telar-platform-{winit,desktop,android,tui,web,headless}` | Window/event abstraction and its backends |
 | [`telar-parser`](crates/tools/telar-parser) · [`telar-transpiler`](crates/tools/telar-transpiler) · [`telar-macros`](crates/tools/telar-macros) | The `.rsx` pipeline |

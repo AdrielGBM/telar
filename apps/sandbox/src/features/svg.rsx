@@ -6,7 +6,7 @@ use crate::shared::components::example::{example, ExampleProps};
 use crate::shared::components::prop_row::{prop_row, PropRowProps};
 use crate::shared::demo_svgs::{make_blurred, make_icon, make_logo};
 
-// Each returns an Arc<SvgData> parsed at runtime (the app enables the dynamic-svg feature).
+// Each returns an Arc<SvgData> parsed at runtime (the app depends on telar-dynamic for the parser).
 let icon = make_icon();
 let logo = make_logo();
 let blurred = make_blurred();

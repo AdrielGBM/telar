@@ -19,7 +19,7 @@ pub fn svg(props: SvgProps, children: Children) -> Result<Box<dyn LayoutItem>, L
     #[allow(unused_imports)] use telar::use_theme;
     #[allow(unused_variables)] let theme = telar::Theme::<core::theme::SandboxTheme>::default();
 
-    // Each returns an Arc<SvgData> parsed at runtime (the app enables the dynamic-svg feature).
+    // Each returns an Arc<SvgData> parsed at runtime (the app depends on telar-dynamic for the parser).
     let icon = make_icon();
     let logo = make_logo();
     let blurred = make_blurred();

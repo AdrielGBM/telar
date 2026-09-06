@@ -14,8 +14,8 @@ repository = { workspace = true }
 renderer-core = { workspace = true }
 geometry-core = { workspace = true }
 image = { version = "0.25.10", default-features = false, features = ["png", "jpeg"], optional = true }
-# Both stripped to their cores, because their defaults are a whole text stack and a set of image decoders —
-# see `svg-text` and `svg-images` below for what that costs and who should pay it.
+# Both stripped to their cores, because their defaults are a whole text stack — see `svg-text` below for
+# what that costs and who should pay it.
 resvg = { version = "0.48", optional = true, default-features = false }
 rustc-hash = { workspace = true }
 thiserror = { workspace = true }
@@ -23,15 +23,20 @@ usvg = { version = "0.48", optional = true, default-features = false }
 
 [features]
 # usvg/resvg for the runtime dynamic SVG path (`from_str`). The build-time baker lives behind `bake`, not this.
-dynamic-svg = ["dep:usvg", "dep:resvg"]
-# The `image` crate's runtime decode path (`decode`). The build-time image baker lives behind `bake`, not this.
-dynamic-image = ["dep:image"]
+#
+# `raster-images` comes with it rather than as a knob of its own: a parser that drops the `<image>` elements
+# it is pointed at, silently and only at runtime, is a latent bug rather than a size/features trade the
+# person enabling SVG parsing is in a position to make.
+dynamic-svg = ["dep:usvg", "dep:resvg", "resvg/raster-images"]
 
-# The build-time bakers (`bake_to_source`, `bake_image_to_source`), host-only: everything the runtime paths
+# The build-time bakers (`bake_to_source`, `bake_image_to_source`), host-only: everything the runtime path
 # above can parse, plus every format `image` ships, so a baked asset never fails for a format the app itself
 # never turned on. The transpiler enables this to bake `src:"…"` assets without putting usvg/image in the app
 # binary.
-bake = ["dynamic-svg", "svg-text", "svg-images", "dep:image", "image/default-formats"]
+#
+# The only thing left that reaches for `image` here. Decoding a bitmap at *runtime* is `telar-dynamic`'s
+# `ImageDecoder`, which calls `image` itself and carries the per-format knobs that used to live here.
+bake = ["dynamic-svg", "svg-text", "dep:image", "image/default-formats"]
 
 # `<text>` in an SVG parsed at *runtime*. Off by default, and the reason is what it weighs: shaping a glyph
 # needs a shaper, a font database and an outline rasterizer — harfrust, fontdb, skrifa and read_fonts — which
@@ -42,30 +47,3 @@ bake = ["dynamic-svg", "svg-text", "svg-images", "dep:image", "image/default-for
 # `image-*` knobs do: text in a runtime SVG is dropped rather than refusing to compile, because which
 # features an SVG uses is not knowable until the string arrives.
 svg-text = ["usvg?/text", "resvg?/text"]
-# `<image>` in an SVG parsed at runtime, which is a GIF, WebP and JPEG decoder to read what it points at.
-svg-images = ["resvg?/raster-images"]
-
-# Extra decode formats, one knob each, passed straight through to `image`. PNG and JPEG are always on; every
-# other format costs binary size that an app which never meets one should not pay.
-#
-# One per format rather than a set this crate curates, because of *how* the wrong choice fails: `decode` calls
-# `image::load_from_memory`, which dispatches on whatever was compiled in, so a format nobody enabled is not a
-# compile error — it is `unsupported format` at runtime, on the one wallpaper the user picked. A curated list
-# leaves whoever needs the sixteenth format unable to reach it at all, which is the reason an application went
-# and depended on `image` itself instead.
-image-avif = ["dynamic-image", "image/avif"]
-image-bmp = ["dynamic-image", "image/bmp"]
-image-dds = ["dynamic-image", "image/dds"]
-image-exr = ["dynamic-image", "image/exr"]
-image-ff = ["dynamic-image", "image/ff"]
-image-gif = ["dynamic-image", "image/gif"]
-image-hdr = ["dynamic-image", "image/hdr"]
-image-ico = ["dynamic-image", "image/ico"]
-image-pnm = ["dynamic-image", "image/pnm"]
-image-qoi = ["dynamic-image", "image/qoi"]
-image-tga = ["dynamic-image", "image/tga"]
-image-tiff = ["dynamic-image", "image/tiff"]
-image-webp = ["dynamic-image", "image/webp"]
-# Every format `image` ships, for an app that opens whatever the user points it at — a file manager's
-# thumbnails, a wallpaper picker — and would rather pay the size than enumerate.
-image-formats = ["dynamic-image", "image/default-formats"]

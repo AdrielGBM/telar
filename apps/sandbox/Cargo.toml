@@ -20,11 +20,15 @@ path = "src/main.rs"
 telar = { workspace = true, features = [
     "runtime",
     "bake-assets",
-    "dynamic-svg",
+    "svg",
     "components",
     "navigate",
 ] }
 serde = { workspace = true }
+# `demo_svgs.rs` builds its icons with `SvgData::from_str`, and the runtime parser behind it lives here now
+# rather than under a `telar` feature. The demo never reaches for a name in this crate — the dependency is
+# what turns the parser on.
+telar-dynamic = { workspace = true, features = ["svg"] }
 tracing-subscriber = { workspace = true, features = ["env-filter"] }
 
 [features]

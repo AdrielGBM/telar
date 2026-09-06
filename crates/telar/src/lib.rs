@@ -23,8 +23,6 @@ pub mod app;
 pub mod app_config;
 #[cfg(feature = "runtime")]
 pub mod app_context;
-#[cfg(feature = "http-assets")]
-pub mod async_assets;
 #[cfg(feature = "runtime")]
 pub mod dev_plugin;
 #[cfg(feature = "dev")]
@@ -146,12 +144,8 @@ pub use reactive_core::{
     effect, end_batch, memo, on_cleanup, owner_scope, reset_runtime, reset_tasks, set_task_waker,
     signal, spawn_stream, spawn_task, with_owner,
 };
-#[cfg(all(feature = "runtime", feature = "dynamic-image"))]
-pub use renderer_assets::{ImageError, decode};
 #[cfg(all(feature = "runtime", feature = "svg"))]
 pub use renderer_assets::{SvgData, SvgError, VectorCommand};
-#[cfg(all(feature = "runtime", feature = "dynamic-svg"))]
-pub use renderer_assets::{static_key, svg_cached};
 #[cfg(feature = "runtime")]
 pub use renderer_core::{
     Border, BorderRadius, Clamp, Color, Declared, DrawCommand, DrawState, FillRule, FontFamily,
@@ -199,8 +193,6 @@ pub use services_core::app_paths as paths;
 pub use services_core::{AppPathsProvider, NoPaths};
 pub use services_core::{Clipboard, clipboard, clipboard_text, set_clipboard, set_clipboard_text};
 // Available in every GUI build rather than opt-in: `ui_core::Surface` composes the per-surface service scope, so `runtime` turns on services-core/di. A non-GUI build has no ui-core and nothing to re-export.
-#[cfg(feature = "http-assets")]
-pub use async_assets::HttpAssetSource;
 #[cfg(feature = "runtime")]
 pub use services_core::{Scope, context, provide, set_context, try_inject, with_service};
 #[cfg(feature = "runtime")]
@@ -216,8 +208,11 @@ pub use theme_core::{
 };
 #[cfg(all(feature = "runtime", feature = "svg"))]
 pub use ui_core::Svg;
+// The seam and nothing behind it: `telar-dynamic` carries the decoders and transports that plug in here, and an application's own plug in exactly the same way.
 #[cfg(feature = "async-assets")]
-pub use ui_core::{AssetSource, AssetState};
+pub use ui_core::{
+    AssetCache, AssetDecoder, AssetError, AssetKey, AssetLoader, AssetState, AssetTransport, Reply,
+};
 #[cfg(feature = "runtime")]
 pub use ui_core::{
     Axis, Canvas, ChildSlot, Children, Clip, ClipAxis, ClippedItem, Component, ComponentList,

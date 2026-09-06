@@ -79,20 +79,14 @@ navigate = ["runtime", "dep:navigate-core"]
 ## The `Svg` widget, drawing shapes baked at build time out of `src:"…"`. No SVG parser at runtime.
 svg = ["ui-core?/svg"]
 
-## SVG parsed at runtime, from a string the application assembles or fetches.
-dynamic-svg = ["svg", "renderer-assets?/dynamic-svg"]
-
-## Images decoded at runtime. PNG and JPEG come with it; every other format is one knob of its own, under
-## **Image formats** below.
-dynamic-image = ["renderer-assets?/dynamic-image"]
-
-## The reactive seam for assets that arrive later (`AssetSource`, `AssetState`) — glue over signals, with
-## no transport of its own.
+## The reactive seam for assets that arrive later: `AssetLoader` over the `AssetTransport` / `AssetCache` /
+## `AssetDecoder` roles, which is reactive glue and nothing else — no decoder, no client, no format knobs.
+##
+## The implementations live in the companion crate `telar-dynamic`: SVG, bitmaps and translation catalogs
+## as decoders, HTTP and a directory as transports, each behind its own feature there. Depending on it is
+## how an application gets a format; implementing these three traits is how it gets one we do not ship, and
+## the two go in through the same door.
 async-assets = ["runtime", "ui-core/async-assets"]
-
-## The HTTP implementation of that seam. Split from [`async-assets`](#async-assets) because an application
-## supplying its own transport gets the seam without an HTTP client and a TLS stack behind it.
-http-assets = ["async-assets", "dynamic-svg", "dep:ureq"]
 
 ## Dependency injection over the per-surface service scope.
 di = ["services-core/di"]
@@ -186,40 +180,6 @@ desktop-bare = ["runtime", "dep:platform-desktop"]
 ## The same, for Android.
 android-bare = ["runtime", "dep:platform-android"]
 
-#! ## Image formats
-#!
-#! Extra decode formats for [`dynamic-image`](#dynamic-image), one knob each, passed straight through to
-#! the `image` crate. PNG and JPEG are always on. There is one per format rather than a set this crate
-#! curates because of *how* the wrong choice fails: decoding dispatches on whatever was compiled in, so a
-#! format nobody enabled is not a compile error — it is `unsupported format` at runtime, on the one file
-#! the user happened to open.
-
-## Everything `image` ships, for an application that opens whatever the user points it at — a file
-## manager's thumbnails, a wallpaper picker — and would rather pay the size than enumerate.
-image-formats = ["dynamic-image", "renderer-assets?/image-formats"]
-
-## `<text>` in an SVG parsed at *runtime*: a shaper, a font database and an outline rasterizer, which came
-## to 1.6 MB of the sandbox's wasm module for something its icons never used. An SVG baked at build time
-## keeps its text either way — the baker runs on the host with everything on.
-svg-text = ["dynamic-svg", "renderer-assets?/svg-text"]
-
-## `<image>` in an SVG parsed at runtime, which is a GIF, WebP and JPEG decoder to read what it points at.
-svg-images = ["dynamic-svg", "renderer-assets?/svg-images"]
-
-image-avif = ["dynamic-image", "renderer-assets?/image-avif"]
-image-bmp = ["dynamic-image", "renderer-assets?/image-bmp"]
-image-dds = ["dynamic-image", "renderer-assets?/image-dds"]
-image-exr = ["dynamic-image", "renderer-assets?/image-exr"]
-image-ff = ["dynamic-image", "renderer-assets?/image-ff"]
-image-gif = ["dynamic-image", "renderer-assets?/image-gif"]
-image-hdr = ["dynamic-image", "renderer-assets?/image-hdr"]
-image-ico = ["dynamic-image", "renderer-assets?/image-ico"]
-image-pnm = ["dynamic-image", "renderer-assets?/image-pnm"]
-image-qoi = ["dynamic-image", "renderer-assets?/image-qoi"]
-image-tga = ["dynamic-image", "renderer-assets?/image-tga"]
-image-tiff = ["dynamic-image", "renderer-assets?/image-tiff"]
-image-webp = ["dynamic-image", "renderer-assets?/image-webp"]
-
 [dependencies]
 document-features = { version = "0.2.12", optional = true }
 libloading = { version = "0.8", optional = true }
@@ -229,7 +189,6 @@ serde = { workspace = true }
 serde_json = { version = "1", optional = true }
 toml = { workspace = true, optional = true }
 tracing = { workspace = true, optional = true }
-ureq = { workspace = true, optional = true }
 web-time = { workspace = true }
 
 geometry-core = { workspace = true, optional = true }
@@ -269,9 +228,9 @@ libc = { version = "0.2.186", optional = true }
 [dev-dependencies]
 platform-headless = { workspace = true }
 # Self-referencing so the integration tests get the opt-in `testing` module without it being a default that
-# ships in every binary. `http-assets` rides along for the same reason: `tests/http_assets.rs` is real
-# coverage of the transport, not an `--all-features`-only extra.
-telar = { path = ".", features = ["testing", "http-assets", "watch"] }
+# ships in every binary. Nothing here covers an asset transport any more: `tests/http_assets.rs` moved to
+# `telar-dynamic` along with the transport it exercises.
+telar = { path = ".", features = ["testing", "watch"] }
 renderer-record = { workspace = true }
 
 [lints.rust]

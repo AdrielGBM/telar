@@ -5068,6 +5068,7 @@ dependencies = [
  "pollster",
  "serde",
  "telar",
+ "telar-dynamic",
  "telar-platform-core",
  "telar-platform-headless",
  "telar-renderer-core",
@@ -5550,7 +5551,6 @@ dependencies = [
  "telar-ui-tree",
  "toml",
  "tracing",
- "ureq",
  "wasm-bindgen-futures",
  "web-sys",
  "web-time",
@@ -5601,12 +5601,17 @@ dependencies = [
 name = "telar-dynamic"
 version = "0.1.8"
 dependencies = [
+ "document-features",
+ "image",
+ "telar-dynamic",
  "telar-geometry-core",
  "telar-i18n-core",
  "telar-reactive-core",
  "telar-renderer-assets",
  "telar-renderer-core",
  "telar-ui-core",
+ "tracing",
+ "ureq",
 ]
 
 [[package]]

@@ -10,10 +10,101 @@ readme = "README.md"
 license = { workspace = true }
 repository = { workspace = true }
 
+# docs.rs builds with everything on, so every decoder and transport is visible from one page rather than
+# just the ones a default build happens to carry — which here is none of them.
+[package.metadata.docs.rs]
+all-features = true
+rustdoc-args = ["--cfg", "docsrs"]
+
+[features]
+#! Nothing is on by default. A decoder you never named is a format you never linked, and the crate with no
+#! features enabled is the seam's vocabulary and a disk cache — no parser, no HTTP client, no codecs.
+default = []
+
+#! ## Formats
+
+## SVG parsed at runtime, through `usvg`/`resvg`. Covers `<image>` inside the document too: an SVG parser
+## that drops the rasters it is pointed at without saying so is a latent bug, not a knob.
+svg = ["renderer-assets/dynamic-svg"]
+
+## `<text>` in an SVG parsed at runtime: a shaper, a font database and an outline rasterizer, ~1.6 MB of
+## wasm for something most icon sets never use. An SVG baked at build time keeps its text either way.
+svg-text = ["svg", "renderer-assets/svg-text"]
+
+## Bitmaps decoded at runtime. PNG and JPEG come with it; every other format is one knob of its own below.
+image = ["dep:image"]
+
+## A translation catalog parsed from TOML at runtime, so a downloaded locale resolves through the same
+## transport/cache/decoder path an icon does — validated before it is cached, which a plain download is not.
+catalog = ["i18n-core/runtime-catalog"]
+
+#! ## Sources
+
+## Bytes read from a directory on disk. **Nothing behind it yet** — the name is reserved so that turning it
+## on later is not a manifest change; `DirTransport` is unwritten, and enabling this today gets you nothing.
+dir = []
+
+## Bytes fetched over HTTP. Native only for now: the browser body is `fetch`, and it is not written yet, so
+## a wasm build that names this fails to compile with a message that says so.
+http = ["dep:ureq"]
+
+#! ## Everything
+
+## Every decoder and every transport, for a build that would rather not enumerate.
+all = ["svg", "svg-text", "image", "image-formats", "catalog", "dir", "http"]
+
+#! ## Image formats
+#!
+#! Extra decode formats for [`image`](#image), one knob each, passed straight through to the `image` crate.
+#! PNG and JPEG are always on. One per format rather than a set this crate curates because of *how* the
+#! wrong choice fails: decoding dispatches on whatever was compiled in, so a format nobody enabled is not a
+#! compile error — it is `unsupported format` at runtime, on the one file the user happened to open.
+
+## Everything `image` ships, for an application that opens whatever the user points it at — a file
+## manager's thumbnails, a wallpaper picker — and would rather pay the size than enumerate.
+image-formats = ["image", "image/default-formats"]
+
+image-avif = ["image", "image/avif"]
+image-bmp = ["image", "image/bmp"]
+image-dds = ["image", "image/dds"]
+image-exr = ["image", "image/exr"]
+image-ff = ["image", "image/ff"]
+image-gif = ["image", "image/gif"]
+image-hdr = ["image", "image/hdr"]
+image-ico = ["image", "image/ico"]
+image-pnm = ["image", "image/pnm"]
+image-qoi = ["image", "image/qoi"]
+image-tga = ["image", "image/tga"]
+image-tiff = ["image", "image/tiff"]
+image-webp = ["image", "image/webp"]
+
+## Renders this feature list into the crate documentation. docs.rs only; never enable it yourself.
+document-features = ["dep:document-features"]
+
 [dependencies]
+document-features = { version = "0.2.12", optional = true }
 geometry-core.workspace = true
 i18n-core.workspace = true
+image = { version = "0.25.10", default-features = false, features = ["png", "jpeg"], optional = true }
 reactive-core.workspace = true
 renderer-assets.workspace = true
 renderer-core.workspace = true
+tracing.workspace = true
 ui-core = { workspace = true, features = ["async-assets"] }
+
+# Target-gated rather than plain-optional so `http` on a wasm build fails on the missing web body with a
+# message that names it, instead of on a `getrandom` error deep under a TLS stack that nobody asked for.
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+ureq = { workspace = true, optional = true }
+
+[dev-dependencies]
+reactive-core.workspace = true
+renderer-assets.workspace = true
+# Self-referencing so `tests/http_assets.rs` gets the transport and the decoder it exercises without them
+# being defaults every dependent links. That test is real coverage of the HTTP path end to end, not an
+# `--all-features`-only extra.
+telar-dynamic = { path = ".", features = ["http", "svg"] }
+ui-core.workspace = true
+
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(docsrs)'] }

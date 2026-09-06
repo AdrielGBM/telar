@@ -1,6 +1,6 @@
 //! The reactive seam for assets that resolve later, and the transport-agnostic vocabulary — a key, an error, and the transport/cache/decoder roles — that an implementor assembles into one.
 //!
-//! [`AssetState`] and [`AssetSource`] are the older, still-supported shape: one method per asset format, with transport, caching and decoding folded together inside a single implementor like `HttpAssetSource`. [`AssetTransport`], [`AssetCache`] and [`AssetDecoder`] are the shape a new resource type should target instead — bytes in, bytes cached, bytes decoded, with no method to add anywhere for a format nobody asked for. [`AssetLoader`] assembles the three into the same `Loading` → `Ready`/`Failed` contract `AssetSource` exposes today.
+//! [`AssetTransport`], [`AssetCache`] and [`AssetDecoder`] are three roles, not one: bytes in, bytes kept, bytes decoded, with no method to add anywhere for a format nobody asked for. [`AssetLoader`] assembles them into the `Loading` → `Ready`/`Failed` contract a widget reads. This crate ships no implementation of any of the three — `telar-dynamic` carries ours, and an application's own arrives through exactly the same door.
 
 use std::cell::{Cell, RefCell};
 use std::collections::{HashMap, VecDeque};
@@ -8,7 +8,6 @@ use std::rc::Rc;
 use std::sync::Arc;
 
 use reactive_core::{Emitter, ReadSignal, RwSignal, Task, signal, spawn_stream};
-use renderer_assets::SvgData;
 
 /// The lifecycle of an asynchronously-resolved asset. Kept inside a signal so a widget re-renders as the state advances from `Loading` to `Ready`/`Failed`.
 #[derive(Clone, Debug)]
@@ -20,7 +19,7 @@ pub enum AssetState<T> {
 
 /// Two resolved states are the same asset when they hold the same `Arc` — identity, not contents. Comparing a decoded asset structurally would walk every path of every glyph to answer a question the pointer already answers, and answer it differently: two identical decodes of the same file are still two arrivals.
 ///
-/// Only `Arc` payloads, which is what an [`AssetSource`] hands out. It exists so a `memo` can hold one, which is what lets a view `match` on an asset as it resolves.
+/// Only `Arc` payloads, which is what a decoder of a shared, heap-sized asset hands out. It exists so a `memo` can hold one, which is what lets a view `match` on an asset as it resolves.
 impl<T> PartialEq for AssetState<std::sync::Arc<T>> {
     fn eq(&self, other: &Self) -> bool {
         match (self, other) {
@@ -60,20 +59,6 @@ impl<T> AssetState<T> {
         match self {
             AssetState::Ready(value) => Some(value),
             _ => None,
-        }
-    }
-}
-
-/// A transport-agnostic source of SVG assets addressed by string id. rsx owns the reactive contract — a signal that advances `Loading` → `Ready`/`Failed` and re-renders whoever read it — while an implementor supplies the bytes from disk, a bundle, or the network entirely outside this crate.
-pub trait AssetSource {
-    /// A reactive handle to the SVG named `id`. Reading it subscribes the caller and may start the load; the state advances as the asset resolves.
-    fn svg(&self, id: &str) -> ReadSignal<AssetState<Arc<SvgData>>>;
-
-    /// The resolved SVG, or `fallback()` while it is still loading or has failed. Reads reactively, so a widget calling this re-renders once the asset lands.
-    fn svg_or(&self, id: &str, fallback: impl FnOnce() -> Arc<SvgData>) -> Arc<SvgData> {
-        match self.svg(id).get() {
-            AssetState::Ready(data) => data,
-            _ => fallback(),
         }
     }
 }
@@ -246,11 +231,11 @@ fn decode_and_cache<V: Clone + Send + 'static>(
 
 /// Resolves ids into `V` through a cache-then-transport pipeline, reactively: [`get`](Self::get) returns at once with a signal that advances `Loading` → `Ready`/`Failed` as the answer arrives.
 ///
-/// A concrete type where [`AssetSource`] is a trait: nothing here needs to be dyn-safe, so [`get_or`](Self::get_or) takes its fallback as a plain `impl FnOnce` instead of paying the object-safety cost that method's shape puts on `AssetSource`. One loader serves one [`AssetDecoder::Output`] — an application with both SVGs and bitmaps builds two, sharing a transport and a cache between them if it wants to.
+/// A concrete type rather than a trait: nothing here needs to be dyn-safe, so [`get_or`](Self::get_or) takes its fallback as a plain `impl FnOnce` — a shape a trait with this method could not have had at all. What varies is behind it, in the three roles it composes. One loader serves one [`AssetDecoder::Output`] — an application with both SVGs and bitmaps builds two, sharing a transport and a cache between them if it wants to.
 ///
 /// Every read for an id already loading or loaded shares the request that started it, so a screen full of the same icon costs one transport call, not one per widget that asked. Requests beyond [`with_max_in_flight`](Self::with_max_in_flight) — 1 by default — queue and start as earlier ones finish, so the loader throttles concurrency itself rather than leaving that to the transport.
 ///
-/// `!Send` by construction: it holds the signals it hands out, and those live on the UI thread. Construct it there and keep it there — a `thread_local!`, or a field of the app — the same way `HttpAssetSource` does today. Dropping it cancels every request still in flight, so nothing it started can write into a signal nobody can read anymore.
+/// `!Send` by construction: it holds the signals it hands out, and those live on the UI thread. Construct it there and keep it there — a `thread_local!`, or a field of the app. Dropping it cancels every request still in flight, so nothing it started can write into a signal nobody can read anymore.
 pub struct AssetLoader<V: Clone + Send + 'static> {
     inner: Rc<Inner<V>>,
 }
