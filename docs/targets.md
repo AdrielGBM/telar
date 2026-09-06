@@ -1,0 +1,141 @@
+# Targets
+
+Telar draws every pixel itself, so "which target" is a real question: a terminal build has no GPU to talk
+to, a browser build has no font directory, and a desktop build has both. The answer is one word.
+
+## One word, one target
+
+Each target feature is complete on its own. There is no second flag to remember, no renderer to wire up,
+and no row below that pays for another:
+
+| Your app runs in | `default = [...]` | Crates compiled |
+| --- | --- | --- |
+| A desktop window (Linux, macOS, Windows) | `["desktop"]` | 413 |
+| The terminal it was launched from | `["tui"]` | 162 |
+| A browser, drawing as a document | `["web-dom"]` | 164 |
+| A browser, document **and** WebGPU canvas | `["web"]` | 230 |
+| Android | `["android"]` | 297 |
+| Nothing — draw commands in, pixels out | `["headless"]` | 219 |
+
+Counted with `cargo tree -e normal` on each target, with the default `bake-assets` on. The spread is the
+point: a desktop build is mostly wgpu and its shader toolchain, and a terminal build links neither.
+
+`cargo telar new --target <name>` writes the manifest for you. Switching later is one word in `Cargo.toml`,
+or `--target` on the command line for a one-off.
+
+## Desktop
+
+```toml
+[features]
+default = ["desktop"]
+desktop = ["telar/desktop"]
+```
+
+```sh
+cargo telar dev
+cargo telar build --format appimage   # deb | dmg | nsis | dir
+```
+
+A native window through winit, drawn by the GPU where there is one and the CPU where there is not.
+`backend = "auto"` in `telar.toml` is what picks between them at startup; `"hardware"` or `"software"`
+forces one. Both renderers are compiled in, because which machine the binary lands on is not known at build
+time — an app that ships to a known fleet can drop one:
+
+```toml
+telar = { version = "0.1", default-features = false, features = ["desktop-bare", "software"] }
+```
+
+## Terminal
+
+```toml
+[features]
+default = ["tui"]
+tui = ["telar/tui"]
+```
+
+```sh
+cargo telar dev --target tui
+```
+
+The same components, laid out in whole cells and drawn with box characters and colour. No window, no GPU
+and no glyph shaper — a terminal has its own font and Telar does not get a say in it, which is most of why
+this build is a third of a desktop one.
+
+Boxes, fills, strokes and text render; anything that needs subpixel geometry (gradients, shadows, arbitrary
+paths, images) is approximated or dropped, because a cell is the smallest thing a terminal can colour.
+
+## Browser
+
+```toml
+[features]
+default = ["web"]
+web = ["telar/web"]
+web-dom = ["telar/web-dom"]
+```
+
+```sh
+cargo telar dev --target web              # serves on :8080
+cargo telar build --target web --renderer dom
+```
+
+Two ways to draw, and they are genuinely different rather than a fallback order:
+
+- **`web-dom`** builds the interface out of real elements laid out by CSS, measured with the browser's own
+  canvas. No GPU, no shaper, no font bytes in the module — text is the browser's own, selectable and
+  searchable, and screen readers see a document.
+- **`web`** adds pixels on a canvas through WebGPU, which draws exactly what the desktop build draws. It
+  carries a glyph shaper and needs a face, because a canvas has no fonts of its own.
+
+With `web`, `WebRenderer::Auto` picks pixels where the browser offers a GPU adapter and a document where it
+does not; the page can override at load time with `?telar-renderer=dom`. Build with `--profile web`, which
+optimises for size rather than cycles — a module crosses a network before it runs an instruction.
+
+## Android
+
+```toml
+[features]
+default = ["android"]
+android = ["telar/android"]
+```
+
+```sh
+cargo telar dev --target android
+cargo telar build --target android --format apk
+```
+
+A `NativeActivity`, with both renderers behind it. `opt-level = "z"` in `[profile.release]` is worth more
+here than anywhere else.
+
+The Android frontend is opt-in rather than implied by the target triple, because a command-line build under
+Termux is an ordinary Linux process with no activity behind it, and linking one would be dead weight.
+
+## Headless
+
+```toml
+telar = { version = "0.1", default-features = false, features = ["headless"] }
+```
+
+No surface: `rasterize` takes draw commands and returns pixels, on the CPU. For rendering a component to
+PNG from a test, a server, or a build script. `cargo telar test` is this target — it renders every
+`[preview]` block and reports the ones that failed.
+
+## More than one target from one codebase
+
+Naming several is allowed, and `apps/sandbox` in this repository does exactly that: it compiles the desktop,
+terminal, Android and browser frontends from one set of `.rsx` files and picks between the ones a given
+build contains with `TELAR_TARGET`.
+
+```toml
+[features]
+default = ["desktop"]
+desktop = ["telar/desktop"]
+tui = ["telar/tui"]
+```
+
+The cost is additive, so this is worth doing when you ship both and not worth doing to keep options open.
+
+## The rest of the features
+
+Everything beyond the target — the widget catalogue, navigation, SVG, HTTP assets, i18n at runtime — is
+listed with what it costs at **<https://docs.rs/telar#feature-flags>**. Most applications name a target,
+`components`, and nothing else.

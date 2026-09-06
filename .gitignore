@@ -5,7 +5,9 @@
 *.jks
 .env
 
-/docs
+/docs/*
+!/docs/build-tuning.md
+!/docs/targets.md
 /librust_out.*
 
 .direnv/

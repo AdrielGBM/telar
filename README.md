@@ -34,6 +34,85 @@ feature_card icon:"⚡" title:"Fast" body:"Software and wgpu renderers with dirt
 
 A `.rsx` file has up to four sections: `[logic]` for verbatim Rust (a `pub struct Props` declares the component's props), `[style]` for reusable style classes, `[view]` for the node tree, and `[preview]` blocks that the tooling can render in isolation.
 
+## Quick start
+
+```sh
+cargo install cargo-telar
+cargo telar new my-app        # --target desktop | tui | web | android
+cd my-app
+cargo telar dev
+```
+
+That is the whole of the setup. `cargo telar new` writes the manifest, the build profiles, a theme, an app root and one `.rsx` component, with **one target already named** — there is nothing to wire up and no feature list to read first.
+
+<details>
+<summary>What it writes, for adding Telar to a project you already have</summary>
+
+```
+my-app/
+  Cargo.toml      # one target under [features], and the build profiles
+  telar.toml      # renderer backend, module discovery, the dev window
+  src/main.rs     # fn main() { my_app::run(); }
+  src/lib.rs      # telar::app!(…) — theme, startup hook, config, root
+  src/theme.rs    # the design tokens every component reads
+  src/app.rs      # the root component
+  src/home.rsx    # one page
+```
+
+`src/lib.rs` is the whole of the wiring:
+
+```rust
+telar::app!(
+    theme::AppTheme,
+    { telar::set_theme(theme::AppTheme::light()); },
+    telar::AppConfig::default(),
+    app::Root
+);
+```
+
+and `telar.toml` sits next to `Cargo.toml`:
+
+```toml
+[telar]
+backend = "auto"
+auto_modules = true
+
+[telar.dev.window]
+title = "my-app"
+width = 1000
+height = 700
+```
+
+</details>
+
+Then:
+
+```sh
+cargo telar dev        # run with hot reload
+cargo telar preview    # render every [preview] block, hot-reloaded
+cargo telar test       # render all previews headlessly and report failures
+cargo telar check      # type-check, with .rsx errors on the lines you wrote
+cargo telar build --format deb   # appimage | deb | dmg | nsis | apk | dir
+cargo telar doctor     # check the toolchain
+```
+
+### One target, one word
+
+Telar is a set of small crates behind one facade, and a build carries the target it named and nothing else:
+
+| Your app runs in | `default = [...]` | Crates compiled |
+| --- | --- | --- |
+| A desktop window (Linux, macOS, Windows) | `["desktop"]` | 413 |
+| The terminal it was launched from | `["tui"]` | 162 |
+| A browser, drawing as a document | `["web-dom"]` | 164 |
+| A browser, document **and** WebGPU canvas | `["web"]` | 230 |
+| Android | `["android"]` | 297 |
+| Nothing — draw commands in, pixels out | `["headless"]` | 219 |
+
+Counted with `cargo tree -e normal` on each target. Every row is complete on its own: naming it is the whole of the choice, and no row pays for another — a desktop build is mostly wgpu and its shader toolchain, and a terminal build links neither. Switching later is one word in `Cargo.toml`.
+
+Per-target guides, and how to ship two targets from one codebase, are in **[docs/targets.md](docs/targets.md)**.
+
 ### One value grammar
 
 An attribute is `key` — a flag that asserts itself — or `key:<rust expression>`, read to the next space at
@@ -76,131 +155,73 @@ card pad:20
     text "inside" font_size:14
 ```
 
-## Getting started
-
-```sh
-cargo install cargo-telar
-cargo add telar
-```
-
-Add a `telar.toml` next to your `Cargo.toml`:
-
-```toml
-[telar]
-backend = "auto"
-auto_modules = true
-
-[telar.dev.window]
-title = "my-app"
-width = 1200
-height = 800
-```
-
-Declare the app in `src/lib.rs` — `telar::app!` wires the theme, the startup hook, the window config and the root component:
-
-```rust
-telar::app!(
-    theme::MyTheme,
-    { telar::set_theme(theme::MyTheme::light()); },
-    telar::AppConfig::default(),
-    app::Root
-);
-```
-
-Then:
-
-```sh
-cargo telar dev        # run with hot reload
-cargo telar preview    # render every [preview] block, hot-reloaded
-cargo telar test       # render all previews headlessly and report failures
-cargo telar build --format deb   # appimage | deb | dmg | nsis | apk | dir
-cargo telar doctor     # check the toolchain
-```
-
 `apps/sandbox` in this repo is the reference app and covers most of the surface.
-
-## Build profiles
-
-Copy these into your **workspace root** `Cargo.toml` — Cargo ignores `[profile.*]` in a member crate. `cargo telar build` always implies `--release`.
-
-```toml
-[profile.dev]
-opt-level = 1
-debug = "line-tables-only"
-
-# Dependencies compile once and are not rebuilt as you edit, and they are not what you are stepping
-# through: optimising them is paid for on the first build and buys a renderer and a layout engine that
-# run at a usable speed in dev, and dropping their debug info takes 140 MB out of a cdylib that gets
-# rewritten on every reload. Your own crates keep theirs, so panics in your code still name a line.
-[profile.dev.package."*"]
-opt-level = 3
-debug = false
-
-[profile.release]
-opt-level = 3        # "s" or "z" for a smaller binary instead — matters most on Android
-lto = "fat"          # "thin" keeps most of the win for a fraction of the build time
-codegen-units = 1    # better codegen, no parallelism left in that stage
-strip = "symbols"    # smaller binary; release backtraces lose function names
-```
-
-`debug` decides how much the link has to write: `false` (addresses only), `"line-tables-only"` (file and line, no debugger) or `true` (full, debugger-ready). `"line-tables-only"` is worth keeping for your own crates — a panic still names the line it came from, without carrying what only a debugger reads — and `false` is worth setting for everything else, which is why the two blocks above differ. Measured on a real app: the rebuild drops ~14 % and the `cdylib` goes from 154 MB to 15 MB, with panics in the app's own code unchanged. Setting `debug = false` on `[profile.dev]` as well takes it to 0.7 MB and saves another 15 ms, which is inside the noise and not worth the panic locations.
-
-**Do not set `panic = "abort"`.** Telar recovers from two kinds of panic and both need unwinding: a widget handler, effect or render that panics unmounts *only that surface* and leaves the rest of the application running; and a wgpu validation error or lost device — a transient swapchain mismatch while a compositor resizes a just-opened window is the common case — is caught on the render thread, which drops that one frame and recovers on the next. Under `abort` both are process death. If binary size is the goal, `opt-level = "z"` and `strip` give you more of it with nothing load-bearing attached.
-
-### Faster rebuilds
-
-A hot reload is rustc on the crate you edited plus a full relink of the `cdylib`, and only the first half gets cheaper the smaller your edit is. On `apps/sandbox` (155 MB `cdylib`) the rebuild is ~2.0 s, of which ~0.86 s is the link.
-
-The default linker on Linux (GNU `ld`) works single-threaded; `mold` and `lld` parallelise it and take that link to ~0.70 s — about 8 % of the rebuild. Install one (`apt install mold`, `dnf install mold`, `pacman -S mold`, …) and point Cargo at it in `<your-project>/.cargo/config.toml`:
-
-```toml
-[target.x86_64-unknown-linux-gnu]
-rustflags = ["-C", "link-arg=-fuse-ld=mold"]
-```
-
-Scope it to the host triple rather than to `build.rustflags`, or an Android build will try to link with the host's linker instead of the NDK's. `lld` works the same way with `-fuse-ld=lld`, and needs `ld.lld` on `PATH` — the driver's name, not the package's. macOS has shipped a parallel linker of its own since Xcode 15 and needs none of this; MSVC takes no `-fuse-ld=` at all. `cargo telar doctor` reports whether one is installed; it never selects or installs anything.
 
 ## What's in the box
 
+Everything here is either always present or one word away. Nothing is bundled.
+
 - **Reactive signals** — a fine-grained graph of signals, memos and effects; no virtual DOM, no diffing.
-- **Two renderers** — a CPU rasterizer on `tiny-skia` and a GPU one on `wgpu`, both behind the same drawing vocabulary, selected by `backend = "auto" | "hardware" | "software"`.
 - **Flexbox and grid layout** on top of Taffy, with reactive writing direction (LTR/RTL).
 - **Motion** — tweens and springs driven by one frame ticker, with colors interpolated in Oklch.
 - **Theming** — theme tokens plus light/dark mode that can follow the OS.
 - **Internationalization** — translation catalogs baked at build time; `t!` validates keys and arguments at compile time.
-- **Navigation** — a reactive page stack with animated transitions.
-- **Hot reload** in `cargo telar dev`, and an in-app devtools overlay for inspecting the live component tree.
-- **Packaging** to native installers per platform, plus Android APKs.
+- **Two renderers** — a CPU rasterizer on `tiny-skia` and a GPU one on `wgpu`, behind the same drawing vocabulary. `desktop` and `android` bring both, and `backend = "auto"` picks per machine.
+- **A widget catalogue** — buttons, fields, selects, menus, modals, tabs, sliders, and the rest. → `components`
+- **Navigation** — a reactive page stack with animated transitions. → `navigate`
+- **Images and SVG** — baked into the binary at build time, or parsed at runtime. → `svg` · `dynamic-svg` · `dynamic-image`
+- **Assets over HTTP**, behind a transport-agnostic reactive seam. → `http-assets`
+- **Hot reload** in `cargo telar dev`, and an in-app devtools overlay for inspecting the live component tree. *(the CLI sets this one)*
+- **Packaging** to native installers per platform, plus Android APKs. → `cargo telar build --format …`
 
-Targets desktop (Linux, macOS, Windows) and Android.
+The complete list, with what each feature pulls in and why, is on **[docs.rs](https://docs.rs/telar#feature-flags)**.
 
 ## Editor support
 
 The VS Code extension provides syntax highlighting, snippets, diagnostics, completion and component preview, backed by the `telar-analyzer` language server. A component's attribute keys are completed from its props struct — names, types and doc comments — through an embedded rust-analyzer, and a diagnostic about a value lands on the `.rsx` line and column you wrote it on. The extension bundles a prebuilt server binary, so no extra install step is needed.
 
+## Build tuning
+
+`cargo telar new` writes profiles that keep dev builds fast and release builds small. Adding Telar to an existing workspace, wanting a faster linker, or wanting to know why **`panic = "abort"` must stay off**: see **[docs/build-tuning.md](docs/build-tuning.md)**.
+
 ## Crates
 
-Everything is published under the `telar-` prefix. Most users only need the `telar` facade, which re-exports the runtime behind feature flags.
+You depend on one:
+
+```toml
+[dependencies]
+telar = "0.1.8"
+```
+
+Everything behind it — the reactive graph, the layout engine, the renderers, the platform backends, the `.rsx` pipeline — is a separate `telar-*` crate. They are published because Cargo requires every dependency of a published crate to be published too, not because an application names them; the split is what lets a terminal build skip a GPU renderer. Reach for one directly only if you are writing a frontend or a tool against Telar's internals.
+
+The one exception is [`cargo-telar`](crates/tools/cargo-telar), which is a binary you install rather than a dependency.
+
+<details>
+<summary><b>The crates behind the facade</b></summary>
 
 | Crate | Purpose |
 | --- | --- |
-| [`telar`](crates/telar) | The facade: re-exports the runtime and the `app!`/`t!` macros |
-| [`cargo-telar`](crates/tools/cargo-telar) | `cargo telar` — dev server, previews, packaging |
 | [`telar-reactive-core`](crates/reactive/reactive-core) | Signals, memos, effects, batching |
 | [`telar-geometry-core`](crates/geometry/geometry-core) | Points, rects, transforms, border radii, Oklch color |
 | [`telar-layout-core`](crates/layout/layout-core) · [`telar-layout-reactive`](crates/layout/layout-reactive) | Flexbox/grid engine and its reactive context |
 | [`telar-motion-core`](crates/motion/motion-core) | Tweens, springs, the frame ticker |
 | [`telar-theme-core`](crates/ui/theme-core) | Theme tokens, light/dark mode |
+| [`telar-semantics-core`](crates/semantics/semantics-core) | What a thing in an interface *is*, for screen readers, documents and terminals |
 | [`telar-ui-core`](crates/ui/ui-core) · [`telar-ui-tree`](crates/ui/ui-tree) · [`telar-ui-components`](crates/ui/ui-components) | Widget kernel, component tree, widget catalogue |
 | [`telar-renderer-core`](crates/renderer/renderer-core) | Draw commands, culling, dirty tracking |
 | [`telar-renderer-software`](crates/renderer/renderer-software) · [`telar-renderer-hardware`](crates/renderer/renderer-hardware) | CPU and wgpu backends |
-| [`telar-renderer-text`](crates/renderer/renderer-text) · [`telar-renderer-assets`](crates/renderer/renderer-assets) | Text shaping and glyph atlas; SVG/PNG/JPEG decoding |
-| [`telar-platform-core`](crates/platform/platform-core) and `telar-platform-{winit,desktop,android,headless}` | Window/event abstraction and its backends |
+| [`telar-renderer-tui`](crates/renderer/renderer-tui) · [`telar-renderer-dom`](crates/renderer/renderer-dom) · [`telar-renderer-web`](crates/renderer/renderer-web) | Terminal cells, browser elements, browser canvas |
+| [`telar-renderer-text`](crates/renderer/renderer-text) · [`telar-renderer-assets`](crates/renderer/renderer-assets) | Text shaping and glyph atlas; SVG/PNG/JPEG decoding and baking |
+| [`telar-renderer-cache`](crates/renderer/renderer-cache) · [`telar-renderer-record`](crates/renderer/renderer-record) | The shared byte-budgeted cache; a backend that records instead of drawing |
+| [`telar-platform-core`](crates/platform/platform-core) and `telar-platform-{winit,desktop,android,tui,web,headless}` | Window/event abstraction and its backends |
 | [`telar-parser`](crates/tools/telar-parser) · [`telar-transpiler`](crates/tools/telar-transpiler) · [`telar-macros`](crates/tools/telar-macros) | The `.rsx` pipeline |
 | [`telar-i18n-core`](crates/i18n/i18n-core) · [`telar-navigate-core`](crates/navigate/navigate-core) · [`telar-services-core`](crates/services/services-core) | i18n runtime, navigation, platform paths and DI |
-| [`telar-diagnostics`](crates/tools/telar-diagnostics) | Shared tooling (the devtools overlay lives in `telar` behind `dev`) |
+| [`telar-reactive-local`](crates/reactive/reactive-local) | Per-surface thread-local slots, split out so `platform-core` need not link the reactive runtime |
 
-`telar-analyzer` lives in this repo but is distributed as a binary through GitHub Releases and the VS Code extension rather than crates.io.
+`telar-analyzer` and `telar-diagnostics` live in this repo but are distributed through GitHub Releases and the VS Code extension rather than crates.io.
+
+</details>
 
 ## Minimum supported Rust version
 
