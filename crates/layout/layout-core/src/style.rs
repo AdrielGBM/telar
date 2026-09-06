@@ -451,11 +451,16 @@ impl LayoutStyle {
     /// On a raster backend a stroke is drawn inside the box and costs no layout at all — a one-pixel rule overlaps the padding and nobody notices. A terminal has no sub-cell line: a border claims an entire cell on each side. A box laid out with no room for one therefore has its own frame and its content competing for the same row, and below three rows the text is drawn on top of the frame.
     ///
     /// Nothing on a unit grid, so a desktop window keeps exactly the geometry it had.
-    pub fn bordered(mut self) -> Self {
+    pub fn bordered(self) -> Self {
         let grid = geometry_core::layout_grid();
         if grid.is_unit() {
             return self;
         }
+        self.bordered_on(grid)
+    }
+
+    /// The rule itself, with the grid handed in rather than read. Split out so it can be tested without writing the process-wide grid: that global is documented as written once by a frontend before any component exists, and a test that re-writes it mid-run breaks the contract every other test in the binary is relying on.
+    fn bordered_on(mut self, grid: LayoutGrid) -> Self {
         // Only what the padding does not already give. A raster backend draws a stroke *inside* the box, overlapping whatever padding is there, and the cell equivalent is a frame in the outermost cell — so a box already padded by a cell or more has the room and reserving another would double its frame for nothing. Read from `self`, which is why this belongs after the padding calls in a builder chain.
         let short = |declared: LengthPercentage, step: f32| {
             LengthPercentage::length((step - length_of(declared)).max(0.0))
@@ -622,7 +627,7 @@ impl Default for LayoutStyle {
 #[cfg(test)]
 mod border_reservation {
     use super::*;
-    use geometry_core::{LayoutGrid, set_layout_grid};
+    use geometry_core::LayoutGrid;
 
     fn border_of(style: LayoutStyle) -> (f32, f32) {
         (
@@ -631,35 +636,31 @@ mod border_reservation {
         )
     }
 
+    const CELL: LayoutGrid = LayoutGrid { x: 8.0, y: 16.0 };
+
     /// The whole of the rule: a stroke needs one cell per side, and padding already supplies cells. Only the shortfall is reserved, so a roomy box does not pay twice for its own frame.
     #[test]
     fn a_border_reserves_only_what_the_padding_does_not_give() {
-        set_layout_grid(LayoutGrid::new(8.0, 16.0));
-
-        let bare = LayoutStyle::new().bordered();
         assert_eq!(
-            border_of(bare),
+            border_of(LayoutStyle::new().bordered_on(CELL)),
             (8.0, 16.0),
             "an unpadded box needs the whole cell"
         );
-
-        let padded = LayoutStyle::new().padding_all(16.0).bordered();
         assert_eq!(
-            border_of(padded),
+            border_of(LayoutStyle::new().padding_all(16.0).bordered_on(CELL)),
             (0.0, 0.0),
             "a box padded a cell already has room for its frame"
         );
-
-        let roomy = LayoutStyle::new().padding_all(32.0).bordered();
-        assert_eq!(border_of(roomy), (0.0, 0.0), "and so does a roomier one");
-
-        set_layout_grid(LayoutGrid::UNIT);
+        assert_eq!(
+            border_of(LayoutStyle::new().padding_all(32.0).bordered_on(CELL)),
+            (0.0, 0.0),
+            "and so does a roomier one"
+        );
     }
 
-    /// A surface that can put an edge anywhere draws a stroke inside the box for free, exactly as it did before any of this existed.
+    /// A surface that can put an edge anywhere draws a stroke inside the box for free, exactly as it did before any of this existed. Goes through `bordered`, since the unit grid is the default and the short-circuit is the part worth covering.
     #[test]
     fn a_unit_grid_reserves_nothing() {
-        set_layout_grid(LayoutGrid::UNIT);
         assert_eq!(border_of(LayoutStyle::new().bordered()), (0.0, 0.0));
     }
 }
