@@ -53,7 +53,9 @@ mod virtual_list;
 mod window_root;
 
 #[cfg(feature = "async-assets")]
-pub use async_asset::{AssetSource, AssetState};
+pub use async_asset::{
+    AssetCache, AssetDecoder, AssetError, AssetKey, AssetSource, AssetState, AssetTransport, Reply,
+};
 pub use border::{logical_border_radius, logical_border_widths};
 pub use canvas::Canvas;
 pub use child_host::{ChildSlot, fragment, fragment_positional};
