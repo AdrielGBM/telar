@@ -2,6 +2,13 @@
 //!
 //! The single source of truth for which built-in tags carry an asset reference and what goes with each: the runtime data type, the baked-asset `static` prefix, the missing-`src` placeholder identifier, and the file extensions that name it. `telar-analyzer`'s document links and `cargo-telar`'s asset watcher read this table instead of keeping their own copy.
 
+mod artifact;
+
+pub use artifact::{
+    ASSET_ARTIFACT_FORMAT, ASSETS_INDEX_FILENAME, ASSETS_MODULE, ASSETS_SOURCE_FILENAME,
+    AssetEntry, AssetIndex, BakedAsset, GeneratedAssets, content_hash, generate_assets, read_index,
+    static_name_for_path, write_generated,
+};
 
 /// One kind of external asset a widget's `src:` attribute can resolve to.
 pub struct AssetKind {
@@ -49,4 +56,9 @@ pub const ASSET_KINDS: &[AssetKind] = &[
 /// The asset kind `tag` resolves to, or `None` for a tag that carries no asset reference.
 pub fn asset_kind_for_tag(tag: &str) -> Option<&'static AssetKind> {
     ASSET_KINDS.iter().find(|kind| kind.tags.contains(&tag))
+}
+
+/// The asset kind identified by [`AssetKind::id`], or `None` if `id` names no registered kind.
+pub fn asset_kind_for_id(id: &str) -> Option<&'static AssetKind> {
+    ASSET_KINDS.iter().find(|kind| kind.id == id)
 }

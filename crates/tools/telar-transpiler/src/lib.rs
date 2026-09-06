@@ -19,7 +19,12 @@ mod style;
 mod transition;
 mod view;
 
-pub use assets::{ASSET_KINDS, AssetKind, asset_kind_for_tag};
+pub use assets::{
+    ASSET_ARTIFACT_FORMAT, ASSET_KINDS, ASSETS_INDEX_FILENAME, ASSETS_MODULE,
+    ASSETS_SOURCE_FILENAME, AssetEntry, AssetIndex, AssetKind, BakedAsset, GeneratedAssets,
+    asset_kind_for_id, asset_kind_for_tag, content_hash, generate_assets, read_index,
+    static_name_for_path, write_generated,
+};
 pub use codegen::{TranspiledSource, transpile_source};
 pub use discovery::{
     assets_root, auto_modules_enabled, collect_files_by_ext, component_name, discover_rust_modules,
