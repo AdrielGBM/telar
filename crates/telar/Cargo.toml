@@ -65,9 +65,6 @@ web = ["web-dom", "shaper", "dep:renderer-web"]
 ## No surface at all: exposes `rasterize`, draw commands in and pixels out, with no window and no GPU.
 headless = ["runtime", "software", "dep:platform-headless"]
 
-## Deprecated alias for [`headless`](#headless), kept so an existing manifest keeps compiling.
-platform-headless = ["headless"]
-
 #! ## Capabilities
 #!
 #! Optional runtime pieces, each off unless named. Every one of them is a dependency an application that
