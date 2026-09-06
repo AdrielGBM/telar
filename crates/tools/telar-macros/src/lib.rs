@@ -569,41 +569,35 @@ fn transpile_project(theme_type_str: Option<&str>) -> Result<TranspileOutput, To
             Ok(tokens) => include_stmts.extend(tokens),
             Err(e) => {
                 let msg = format!("Failed to emit auto-discovered modules: {e}");
-                return Err(quote! { compile_error!(#msg) });
+                return Err(quote! { compile_error!(#msg); });
             }
         }
     }
 
-    // Baked when a `locales/` directory exists: every `locales/<tag>.toml` becomes one generated module wired at the crate root, so `t!` and markup call sites reference it. Inert when there is no catalog, mirroring how svg baking only fires for `svg` elements.
-    match telar_transpiler::parse_catalog(&manifest_dir) {
-        Ok(Some(catalog)) => {
-            let src = telar_transpiler::bake_catalog_to_source(&catalog);
-            let out_path = generated_dir.join("__i18n.rs");
-            written_files.insert(out_path.clone());
-            let needs_write = std::fs::read_to_string(&out_path)
-                .map(|existing| existing != src)
-                .unwrap_or(true);
-            if needs_write && let Err(e) = std::fs::write(&out_path, &src) {
-                let msg = format!("Failed to write {}: {e}", out_path.display());
-                return Err(quote! { compile_error!(#msg) });
-            }
-            let out_path_str = out_path.to_string_lossy().to_string();
-            let mod_ident = Ident::new(telar_transpiler::I18N_MODULE, Span::call_site());
-            include_stmts.extend(quote! {
-                #[path = #out_path_str]
-                #[allow(dead_code)]
-                // A crate invokes this once per module owning `.rsx`, and each one loads this same file on purpose: `t!` resolves `crate::__rsx_i18n::CATALOG`, so the module has to exist wherever the catalog is baked.
-                #[allow(clippy::duplicate_mod)]
-                pub mod #mod_ident;
-            });
-            // Re-bake when any locale file changes, like a `.rsx` edit.
-            for file in telar_transpiler::catalog_files(&manifest_dir) {
-                let path_str = file.to_string_lossy().to_string();
-                rerun_stmts.extend(quote! { const _: &str = include_str!(#path_str); });
-            }
-        }
-        Ok(None) => {}
-        Err(msg) => return Err(quote! { compile_error!(#msg) }),
+    // The catalog the CLI baked, wired exactly like the asset module. The macro neither discovers locale files nor parses one: an empty artifact is a project with no translations, and a missing one is a build that has not run the baker, which is `t!`'s error to report and not this pass's.
+    let catalog = telar_transpiler::CatalogContext::load(&manifest_dir, env!("CARGO_PKG_VERSION"));
+    if let Some(stale) = catalog.staleness() {
+        return Err(quote! { compile_error!(#stale); });
+    }
+    if let Some(module_file) = catalog.module_file() {
+        let path_str = module_file.to_string_lossy().to_string();
+        let mod_ident = Ident::new(telar_transpiler::I18N_MODULE, Span::call_site());
+        include_stmts.extend(quote! {
+            #[path = #path_str]
+            #[allow(dead_code)]
+            // A crate invokes this once per module owning `.rsx`, and each one loads this same file on purpose: `t!` resolves `crate::__rsx_i18n::CATALOG`, so the module has to exist wherever the catalog is baked.
+            #[allow(clippy::duplicate_mod)]
+            pub mod #mod_ident;
+        });
+    }
+    if let Some(index_file) = catalog.index_file() {
+        let path_str = index_file.to_string_lossy().to_string();
+        rerun_stmts.extend(quote! { const _: &str = include_str!(#path_str); });
+    }
+    // Editing a translation re-expands every `t!` in the crate, which is what makes the staleness check fire instead of the build quietly keeping last week's wording.
+    for file in catalog.tracked_files() {
+        let path_str = file.to_string_lossy().to_string();
+        rerun_stmts.extend(quote! { const _: &str = include_str!(#path_str); });
     }
 
     // The module every static `src:"…"` resolves into, wired like the i18n catalog. Declared only when the artifact is usable: against a stale or missing one the error belongs on the `.rsx` line naming the asset, which is where `AssetContext` puts it, not inside generated code nobody wrote.

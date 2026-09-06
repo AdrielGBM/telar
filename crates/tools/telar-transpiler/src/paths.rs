@@ -38,3 +38,21 @@ fn is_workspace_root_dir(dir: &Path) -> bool {
         .map(|table| table.contains_key("workspace"))
         .unwrap_or(false)
 }
+
+/// Writes `content` to `path`, but only when it differs, and via a same-directory temp file plus rename. Both artifacts under `.telar/` need both guarantees: an unchanged write would retrigger rustc and the editor's file watcher for nothing, and a half-written file is something a concurrent reader can observe — the analyzer and the CLI legitimately race to bake the same package.
+pub fn write_if_changed_atomic(path: &Path, content: &str) -> std::io::Result<()> {
+    if std::fs::read_to_string(path)
+        .map(|existing| existing == content)
+        .unwrap_or(false)
+    {
+        return Ok(());
+    }
+    let tmp_name = format!(
+        "{}.tmp-{}",
+        path.file_name().and_then(|n| n.to_str()).unwrap_or("out"),
+        std::process::id()
+    );
+    let tmp_path = path.with_file_name(tmp_name);
+    std::fs::write(&tmp_path, content)?;
+    std::fs::rename(&tmp_path, path)
+}

@@ -15,18 +15,28 @@ pub(crate) fn bake_workspace() {
         .unwrap_or_else(|| env!("CARGO_PKG_VERSION").to_string());
     let producer = format!("cargo-telar {}", env!("CARGO_PKG_VERSION"));
     for member in member_dirs(&workspace_root) {
-        let Some(report) = telar_baker::bake_package(&member, &producer, &telar_version) else {
-            continue;
-        };
-        for warning in &report.warnings {
-            eprintln!("[cargo-telar] warning: {warning}");
+        let name = member
+            .file_name()
+            .and_then(|n| n.to_str())
+            .unwrap_or("package");
+        if let Some(report) = telar_baker::bake_package(&member, &producer, &telar_version) {
+            for warning in &report.warnings {
+                eprintln!("[cargo-telar] warning: {warning}");
+            }
+            if report.changed {
+                eprintln!("[cargo-telar] Baked {} asset(s) for {name}", report.baked);
+            }
         }
-        if report.changed {
-            let name = member
-                .file_name()
-                .and_then(|n| n.to_str())
-                .unwrap_or("package");
-            eprintln!("[cargo-telar] Baked {} asset(s) for {name}", report.baked);
+        if let Some(report) = telar_baker::bake_catalog(&member, &producer, &telar_version) {
+            for warning in &report.warnings {
+                eprintln!("[cargo-telar] warning: {warning}");
+            }
+            if report.changed {
+                eprintln!(
+                    "[cargo-telar] Baked {} translation key(s) for {name}",
+                    report.keys
+                );
+            }
         }
     }
 }

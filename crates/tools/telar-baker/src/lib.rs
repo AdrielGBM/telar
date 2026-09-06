@@ -14,10 +14,14 @@
 
 use telar_transpiler::AssetKind;
 
+mod catalog;
 mod image;
 mod package;
 mod svg;
 
+pub use catalog::{
+    CatalogReport, bake_catalog, catalog_files, locales_root, parse_catalog, to_source,
+};
 pub use package::{BakeReport, bake_package, collect_asset_refs, resolve_telar_version};
 
 /// Converts one registered [`AssetKind`]'s raw file bytes into the Rust source expression that reconstructs

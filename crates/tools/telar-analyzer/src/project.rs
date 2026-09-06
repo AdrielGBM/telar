@@ -54,7 +54,7 @@ impl ProjectInfo {
             HashSet::new()
         };
         // A malformed catalog is the baker's error to report, not the analyzer's: "no keys known" silences the check rather than flagging every `t"…"`.
-        let i18n_keys = telar_transpiler::parse_catalog(&root)
+        let i18n_keys = telar_baker::parse_catalog(&root)
             .ok()
             .flatten()
             .map(|c| c.keys().cloned().collect())

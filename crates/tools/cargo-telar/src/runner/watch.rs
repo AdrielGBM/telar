@@ -136,7 +136,7 @@ fn collect_watch_dirs(workspace_root: &Path) -> Vec<PathBuf> {
             [
                 Some(member.join("src")),
                 Some(telar_transpiler::assets_root(&member)),
-                telar_transpiler::locales_root(&member),
+                telar_baker::locales_root(&member),
             ]
         })
         .flatten()

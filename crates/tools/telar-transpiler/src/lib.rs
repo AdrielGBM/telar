@@ -3,12 +3,12 @@
 #![warn(rustdoc::broken_intra_doc_links)]
 
 mod assets;
+mod catalog;
 mod codegen;
 mod discovery;
 mod edges;
 mod error;
 mod gradient;
-mod i18n;
 pub mod naming;
 mod paths;
 mod registry;
@@ -25,17 +25,19 @@ pub use assets::{
     BakedAsset, GeneratedAssets, asset_kind_for_id, asset_kind_for_tag, check_artifact,
     content_hash, generate_assets, read_index, static_name_for_path, write_generated,
 };
+pub use catalog::{
+    CATALOG_ARTIFACT_FORMAT, CATALOG_INDEX_FILENAME, CATALOG_SOURCE_FILENAME, CatalogContext,
+    CatalogEntry, CatalogIndex, CatalogSourceFile, I18N_CATALOG_PATH, I18N_MODULE,
+    read_catalog_index,
+};
 pub use codegen::{TranspiledSource, transpile_source};
 pub use discovery::{
     assets_root, auto_modules_enabled, collect_files_by_ext, component_name, discover_rust_modules,
-    find_rsx_files, find_rsx_files_in_tree, prune_stale_generated, relative_output_path,
+    find_rsx_files, find_rsx_files_in_tree, prune_stale_generated, read_rsx_section,
+    relative_output_path,
 };
 pub use error::TranspileError;
-pub use i18n::{
-    CatalogModel, I18N_CATALOG_PATH, I18N_MODULE, MessageModel, PartModel, catalog_files,
-    locales_root, parse_catalog, parse_message, to_source as bake_catalog_to_source,
-};
-pub use paths::{find_ancestor_dir, find_telar_root, find_workspace_root};
+pub use paths::{find_ancestor_dir, find_telar_root, find_workspace_root, write_if_changed_atomic};
 pub use registry::{
     AttrSpec, ROLE_VALUES, ValueKind, attr_doc, attr_spec, builtin_tags, color_attr_keys,
     color_keywords, is_builtin_tag, is_control_flow_keyword, keyword_color_rgba, layout_attr_keys,

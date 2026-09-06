@@ -283,33 +283,12 @@ pub fn check_artifact(
 /// a bake that changes nothing doesn't retrigger rustc or rust-analyzer's file watcher.
 pub fn write_generated(telar_dir: &Path, generated: &GeneratedAssets) -> std::io::Result<()> {
     std::fs::create_dir_all(telar_dir)?;
-    write_if_changed_atomic(
+    crate::write_if_changed_atomic(
         &telar_dir.join(ASSETS_INDEX_FILENAME),
         &format!("{}\n", generated.index.to_json()),
     )?;
-    write_if_changed_atomic(&telar_dir.join(ASSETS_SOURCE_FILENAME), &generated.source)?;
+    crate::write_if_changed_atomic(&telar_dir.join(ASSETS_SOURCE_FILENAME), &generated.source)?;
     Ok(())
-}
-
-/// Writes via a same-directory temp file plus rename, so a reader (rustc, rust-analyzer) never observes a
-/// half-written file — the analyzer and the CLI can legitimately race to bake the same package.
-fn write_if_changed_atomic(path: &Path, content: &str) -> std::io::Result<()> {
-    if std::fs::read_to_string(path)
-        .map(|existing| existing == content)
-        .unwrap_or(false)
-    {
-        return Ok(());
-    }
-    let tmp_name = format!(
-        "{}.tmp-{}",
-        path.file_name()
-            .and_then(|n| n.to_str())
-            .unwrap_or("assets"),
-        std::process::id()
-    );
-    let tmp_path = path.with_file_name(tmp_name);
-    std::fs::write(&tmp_path, content)?;
-    std::fs::rename(&tmp_path, path)
 }
 
 #[cfg(test)]

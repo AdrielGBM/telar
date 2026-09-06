@@ -1,18 +1,113 @@
-//! Build-time i18n catalog baker.
+//! Build-time i18n catalog baker: discovery, parsing, and the artifact both binaries write.
 //!
-//! Discovers translation files — a project-wide `locales/<tag>.toml` (or `locales/<tag>/*.toml`), and/or per-module `src/**/i18n/<tag>.toml` co-located with each module, all configurable via `[telar.i18n]` in `telar.toml` — parses each into a keyed set of messages, and serializes the merged catalog to a Rust source string (`pub static CATALOG: telar::i18n::Catalog = ..;`) of pure `&'static` data — the same host-only "parse once, emit `&'static`" approach as the svg baker. The parsed [`CatalogModel`] is also queryable so the `t!` macro and markup emitters can validate keys and arguments at compile time.
+//! Discovers translation files — a project-wide `locales/<tag>.toml` (or `locales/<tag>/*.toml`), and/or per-module `src/**/i18n/<tag>.toml` co-located with each module, all configurable via `[telar.i18n]` in `telar.toml` — parses each into a keyed set of messages, and serializes the merged catalog to a Rust source string of pure `&'static` data.
 //!
-//! The model and the TOML grammar are `i18n-core`'s, shared with the runtime loader an app without any `.rsx` file uses. What is baker-only is here: discovery, and serialization to Rust source.
+//! The model and the TOML grammar are `i18n-core`'s, shared with the runtime loader an app without any `.rsx` file uses. What is baker-only is here: discovery, serialization, and the index that lets `t!` validate a key without any of this being linked into the macro.
 
 use std::path::{Path, PathBuf};
 
 use i18n_core::PluralCategory;
-pub use i18n_core::{CatalogModel, MessageModel, PartModel, parse_message};
+use i18n_core::{CatalogModel, MessageModel, PartModel};
+use telar_transpiler::{
+    CATALOG_ARTIFACT_FORMAT, CATALOG_INDEX_FILENAME, CATALOG_SOURCE_FILENAME, CatalogEntry,
+    CatalogIndex, CatalogSourceFile, content_hash, read_catalog_index, write_if_changed_atomic,
+};
 
-/// The crate-root module the baked catalog is wired under, and the path every `t!`/markup call site references.
-pub const I18N_MODULE: &str = "__rsx_i18n";
-/// Where generated code reaches the baked catalogue.
-pub const I18N_CATALOG_PATH: &str = "crate::__rsx_i18n::CATALOG";
+/// What baking one package's catalog turned up, mirroring [`super::BakeReport`].
+#[derive(Debug, Clone, Default)]
+pub struct CatalogReport {
+    pub keys: usize,
+    pub changed: bool,
+    pub warnings: Vec<String>,
+}
+
+/// Bakes `package_dir`'s translation catalog, writing `<package_dir>/.telar/i18n.{json,rs}`. `None` when the package has neither `.rsx` files nor locale files, so a crate with no stake in either never grows a `.telar/`.
+///
+/// Note the `or`: `t!` is plain Rust and needs no `.rsx` to appear in — `crates/i18n/i18n-fixture` is exactly that shape — while a package with `.rsx` and no translations still gets an artifact, with no entries. That empty artifact is what lets `t!` tell "this project has no translations" from "nobody has run the baker", which a missing file cannot distinguish.
+pub fn bake_catalog(
+    package_dir: &Path,
+    producer: &str,
+    telar_version: &str,
+) -> Option<CatalogReport> {
+    let sources = catalog_sources(package_dir);
+    if sources.is_empty() && telar_transpiler::find_rsx_files_in_tree(package_dir).is_empty() {
+        return None;
+    }
+
+    let mut report = CatalogReport::default();
+    let model = match parse_catalog(package_dir) {
+        Ok(model) => model,
+        Err(e) => {
+            report.warnings.push(format!("catalog: {e}"));
+            return Some(report);
+        }
+    };
+
+    let mut entries: Vec<CatalogEntry> = model
+        .iter()
+        .flat_map(|model| model.entries.keys())
+        .map(|key| CatalogEntry {
+            key: key.clone(),
+            args: {
+                let mut args = model
+                    .as_ref()
+                    .and_then(|m| m.arg_names(key))
+                    .unwrap_or_default();
+                args.sort();
+                args.dedup();
+                args
+            },
+        })
+        .collect();
+    entries.sort_by(|a, b| a.key.cmp(&b.key));
+
+    let mut source_files: Vec<CatalogSourceFile> = Vec::new();
+    for (_, path) in sources {
+        let Ok(bytes) = std::fs::read(&path) else {
+            continue;
+        };
+        let relative = path
+            .strip_prefix(package_dir)
+            .unwrap_or(&path)
+            .to_string_lossy()
+            .replace('\\', "/");
+        source_files.push(CatalogSourceFile {
+            path: relative,
+            hash: content_hash(&bytes),
+        });
+    }
+    source_files.sort_by(|a, b| a.path.cmp(&b.path));
+
+    let index = CatalogIndex {
+        format: CATALOG_ARTIFACT_FORMAT,
+        producer: producer.to_string(),
+        telar_version: telar_version.to_string(),
+        entries,
+        sources: source_files,
+    };
+    let source = model.as_ref().map(to_source).unwrap_or_default();
+
+    let telar_dir = package_dir.join(".telar");
+    let previous = read_catalog_index(&telar_dir).ok().flatten();
+    report.changed = previous.as_ref() != Some(&index);
+    report.keys = index.entries.len();
+
+    if let Err(e) = std::fs::create_dir_all(&telar_dir)
+        .and_then(|()| {
+            write_if_changed_atomic(
+                &telar_dir.join(CATALOG_INDEX_FILENAME),
+                &format!("{}\n", index.to_json()),
+            )
+        })
+        .and_then(|()| write_if_changed_atomic(&telar_dir.join(CATALOG_SOURCE_FILENAME), &source))
+    {
+        report
+            .warnings
+            .push(format!("could not write {}: {e}", telar_dir.display()));
+        report.changed = false;
+    }
+    Some(report)
+}
 
 /// How the catalog is discovered, from `[telar.i18n]` in `telar.toml` (with back-compat fallbacks to the older `[telar] locales` / `[telar] default_locale`). Both discovery sources may be active at once; set either name to `""` to disable it.
 struct I18nConfig {
@@ -25,7 +120,7 @@ struct I18nConfig {
 }
 
 fn read_i18n_config(package_root: &Path) -> I18nConfig {
-    let rsx = crate::discovery::read_rsx_section(package_root);
+    let rsx = telar_transpiler::read_rsx_section(package_root);
     let i18n = rsx
         .as_ref()
         .and_then(|t| t.get("i18n"))
@@ -50,7 +145,7 @@ fn read_i18n_config(package_root: &Path) -> I18nConfig {
     }
 }
 
-/// The project-wide catalog directory (`locales/` by default, `[telar.i18n] root`), or `None` when it is disabled. Mirrors [`crate::assets_root`]: a caller that needs the *directory* — a file watcher, say — must not have to infer it from the files that happen to be in it today, or adding the first `.toml` to an empty one goes unnoticed. The per-module catalogs the `scan` setting finds are under `src/`, so nothing else needs exposing.
+/// The project-wide catalog directory (`locales/` by default, `[telar.i18n] root`), or `None` when it is disabled. Mirrors [`telar_transpiler::assets_root`]: a caller that needs the *directory* — a file watcher, say — must not have to infer it from the files that happen to be in it today, or adding the first `.toml` to an empty one goes unnoticed. The per-module catalogs the `scan` setting finds are under `src/`, so nothing else needs exposing.
 pub fn locales_root(package_root: &Path) -> Option<PathBuf> {
     let root = read_i18n_config(package_root).root;
     (!root.is_empty()).then(|| package_root.join(root))
@@ -73,7 +168,9 @@ fn catalog_sources(package_root: &Path) -> Vec<(String, PathBuf)> {
         discover_root_dir(&package_root.join(&cfg.root), &mut sources);
     }
     if !cfg.scan.is_empty() {
-        for file in crate::collect_files_by_ext(&package_root.join("src"), "toml", &|_| true) {
+        for file in
+            telar_transpiler::collect_files_by_ext(&package_root.join("src"), "toml", &|_| true)
+        {
             let in_scan_dir = file
                 .parent()
                 .and_then(|p| p.file_name())
@@ -101,7 +198,7 @@ fn discover_root_dir(root: &Path, sources: &mut Vec<(String, PathBuf)>) {
             continue;
         };
         if path.is_dir() {
-            for file in crate::collect_files_by_ext(&path, "toml", &|_| true) {
+            for file in telar_transpiler::collect_files_by_ext(&path, "toml", &|_| true) {
                 sources.push((name.to_string(), file));
             }
         } else if path.extension().and_then(|e| e.to_str()) == Some("toml")
@@ -238,7 +335,6 @@ fn ser_str_list(items: &[String]) -> String {
         .collect::<Vec<_>>()
         .join(", ")
 }
-
 #[cfg(test)]
 mod tests {
     use super::*;

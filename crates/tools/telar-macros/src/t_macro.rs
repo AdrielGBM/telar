@@ -13,7 +13,7 @@ use syn::{
     Expr, LitStr, Token,
     parse::{Parse, ParseStream, Result as ParseResult},
 };
-use telar_transpiler::CatalogModel;
+use telar_transpiler::CatalogContext;
 
 pub(crate) struct TInput {
     key: LitStr,
@@ -39,21 +39,25 @@ impl Parse for TInput {
 }
 
 thread_local! {
-    // One build process expands every `t!` in the crate; cache the parsed catalog so hundreds of call sites don't each re-read the locale files. Keyed by package root; a fresh process (next build) starts empty.
-    static CATALOG_CACHE: RefCell<HashMap<PathBuf, Rc<Result<Option<CatalogModel>, String>>>> =
+    // One build process expands every `t!` in the crate; cache the index so hundreds of call sites don't each re-read it. Keyed by package root; a fresh process (next build) starts empty.
+    static CATALOG_CACHE: RefCell<HashMap<PathBuf, Rc<CatalogContext>>> =
         RefCell::new(HashMap::new());
 }
 
-fn load_catalog(manifest_dir: &Path) -> Rc<Result<Option<CatalogModel>, String>> {
+fn load_catalog(manifest_dir: &Path) -> Rc<CatalogContext> {
     if let Some(hit) = CATALOG_CACHE.with(|c| c.borrow().get(manifest_dir).cloned()) {
         return hit;
     }
-    let parsed = Rc::new(telar_transpiler::parse_catalog(manifest_dir));
+    // This crate's own version, for the same reason the asset artifact compares against it: what matters is the `telar` whose API the generated module calls, and that is whoever loads it.
+    let loaded = Rc::new(CatalogContext::load(
+        manifest_dir,
+        env!("CARGO_PKG_VERSION"),
+    ));
     CATALOG_CACHE.with(|c| {
         c.borrow_mut()
-            .insert(manifest_dir.to_path_buf(), parsed.clone())
+            .insert(manifest_dir.to_path_buf(), loaded.clone())
     });
-    parsed
+    loaded
 }
 
 pub(crate) fn expand(input: TInput) -> TokenStream2 {
@@ -65,37 +69,37 @@ pub(crate) fn expand(input: TInput) -> TokenStream2 {
         Err(_) => return quote! { compile_error!("CARGO_MANIFEST_DIR not set") },
     };
 
-    match &*load_catalog(&manifest_dir) {
-        Ok(Some(model)) => {
-            if !model.contains_key(&key_str) {
-                let msg = format!("unknown i18n key `{key_str}`: not found in any catalog locale");
-                return syn::Error::new(key.span(), msg).to_compile_error();
-            }
-            if let Some(expected) = model.arg_names(&key_str) {
-                for (name, _) in &args {
-                    let n = name.to_string();
-                    if !expected.iter().any(|e| e == &n) {
-                        let msg = format!("i18n key `{key_str}` has no placeholder `{{{n}}}`");
-                        return syn::Error::new(name.span(), msg).to_compile_error();
-                    }
+    let catalog = load_catalog(&manifest_dir);
+    match catalog.arg_names(&key_str) {
+        Ok(Some(expected)) => {
+            for (name, _) in &args {
+                let n = name.to_string();
+                if !expected.iter().any(|e| e == &n) {
+                    let msg = format!("i18n key `{key_str}` has no placeholder `{{{n}}}`");
+                    return syn::Error::new(name.span(), msg).to_compile_error();
                 }
-                for e in &expected {
-                    if !args.iter().any(|(n, _)| &n.to_string() == e) {
-                        let msg = format!(
-                            "i18n key `{key_str}` is missing argument `{e}` (expected `{{{e}}}`)"
-                        );
-                        return syn::Error::new(key.span(), msg).to_compile_error();
-                    }
+            }
+            for e in expected {
+                if !args.iter().any(|(n, _)| &n.to_string() == e) {
+                    let msg = format!(
+                        "i18n key `{key_str}` is missing argument `{e}` (expected `{{{e}}}`)"
+                    );
+                    return syn::Error::new(key.span(), msg).to_compile_error();
                 }
             }
         }
-        Ok(None) => {
+        // An artifact that exists and defines nothing is a project with no translations; one that defines other keys but not this one is a typo. The two deserve different advice, and only the index can tell them apart — which is why it is written even when there is nothing to write.
+        Ok(None) if catalog.is_empty() => {
             let msg = format!(
                 "`t!(\"{key_str}\")` used but no translation catalog exists — create `locales/<lang>.toml`"
             );
             return syn::Error::new(key.span(), msg).to_compile_error();
         }
-        Err(msg) => return syn::Error::new(key.span(), msg.clone()).to_compile_error(),
+        Ok(None) => {
+            let msg = format!("unknown i18n key `{key_str}`: not found in any catalog locale");
+            return syn::Error::new(key.span(), msg).to_compile_error();
+        }
+        Err(msg) => return syn::Error::new(key.span(), msg).to_compile_error(),
     }
 
     let catalog_path: syn::Path =

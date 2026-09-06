@@ -5589,9 +5589,11 @@ dependencies = [
  "image",
  "serde",
  "serde_json",
+ "telar-i18n-core",
  "telar-parser",
  "telar-renderer-assets",
  "telar-transpiler",
+ "toml",
 ]
 
 [[package]]
@@ -5990,7 +5992,6 @@ dependencies = [
  "serde",
  "serde_json",
  "syn 3.0.5",
- "telar-i18n-core",
  "telar-parser",
  "telar-semantics-core",
  "thiserror 2.0.20",
