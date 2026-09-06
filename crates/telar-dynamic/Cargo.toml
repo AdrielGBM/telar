@@ -46,7 +46,13 @@ dir = []
 
 ## Bytes fetched over HTTP. Native only for now: the browser body is `fetch`, and it is not written yet, so
 ## a wasm build that names this fails to compile with a message that says so.
-http = ["dep:ureq"]
+http = [
+    "dep:ureq",
+    "dep:js-sys",
+    "dep:wasm-bindgen",
+    "dep:wasm-bindgen-futures",
+    "dep:web-sys",
+]
 
 #! ## Everything
 
@@ -92,10 +98,21 @@ renderer-core.workspace = true
 tracing.workspace = true
 ui-core = { workspace = true, features = ["async-assets"] }
 
-# Target-gated rather than plain-optional so `http` on a wasm build fails on the missing web body with a
-# message that names it, instead of on a `getrandom` error deep under a TLS stack that nobody asked for.
+# Target-gated rather than plain-optional: `http` is one feature with two bodies, and neither client is
+# buildable — let alone useful — on the other's target. A plain optional `ureq` fails a wasm build on a
+# `getrandom` error deep under a TLS stack nobody asked for.
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 ureq = { workspace = true, optional = true }
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+js-sys = { workspace = true, optional = true }
+wasm-bindgen = { workspace = true, optional = true }
+wasm-bindgen-futures = { workspace = true, optional = true }
+
+[target.'cfg(target_arch = "wasm32")'.dependencies.web-sys]
+workspace = true
+optional = true
+features = ["AbortController", "AbortSignal", "Request", "RequestInit", "Response", "Window"]
 
 [dev-dependencies]
 reactive-core.workspace = true

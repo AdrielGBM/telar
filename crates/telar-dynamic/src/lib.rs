@@ -4,6 +4,8 @@
 //!
 //! Nothing here is privileged. An application that wants a format this crate does not carry, or bytes from a pack file, implements the same three traits against the same seam.
 //!
+//! **Keep this crate on the same version as `telar`.** Both depend on `renderer-assets` for `SvgData`, so a mismatch resolves two copies of it and the `Arc<SvgData>` a decoder here produces stops being the type the widget over there accepts — a type error naming one struct twice. It is the same lockstep `telar` and `telar-macros` already have, and for the same reason.
+//!
 //! Be clear about what the split does and does not buy. It costs the same to compile: enabling `telar-dynamic/svg-text` links exactly what `telar/svg-text` used to. What it buys is that `telar` no longer carries twenty knobs about formats most applications never touch, and that a third-party decoder arrives through the same door as ours.
 //!
 //! ```ignore
@@ -39,11 +41,6 @@ mod http;
 mod image;
 #[cfg(feature = "svg")]
 mod svg;
-
-#[cfg(all(feature = "http", target_arch = "wasm32"))]
-compile_error!(
-    "`telar-dynamic/http` has no browser body yet: fetching is `fetch` there, not `ureq`, and that transport is unwritten. Build for a native target, or implement `AssetTransport` over `web_sys::window().fetch_with_str(..)` in the application until it lands."
-);
 
 #[cfg(feature = "catalog")]
 pub use catalog::CatalogDecoder;

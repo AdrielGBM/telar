@@ -5610,6 +5610,7 @@ version = "0.1.8"
 dependencies = [
  "document-features",
  "image",
+ "js-sys",
  "telar-dynamic",
  "telar-geometry-core",
  "telar-i18n-core",
@@ -5619,6 +5620,9 @@ dependencies = [
  "telar-ui-core",
  "tracing",
  "ureq",
+ "wasm-bindgen",
+ "wasm-bindgen-futures",
+ "web-sys",
 ]
 
 [[package]]
