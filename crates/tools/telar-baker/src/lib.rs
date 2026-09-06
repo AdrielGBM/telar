@@ -15,7 +15,10 @@
 use telar_transpiler::AssetKind;
 
 mod image;
+mod package;
 mod svg;
+
+pub use package::{BakeReport, bake_package, collect_asset_refs, resolve_telar_version};
 
 /// Converts one registered [`AssetKind`]'s raw file bytes into the Rust source expression that reconstructs
 /// the equivalent runtime data with no baking dependency left in the compiled app.
