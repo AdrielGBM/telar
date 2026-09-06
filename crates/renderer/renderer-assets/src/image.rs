@@ -4,7 +4,7 @@ use renderer_core::Color;
 #[cfg(feature = "dynamic-image")]
 use renderer_core::ImageData;
 
-#[cfg(feature = "dynamic-image")]
+#[cfg(any(feature = "dynamic-image", feature = "bake"))]
 #[derive(Debug, Clone, thiserror::Error)]
 #[error("failed to decode image: {0}")]
 /// A bitmap could not be decoded.
@@ -33,7 +33,7 @@ pub fn decode(bytes: &[u8]) -> Result<ImageData, ImageError> {
 }
 
 /// Build-time: decode PNG/JPEG bytes and emit a Rust expression constructing the equivalent `ImageData` (non-premultiplied RGBA8; `ImageData::new` premultiplies at load).
-#[cfg(feature = "dynamic-image")]
+#[cfg(feature = "bake")]
 pub fn bake_image_to_source(bytes: &[u8]) -> Result<String, ImageError> {
     let (rgba, w, h) = decode_rgba8(bytes)?;
     // Bare `ImageData` (not `::renderer_core::ImageData`): the transpiler drops this into code that does `use telar::*`, whose facade re-exports the type unqualified.
@@ -45,7 +45,7 @@ pub fn bake_image_to_source(bytes: &[u8]) -> Result<String, ImageError> {
     ))
 }
 
-#[cfg(feature = "dynamic-image")]
+#[cfg(any(feature = "dynamic-image", feature = "bake"))]
 fn decode_rgba8(bytes: &[u8]) -> Result<(Vec<u8>, u32, u32), ImageError> {
     let img = image::load_from_memory(bytes).map_err(|e| ImageError(e.to_string()))?;
     let rgba = img.to_rgba8();
@@ -54,7 +54,7 @@ fn decode_rgba8(bytes: &[u8]) -> Result<(Vec<u8>, u32, u32), ImageError> {
 }
 
 /// A `b"..."` byte-string literal for the given bytes: far cheaper in compiler tokens than a `vec![1, 2, ...]` for a raster's worth of pixels. Every byte is emitted as `\xNN` so the output is always valid regardless of content.
-#[cfg(any(feature = "dynamic-svg", feature = "dynamic-image"))]
+#[cfg(feature = "bake")]
 pub(crate) fn byte_string_literal(bytes: &[u8]) -> String {
     let mut out = String::with_capacity(bytes.len() * 4 + 3);
     out.push_str("b\"");

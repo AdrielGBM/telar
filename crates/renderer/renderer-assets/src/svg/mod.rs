@@ -25,7 +25,7 @@ use usvg::tiny_skia_path::Transform as SkiaTransform;
 #[cfg(feature = "dynamic-svg")]
 use vector::convert_group;
 
-#[cfg(feature = "dynamic-svg")]
+#[cfg(feature = "bake")]
 pub use bake::bake_to_source;
 
 #[derive(Debug, Clone, thiserror::Error)]

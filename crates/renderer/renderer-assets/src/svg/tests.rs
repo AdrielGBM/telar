@@ -194,6 +194,7 @@ fn commands_for_is_memoized() {
 }
 
 // The three walks over a baked vector list — the hasher, the re-fitter and the serializer — each answered differently when handed a command outside the set. `VectorCommand` is the set, so there is no fourth case to disagree about.
+#[cfg(feature = "bake")]
 #[test]
 fn a_baked_vector_list_round_trips_through_every_walk() {
     let svg = r##"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10" width="10" height="10"><rect width="10" height="10" fill="#00ff00"/></svg>"##;

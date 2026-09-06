@@ -1,20 +1,32 @@
 //! Turning a parsed SVG into the Rust literal the transpiler bakes into generated code.
 
+#[cfg(any(feature = "bake", test))]
 use std::sync::Arc;
 
+#[cfg(any(feature = "bake", test))]
 use usvg::tiny_skia_path::Transform as SkiaTransform;
 
+#[cfg(feature = "bake")]
 use crate::image::byte_string_literal;
+#[cfg(any(feature = "bake", test))]
+use renderer_core::ImageData;
+#[cfg(feature = "bake")]
 use renderer_core::{
-    Color, FillRule, Gradient, GradientKind, ImageData, LineCap, LineJoin, Paint, PathData,
-    PathStyle, PathVerb, Stroke,
+    Color, FillRule, Gradient, GradientKind, LineCap, LineJoin, Paint, PathData, PathStyle,
+    PathVerb, Stroke,
 };
 
+#[cfg(feature = "bake")]
+use super::VectorCommand;
+#[cfg(any(feature = "bake", test))]
 use super::raster::raster_px;
+#[cfg(any(feature = "bake", test))]
 use super::vector::convert_group;
-use super::{BakedSvg, SvgError, Unsupported, VectorCommand};
+#[cfg(any(feature = "bake", test))]
+use super::{BakedSvg, SvgError, Unsupported};
 
 /// Parses `content` and converts it to a `BakedSvg`: a vector display list when every feature has a primitive, otherwise the whole document rasterized. Shared by `bake_to_source` and the equivalence tests.
+#[cfg(any(feature = "bake", test))]
 pub(crate) fn bake(content: &str) -> Result<((f32, f32), BakedSvg), SvgError> {
     let opt = usvg::Options::default();
     let tree = usvg::Tree::from_str(content, &opt).map_err(|e| SvgError(e.to_string()))?;
@@ -38,6 +50,7 @@ pub(crate) fn bake(content: &str) -> Result<((f32, f32), BakedSvg), SvgError> {
     }
 }
 
+#[cfg(any(feature = "bake", test))]
 fn rasterize(
     tree: &usvg::Tree,
     intrinsic: (f32, f32),
@@ -55,12 +68,14 @@ fn rasterize(
 }
 
 /// Build-time entry point: bake `content` and emit a Rust expression that reconstructs the equivalent `SvgData` with no runtime SVG dependency.
+#[cfg(feature = "bake")]
 pub fn bake_to_source(content: &str) -> Result<String, SvgError> {
     let (size, baked) = bake(content)?;
     Ok(serialize(size, &baked))
 }
 
 // Emits bare type names (`SvgData`, `DrawCommand`, `Point`, …) because the transpiler drops this expression into generated code that does `use telar::*`, whose facade re-exports every renderer-core / geometry-core type unqualified.
+#[cfg(feature = "bake")]
 fn serialize(size: (f32, f32), baked: &BakedSvg) -> String {
     match baked {
         BakedSvg::Vector(cmds) => {
@@ -85,6 +100,7 @@ fn serialize(size: (f32, f32), baked: &BakedSvg) -> String {
     }
 }
 
+#[cfg(feature = "bake")]
 fn ser_command(cmd: &VectorCommand) -> String {
     match cmd {
         VectorCommand::Path { data, style } => format!(
@@ -104,6 +120,7 @@ fn ser_command(cmd: &VectorCommand) -> String {
     }
 }
 
+#[cfg(feature = "bake")]
 fn ser_path_data(data: &PathData) -> String {
     let mut s = String::from("PathData::new()");
     for verb in data.verbs() {
@@ -125,6 +142,7 @@ fn ser_path_data(data: &PathData) -> String {
     s
 }
 
+#[cfg(feature = "bake")]
 fn ser_path_style(style: &PathStyle) -> String {
     format!(
         "PathStyle {{ fill: {}, stroke: {}, shadow: None, fill_rule: {} }}",
@@ -134,6 +152,7 @@ fn ser_path_style(style: &PathStyle) -> String {
     )
 }
 
+#[cfg(feature = "bake")]
 fn ser_opt_paint(paint: &Option<Paint>) -> String {
     match paint {
         None => "None".to_string(),
@@ -141,6 +160,7 @@ fn ser_opt_paint(paint: &Option<Paint>) -> String {
     }
 }
 
+#[cfg(feature = "bake")]
 fn ser_opt_stroke(stroke: &Option<Stroke>) -> String {
     match stroke {
         None => "None".to_string(),
@@ -154,6 +174,7 @@ fn ser_opt_stroke(stroke: &Option<Stroke>) -> String {
     }
 }
 
+#[cfg(feature = "bake")]
 fn ser_paint(paint: &Paint) -> String {
     match paint {
         Paint::Solid(c) => format!("Paint::Solid({})", ser_color(*c)),
@@ -161,6 +182,7 @@ fn ser_paint(paint: &Paint) -> String {
     }
 }
 
+#[cfg(feature = "bake")]
 fn ser_gradient(g: &Gradient) -> String {
     let stops = ser_stops(g);
     match g.kind {
@@ -179,6 +201,7 @@ fn ser_gradient(g: &Gradient) -> String {
     }
 }
 
+#[cfg(feature = "bake")]
 fn ser_stops(g: &Gradient) -> String {
     let mut s = String::from("&[");
     for stop in g.stops.active() {
@@ -192,6 +215,7 @@ fn ser_stops(g: &Gradient) -> String {
     s
 }
 
+#[cfg(feature = "bake")]
 fn ser_color(c: Color) -> String {
     format!(
         "Color::rgba({}, {}, {}, {})",
@@ -202,6 +226,7 @@ fn ser_color(c: Color) -> String {
     )
 }
 
+#[cfg(feature = "bake")]
 fn ser_cap(cap: LineCap) -> String {
     match cap {
         LineCap::Butt => "LineCap::Butt",
@@ -211,6 +236,7 @@ fn ser_cap(cap: LineCap) -> String {
     .to_string()
 }
 
+#[cfg(feature = "bake")]
 fn ser_join(join: LineJoin) -> String {
     match join {
         LineJoin::Miter => "LineJoin::Miter",
@@ -220,6 +246,7 @@ fn ser_join(join: LineJoin) -> String {
     .to_string()
 }
 
+#[cfg(feature = "bake")]
 fn ser_fill_rule(rule: FillRule) -> String {
     match rule {
         FillRule::Winding => "FillRule::Winding",
@@ -228,15 +255,18 @@ fn ser_fill_rule(rule: FillRule) -> String {
     .to_string()
 }
 
+#[cfg(feature = "bake")]
 fn ser_point(p: &geometry_core::Point) -> String {
     format!("Point::new({}, {})", fmt_f32(p.x), fmt_f32(p.y))
 }
 
+#[cfg(feature = "bake")]
 fn ser_size(size: (f32, f32)) -> String {
     format!("({}, {})", fmt_f32(size.0), fmt_f32(size.1))
 }
 
 // `{:?}` yields the shortest string that round-trips to the same f32; the `f32` suffix pins the literal's type so no `f64 -> f32` rounding can creep in.
+#[cfg(feature = "bake")]
 fn fmt_f32(v: f32) -> String {
     format!("{v:?}f32")
 }

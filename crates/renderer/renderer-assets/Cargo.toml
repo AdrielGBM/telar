@@ -22,10 +22,16 @@ thiserror = { workspace = true }
 usvg = { version = "0.48", optional = true, default-features = false }
 
 [features]
-# usvg/resvg. Enables the runtime dynamic SVG path (`from_str`) AND the build-time baker (`bake_to_source`); the transpiler turns this on host-side so baking is always available without putting usvg in the app binary.
+# usvg/resvg for the runtime dynamic SVG path (`from_str`). The build-time baker lives behind `bake`, not this.
 dynamic-svg = ["dep:usvg", "dep:resvg"]
-# The `image` crate: runtime decode (`decode`) plus the build-time image baker (`bake_image_to_source`), host-only same as `dynamic-svg`.
+# The `image` crate's runtime decode path (`decode`). The build-time image baker lives behind `bake`, not this.
 dynamic-image = ["dep:image"]
+
+# The build-time bakers (`bake_to_source`, `bake_image_to_source`), host-only: everything the runtime paths
+# above can parse, plus every format `image` ships, so a baked asset never fails for a format the app itself
+# never turned on. The transpiler enables this to bake `src:"…"` assets without putting usvg/image in the app
+# binary.
+bake = ["dynamic-svg", "svg-text", "svg-images", "dep:image", "image/default-formats"]
 
 # `<text>` in an SVG parsed at *runtime*. Off by default, and the reason is what it weighs: shaping a glyph
 # needs a shaper, a font database and an outline rasterizer — harfrust, fontdb, skrifa and read_fonts — which
