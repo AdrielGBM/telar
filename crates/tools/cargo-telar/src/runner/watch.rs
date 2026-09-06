@@ -360,6 +360,8 @@ fn watch_and_hot_reload(
             pending_rebuild = false;
             while rx.try_recv().is_ok() {}
             eprintln!("[cargo-telar] Change detected, rebuilding...");
+            // `super::run` bakes once, before the loop starts. Every rebuild after that invokes cargo directly, so without this an edited asset compiles against the artifact from startup — and since the macro checks its hash, that is a build failure rather than a stale drawing.
+            super::bake::bake_workspace();
             let mut cmd = Command::new("cargo");
             cmd.args(&build_args)
                 .env("TELAR_HOT_RELOAD_BUILD", "1")
@@ -399,6 +401,7 @@ fn watch_and_run(
 
     loop {
         eprintln!("[cargo-telar] Starting...");
+        super::bake::bake_workspace();
         let mut child = Command::new("cargo")
             .args(&cargo_args)
             .envs(envs.iter().map(|(k, v)| (k.as_str(), v.as_str())))
