@@ -12,17 +12,21 @@
 //! of the `build`/`build-hot` flavour split, since it decodes no reactive-vs-hot-reload distinction of its
 //! own — both flavours reference the same `.telar/assets.rs`.
 //!
-//! What is deliberately *not* here: deciding whether a `format`/`telar_version` mismatch is fatal (that
-//! policy is a later task) and turning file bytes into a [`BakedAsset`] in the first place (the baker's
-//! job) — this module only defines the shape both sides agree on, and reads/writes it.
+//! [`check_artifact`] decides *whether* a `format`/`telar_version` mismatch exists and which of the two it
+//! is; it does not decide what a caller should do about it or how to phrase that for a human (macro
+//! expansion, `telar-analyzer`, and `cargo-telar` each want their own wording and severity — that's a later
+//! task). Turning file bytes into a [`BakedAsset`] in the first place is the baker's job, not this module's
+//! — this module only defines the shape both sides agree on, and reads, writes, and validates it.
 
 use std::path::Path;
 
 use serde::{Deserialize, Serialize};
 
 /// Bumped whenever `.telar/assets.rs`'s generated source changes shape in a way older `telar`/`telar-macros`
-/// can't read (e.g. the `static`'s wrapper type, or how an entry's initializer is called). Compared against
-/// an index's own [`AssetIndex::format`] by whoever enforces the handshake.
+/// can't read (e.g. the `static`'s wrapper type, or how an entry's initializer is called). This is
+/// mandatory, not discretionary: [`check_artifact`] treats any mismatch here as fatal on its own, without
+/// even looking at `telar_version`, because a shape it can't parse makes that second comparison moot.
+/// Compared against an index's own [`AssetIndex::format`] by [`check_artifact`].
 pub const ASSET_ARTIFACT_FORMAT: u32 = 1;
 
 /// The module every baked `static` is wired under once a macro declares `#[path = "…/assets.rs"] pub mod
@@ -140,6 +144,12 @@ pub fn content_hash(bytes: &[u8]) -> String {
 /// it, from the same pass so the two can never drift apart. `Err` when an entry can't be placed — an
 /// unknown `kind`, a `path` listed twice, or (astronomically unlikely, but silent corruption otherwise) two
 /// different paths whose hash collides on the same `static_name`.
+///
+/// Changing the shape of the source this emits — the `static`'s wrapper type, or how `init_expr` gets
+/// invoked below — requires bumping [`ASSET_ARTIFACT_FORMAT`] in the same change. Nothing here enforces
+/// that at compile time: an unbumped constant still lets [`check_artifact`] wave the new shape through as
+/// `UpToDate`, so a reader built against the old shape fails on `assets.rs` itself instead of getting the
+/// clean [`ArtifactHandshake::FormatMismatch`] it should have seen.
 pub fn generate_assets(
     assets: &[BakedAsset],
     producer: &str,
@@ -213,6 +223,65 @@ pub fn read_index(telar_dir: &Path) -> std::io::Result<Option<AssetIndex>> {
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(None),
         Err(e) => Err(e),
     }
+}
+
+/// What checking a package's artifact against this binary's own expectations turns up. Returned by
+/// [`check_artifact`], which folds a [`read_index`] call and the version handshake into one call so a
+/// caller matches on a single value instead of separately unwrapping an `Option` and comparing fields.
+///
+/// Deliberately keeps the not-baked, stale, and up-to-date cases apart as distinct variants rather than
+/// collapsing them into a bool or an `Option`: each demands different behavior from a caller (fall back
+/// silently, fail with instructions to re-bake, or proceed), and [`read_index`]'s `Err` already carries the
+/// fourth case — a corrupt file — so nothing here needs to re-represent it. Composing the actual diagnostic
+/// text for each variant is deliberately left to whoever calls this (macro expansion, `telar-analyzer`,
+/// `cargo-telar` each want different phrasing).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ArtifactHandshake {
+    /// No `.telar/assets.json` — the package hasn't run `cargo telar bake` yet, or bakes no assets at all.
+    NotBaked,
+    /// `index.format` doesn't match [`ASSET_ARTIFACT_FORMAT`]. Checked before `telar_version`, and reported
+    /// instead of it, because a format this binary doesn't recognize makes no promise about what
+    /// `telar_version` even means in that shape.
+    FormatMismatch { found: u32, expected: u32 },
+    /// `index.format` matches, but `index.telar_version` doesn't match the `current_telar_version` the
+    /// caller passed in. The index's own shape is fine, but the generated `assets.rs` may call `telar` APIs
+    /// (`SvgData::from_baked_vector`, `ImageData::new`, …) whose signatures moved since this was baked —
+    /// see [`AssetIndex::telar_version`] for why this check exists independently of `format`.
+    VersionMismatch { found: String, expected: String },
+    /// Both checks passed. Holds the parsed index so a caller that reached this variant never has to call
+    /// [`read_index`] again to get at the entries.
+    UpToDate(AssetIndex),
+}
+
+/// Reads `<telar_dir>/assets.json` and checks it against [`ASSET_ARTIFACT_FORMAT`] and
+/// `current_telar_version`. Pass the *caller's own* `env!("CARGO_PKG_VERSION")` — not this crate's — since
+/// the comparison is only meaningful against the binary that will actually load the generated
+/// `assets.rs` (see [`AssetIndex::telar_version`]); `telar-transpiler`, `telar`, and `telar-macros` share a
+/// workspace version today, but this function makes no assumption that they always will.
+///
+/// `Err` only for a corrupt or otherwise unreadable file, propagated from [`read_index`]. The three states
+/// [`ArtifactHandshake`] distinguishes on the happy path — not baked, stale, up to date — are all `Ok`, so a
+/// caller doesn't need to unwrap a `Result` just to learn the artifact was simply never baked.
+pub fn check_artifact(
+    telar_dir: &Path,
+    current_telar_version: &str,
+) -> std::io::Result<ArtifactHandshake> {
+    let Some(index) = read_index(telar_dir)? else {
+        return Ok(ArtifactHandshake::NotBaked);
+    };
+    if index.format != ASSET_ARTIFACT_FORMAT {
+        return Ok(ArtifactHandshake::FormatMismatch {
+            found: index.format,
+            expected: ASSET_ARTIFACT_FORMAT,
+        });
+    }
+    if index.telar_version != current_telar_version {
+        return Ok(ArtifactHandshake::VersionMismatch {
+            found: index.telar_version,
+            expected: current_telar_version.to_string(),
+        });
+    }
+    Ok(ArtifactHandshake::UpToDate(index))
 }
 
 /// Writes `<telar_dir>/assets.json` and `<telar_dir>/assets.rs`, atomically and only when their content
@@ -444,6 +513,120 @@ mod tests {
         let source_on_disk =
             std::fs::read_to_string(telar_dir.join(ASSETS_SOURCE_FILENAME)).unwrap();
         assert_eq!(source_on_disk, generated.source);
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn check_artifact_of_a_never_baked_package_is_not_baked() {
+        let dir = std::env::temp_dir().join(format!(
+            "rsx_assets_handshake_missing_{}",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+
+        assert_eq!(
+            check_artifact(&dir, "0.1.8").unwrap(),
+            ArtifactHandshake::NotBaked
+        );
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn check_artifact_of_a_matching_index_is_up_to_date() {
+        let dir =
+            std::env::temp_dir().join(format!("rsx_assets_handshake_ok_{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        let telar_dir = dir.join(".telar");
+
+        let generated = generate_assets(
+            &[svg_asset("badge.svg", b"<svg/>")],
+            "cargo-telar 0.1.8",
+            "0.1.8",
+        )
+        .unwrap();
+        write_generated(&telar_dir, &generated).unwrap();
+
+        assert_eq!(
+            check_artifact(&telar_dir, "0.1.8").unwrap(),
+            ArtifactHandshake::UpToDate(generated.index)
+        );
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn check_artifact_reports_a_telar_version_mismatch() {
+        let dir = std::env::temp_dir().join(format!(
+            "rsx_assets_handshake_version_{}",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_dir_all(&dir);
+        let telar_dir = dir.join(".telar");
+
+        let generated = generate_assets(
+            &[svg_asset("badge.svg", b"<svg/>")],
+            "cargo-telar 0.1.8",
+            "0.1.8",
+        )
+        .unwrap();
+        write_generated(&telar_dir, &generated).unwrap();
+
+        assert_eq!(
+            check_artifact(&telar_dir, "0.2.0").unwrap(),
+            ArtifactHandshake::VersionMismatch {
+                found: "0.1.8".to_string(),
+                expected: "0.2.0".to_string(),
+            }
+        );
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn check_artifact_reports_a_format_mismatch_without_regard_to_version() {
+        let dir = std::env::temp_dir().join(format!(
+            "rsx_assets_handshake_format_{}",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_dir_all(&dir);
+        let telar_dir = dir.join(".telar");
+        std::fs::create_dir_all(&telar_dir).unwrap();
+
+        let stale_index = AssetIndex {
+            format: ASSET_ARTIFACT_FORMAT + 1,
+            producer: "cargo-telar 0.1.8".to_string(),
+            telar_version: "0.1.8".to_string(),
+            entries: vec![],
+        };
+        std::fs::write(telar_dir.join(ASSETS_INDEX_FILENAME), stale_index.to_json()).unwrap();
+
+        assert_eq!(
+            check_artifact(&telar_dir, "0.1.8").unwrap(),
+            ArtifactHandshake::FormatMismatch {
+                found: ASSET_ARTIFACT_FORMAT + 1,
+                expected: ASSET_ARTIFACT_FORMAT,
+            }
+        );
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn check_artifact_surfaces_a_corrupt_index_as_an_error_not_a_variant() {
+        let dir = std::env::temp_dir().join(format!(
+            "rsx_assets_handshake_corrupt_{}",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_dir_all(&dir);
+        let telar_dir = dir.join(".telar");
+        std::fs::create_dir_all(&telar_dir).unwrap();
+        std::fs::write(telar_dir.join(ASSETS_INDEX_FILENAME), "{ not json").unwrap();
+
+        let err = check_artifact(&telar_dir, "0.1.8").unwrap_err();
+        assert_eq!(err.kind(), std::io::ErrorKind::InvalidData);
 
         let _ = std::fs::remove_dir_all(&dir);
     }

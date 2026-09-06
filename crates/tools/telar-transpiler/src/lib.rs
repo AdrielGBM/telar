@@ -21,9 +21,9 @@ mod view;
 
 pub use assets::{
     ASSET_ARTIFACT_FORMAT, ASSET_KINDS, ASSETS_INDEX_FILENAME, ASSETS_MODULE,
-    ASSETS_SOURCE_FILENAME, AssetEntry, AssetIndex, AssetKind, BakedAsset, GeneratedAssets,
-    asset_kind_for_id, asset_kind_for_tag, content_hash, generate_assets, read_index,
-    static_name_for_path, write_generated,
+    ASSETS_SOURCE_FILENAME, ArtifactHandshake, AssetEntry, AssetIndex, AssetKind, BakedAsset,
+    GeneratedAssets, asset_kind_for_id, asset_kind_for_tag, check_artifact, content_hash,
+    generate_assets, read_index, static_name_for_path, write_generated,
 };
 pub use codegen::{TranspiledSource, transpile_source};
 pub use discovery::{

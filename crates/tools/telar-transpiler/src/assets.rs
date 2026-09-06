@@ -6,8 +6,8 @@ mod artifact;
 
 pub use artifact::{
     ASSET_ARTIFACT_FORMAT, ASSETS_INDEX_FILENAME, ASSETS_MODULE, ASSETS_SOURCE_FILENAME,
-    AssetEntry, AssetIndex, BakedAsset, GeneratedAssets, content_hash, generate_assets, read_index,
-    static_name_for_path, write_generated,
+    ArtifactHandshake, AssetEntry, AssetIndex, BakedAsset, GeneratedAssets, check_artifact,
+    content_hash, generate_assets, read_index, static_name_for_path, write_generated,
 };
 
 /// One kind of external asset a widget's `src:` attribute can resolve to.
