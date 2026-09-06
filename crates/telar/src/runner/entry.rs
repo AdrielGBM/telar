@@ -1,6 +1,6 @@
 //! Which frontend an app runs on.
 //!
-//! The three predicates below are spelled out at every use rather than named once, because a `cfg` attribute takes no macro: `all(feature = "desktop", not(target_os = "android"), not(target_arch = "wasm32"))` is a window, `all(feature = "web-dom", target_arch = "wasm32")` is a page, and `feature = "tui"` is a terminal.
+//! The three predicates below are spelled out at every use rather than named once, because a `cfg` attribute takes no macro: `all(feature = "desktop-bare", not(target_os = "android"), not(target_arch = "wasm32"))` is a window, `all(feature = "web-dom", target_arch = "wasm32")` is a page, and `feature = "tui"` is a terminal.
 
 use crate::app::App;
 use crate::app_config::AppConfig;
@@ -23,7 +23,7 @@ pub fn run_app_with_name<A: App>(config: AppConfig, app: A, app_name: &str) {
 #[cfg(feature = "tui")]
 fn tui_selected() -> bool {
     let has_window = cfg!(all(
-        feature = "desktop",
+        feature = "desktop-bare",
         not(target_os = "android"),
         not(target_arch = "wasm32")
     ));
@@ -35,7 +35,7 @@ fn tui_selected() -> bool {
 }
 
 #[cfg(all(
-    feature = "desktop",
+    feature = "desktop-bare",
     not(target_os = "android"),
     not(target_arch = "wasm32")
 ))]
@@ -47,7 +47,7 @@ fn run_default_frontend<A: App>(config: AppConfig, app: A, app_name: &str) {
     feature = "web-dom",
     target_arch = "wasm32",
     not(all(
-        feature = "desktop",
+        feature = "desktop-bare",
         not(target_os = "android"),
         not(target_arch = "wasm32")
     ))
@@ -58,7 +58,7 @@ fn run_default_frontend<A: App>(config: AppConfig, app: A, app_name: &str) {
 
 #[cfg(not(any(
     all(
-        feature = "desktop",
+        feature = "desktop-bare",
         not(target_os = "android"),
         not(target_arch = "wasm32")
     ),

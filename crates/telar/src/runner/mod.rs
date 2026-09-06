@@ -3,14 +3,14 @@
 #[cfg(all(feature = "android", target_os = "android"))]
 mod android;
 #[cfg(all(
-    feature = "desktop",
+    feature = "desktop-bare",
     not(target_os = "android"),
     not(target_arch = "wasm32")
 ))]
 mod desktop;
 #[cfg(any(
     all(
-        feature = "desktop",
+        feature = "desktop-bare",
         not(target_os = "android"),
         not(target_arch = "wasm32")
     ),
@@ -59,7 +59,7 @@ const COMMAND_BUF_POOL_CAP: usize = 3;
 #[cfg(all(feature = "android", target_os = "android"))]
 pub use android::run_android_app_with_name;
 #[cfg(all(
-    feature = "desktop",
+    feature = "desktop-bare",
     not(target_os = "android"),
     not(target_arch = "wasm32")
 ))]

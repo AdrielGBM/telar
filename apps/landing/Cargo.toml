@@ -21,7 +21,7 @@ tracing-subscriber = { workspace = true, features = ["env-filter"] }
 [features]
 default = ["desktop"]
 # A window, drawn by the GPU where there is one and the CPU where there is not.
-desktop = ["telar/desktop", "telar/hardware", "telar/software"]
+desktop = ["telar/desktop"]
 # The browser, both ways it can draw. Only meaningful for a wasm32 build.
 web = ["telar/web"]
 # The browser drawing as a document alone: no GPU and no glyph shaper, which is most of a page's weight.

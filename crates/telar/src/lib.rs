@@ -45,7 +45,7 @@ pub mod hot_state;
 pub mod plugin;
 #[cfg(feature = "runtime")]
 pub mod prefs;
-#[cfg(feature = "platform-headless")]
+#[cfg(feature = "headless")]
 mod raster;
 #[cfg(feature = "runtime")]
 pub mod runner;
@@ -125,7 +125,7 @@ pub use platform_core::{
 };
 #[cfg(all(
     feature = "runtime",
-    feature = "desktop",
+    feature = "desktop-bare",
     not(target_os = "android"),
     not(target_arch = "wasm32")
 ))]
@@ -275,7 +275,7 @@ mod preview;
 pub use preview::PreviewApp;
 #[cfg(all(feature = "preview-headless", not(target_os = "android")))]
 pub use preview::run_preview_png;
-#[cfg(feature = "platform-headless")]
+#[cfg(feature = "headless")]
 pub use raster::rasterize;
 
 #[cfg(feature = "dev")]
@@ -312,7 +312,7 @@ pub use runner::run_with_platform;
 pub use runner::{SurfaceWindow, run_with_platform_and_renderer};
 #[cfg(all(
     feature = "runtime",
-    feature = "desktop",
+    feature = "desktop-bare",
     not(target_os = "android"),
     not(target_arch = "wasm32")
 ))]

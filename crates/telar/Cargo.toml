@@ -11,8 +11,140 @@ license = { workspace = true }
 repository = { workspace = true }
 
 [features]
-default = ["runtime", "desktop", "hardware", "software", "bake-assets"]
+default = ["desktop", "bake-assets"]
 
+#! ## Targets
+#!
+#! One feature per surface Telar draws on, and **each is complete on its own** — naming it is the whole of
+#! the choice. Most applications enable exactly one and never touch another feature on this page.
+#! `cargo telar new --target <name>` writes it for you.
+#!
+#! | Feature | Surface | Crates in the build graph |
+#! | --- | --- | --- |
+#! | `desktop` | A native window on Linux, macOS and Windows *(default)* | 413 |
+#! | `tui` | The terminal the app was launched from | 162 |
+#! | `web-dom` | A browser, drawing as a document | 164 |
+#! | `web` | A browser, document **and** WebGPU canvas | 230 |
+#! | `android` | An Android `NativeActivity` | 297 |
+#! | `headless` | No surface at all: draw commands in, pixels out | 219 |
+#!
+#! Counted with `cargo tree -e normal` on each target, with `bake-assets` on. The spread is the point:
+#! nothing here is bundled, so a build carries the target it named and no other.
+
+## A native window on Linux, macOS and Windows, drawn by the GPU where there is one and the CPU where
+## there is not. Enabled by `default`.
+desktop = ["desktop-bare", "hardware", "software"]
+
+## The terminal the app was launched from, drawn through `renderer-tui`. No window, no GPU and no glyph
+## shaper.
+tui = ["runtime", "dep:platform-tui", "dep:renderer-tui", "services-core/system-paths"]
+
+## An Android `NativeActivity`, drawn by the GPU where there is one and the CPU where there is not. Opt-in
+## like every other frontend: `runtime` used to bring it in unconditionally, which linked winit and an
+## activity into terminal builds under Termux — ordinary command-line processes with no activity behind them.
+android = ["android-bare", "hardware", "software"]
+
+## A browser, drawing as a document: real elements laid out by CSS, measured with the browser's own
+## canvas. No GPU and no shaper, which is most of what a web build used to weigh.
+##
+## Only meaningful for a `wasm32` build; the dependencies behind it are target-gated, so turning it on for
+## a host build enables nothing.
+web-dom = ["runtime", "dep:platform-web", "dep:renderer-dom"]
+
+## Both browser frontends: the document above, and pixels on a canvas through WebGPU — what
+## `WebRenderer::Auto` needs to have a choice to make. The canvas draws its own glyphs, hence the shaper.
+web = ["web-dom", "shaper", "dep:renderer-web"]
+
+## No surface at all: exposes `rasterize`, draw commands in and pixels out, with no window and no GPU.
+headless = ["runtime", "software", "dep:platform-headless"]
+
+## Deprecated alias for [`headless`](#headless), kept so an existing manifest keeps compiling.
+platform-headless = ["headless"]
+
+#! ## Capabilities
+#!
+#! Optional runtime pieces, each off unless named. Every one of them is a dependency an application that
+#! does not use it should not have to link.
+
+## The widget catalogue: buttons, fields, menus, modals, tabs, sliders and the rest.
+components = ["runtime", "dep:ui-components"]
+
+## A reactive page stack with animated transitions.
+navigate = ["runtime", "dep:navigate-core"]
+
+## The `Svg` widget, drawing shapes baked at build time out of `src:"…"`. No SVG parser at runtime.
+svg = ["ui-core?/svg"]
+
+## SVG parsed at runtime, from a string the application assembles or fetches.
+dynamic-svg = ["svg", "renderer-assets?/dynamic-svg"]
+
+## Images decoded at runtime. PNG and JPEG come with it; every other format is one knob of its own, under
+## **Image formats** below.
+dynamic-image = ["renderer-assets?/dynamic-image"]
+
+## The reactive seam for assets that arrive later (`AssetSource`, `AssetState`) — glue over signals, with
+## no transport of its own.
+async-assets = ["runtime", "ui-core/async-assets"]
+
+## The HTTP implementation of that seam. Split from [`async-assets`](#async-assets) because an application
+## supplying its own transport gets the seam without an HTTP client and a TLS stack behind it.
+http-assets = ["async-assets", "dynamic-svg", "dep:ureq"]
+
+## Dependency injection over the per-surface service scope.
+di = ["services-core/di"]
+
+## Loading a translation catalog from TOML instead of linking one the transpiler baked — what an
+## application with no `.rsx` file in it needs to reach i18n at all.
+runtime-catalog = ["i18n-core/runtime-catalog"]
+
+## Filesystem watching delivered on the UI thread. Opt-in: an application that reloads nothing should not
+## link a platform file-notification backend.
+watch = ["runtime", "dep:notify"]
+
+## Turning `src:"…"` assets into Rust source at build time. **On by default**, and host-side only — the
+## baker (usvg, resvg, `image`) compiles into the proc-macro, never into the application binary. Turning
+## it off drops ~66 crates from every build; an `.rsx` that then bakes an asset fails to compile rather
+## than failing at runtime.
+bake-assets = ["telar-macros/bake-assets"]
+
+#! ## Set by the tooling
+#!
+#! `cargo telar` passes these on the command line for the command you ran. An application does not name
+#! them, and nothing in a shipping binary should reach for them.
+
+## Hot reload and the in-app devtools overlay. Injected by `cargo telar dev`. Takes the bare window rather
+## than `desktop`, so `--target tui` does not acquire a GPU renderer on the way to a terminal.
+dev = ["runtime", "desktop-bare", "dep:libloading", "dep:serde_json"]
+
+## The preview host that renders `[preview]` blocks in a window. Injected by `cargo telar preview`.
+preview = ["runtime", "desktop-bare"]
+
+## Rendering those previews to PNG with no window, which is `cargo telar test`. `headless` plus a PNG
+## encoder, the only thing `image` is here for.
+preview-headless = ["headless", "dep:image"]
+
+## Test helpers an out-of-tree application needs to assert on what its tree drew, plus the GPU gate that
+## keeps a pixel test from passing having asserted nothing.
+testing = ["runtime"]
+
+
+#! ## Embedding
+#!
+#! For hosting Telar inside something else, or something else inside Telar.
+
+## The dylib side of a production plugin, distinct from dev hot-reload.
+plugin = ["runtime"]
+
+## The loader for one.
+plugin-host = ["plugin", "dep:libloading"]
+
+#! ## Building blocks
+#!
+#! What the target features above are assembled from. An out-of-tree frontend installing its own platform
+#! or renderer through `run_with_platform_and_renderer` names these directly; nothing else needs to.
+
+## The kernel every frontend sits on: reactive graph, layout, theming, the widget tree and the draw
+## vocabulary. No surface and no renderer.
 runtime = [
     "dep:platform-core",
     "dep:renderer-core",
@@ -28,83 +160,47 @@ runtime = [
     "dep:libc",
 ]
 
-# Shaping glyphs out of font files, which is what a backend that draws its own text needs and what one
-# handing text to somebody else's engine does not. Split out of `runtime` because it is the heaviest thing
-# in a build that never uses it: cosmic-text, swash, skrifa and two `fontdb`s come with it, and a document
-# renderer measures with the browser's own canvas instead.
+## Shaping glyphs out of font files, which is what a backend drawing its own text needs and what one
+## handing text to somebody else's engine does not. Split out of `runtime` because it is the heaviest
+## thing in a build that never uses it: cosmic-text, swash, skrifa and two `fontdb`s come with it, and a
+## document renderer measures with the browser's own canvas instead.
 shaper = ["runtime", "dep:renderer-text"]
 
-# Both renderers are opt-in, so a frontend installing its own via `run_with_platform_and_renderer` compiles
-# neither. `RendererBackend::Auto` resolves to whichever is present.
-# `platform-headless` rides along because `TextureUi` names `HeadlessWindow` as its offscreen marker.
+## The wgpu renderer. `platform-headless` rides along because `TextureUi` names `HeadlessWindow` as its
+## offscreen marker.
 hardware = ["runtime", "shaper", "dep:renderer-hardware", "dep:platform-headless"]
-software = ["runtime", "shaper", "dep:renderer-software"]
 
-desktop = ["runtime", "dep:platform-desktop"]
-# Opt-in like every other frontend. It was the one `runtime` brought in unconditionally, which on an Android
-# target linked winit and a NativeActivity the app might never open — the case that matters is a terminal build
-# under Termux, which is an ordinary command-line process with no activity behind it.
-android = ["runtime", "dep:platform-android"]
-# Exposes `rasterize`: draw commands in, pixels out, with no window and no GPU.
-platform-headless = ["runtime", "software", "dep:platform-headless"]
+## The CPU rasterizer, on `tiny-skia`.
+software = ["runtime", "dep:renderer-software", "shaper"]
 
-# A terminal frontend. Neither `desktop` nor a GPU is involved: the app runs in the terminal it was
-# launched from, drawing through `renderer-tui`.
-tui = ["runtime", "dep:platform-tui", "dep:renderer-tui", "services-core/system-paths"]
+## A desktop window with no renderer behind it, for a frontend installing its own through
+## `run_with_platform_and_renderer`. `RendererBackend::Auto` resolves to whichever of `hardware`/`software`
+## is present, so a build with neither draws nothing.
+desktop-bare = ["runtime", "dep:platform-desktop"]
 
-# A browser frontend drawing as a document: real elements laid out by CSS, measured with the browser's own
-# canvas. No GPU and no shaper, which is most of what a web build used to weigh.
-#
-# Only meaningful for a `wasm32` build; the dependencies behind it are target-gated, so turning it on for a
-# host build enables nothing.
-web-dom = ["runtime", "dep:platform-web", "dep:renderer-dom"]
+## The same, for Android.
+android-bare = ["runtime", "dep:platform-android"]
 
-# Both browser frontends: the document above, and pixels on a canvas through WebGPU. What `WebRenderer::Auto`
-# needs to have a choice to make. The canvas draws its own glyphs, hence the shaper.
-web = ["web-dom", "shaper", "dep:renderer-web"]
+#! ## Image formats
+#!
+#! Extra decode formats for [`dynamic-image`](#dynamic-image), one knob each, passed straight through to
+#! the `image` crate. PNG and JPEG are always on. There is one per format rather than a set this crate
+#! curates because of *how* the wrong choice fails: decoding dispatches on whatever was compiled in, so a
+#! format nobody enabled is not a compile error — it is `unsupported format` at runtime, on the one file
+#! the user happened to open.
 
-dev = ["runtime", "desktop", "dep:libloading", "dep:serde_json"]
-preview = ["runtime", "desktop"]
-# `platform-headless` plus a PNG encoder, which is the only thing `image` is here for.
-preview-headless = ["platform-headless", "dep:image"]
+## Everything `image` ships, for an application that opens whatever the user points it at — a file
+## manager's thumbnails, a wallpaper picker — and would rather pay the size than enumerate.
+image-formats = ["dynamic-image", "renderer-assets?/image-formats"]
 
-# Production dylibs, distinct from dev hot-reload: `plugin` is the dylib side, `plugin-host` the loader.
-plugin = ["runtime"]
-# Test helpers an out-of-tree app needs to say what its tree drew, and the GPU gate that keeps a pixel test
-# from passing having asserted nothing. Opt-in: nothing in a shipping binary should reach for these.
-testing = ["runtime"]
-plugin-host = ["plugin", "dep:libloading"]
-
-components = ["runtime", "dep:ui-components"]
-navigate = ["runtime", "dep:navigate-core"]
-async-assets = ["runtime", "ui-core/async-assets"]
-# The HTTP implementation of that seam. Split from `async-assets` because the seam itself is pure reactive
-# glue: an app supplying its own transport gets it without an HTTP client and a TLS stack.
-http-assets = ["async-assets", "dynamic-svg", "dep:ureq"]
-di = ["services-core/di"]
-# Loading a translation catalog from TOML instead of linking one the transpiler baked. What an app with no
-# `.rsx` file in it needs to reach i18n at all.
-runtime-catalog = ["i18n-core/runtime-catalog"]
-# Filesystem watching delivered on the UI thread. Opt-in: an app that reloads nothing should not link a
-# platform file-notification backend.
-watch = ["runtime", "dep:notify"]
-
-## Turning `src:"…"` assets into Rust source at build time. **On by default**, and host-side only — the
-## baker (usvg, resvg, `image`) compiles into the proc-macro, never into the application binary. Turning
-## it off drops ~66 crates from every build; an `.rsx` that then bakes an asset fails to compile rather
-## than failing at runtime.
-bake-assets = ["telar-macros/bake-assets"]
-
-svg = ["ui-core?/svg"]
-dynamic-svg = ["svg", "renderer-assets?/dynamic-svg"]
-dynamic-image = ["renderer-assets?/dynamic-image"]
-# What a *runtime-parsed* SVG may contain beyond shapes. Both off by default because both are heavy and most
-# SVG is icons: `svg-text` links a shaper, a font database and an outline rasterizer, `svg-images` three
-# decoders. An SVG baked at build time keeps both regardless — the baker runs on the host with everything on.
+## `<text>` in an SVG parsed at *runtime*: a shaper, a font database and an outline rasterizer, which came
+## to 1.6 MB of the sandbox's wasm module for something its icons never used. An SVG baked at build time
+## keeps its text either way — the baker runs on the host with everything on.
 svg-text = ["dynamic-svg", "renderer-assets?/svg-text"]
+
+## `<image>` in an SVG parsed at runtime, which is a GIF, WebP and JPEG decoder to read what it points at.
 svg-images = ["dynamic-svg", "renderer-assets?/svg-images"]
-# Decode formats beyond the always-on PNG and JPEG. See `renderer-assets` for why there is one per format:
-# a format nobody enabled fails at runtime, not at compile time.
+
 image-avif = ["dynamic-image", "renderer-assets?/image-avif"]
 image-bmp = ["dynamic-image", "renderer-assets?/image-bmp"]
 image-dds = ["dynamic-image", "renderer-assets?/image-dds"]
@@ -118,7 +214,6 @@ image-qoi = ["dynamic-image", "renderer-assets?/image-qoi"]
 image-tga = ["dynamic-image", "renderer-assets?/image-tga"]
 image-tiff = ["dynamic-image", "renderer-assets?/image-tiff"]
 image-webp = ["dynamic-image", "renderer-assets?/image-webp"]
-image-formats = ["dynamic-image", "renderer-assets?/image-formats"]
 
 [dependencies]
 image = { version = "0.25.10", default-features = false, features = ["png"], optional = true }
