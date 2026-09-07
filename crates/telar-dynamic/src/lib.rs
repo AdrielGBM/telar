@@ -36,11 +36,14 @@
 mod catalog;
 #[cfg(feature = "dir")]
 mod dir;
+// A cache that writes to a directory has no target in a browser: `std::fs` compiles there and fails every call, so a build that reached for this one resolved every id over the network on every run and reported nothing. `MemoryCache` is the one that works on every target.
+#[cfg(not(target_arch = "wasm32"))]
 mod disk_cache;
 #[cfg(feature = "http")]
 mod http;
 #[cfg(feature = "image")]
 mod image;
+mod memory_cache;
 #[cfg(feature = "svg")]
 mod svg;
 
@@ -48,12 +51,17 @@ mod svg;
 pub use catalog::CatalogDecoder;
 #[cfg(feature = "dir")]
 pub use dir::DirTransport;
+#[cfg(not(target_arch = "wasm32"))]
 pub use disk_cache::DiskCache;
 #[cfg(feature = "http")]
 pub use http::HttpTransport;
 #[cfg(feature = "image")]
 pub use image::ImageDecoder;
+pub use memory_cache::{DEFAULT_BUDGET_BYTES, MemoryCache};
 #[cfg(feature = "svg")]
 pub use svg::SvgDecoder;
 
 pub use ui_core::{AssetCache, AssetDecoder, AssetError, AssetKey, AssetTransport, Reply};
+
+/// How a cache is bounded: a byte budget, an optional idle horizon, and whether a value must be offered twice before it is kept. Re-exported for [`MemoryCache::with_policy`].
+pub use renderer_cache::{CacheStat, Policy};

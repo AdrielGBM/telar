@@ -102,6 +102,8 @@ geometry-core = { workspace = true }
 i18n-core = { workspace = true }
 reactive-core = { workspace = true }
 renderer-assets = { workspace = true }
+# The weight-budgeted LRU every renderer cache is already an instance of. `MemoryCache` is one more, so an asset cache reads its eviction rules from where the renderer's are written down instead of rewriting them.
+renderer-cache = { workspace = true }
 renderer-core = { workspace = true }
 ui-core = { workspace = true, features = ["async-assets"] }
 

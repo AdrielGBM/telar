@@ -6,7 +6,7 @@ use ui_core::{AssetError, AssetKey, AssetTransport, Reply};
 
 /// An [`AssetTransport`] that resolves each id against a directory.
 ///
-/// Unlike [`crate::DiskCache`], which flattens an id into one file name because it owns its own storage, this keeps the id's shape: `"icons/mdi/home.svg"` is `root/icons/mdi/home.svg`. A directory of content is a tree, and reading it as anything else would make half of one unreachable.
+/// Unlike `DiskCache`, which flattens an id into one file name because it owns its own storage, this keeps the id's shape: `"icons/mdi/home.svg"` is `root/icons/mdi/home.svg`. A directory of content is a tree, and reading it as anything else would make half of one unreachable.
 ///
 /// **`root` is the application's decision, not the library's**, because only the application knows whether the files ship with it or arrive afterwards. The two real answers are [`telar::paths::data()`](https://docs.rs/telar) — the per-user data directory, for content downloaded or authored after install — and a directory beside `std::env::current_exe()`, for content shipped alongside the binary. A relative path is neither: it resolves against the working directory, which is wherever the user happened to launch from.
 ///

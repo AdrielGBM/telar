@@ -5480,6 +5480,7 @@ dependencies = [
  "telar-i18n-core",
  "telar-reactive-core",
  "telar-renderer-assets",
+ "telar-renderer-cache",
  "telar-renderer-core",
  "telar-ui-core",
  "tracing",

@@ -32,7 +32,7 @@ pub struct HttpTransport {
 }
 
 impl HttpTransport {
-    /// A transport that fetches from `url_template`. Pair it with a [`crate::DiskCache`] unless the assets genuinely should not touch disk — without one, every miss is a round trip and a restart re-downloads the lot.
+    /// A transport that fetches from `url_template`. Pair it with a cache unless the assets genuinely should not touch disk — without one, every miss is a round trip and a restart re-downloads the lot. [`MemoryCache`](crate::MemoryCache) spares the repeat request within a run and works on every target; `DiskCache` also spares it across restarts, and exists only where there is a disk to write to.
     pub fn new(url_template: impl Into<String>) -> Self {
         Self {
             url_template: url_template.into(),
