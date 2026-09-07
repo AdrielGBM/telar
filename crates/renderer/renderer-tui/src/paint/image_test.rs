@@ -4,6 +4,7 @@ use renderer_core::{DrawCommand, TextStyle};
 
 use super::*;
 use crate::buffer::CellBuffer;
+use crate::color::Rgb;
 use crate::metrics::CellSize;
 
 const CELL: CellSize = CellSize {

@@ -5,7 +5,6 @@ use renderer_core::{Color, ImageData, Raster};
 
 use super::Painter;
 use crate::cell::{Attrs, Grapheme};
-use crate::color::Rgb;
 
 /// The upper half block, which is what lets one cell show two colours: its foreground paints the top half and its background the bottom.
 ///
