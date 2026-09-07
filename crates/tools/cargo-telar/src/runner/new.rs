@@ -48,6 +48,10 @@ pub(crate) fn run_new_cmd(args: NewArgs) {
         write(&path, rel, &contents);
     }
 
+    // Left transpiled so the project checks out of the box: opened in an editor before its first `cargo telar` command it would otherwise greet its author with the error naming one. No `cargo metadata` to resolve a version against — nothing is fetched yet, and the manifest just written pins this binary's own.
+    let producer = format!("cargo-telar {TELAR_VERSION}");
+    super::transpile::transpile_member(&path, &producer, TELAR_VERSION);
+
     let dev = match target {
         Target::Desktop => "cargo telar dev".to_string(),
         other => format!("cargo telar dev --target {}", target_name(other)),

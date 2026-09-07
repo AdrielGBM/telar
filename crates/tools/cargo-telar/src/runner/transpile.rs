@@ -26,7 +26,7 @@ pub(crate) fn transpile_workspace() {
     }
 }
 
-fn transpile_member(member: &Path, producer: &str, telar_version: &str) {
+pub(super) fn transpile_member(member: &Path, producer: &str, telar_version: &str) {
     let src_dir = member.join("src");
     if telar_transpiler::find_rsx_files(&src_dir).is_empty() {
         return;
