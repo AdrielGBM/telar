@@ -3,7 +3,7 @@
 //! This is the condition no in-process test can reproduce, and the one that made an entrance transition sit at opacity 0 — a black page — until the user moved the mouse. It needs a dylib built the way `cargo telar dev` builds one, so it is `#[ignore]`d by default. To run it:
 //!
 //! ```text
-//! TELAR_HOT_RELOAD_BUILD=1 RUSTFLAGS=--cfg=telar_hot_reload cargo build -p sandbox --features sandbox/dev --lib
+//! cargo build -p sandbox --features telar/hot-reload --lib
 //! cargo test -p sandbox --features dev --test hot_tree -- --ignored
 //! ```
 
@@ -130,7 +130,7 @@ fn a_click_keeps_recomposing_frames_with_the_app_in_a_dylib() {
     assert!(
         distinct >= 2,
         "only {distinct} distinct frame(s) after the click with no further input: the app's tree is not \
-         re-composing on its own. If the dylib was last built without TELAR_HOT_RELOAD_BUILD it exports no \
+         re-composing on its own. If the dylib was last built without `telar/hot-reload` it exports no \
          tree shims and the host mounted the tree itself — rebuild it as the module docs describe."
     );
 }

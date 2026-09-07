@@ -13,6 +13,13 @@ repository = { workspace = true }
 [lib]
 proc-macro = true
 
+[features]
+## The `cargo telar dev` build shape: signal declarations become keyed bindings the dev host restores across a dylib swap, and the runner exports the symbols it swaps through. A feature and not an environment variable because cargo hashes features into the units that enable them, and does not track what a proc macro reads from its environment.
+hot-reload = []
+
+## The `cargo telar preview` entry point: the generated runner builds the preview host instead of the application.
+preview = []
+
 [dependencies]
 telar-transpiler = { workspace = true }
 

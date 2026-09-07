@@ -134,9 +134,9 @@ pub fn app(input: TokenStream) -> TokenStream {
         }
     };
 
-    // Detected at macro expansion time: cargo-telar sets these env vars.
-    let is_hot_reload = hot_reload_build();
-    let is_preview = std::env::var("TELAR_PREVIEW_BUILD").is_ok();
+    // Decided at macro expansion time by the features cargo-telar names on the build, which cargo tracks — unlike the environment variables these were, which it does not.
+    let is_hot_reload = build_flavour().is_hot();
+    let is_preview = cfg!(feature = "preview");
 
     // The env-var dispatch lives in `telar::dev_entry` rather than here, so an app that wires its own runner (`rsx_modules!` plus a hand-written `run()`) gets the same dev loop this macro generates.
     let run_tail = quote! {
@@ -190,7 +190,7 @@ pub fn app(input: TokenStream) -> TokenStream {
         }
     };
 
-    // Only under `TELAR_HOT_RELOAD_BUILD`, so dlopen can find the factory. `TELAR_PREVIEW_BUILD` lets the macro branch without leaking a custom cfg into generated output.
+    // Only under `telar/hot-reload`, so dlopen can find the factory.
     let hot_export = if is_hot_reload {
         let body: TokenStream2 = if is_preview {
             quote! {
@@ -386,9 +386,14 @@ pub fn app(input: TokenStream) -> TokenStream {
     .into()
 }
 
-// Set by cargo-telar for the dylib build. Cargo does not track env reads from a proc macro, so this must only ever select between outputs that are themselves distinguishable to cargo — here, two output directories.
-fn hot_reload_build() -> bool {
-    std::env::var("TELAR_HOT_RELOAD_BUILD").is_ok()
+/// Which shape `cargo telar` asked this build to be, as a feature.
+///
+/// It was an environment variable, and cargo does not track a proc macro's env reads — so the flavour needed something cargo *does* track to move the fingerprint by, and that was `--cfg=telar_hot_reload` pushed into `RUSTFLAGS`. Rustflags are hashed into every unit in the graph, so alternating `cargo telar check` and `cargo telar dev` recompiled all four hundred dependencies each way to change which directory this function names. A feature is tracked too, and reaches only the crates that enable it.
+fn build_flavour() -> telar_transpiler::BuildFlavour {
+    match cfg!(feature = "hot-reload") {
+        true => telar_transpiler::BuildFlavour::Hot,
+        false => telar_transpiler::BuildFlavour::Plain,
+    }
 }
 
 /// Refuses a `telar.toml` whose `[telar] theme` is not what the invocation names.
@@ -447,10 +452,7 @@ fn transpile_project(theme_type_str: Option<&str>) -> Result<TranspileOutput, To
         .map_err(|_| quote! { compile_error!("CARGO_MANIFEST_DIR not set"); })?;
 
     // A hot-reload build emits different code for the same `.rsx`, so it needs its own output dir: sharing one has the two flavours — and the analyzer's live mirror, which always writes the plain one — overwrite each other on every build, leaving each cargo unit permanently stale.
-    let flavour = match hot_reload_build() {
-        true => telar_transpiler::BuildFlavour::Hot,
-        false => telar_transpiler::BuildFlavour::Plain,
-    };
+    let flavour = build_flavour();
     let generated_dir = telar_transpiler::generated_dir(&manifest_dir, flavour);
     if let Err(e) = std::fs::create_dir_all(&generated_dir) {
         let msg = format!("Failed to create {}: {e}", generated_dir.display());

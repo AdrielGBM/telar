@@ -157,47 +157,6 @@ fn collect_watch_dirs(workspace_root: &Path) -> Vec<PathBuf> {
     dirs
 }
 
-/// The host triple's `CARGO_TARGET_<TRIPLE>_RUSTFLAGS`, which is where a direnv/flake shell usually puts a linker choice (target-scoped rather than global, so a cross build keeps its own toolchain's linker).
-fn host_target_rustflags() -> Option<String> {
-    let output = Command::new("rustc").arg("-vV").output().ok()?;
-    let text = String::from_utf8_lossy(&output.stdout);
-    let host = text
-        .lines()
-        .find_map(|line| line.strip_prefix("host: "))?
-        .trim();
-    let key = format!(
-        "CARGO_TARGET_{}_RUSTFLAGS",
-        host.to_uppercase().replace('-', "_")
-    );
-    std::env::var(key).ok().filter(|v| !v.trim().is_empty())
-}
-
-/// The flags this loop must build with, on top of whatever the developer already configured.
-///
-/// Cargo reads rustflags from exactly one source and `RUSTFLAGS` outranks the rest, so setting it here silently discards the target-scoped tier — which is where a Nix shell or a `.envrc` puts `-fuse-ld=mold`. Folding that tier in when `RUSTFLAGS` is unset keeps the developer's choice instead of quietly undoing it.
-fn hot_reload_rustflags() -> String {
-    with_hot_reload_cfg(
-        std::env::var("RUSTFLAGS")
-            .ok()
-            .filter(|v| !v.trim().is_empty())
-            .or_else(host_target_rustflags),
-    )
-}
-
-fn with_hot_reload_cfg(inherited: Option<String>) -> String {
-    // Adding the cfg changes the Cargo fingerprint, forcing a recompile so the proc macro re-runs with `TELAR_HOT_RELOAD_BUILD=1`.
-    let flag = "--cfg=telar_hot_reload";
-    match inherited {
-        Some(existing) => format!("{existing} {flag}"),
-        None => flag.to_string(),
-    }
-}
-
-fn preview_rustflags() -> String {
-    // In the fingerprint, so Cargo recompiles when switching between dev and preview and the generated entrypoint includes or omits the preview branch correctly.
-    format!("{} --cfg=telar_preview", hot_reload_rustflags())
-}
-
 // TCP loopback rather than a unix socket, so hot reload works on non-Unix hosts. cargo-telar binds and the app connects once at startup, then reads line events.
 struct HotChannel {
     listener: std::net::TcpListener,
@@ -280,7 +239,6 @@ fn watch_and_hot_reload(
     lib_path: PathBuf,
     mut channel: HotChannel,
     envs: Vec<(String, String)>,
-    rustflags: String,
     workspace_root: PathBuf,
 ) -> ! {
     let (tx, rx) = mpsc::channel::<notify::Result<notify::Event>>();
@@ -323,8 +281,6 @@ fn watch_and_hot_reload(
             super::bake::bake_workspace();
             let mut cmd = Command::new("cargo");
             cmd.args(&build_args)
-                .env("TELAR_HOT_RELOAD_BUILD", "1")
-                .env("RUSTFLAGS", &rustflags)
                 .envs(envs.iter().map(|(k, v)| (k.as_str(), v.as_str())));
             let (succeeded, report) = build_with_diagnostics(&mut cmd);
             if !report.is_empty() {
@@ -439,10 +395,11 @@ impl HotMode {
         }
     }
 
-    fn rustflags(&self) -> String {
+    /// What the dylib half of the loop adds. Named on the build rather than pushed through `RUSTFLAGS` as a `--cfg`: rustflags are hashed into every unit in the graph, so the old spelling recompiled all four hundred dependencies on each switch between this loop and `cargo telar check`, to change three crates. Cargo tracks a feature just as well and scopes it to the crates that enable it.
+    fn hot_features(&self) -> &'static [&'static str] {
         match self {
-            HotMode::Dev => hot_reload_rustflags(),
-            HotMode::Preview => preview_rustflags(),
+            HotMode::Dev => &["telar/dev", "telar/hot-reload"],
+            HotMode::Preview => &["telar/preview", "telar/dev", "telar/hot-reload"],
         }
     }
 }
@@ -521,14 +478,14 @@ pub(crate) fn run_hot_loop(mode: HotMode, opts: HotLoopOpts) -> ! {
     }
 
     if hot_reload {
-        let rustflags = mode.rustflags();
+        let hot_features = mode.hot_features();
         let package_name = resolved.name();
         let lib_path = package_lib_path(&workspace_root, &package_name, profile);
         let bin_path = package_bin_path(&workspace_root, &package_name, profile);
 
         let mut build_args = vec!["build".to_string()];
         build_args.extend(rest.clone());
-        for feature in features {
+        for feature in hot_features {
             inject_feature(&mut build_args, feature);
         }
         with_json_messages(&mut build_args);
@@ -536,13 +493,8 @@ pub(crate) fn run_hot_loop(mode: HotMode, opts: HotLoopOpts) -> ! {
         let mut build_cmd = Command::new("cargo");
         build_cmd
             .args(&build_args)
-            .env("TELAR_HOT_RELOAD_BUILD", "1")
             // `telar`'s backend is resolved with `option_env!` and so is a tracked build input: omitting it would compile a different backend than the hot rebuilds.
-            .env("TELAR_RENDERER_BACKEND", backend_value)
-            .env("RUSTFLAGS", &rustflags);
-        if is_preview {
-            build_cmd.env("TELAR_PREVIEW_BUILD", "1");
-        }
+            .env("TELAR_RENDERER_BACKEND", backend_value);
         let (succeeded, report) = build_with_diagnostics(&mut build_cmd);
         if !report.is_empty() {
             eprintln!();
@@ -553,20 +505,14 @@ pub(crate) fn run_hot_loop(mode: HotMode, opts: HotLoopOpts) -> ! {
         }
 
         if bin_path.exists() && lib_path.exists() {
-            let lib_build_args = make_lib_build_args(&rest, features);
-
-            let mut build_envs = launch_envs.clone();
-            if is_preview {
-                build_envs.push(("TELAR_PREVIEW_BUILD".to_string(), "1".to_string()));
-            }
+            let lib_build_args = make_lib_build_args(&rest, hot_features);
 
             watch_and_hot_reload(
                 lib_build_args,
                 bin_path,
                 lib_path,
                 HotChannel::bind(),
-                build_envs,
-                rustflags,
+                launch_envs,
                 workspace_root,
             );
         }

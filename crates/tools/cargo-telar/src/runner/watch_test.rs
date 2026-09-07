@@ -1,19 +1,21 @@
 use super::*;
 
-/// The linker a Nix or direnv shell configures for the host target used to be dropped on the floor: setting `RUSTFLAGS` here made Cargo stop reading the tier that carried it, so the one loop a developer tunes their linker *for* was the one loop that ignored it. Choosing a linker is not this tool's call, but discarding the choice already made is a bug.
+/// The linker a Nix or direnv shell configures for the host target used to be dropped on the floor: `RUSTFLAGS` was set here to carry a `--cfg`, and Cargo reads rustflags from exactly one tier — so the one loop a developer tunes their linker *for* was the one loop that ignored it. The flavour is a feature now and this loop sets no rustflags at all, which is what keeps the choice already made.
 #[test]
-fn a_shell_configured_linker_survives_into_the_hot_reload_build() {
-    assert_eq!(
-        with_hot_reload_cfg(Some("-C link-arg=-fuse-ld=mold".to_string())),
-        "-C link-arg=-fuse-ld=mold --cfg=telar_hot_reload"
+fn the_hot_build_names_features_and_sets_no_rustflags() {
+    assert!(
+        HotMode::Dev.hot_features().contains(&"telar/hot-reload"),
+        "the dylib half of the loop has to ask for the hot-reload shape"
+    );
+    assert!(
+        !HotMode::Dev
+            .hot_features()
+            .iter()
+            .any(|f| f.contains("cfg")),
+        "a build shape carried in rustflags recompiles the whole graph on every switch"
     );
 }
 
-/// With nothing to inherit the cfg stands alone, so a bare shell does not get a leading space that would read as an empty flag.
-#[test]
-fn nothing_to_inherit_leaves_the_cfg_alone() {
-    assert_eq!(with_hot_reload_cfg(None), "--cfg=telar_hot_reload");
-}
 fn watch_probe(name: &str) -> PathBuf {
     let root =
         std::env::temp_dir().join(format!("cargo_telar_watch_{name}_{}", std::process::id()));

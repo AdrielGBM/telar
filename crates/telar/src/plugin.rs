@@ -373,7 +373,7 @@ pub struct PluginVTable {
 ///
 /// One symbol rather than one per method, so adding a guest method is a field here and a wrapper on the host instead of four edits across two macros — and so a stale `.so` fails the [`TELAR_PLUGIN_ABI`] check with a version mismatch rather than a missing-symbol error that names whichever method happened to be added last.
 ///
-/// The symbol is a plain (release) export — no `TELAR_HOT_RELOAD_BUILD`, no `dev` feature.
+/// The symbol is a plain (release) export — no `hot-reload` feature, no `dev` feature.
 #[macro_export]
 macro_rules! plugin {
     ($factory:expr) => {

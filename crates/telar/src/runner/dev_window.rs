@@ -8,9 +8,9 @@ use crate::app_config::AppConfig;
 ///
 /// **Precedence, deliberately**: these land on the config the caller passes, which [`super::resolved_window`] then lets [`crate::App::window_config`] replace outright. The app's own answer wins, and trinity's `[telar.dev.window]` depends on that order. Pinned by the test below.
 pub(super) fn with_dev_overrides(config: AppConfig) -> AppConfig {
-    #[cfg(not(telar_hot_reload))]
+    #[cfg(not(feature = "hot-reload"))]
     return config;
-    #[cfg(telar_hot_reload)]
+    #[cfg(feature = "hot-reload")]
     {
         let AppConfig {
             mut window,
@@ -28,7 +28,7 @@ pub(super) fn with_dev_overrides(config: AppConfig) -> AppConfig {
     }
 }
 
-#[cfg(telar_hot_reload)]
+#[cfg(feature = "hot-reload")]
 pub(super) fn apply_dev_window_overrides(config: &mut platform_core::WindowConfig) {
     if let Ok(v) = std::env::var("TELAR_DEV_WINDOW_TITLE") {
         config.title = v;
@@ -65,7 +65,7 @@ pub(super) fn apply_dev_window_overrides(config: &mut platform_core::WindowConfi
 }
 
 // "centered" (or empty/invalid) → Centered; "<x>,<y>" → absolute coordinates.
-#[cfg(telar_hot_reload)]
+#[cfg(feature = "hot-reload")]
 fn parse_dev_window_position(value: &str) -> platform_core::WindowPosition {
     let value = value.trim();
     if let Some((x, y)) = value.split_once(',')
