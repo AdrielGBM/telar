@@ -28,12 +28,12 @@ default = ["desktop"]
 #!
 #! | Feature | Surface | Crates in the build graph |
 #! | --- | --- | --- |
-#! | `desktop` | A native window on Linux, macOS and Windows *(default)* | 406 |
-#! | `tui` | The terminal the app was launched from | 106 |
-#! | `web-dom` | A browser, drawing as a document | 81 |
-#! | `web` | A browser, document **and** WebGPU canvas | 213 |
-#! | `android` | An Android `NativeActivity` | 327 |
-#! | `headless` | No surface at all: draw commands in, pixels out | 192 |
+#! | `desktop` | A native window on Linux, macOS and Windows *(default)* | 398 |
+#! | `tui` | The terminal the app was launched from | 103 |
+#! | `web-dom` | A browser, drawing as a document | 78 |
+#! | `web` | A browser, document **and** WebGPU canvas | 211 |
+#! | `android` | An Android `NativeActivity` | 300 |
+#! | `headless` | No surface at all: draw commands in, pixels out | 175 |
 #!
 #! Counted with `cargo tree -p telar --no-default-features --features "<target>" -e normal --target all`,
 #! so every platform's dependencies are in the figure at once. The spread is the point: nothing here is

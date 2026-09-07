@@ -16,7 +16,10 @@ path = "src/main.rs"
 [dependencies]
 # The workspace turns telar's default features off, so the frontend is this app's `default` to name.
 telar = { workspace = true, features = ["runtime", "components"] }
-tracing-subscriber = { workspace = true, features = ["env-filter"] }
+
+# Only `main.rs` initialises a subscriber, and there is no `main.rs` on wasm — left unconditional, this pulled a terminal log formatter, `ansi` included, into every page build.
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+tracing-subscriber = { workspace = true, features = ["env-filter", "ansi"] }
 
 [features]
 default = ["desktop"]

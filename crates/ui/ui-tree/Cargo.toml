@@ -18,7 +18,9 @@ platform-core = { workspace = true }
 geometry-core = { workspace = true }
 
 [dev-dependencies]
-criterion = "0.8.2"
+criterion = { version = "0.8.2", default-features = false, features = [
+    "cargo_bench_support",
+] }
 motion-core = { workspace = true }
 
 [[bench]]

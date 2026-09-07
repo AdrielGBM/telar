@@ -21,7 +21,13 @@ renderer-core = { workspace = true }
 rfd = { version = "0.17.2", default-features = false, features = ["xdg-portal"] }
 services-core = { workspace = true, features = ["system-paths"] }
 tracing = { workspace = true }
-winit = { workspace = true }
+# `wayland-csd-adwaita-notitle` rather than the default `wayland-csd-adwaita`: same client-side frame, without the `ab_glyph`/`ttf-parser` pair that only draws the title text winit then hides behind our own.
+winit = { workspace = true, features = [
+    "x11",
+    "wayland",
+    "wayland-dlopen",
+    "wayland-csd-adwaita-notitle",
+] }
 
 [target.'cfg(target_os = "linux")'.dependencies]
 zbus = "5.17.0"

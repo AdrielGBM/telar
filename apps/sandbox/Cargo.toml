@@ -28,7 +28,10 @@ serde = { workspace = true }
 # rather than under a `telar` feature. The demo never reaches for a name in this crate — the dependency is
 # what turns the parser on.
 telar-dynamic = { workspace = true, features = ["svg"] }
-tracing-subscriber = { workspace = true, features = ["env-filter"] }
+
+# Only `main.rs` initialises a subscriber, and there is no `main.rs` on wasm — left unconditional, this pulled a terminal log formatter, `ansi` included, into every page build.
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+tracing-subscriber = { workspace = true, features = ["env-filter", "ansi"] }
 
 [features]
 default = ["desktop"]
@@ -47,7 +50,9 @@ web = ["telar/web"]
 web-dom = ["telar/web-dom"]
 
 [dev-dependencies]
-criterion = "0.8.2"
+criterion = { version = "0.8.2", default-features = false, features = [
+    "cargo_bench_support",
+] }
 platform-core = { workspace = true }
 platform-headless = { workspace = true }
 pollster = "0.4"

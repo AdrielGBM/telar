@@ -10,12 +10,12 @@ and no row below that pays for another:
 
 | Your app runs in | `default = [...]` | Crates compiled |
 | --- | --- | --- |
-| A desktop window (Linux, macOS, Windows) | `["desktop"]` | 406 |
-| The terminal it was launched from | `["tui"]` | 106 |
-| A browser, drawing as a document | `["web-dom"]` | 81 |
-| A browser, document **and** WebGPU canvas | `["web"]` | 213 |
-| Android | `["android"]` | 327 |
-| Nothing — draw commands in, pixels out | `["headless"]` | 192 |
+| A desktop window (Linux, macOS, Windows) | `["desktop"]` | 398 |
+| The terminal it was launched from | `["tui"]` | 103 |
+| A browser, drawing as a document | `["web-dom"]` | 78 |
+| A browser, document **and** WebGPU canvas | `["web"]` | 211 |
+| Android | `["android"]` | 300 |
+| Nothing — draw commands in, pixels out | `["headless"]` | 175 |
 
 Counted with `cargo tree -p telar --no-default-features --features "<target>" -e normal --target all`,
 so every platform's dependencies are in the figure at once. The spread is the point: a desktop build is
