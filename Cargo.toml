@@ -45,6 +45,7 @@ members = [
     "crates/i18n/i18n-fixture",
     "crates/telar-dynamic",
     "crates/telar-plugin",
+    "crates/telar-devtools",
 ]
 
 default-members = [
@@ -80,6 +81,7 @@ default-members = [
     "apps/sandbox",
     "crates/telar-dynamic",
     "crates/telar-plugin",
+    "crates/telar-devtools",
 ]
 
 [workspace.package]
@@ -153,6 +155,7 @@ services-core = { package = "telar-services-core", path = "crates/services/servi
 telar = { path = "crates/telar", version = "0.1.8", default-features = false }
 telar-baker = { path = "crates/tools/telar-baker", version = "0.1.8" }
 telar-diagnostics = { path = "crates/tools/telar-diagnostics", version = "0.1.8" }
+telar-devtools = { path = "crates/telar-devtools", version = "0.1.8" }
 telar-dynamic = { path = "crates/telar-dynamic", version = "0.1.8" }
 telar-plugin = { path = "crates/telar-plugin", version = "0.1.8" }
 telar-macros = { path = "crates/tools/telar-macros", version = "0.1.8" }

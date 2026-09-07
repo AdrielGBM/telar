@@ -63,8 +63,10 @@ pub use android::run_android_app_with_name;
     not(target_os = "android"),
     not(target_arch = "wasm32")
 ))]
-pub use desktop::{open_window, run_app_windowed, run_desktop_app_with_name};
-pub use entry::run_app_with_name;
+pub use desktop::{
+    open_window, run_app_windowed, run_desktop_app_with_devtools, run_desktop_app_with_name,
+};
+pub use entry::{run_app_with_devtools, run_app_with_name};
 pub use generic::{run_with_platform, run_with_platform_and_renderer};
 pub use host::SurfaceWindow;
 #[cfg(all(

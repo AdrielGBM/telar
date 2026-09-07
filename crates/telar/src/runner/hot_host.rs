@@ -56,7 +56,7 @@ pub fn run_hot_reload_host(
         window = custom;
     }
     // Share the one field literal with `run_with_platform` (via build_app_handler); only the hot-reload receiver differs from a normal single-window handler.
-    let mut handler = build_app_handler::<WinitWindow, crate::dev_tools::DevTools>(
+    let mut handler = build_app_handler::<WinitWindow, crate::DefaultDevTools>(
         Box::new(initial_app),
         paths,
         font_paths,

@@ -5386,6 +5386,7 @@ dependencies = [
  "serde",
  "serde_json",
  "telar",
+ "telar-devtools",
  "telar-geometry-core",
  "telar-i18n-core",
  "telar-layout-core",
@@ -5458,6 +5459,17 @@ dependencies = [
  "telar-renderer-assets",
  "telar-transpiler",
  "toml",
+]
+
+[[package]]
+name = "telar-devtools"
+version = "0.1.8"
+dependencies = [
+ "telar-geometry-core",
+ "telar-platform-core",
+ "telar-renderer-core",
+ "telar-ui-tree",
+ "web-time",
 ]
 
 [[package]]

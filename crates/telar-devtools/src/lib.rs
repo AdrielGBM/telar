@@ -1,4 +1,9 @@
-//! The dev overlay: an FPS counter, a node inspector and the build-error banner.
+//! The dev overlay `cargo telar dev` draws over a running application: an FPS counter, a node inspector and the build-error banner.
+//!
+//! Nothing here is privileged. It implements [`ui_tree::DevPlugin`], which is the whole of what the runner asks of an overlay, and an overlay of your own goes in through the same door — see `telar::run_app_with_devtools`.
+//!
+//! Kept out of `telar` because it is 400 lines of chrome no shipping application draws, and because a seam whose only implementation lives inside the crate that defines it is a seam nobody can be shown how to use.
+#![warn(rustdoc::broken_intra_doc_links)]
 
 use std::borrow::Cow;
 use std::collections::VecDeque;
@@ -10,8 +15,7 @@ use platform_core::{Key, ModifiersState};
 use renderer_core::{
     Border, BorderRadius, Color, DrawCommand, Paint, RectStyle, ShapeStyle, TextStyle,
 };
-use ui_tree::SegmentNodeInfo;
-use ui_tree::{DevAction, DevPlugin};
+use ui_tree::{DevAction, DevPlugin, SegmentNodeInfo};
 
 fn rect_command(rect: Rect, style: RectStyle) -> DrawCommand {
     DrawCommand::Rect {
@@ -431,5 +435,5 @@ impl DevPlugin for DevTools {
 }
 
 #[cfg(test)]
-#[path = "dev_tools_test.rs"]
+#[path = "lib_test.rs"]
 mod tests;

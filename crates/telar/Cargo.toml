@@ -19,6 +19,10 @@ name = "component"
 path = "src/component_test.rs"
 
 [[test]]
+name = "devtools_seam"
+path = "src/devtools_seam_test.rs"
+
+[[test]]
 name = "frame_budget"
 path = "src/frame_budget_test.rs"
 
@@ -197,7 +201,14 @@ system-theme = ["platform-desktop?/system-theme"]
 
 ## Hot reload and the in-app devtools overlay. Injected by `cargo telar dev`. Takes the bare window rather
 ## than `desktop`, so `--target tui` does not acquire a GPU renderer on the way to a terminal.
-dev = ["runtime", "desktop-bare", "platform-core/dylib", "dep:libloading", "dep:serde_json"]
+dev = [
+    "runtime",
+    "desktop-bare",
+    "platform-core/dylib",
+    "dep:telar-devtools",
+    "dep:libloading",
+    "dep:serde_json",
+]
 
 ## The dylib half of that loop, which only `cargo telar dev` turns on and only for a package that can produce
 ## one: `.rsx` signal declarations become keyed bindings whose values survive a swap, the runner exports the
@@ -295,6 +306,7 @@ renderer-software = { workspace = true, optional = true }
 renderer-text = { workspace = true, optional = true }
 renderer-tui = { workspace = true, optional = true }
 services-core = { workspace = true }
+telar-devtools = { workspace = true, optional = true }
 telar-macros = { workspace = true }
 theme-core = { workspace = true, optional = true }
 ui-components = { workspace = true, optional = true }
@@ -310,6 +322,7 @@ serde_json = { workspace = true, optional = true }
 toml = { workspace = true, optional = true }
 tracing = { workspace = true, optional = true }
 web-time = { workspace = true }
+
 
 # Excludes wasm as well as Android: `not(target_os = "android")` is true on wasm32, which would drag winit
 # into a build that has no window server to talk to. A web build takes `--no-default-features`.

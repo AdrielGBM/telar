@@ -176,7 +176,7 @@ Everything here is either always present or one word away. Nothing is bundled.
 Both are baked by the CLI, and so is the `.rsx` itself: build through `cargo telar check`/`dev`/`build`/`test`, or run `cargo telar transpile` first. A plain `cargo build` fails with a message naming that command rather than compiling something stale, which is what keeps the decoders, the parser and the code generator out of every project's own build. A project that will not install the CLI produces the artifact itself from a `build.rs`, which is one call into `telar-transpiler` and gets real `cargo:rerun-if-changed` out of it.
 - **Assets that arrive later**, behind a transport-agnostic reactive seam: a signal that advances `Loading` → `Ready`/`Failed`, with the transport, the cache and the decoder each yours to choose. → `async-assets`
 - **Decoders and transports for that seam** — SVG, bitmaps, translation catalogs, over HTTP or from a directory — in the companion crate [`telar-dynamic`](crates/telar-dynamic), one feature each. Yours plugs in the same way.
-- **Hot reload** in `cargo telar dev`, and an in-app devtools overlay for inspecting the live component tree. *(the CLI sets this one)*
+- **Hot reload** in `cargo telar dev`, and an in-app devtools overlay for inspecting the live component tree — or one of your own, through the same seam. *(the CLI sets this one)*
 - **Packaging** to native installers per platform, plus Android APKs. → `cargo telar build --format …`
 
 The complete list, with what each feature pulls in and why, is on **[docs.rs](https://docs.rs/telar#feature-flags)**.
@@ -221,6 +221,7 @@ Three exceptions. [`cargo-telar`](crates/tools/cargo-telar) is a binary you inst
 | [`telar-dynamic`](crates/telar-dynamic) · [`telar-plugin`](crates/telar-plugin) | Runtime asset decoders and transports; embedding a separately-compiled UI — the two crates here an application depends on directly |
 | [`telar-renderer-cache`](crates/renderer/renderer-cache) · [`telar-renderer-record`](crates/renderer/renderer-record) | The shared byte-budgeted cache; a backend that records instead of drawing |
 | [`telar-platform-core`](crates/platform/platform-core) and `telar-platform-{winit,desktop,android,tui,web,headless}` | Window/event abstraction and its backends |
+| [`telar-devtools`](crates/telar-devtools) | The dev overlay: FPS counter, node inspector, build-error banner — pulled in by `telar/dev`, and by nothing else |
 | [`telar-parser`](crates/tools/telar-parser) · [`telar-transpiler`](crates/tools/telar-transpiler) · [`telar-macros`](crates/tools/telar-macros) | The `.rsx` pipeline |
 | [`telar-i18n-core`](crates/i18n/i18n-core) · [`telar-navigate-core`](crates/navigate/navigate-core) · [`telar-services-core`](crates/services/services-core) | i18n runtime, navigation, platform paths and DI |
 | [`telar-reactive-local`](crates/reactive/reactive-local) | Per-surface thread-local slots, split out so `platform-core` need not link the reactive runtime |

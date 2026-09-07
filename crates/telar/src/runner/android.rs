@@ -35,10 +35,7 @@ pub fn run_android_app_with_name<A: App>(
     android_app: platform_android::AndroidApp,
 ) {
     bridge_debug_props_to_env();
-    #[cfg(feature = "dev")]
-    run_android_with_plugin::<A, crate::dev_tools::DevTools>(config, app, app_name, android_app);
-    #[cfg(not(feature = "dev"))]
-    run_android_with_plugin::<A, ()>(config, app, app_name, android_app);
+    run_android_with_plugin::<A, crate::DefaultDevTools>(config, app, app_name, android_app);
 }
 
 /// Builds the Android platform and paths provider, then hands over to the one shared boot sequence.
