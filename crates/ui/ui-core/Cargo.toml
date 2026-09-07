@@ -27,12 +27,14 @@ rustc-hash = { workspace = true }
 web-time = { workspace = true }
 
 [features]
-# Enables the `Svg` widget module only; it needs baked `SvgData` (always available), not usvg.
-svg = []
-# Adds runtime SVG parsing (`SvgData::from_str` via usvg); required to compile the widget's from_str-based tests.
-dynamic-svg = ["svg", "renderer-assets/dynamic-svg"]
+default = []
+
 # The transport-agnostic reactive asset seam (`AssetLoader` over transport/cache/decoder); pure reactive glue over existing deps, no transport and no decoder.
 async-assets = []
+# Adds runtime SVG parsing (`SvgData::from_str` via usvg); required to compile the widget's from_str-based tests.
+dynamic-svg = ["svg", "renderer-assets/dynamic-svg"]
+# Enables the `Svg` widget module only; it needs baked `SvgData` (always available), not usvg.
+svg = []
 
 [dev-dependencies]
 renderer-text = { workspace = true }

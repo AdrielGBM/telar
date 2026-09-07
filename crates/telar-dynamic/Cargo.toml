@@ -20,6 +20,11 @@ rustdoc-args = ["--cfg", "docsrs"]
 [features]
 #! Nothing is on by default. A decoder you never named is a format you never linked, and the crate with no
 #! features enabled is the seam's vocabulary and a disk cache — no parser, no HTTP client, no codecs.
+#!
+#! **Names here drop the qualifier the rest of the workspace carries**, because this whole crate is the
+#! qualifier: `svg` is what `telar` and `ui-core` call `dynamic-svg`, and `catalog` is their
+#! `runtime-catalog`. Nothing in here is baked or linked ahead of time, so saying so in every name would
+#! only be loud.
 default = []
 
 #! ## Formats

@@ -13,10 +13,13 @@ repository = { workspace = true }
 [features]
 # All four on, so a desktop build is as complete as it has always been. They exist to be nameable, not to be off: what changes is that `default-features = false` finally leaves something out.
 default = ["a11y", "clipboard-wayland", "dialogs", "system-theme"]
+# Screen-reader support, over AccessKit and the platform's own accessibility bus. The heaviest of the four by some way, and the last one anybody should turn off.
 a11y = ["dep:accesskit", "dep:accesskit_winit"]
+# The system clipboard: X11 on Linux, the native one on Windows and macOS. Without it a paste does nothing rather than failing loudly.
 clipboard = ["dep:arboard"]
 # X11's clipboard reaches a Wayland session only through XWayland. This covers a compositor without it, at the price of `wl-clipboard-rs`; a build that knows XWayland is there can keep plain `clipboard`.
 clipboard-wayland = ["clipboard", "arboard/wayland-data-control"]
+# Native file pickers: the XDG portal on Linux, the OS panel elsewhere. The cheapest of the four to drop — a kiosk that opens no files links `rfd` for nothing.
 dialogs = ["dep:rfd"]
 # Linux only, and the one thing winit does not answer there: Windows and macOS report the preference natively and need no feature.
 system-theme = ["dep:zbus"]
