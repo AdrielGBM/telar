@@ -5,9 +5,11 @@
 /// Sentinel constructor for the `children` slot placeholder, which builds no widget: it splices the caller-supplied children (from the component's `Slots` argument) into the enclosing container.
 pub const TAG_SLOT_PLACEHOLDER: &str = "<slot placeholder>";
 
-/// Built-in RSX tags paired with the Rust constructor path they transpile to.
+/// Built-in RSX tags paired with the Rust type they build, spelled as that type's canonical constructor.
 ///
-/// Mirrors the tag dispatch in `ViewGen::emit_element`. Tags that share a constructor (e.g. `col`/`row`/`grid` -> `Container::new`) are listed once per spelling so lookups by tag name resolve every alias. Every tag here builds something; the one exception carries `TAG_SLOT_PLACEHOLDER` and says so.
+/// Mirrors the tag dispatch in `ViewGen::emit_element`, and `every_tag_the_table_names_builds_the_type_it_promises` holds the two together. Tags that share a type (e.g. `col`/`row`/`grid` -> `Container`) are listed once per spelling so lookups by tag name resolve every alias. Every tag here builds something; the one exception carries `TAG_SLOT_PLACEHOLDER` and says so.
+///
+/// The *type* is what a tag promises; the constructor is one spelling of it. Codegen reaches for a sibling where the line calls for one — `text`, `input` and `path` emit `::declaring` when a value is reactive or a style is inherited, which for `text` is essentially always — so this column is what hover shows and what a reader should read as "which widget is this", not a literal prediction of the emitted call.
 pub fn builtin_tags() -> &'static [(&'static str, &'static str)] {
     &[
         ("text", "Text::new"),

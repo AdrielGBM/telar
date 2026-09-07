@@ -332,7 +332,7 @@ impl<'a> ViewGen<'a> {
             Some(kind) => kind.var_prefix,
             None => match tag {
                 "text" => "text",
-                "col" | "column" => "col",
+                "col" => "col",
                 "row" => "row",
                 "box" => "sbox",
                 "overlay" => "overlay",
