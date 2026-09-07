@@ -62,7 +62,8 @@ fn transpile_project(project: &Project) -> Vec<GeneratedFile> {
         src_dir: &src_dir,
         theme_type: theme_type.as_deref(),
         assets: Some(&assets),
-        flavour: telar_transpiler::BuildFlavour::Plain,
+        // `Preview`, not `Plain`: it is the richer of the two shapes — the same Rust plus a build fn per `[preview]` — so snapshotting it keeps preview codegen covered. Pinning `Plain` would drop every preview from the corpus and stop asserting anything about how one is generated.
+        flavour: telar_transpiler::BuildFlavour::Preview,
     })
     .unwrap_or_else(|e| panic!("{} failed to transpile: {e}", project.name));
     assert!(

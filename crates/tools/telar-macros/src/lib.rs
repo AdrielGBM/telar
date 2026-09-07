@@ -126,27 +126,29 @@ pub fn app(input: TokenStream) -> TokenStream {
         Err(err) => return err.into(),
     };
 
-    let preview_fn = quote! {
-        pub fn telar_all_preview_entries() -> ::std::vec::Vec<::telar::PreviewEntry> {
-            let mut entries = ::std::vec::Vec::new();
-            #( entries.extend_from_slice(#preview_const_idents); )*
-            entries
-        }
-    };
-
     // Decided at macro expansion time by the features cargo-telar names on the build, which cargo tracks — unlike the environment variables these were, which it does not.
     let is_hot_reload = build_flavour().is_hot();
     let is_preview = cfg!(feature = "preview");
 
+    let preview_fn = preview_entries_fn(is_preview, &preview_const_idents);
+
     // The env-var dispatch lives in `telar::dev_entry` rather than here, so an app that wires its own runner (`rsx_modules!` plus a hand-written `run()`) gets the same dev loop this macro generates.
+    //
+    // Absent from a build that carries no previews, and that is the whole of what keeps the dev loop out of a shipped application: `dev_entry` reads four environment variables on every start and can be told to run the preview harness and exit, so a release binary that still called it answered `TELAR_TEST=1` from anyone who set it.
+    let dev_entry_call = match is_preview {
+        true => quote! {
+            if ::telar::dev_entry(
+                telar_all_preview_entries,
+                ::telar::AppConfig::from(#config),
+                || #setup,
+            ) {
+                return;
+            }
+        },
+        false => quote! {},
+    };
     let run_tail = quote! {
-        if ::telar::dev_entry(
-            telar_all_preview_entries,
-            ::telar::AppConfig::from(#config),
-            || #setup,
-        ) {
-            return;
-        }
+        #dev_entry_call
         #setup
         ::telar::run_app_with_name(
             ::telar::AppConfig::from(#config),
@@ -390,10 +392,7 @@ pub fn app(input: TokenStream) -> TokenStream {
 ///
 /// It was an environment variable, and cargo does not track a proc macro's env reads — so the flavour needed something cargo *does* track to move the fingerprint by, and that was `--cfg=telar_hot_reload` pushed into `RUSTFLAGS`. Rustflags are hashed into every unit in the graph, so alternating `cargo telar check` and `cargo telar dev` recompiled all four hundred dependencies each way to change which directory this function names. A feature is tracked too, and reaches only the crates that enable it.
 fn build_flavour() -> telar_transpiler::BuildFlavour {
-    match cfg!(feature = "hot-reload") {
-        true => telar_transpiler::BuildFlavour::Hot,
-        false => telar_transpiler::BuildFlavour::Plain,
-    }
+    telar_transpiler::BuildFlavour::new(cfg!(feature = "hot-reload"), cfg!(feature = "preview"))
 }
 
 /// Refuses a build driven by a `cargo-telar` older than this `telar`.
@@ -709,13 +708,7 @@ pub fn rsx_modules(input: TokenStream) -> TokenStream {
         Ok(o) => o,
         Err(err) => return err.into(),
     };
-    let preview_fn = quote! {
-        pub fn telar_all_preview_entries() -> ::std::vec::Vec<::telar::PreviewEntry> {
-            let mut entries = ::std::vec::Vec::new();
-            #( entries.extend_from_slice(#preview_const_idents); )*
-            entries
-        }
-    };
+    let preview_fn = preview_entries_fn(cfg!(feature = "preview"), &preview_const_idents);
     quote! {
         #rerun_stmts
         #include_stmts
@@ -727,3 +720,19 @@ pub fn rsx_modules(input: TokenStream) -> TokenStream {
 #[cfg(test)]
 #[path = "lib_test.rs"]
 mod tests;
+
+/// The table `telar::dev_entry` reads, or nothing at all.
+///
+/// Nothing at all is the normal case: a `[preview]` is emitted only for the flavours that ask for one (see `telar_transpiler::BuildFlavour`), so in every other build there are no consts to name and no caller left to name them. Emitting an empty table instead would keep `telar::PreviewEntry` in the surface of a crate that has no previews, and keep the shape alive for the next thing that decides to call it.
+fn preview_entries_fn(previews: bool, consts: &[TokenStream2]) -> TokenStream2 {
+    if !previews {
+        return quote! {};
+    }
+    quote! {
+        pub fn telar_all_preview_entries() -> ::std::vec::Vec<::telar::PreviewEntry> {
+            let mut entries = ::std::vec::Vec::new();
+            #( entries.extend_from_slice(#consts); )*
+            entries
+        }
+    }
+}

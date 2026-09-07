@@ -19,6 +19,8 @@ pub(crate) fn run_check_cmd(args: CheckArgs) {
     if let Some(features) = &args.common.features {
         cmd.arg("--features").arg(features);
     }
+    // A `[preview]` is markup the author wrote, so a check that skipped it would report nothing about the one block most likely to be half-finished. It is the only command that asks for previews without going on to render them.
+    cmd.arg("--features").arg("telar/previews");
     if args.all_targets {
         cmd.arg("--all-targets");
     }

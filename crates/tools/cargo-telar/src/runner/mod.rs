@@ -211,6 +211,9 @@ fn run_test_cmd(args: TestArgs) -> ! {
     let mut cargo_args = vec!["run".to_string()];
     cargo_args.extend(build_cargo_args(&package, release, &features));
     cargo_args.extend(extra);
+    // What emits the `[preview]` blocks and the entry point that runs them. Without it the binary has neither, and `TELAR_TEST` below reaches nothing — which is the point: it reaches nothing in a shipped build either.
+    cargo_args.push("--features".to_string());
+    cargo_args.push("telar/previews".to_string());
     // The test host never instantiates a renderer, and the value is read via `option_env!`, so setting it would change the build fingerprint and force a needless recompile.
     let _ = (backend, renderer);
     eprintln!("[cargo-telar] Running component render tests...");

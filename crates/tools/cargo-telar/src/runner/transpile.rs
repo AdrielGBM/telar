@@ -2,7 +2,7 @@
 //!
 //! The same discipline as the bake next door, and downstream of it: a `src:"…"` resolves against the baked artifact, so transpiling first would freeze whatever the last bake left. Every route in this binary that spawns `cargo` bakes and then transpiles, in that order.
 //!
-//! Both flavours are written on every run. Which one a build will read is not known here — `cargo telar dev` picks it, a plain `cargo build` after it picks the other — and producing one is a parse and a codegen over files that are already in the page cache. Guessing wrong would be worse than free: the macro would find an index that does not answer for the sources and transpile the package itself, silently paying for both.
+//! Every flavour is written on every run. Which one a build will read is not known here — `cargo telar dev` picks one, a plain `cargo build` after it picks another, `cargo telar test` a third — and producing one is a parse and a codegen over files that are already in the page cache. Guessing wrong would be worse than free: the macro would find an index that does not answer for the sources and transpile the package itself, silently paying for both.
 //!
 //! **Nothing is pruned here.** The generated directory also holds the module tree the macro writes, and a sweep that knows only about `.rsx` output would delete it. The macro has the whole picture and keeps that job.
 
@@ -40,7 +40,7 @@ pub(super) fn transpile_member(member: &Path, producer: &str, telar_version: &st
     let assets = telar_transpiler::AssetContext::load(member, telar_version);
     let theme = telar_transpiler::resolve_theme_type(member);
 
-    for flavour in [BuildFlavour::Plain, BuildFlavour::Hot] {
+    for flavour in BuildFlavour::ALL {
         let files = match telar_transpiler::transpile_package(&PackageOptions {
             src_dir: &src_dir,
             theme_type: theme.as_deref(),

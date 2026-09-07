@@ -1,12 +1,12 @@
 //! Where `cargo telar` enters an app: the env vars that choose between running it, previewing it and testing its previews.
 
-#[cfg(feature = "runtime")]
+#[cfg(feature = "previews")]
 use crate::{LayoutError, LayoutItem};
 
-#[cfg(all(feature = "runtime", not(target_os = "android")))]
+#[cfg(all(feature = "previews", not(target_os = "android")))]
 use crate::{AppConfig, AvailableSpace, ComponentList, compute_layout};
 
-#[cfg(feature = "runtime")]
+#[cfg(feature = "previews")]
 #[derive(Clone)]
 /// One `[preview]` block: which component it belongs to, its name, and the fn that builds it.
 pub struct PreviewEntry {
@@ -20,7 +20,7 @@ pub struct PreviewEntry {
 /// What a preview needs to be rendered the way the runner mounts a surface, rather than as one more widget in the page's column.
 ///
 /// A tree preview answers "does this component look right"; a surface preview answers "does this *window* look right" — and the difference is everything a surface adds on top of its content: a definite size the content lays out against, and the enter transition its root plays. Without it the two questions could not both be asked, so an app ended up keeping a headless harness of its own for the second one.
-#[cfg(feature = "runtime")]
+#[cfg(feature = "previews")]
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct PreviewSurface {
     /// The size the surface would be given by the compositor, in logical px.
@@ -30,7 +30,7 @@ pub struct PreviewSurface {
     pub animate: bool,
 }
 
-#[cfg(feature = "runtime")]
+#[cfg(feature = "previews")]
 impl PreviewSurface {
     pub fn new(width: f32, height: f32) -> Self {
         Self {
@@ -55,7 +55,7 @@ impl PreviewSurface {
 /// `setup` runs only on the dev path, never on the way to a normal start — a caller whose setup seeds a world that exists *for* previews must not pay for it, or change its own startup, every time the app launches. It is not optional on the dev path, because [`crate::use_theme`] panics when no theme is set: a `[preview]` reading one would otherwise fail for a reason that has nothing to do with the component under test.
 ///
 /// `entries` is a closure so a normal run pays nothing to build a list it will not read. A workspace whose `.rsx` files live in several crates concatenates one `telar_all_preview_entries()` per crate here — each `rsx_modules!` invocation emits its own, and they are per crate rather than per process.
-#[cfg(all(feature = "runtime", not(target_os = "android")))]
+#[cfg(all(feature = "previews", not(target_os = "android")))]
 pub fn dev_entry<F>(entries: F, config: AppConfig, setup: impl FnOnce()) -> bool
 where
     F: Fn() -> Vec<PreviewEntry>,
@@ -102,7 +102,7 @@ where
 }
 
 /// Renders every preview component headlessly (build → layout → flatten) and exits with a non-zero code if any panics or returns a layout error. Backs `cargo telar test`, entered via the `TELAR_TEST` env var set on the app binary.
-#[cfg(all(feature = "runtime", not(target_os = "android")))]
+#[cfg(all(feature = "previews", not(target_os = "android")))]
 pub fn try_run_test(entries: Vec<PreviewEntry>, config: AppConfig) -> ! {
     use std::panic::{AssertUnwindSafe, catch_unwind};
 

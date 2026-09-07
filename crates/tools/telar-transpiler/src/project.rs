@@ -25,40 +25,66 @@ use crate::error::TranspileError;
 #[cfg(feature = "transpile")]
 use crate::source_map::SourceMap;
 
-/// Which of the two shapes a package's `.rsx` is compiled into.
+/// Which shape a package's `.rsx` is compiled into: hot-reloadable or not, carrying `[preview]` fns or not.
 ///
-/// The two are written to different directories on purpose: they are different Rust for the same source, and sharing one directory had each flavour — and the editor's mirror, which always writes the plain one — overwrite the other on every build, leaving every cargo unit permanently stale.
+/// Each is written to its own directory on purpose: they are different Rust for the same source, and sharing one directory had each flavour — and the editor's mirror, which always writes the plain one — overwrite the other on every build, leaving every cargo unit permanently stale. Previews are on this axis for exactly that reason: alternating `cargo telar dev` and `cargo telar preview` would otherwise rewrite every generated file each time, and rustc would rebuild the crate on every switch.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub enum BuildFlavour {
-    /// What `cargo build`, `cargo telar check` and the editor's mirror produce.
+    /// What `cargo build` and `cargo telar build` produce, and what the editor's mirror writes.
     #[default]
     Plain,
     /// What `cargo telar dev` produces: signal declarations become keyed `hot_signal_auto!` bindings, so the dev host can carry their values across a dylib swap.
     Hot,
+    /// The same as [`Self::Plain`], plus a build fn per `[preview]` and the table naming them. What `cargo telar check` and `cargo telar test` produce — the two commands that answer for a preview without running one in a window.
+    Preview,
+    /// Both: `cargo telar preview`, which reloads previews in a window.
+    HotPreview,
 }
 
 impl BuildFlavour {
-    /// Every directory name a flavour writes under, for a reader that has only a path and needs to know whether it is generated output — `cargo-telar`'s diagnostic projection, which sees whichever of the two the build used.
-    pub const DIR_NAMES: [&'static str; 2] = ["build", "build-hot"];
+    /// Every directory name a flavour writes under, for a reader that has only a path and needs to know whether it is generated output — `cargo-telar`'s diagnostic projection, which sees whichever one the build used.
+    pub const DIR_NAMES: [&'static str; 4] =
+        ["build", "build-hot", "build-preview", "build-hot-preview"];
+
+    /// Every flavour, for a producer that writes them all rather than guessing which a build will read.
+    pub const ALL: [Self; 4] = [Self::Plain, Self::Hot, Self::Preview, Self::HotPreview];
+
+    /// The flavour for a build that is `hot` and/or carries `previews`.
+    pub fn new(hot: bool, previews: bool) -> Self {
+        match (hot, previews) {
+            (false, false) => Self::Plain,
+            (true, false) => Self::Hot,
+            (false, true) => Self::Preview,
+            (true, true) => Self::HotPreview,
+        }
+    }
 
     /// The `.telar/` subdirectory this flavour writes into.
     pub fn dir_name(self) -> &'static str {
         match self {
-            Self::Plain => Self::DIR_NAMES[0],
-            Self::Hot => Self::DIR_NAMES[1],
+            Self::Plain => "build",
+            Self::Hot => "build-hot",
+            Self::Preview => "build-preview",
+            Self::HotPreview => "build-hot-preview",
         }
     }
 
-    /// The index this flavour writes beside its directory, naming the flavour so the two never read each other's.
+    /// The index this flavour writes beside its directory, naming the flavour so no two read each other's.
     pub fn index_filename(self) -> &'static str {
         match self {
             Self::Plain => "build.json",
             Self::Hot => "build-hot.json",
+            Self::Preview => "build-preview.json",
+            Self::HotPreview => "build-hot-preview.json",
         }
     }
 
     pub fn is_hot(self) -> bool {
-        matches!(self, Self::Hot)
+        matches!(self, Self::Hot | Self::HotPreview)
+    }
+
+    pub fn has_previews(self) -> bool {
+        matches!(self, Self::Preview | Self::HotPreview)
     }
 }
 
@@ -76,6 +102,7 @@ pub struct PackageOptions<'a> {
     pub theme_type: Option<&'a str>,
     /// The package's baked asset artifact, which static `svg`/`img` `src:"…"` references resolve against.
     pub assets: Option<&'a AssetContext>,
+    /// Which shape to produce. Carries whether the build is hot-reloadable *and* whether it emits `[preview]` fns, because both change the Rust for the same source and each pair needs its own output directory.
     pub flavour: BuildFlavour,
 }
 
@@ -165,6 +192,7 @@ fn transpile_one(
         theme_type: options.theme_type,
         assets: options.assets,
         hot_reload: options.flavour.is_hot(),
+        previews: options.flavour.has_previews(),
     })
     .map_err(|source| PackageError::Codegen {
         path: rsx_path.clone(),

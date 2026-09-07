@@ -123,3 +123,70 @@ fn writing_reports_what_it_wrote() {
 
     let _ = std::fs::remove_dir_all(&root);
 }
+
+/// `DIR_NAMES` is read by `cargo-telar` to recognise a generated path, and `dir_name` is what writes one. Two lists of the same thing, so a fifth flavour added to one and not the other makes every diagnostic in it point at generated Rust instead of at the `.rsx`.
+#[test]
+fn every_flavour_writes_a_directory_the_list_names() {
+    for flavour in BuildFlavour::ALL {
+        assert!(
+            BuildFlavour::DIR_NAMES.contains(&flavour.dir_name()),
+            "{flavour:?} writes `{}`, which nothing downstream recognises",
+            flavour.dir_name()
+        );
+    }
+    let mut names: Vec<&str> = BuildFlavour::ALL.iter().map(|f| f.dir_name()).collect();
+    names.sort_unstable();
+    names.dedup();
+    assert_eq!(
+        names.len(),
+        BuildFlavour::DIR_NAMES.len(),
+        "one directory per flavour, and no two sharing one"
+    );
+}
+
+/// The pair a flavour stands for, round-tripped: a caller builds one from two booleans and reads them back off it.
+#[test]
+fn a_flavour_reports_the_pair_it_was_built_from() {
+    for hot in [false, true] {
+        for previews in [false, true] {
+            let flavour = BuildFlavour::new(hot, previews);
+            assert_eq!(flavour.is_hot(), hot, "{flavour:?}");
+            assert_eq!(flavour.has_previews(), previews, "{flavour:?}");
+        }
+    }
+}
+
+/// The whole point of the flavour: a build that does not ask for previews gets none generated.
+///
+/// Not a size optimisation. These fns used to be emitted into every build, `telar_all_preview_entries` named them from the crate root, and `telar::dev_entry` called that from the `run()` of every application — so the markup of every `[preview]` block was live code in a shipped binary, and `TELAR_TEST=1 ./app` ran the preview harness and exited for anyone who set it.
+#[test]
+fn a_flavour_without_previews_generates_none() {
+    let root = package("no_previews");
+    let src = root.join("src");
+    std::fs::write(
+        src.join("card.rsx"),
+        "[view]\ntext \"body\"\n\n[preview \"Default\"]\ncard\n",
+    )
+    .unwrap();
+
+    let with = transpile_package(&options(&src, BuildFlavour::Preview)).unwrap();
+    let without = transpile_package(&options(&src, BuildFlavour::Plain)).unwrap();
+
+    assert!(
+        with[0].source.rust_code.contains("card_preview_0"),
+        "the preview flavour emits a build fn per block:\n{}",
+        with[0].source.rust_code
+    );
+    assert_eq!(with[0].source.preview_names, ["Default"]);
+
+    assert!(
+        !without[0].source.rust_code.contains("preview"),
+        "a plain build must carry no trace of one:\n{}",
+        without[0].source.rust_code
+    );
+    assert!(
+        without[0].source.preview_names.is_empty(),
+        "and must not report previews a reader would then wire to nothing"
+    );
+    assert!(without[0].source.rust_code.contains("pub fn card("));
+}

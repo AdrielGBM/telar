@@ -165,6 +165,12 @@ pub(crate) struct TranspileInput<'a> {
     pub assets: Option<&'a AssetContext>,
     /// Emit signal declarations in the keyed form the dev host restores across a dylib swap. An argument rather than an ambient one: this was read from the environment, which made the generated code depend on who ran the process — the editor mirror, the golden snapshots and the build could each produce a different file from the same source and none of them was wrong to.
     pub hot_reload: bool,
+    /// Emit a build fn per `[preview]` block, and the entry table naming them.
+    ///
+    /// Off for anything that ships. A `[preview]` is a thing to look at while writing the component, and it used to reach the binary a user installs: the fns are `pub`, the table is `pub`, and `telar::dev_entry` referenced the table from every `run()` — so the preview bodies were live code, and `TELAR_TEST=1 ./app` ran the preview harness in a shipped application. Not emitting them is the only version of "off" that costs nothing to compile and cannot be reached by an environment variable.
+    ///
+    /// An argument for the same reason [`Self::hot_reload`] is one: it decides what the generated Rust *is*, so the artifact records which way it was written and a build wanting the other one re-transpiles rather than wiring the wrong shape.
+    pub previews: bool,
 }
 
 /// The generated Rust source for one `.rsx` file.
@@ -194,6 +200,8 @@ pub fn transpile_source(
         theme_type,
         assets,
         hot_reload: false,
+        // On, unlike a shipping build: this is the one-file entry the editor mirrors a live buffer through, and a `[preview]` block is markup the author is looking at while they type. Omitting it here would stop reporting an error inside one — the diagnostic would simply never be produced, which reads as a preview that is fine.
+        previews: true,
     })
 }
 
@@ -441,7 +449,7 @@ pub(crate) fn transpile(input: TranspileInput<'_>) -> Result<TranspiledSource, T
     }
     code.push("}\n", None);
 
-    if !doc.previews.is_empty() {
+    if input.previews && !doc.previews.is_empty() {
         // One build fn per preview, so a prop-taking component can be previewed through its markup body.
         for (i, preview) in doc.previews.iter().enumerate() {
             let pfn = format!("{fn_name}_preview_{i}");
@@ -508,7 +516,11 @@ pub(crate) fn transpile(input: TranspileInput<'_>) -> Result<TranspiledSource, T
 
     Ok(TranspiledSource {
         rust_code: code.out,
-        preview_names: doc.previews.iter().map(|p| p.name.clone()).collect(),
+        // What was emitted, not what the document declared: a caller reads this to decide whether to wire a preview table, and a name here with no fn behind it wires one that does not exist.
+        preview_names: match input.previews {
+            true => doc.previews.iter().map(|p| p.name.clone()).collect(),
+            false => Vec::new(),
+        },
         source_map: code.map,
         expr_spans,
     })

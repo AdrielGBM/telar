@@ -206,11 +206,26 @@ dev = ["runtime", "desktop-bare", "dep:libloading", "dep:serde_json"]
 ## recompiled every dependency rather than the three crates that read it.
 hot-reload = ["dev", "telar-macros/hot-reload"]
 
-## The preview host that renders `[preview]` blocks in a window. Injected by `cargo telar preview`.
-preview = ["runtime", "desktop-bare", "telar-macros/preview"]
+## Emitting the `[preview]` blocks at all, and the entry point that runs them. Injected by `cargo telar test`.
+##
+## The one that matters, because without it a `[preview]` is not compiled into anything: the transpiler emits
+## a build fn per block only for the flavours that ask, and this is what asks. A build without it also has no
+## `telar::dev_entry` in its `run()` — which is why a shipped binary no longer answers `TELAR_TEST=1` from
+## whoever sets it, and no longer carries the preview harness or the markup of every block.
+##
+## Carries no frontend of its own: `cargo telar test` builds and lays a preview out without drawing it, and a
+## terminal application must not acquire a window on the way to being tested.
+previews = ["runtime", "telar-macros/preview"]
 
-## Rendering those previews to PNG with no window, which is `cargo telar test`.
-preview-headless = ["headless"]
+## The preview host that renders those blocks in a window. Injected by `cargo telar preview`.
+preview = ["previews", "desktop-bare"]
+
+## Rendering them to PNG with no window, which is `cargo telar preview --png <dir>`.
+##
+## Took `headless` alone until it was wired to a command, so it enabled a renderer for previews the build was
+## never told to emit — `run_preview_png` was reachable only by setting a feature and an environment variable
+## by hand, and rendered nothing when you did.
+preview-headless = ["previews", "headless"]
 
 ## Test helpers an out-of-tree application needs to assert on what its tree drew, plus the GPU gate that
 ## keeps a pixel test from passing having asserted nothing.

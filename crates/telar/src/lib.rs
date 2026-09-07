@@ -71,10 +71,10 @@ pub mod window;
 
 pub use config::RendererBackend;
 
-#[cfg(feature = "runtime")]
+#[cfg(feature = "previews")]
 mod preview_runner;
 
-#[cfg(feature = "runtime")]
+#[cfg(feature = "previews")]
 pub use preview_runner::{PreviewEntry, PreviewSurface};
 
 #[cfg(feature = "runtime")]
@@ -329,5 +329,5 @@ pub use runner::{TuiOptions, run_tui_app_with_name};
 
 pub use telar_macros::{Props, ThemeTokens, app, component, rsx_modules, t};
 
-#[cfg(all(feature = "runtime", not(target_os = "android")))]
+#[cfg(all(feature = "previews", not(target_os = "android")))]
 pub use preview_runner::{dev_entry, try_run_test};
