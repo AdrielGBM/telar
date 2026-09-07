@@ -8,7 +8,7 @@ use std::collections::BTreeSet;
 use std::path::Path;
 
 use telar_parser::{RsxDocument, ViewNode};
-use telar_transpiler::{AssetKind, BakedAsset, asset_kind_for_tag, assets_root};
+use telar_project::{AssetKind, BakedAsset, asset_kind_for_tag, assets_root};
 
 /// What baking one package turned up. Warnings are collected rather than printed so each caller renders them where its user is looking — a terminal for the CLI, the LSP log for the analyzer — and none of them is fatal: a package with one unreadable asset still bakes the rest.
 #[derive(Debug, Clone, Default)]
@@ -21,9 +21,9 @@ pub struct BakeReport {
 
 /// Bakes every asset `package_dir`'s `.rsx` files reference, writing `<package_dir>/.telar/assets.{json,rs}`. `None` when the package holds no `.rsx` at all, so a crate with nothing to bake never grows a `.telar/`.
 ///
-/// `telar_version` is the version of `telar` the *project* resolves — see [`telar_transpiler::resolve_telar_version`]. Writing this binary's own version here would hand the macro a mismatch it cannot act on.
+/// `telar_version` is the version of `telar` the *project* resolves — see [`telar_project::resolve_telar_version`]. Writing this binary's own version here would hand the macro a mismatch it cannot act on.
 pub fn bake_package(package_dir: &Path, producer: &str, telar_version: &str) -> Option<BakeReport> {
-    let rsx_files = telar_transpiler::find_rsx_files_in_tree(package_dir);
+    let rsx_files = telar_project::find_rsx_files_in_tree(package_dir);
     if rsx_files.is_empty() {
         return None;
     }
@@ -42,9 +42,9 @@ pub fn bake_package(package_dir: &Path, producer: &str, telar_version: &str) -> 
 
     let assets_root = assets_root(package_dir);
     let telar_dir = package_dir.join(".telar");
-    let previous_index = telar_transpiler::read_index(&telar_dir).ok().flatten();
+    let previous_index = telar_project::read_index(&telar_dir).ok().flatten();
     let previous_source =
-        std::fs::read_to_string(telar_dir.join(telar_transpiler::ASSETS_SOURCE_FILENAME)).ok();
+        std::fs::read_to_string(telar_dir.join(telar_project::ASSETS_SOURCE_FILENAME)).ok();
 
     let mut baked: Vec<BakedAsset> = Vec::new();
     // Keyed on path alone, matching `generate_assets`'s own uniqueness rule: two tags naming one file resolve to one entry rather than failing the whole package.
@@ -66,7 +66,7 @@ pub fn bake_package(package_dir: &Path, producer: &str, telar_version: &str) -> 
                 continue;
             }
         };
-        let hash = telar_transpiler::content_hash(&bytes);
+        let hash = telar_project::content_hash(&bytes);
 
         let cached_expr = previous_index
             .as_ref()
@@ -108,7 +108,7 @@ pub fn bake_package(package_dir: &Path, producer: &str, telar_version: &str) -> 
         });
     }
 
-    let generated = match telar_transpiler::generate_assets(&baked, producer, telar_version) {
+    let generated = match telar_project::generate_assets(&baked, producer, telar_version) {
         Ok(generated) => generated,
         Err(e) => {
             report.warnings.push(format!(
@@ -121,7 +121,7 @@ pub fn bake_package(package_dir: &Path, producer: &str, telar_version: &str) -> 
 
     report.changed = previous_index.as_ref() != Some(&generated.index);
     report.baked = generated.index.entries.len();
-    if let Err(e) = telar_transpiler::write_generated(&telar_dir, &generated) {
+    if let Err(e) = telar_project::write_generated(&telar_dir, &generated) {
         report
             .warnings
             .push(format!("could not write {}: {e}", telar_dir.display()));
@@ -130,7 +130,7 @@ pub fn bake_package(package_dir: &Path, producer: &str, telar_version: &str) -> 
     Some(report)
 }
 
-/// The Rust expression a previous bake already wrote for `static_name`, reused so an asset whose content hash is unchanged is never re-decoded through `usvg`/`resvg`/`image` on every bake. Parses the exact single-line shape [`telar_transpiler::generate_assets`] emits for one entry — brittle to that shape changing, which is exactly what bumping `ASSET_ARTIFACT_FORMAT` is for.
+/// The Rust expression a previous bake already wrote for `static_name`, reused so an asset whose content hash is unchanged is never re-decoded through `usvg`/`resvg`/`image` on every bake. Parses the exact single-line shape [`telar_project::generate_assets`] emits for one entry — brittle to that shape changing, which is exactly what bumping `ASSET_ARTIFACT_FORMAT` is for.
 fn init_expr_for_static(source: &str, static_name: &str) -> Option<String> {
     let marker = format!("pub static {static_name}: ");
     let line = source.lines().find(|line| line.starts_with(&marker))?;

@@ -4,8 +4,8 @@ use std::fmt::Write;
 
 use telar_parser::{Attr, Element, Value, ViewNode};
 
-use crate::naming::to_pascal_case;
 use crate::style::{format_f32, hex_to_color_expr};
+use telar_project::naming::to_pascal_case;
 
 use super::signals::{rust_str, substitute_reads, wrap_signal_clones};
 use super::{ChildEmit, ChildMode, ViewGen, expr_marker};

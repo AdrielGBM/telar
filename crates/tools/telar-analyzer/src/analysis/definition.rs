@@ -62,7 +62,7 @@ fn find_component(
         .chain(current_dir.as_deref());
 
     for dir in all_dirs {
-        let files = telar_transpiler::find_rsx_files_in_tree(dir);
+        let files = telar_project::find_rsx_files_in_tree(dir);
         if let Some(path) = files
             .iter()
             .find(|p| p.file_stem().and_then(|s| s.to_str()) == Some(tag))

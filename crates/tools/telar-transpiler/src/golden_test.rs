@@ -44,7 +44,7 @@ fn golden_dir() -> PathBuf {
 fn transpile_project(project: &Project) -> Vec<GeneratedFile> {
     let manifest = workspace_root().join(project.manifest);
     let src_dir = manifest.join("src");
-    let assets = telar_transpiler::AssetContext::load(&manifest, env!("CARGO_PKG_VERSION"));
+    let assets = telar_project::AssetContext::load(&manifest, env!("CARGO_PKG_VERSION"));
     // Without it every `src:"…"` snapshots as a `compile_error!` telling you to bake — a diff that says nothing about the transpiler, over a snapshot that would then be wrong for everyone who did bake.
     assert!(
         assets.index().is_some(),
@@ -63,7 +63,7 @@ fn transpile_project(project: &Project) -> Vec<GeneratedFile> {
         theme_type: theme_type.as_deref(),
         assets: Some(&assets),
         // `Preview`, not `Plain`: it is the richer of the two shapes — the same Rust plus a build fn per `[preview]` — so snapshotting it keeps preview codegen covered. Pinning `Plain` would drop every preview from the corpus and stop asserting anything about how one is generated.
-        flavour: telar_transpiler::BuildFlavour::Preview,
+        flavour: telar_project::BuildFlavour::Preview,
     })
     .unwrap_or_else(|e| panic!("{} failed to transpile: {e}", project.name));
     assert!(
@@ -142,14 +142,14 @@ fn first_diff(expected: &str, actual: &str) -> String {
 
 /// The shape of the generated code, paired with the number that declares which `telar` can compile it.
 ///
-/// [`telar_transpiler::BUILD_ARTIFACT_FORMAT`] is what lets one installed CLI serve projects pinning different `telar` versions: same format means compatible, whatever the versions say. It is *declared*, not derived — a digest cannot tell a cosmetic rewrite from one that reaches for an API an older `telar` never had, and deriving it from the output would refuse both alike, which is the one failure a matching CLI has to be installed to clear.
+/// [`telar_project::BUILD_ARTIFACT_FORMAT`] is what lets one installed CLI serve projects pinning different `telar` versions: same format means compatible, whatever the versions say. It is *declared*, not derived — a digest cannot tell a cosmetic rewrite from one that reaches for an API an older `telar` never had, and deriving it from the output would refuse both alike, which is the one failure a matching CLI has to be installed to clear.
 ///
 /// So the digest does not decide; it makes the decision unskippable. Any change to the corpus lands here beside the current format, and updating this file is where someone has to answer whether the format moves with it.
 fn render_shape(corpus: &str) -> String {
     format!(
         "# The generated code changed if this digest did. When it does, decide whether an older `telar` can still compile the new shape: if it cannot, bump BUILD_ARTIFACT_FORMAT before updating this.\nBUILD_ARTIFACT_FORMAT = {}\ncorpus digest = {}\n",
-        telar_transpiler::BUILD_ARTIFACT_FORMAT,
-        telar_transpiler::content_hash(corpus.as_bytes())
+        telar_project::BUILD_ARTIFACT_FORMAT,
+        telar_project::content_hash(corpus.as_bytes())
     )
 }
 

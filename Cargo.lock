@@ -793,6 +793,7 @@ dependencies = [
  "serde_json",
  "telar-baker",
  "telar-parser",
+ "telar-project",
  "telar-transpiler",
  "toml",
 ]
@@ -5441,6 +5442,7 @@ dependencies = [
  "telar-baker",
  "telar-diagnostics",
  "telar-parser",
+ "telar-project",
  "telar-transpiler",
  "tokio",
  "toml",
@@ -5456,6 +5458,7 @@ dependencies = [
  "serde_json",
  "telar-i18n-core",
  "telar-parser",
+ "telar-project",
  "telar-renderer-assets",
  "telar-transpiler",
  "toml",
@@ -5548,7 +5551,7 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 3.0.5",
- "telar-transpiler",
+ "telar-project",
 ]
 
 [[package]]
@@ -5685,6 +5688,15 @@ dependencies = [
  "telar-ui-core",
  "telar-ui-tree",
  "web-time",
+]
+
+[[package]]
+name = "telar-project"
+version = "0.1.8"
+dependencies = [
+ "serde",
+ "serde_json",
+ "toml",
 ]
 
 [[package]]
@@ -5895,6 +5907,7 @@ dependencies = [
  "serde_json",
  "syn 3.0.5",
  "telar-parser",
+ "telar-project",
  "telar-semantics-core",
  "thiserror 2.0.20",
  "toml",

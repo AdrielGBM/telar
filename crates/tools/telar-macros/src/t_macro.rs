@@ -13,7 +13,7 @@ use syn::{
     Expr, LitStr, Token,
     parse::{Parse, ParseStream, Result as ParseResult},
 };
-use telar_transpiler::CatalogContext;
+use telar_project::CatalogContext;
 
 pub(crate) struct TInput {
     key: LitStr,
@@ -103,7 +103,7 @@ pub(crate) fn expand(input: TInput) -> TokenStream2 {
     }
 
     let catalog_path: syn::Path =
-        syn::parse_str(telar_transpiler::I18N_CATALOG_PATH).expect("catalog path is valid");
+        syn::parse_str(telar_project::I18N_CATALOG_PATH).expect("catalog path is valid");
 
     let arg_lets: Vec<TokenStream2> = args
         .iter()

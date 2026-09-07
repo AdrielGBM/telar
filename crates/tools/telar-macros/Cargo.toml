@@ -21,7 +21,7 @@ hot-reload = []
 preview = []
 
 [dependencies]
-telar-transpiler = { workspace = true }
+telar-project = { workspace = true }
 
 proc-macro2 = { workspace = true }
 quote = "1"

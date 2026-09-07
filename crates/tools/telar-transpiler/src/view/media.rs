@@ -2,8 +2,8 @@
 
 use telar_parser::{Attr, Element, Value};
 
-use crate::assets::{AssetContext, AssetKind, asset_kind_for_tag};
 use crate::registry;
+use telar_project::{AssetContext, AssetKind, asset_kind_for_tag};
 
 use super::signals::{rust_str, substitute_reads, wrap_signal_clones};
 use super::{ChildEmit, ViewGen, expr_marker};

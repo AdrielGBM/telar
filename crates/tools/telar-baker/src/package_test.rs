@@ -21,8 +21,8 @@ fn init_expr_round_trips_a_real_baked_entry() {
         init_expr: expected.clone(),
     };
     let generated =
-        telar_transpiler::generate_assets(std::slice::from_ref(&baked), "p", "1.0.0").unwrap();
-    let static_name = telar_transpiler::static_name_for_path("badge.svg");
+        telar_project::generate_assets(std::slice::from_ref(&baked), "p", "1.0.0").unwrap();
+    let static_name = telar_project::static_name_for_path("badge.svg");
 
     assert_eq!(
         init_expr_for_static(&generated.source, &static_name).as_deref(),
@@ -74,7 +74,7 @@ fn bakes_only_the_assets_a_document_actually_references() {
     assert!(report.changed, "a first bake is always a change");
     assert!(report.warnings.is_empty(), "{:?}", report.warnings);
 
-    let index = telar_transpiler::read_index(&root.join(".telar"))
+    let index = telar_project::read_index(&root.join(".telar"))
         .unwrap()
         .expect("a package with references bakes an index");
     assert_eq!(index.producer, "test-producer");
@@ -110,7 +110,7 @@ fn a_missing_asset_file_is_skipped_with_a_warning_not_a_panic() {
         report.warnings
     );
 
-    let index = telar_transpiler::read_index(&root.join(".telar")).unwrap();
+    let index = telar_project::read_index(&root.join(".telar")).unwrap();
     assert!(
         index.is_none_or(|i| i.entries.is_empty()),
         "a missing file leaves no entry behind"

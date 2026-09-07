@@ -115,7 +115,7 @@ pub fn app(input: TokenStream) -> TokenStream {
 
     // The transpiler has no runtime access to the theme type, so it is passed as a source string, spelled the one way everything that resolves a theme spells it.
     let theme_type_str =
-        telar_transpiler::normalize_theme_path(&theme_type.to_token_stream().to_string());
+        telar_project::normalize_theme_path(&theme_type.to_token_stream().to_string());
 
     let TranspileOutput {
         include_stmts,
@@ -391,8 +391,8 @@ pub fn app(input: TokenStream) -> TokenStream {
 /// Which shape `cargo telar` asked this build to be, as a feature.
 ///
 /// It was an environment variable, and cargo does not track a proc macro's env reads — so the flavour needed something cargo *does* track to move the fingerprint by, and that was `--cfg=telar_hot_reload` pushed into `RUSTFLAGS`. Rustflags are hashed into every unit in the graph, so alternating `cargo telar check` and `cargo telar dev` recompiled all four hundred dependencies each way to change which directory this function names. A feature is tracked too, and reaches only the crates that enable it.
-fn build_flavour() -> telar_transpiler::BuildFlavour {
-    telar_transpiler::BuildFlavour::new(cfg!(feature = "hot-reload"), cfg!(feature = "preview"))
+fn build_flavour() -> telar_project::BuildFlavour {
+    telar_project::BuildFlavour::new(cfg!(feature = "hot-reload"), cfg!(feature = "preview"))
 }
 
 /// Refuses a build driven by a `cargo-telar` older than this `telar`.
@@ -420,9 +420,9 @@ fn stale_cli_message(hot_requested_by_env: bool) -> Option<String> {
 
 /// Refuses a `telar.toml` whose `[telar] theme` is not what the invocation names.
 ///
-/// Nothing else in the build reads that key — the macro is handed the type directly — but everything that transpiles the same file *without* a macro to read does: the editor's live mirror and the golden harness both resolve the theme through [`telar_transpiler::resolve_theme_type`], which answers with this key when it is set. Two answers means two different files generated from one source, and the last writer wins.
+/// Nothing else in the build reads that key — the macro is handed the type directly — but everything that transpiles the same file *without* a macro to read does: the editor's live mirror and the golden harness both resolve the theme through `telar_transpiler::resolve_theme_type`, which answers with this key when it is set. Two answers means two different files generated from one source, and the last writer wins.
 fn check_theme_agrees(package_dir: &Path, given: Option<&str>) -> Result<(), TokenStream2> {
-    let Some(declared) = telar_transpiler::theme_type_in_config(package_dir) else {
+    let Some(declared) = telar_project::theme_type_in_config(package_dir) else {
         return Ok(());
     };
     if given == Some(declared.as_str()) {
@@ -455,20 +455,20 @@ struct WiredFile {
 
 /// The files to wire, taken from `cargo telar transpile`'s artifact when it still answers for the sources on disk, and produced here when it does not.
 ///
-/// The artifact is never trusted on its word: [`telar_transpiler::BuildIndex::answers_for`] re-hashes every `.rsx` before a line of it is used, so a source edited since the CLI last ran sends this straight to the fallback rather than compiling the output of the run before. Which makes a stale artifact slow, not wrong — the property that lets the fallback exist at all.
+/// The artifact is never trusted on its word: [`telar_project::BuildIndex::answers_for`] re-hashes every `.rsx` before a line of it is used, so a source edited since the CLI last ran sends this straight to the fallback rather than compiling the output of the run before. Which makes a stale artifact slow, not wrong — the property that lets the fallback exist at all.
 fn wire_sources(
     package_dir: &Path,
     src_dir: &Path,
     generated_dir: &Path,
     theme_type_str: Option<&str>,
-    flavour: telar_transpiler::BuildFlavour,
-    assets: &telar_transpiler::AssetContext,
+    flavour: telar_project::BuildFlavour,
+    assets: &telar_project::AssetContext,
 ) -> Result<Vec<WiredFile>, TokenStream2> {
     // A package with no markup needs nothing produced and nothing attested to, so it never reaches for an artifact — `rsx_modules!()` in a crate that only wires an i18n catalog is exactly this.
-    if telar_transpiler::find_rsx_files(src_dir).is_empty() {
+    if telar_project::find_rsx_files(src_dir).is_empty() {
         return Ok(Vec::new());
     }
-    if let Some(index) = telar_transpiler::read_build_index(package_dir, flavour)
+    if let Some(index) = telar_project::read_build_index(package_dir, flavour)
         && index.answers_for(
             src_dir,
             generated_dir,
@@ -478,10 +478,10 @@ fn wire_sources(
         // Output that reaches into the baked asset module is only wirable while that module is: declared against an unusable artifact it would resolve to nothing, and rustc would report it against generated code instead of the `.rsx` line that named the asset — which is the whole thing `AssetContext`'s messages exist to prevent.
         && !(index.uses_assets && assets.module_file().is_none())
     {
-        return Ok(telar_transpiler::find_rsx_files(src_dir)
+        return Ok(telar_project::find_rsx_files(src_dir)
             .into_iter()
             .filter_map(|rsx_path| {
-                let rel_out = telar_transpiler::relative_output_path(&rsx_path, src_dir)?;
+                let rel_out = telar_project::relative_output_path(&rsx_path, src_dir)?;
                 let previews = index.entry_for(&rsx_path, src_dir)?.previews;
                 Some(WiredFile {
                     out_path: generated_dir.join(&rel_out),
@@ -528,7 +528,7 @@ fn transpile_project(theme_type_str: Option<&str>) -> Result<TranspileOutput, To
 
     // A hot-reload build emits different code for the same `.rsx`, so it needs its own output dir: sharing one has the two flavours — and the analyzer's live mirror, which always writes the plain one — overwrite each other on every build, leaving each cargo unit permanently stale.
     let flavour = build_flavour();
-    let generated_dir = telar_transpiler::generated_dir(&manifest_dir, flavour);
+    let generated_dir = telar_project::generated_dir(&manifest_dir, flavour);
     if let Err(e) = std::fs::create_dir_all(&generated_dir) {
         let msg = format!("Failed to create {}: {e}", generated_dir.display());
         return Err(quote! { compile_error!(#msg); });
@@ -536,7 +536,7 @@ fn transpile_project(theme_type_str: Option<&str>) -> Result<TranspileOutput, To
 
     let src_dir = manifest_dir.join("src");
     // This crate's own version, because it is the one whose generated code the artifact's `assets.rs` calls into. `telar` and `telar-macros` share the workspace version, but the handshake compares against whoever loads the module, not whoever wrote the check.
-    let assets = telar_transpiler::AssetContext::load(&manifest_dir, env!("CARGO_PKG_VERSION"));
+    let assets = telar_project::AssetContext::load(&manifest_dir, env!("CARGO_PKG_VERSION"));
 
     check_theme_agrees(&manifest_dir, theme_type_str)?;
 
@@ -569,7 +569,7 @@ fn transpile_project(theme_type_str: Option<&str>) -> Result<TranspileOutput, To
                 .components()
                 .map(|c| Ident::new(&c.as_os_str().to_string_lossy(), Span::call_site()))
                 .collect();
-            let name = preview_const_ident(&telar_transpiler::component_name(&file.rsx_path));
+            let name = preview_const_ident(&telar_project::component_name(&file.rsx_path));
             preview_const_idents.push(quote! { crate::#(#module)::*::#name });
         }
     }
@@ -577,7 +577,7 @@ fn transpile_project(theme_type_str: Option<&str>) -> Result<TranspileOutput, To
     // Opt-in via `[telar] auto_modules = true`: declares the hand-written `.rs` modules by walking the source tree, so an app needs no `mod` statements for them, mirroring how `.rsx` files are wired.
     //
     // Nothing tracks a borrowed component any more. Its signature used to be baked into this crate's call sites, so editing its `Props` elsewhere had to rebuild this crate or the call kept the old arity.
-    let auto_modules = telar_transpiler::auto_modules_enabled(&manifest_dir);
+    let auto_modules = telar_project::auto_modules_enabled(&manifest_dir);
     // The compiler's own span, not proc-macro2's shim: only the real one carries a file. A crate may invoke the macro once per module owning `.rsx` files, and what differs is where the module tree is rooted and whether this run may sweep the generated directory.
     let invoked_in = proc_macro::Span::call_site()
         .local_file()
@@ -601,7 +601,7 @@ fn transpile_project(theme_type_str: Option<&str>) -> Result<TranspileOutput, To
             let msg = format!("Failed to create {}: {e}", modtree_dir.display());
             return Err(quote! { compile_error!(#msg); });
         }
-        let (modules_src, modtree_written) = match telar_transpiler::discover_rust_modules(
+        let (modules_src, modtree_written) = match telar_project::discover_rust_modules(
             &src_dir,
             &invoked_in,
             &modtree_dir,
@@ -625,13 +625,13 @@ fn transpile_project(theme_type_str: Option<&str>) -> Result<TranspileOutput, To
     }
 
     // The catalog the CLI baked, wired exactly like the asset module. The macro neither discovers locale files nor parses one: an empty artifact is a project with no translations, and a missing one is a build that has not run the baker, which is `t!`'s error to report and not this pass's.
-    let catalog = telar_transpiler::CatalogContext::load(&manifest_dir, env!("CARGO_PKG_VERSION"));
+    let catalog = telar_project::CatalogContext::load(&manifest_dir, env!("CARGO_PKG_VERSION"));
     if let Some(stale) = catalog.staleness() {
         return Err(quote! { compile_error!(#stale); });
     }
     if let Some(module_file) = catalog.module_file() {
         let path_str = module_file.to_string_lossy().to_string();
-        let mod_ident = Ident::new(telar_transpiler::I18N_MODULE, Span::call_site());
+        let mod_ident = Ident::new(telar_project::I18N_MODULE, Span::call_site());
         include_stmts.extend(quote! {
             #[path = #path_str]
             #[allow(dead_code)]
@@ -653,7 +653,7 @@ fn transpile_project(theme_type_str: Option<&str>) -> Result<TranspileOutput, To
     // The module every static `src:"…"` resolves into, wired like the i18n catalog. Declared only when the artifact is usable: against a stale or missing one the error belongs on the `.rsx` line naming the asset, which is where `AssetContext` puts it, not inside generated code nobody wrote.
     if let Some(module_file) = assets.module_file() {
         let path_str = module_file.to_string_lossy().to_string();
-        let mod_ident = Ident::new(telar_transpiler::ASSETS_MODULE, Span::call_site());
+        let mod_ident = Ident::new(telar_project::ASSETS_MODULE, Span::call_site());
         include_stmts.extend(quote! {
             #[path = #path_str]
             #[allow(dead_code)]
@@ -677,7 +677,7 @@ fn transpile_project(theme_type_str: Option<&str>) -> Result<TranspileOutput, To
     //
     // The root invocation only. A crate may have several, one per module owning `.rsx` files, and each knows only its own module tree, so a nested one sweeping the directory deletes what the root wrote.
     if invoked_at_root {
-        telar_transpiler::prune_stale_generated(&generated_dir, &written_files);
+        telar_project::prune_stale_generated(&generated_dir, &written_files);
     }
 
     Ok(TranspileOutput {
@@ -694,7 +694,7 @@ pub fn rsx_modules(input: TokenStream) -> TokenStream {
         None
     } else {
         match syn::parse::<syn::Path>(input) {
-            Ok(path) => Some(telar_transpiler::normalize_theme_path(
+            Ok(path) => Some(telar_project::normalize_theme_path(
                 &path.to_token_stream().to_string(),
             )),
             Err(e) => return e.to_compile_error().into(),
@@ -723,7 +723,7 @@ mod tests;
 
 /// The table `telar::dev_entry` reads, or nothing at all.
 ///
-/// Nothing at all is the normal case: a `[preview]` is emitted only for the flavours that ask for one (see `telar_transpiler::BuildFlavour`), so in every other build there are no consts to name and no caller left to name them. Emitting an empty table instead would keep `telar::PreviewEntry` in the surface of a crate that has no previews, and keep the shape alive for the next thing that decides to call it.
+/// Nothing at all is the normal case: a `[preview]` is emitted only for the flavours that ask for one (see `telar_project::BuildFlavour`), so in every other build there are no consts to name and no caller left to name them. Emitting an empty table instead would keep `telar::PreviewEntry` in the surface of a crate that has no previews, and keep the shape alive for the next thing that decides to call it.
 fn preview_entries_fn(previews: bool, consts: &[TokenStream2]) -> TokenStream2 {
     if !previews {
         return quote! {};

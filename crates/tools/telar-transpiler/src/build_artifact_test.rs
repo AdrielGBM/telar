@@ -1,7 +1,9 @@
 use std::path::PathBuf;
 
-use super::super::{BuildFlavour, PackageOptions, build_index, transpile_package};
-use super::{BUILD_ARTIFACT_FORMAT, read_build_index, write_build_index};
+use crate::{PackageOptions, build_index, transpile_package, write_package};
+use telar_project::{
+    BUILD_ARTIFACT_FORMAT, BuildFlavour, generated_dir, read_build_index, write_build_index,
+};
 
 fn package(name: &str) -> PathBuf {
     let root = std::env::temp_dir().join(format!("telar_artifact_{name}_{}", std::process::id()));
@@ -19,12 +21,12 @@ fn transpile(root: &std::path::Path) -> super::BuildIndex {
         flavour: BuildFlavour::Plain,
     })
     .unwrap();
-    super::super::write_package(&files, &generated(root)).unwrap();
+    write_package(&files, &generated(root)).unwrap();
     build_index(&files, &src_dir, Some("app::Theme"), "test", "0.0.0")
 }
 
 fn generated(root: &std::path::Path) -> PathBuf {
-    super::super::generated_dir(root, BuildFlavour::Plain)
+    generated_dir(root, BuildFlavour::Plain)
 }
 
 /// The whole point: an artifact that still describes the sources is one the macro may wire instead of producing again.

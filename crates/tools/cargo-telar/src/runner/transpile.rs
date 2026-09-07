@@ -8,7 +8,8 @@
 
 use std::path::Path;
 
-use telar_transpiler::{BuildFlavour, PackageOptions};
+use telar_project::BuildFlavour;
+use telar_transpiler::PackageOptions;
 
 use super::bake::member_dirs;
 use super::config::find_package_dir;
@@ -16,8 +17,8 @@ use super::config::find_package_dir;
 /// Transpiles every workspace member's `.rsx`, in both build flavours.
 pub(crate) fn transpile_workspace() {
     let dir = find_package_dir(&[]);
-    let workspace_root = telar_transpiler::find_workspace_root(&dir).unwrap_or_else(|| dir.clone());
-    let telar_version = telar_transpiler::resolve_telar_version(&workspace_root)
+    let workspace_root = telar_project::find_workspace_root(&dir).unwrap_or_else(|| dir.clone());
+    let telar_version = telar_project::resolve_telar_version(&workspace_root)
         .unwrap_or_else(|| env!("CARGO_PKG_VERSION").to_string());
     super::config::warn_if_foreign_version(&telar_version);
     let producer = format!("cargo-telar {}", env!("CARGO_PKG_VERSION"));
@@ -29,7 +30,7 @@ pub(crate) fn transpile_workspace() {
 
 pub(super) fn transpile_member(member: &Path, producer: &str, telar_version: &str) {
     let src_dir = member.join("src");
-    if telar_transpiler::find_rsx_files(&src_dir).is_empty() {
+    if telar_project::find_rsx_files(&src_dir).is_empty() {
         return;
     }
     let name = member
@@ -37,7 +38,7 @@ pub(super) fn transpile_member(member: &Path, producer: &str, telar_version: &st
         .and_then(|n| n.to_str())
         .unwrap_or("package");
     // Loaded, never baked: the bake already ran, and a `src:"…"` the artifact cannot answer for is an error the macro puts on its own `.rsx` line rather than one this pass can act on.
-    let assets = telar_transpiler::AssetContext::load(member, telar_version);
+    let assets = telar_project::AssetContext::load(member, telar_version);
     let theme = telar_transpiler::resolve_theme_type(member);
 
     for flavour in BuildFlavour::ALL {
@@ -51,7 +52,7 @@ pub(super) fn transpile_member(member: &Path, producer: &str, telar_version: &st
             // Reported by the compiler, on the `.rsx` line, once the macro reaches the same file — saying it twice from two processes only makes the second one look like a different problem.
             Err(_) => return,
         };
-        let generated_dir = telar_transpiler::generated_dir(member, flavour);
+        let generated_dir = telar_project::generated_dir(member, flavour);
         if let Err(e) = telar_transpiler::write_package(&files, &generated_dir) {
             eprintln!("[cargo-telar] warning: could not write {name}'s generated Rust: {e}");
             return;
@@ -63,7 +64,7 @@ pub(super) fn transpile_member(member: &Path, producer: &str, telar_version: &st
             producer,
             telar_version,
         );
-        if let Err(e) = telar_transpiler::write_build_index(member, flavour, &index) {
+        if let Err(e) = telar_project::write_build_index(member, flavour, &index) {
             eprintln!("[cargo-telar] warning: could not write {name}'s build index: {e}");
         }
     }

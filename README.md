@@ -223,6 +223,7 @@ Three exceptions. [`cargo-telar`](crates/tools/cargo-telar) is a binary you inst
 | [`telar-platform-core`](crates/platform/platform-core) and `telar-platform-{winit,desktop,android,tui,web,headless}` | Window/event abstraction and its backends |
 | [`telar-devtools`](crates/telar-devtools) | The dev overlay: FPS counter, node inspector, build-error banner — pulled in by `telar/dev`, and by nothing else |
 | [`telar-parser`](crates/tools/telar-parser) · [`telar-transpiler`](crates/tools/telar-transpiler) · [`telar-macros`](crates/tools/telar-macros) | The `.rsx` pipeline |
+| [`telar-project`](crates/tools/telar-project) | What a project *is*: `telar.toml`, source discovery, output paths, and the build artifacts a transpile leaves behind |
 | [`telar-i18n-core`](crates/i18n/i18n-core) · [`telar-navigate-core`](crates/navigate/navigate-core) · [`telar-services-core`](crates/services/services-core) | i18n runtime, navigation, platform paths and DI |
 | [`telar-reactive-local`](crates/reactive/reactive-local) | Per-surface thread-local slots, split out so `platform-core` need not link the reactive runtime |
 

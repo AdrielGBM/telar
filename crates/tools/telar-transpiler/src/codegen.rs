@@ -2,16 +2,14 @@
 
 use telar_parser::{RsxDocument, ViewNode};
 
-use crate::assets::AssetContext;
 use crate::error::TranspileError;
-use crate::naming::{
-    contains_ident, literal_or_comment_end, preview_entries_const_name, replace_whole_word,
-    to_pascal_case, to_snake_case,
-};
+use crate::lexer::{contains_ident, literal_or_comment_end, replace_whole_word};
 use crate::signal_scan::{scan_locals, scan_signals};
 use crate::source_map::ExprSpan;
 use crate::style::generate_style_section;
 use crate::view::ViewGen;
+use telar_project::AssetContext;
+use telar_project::naming::{preview_entries_const_name, to_pascal_case, to_snake_case};
 
 /// A parsed `Props` field: its name, its type, and any inline default expression (the `name: Type = expr` sugar). Whether it is `Option<...>` is no longer anyone's business here — the builder's `some` attribute answers that in the callee's own declaration.
 struct ParsedField {

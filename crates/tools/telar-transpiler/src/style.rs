@@ -4,8 +4,8 @@ use std::fmt::Write;
 
 use telar_parser::{StyleClass, StyleSection};
 
-use crate::naming::style_function_name;
 use crate::registry;
+use telar_project::naming::style_function_name;
 
 /// A number for a key [`crate::registry::value_kind`] describes, where a value the key cannot mean has already been reported on the attribute itself. What stands in its place only has to be *something*: the build stops before anything reads it.
 pub fn number_or(value: &str, fallback: &str) -> String {

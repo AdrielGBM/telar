@@ -45,7 +45,7 @@ impl ProjectInfo {
     }
 
     pub fn discover(file_path: &Path) -> Option<Self> {
-        let root = telar_transpiler::find_telar_root(file_path)?;
+        let root = telar_project::find_telar_root(file_path)?;
         // The same resolution the build uses, which is the whole point: reading `[telar] theme` alone answered `None` for every project that names its theme in `app!` and never set the key, so the mirror wrote `Theme::<>` over the correct output the build had written on each keystroke.
         let theme_type = telar_transpiler::resolve_theme_type(&root);
         let theme_fields = if let Some(ref type_name) = theme_type {
@@ -60,7 +60,7 @@ impl ProjectInfo {
             .map(|c| c.keys().cloned().collect())
             .unwrap_or_default();
         let component_root =
-            telar_transpiler::find_workspace_root(&root).unwrap_or_else(|| root.clone());
+            telar_project::find_workspace_root(&root).unwrap_or_else(|| root.clone());
         Some(Self {
             root,
             component_root,
@@ -86,7 +86,7 @@ fn scan_project_theme_fields(root: &Path, type_name: &str) -> HashSet<String> {
 
 fn collect_rs_files(dir: &Path) -> Vec<PathBuf> {
     // Unlike the transpiler's `.rsx` walk, this prunes build output (`target`, `.rsx`) so theme scanning stays fast and skips generated code.
-    telar_transpiler::collect_files_by_ext(dir, "rs", &|name| name != "target" && name != ".telar")
+    telar_project::collect_files_by_ext(dir, "rs", &|name| name != "target" && name != ".telar")
 }
 
 /// Scans `source` for `Color` fields inside the `type_name` theme struct, invoking `on_field` with each field name and its 0-based line number in `source`.

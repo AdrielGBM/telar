@@ -587,8 +587,8 @@ impl Backend {
         let uri = &params.text_document.uri;
         let path = crate::uri::to_path(uri)?;
         // Against the project asset root, matching the baker, falling back to the file's dir with no telar.toml.
-        let assets_dir = telar_transpiler::find_telar_root(&path)
-            .map(|root| telar_transpiler::assets_root(&root))
+        let assets_dir = telar_project::find_telar_root(&path)
+            .map(|root| telar_project::assets_root(&root))
             .or_else(|| path.parent().map(|p| p.to_path_buf()))?;
         let store = self.store.read().await;
         let parsed = store.get(uri)?;
@@ -742,8 +742,8 @@ impl Backend {
         {
             let path = crate::uri::to_path(uri)?;
             // Workspace first: a component is referenced from wherever it is used, which in a multi-crate project is not the crate defining it. The nearest `telar.toml` is only right when there is no workspace above it.
-            let root = telar_transpiler::find_workspace_root(&path)
-                .or_else(|| telar_transpiler::find_telar_root(&path))?;
+            let root = telar_project::find_workspace_root(&path)
+                .or_else(|| telar_project::find_telar_root(&path))?;
             let locations = self
                 .with_index(root, move |idx| idx.component_references(&name))
                 .await?;
@@ -899,8 +899,8 @@ impl Backend {
             let uri = store.any_uri()?;
             let path = crate::uri::to_path(uri)?;
             // The Cargo workspace root, so `workspace/symbol` answers for the whole workspace rather than whichever crate happened to have a file open.
-            telar_transpiler::find_workspace_root(&path)
-                .or_else(|| telar_transpiler::find_telar_root(&path))?
+            telar_project::find_workspace_root(&path)
+                .or_else(|| telar_project::find_telar_root(&path))?
         };
         self.with_index(root, move |idx| idx.symbols(&query)).await
     }

@@ -4,7 +4,7 @@ use std::path::Path;
 
 use lsp_types::{DocumentLink, Range};
 use telar_parser::{RsxDocument, ViewNode};
-use telar_transpiler::asset_kind_for_tag;
+use telar_project::asset_kind_for_tag;
 
 use crate::text::offset_to_position;
 

@@ -5,8 +5,8 @@ use std::fmt::Write;
 
 use telar_parser::{Attr, Element, Value};
 
-use crate::naming::to_pascal_case;
 use crate::style::format_f32;
+use telar_project::naming::to_pascal_case;
 
 use super::signals::{
     closure_marker, emit_transition_prelude, has_paint, normalize_closure, substitute_handles,

@@ -47,7 +47,7 @@ impl WorkspaceIndex {
     /// One-time scan of every `.rsx` under `root` from disk.
     pub fn build(root: &Path) -> Self {
         let mut files = HashMap::new();
-        for path in telar_transpiler::find_rsx_files(root) {
+        for path in telar_project::find_rsx_files(root) {
             if let Ok(source) = std::fs::read_to_string(&path)
                 && let Some(entry) = index_source(&path, &source)
             {

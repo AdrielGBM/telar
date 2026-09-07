@@ -7,7 +7,7 @@ use std::sync::mpsc;
 use std::time::{Duration, Instant};
 
 use notify::{Config as NotifyConfig, EventKind, RecommendedWatcher, RecursiveMode, Watcher};
-use telar_transpiler::ASSET_KINDS;
+use telar_project::ASSET_KINDS;
 
 use super::android::{android_install_and_launch, make_android_cmd};
 use super::config::{
@@ -135,7 +135,7 @@ fn collect_watch_dirs(workspace_root: &Path) -> Vec<PathBuf> {
         .flat_map(|member| {
             [
                 Some(member.join("src")),
-                Some(telar_transpiler::assets_root(&member)),
+                Some(telar_project::assets_root(&member)),
                 telar_baker::locales_root(&member),
             ]
         })

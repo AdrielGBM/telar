@@ -1,6 +1,7 @@
 use std::path::{Path, PathBuf};
 
-use super::{resolve_theme_type, theme_type_in_config};
+use super::resolve_theme_type;
+use telar_project::theme_type_in_config;
 
 fn package(name: &str) -> PathBuf {
     let root = std::env::temp_dir().join(format!("telar_theme_{name}_{}", std::process::id()));

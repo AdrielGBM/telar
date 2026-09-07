@@ -8,7 +8,7 @@ use std::path::{Path, PathBuf};
 
 use i18n_core::PluralCategory;
 use i18n_core::{CatalogModel, MessageModel, PartModel};
-use telar_transpiler::{
+use telar_project::{
     CATALOG_ARTIFACT_FORMAT, CATALOG_INDEX_FILENAME, CATALOG_SOURCE_FILENAME, CatalogEntry,
     CatalogIndex, CatalogSourceFile, content_hash, read_catalog_index, write_if_changed_atomic,
 };
@@ -30,7 +30,7 @@ pub fn bake_catalog(
     telar_version: &str,
 ) -> Option<CatalogReport> {
     let sources = catalog_sources(package_dir);
-    if sources.is_empty() && telar_transpiler::find_rsx_files_in_tree(package_dir).is_empty() {
+    if sources.is_empty() && telar_project::find_rsx_files_in_tree(package_dir).is_empty() {
         return None;
     }
 
@@ -120,7 +120,7 @@ struct I18nConfig {
 }
 
 fn read_i18n_config(package_root: &Path) -> I18nConfig {
-    let rsx = telar_transpiler::read_rsx_section(package_root);
+    let rsx = telar_project::read_rsx_section(package_root);
     let i18n = rsx
         .as_ref()
         .and_then(|t| t.get("i18n"))
@@ -145,7 +145,7 @@ fn read_i18n_config(package_root: &Path) -> I18nConfig {
     }
 }
 
-/// The project-wide catalog directory (`locales/` by default, `[telar.i18n] root`), or `None` when it is disabled. Mirrors [`telar_transpiler::assets_root`]: a caller that needs the *directory* — a file watcher, say — must not have to infer it from the files that happen to be in it today, or adding the first `.toml` to an empty one goes unnoticed. The per-module catalogs the `scan` setting finds are under `src/`, so nothing else needs exposing.
+/// The project-wide catalog directory (`locales/` by default, `[telar.i18n] root`), or `None` when it is disabled. Mirrors [`telar_project::assets_root`]: a caller that needs the *directory* — a file watcher, say — must not have to infer it from the files that happen to be in it today, or adding the first `.toml` to an empty one goes unnoticed. The per-module catalogs the `scan` setting finds are under `src/`, so nothing else needs exposing.
 pub fn locales_root(package_root: &Path) -> Option<PathBuf> {
     let root = read_i18n_config(package_root).root;
     (!root.is_empty()).then(|| package_root.join(root))
@@ -169,7 +169,7 @@ fn catalog_sources(package_root: &Path) -> Vec<(String, PathBuf)> {
     }
     if !cfg.scan.is_empty() {
         for file in
-            telar_transpiler::collect_files_by_ext(&package_root.join("src"), "toml", &|_| true)
+            telar_project::collect_files_by_ext(&package_root.join("src"), "toml", &|_| true)
         {
             let in_scan_dir = file
                 .parent()
@@ -198,7 +198,7 @@ fn discover_root_dir(root: &Path, sources: &mut Vec<(String, PathBuf)>) {
             continue;
         };
         if path.is_dir() {
-            for file in telar_transpiler::collect_files_by_ext(&path, "toml", &|_| true) {
+            for file in telar_project::collect_files_by_ext(&path, "toml", &|_| true) {
                 sources.push((name.to_string(), file));
             }
         } else if path.extension().and_then(|e| e.to_str()) == Some("toml")

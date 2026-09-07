@@ -5,7 +5,7 @@ use syn::{
     Token,
     parse::{Parse, ParseStream, Result as ParseResult},
 };
-use telar_transpiler::naming::preview_entries_const_name;
+use telar_project::naming::preview_entries_const_name;
 
 pub(crate) struct AppInput {
     pub(crate) theme_type: syn::Path,

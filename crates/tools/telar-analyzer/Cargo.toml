@@ -18,6 +18,7 @@ repository = { workspace = true }
 telar-baker = { workspace = true }
 telar-diagnostics = { workspace = true }
 telar-parser = { workspace = true }
+telar-project = { workspace = true }
 telar-transpiler = { workspace = true, features = ["transpile"] }
 
 anyhow = "1.0.103"

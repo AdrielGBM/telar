@@ -101,7 +101,7 @@ pub fn element_name_items(dir: Option<&Path>) -> Vec<CompletionItem> {
         .collect();
 
     if let Some(dir) = dir {
-        for path in telar_transpiler::find_rsx_files_in_tree(dir) {
+        for path in telar_project::find_rsx_files_in_tree(dir) {
             if let Some(stem) = path.file_stem().and_then(|s| s.to_str())
                 && !builtin_set.contains(stem)
             {

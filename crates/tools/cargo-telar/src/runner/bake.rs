@@ -11,9 +11,9 @@ use super::config::{CargoManifest, expand_member, find_package_dir};
 /// Called once from [`super::run`], before dispatching to any subcommand that goes on to invoke `cargo`, and again from each of `watch.rs`'s two loops, which spawn their own `cargo` per rebuild. **Every place in this binary that spawns `cargo` is a build route**, and a build route that has not baked compiles against a stale artifact — or, since the macro checks hashes, fails. A new one either calls this first or sits downstream of a call that did.
 pub(crate) fn bake_workspace() {
     let dir = find_package_dir(&[]);
-    let workspace_root = telar_transpiler::find_workspace_root(&dir).unwrap_or_else(|| dir.clone());
+    let workspace_root = telar_project::find_workspace_root(&dir).unwrap_or_else(|| dir.clone());
     // This binary's own version is the right fallback only because every crate here shares the workspace version; for any other project a failed resolve means cargo itself is unusable, and the build is about to say so.
-    let telar_version = telar_transpiler::resolve_telar_version(&workspace_root)
+    let telar_version = telar_project::resolve_telar_version(&workspace_root)
         .unwrap_or_else(|| env!("CARGO_PKG_VERSION").to_string());
     super::config::warn_if_foreign_version(&telar_version);
     let producer = format!("cargo-telar {}", env!("CARGO_PKG_VERSION"));

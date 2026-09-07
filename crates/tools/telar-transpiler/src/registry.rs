@@ -266,7 +266,7 @@ pub const CURSOR_VALUES: &[(&str, &str)] = &[
 ///
 /// Matched on the pascal-cased spelling rather than on the table's own, so every way of writing a variant that worked while this key took nothing but a keyword still does: `col_resize`, `col-resize`, `ColResize`.
 pub fn cursor_keyword(value: &str) -> Option<&'static str> {
-    let wanted = crate::naming::to_pascal_case(value);
+    let wanted = telar_project::naming::to_pascal_case(value);
     CURSOR_VALUES
         .iter()
         .find(|(_, rust)| rust.strip_prefix("Cursor::") == Some(wanted.as_str()))

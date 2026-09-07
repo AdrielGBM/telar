@@ -1,97 +1,18 @@
-//! Transpiling a whole package: the walk over `src/**/*.rsx`, the two build flavours, and where the generated Rust lands.
+//! Transpiling a whole package: the walk over `src/**/*.rsx`, and where the generated Rust lands.
 //!
 //! The loop itself is what this exists for. It was written three times — once inside the `app!` macro, once in the golden harness, and a third time in the editor's live mirror — and the copies drifted: which name a file is transpiled under, which theme it resolves, whether the hot-reload rewrite applies. All three now ask this module, so a disagreement is a compile error rather than a snapshot nobody re-reads.
 //!
 //! Writing is separate from transpiling ([`write_package`] from [`transpile_package`]) because the golden harness compares output it must never put on disk, and the macro needs the set of paths it wrote to tell live output from what a deleted `.rsx` left behind.
 
-mod artifact;
-
-#[cfg(feature = "transpile")]
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 
-#[cfg(feature = "transpile")]
-use artifact::relative_source;
-pub use artifact::{
-    BUILD_ARTIFACT_FORMAT, BuildEntry, BuildIndex, read_build_index, write_build_index,
-};
+use telar_project::{BUILD_ARTIFACT_FORMAT, BuildEntry, BuildFlavour, BuildIndex, relative_source};
 
-#[cfg(feature = "transpile")]
-use crate::assets::AssetContext;
-#[cfg(feature = "transpile")]
 use crate::codegen::{TranspileInput, TranspiledSource, transpile};
-#[cfg(feature = "transpile")]
 use crate::error::TranspileError;
-#[cfg(feature = "transpile")]
 use crate::source_map::SourceMap;
-
-/// Which shape a package's `.rsx` is compiled into: hot-reloadable or not, carrying `[preview]` fns or not.
-///
-/// Each is written to its own directory on purpose: they are different Rust for the same source, and sharing one directory had each flavour — and the editor's mirror, which always writes the plain one — overwrite the other on every build, leaving every cargo unit permanently stale. Previews are on this axis for exactly that reason: alternating `cargo telar dev` and `cargo telar preview` would otherwise rewrite every generated file each time, and rustc would rebuild the crate on every switch.
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
-pub enum BuildFlavour {
-    /// What `cargo build` and `cargo telar build` produce, and what the editor's mirror writes.
-    #[default]
-    Plain,
-    /// What `cargo telar dev` produces: signal declarations become keyed `hot_signal_auto!` bindings, so the dev host can carry their values across a dylib swap.
-    Hot,
-    /// The same as [`Self::Plain`], plus a build fn per `[preview]` and the table naming them. What `cargo telar check` and `cargo telar test` produce — the two commands that answer for a preview without running one in a window.
-    Preview,
-    /// Both: `cargo telar preview`, which reloads previews in a window.
-    HotPreview,
-}
-
-impl BuildFlavour {
-    /// Every directory name a flavour writes under, for a reader that has only a path and needs to know whether it is generated output — `cargo-telar`'s diagnostic projection, which sees whichever one the build used.
-    pub const DIR_NAMES: [&'static str; 4] =
-        ["build", "build-hot", "build-preview", "build-hot-preview"];
-
-    /// Every flavour, for a producer that writes them all rather than guessing which a build will read.
-    pub const ALL: [Self; 4] = [Self::Plain, Self::Hot, Self::Preview, Self::HotPreview];
-
-    /// The flavour for a build that is `hot` and/or carries `previews`.
-    pub fn new(hot: bool, previews: bool) -> Self {
-        match (hot, previews) {
-            (false, false) => Self::Plain,
-            (true, false) => Self::Hot,
-            (false, true) => Self::Preview,
-            (true, true) => Self::HotPreview,
-        }
-    }
-
-    /// The `.telar/` subdirectory this flavour writes into.
-    pub fn dir_name(self) -> &'static str {
-        match self {
-            Self::Plain => "build",
-            Self::Hot => "build-hot",
-            Self::Preview => "build-preview",
-            Self::HotPreview => "build-hot-preview",
-        }
-    }
-
-    /// The index this flavour writes beside its directory, naming the flavour so no two read each other's.
-    pub fn index_filename(self) -> &'static str {
-        match self {
-            Self::Plain => "build.json",
-            Self::Hot => "build-hot.json",
-            Self::Preview => "build-preview.json",
-            Self::HotPreview => "build-hot-preview.json",
-        }
-    }
-
-    pub fn is_hot(self) -> bool {
-        matches!(self, Self::Hot | Self::HotPreview)
-    }
-
-    pub fn has_previews(self) -> bool {
-        matches!(self, Self::Preview | Self::HotPreview)
-    }
-}
-
-/// Where a package's generated Rust for `flavour` lives.
-pub fn generated_dir(package_dir: &Path, flavour: BuildFlavour) -> PathBuf {
-    package_dir.join(".telar").join(flavour.dir_name())
-}
+use telar_project::AssetContext;
 
 /// Everything a package transpile needs to know, and nothing it can read behind the caller's back.
 #[cfg(feature = "transpile")]
@@ -159,11 +80,11 @@ pub enum PackageError {
 ///
 /// Each file is transpiled under its own stem and knows nothing of its siblings, so this is a plain map over the walk: there is no cross-file pre-pass to keep in step, and adding one would be what makes a single-file edit re-read the whole package.
 pub fn transpile_package(options: &PackageOptions<'_>) -> Result<Vec<GeneratedFile>, PackageError> {
-    crate::find_rsx_files(options.src_dir)
+    telar_project::find_rsx_files(options.src_dir)
         .into_iter()
         .filter_map(|rsx_path| {
             // Outside `src/` there is no place in the mirrored output tree, and `find_rsx_files` yields nothing outside it — so this drops nothing in practice and refuses to invent a path if it ever does.
-            let rel_out = crate::relative_output_path(&rsx_path, options.src_dir)?;
+            let rel_out = telar_project::relative_output_path(&rsx_path, options.src_dir)?;
             Some(transpile_one(rsx_path, rel_out, options))
         })
         .collect()
@@ -184,8 +105,8 @@ fn transpile_one(
         line: e.line,
         message: e.message.clone(),
     })?;
-    let source_hash = crate::content_hash(source.as_bytes());
-    let component_name = crate::component_name(&rsx_path);
+    let source_hash = telar_project::content_hash(source.as_bytes());
+    let component_name = telar_project::component_name(&rsx_path);
     let source = transpile(TranspileInput {
         document: &document,
         component_name: &component_name,
@@ -222,7 +143,7 @@ pub fn write_package(
         }
         write_error(
             &out_path,
-            crate::write_if_changed_atomic(&out_path, &file.source.rust_code),
+            telar_project::write_if_changed_atomic(&out_path, &file.source.rust_code),
         )?;
         // Beside the build file, so the editor extension and `cargo telar check` can put a diagnostic on the generated Rust back onto the `.rsx` line — and the column — the author wrote.
         let map = SourceMap::new(
@@ -232,7 +153,7 @@ pub fn write_package(
         let map_path = out_path.with_extension("rs.map");
         write_error(
             &map_path,
-            crate::write_if_changed_atomic(&map_path, &map.to_json()),
+            telar_project::write_if_changed_atomic(&map_path, &map.to_json()),
         )?;
         written.insert(out_path);
     }
@@ -252,20 +173,20 @@ pub fn write_package(
 /// let src_dir = package.join("src");
 /// let theme = telar_transpiler::resolve_theme_type(&package);
 /// // What the macro compares the index against: the `telar` this project resolves, not this crate's own.
-/// let workspace = telar_transpiler::find_workspace_root(&package).unwrap_or_else(|| package.clone());
-/// let telar_version = telar_transpiler::resolve_telar_version(&workspace).ok_or("no telar dependency")?;
-/// let assets = telar_transpiler::AssetContext::load(&package, &telar_version);
+/// let workspace = telar_project::find_workspace_root(&package).unwrap_or_else(|| package.clone());
+/// let telar_version = telar_project::resolve_telar_version(&workspace).ok_or("no telar dependency")?;
+/// let assets = telar_project::AssetContext::load(&package, &telar_version);
 ///
-/// let flavour = telar_transpiler::BuildFlavour::Plain;
+/// let flavour = telar_project::BuildFlavour::Plain;
 /// let files = telar_transpiler::transpile_package(&telar_transpiler::PackageOptions {
 ///     src_dir: &src_dir,
 ///     theme_type: theme.as_deref(),
 ///     assets: Some(&assets),
 ///     flavour,
 /// })?;
-/// telar_transpiler::write_package(&files, &telar_transpiler::generated_dir(&package, flavour))?;
+/// telar_transpiler::write_package(&files, &telar_project::generated_dir(&package, flavour))?;
 /// let index = telar_transpiler::build_index(&files, &src_dir, theme.as_deref(), "build.rs", &telar_version);
-/// telar_transpiler::write_build_index(&package, flavour, &index)?;
+/// telar_project::write_build_index(&package, flavour, &index)?;
 ///
 /// for file in &files {
 ///     println!("cargo:rerun-if-changed={}", file.rsx_path.display());
@@ -287,14 +208,14 @@ pub fn build_index(
         theme: theme_type.map(str::to_string),
         uses_assets: files
             .iter()
-            .any(|file| file.source.rust_code.contains(crate::ASSETS_MODULE)),
+            .any(|file| file.source.rust_code.contains(telar_project::ASSETS_MODULE)),
         entries: files
             .iter()
             .filter_map(|file| {
                 Some(BuildEntry {
                     source: relative_source(&file.rsx_path, src_dir)?,
                     hash: file.source_hash.clone(),
-                    output_hash: crate::content_hash(file.source.rust_code.as_bytes()),
+                    output_hash: telar_project::content_hash(file.source.rust_code.as_bytes()),
                     previews: !file.source.preview_names.is_empty(),
                 })
             })
@@ -311,5 +232,10 @@ fn write_error(path: &Path, result: std::io::Result<()>) -> Result<(), PackageEr
 }
 
 #[cfg(all(test, feature = "transpile"))]
-#[path = "project_test.rs"]
+#[path = "package_test.rs"]
 mod tests;
+
+/// The artifact's own tests live here rather than beside [`BuildIndex`](telar_project::BuildIndex): what they assert is whether an index still answers for sources it was written from, and producing one means running a real transpile.
+#[cfg(test)]
+#[path = "build_artifact_test.rs"]
+mod artifact_tests;

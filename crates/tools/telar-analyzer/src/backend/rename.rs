@@ -6,7 +6,7 @@ use lsp_types::*;
 use ra_ap_ide::TextSize;
 
 use crate::project::ProjectInfo;
-use telar_transpiler::naming::{to_pascal_case, to_snake_case};
+use telar_project::naming::{to_pascal_case, to_snake_case};
 
 use super::Backend;
 
@@ -31,8 +31,8 @@ impl Backend {
             return None;
         }
         let path = crate::uri::to_path(uri)?;
-        let root = telar_transpiler::find_telar_root(&path)
-            .or_else(|| telar_transpiler::find_workspace_root(&path))?;
+        let root = telar_project::find_telar_root(&path)
+            .or_else(|| telar_project::find_workspace_root(&path))?;
 
         // Markup usages + the defining file, from the workspace `.rsx` index.
         let old = old_name.to_string();

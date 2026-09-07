@@ -1,7 +1,7 @@
 //! Text interpolation and color resolution for the view emitters.
 
-use crate::naming::is_ident;
 use crate::style::hex_to_color_expr;
+use telar_project::naming::is_ident;
 
 use super::ViewGen;
 use super::expr_marker;
@@ -37,7 +37,7 @@ impl ViewGen<'_> {
     pub(super) fn i18n_lookup(&self, key: &str) -> String {
         format!(
             "telar::i18n::translate(&{}, {}, &[])",
-            crate::I18N_CATALOG_PATH,
+            telar_project::I18N_CATALOG_PATH,
             rust_str(key)
         )
     }

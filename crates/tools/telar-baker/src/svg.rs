@@ -1,4 +1,4 @@
-use telar_transpiler::{AssetKind, asset_kind_for_id};
+use telar_project::{AssetKind, asset_kind_for_id};
 
 use crate::Baker;
 

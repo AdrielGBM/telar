@@ -1,6 +1,6 @@
 //! Detects reactive signals declared in the logic zone so the view generator knows which identifiers must be read with `.get()` inside closures.
 
-use crate::naming::is_ident;
+use telar_project::naming::is_ident;
 
 #[derive(Debug, Clone)]
 /// A signal declared in `[logic]`: its name, its kind and the line it was declared on.

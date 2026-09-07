@@ -8,7 +8,8 @@ use std::sync::{Mutex, OnceLock};
 use std::time::SystemTime;
 
 use telar_parser::RsxDocument;
-use telar_transpiler::{AssetContext, BuildFlavour, SourceMap, find_ancestor_dir};
+use telar_project::{AssetContext, BuildFlavour, find_ancestor_dir};
+use telar_transpiler::SourceMap;
 
 /// Nearest ancestor holding a `Cargo.toml` — the crate root, i.e. the macro's `CARGO_MANIFEST_DIR`. Anchored on `Cargo.toml` (not `telar.toml`) so this works in crates without an rsx config too.
 pub fn crate_root(rsx_path: &Path) -> Option<PathBuf> {
@@ -19,8 +20,8 @@ pub fn crate_root(rsx_path: &Path) -> Option<PathBuf> {
 pub fn generated_path(rsx_path: &Path) -> Option<PathBuf> {
     let root = crate_root(rsx_path)?;
     let src_dir = root.join("src");
-    let rel = telar_transpiler::relative_output_path(rsx_path, &src_dir)?;
-    Some(telar_transpiler::generated_dir(&root, BuildFlavour::Plain).join(rel))
+    let rel = telar_project::relative_output_path(rsx_path, &src_dir)?;
+    Some(telar_project::generated_dir(&root, BuildFlavour::Plain).join(rel))
 }
 
 /// The transpiler output for one `.rsx`, computed in-memory (no disk). Shared by [`sync_build_file`] and the embedded-analyzer query paths so both see byte-identical generated text.
@@ -41,14 +42,14 @@ pub fn generated_target(
 ) -> Option<GeneratedTarget> {
     let root = crate_root(rsx_path)?;
     let src_dir = root.join("src");
-    let rel = telar_transpiler::relative_output_path(rsx_path, &src_dir)?;
-    let stem = telar_transpiler::component_name(rsx_path);
+    let rel = telar_project::relative_output_path(rsx_path, &src_dir)?;
+    let stem = telar_project::component_name(rsx_path);
     // The same artifact the macro reads, so the mirror shows the same `src:"…"` errors the build will. Loaded, never baked: this runs on the completion and hover paths too, and neither should be spawning cargo.
     let assets = AssetContext::load(&root, &project_telar_version(&root));
     // No cross-file pre-pass: the editor mirrors the build exactly, because neither needs to know what any other file declares. A component call spells names, and the callee's own type answers for them.
     let result =
         telar_transpiler::transpile_source(source, &stem, theme_type, Some(&assets)).ok()?;
-    let out_path = telar_transpiler::generated_dir(&root, BuildFlavour::Plain).join(&rel);
+    let out_path = telar_project::generated_dir(&root, BuildFlavour::Plain).join(&rel);
     Some(GeneratedTarget {
         path: out_path,
         code: result.rust_code,
@@ -62,7 +63,7 @@ pub fn generated_target(
 fn project_telar_version(package_dir: &Path) -> String {
     static CACHE: OnceLock<Mutex<HashMap<PathBuf, (Option<SystemTime>, String)>>> = OnceLock::new();
 
-    let workspace_root = telar_transpiler::find_workspace_root(package_dir)
+    let workspace_root = telar_project::find_workspace_root(package_dir)
         .unwrap_or_else(|| package_dir.to_path_buf());
     let stamp = std::fs::metadata(workspace_root.join("Cargo.lock"))
         .and_then(|meta| meta.modified())
@@ -76,7 +77,7 @@ fn project_telar_version(package_dir: &Path) -> String {
         return version.clone();
     }
     // Falling back to this binary's version keeps the mirror working when cargo cannot run at all; it is wrong for a project pinning another `telar`, but so is every other answer available here.
-    let version = telar_transpiler::resolve_telar_version(&workspace_root)
+    let version = telar_project::resolve_telar_version(&workspace_root)
         .unwrap_or_else(|| env!("CARGO_PKG_VERSION").to_string());
     cache.insert(workspace_root, (stamp, version.clone()));
     version
@@ -88,7 +89,7 @@ fn project_telar_version(package_dir: &Path) -> String {
 fn bake_if_unanswered(package_dir: &Path, document: &RsxDocument) {
     let version = project_telar_version(package_dir);
     let assets = AssetContext::load(package_dir, &version);
-    let assets_root = telar_transpiler::assets_root(package_dir);
+    let assets_root = telar_project::assets_root(package_dir);
     let mut refs = Vec::new();
     telar_baker::collect_asset_refs(document, &mut refs);
     let bakeable = refs.iter().any(|(kind, path)| {
@@ -120,11 +121,10 @@ pub fn sync_build_file(
     }
     // Written to give the file something to exist as, and never rewritten. The embedded analyzer only knows a file the loaded workspace graph carries, and a `.rsx` created in the editor has no generated Rust until something builds it; every edit after that is served by the in-memory overlay, so overwriting here would buy nothing and cost the one thing this directory has to guarantee — that what a build compiles came from what is on disk, and not from a buffer nobody has saved.
     if !path.exists() {
-        let _ = telar_transpiler::write_if_changed_atomic(&path, &code);
+        let _ = telar_project::write_if_changed_atomic(&path, &code);
     }
     // The map does track the live buffer: it is what turns a position in the overlaid Rust back into one in the `.rsx` being typed, and it is not what the build artifact attests to.
-    let _ =
-        telar_transpiler::write_if_changed_atomic(&path.with_extension("rs.map"), &map.to_json());
+    let _ = telar_project::write_if_changed_atomic(&path.with_extension("rs.map"), &map.to_json());
 }
 
 /// The `<crate>/.telar/build/` path segment that marks a generated file (platform separators). Splits `<crate>/.telar/build/<rel>.rs` into (`<crate>`, `<rel>.rs`). Component-based instead of string matching so Windows paths with mixed `/`/`\` separators still classify.

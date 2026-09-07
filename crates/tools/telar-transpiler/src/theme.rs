@@ -1,30 +1,14 @@
-//! Which theme type a package's `.rsx` resolves `use_theme` against, answered the same way for everyone who has to ask.
+//! Resolving the theme type a package's components are transpiled against, when `telar.toml` does not declare one.
 //!
-//! The build has never had to look: `app!(MyTheme, …)` hands the macro the path directly. Everything *else* that transpiles the same file — the editor's live mirror, the golden harness, a future CLI-side pass — has no macro invocation to read, and each answered on its own. The editor read `[telar] theme` from `telar.toml`, which the applications in this repository do not set, so it mirrored every themed component as `Theme::<>` while the build compiled `Theme::<SandboxTheme>`: two writers of one file, disagreeing, with the last one to run winning.
-//!
-//! So the config key stays the answer where it is set, and where it is not the invocation is read out of the source — which is the same thing the build does, one step earlier. Nothing has to be written into `telar.toml` for a project to be understood.
+//! The declaration itself is [`telar_project::theme`]; this is the fallback that reads it out of the `app!` invocation, which needs a Rust parser and so cannot live beside the config key.
 
 use std::path::{Path, PathBuf};
 
-/// The theme type declared in `[telar] theme`, if the package sets one.
-///
-/// This is the *declaration*, not the resolution: [`resolve_theme_type`] falls back to the source when it is absent, and `app!` compares against this one to refuse a `telar.toml` that says something the code does not.
-pub fn theme_type_in_config(package_dir: &Path) -> Option<String> {
-    let declared = crate::read_rsx_section(package_dir)?
-        .get("theme")?
-        .as_str()?
-        .to_string();
-    Some(normalize_theme_path(&declared))
-}
+use telar_project::{normalize_theme_path, theme_type_in_config};
 
 /// The theme type a package's components are transpiled against: `[telar] theme` when set, otherwise the first argument of the `app!` / `rsx_modules!` invocation that places the package's `.rsx`.
 pub fn resolve_theme_type(package_dir: &Path) -> Option<String> {
     theme_type_in_config(package_dir).or_else(|| theme_type_in_source(package_dir))
-}
-
-/// A theme path as generated code has to spell it: rendering a token stream puts spaces around `::`, and a turbofish carrying them does not parse.
-pub fn normalize_theme_path(rendered: &str) -> String {
-    rendered.replace(" :: ", "::").trim().to_string()
 }
 
 /// The theme named by the macro invocation that places this package's `.rsx` files.
@@ -39,9 +23,11 @@ fn theme_type_in_source(package_dir: &Path) -> Option<String> {
 fn invocation_files(src_dir: &Path) -> Vec<PathBuf> {
     let mut files = vec![src_dir.join("lib.rs"), src_dir.join("main.rs")];
     files.extend(
-        crate::collect_files_by_ext(src_dir, "rs", &|name| name != "target" && name != ".telar")
-            .into_iter()
-            .filter(|path| path.file_name().is_some_and(|name| name == "mod.rs")),
+        telar_project::collect_files_by_ext(src_dir, "rs", &|name| {
+            name != "target" && name != ".telar"
+        })
+        .into_iter()
+        .filter(|path| path.file_name().is_some_and(|name| name == "mod.rs")),
     );
     files.retain(|path| path.is_file());
     files

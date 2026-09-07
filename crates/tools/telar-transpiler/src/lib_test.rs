@@ -1,5 +1,10 @@
 use super::*;
+// Placement types the transpiler produces output *for*: a codegen test that then checks where the output lands touches both crates, which is what the split makes visible.
 use std::path::{Path, PathBuf};
+use telar_project::{
+    ASSET_ARTIFACT_FORMAT, AssetContext, AssetEntry, AssetIndex, content_hash,
+    relative_output_path, static_name_for_path,
+};
 
 /// A class on a component call used to compile to nothing.
 ///

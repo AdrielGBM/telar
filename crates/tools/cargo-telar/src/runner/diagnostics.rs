@@ -12,7 +12,8 @@ use std::collections::HashMap;
 use std::io::BufRead;
 use std::path::{Component, Path, PathBuf};
 
-use telar_transpiler::{BuildFlavour, RsxSpan, SourceMap};
+use telar_project::BuildFlavour;
+use telar_transpiler::{RsxSpan, SourceMap};
 
 /// A `help:`/`note:` rustc hung off a diagnostic. Dropping these used to cost the half of a type error that says what to do about it.
 pub(crate) struct Note {

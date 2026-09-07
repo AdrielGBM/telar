@@ -18,10 +18,10 @@ use std::fmt::Write;
 
 use telar_parser::{Attr, Element, IfBlock, StyleClass, ViewNode};
 
-use crate::assets::{AssetContext, asset_kind_for_tag};
-use crate::naming::contains_ident;
+use crate::lexer::contains_ident;
 use crate::registry::ValueKind;
 pub(crate) use signals::{is_paint_key, rust_str, substitute_reads};
+use telar_project::{AssetContext, asset_kind_for_tag};
 
 /// Sentinel comment lines that bracket each view node's generated code with the `.rsx` line it came from. They are emitted into the view body during generation and stripped by [`resolve_source_map`] in the transpiler, which turns them into the per-line origin map. The prefix is deliberately un-generatable by normal codegen so it can never collide with real output.
 const SRC_PUSH: &str = "//@RSX@PUSH:";

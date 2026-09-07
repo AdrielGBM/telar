@@ -4,9 +4,9 @@ use std::collections::HashMap;
 
 use telar_parser::{Attr, Element, Value};
 
-use crate::naming::style_function_name;
 use crate::registry::ValueKind;
 use crate::style::{PropCall, format_f32, layout_prop_call};
+use telar_project::naming::style_function_name;
 
 use super::ViewGen;
 use super::signals::{

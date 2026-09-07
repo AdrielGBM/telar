@@ -4,7 +4,7 @@ use std::fmt::Write;
 
 use telar_parser::{Attr, ViewNode};
 
-use crate::naming::contains_ident;
+use crate::lexer::contains_ident;
 use crate::style::format_f32;
 
 use super::{ViewGen, expr_marker};

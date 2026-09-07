@@ -7,12 +7,12 @@
 //! instead of in `telar-transpiler`, which every app compiles and which would otherwise carry `usvg`/`resvg`/
 //! `image` (~66 host crates) into a project that never bakes an asset.
 //!
-//! Adding a kind — fonts, shaders, audio — is an entry in [`ASSET_KINDS`](telar_transpiler::ASSET_KINDS) plus
+//! Adding a kind — fonts, shaders, audio — is an entry in [`ASSET_KINDS`](telar_project::ASSET_KINDS) plus
 //! one [`Baker`] impl here; nothing in the transpiler, the macro, or a CLI needs to change to pick it up.
 
 #![warn(rustdoc::broken_intra_doc_links)]
 
-use telar_transpiler::AssetKind;
+use telar_project::AssetKind;
 
 mod catalog;
 mod image;
@@ -38,7 +38,7 @@ pub trait Baker {
     fn bake(&self, bytes: &[u8]) -> Result<String, String>;
 }
 
-/// Every registered baker, one per [`ASSET_KINDS`](telar_transpiler::ASSET_KINDS) entry.
+/// Every registered baker, one per [`ASSET_KINDS`](telar_project::ASSET_KINDS) entry.
 pub fn bakers() -> &'static [&'static dyn Baker] {
     &[&svg::SvgBaker, &image::ImageBaker]
 }
