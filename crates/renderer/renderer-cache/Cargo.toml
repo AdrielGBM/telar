@@ -11,6 +11,6 @@ license = { workspace = true }
 repository = { workspace = true }
 
 [dependencies]
-web-time = { workspace = true }
-clru = { workspace = true }
+clru = "0.6.3"
 rustc-hash = { workspace = true }
+web-time = { workspace = true }

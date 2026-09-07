@@ -22,17 +22,18 @@ dialogs = ["dep:rfd"]
 system-theme = ["dep:zbus"]
 
 [dependencies]
-accesskit = { version = "0.25.0", optional = true }
-accesskit_winit = { version = "0.34.0", optional = true }
-arboard = { version = "3.6.1", default-features = false, optional = true }
 geometry-core = { workspace = true }
 platform-core = { workspace = true }
 platform-winit = { workspace = true }
 renderer-core = { workspace = true }
+services-core = { workspace = true, features = ["system-paths"] }
+
+accesskit = { version = "0.25.0", optional = true }
+accesskit_winit = { version = "0.34.0", optional = true }
+arboard = { version = "3.6.1", default-features = false, optional = true }
 rfd = { version = "0.17.2", default-features = false, features = [
     "xdg-portal",
 ], optional = true }
-services-core = { workspace = true, features = ["system-paths"] }
 tracing = { workspace = true }
 # `wayland-csd-adwaita-notitle` rather than the default `wayland-csd-adwaita`: same client-side frame, without the `ab_glyph`/`ttf-parser` pair that only draws the title text winit then hides behind our own.
 winit = { workspace = true, features = [

@@ -16,12 +16,22 @@ repository = { workspace = true }
 # The same baker `cargo telar bake` runs. The editor has to answer for a `src:"…"` before any build has,
 # so it bakes for itself rather than showing an error the user cannot act on from where they are.
 telar-baker = { workspace = true }
+telar-diagnostics = { workspace = true }
 telar-parser = { workspace = true }
 telar-transpiler = { workspace = true }
+
+anyhow = "1.0.103"
+lsp-types = { workspace = true }
+ra_ap_hir = "=0.0.349"
+ra_ap_ide = "=0.0.349"
+ra_ap_ide_db = "=0.0.349"
+ra_ap_load-cargo = "=0.0.349"
+ra_ap_paths = "=0.0.349"
+ra_ap_proc_macro_api = "=0.0.349"
+ra_ap_project_model = "=0.0.349"
+ra_ap_vfs = "=0.0.349"
 serde = { workspace = true }
-toml = { workspace = true }
-lsp-types = "0.97"
-serde_json = "1"
+serde_json = { workspace = true }
 tokio = { version = "1", features = [
     "rt",
     "macros",
@@ -31,17 +41,8 @@ tokio = { version = "1", features = [
     "time",
     "signal",
 ] }
+toml = { workspace = true }
 url = "2.5.8"
-telar-diagnostics = { workspace = true }
-ra_ap_ide = "=0.0.349"
-ra_ap_ide_db = "=0.0.349"
-ra_ap_load-cargo = "=0.0.349"
-ra_ap_project_model = "=0.0.349"
-ra_ap_vfs = "=0.0.349"
-ra_ap_paths = "=0.0.349"
-anyhow = "1.0.103"
-ra_ap_proc_macro_api = "=0.0.349"
-ra_ap_hir = "=0.0.349"
 
 [target."cfg(unix)".dependencies]
-libc = "0.2.189"
+libc = { workspace = true }

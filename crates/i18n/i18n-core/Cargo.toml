@@ -12,6 +12,7 @@ repository = { workspace = true }
 
 [dependencies]
 reactive-core = { workspace = true }
+
 toml = { workspace = true, optional = true }
 
 [features]

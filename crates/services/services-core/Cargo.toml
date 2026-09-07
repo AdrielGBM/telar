@@ -11,12 +11,13 @@ license = { workspace = true }
 repository = { workspace = true }
 
 [dependencies]
-dirs = { version = "7.0.0", optional = true }
-reactive-core.workspace = true
+reactive-core = { workspace = true }
 reactive-local = { workspace = true }
+
+dirs = { version = "7.0.0", optional = true }
 rustc-hash = { workspace = true, optional = true }
 thiserror = { workspace = true, optional = true }
-tracing.workspace = true
+tracing = { workspace = true }
 
 [features]
 default = []

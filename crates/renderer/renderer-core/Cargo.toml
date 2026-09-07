@@ -11,14 +11,14 @@ license = { workspace = true }
 repository = { workspace = true }
 
 [dependencies]
-web-time = { workspace = true }
-bytemuck = { workspace = true }
 geometry-core = { workspace = true }
 semantics-core = { workspace = true }
+
+bytemuck = { workspace = true }
 rustc-hash = { workspace = true }
 smallvec = { workspace = true }
 thiserror = { workspace = true }
 tracing = { workspace = true }
+web-time = { workspace = true }
 wide = { workspace = true }
-xxhash-rust = { workspace = true }
-
+xxhash-rust = { version = "0.8.18", features = ["xxh3"] }

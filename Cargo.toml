@@ -108,15 +108,80 @@ strip = "symbols"
 # before it runs a single instruction, and a megabyte of extra code costs more there than the cycles
 # `opt-level = 3` bought. `panic = "abort"` goes with it because a wasm module cannot unwind out through the
 # JavaScript that called it anyway, so the landing pads are tables nothing will ever read.
+
 [profile.web]
 inherits = "release"
 opt-level = "z"
 panic = "abort"
 
 [workspace.dependencies]
-thiserror = "2"
+# Internal crates first, then a blank line, then everything external; alphabetical within each group.
+# Every crate publishes as `telar-*`; the keys keep the short internal names so `use ui_core::…` and `dep:ui-core` feature syntax stay unchanged.
+geometry-core = { package = "telar-geometry-core", path = "crates/geometry/geometry-core", version = "0.1.8" }
+i18n-core = { package = "telar-i18n-core", path = "crates/i18n/i18n-core", version = "0.1.8" }
+layout-core = { package = "telar-layout-core", path = "crates/layout/layout-core", version = "0.1.8" }
+layout-reactive = { package = "telar-layout-reactive", path = "crates/layout/layout-reactive", version = "0.1.8" }
+motion-core = { package = "telar-motion-core", path = "crates/motion/motion-core", version = "0.1.8" }
+navigate-core = { package = "telar-navigate-core", path = "crates/navigate/navigate-core", version = "0.1.8" }
+platform-android = { package = "telar-platform-android", path = "crates/platform/platform-android", version = "0.1.8" }
+platform-core = { package = "telar-platform-core", path = "crates/platform/platform-core", version = "0.1.8" }
+# `default-features = false` so telar forwards the desktop extras through its own features: with the defaults left on, `telar/a11y` and friends would have nothing to switch.
+platform-desktop = { package = "telar-platform-desktop", path = "crates/platform/platform-desktop", version = "0.1.8", default-features = false }
+platform-headless = { package = "telar-platform-headless", path = "crates/platform/platform-headless", version = "0.1.8" }
+platform-tui = { package = "telar-platform-tui", path = "crates/platform/platform-tui", version = "0.1.8" }
+platform-web = { package = "telar-platform-web", path = "crates/platform/platform-web", version = "0.1.8" }
+platform-winit = { package = "telar-platform-winit", path = "crates/platform/platform-winit", version = "0.1.8" }
+reactive-core = { package = "telar-reactive-core", path = "crates/reactive/reactive-core", version = "0.1.8" }
+reactive-local = { package = "telar-reactive-local", path = "crates/reactive/reactive-local", version = "0.1.8" }
+renderer-assets = { package = "telar-renderer-assets", path = "crates/renderer/renderer-assets", version = "0.1.8" }
+renderer-cache = { package = "telar-renderer-cache", path = "crates/renderer/renderer-cache", version = "0.1.8" }
+renderer-core = { package = "telar-renderer-core", path = "crates/renderer/renderer-core", version = "0.1.8" }
+renderer-dom = { package = "telar-renderer-dom", path = "crates/renderer/renderer-dom", version = "0.1.8" }
+renderer-hardware = { package = "telar-renderer-hardware", path = "crates/renderer/renderer-hardware", version = "0.1.8" }
+renderer-record = { package = "telar-renderer-record", path = "crates/renderer/renderer-record", version = "0.1.8" }
+renderer-software = { package = "telar-renderer-software", path = "crates/renderer/renderer-software", version = "0.1.8" }
+renderer-text = { package = "telar-renderer-text", path = "crates/renderer/renderer-text", version = "0.1.8" }
+renderer-tui = { package = "telar-renderer-tui", path = "crates/renderer/renderer-tui", version = "0.1.8" }
+renderer-web = { package = "telar-renderer-web", path = "crates/renderer/renderer-web", version = "0.1.8" }
+semantics-core = { package = "telar-semantics-core", path = "crates/semantics/semantics-core", version = "0.1.8" }
+services-core = { package = "telar-services-core", path = "crates/services/services-core", version = "0.1.8" }
+# `default-features = false` here so each member says which frontend it wants. A member cannot override the
+# workspace on this, and the browser build of an app needs the desktop renderers off: neither is target-gated,
+# so a default left on drags wgpu and a glyph shaper into a page that draws as a document and calls neither.
+telar = { path = "crates/telar", version = "0.1.8", default-features = false }
+telar-baker = { path = "crates/tools/telar-baker", version = "0.1.8" }
+telar-diagnostics = { path = "crates/tools/telar-diagnostics", version = "0.1.8" }
+telar-dynamic = { path = "crates/telar-dynamic", version = "0.1.8" }
+telar-macros = { path = "crates/tools/telar-macros", version = "0.1.8" }
+telar-parser = { path = "crates/tools/telar-parser", version = "0.1.8" }
+telar-transpiler = { path = "crates/tools/telar-transpiler", version = "0.1.8" }
+theme-core = { package = "telar-theme-core", path = "crates/ui/theme-core", version = "0.1.8" }
+ui-components = { package = "telar-ui-components", path = "crates/ui/ui-components", version = "0.1.8" }
+ui-core = { package = "telar-ui-core", path = "crates/ui/ui-core", version = "0.1.8" }
+ui-tree = { package = "telar-ui-tree", path = "crates/ui/ui-tree", version = "0.1.8" }
+
+bytemuck = "1.25.0"
+criterion = { version = "0.8.2", default-features = false, features = [
+    "cargo_bench_support",
+] }
+document-features = "0.2.12"
+image = { version = "0.25.10", default-features = false }
+js-sys = "0.3"
+libc = "0.2.189"
+lru = "0.18.0"
+lsp-types = "0.97"
+notify = "8.2.0"
+# Held at 0.4 rather than 1.x because `rfd` 0.17 pins that, and a second copy buys nothing.
+pollster = "0.4"
+proc-macro2 = "1.0.107"
 raw-window-handle = "0.6"
+rustc-hash = "2.1.2"
 serde = { version = "1.0.228", features = ["derive"] }
+serde_json = "1.0.151"
+smallvec = { version = "1.15.1", features = ["union"] }
+syn = { version = "3.0.4", features = ["full"] }
+thiserror = "2"
+tiny-skia = "0.12.0"
 toml = "1.1.2"
 tracing = { version = "0.1.44", features = ["log"] }
 # `ansi` off by default: the two backends that log through this are a browser console and logcat, and neither renders escape codes. A terminal binary asks for the feature back.
@@ -126,77 +191,12 @@ tracing-subscriber = { version = "0.3.23", default-features = false, features = 
     "tracing-log",
     "std",
 ] }
-bytemuck = "1.25.0"
-rustc-hash = "2.1.2"
-wide = "1.4"
-xxhash-rust = { version = "0.8.18", features = ["xxh3"] }
-clru = "0.6.3"
-smallvec = { version = "1.15.1", features = ["union"] }
-lru = "0.18.0"
-# Only `rwh_06` is common to every backend, so each platform crate names the windowing systems it actually talks to: an Android build has no business compiling X11 and Wayland.
-winit = { version = "0.30", default-features = false, features = ["rwh_06"] }
-tiny-skia = "0.12.0"
-ureq = "3.4.0"
-notify = "8.2.0"
-# std's Instant aborts on wasm32-unknown-unknown; this is the same type on every other target.
-web-time = "1.1.0"
 # Pinned: the generated glue must match the `wasm-bindgen` CLI, and the one in the dev shell is this version.
 wasm-bindgen = "=0.2.127"
-# Pinned with it: this is the release whose glue and `wasm-bindgen-test-runner` are the ones above.
-wasm-bindgen-test = "=0.3.77"
 wasm-bindgen-futures = "0.4"
-js-sys = "0.3"
 web-sys = "0.3"
-console_error_panic_hook = "0.1.7"
-# Without `derive-more`: it exists for `Display` on crossterm's own key and event enums, which nothing here formats.
-crossterm = { version = "0.29.0", default-features = false, features = [
-    "bracketed-paste",
-    "events",
-    "windows",
-] }
-unicode-width = "0.2.2"
-unicode-segmentation = "1.13.3"
-
-# Every crate publishes as `telar-*`; the keys keep the short internal names so `use ui_core::…` and `dep:ui-core` feature syntax stay unchanged.
-platform-core = { package = "telar-platform-core", path = "crates/platform/platform-core", version = "0.1.8" }
-platform-winit = { package = "telar-platform-winit", path = "crates/platform/platform-winit", version = "0.1.8" }
-# `default-features = false` so telar forwards the desktop extras through its own features: with the defaults left on, `telar/a11y` and friends would have nothing to switch.
-platform-desktop = { package = "telar-platform-desktop", path = "crates/platform/platform-desktop", version = "0.1.8", default-features = false }
-platform-android = { package = "telar-platform-android", path = "crates/platform/platform-android", version = "0.1.8" }
-platform-headless = { package = "telar-platform-headless", path = "crates/platform/platform-headless", version = "0.1.8" }
-renderer-core = { package = "telar-renderer-core", path = "crates/renderer/renderer-core", version = "0.1.8" }
-renderer-assets = { package = "telar-renderer-assets", path = "crates/renderer/renderer-assets", version = "0.1.8" }
-renderer-cache = { package = "telar-renderer-cache", path = "crates/renderer/renderer-cache", version = "0.1.8" }
-renderer-record = { package = "telar-renderer-record", path = "crates/renderer/renderer-record", version = "0.1.8" }
-renderer-tui = { package = "telar-renderer-tui", path = "crates/renderer/renderer-tui", version = "0.1.8" }
-platform-tui = { package = "telar-platform-tui", path = "crates/platform/platform-tui", version = "0.1.8" }
-platform-web = { package = "telar-platform-web", path = "crates/platform/platform-web", version = "0.1.8" }
-renderer-web = { package = "telar-renderer-web", path = "crates/renderer/renderer-web", version = "0.1.8" }
-renderer-dom = { package = "telar-renderer-dom", path = "crates/renderer/renderer-dom", version = "0.1.8" }
-reactive-local = { package = "telar-reactive-local", path = "crates/reactive/reactive-local", version = "0.1.8" }
-renderer-software = { package = "telar-renderer-software", path = "crates/renderer/renderer-software", version = "0.1.8" }
-renderer-hardware = { package = "telar-renderer-hardware", path = "crates/renderer/renderer-hardware", version = "0.1.8" }
-renderer-text = { package = "telar-renderer-text", path = "crates/renderer/renderer-text", version = "0.1.8" }
-reactive-core = { package = "telar-reactive-core", path = "crates/reactive/reactive-core", version = "0.1.8" }
-services-core = { package = "telar-services-core", path = "crates/services/services-core", version = "0.1.8" }
-geometry-core = { package = "telar-geometry-core", path = "crates/geometry/geometry-core", version = "0.1.8" }
-semantics-core = { package = "telar-semantics-core", path = "crates/semantics/semantics-core", version = "0.1.8" }
-motion-core = { package = "telar-motion-core", path = "crates/motion/motion-core", version = "0.1.8" }
-layout-core = { package = "telar-layout-core", path = "crates/layout/layout-core", version = "0.1.8" }
-layout-reactive = { package = "telar-layout-reactive", path = "crates/layout/layout-reactive", version = "0.1.8" }
-theme-core = { package = "telar-theme-core", path = "crates/ui/theme-core", version = "0.1.8" }
-i18n-core = { package = "telar-i18n-core", path = "crates/i18n/i18n-core", version = "0.1.8" }
-ui-core = { package = "telar-ui-core", path = "crates/ui/ui-core", version = "0.1.8" }
-ui-tree = { package = "telar-ui-tree", path = "crates/ui/ui-tree", version = "0.1.8" }
-ui-components = { package = "telar-ui-components", path = "crates/ui/ui-components", version = "0.1.8" }
-navigate-core = { package = "telar-navigate-core", path = "crates/navigate/navigate-core", version = "0.1.8" }
-# `default-features = false` here so each member says which frontend it wants. A member cannot override the
-# workspace on this, and the browser build of an app needs the desktop renderers off: neither is target-gated,
-# so a default left on drags wgpu and a glyph shaper into a page that draws as a document and calls neither.
-telar = { path = "crates/telar", version = "0.1.8", default-features = false }
-telar-diagnostics = { path = "crates/tools/telar-diagnostics", version = "0.1.8" }
-telar-baker = { path = "crates/tools/telar-baker", version = "0.1.8" }
-telar-dynamic = { path = "crates/telar-dynamic", version = "0.1.8" }
-telar-parser = { path = "crates/tools/telar-parser", version = "0.1.8" }
-telar-transpiler = { path = "crates/tools/telar-transpiler", version = "0.1.8" }
-telar-macros = { path = "crates/tools/telar-macros", version = "0.1.8" }
+# std's Instant aborts on wasm32-unknown-unknown; this is the same type on every other target.
+web-time = "1.1.0"
+wide = "1.4"
+# Only `rwh_06` is common to every backend, so each platform crate names the windowing systems it actually talks to: an Android build has no business compiling X11 and Wayland.
+winit = { version = "0.30", default-features = false, features = ["rwh_06"] }

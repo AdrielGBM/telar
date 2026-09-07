@@ -11,19 +11,20 @@ license = { workspace = true }
 repository = { workspace = true }
 
 [dependencies]
-web-time = { workspace = true }
 geometry-core = { workspace = true }
 layout-core = { workspace = true }
 layout-reactive = { workspace = true }
+motion-core = { workspace = true }
 platform-core = { workspace = true }
 reactive-core = { workspace = true }
-renderer-core = { workspace = true }
 renderer-assets = { workspace = true }
+renderer-core = { workspace = true }
+services-core = { workspace = true, features = ["di"] }
 theme-core = { workspace = true }
 ui-tree = { workspace = true }
-motion-core = { workspace = true }
-services-core = { workspace = true, features = ["di"] }
+
 rustc-hash = { workspace = true }
+web-time = { workspace = true }
 
 [features]
 # Enables the `Svg` widget module only; it needs baked `SvgData` (always available), not usvg.

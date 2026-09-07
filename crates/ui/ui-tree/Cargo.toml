@@ -11,17 +11,17 @@ license = { workspace = true }
 repository = { workspace = true }
 
 [dependencies]
-web-time = { workspace = true }
+geometry-core = { workspace = true }
+platform-core = { workspace = true }
 reactive-core = { workspace = true }
 renderer-core = { workspace = true }
-platform-core = { workspace = true }
-geometry-core = { workspace = true }
+
+web-time = { workspace = true }
 
 [dev-dependencies]
-criterion = { version = "0.8.2", default-features = false, features = [
-    "cargo_bench_support",
-] }
 motion-core = { workspace = true }
+
+criterion = { workspace = true }
 
 [[bench]]
 name = "tree_flatten"

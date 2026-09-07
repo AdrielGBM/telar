@@ -11,9 +11,10 @@ license = { workspace = true }
 repository = { workspace = true }
 
 [dependencies]
-renderer-core = { workspace = true }
 geometry-core = { workspace = true }
-image = { version = "0.25.10", default-features = false, features = ["png", "jpeg"], optional = true }
+renderer-core = { workspace = true }
+
+image = { workspace = true, features = ["png", "jpeg"], optional = true }
 # Both stripped to their cores, because their defaults are a whole text stack — see `svg-text` below for
 # what that costs and who should pay it.
 resvg = { version = "0.48", optional = true, default-features = false }

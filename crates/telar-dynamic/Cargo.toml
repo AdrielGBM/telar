@@ -12,6 +12,7 @@ repository = { workspace = true }
 
 # docs.rs builds with everything on, so every decoder and transport is visible from one page rather than
 # just the ones a default build happens to carry — which here is none of them.
+
 [package.metadata.docs.rs]
 all-features = true
 rustdoc-args = ["--cfg", "docsrs"]
@@ -88,40 +89,44 @@ image-webp = ["image", "image/webp"]
 document-features = ["dep:document-features"]
 
 [dependencies]
-document-features = { version = "0.2.12", optional = true }
-geometry-core.workspace = true
-i18n-core.workspace = true
-image = { version = "0.25.10", default-features = false, features = ["png", "jpeg"], optional = true }
-reactive-core.workspace = true
-renderer-assets.workspace = true
-renderer-core.workspace = true
-tracing.workspace = true
+geometry-core = { workspace = true }
+i18n-core = { workspace = true }
+reactive-core = { workspace = true }
+renderer-assets = { workspace = true }
+renderer-core = { workspace = true }
 ui-core = { workspace = true, features = ["async-assets"] }
+
+document-features = { workspace = true, optional = true }
+image = { workspace = true, features = ["png", "jpeg"], optional = true }
+tracing = { workspace = true }
 
 # Target-gated rather than plain-optional: `http` is one feature with two bodies, and neither client is
 # buildable — let alone useful — on the other's target. A plain optional `ureq` fails a wasm build on a
 # `getrandom` error deep under a TLS stack nobody asked for.
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
-ureq = { workspace = true, optional = true }
+ureq = { version = "3.4.0", optional = true }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 js-sys = { workspace = true, optional = true }
 wasm-bindgen = { workspace = true, optional = true }
 wasm-bindgen-futures = { workspace = true, optional = true }
-
-[target.'cfg(target_arch = "wasm32")'.dependencies.web-sys]
-workspace = true
-optional = true
-features = ["AbortController", "AbortSignal", "Request", "RequestInit", "Response", "Window"]
+web-sys = { workspace = true, optional = true, features = [
+    "AbortController",
+    "AbortSignal",
+    "Request",
+    "RequestInit",
+    "Response",
+    "Window",
+] }
 
 [dev-dependencies]
-reactive-core.workspace = true
-renderer-assets.workspace = true
+reactive-core = { workspace = true }
+renderer-assets = { workspace = true }
 # Self-referencing so `tests/http_assets.rs` gets the transport and the decoder it exercises without them
 # being defaults every dependent links. That test is real coverage of the HTTP path end to end, not an
 # `--all-features`-only extra.
 telar-dynamic = { path = ".", features = ["http", "svg"] }
-ui-core.workspace = true
+ui-core = { workspace = true }
 
 [lints.rust]
 unexpected_cfgs = { level = "warn", check-cfg = ['cfg(docsrs)'] }

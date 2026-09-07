@@ -12,6 +12,7 @@ repository = { workspace = true }
 
 [dependencies]
 geometry-core = { workspace = true }
-semantics-core = { workspace = true }
 reactive-local = { workspace = true }
+semantics-core = { workspace = true }
+
 thiserror = { workspace = true }

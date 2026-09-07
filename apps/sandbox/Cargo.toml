@@ -23,11 +23,12 @@ telar = { workspace = true, features = [
     "components",
     "navigate",
 ] }
-serde = { workspace = true }
 # `demo_svgs.rs` builds its icons with `SvgData::from_str`, and the runtime parser behind it lives here now
 # rather than under a `telar` feature. The demo never reaches for a name in this crate — the dependency is
 # what turns the parser on.
 telar-dynamic = { workspace = true, features = ["svg"] }
+
+serde = { workspace = true }
 
 # Only `main.rs` initialises a subscriber, and there is no `main.rs` on wasm — left unconditional, this pulled a terminal log formatter, `ansi` included, into every page build.
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
@@ -50,18 +51,17 @@ web = ["telar/web"]
 web-dom = ["telar/web-dom"]
 
 [dev-dependencies]
-criterion = { version = "0.8.2", default-features = false, features = [
-    "cargo_bench_support",
-] }
 platform-core = { workspace = true }
 platform-headless = { workspace = true }
-pollster = "0.4"
-renderer-core.workspace = true
-renderer-hardware.workspace = true
-renderer-software.workspace = true
-renderer-text.workspace = true
-renderer-tui.workspace = true
-ui-core.workspace = true
+renderer-core = { workspace = true }
+renderer-hardware = { workspace = true }
+renderer-software = { workspace = true }
+renderer-text = { workspace = true }
+renderer-tui = { workspace = true }
+ui-core = { workspace = true }
+
+criterion = { workspace = true }
+pollster = { workspace = true }
 
 [[bench]]
 name = "frontend_frame"

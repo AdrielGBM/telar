@@ -11,8 +11,14 @@ license = { workspace = true }
 repository = { workspace = true }
 
 [dependencies]
-crossterm = { workspace = true }
 geometry-core = { workspace = true }
 platform-core = { workspace = true }
 services-core = { workspace = true, features = ["system-paths"] }
+
+# Without `derive-more`: it exists for `Display` on crossterm's own key and event enums, which nothing here formats.
+crossterm = { version = "0.29.0", default-features = false, features = [
+    "bracketed-paste",
+    "events",
+    "windows",
+] }
 tracing = { workspace = true }

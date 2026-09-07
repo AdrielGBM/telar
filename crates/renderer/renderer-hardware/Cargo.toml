@@ -11,24 +11,24 @@ license = { workspace = true }
 repository = { workspace = true }
 
 [dependencies]
-renderer-core = { workspace = true }
-raw-window-handle = { workspace = true }
-wgpu = "30"
-pollster = "0.4"
-bytemuck = { workspace = true, features = ["derive"] }
-renderer-text = { workspace = true }
-lyon = "1.0.19"
-tracing = { workspace = true }
 geometry-core = { workspace = true }
-rustc-hash = { workspace = true }
 renderer-cache = { workspace = true }
+renderer-core = { workspace = true }
+renderer-text = { workspace = true }
+
+bytemuck = { workspace = true, features = ["derive"] }
 lru = { workspace = true }
+lyon = "1.0.19"
+pollster = { workspace = true }
+raw-window-handle = { workspace = true }
+rustc-hash = { workspace = true }
+tracing = { workspace = true }
+wgpu = "30"
 
 [dev-dependencies]
-criterion = { version = "0.8.2", default-features = false, features = [
-    "cargo_bench_support",
-] }
 platform-headless = { workspace = true }
+
+criterion = { workspace = true }
 
 [[bench]]
 name = "render_frame"
@@ -37,12 +37,17 @@ harness = false
 # `fragile-send-sync-non-atomic-wasm` makes wgpu's browser handles — which wrap JS objects in `Rc` — count as
 # `Send + Sync`. Sound only because a wasm build without the `atomics` feature has exactly one thread, so
 # nothing ever crosses one; without it every process-wide slot in this crate stops compiling there.
+
 [target.'cfg(target_arch = "wasm32")'.dependencies]
-wgpu = { version = "30", features = ["fragile-send-sync-non-atomic-wasm"] }
 js-sys = { workspace = true }
 wasm-bindgen = { workspace = true }
 wasm-bindgen-futures = { workspace = true }
-
-[target.'cfg(target_arch = "wasm32")'.dependencies.web-sys]
-workspace = true
-features = ["Document", "Element", "HtmlCanvasElement", "HtmlElement", "Window", "CssStyleDeclaration"]
+web-sys = { workspace = true, features = [
+    "Document",
+    "Element",
+    "HtmlCanvasElement",
+    "HtmlElement",
+    "Window",
+    "CssStyleDeclaration",
+] }
+wgpu = { version = "30", features = ["fragile-send-sync-non-atomic-wasm"] }

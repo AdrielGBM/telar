@@ -11,7 +11,15 @@ license = { workspace = true }
 repository = { workspace = true }
 
 [dependencies]
+geometry-core = { workspace = true }
+renderer-cache = { workspace = true }
 renderer-core = { workspace = true }
+renderer-text = { workspace = true }
+
+raw-window-handle = { workspace = true }
+rayon = "1"
+rustc-hash = { workspace = true }
+smallvec = { workspace = true }
 # Without `kms`: presenting to a bare DRM device is not a surface Telar ever asks for, and it carries drm + rustix.
 softbuffer = { version = "0.4", default-features = false, features = [
     "x11",
@@ -19,16 +27,9 @@ softbuffer = { version = "0.4", default-features = false, features = [
     "wayland",
     "wayland-dlopen",
 ] }
-raw-window-handle = { workspace = true }
 tiny-skia = { workspace = true, features = ["simd"] }
-renderer-text = { workspace = true }
-geometry-core = { workspace = true }
-rustc-hash = { workspace = true }
-wide = { workspace = true }
-rayon = "1"
-smallvec = { workspace = true }
 tracing = { workspace = true }
-renderer-cache = { workspace = true }
+wide = { workspace = true }
 
 [target.'cfg(target_os = "android")'.dependencies]
 ndk = { version = "0.9", features = ["nativewindow"] }
@@ -39,11 +40,7 @@ rustix = { version = "1.1", features = ["fs"] }
 wayland-client = "0.31"
 
 [dev-dependencies]
-criterion = { version = "0.8.2", default-features = false, features = [
-    "cargo_bench_support",
-] }
 geometry-core = { workspace = true }
-image = { version = "0.25.10", default-features = false, features = ["png"] }
 layout-core = { workspace = true }
 platform-core = { workspace = true }
 platform-headless = { workspace = true }
@@ -51,6 +48,9 @@ reactive-core = { workspace = true }
 ui-components = { workspace = true }
 ui-core = { workspace = true }
 ui-tree = { workspace = true }
+
+criterion = { workspace = true }
+image = { workspace = true, features = ["png"] }
 
 [[bench]]
 name = "render_frame"

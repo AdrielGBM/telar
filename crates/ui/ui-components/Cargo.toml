@@ -11,7 +11,6 @@ license = { workspace = true }
 repository = { workspace = true }
 
 [dependencies]
-web-time = { workspace = true }
 geometry-core = { workspace = true }
 layout-core = { workspace = true }
 motion-core = { workspace = true }
@@ -21,6 +20,8 @@ renderer-core = { workspace = true }
 telar-macros = { workspace = true }
 theme-core = { workspace = true }
 ui-core = { workspace = true }
+
+web-time = { workspace = true }
 
 [dev-dependencies]
 renderer-text = { workspace = true }

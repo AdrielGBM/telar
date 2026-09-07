@@ -12,6 +12,7 @@ repository = { workspace = true }
 
 [dependencies]
 geometry-core = { workspace = true }
+
 rustc-hash = { workspace = true }
 taffy = "0.14.0"
 thiserror = { workspace = true }

@@ -14,15 +14,13 @@ repository = { workspace = true }
 geometry-core = { workspace = true }
 platform-core = { workspace = true }
 renderer-core = { workspace = true }
+
 rustc-hash = { workspace = true }
 tracing = { workspace = true }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 wasm-bindgen = { workspace = true }
-
-[target.'cfg(target_arch = "wasm32")'.dependencies.web-sys]
-workspace = true
-features = [
+web-sys = { workspace = true, features = [
     "CanvasRenderingContext2d",
     "HtmlCanvasElement",
     "ImageData",
@@ -43,8 +41,10 @@ features = [
     "Text",
     "Window",
     "Location",
-]
+] }
 
 [target.'cfg(target_arch = "wasm32")'.dev-dependencies]
-layout-core.workspace = true
-wasm-bindgen-test.workspace = true
+layout-core = { workspace = true }
+
+# Pinned to the release whose glue and `wasm-bindgen-test-runner` match the `wasm-bindgen` pin in [workspace.dependencies]. The two move together.
+wasm-bindgen-test = "=0.3.77"
