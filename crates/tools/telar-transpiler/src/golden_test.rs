@@ -139,10 +139,24 @@ fn first_diff(expected: &str, actual: &str) -> String {
     )
 }
 
+/// The shape of the generated code, paired with the number that declares which `telar` can compile it.
+///
+/// [`telar_transpiler::BUILD_ARTIFACT_FORMAT`] is what lets one installed CLI serve projects pinning different `telar` versions: same format means compatible, whatever the versions say. It is *declared*, not derived — a digest cannot tell a cosmetic rewrite from one that reaches for an API an older `telar` never had, and deriving it from the output would refuse both alike, which is the one failure a matching CLI has to be installed to clear.
+///
+/// So the digest does not decide; it makes the decision unskippable. Any change to the corpus lands here beside the current format, and updating this file is where someone has to answer whether the format moves with it.
+fn render_shape(corpus: &str) -> String {
+    format!(
+        "# The generated code changed if this digest did. When it does, decide whether an older `telar` can still compile the new shape: if it cannot, bump BUILD_ARTIFACT_FORMAT before updating this.\nBUILD_ARTIFACT_FORMAT = {}\ncorpus digest = {}\n",
+        telar_transpiler::BUILD_ARTIFACT_FORMAT,
+        telar_transpiler::content_hash(corpus.as_bytes())
+    )
+}
+
 #[test]
 fn generated_rust_and_source_maps_match_the_snapshots() {
     let mut failures = Vec::new();
     let mut covered = 0usize;
+    let mut corpus = String::new();
 
     for project in PROJECTS {
         for file in transpile_project(project) {
@@ -154,9 +168,15 @@ fn generated_rust_and_source_maps_match_the_snapshots() {
                 &render_map(&file.source, &source),
                 &mut failures,
             );
+            corpus.push_str(&file.source.rust_code);
             covered += 1;
         }
     }
+    check(
+        &golden_dir().join("shape.txt"),
+        &render_shape(&corpus),
+        &mut failures,
+    );
 
     assert!(
         covered >= 39,
