@@ -41,6 +41,28 @@ pub(crate) struct Report {
 }
 
 impl Report {
+    /// Adds the `.rsx` semantic checks for one file — a style class nobody declared, an i18n key the catalogue does not hold.
+    ///
+    /// They arrive here rather than in a report of their own so the terminal draws one frame per diagnostic whatever found it, and so `has_errors` counts them: an error the editor shows and the build ignores is the disagreement this exists to end. No underline, because the check spans the whole line.
+    pub(crate) fn add_semantic(
+        &mut self,
+        source: &std::path::Path,
+        diagnostics: Vec<telar_diagnostics::Diagnostic>,
+    ) {
+        self.projected
+            .extend(diagnostics.into_iter().map(|d| Projected {
+                source: source.to_path_buf(),
+                line: d.span.line,
+                underline: None,
+                level: match d.severity {
+                    telar_diagnostics::Severity::Error => "error".to_string(),
+                    telar_diagnostics::Severity::Warning => "warning".to_string(),
+                },
+                message: d.message,
+                notes: Vec::new(),
+            }));
+    }
+
     pub(crate) fn is_empty(&self) -> bool {
         self.projected.is_empty() && self.passthrough.is_empty()
     }

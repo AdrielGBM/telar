@@ -12,6 +12,7 @@ repository = { workspace = true }
 
 [dependencies]
 telar-baker = { workspace = true }
+telar-diagnostics = { workspace = true }
 telar-parser = { workspace = true }
 telar-project = { workspace = true }
 telar-transpiler = { workspace = true, features = ["transpile"] }
@@ -23,3 +24,4 @@ notify = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 toml = { workspace = true }
+

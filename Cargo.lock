@@ -792,6 +792,7 @@ dependencies = [
  "serde",
  "serde_json",
  "telar-baker",
+ "telar-diagnostics",
  "telar-parser",
  "telar-project",
  "telar-transpiler",

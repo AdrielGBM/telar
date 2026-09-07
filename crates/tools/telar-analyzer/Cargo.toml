@@ -16,7 +16,7 @@ repository = { workspace = true }
 # The same baker `cargo telar bake` runs. The editor has to answer for a `src:"…"` before any build has,
 # so it bakes for itself rather than showing an error the user cannot act on from where they are.
 telar-baker = { workspace = true }
-telar-diagnostics = { workspace = true }
+telar-diagnostics = { workspace = true, features = ["lsp"] }
 telar-parser = { workspace = true }
 telar-project = { workspace = true }
 telar-transpiler = { workspace = true, features = ["transpile"] }

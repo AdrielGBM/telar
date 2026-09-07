@@ -5,6 +5,7 @@
 #![warn(rustdoc::broken_intra_doc_links)]
 
 mod diagnostic;
+#[cfg(feature = "lsp")]
 mod lsp;
 mod semantic;
 

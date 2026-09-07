@@ -12,7 +12,14 @@ readme = { workspace = true }
 license = { workspace = true }
 repository = { workspace = true }
 
+[features]
+default = []
+
+## Converting a diagnostic into the LSP shape an editor reads. Off by default: the terminal reports the same
+## diagnostics and has no use for `lsp-types`, and this crate is on `cargo-telar`'s path now.
+lsp = ["dep:lsp-types"]
+
 [dependencies]
 telar-parser = { workspace = true }
 
-lsp-types = { workspace = true }
+lsp-types = { workspace = true, optional = true }
