@@ -37,7 +37,7 @@ mod catalog;
 #[cfg(feature = "dir")]
 mod dir;
 mod disk_cache;
-#[cfg(all(feature = "http", not(target_arch = "wasm32")))]
+#[cfg(feature = "http")]
 mod http;
 #[cfg(feature = "image")]
 mod image;
@@ -49,7 +49,7 @@ pub use catalog::CatalogDecoder;
 #[cfg(feature = "dir")]
 pub use dir::DirTransport;
 pub use disk_cache::DiskCache;
-#[cfg(all(feature = "http", not(target_arch = "wasm32")))]
+#[cfg(feature = "http")]
 pub use http::HttpTransport;
 #[cfg(feature = "image")]
 pub use image::ImageDecoder;

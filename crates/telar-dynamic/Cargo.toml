@@ -41,12 +41,12 @@ catalog = ["i18n-core/runtime-catalog"]
 
 #! ## Sources
 
-## Bytes read from a directory on disk. **Nothing behind it yet** — the name is reserved so that turning it
-## on later is not a manifest change; `DirTransport` is unwritten, and enabling this today gets you nothing.
+## Bytes read from a directory on disk, through `DirTransport`. Adds no dependency: the whole transport is
+## `std`, and the two-layer check that keeps an id from escaping the root is the only thing in it.
 dir = []
 
-## Bytes fetched over HTTP. Native only for now: the browser body is `fetch`, and it is not written yet, so
-## a wasm build that names this fails to compile with a message that says so.
+## Bytes fetched over HTTP: `ureq` off the web, the browser's own `fetch` on it. Which client a target uses
+## is not a choice an application should have to make, so both live behind this one name.
 http = [
     "dep:ureq",
     "dep:js-sys",
