@@ -58,35 +58,11 @@ pub(crate) fn run_fmt_cmd(args: FmtArgs) {
 
 /// Every `.rsx` and `.rs` file under `root`, skipping what is not source: `target/`, the generated `.telar/` tree (formatting it would be undone by the next build) and any dot-directory.
 fn collect(root: &Path, out: &mut Vec<PathBuf>) {
-    if root.is_file() {
-        if is_source(root) {
-            out.push(root.to_path_buf());
-        }
-        return;
-    }
-    let Ok(entries) = std::fs::read_dir(root) else {
-        return;
-    };
-    for entry in entries.flatten() {
-        let path = entry.path();
-        let name = entry.file_name();
-        let name = name.to_string_lossy();
-        if path.is_dir() {
-            if name.starts_with('.') || name == "target" {
-                continue;
-            }
-            collect(&path, out);
-        } else if is_source(&path) {
-            out.push(path);
-        }
-    }
-}
-
-fn is_source(path: &Path) -> bool {
-    matches!(
-        path.extension().and_then(|e| e.to_str()),
-        Some("rsx") | Some("rs")
-    )
+    out.extend(telar_project::collect_files_by_ext(
+        root,
+        &["rsx", "rs"],
+        &|name| name != "target" && !name.starts_with('.'),
+    ));
 }
 
 /// Formats one file, reporting whether it changed. `check` reads and compares without writing.

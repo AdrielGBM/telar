@@ -8,13 +8,18 @@ use std::path::{Path, PathBuf};
 ///
 /// A `root` that names a file is that file, if it matches — so a caller taking paths from a command line does not need a second walk for the case where the user pointed at one thing.
 pub fn collect_files_by_ext(
-    dir: &Path,
-    extension: &str,
+    root: &Path,
+    extensions: &[&str],
     keep_dir: &dyn Fn(&str) -> bool,
 ) -> Vec<PathBuf> {
+    fn matches(path: &Path, extensions: &[&str]) -> bool {
+        path.extension()
+            .and_then(|e| e.to_str())
+            .is_some_and(|ext| extensions.contains(&ext))
+    }
     fn walk(
         dir: &Path,
-        extension: &str,
+        extensions: &[&str],
         keep_dir: &dyn Fn(&str) -> bool,
         result: &mut Vec<PathBuf>,
     ) {
@@ -29,28 +34,34 @@ pub fn collect_files_by_ext(
                     .and_then(|n| n.to_str())
                     .is_some_and(|name| !keep_dir(name));
                 if !skip {
-                    walk(&path, extension, keep_dir, result);
+                    walk(&path, extensions, keep_dir, result);
                 }
-            } else if path.extension().and_then(|e| e.to_str()) == Some(extension) {
+            } else if matches(&path, extensions) {
                 result.push(path);
             }
         }
     }
 
+    if root.is_file() {
+        return match matches(root, extensions) {
+            true => vec![root.to_path_buf()],
+            false => Vec::new(),
+        };
+    }
     let mut result = Vec::new();
-    walk(dir, extension, keep_dir, &mut result);
+    walk(root, extensions, keep_dir, &mut result);
     result.sort();
     result
 }
 
 /// Every `.rsx` under `dir`, recursively.
 pub fn find_rsx_files(dir: &Path) -> Vec<PathBuf> {
-    collect_files_by_ext(dir, "rsx", &|_| true)
+    collect_files_by_ext(dir, &["rsx"], &|_| true)
 }
 
 /// Every `.rsx` under a whole workspace, skipping what a build produced rather than a person: `target/` and any dot-directory (which is where the generated `.telar/` tree lives). [`find_rsx_files`] descends into everything, which is right for one crate's `src/` and ruinous one directory up — a workspace root holds a `target/` that dwarfs the sources, and this runs on every completion request.
 pub fn find_rsx_files_in_tree(root: &Path) -> Vec<PathBuf> {
-    collect_files_by_ext(root, "rsx", &|name| {
+    collect_files_by_ext(root, &["rsx"], &|name| {
         name != "target" && !name.starts_with('.')
     })
 }
@@ -237,10 +248,10 @@ fn is_rust_module_file(path: &Path) -> bool {
 
 /// Whether a directory earns a module node: it holds a declarable `.rs`, a `mod.rs`, or a `.rsx` — a directory of nothing but markup is still a module once its `.rsx` files live where they sit.
 fn dir_has_rust_module(dir: &Path) -> bool {
-    collect_files_by_ext(dir, "rs", &|_| true)
+    collect_files_by_ext(dir, &["rs"], &|_| true)
         .iter()
         .any(|p| is_rust_module_file(p) || p.file_name().and_then(|n| n.to_str()) == Some("mod.rs"))
-        || !collect_files_by_ext(dir, "rsx", &|_| true).is_empty()
+        || !collect_files_by_ext(dir, &["rsx"], &|_| true).is_empty()
 }
 
 /// Whether the `mod.rs` invokes the macro that places its own `.rsx` siblings.
@@ -252,7 +263,7 @@ fn mod_rs_places_its_own(mod_rs: &Path) -> bool {
 
 /// Whether any `.rsx` sits under `dir`, which is what makes a directory with no `mod.rs` worth declaring even when hand-written modules are the crate's own business.
 fn dir_has_rsx(dir: &Path) -> bool {
-    !collect_files_by_ext(dir, "rsx", &|_| true).is_empty()
+    !collect_files_by_ext(dir, &["rsx"], &|_| true).is_empty()
 }
 
 /// Where the transpiler wrote a `.rsx`'s Rust. The generated tree mirrors the source tree, and `flat_prefix` is that same path with `__` between the segments, so the two agree by construction.

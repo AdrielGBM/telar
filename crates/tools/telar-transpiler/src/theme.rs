@@ -23,7 +23,7 @@ fn theme_type_in_source(package_dir: &Path) -> Option<String> {
 fn invocation_files(src_dir: &Path) -> Vec<PathBuf> {
     let mut files = vec![src_dir.join("lib.rs"), src_dir.join("main.rs")];
     files.extend(
-        telar_project::collect_files_by_ext(src_dir, "rs", &|name| {
+        telar_project::collect_files_by_ext(src_dir, &["rs"], &|name| {
             name != "target" && name != ".telar"
         })
         .into_iter()

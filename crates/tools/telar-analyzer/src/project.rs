@@ -86,7 +86,7 @@ fn scan_project_theme_fields(root: &Path, type_name: &str) -> HashSet<String> {
 
 fn collect_rs_files(dir: &Path) -> Vec<PathBuf> {
     // Unlike the transpiler's `.rsx` walk, this prunes build output (`target`, `.rsx`) so theme scanning stays fast and skips generated code.
-    telar_project::collect_files_by_ext(dir, "rs", &|name| name != "target" && name != ".telar")
+    telar_project::collect_files_by_ext(dir, &["rs"], &|name| name != "target" && name != ".telar")
 }
 
 /// Scans `source` for `Color` fields inside the `type_name` theme struct, invoking `on_field` with each field name and its 0-based line number in `source`.

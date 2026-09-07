@@ -152,7 +152,7 @@ fn catalog_sources(package_root: &Path) -> Vec<(String, PathBuf)> {
     }
     if !cfg.scan.is_empty() {
         for file in
-            telar_project::collect_files_by_ext(&package_root.join("src"), "toml", &|_| true)
+            telar_project::collect_files_by_ext(&package_root.join("src"), &["toml"], &|_| true)
         {
             let in_scan_dir = file
                 .parent()
@@ -181,7 +181,7 @@ fn discover_root_dir(root: &Path, sources: &mut Vec<(String, PathBuf)>) {
             continue;
         };
         if path.is_dir() {
-            for file in telar_project::collect_files_by_ext(&path, "toml", &|_| true) {
+            for file in telar_project::collect_files_by_ext(&path, &["toml"], &|_| true) {
                 sources.push((name.to_string(), file));
             }
         } else if path.extension().and_then(|e| e.to_str()) == Some("toml")
