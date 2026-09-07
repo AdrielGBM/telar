@@ -4,8 +4,15 @@
 //!
 //! Writing is separate from transpiling ([`write_package`] from [`transpile_package`]) because the golden harness compares output it must never put on disk, and the macro needs the set of paths it wrote to tell live output from what a deleted `.rsx` left behind.
 
+mod artifact;
+
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
+
+pub use artifact::{
+    BUILD_ARTIFACT_FORMAT, BuildEntry, BuildIndex, read_build_index, relative_source,
+    write_build_index,
+};
 
 use crate::assets::AssetContext;
 use crate::codegen::{TranspileInput, TranspiledSource, transpile};
@@ -36,6 +43,14 @@ impl BuildFlavour {
         }
     }
 
+    /// The index this flavour writes beside its directory, naming the flavour so the two never read each other's.
+    pub fn index_filename(self) -> &'static str {
+        match self {
+            Self::Plain => "build.json",
+            Self::Hot => "build-hot.json",
+        }
+    }
+
     pub fn is_hot(self) -> bool {
         matches!(self, Self::Hot)
     }
@@ -61,6 +76,8 @@ pub struct PackageOptions<'a> {
 #[derive(Debug)]
 pub struct GeneratedFile {
     pub rsx_path: PathBuf,
+    /// Content hash of the source this was produced from — recorded here rather than re-read later, so the artifact cannot claim an output belongs to a file it never saw.
+    pub source_hash: String,
     /// Output path relative to the generated directory, mirroring the file's place under `src/`.
     pub rel_out: PathBuf,
     pub source: TranspiledSource,
@@ -128,6 +145,7 @@ fn transpile_one(
         line: e.line,
         message: e.message.clone(),
     })?;
+    let source_hash = crate::content_hash(source.as_bytes());
     let component_name = crate::component_name(&rsx_path);
     let source = transpile(TranspileInput {
         document: &document,
@@ -142,6 +160,7 @@ fn transpile_one(
     })?;
     Ok(GeneratedFile {
         rsx_path,
+        source_hash,
         rel_out,
         source,
     })
@@ -177,6 +196,38 @@ pub fn write_package(
         written.insert(out_path);
     }
     Ok(written)
+}
+
+/// The index describing what a transpile produced, for a reader that would rather wire the output than produce it again.
+///
+/// Written by `cargo telar transpile` beside the generated directory; read by the macro, which compares it against the sources on disk before trusting a line of it.
+pub fn build_index(
+    files: &[GeneratedFile],
+    src_dir: &Path,
+    theme_type: Option<&str>,
+    producer: &str,
+    telar_version: &str,
+) -> BuildIndex {
+    BuildIndex {
+        format: BUILD_ARTIFACT_FORMAT,
+        producer: producer.to_string(),
+        telar_version: telar_version.to_string(),
+        theme: theme_type.map(str::to_string),
+        uses_assets: files
+            .iter()
+            .any(|file| file.source.rust_code.contains(crate::ASSETS_MODULE)),
+        entries: files
+            .iter()
+            .filter_map(|file| {
+                Some(BuildEntry {
+                    source: relative_source(&file.rsx_path, src_dir)?,
+                    hash: file.source_hash.clone(),
+                    output_hash: crate::content_hash(file.source.rust_code.as_bytes()),
+                    previews: !file.source.preview_names.is_empty(),
+                })
+            })
+            .collect(),
+    }
 }
 
 fn write_error(path: &Path, result: std::io::Result<()>) -> Result<(), PackageError> {

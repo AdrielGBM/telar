@@ -41,8 +41,9 @@ pub use discovery::{
 pub use error::TranspileError;
 pub use paths::{find_ancestor_dir, find_telar_root, find_workspace_root, write_if_changed_atomic};
 pub use project::{
-    BuildFlavour, GeneratedFile, PackageError, PackageOptions, generated_dir, transpile_package,
-    write_package,
+    BUILD_ARTIFACT_FORMAT, BuildEntry, BuildFlavour, BuildIndex, GeneratedFile, PackageError,
+    PackageOptions, build_index, generated_dir, read_build_index, transpile_package,
+    write_build_index, write_package,
 };
 pub use registry::{
     AttrSpec, ROLE_VALUES, ValueKind, attr_doc, attr_spec, builtin_tags, color_attr_keys,

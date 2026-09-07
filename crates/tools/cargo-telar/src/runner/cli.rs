@@ -31,6 +31,8 @@ pub(crate) enum TelarCommand {
     Check(CheckArgs),
     /// Bake every `.rsx` asset reference into `.telar/assets.rs`, so no project build runs the baker itself
     Bake,
+    /// Transpile every `.rsx` into `.telar/build/`, so a project build wires the result instead of producing it
+    Transpile,
     /// Check the development environment
     Doctor,
     /// Format every `.rsx` and `.rs` file in the project

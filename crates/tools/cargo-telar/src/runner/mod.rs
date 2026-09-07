@@ -15,6 +15,7 @@ mod fmt;
 mod migrate;
 mod new;
 mod package;
+mod transpile;
 mod watch;
 mod web_dev;
 
@@ -31,6 +32,7 @@ use fmt::run_fmt_cmd;
 use migrate::run_migrate_cmd;
 use new::run_new_cmd;
 use package::{build_appimage, build_deb, build_desktop_dir, build_dmg, build_nsis, build_web};
+use transpile::transpile_workspace;
 use watch::{HotLoopOpts, HotMode, run_hot_loop};
 use web_dev::run_web_dev;
 
@@ -38,7 +40,7 @@ use web_dev::run_web_dev;
 pub fn run(args: Vec<String>) {
     let cli = Cli::parse_from(std::iter::once("cargo-telar".to_string()).chain(args));
     let command = cli.command.unwrap_or_else(default_dev_command);
-    // The one place `cargo telar` bakes, rather than at each of the nine sites that spawn `cargo`; the four excluded here compile nothing.
+    // The one place `cargo telar` prepares a build, rather than at each of the nine sites that spawn `cargo`; the five excluded here compile nothing. Bake first: a `src:"…"` transpiles against the artifact the bake writes.
     if !matches!(
         command,
         TelarCommand::New(_)
@@ -46,8 +48,10 @@ pub fn run(args: Vec<String>) {
             | TelarCommand::Fmt(_)
             | TelarCommand::Migrate(_)
             | TelarCommand::Bake
+            | TelarCommand::Transpile
     ) {
         bake_workspace();
+        transpile_workspace();
     }
     match command {
         TelarCommand::New(args) => run_new_cmd(args),
@@ -57,6 +61,10 @@ pub fn run(args: Vec<String>) {
         TelarCommand::Test(args) => run_test_cmd(args),
         TelarCommand::Check(args) => run_check_cmd(args),
         TelarCommand::Bake => bake_workspace(),
+        TelarCommand::Transpile => {
+            bake_workspace();
+            transpile_workspace()
+        }
         TelarCommand::Doctor => run_doctor_cmd(),
         TelarCommand::Fmt(args) => run_fmt_cmd(args),
         TelarCommand::Migrate(args) => run_migrate_cmd(args),
