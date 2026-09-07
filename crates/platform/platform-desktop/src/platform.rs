@@ -17,14 +17,16 @@ use platform_winit::{SurfaceIntent, TouchDrag, WinitWindow, map_window_event};
 // Winit user-event payloads injected from background threads (via EventLoopProxy) to wake the loop.
 enum UserEvent {
     // Routed through the loop rather than answered where it arrives: AccessKit calls its handlers on a platform thread, and the UI that has to answer is `!Send`.
+    #[cfg(feature = "a11y")]
     Accessibility(accesskit_winit::Event),
     // Linux only: the portal watch sends it, where winit reports nothing. Elsewhere winit delivers `ThemeChanged` itself.
-    #[cfg(target_os = "linux")]
+    #[cfg(all(target_os = "linux", feature = "system-theme"))]
     ColorScheme(bool),
     // Redraw every live surface so each one's `on_frame` runs and drains its channels, wherever the waking app's content currently lives.
     Wake,
 }
 
+#[cfg(feature = "a11y")]
 impl From<accesskit_winit::Event> for UserEvent {
     fn from(event: accesskit_winit::Event) -> Self {
         UserEvent::Accessibility(event)
@@ -57,12 +59,16 @@ struct WinitRunner<H: EventHandler<WinitWindow>> {
     // True only on `WaitUntil` timer expiry, so keepalive redraws do not fire on every event-queue drain.
     timer_has_fired: bool,
     // Built at resume, before the window is shown, which the adapter requires. The tree behind it is assembled only while an assistive technology is attached.
+    #[cfg(feature = "a11y")]
     a11y: Option<accesskit_winit::Adapter>,
+    #[cfg(feature = "a11y")]
     a11y_proxy: winit::event_loop::EventLoopProxy<UserEvent>,
     // The nodes last published, so a request naming one can be mapped back to the control it means.
+    #[cfg(feature = "a11y")]
     a11y_nodes: Vec<platform_core::AccessNode>,
 }
 
+#[cfg(feature = "a11y")]
 impl<H: EventHandler<WinitWindow>> WinitRunner<H> {
     /// Answers a screen reader, on the thread the UI actually lives on.
     fn on_accessibility(&mut self, event: accesskit_winit::WindowEvent) {
@@ -99,8 +105,9 @@ impl<H: EventHandler<WinitWindow>> WinitRunner<H> {
 impl<H: EventHandler<WinitWindow>> ApplicationHandler<UserEvent> for WinitRunner<H> {
     fn user_event(&mut self, _event_loop: &ActiveEventLoop, event: UserEvent) {
         match event {
+            #[cfg(feature = "a11y")]
             UserEvent::Accessibility(event) => self.on_accessibility(event.window_event),
-            #[cfg(target_os = "linux")]
+            #[cfg(all(target_os = "linux", feature = "system-theme"))]
             UserEvent::ColorScheme(dark) => {
                 if let Some(window) = &self.window {
                     self.handler
@@ -148,11 +155,14 @@ impl<H: EventHandler<WinitWindow>> ApplicationHandler<UserEvent> for WinitRunner
             return;
         }
         // Attached before the window is ever visible, which the adapter requires — hence creating it hidden. The proxy is what routes a reader's requests back onto this thread.
-        self.a11y = Some(accesskit_winit::Adapter::with_event_loop_proxy(
-            event_loop,
-            &window.0,
-            self.a11y_proxy.clone(),
-        ));
+        #[cfg(feature = "a11y")]
+        {
+            self.a11y = Some(accesskit_winit::Adapter::with_event_loop_proxy(
+                event_loop,
+                &window.0,
+                self.a11y_proxy.clone(),
+            ));
+        }
         window.0.set_visible(true);
         window.request_redraw();
         self.window = Some(window);
@@ -164,9 +174,11 @@ impl<H: EventHandler<WinitWindow>> ApplicationHandler<UserEvent> for WinitRunner
             return;
         };
         // The adapter tracks the window itself, so it sees the event before anything consumes it.
+        #[cfg(feature = "a11y")]
         if let Some(adapter) = &mut self.a11y {
             adapter.process_event(&window.0, &event);
         }
+        #[cfg(feature = "a11y")]
         let redrawn = matches!(event, WindowEvent::RedrawRequested);
         let outcome = dispatch_window_event(
             &mut self.handler,
@@ -178,6 +190,7 @@ impl<H: EventHandler<WinitWindow>> ApplicationHandler<UserEvent> for WinitRunner
             event,
         );
         // After the frame rather than before, so what is announced is the frame that was drawn.
+        #[cfg(feature = "a11y")]
         if redrawn {
             self.publish_accessibility();
         }
@@ -284,8 +297,11 @@ impl Platform for WinitPlatform {
             modifiers: platform_core::ModifiersState::default(),
             touch: TouchDrag::default(),
             timer_has_fired: false,
+            #[cfg(feature = "a11y")]
             a11y: None,
+            #[cfg(feature = "a11y")]
             a11y_proxy: self.event_loop.create_proxy(),
+            #[cfg(feature = "a11y")]
             a11y_nodes: Vec::new(),
         };
         // The app-facing redraw waker wakes the loop through this proxy rather than by holding a window, so caching it cannot pin a window open.
@@ -294,7 +310,7 @@ impl Platform for WinitPlatform {
             let _ = wake_proxy.send_event(UserEvent::Wake);
         }));
         // winit has no Linux integration, so a portal watch thread pushes changes back through the loop. Elsewhere winit delivers `ThemeChanged` natively.
-        #[cfg(target_os = "linux")]
+        #[cfg(all(target_os = "linux", feature = "system-theme"))]
         {
             let proxy = self.event_loop.create_proxy();
             crate::color_scheme::spawn_watch(move |dark| {
@@ -310,11 +326,11 @@ impl Platform for WinitPlatform {
 // winit's native answer on Windows and macOS, falling back to the freedesktop portal on Linux, where winit always reports `None`.
 fn initial_prefers_dark(window: &WinitWindow) -> Option<bool> {
     let winit = window.prefers_dark();
-    #[cfg(target_os = "linux")]
+    #[cfg(all(target_os = "linux", feature = "system-theme"))]
     {
         winit.or_else(crate::color_scheme::portal_prefers_dark)
     }
-    #[cfg(not(target_os = "linux"))]
+    #[cfg(not(all(target_os = "linux", feature = "system-theme")))]
     {
         winit
     }
@@ -369,11 +385,15 @@ struct SurfaceRunner {
     // A dynamically opened window defers `on_resume` until its first event, when the compositor has given it its real size: rendering before that would size the surface and the layout differently.
     resumed: bool,
     // Built before the window is shown, with the tree behind it assembled only while something is listening.
+    #[cfg(feature = "a11y")]
     a11y: Option<accesskit_winit::Adapter>,
+    #[cfg(feature = "a11y")]
     a11y_nodes: Vec<platform_core::AccessNode>,
+    #[cfg(feature = "a11y")]
     title: String,
 }
 
+#[cfg(feature = "a11y")]
 impl SurfaceRunner {
     /// Hands this surface's tree over, if something is listening. The multi-surface counterpart of [`WinitRunner::publish_accessibility`] — a detached tab is a window like any other, and a reader that can see the first one and not the second is reporting the shell's plumbing rather than the app.
     fn publish_accessibility(&mut self) {
@@ -414,6 +434,7 @@ struct WinitMultiRunner {
     pending: Vec<(SurfaceId, WindowConfig)>,
     surfaces: HashMap<WindowId, SurfaceRunner>,
     created: bool,
+    #[cfg(feature = "a11y")]
     a11y_proxy: winit::event_loop::EventLoopProxy<UserEvent>,
     // True only on `WaitUntil` timer expiry, so keepalive redraws fire only on timer ticks.
     timer_has_fired: bool,
@@ -438,6 +459,7 @@ impl WinitMultiRunner {
         };
         let window_id = window.0.id();
         // Attached while the window is still invisible, because that is what the adapter requires.
+        #[cfg(feature = "a11y")]
         let a11y = accesskit_winit::Adapter::with_event_loop_proxy(
             event_loop,
             &window.0,
@@ -453,8 +475,11 @@ impl WinitMultiRunner {
             pace: None,
             close_flag,
             resumed: false,
+            #[cfg(feature = "a11y")]
             a11y: Some(a11y),
+            #[cfg(feature = "a11y")]
             a11y_nodes: Vec::new(),
+            #[cfg(feature = "a11y")]
             title: config.title.clone(),
         };
         if resume_now {
@@ -473,6 +498,7 @@ impl ApplicationHandler<UserEvent> for WinitMultiRunner {
     fn user_event(&mut self, _event_loop: &ActiveEventLoop, event: UserEvent) {
         match event {
             // Every surface carries its own adapter, so a request names the one it came from.
+            #[cfg(feature = "a11y")]
             UserEvent::Accessibility(event) => {
                 use accesskit_winit::WindowEvent as AkEvent;
                 let Some(surface) = self.surfaces.get_mut(&event.window_id) else {
@@ -492,7 +518,7 @@ impl ApplicationHandler<UserEvent> for WinitMultiRunner {
                     AkEvent::AccessibilityDeactivated => surface.a11y_nodes.clear(),
                 }
             }
-            #[cfg(target_os = "linux")]
+            #[cfg(all(target_os = "linux", feature = "system-theme"))]
             UserEvent::ColorScheme(dark) => {
                 // This callback is not inside a shared batch bracket.
                 for surface in self.surfaces.values_mut() {
@@ -604,8 +630,10 @@ impl ApplicationHandler<UserEvent> for WinitMultiRunner {
         }
         // A cheap Arc bump, so the window borrow does not conflict with the mutable handler borrows.
         let window = surface.window.clone();
+        #[cfg(feature = "a11y")]
         let redrawn = matches!(event, WindowEvent::RedrawRequested);
         // The adapter tracks the window itself, so it sees the event first.
+        #[cfg(feature = "a11y")]
         if let Some(adapter) = &mut surface.a11y {
             adapter.process_event(&window.0, &event);
         }
@@ -628,6 +656,7 @@ impl ApplicationHandler<UserEvent> for WinitMultiRunner {
         surface.pace = paced.as_ref().copied().unwrap_or(None);
         let panicked = dispatched.is_err() || paced.is_err();
         // After the frame rather than before, so what is announced is the frame that was drawn.
+        #[cfg(feature = "a11y")]
         if redrawn && !panicked {
             surface.publish_accessibility();
         }
@@ -681,6 +710,7 @@ impl MultiSurfacePlatform for WinitPlatform {
             pending: surfaces,
             surfaces: HashMap::new(),
             created: false,
+            #[cfg(feature = "a11y")]
             a11y_proxy: self.event_loop.create_proxy(),
             timer_has_fired: false,
         };
@@ -690,7 +720,7 @@ impl MultiSurfacePlatform for WinitPlatform {
             let _ = wake_proxy.send_event(UserEvent::Wake);
         }));
         // Delivered to every surface.
-        #[cfg(target_os = "linux")]
+        #[cfg(all(target_os = "linux", feature = "system-theme"))]
         {
             let proxy = self.event_loop.create_proxy();
             crate::color_scheme::spawn_watch(move |dark| {

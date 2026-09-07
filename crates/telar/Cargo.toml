@@ -41,7 +41,15 @@ default = ["desktop"]
 
 ## A native window on Linux, macOS and Windows, drawn by the GPU where there is one and the CPU where
 ## there is not. Enabled by `default`.
-desktop = ["desktop-bare", "hardware", "software"]
+desktop = [
+    "desktop-bare",
+    "hardware",
+    "software",
+    "a11y",
+    "clipboard-wayland",
+    "dialogs",
+    "system-theme",
+]
 
 ## The terminal the app was launched from, drawn through `renderer-tui`. No window, no GPU and no glyph
 ## shaper.
@@ -99,6 +107,31 @@ runtime-catalog = ["i18n-core/runtime-catalog"]
 ## Filesystem watching delivered on the UI thread. Opt-in: an application that reloads nothing should not
 ## link a platform file-notification backend.
 watch = ["runtime", "dep:notify"]
+
+#! ## Desktop extras
+#!
+#! Every one of these is in `desktop`, so a desktop build has the lot and nobody has to ask. They are
+#! nameable so that `default-features = false` can finally leave one out — a kiosk with no file picker, a
+#! packager who knows the target has XWayland — and for no other reason. Each is inert off the desktop.
+
+## Screen-reader support, over AccessKit and the platform's own accessibility bus. The heaviest of the four
+## by some way, and still the last one to turn off: what it costs is build time, and what it buys is an
+## application a blind user can operate at all.
+a11y = ["platform-desktop?/a11y"]
+
+## The system clipboard: X11 on Linux, the native one on Windows and macOS.
+clipboard = ["platform-desktop?/clipboard"]
+
+## The clipboard on a Wayland session with no XWayland behind it, which X11's cannot reach. Costs
+## `wl-clipboard-rs` and its tree; a build that knows XWayland is there can ask for plain `clipboard`.
+clipboard-wayland = ["clipboard", "platform-desktop?/clipboard-wayland"]
+
+## Native file pickers: the XDG portal on Linux, the OS panel elsewhere.
+dialogs = ["platform-desktop?/dialogs"]
+
+## Following the OS light/dark preference. Only ever compiled on Linux, over the freedesktop portal —
+## Windows and macOS answer through winit and need no feature for it.
+system-theme = ["platform-desktop?/system-theme"]
 
 #! ## Set by the tooling
 #!

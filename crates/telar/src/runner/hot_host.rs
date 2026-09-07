@@ -31,7 +31,9 @@ pub fn run_hot_reload_host(
     };
     let hot_rx = crate::hot::listen_hot_reload(port);
     let paths: Arc<dyn services_core::AppPathsProvider> = Arc::new(DesktopPathsProvider);
+    #[cfg(feature = "dialogs")]
     platform_desktop::DesktopFileDialogs::install();
+    #[cfg(feature = "clipboard")]
     platform_desktop::DesktopClipboard::install();
     let prefs = UserPrefs::load(app_name, paths.as_ref());
     let backend = prefs.backend.unwrap_or_else(config::compile_time_backend);

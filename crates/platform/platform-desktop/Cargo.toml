@@ -10,15 +10,28 @@ readme = "README.md"
 license = { workspace = true }
 repository = { workspace = true }
 
+[features]
+# All four on, so a desktop build is as complete as it has always been. They exist to be nameable, not to be off: what changes is that `default-features = false` finally leaves something out.
+default = ["a11y", "clipboard-wayland", "dialogs", "system-theme"]
+a11y = ["dep:accesskit", "dep:accesskit_winit"]
+clipboard = ["dep:arboard"]
+# X11's clipboard reaches a Wayland session only through XWayland. This covers a compositor without it, at the price of `wl-clipboard-rs`; a build that knows XWayland is there can keep plain `clipboard`.
+clipboard-wayland = ["clipboard", "arboard/wayland-data-control"]
+dialogs = ["dep:rfd"]
+# Linux only, and the one thing winit does not answer there: Windows and macOS report the preference natively and need no feature.
+system-theme = ["dep:zbus"]
+
 [dependencies]
-accesskit = "0.25.0"
-accesskit_winit = "0.34.0"
-arboard = { version = "3.6.1", default-features = false, features = ["wayland-data-control"] }
+accesskit = { version = "0.25.0", optional = true }
+accesskit_winit = { version = "0.34.0", optional = true }
+arboard = { version = "3.6.1", default-features = false, optional = true }
 geometry-core = { workspace = true }
 platform-core = { workspace = true }
 platform-winit = { workspace = true }
 renderer-core = { workspace = true }
-rfd = { version = "0.17.2", default-features = false, features = ["xdg-portal"] }
+rfd = { version = "0.17.2", default-features = false, features = [
+    "xdg-portal",
+], optional = true }
 services-core = { workspace = true, features = ["system-paths"] }
 tracing = { workspace = true }
 # `wayland-csd-adwaita-notitle` rather than the default `wayland-csd-adwaita`: same client-side frame, without the `ab_glyph`/`ttf-parser` pair that only draws the title text winit then hides behind our own.
@@ -30,4 +43,4 @@ winit = { workspace = true, features = [
 ] }
 
 [target.'cfg(target_os = "linux")'.dependencies]
-zbus = "5.17.0"
+zbus = { version = "5.17.0", optional = true }
