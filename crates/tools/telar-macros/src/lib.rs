@@ -396,6 +396,35 @@ fn build_flavour() -> telar_transpiler::BuildFlavour {
     }
 }
 
+/// Refuses a build driven by a `cargo-telar` older than this `telar`.
+///
+/// The two halves agree on the build shape through a feature now. An older CLI asks for it by setting `TELAR_HOT_RELOAD_BUILD` and pushing `--cfg=telar_hot_reload` into `RUSTFLAGS`, and neither is read any more — so nothing fails: the project compiles, the window opens, and hot reload simply never happens, because the dylib exports no factory and the host branch was never generated. `cargo telar dev` then reports only that the app is not connected to its own channel, which describes the symptom and names nothing that could be done about it.
+///
+/// The variable is read here and nowhere else, and only ever to refuse. What a build *is* still comes from the feature alone, so this cannot reintroduce an output cargo does not track.
+fn check_cli_is_current() -> Result<(), TokenStream2> {
+    let Some(message) = stale_cli_message(std::env::var_os("TELAR_HOT_RELOAD_BUILD").is_some())
+    else {
+        return Ok(());
+    };
+    Err(quote! { compile_error!(#message); })
+}
+
+fn stale_cli_message(hot_requested_by_env: bool) -> Option<String> {
+    if !hot_requested_by_env || cfg!(feature = "hot-reload") {
+        return None;
+    }
+    Some(format!(
+        "rsx: this build was started by a `cargo-telar` older than telar {v}, which asks for a hot-reload build through an environment variable this version no longer reads — so the build would come out with no hot reload in it and nothing would say so. Run: cargo install cargo-telar --version {v} --force",
+        v = env!("CARGO_PKG_VERSION")
+    ))
+}
+
+/// Relays a package-transpile failure as the `compile_error!` the caller emits. [`telar_transpiler::PackageError`] already names the file — and for a parse error the line — so there is nothing to re-derive here.
+fn compile_error_from(error: telar_transpiler::PackageError) -> TokenStream2 {
+    let msg = error.to_string();
+    quote! { compile_error!(#msg); }
+}
+
 /// Refuses a `telar.toml` whose `[telar] theme` is not what the invocation names.
 ///
 /// Nothing else in the build reads that key — the macro is handed the type directly — but everything that transpiles the same file *without* a macro to read does: the editor's live mirror and the golden harness both resolve the theme through [`telar_transpiler::resolve_theme_type`], which answers with this key when it is set. Two answers means two different files generated from one source, and the last writer wins.
@@ -414,12 +443,6 @@ fn check_theme_agrees(package_dir: &Path, given: Option<&str>) -> Result<(), Tok
         "rsx: telar.toml declares `theme = \"{declared}\"`, but this invocation {named}. The editor and the golden snapshots resolve the theme from telar.toml, so a difference here generates two different files from one source: pass `{declared}` here, or drop the key."
     );
     Err(quote! { compile_error!(#msg); })
-}
-
-/// Relays a package-transpile failure as the `compile_error!` the caller emits. [`telar_transpiler::PackageError`] already names the file — and for a parse error the line — so there is nothing to re-derive here.
-fn compile_error_from(error: telar_transpiler::PackageError) -> TokenStream2 {
-    let msg = error.to_string();
-    quote! { compile_error!(#msg); }
 }
 
 struct TranspileOutput {
@@ -447,6 +470,8 @@ fn invocation_dir(file: &Path, src_dir: &Path) -> Option<PathBuf> {
 
 // Transpiles every `.rsx` under `src/` into the build directory, wiring each as a `#[path] mod` and aliasing nested components to their basenames; also emits `include_str!` rerun triggers and, under `auto_modules`, declares the hand-written `.rs` module tree. Shared by `app!`, which then adds the runner, and `rsx_modules!`, which transpiles only. `Err` carries a `compile_error!` stream to emit.
 fn transpile_project(theme_type_str: Option<&str>) -> Result<TranspileOutput, TokenStream2> {
+    check_cli_is_current()?;
+
     let manifest_dir = std::env::var("CARGO_MANIFEST_DIR")
         .map(PathBuf::from)
         .map_err(|_| quote! { compile_error!("CARGO_MANIFEST_DIR not set"); })?;
@@ -646,3 +671,7 @@ pub fn rsx_modules(input: TokenStream) -> TokenStream {
     }
     .into()
 }
+
+#[cfg(test)]
+#[path = "lib_test.rs"]
+mod tests;
