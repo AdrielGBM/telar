@@ -32,7 +32,8 @@ pub use catalog::{
 };
 pub use discovery::{
     assets_root, auto_modules_enabled, collect_files_by_ext, component_name, discover_rust_modules,
-    find_rsx_files, find_rsx_files_in_tree, prune_stale_generated, relative_output_path,
+    find_rsx_files, find_rsx_files_in_tree, is_generated_output, prune_stale_generated,
+    relative_output_path, source_for_generated,
 };
 pub use manifest::{
     DevSection, I18nSection, MANIFEST_FILENAME, ManifestError, RendererBackend, TelarManifest,

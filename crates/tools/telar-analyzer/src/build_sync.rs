@@ -127,36 +127,14 @@ pub fn sync_build_file(
     let _ = telar_project::write_if_changed_atomic(&path.with_extension("rs.map"), &map.to_json());
 }
 
-/// The `<crate>/.telar/build/` path segment that marks a generated file (platform separators). Splits `<crate>/.telar/build/<rel>.rs` into (`<crate>`, `<rel>.rs`). Component-based instead of string matching so Windows paths with mixed `/`/`\` separators still classify.
-fn split_at_build_dir(path: &Path) -> Option<(PathBuf, PathBuf)> {
-    let comps: Vec<std::path::Component> = path.components().collect();
-    let pos = comps
-        .windows(2)
-        .position(|w| w[0].as_os_str() == ".telar" && w[1].as_os_str() == "build")?;
-    let rel: PathBuf = comps[pos + 2..].iter().collect();
-    if rel.as_os_str().is_empty() {
-        return None;
-    }
-    Some((comps[..pos].iter().collect(), rel))
-}
+/// Whether `path` is generated output, which the backend has to know before it reverse-maps a definition target onto a `.rsx`.
+pub use telar_project::is_generated_output as is_generated_build_file;
 
-/// Whether `path` is one of the transpiler's generated build files (`<crate>/.telar/build/<rel>.rs`). Used to classify a rust-analyzer definition target before reverse-mapping it onto a `.rsx`.
-pub fn is_generated_build_file(path: &Path) -> bool {
-    path.extension().and_then(|e| e.to_str()) == Some("rs") && split_at_build_dir(path).is_some()
-}
-
-/// Inverse of [`generated_target`]'s path mapping: a generated `<crate>/.telar/build/<rel>.rs` → its source `<crate>/src/<rel>.rsx` plus the source map read from the sibling `.rs.map`. `None` for paths outside a build dir or without a readable map.
+/// The `.rsx` a generated file came from, plus the source map read from its sibling `.rs.map`. `None` outside a build directory, or without a readable map.
 pub fn rsx_source_and_map(build_path: &Path) -> Option<(PathBuf, SourceMap)> {
-    let source = rsx_source_for(build_path)?;
+    let source = telar_project::source_for_generated(build_path)?;
     let map_json = std::fs::read_to_string(build_path.with_extension("rs.map")).ok()?;
     Some((source, SourceMap::from_json(&map_json)?))
-}
-
-/// `<crate>/.telar/build/<rel>.rs` → `<crate>/src/<rel>.rsx` (the macro's output mirroring, reversed).
-fn rsx_source_for(build_path: &Path) -> Option<PathBuf> {
-    let (root, rel) = split_at_build_dir(build_path)?;
-    let rel = rel.to_str()?.strip_suffix(".rs")?.to_string();
-    Some(root.join("src").join(format!("{rel}.rsx")))
 }
 
 #[cfg(test)]

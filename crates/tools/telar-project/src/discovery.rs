@@ -2,7 +2,7 @@
 
 use std::collections::HashSet;
 use std::fmt::Write;
-use std::path::{Path, PathBuf};
+use std::path::{Component, Path, PathBuf};
 
 /// Recursively collects files with any of `extensions` under `root`, descending into a subdirectory only when `keep_dir` returns true for its name. The result is sorted.
 ///
@@ -291,6 +291,40 @@ pub fn relative_output_path(path: &Path, src_dir: &Path) -> Option<PathBuf> {
         return None;
     }
     Some(rel.with_extension("rs"))
+}
+
+/// The `.rsx` a generated `.rs` came from: `<crate>/.telar/<flavour>/<rel>.rs` → `<crate>/src/<rel>.rsx`, the inverse of [`relative_output_path`] and [`generated_dir`](crate::generated_dir) together.
+///
+/// Beside the forward mapping because it *is* the forward mapping read backwards, and because it was written twice: `cargo-telar` projects a rustc diagnostic onto the line an author wrote, and the language server classifies a go-to-definition target the same way. The second copy recognised only `build`, so a session whose last build was `cargo telar dev` — writing `build-hot` — had every jump into generated code land there instead of on the `.rsx`.
+///
+/// Component-based rather than string matching, so a Windows path with mixed separators still classifies.
+pub fn source_for_generated(generated: &Path) -> Option<PathBuf> {
+    let (package_root, rel) = split_at_generated_dir(generated)?;
+    Some(package_root.join("src").join(rel.with_extension("rsx")))
+}
+
+/// Whether `path` is generated output rather than something a person wrote.
+pub fn is_generated_output(path: &Path) -> bool {
+    path.extension().and_then(|e| e.to_str()) == Some("rs")
+        && split_at_generated_dir(path).is_some()
+}
+
+/// Splits `<crate>/.telar/<flavour>/<rel>.rs` into its package root and the path under the flavour directory.
+///
+/// Every flavour, from [`BuildFlavour::DIR_NAMES`](crate::BuildFlavour::DIR_NAMES) — a fifth one added there is recognised here without being told.
+fn split_at_generated_dir(path: &Path) -> Option<(PathBuf, PathBuf)> {
+    let parts: Vec<Component> = path.components().collect();
+    let at = parts.windows(2).position(|pair| {
+        pair[0].as_os_str() == ".telar"
+            && crate::BuildFlavour::DIR_NAMES
+                .iter()
+                .any(|name| pair[1].as_os_str() == *name)
+    })?;
+    let rel: PathBuf = parts[at + 2..].iter().collect();
+    if rel.as_os_str().is_empty() {
+        return None;
+    }
+    Some((parts[..at].iter().collect(), rel))
 }
 
 #[cfg(test)]

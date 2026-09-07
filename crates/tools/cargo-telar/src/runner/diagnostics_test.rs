@@ -1,38 +1,5 @@
 use super::*;
 
-#[test]
-fn a_generated_file_maps_back_to_its_rsx() {
-    let generated = PathBuf::from("/w/crates/modules/.telar/build/clock/clock.rs");
-    assert!(is_generated(&generated), "{}", generated.display());
-    assert_eq!(
-        generated_to_source(&generated),
-        Some(PathBuf::from("/w/crates/modules/src/clock/clock.rsx"))
-    );
-}
-
-/// A hot-reload build writes to `build-hot`, and its diagnostics need the same treatment.
-#[test]
-fn a_hot_reload_build_dir_maps_too() {
-    let generated = PathBuf::from("/w/apps/a/.telar/build-hot/home.rs");
-    assert!(is_generated(&generated), "{}", generated.display());
-    assert_eq!(
-        generated_to_source(&generated),
-        Some(PathBuf::from("/w/apps/a/src/home.rsx"))
-    );
-}
-
-#[test]
-fn a_hand_written_rust_file_is_left_alone() {
-    assert!(
-        !is_generated(Path::new("/w/crates/ui/src/icon/mod.rs")),
-        "a hand-written module is not generated"
-    );
-    assert!(
-        !is_generated(Path::new("/w/crates/ui/.telar/other/x.rs")),
-        "and neither is an unrelated file under .telar"
-    );
-}
-
 /// The `help:` line is where rustc puts what to actually do, and it used to be read off the wire and dropped — leaving the half of a type error that says there is a problem without the half that says what the fix is.
 #[test]
 fn help_and_note_children_survive_the_remap() {

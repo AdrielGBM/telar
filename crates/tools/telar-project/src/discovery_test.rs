@@ -231,3 +231,50 @@ fn discover_rust_modules_mirrors_tree() {
         "a `*_test.rs` belongs to the module beside it:\n{out}\n---\n{core_rs}"
     );
 }
+
+/// The inverse is the forward mapping read backwards, so a `.rsx` that goes out and comes back has to be itself — for every flavour, which is the half the language server's own copy of this got wrong.
+#[test]
+fn a_source_survives_the_round_trip_through_every_flavour() {
+    let package = Path::new("/proj");
+    let src = package.join("src");
+    for rsx in [
+        src.join("home.rsx"),
+        src.join("shared/components/card.rsx"),
+        src.join("a/b/c/deep.rsx"),
+    ] {
+        for flavour in crate::BuildFlavour::ALL {
+            let rel =
+                relative_output_path(&rsx, &src).expect("a file under src has an output path");
+            let generated = crate::generated_dir(package, flavour).join(rel);
+            assert!(
+                is_generated_output(&generated),
+                "{flavour:?} output should be recognised: {}",
+                generated.display()
+            );
+            assert_eq!(
+                source_for_generated(&generated).as_deref(),
+                Some(rsx.as_path()),
+                "{flavour:?} should map back to the source it came from"
+            );
+        }
+    }
+}
+
+/// Anything else is somebody's own file, and mistaking one for generated output would reverse-map it onto a `.rsx` that does not exist.
+#[test]
+fn a_hand_written_file_is_not_generated_output() {
+    for path in [
+        "/proj/src/main.rs",
+        "/proj/.telar/assets.rs",
+        "/proj/.telar/build",
+        "/proj/build/thing.rs",
+        "/proj/.telar/other/x.rs",
+        "/proj/src/home.rsx",
+    ] {
+        assert!(
+            !is_generated_output(Path::new(path)),
+            "{path} is not generated output"
+        );
+        assert_eq!(source_for_generated(Path::new(path)), None, "{path}");
+    }
+}

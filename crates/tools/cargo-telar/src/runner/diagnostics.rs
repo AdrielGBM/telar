@@ -10,9 +10,8 @@
 
 use std::collections::HashMap;
 use std::io::BufRead;
-use std::path::{Component, Path, PathBuf};
+use std::path::{Path, PathBuf};
 
-use telar_project::BuildFlavour;
 use telar_transpiler::{RsxSpan, SourceMap};
 
 /// A `help:`/`note:` rustc hung off a diagnostic. Dropping these used to cost the half of a type error that says what to do about it.
@@ -160,7 +159,7 @@ pub(crate) fn collect(reader: impl BufRead) -> Report {
                 continue;
             };
             let generated = PathBuf::from(file);
-            if !is_generated(&generated) {
+            if !telar_project::is_generated_output(&generated) {
                 continue;
             }
             let Some(line_start) = span.get("line_start").and_then(serde_json::Value::as_u64)
@@ -267,39 +266,6 @@ fn primary_spans(message: &serde_json::Value) -> Vec<&serde_json::Value> {
         .unwrap_or_default()
 }
 
-/// `<crate>/.telar/build/<rel>.rs` — or `build-hot`, which a hot-reload build writes instead. The two names come from [`BuildFlavour`], so a third flavour is not something this has to be told about twice.
-fn is_generated(path: &Path) -> bool {
-    if path.extension().and_then(|e| e.to_str()) != Some("rs") {
-        return false;
-    }
-    build_root(path).is_some()
-}
-
-/// The index of the `.telar` component and the build-dir name that follows it.
-fn build_root(path: &Path) -> Option<usize> {
-    let parts: Vec<Component> = path.components().collect();
-    parts.iter().enumerate().position(|(i, part)| {
-        part.as_os_str() == ".telar"
-            && parts.get(i + 1).is_some_and(|next| {
-                BuildFlavour::DIR_NAMES
-                    .iter()
-                    .any(|name| next.as_os_str() == *name)
-            })
-    })
-}
-
-/// Maps a generated `<crate>/.telar/build/<rel>.rs` back to `<crate>/src/<rel>.rsx`.
-fn generated_to_source(generated: &Path) -> Option<PathBuf> {
-    let at = build_root(generated)?;
-    let parts: Vec<Component> = generated.components().collect();
-    let mut source: PathBuf = parts[..at].iter().collect();
-    source.push("src");
-    for part in &parts[at + 2..] {
-        source.push(part.as_os_str());
-    }
-    Some(source.with_extension("rsx"))
-}
-
 /// One generated file, everything needed to place a diagnostic in it, read once. A single broken component usually produces a run of diagnostics, so this is cached for the length of the stream.
 struct Origin {
     rsx_path: PathBuf,
@@ -310,7 +276,7 @@ struct Origin {
 
 impl Origin {
     fn read(generated: &Path) -> Option<Self> {
-        let rsx_path = generated_to_source(generated)?;
+        let rsx_path = telar_project::source_for_generated(generated)?;
         let mut map_path = generated.as_os_str().to_os_string();
         map_path.push(".map");
         Some(Self {
