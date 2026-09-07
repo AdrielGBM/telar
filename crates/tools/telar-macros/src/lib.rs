@@ -451,6 +451,70 @@ struct TranspileOutput {
     preview_const_idents: Vec<TokenStream2>,
 }
 
+/// One `.rsx` this crate has to wire, however its Rust got there.
+struct WiredFile {
+    rsx_path: PathBuf,
+    /// Where the generated Rust sits, relative to the generated directory — the module path it is declared under.
+    rel_out: PathBuf,
+    out_path: PathBuf,
+    previews: bool,
+}
+
+/// The files to wire, taken from `cargo telar transpile`'s artifact when it still answers for the sources on disk, and produced here when it does not.
+///
+/// The artifact is never trusted on its word: [`telar_transpiler::BuildIndex::answers_for`] re-hashes every `.rsx` before a line of it is used, so a source edited since the CLI last ran sends this straight to the fallback rather than compiling the output of the run before. Which makes a stale artifact slow, not wrong — the property that lets the fallback exist at all.
+fn wire_sources(
+    package_dir: &Path,
+    src_dir: &Path,
+    generated_dir: &Path,
+    theme_type_str: Option<&str>,
+    flavour: telar_transpiler::BuildFlavour,
+    assets: &telar_transpiler::AssetContext,
+) -> Result<Vec<WiredFile>, TokenStream2> {
+    if let Some(index) = telar_transpiler::read_build_index(package_dir, flavour)
+        && index.answers_for(
+            src_dir,
+            generated_dir,
+            theme_type_str,
+            env!("CARGO_PKG_VERSION"),
+        )
+        // Output that reaches into the baked asset module is only wirable while that module is: declared against an unusable artifact it would resolve to nothing, and rustc would report it against generated code instead of the `.rsx` line that named the asset — which is the whole thing `AssetContext`'s messages exist to prevent.
+        && !(index.uses_assets && assets.module_file().is_none())
+    {
+        return Ok(telar_transpiler::find_rsx_files(src_dir)
+            .into_iter()
+            .filter_map(|rsx_path| {
+                let rel_out = telar_transpiler::relative_output_path(&rsx_path, src_dir)?;
+                let previews = index.entry_for(&rsx_path, src_dir)?.previews;
+                Some(WiredFile {
+                    out_path: generated_dir.join(&rel_out),
+                    rsx_path,
+                    rel_out,
+                    previews,
+                })
+            })
+            .collect());
+    }
+
+    let files = telar_transpiler::transpile_package(&telar_transpiler::PackageOptions {
+        src_dir,
+        theme_type: theme_type_str,
+        assets: Some(assets),
+        flavour,
+    })
+    .map_err(compile_error_from)?;
+    telar_transpiler::write_package(&files, generated_dir).map_err(compile_error_from)?;
+    Ok(files
+        .into_iter()
+        .map(|file| WiredFile {
+            out_path: file.out_path(generated_dir),
+            rsx_path: file.rsx_path,
+            rel_out: file.rel_out,
+            previews: !file.source.preview_names.is_empty(),
+        })
+        .collect())
+}
+
 /// The `src`-relative directory the macro was written in.
 ///
 /// `Span::local_file` gives the path the compiler knows, which is relative to the *working* directory — the workspace root under cargo, not the package. So the path is re-rooted by its own `src` component rather than trusted whole: rooting it at the wrong `src` silently placed nothing, which reads as a crate that simply has no `.rsx` in it.
@@ -490,27 +554,28 @@ fn transpile_project(theme_type_str: Option<&str>) -> Result<TranspileOutput, To
 
     check_theme_agrees(&manifest_dir, theme_type_str)?;
 
-    let files = telar_transpiler::transpile_package(&telar_transpiler::PackageOptions {
-        src_dir: &src_dir,
-        theme_type: theme_type_str,
-        assets: Some(&assets),
+    let wired = wire_sources(
+        &manifest_dir,
+        &src_dir,
+        &generated_dir,
+        theme_type_str,
         flavour,
-    })
-    .map_err(compile_error_from)?;
-    // Every path this run writes under `generated_dir`, so a stale file left behind by a renamed or deleted `.rsx` (or a toggled-off `auto_modules`/i18n catalog) can be told apart from live output and pruned.
-    let mut written_files =
-        telar_transpiler::write_package(&files, &generated_dir).map_err(compile_error_from)?;
+        &assets,
+    )?;
+    // Every path this run is answerable for under `generated_dir`, so a stale file left behind by a renamed or deleted `.rsx` (or a toggled-off `auto_modules`/i18n catalog) can be told apart from live output and pruned. The CLI writes output but never sweeps: it does not know about the module tree written below, and a sweep that knows half the directory deletes the other half.
+    let mut written_files: std::collections::HashSet<PathBuf> =
+        wired.iter().map(|file| file.out_path.clone()).collect();
 
     let mut include_stmts = TokenStream2::new();
     let mut rerun_stmts = TokenStream2::new();
     let mut preview_const_idents: Vec<TokenStream2> = Vec::new();
 
-    for file in &files {
+    for file in &wired {
         // A real `#[path] mod`, not `include!`, so rust-analyzer treats it as a first-class module and offers completion inside it. `pub use` keeps the component fns, preview consts and `Props` types reachable by bare name, exactly as `include!` did.
         let rsx_path_str = file.rsx_path.to_string_lossy().to_string();
         rerun_stmts.extend(quote! { const _: &str = include_str!(#rsx_path_str); });
 
-        if !file.source.preview_names.is_empty() {
+        if file.previews {
             // The const lives inside the file's own module now, so it is named by its path rather than reached by a bare name the crate root used to re-export.
             let module: Vec<Ident> = file
                 .rel_out
