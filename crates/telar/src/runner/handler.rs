@@ -8,7 +8,7 @@ use services_core::AppPathsProvider;
 use std::sync::Arc;
 use ui_core::EventResult;
 
-use crate::app::App;
+use crate::app_runtime::AppRuntime;
 use crate::config::{self, RendererBackend};
 use crate::prefs::UserPrefs;
 
@@ -23,7 +23,7 @@ pub(super) struct AppHandler<W, D: DevPlugin>
 where
     W: Window + Clone + 'static,
 {
-    pub(super) app: Box<dyn App>,
+    pub(super) app: Box<dyn AppRuntime>,
     // Activated around every lifecycle call so build, event and frame resolve against the right surface. `None` for a single-window app, whose ambient thread-local world is its one surface.
     pub(super) surface: Option<std::rc::Rc<ui_core::Surface>>,
     // Entered alongside `surface`, so a title-bar action pushed by one window's widgets targets that window and never a sibling sharing the UI thread. A single-window app keeps the ambient queue.
@@ -113,7 +113,7 @@ impl FrameGeneration {
 // The one place the large field literal lives, shared by the single-surface runner and the per-surface handler factory. Builds no renderer and touches no thread-local state, so it is safe to call on whatever thread will later drive the handler.
 #[allow(clippy::too_many_arguments)]
 pub(super) fn build_app_handler<W, D>(
-    app: Box<dyn App>,
+    app: Box<dyn AppRuntime>,
     paths: Arc<dyn AppPathsProvider>,
     font_paths: Vec<std::path::PathBuf>,
     font_data: Vec<Vec<u8>>,

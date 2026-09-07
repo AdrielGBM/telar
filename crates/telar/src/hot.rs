@@ -89,9 +89,10 @@ impl Drop for HotTreeHandle {
 }
 
 #[cfg(feature = "dev")]
-impl crate::app::App for HotApp {
-    fn root(&self) -> Box<dyn ui_core::Component> {
-        self.inner.root()
+impl crate::app_runtime::AppRuntime for HotApp {
+    // Delegated rather than defaulted: the window a hot-reloaded app asks for is the one its own `app!` invocation names, and that lives on the far side of the boundary.
+    fn window_config(&self) -> Option<platform_core::WindowConfig> {
+        self.inner.window_config()
     }
 
     // Mounted inside the dylib, where the app's signals live: a tree mounted out here would register its segment effects in the host's runtime and never subscribe to anything the app writes. A dylib too old to export them has no fallback — the host-side mount only worked while a force-tick re-ran every segment.

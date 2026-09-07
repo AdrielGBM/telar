@@ -5,7 +5,7 @@ use std::sync::Arc;
 use platform_core::Platform;
 use platform_desktop::{DesktopPathsProvider, WinitPlatform, WinitWindow};
 
-use crate::app::App;
+use crate::app_runtime::AppRuntime;
 use crate::config;
 use crate::prefs::UserPrefs;
 

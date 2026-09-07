@@ -87,11 +87,11 @@ pub fn submitting() -> std::sync::RwLockReadGuard<'static, ()> {
 
 /// The GPU objects Telar is drawing with, or `None` before its first renderer exists.
 ///
-/// **Not reliably available from [`App::mount`]**, which is the tempting reading and is wrong: the hardware renderer is built on a thread of its own and the tree is mounted without waiting for it, so a mount that asks here is racing a build it will almost always lose. `None` means *no device yet*, which is a different thing from the software backend and looks identical from here.
+/// **Not reliably available from [`AppRuntime::mount`]**, which is the tempting reading and is wrong: the hardware renderer is built on a thread of its own and the tree is mounted without waiting for it, so a mount that asks here is racing a build it will almost always lose. `None` means *no device yet*, which is a different thing from the software backend and looks identical from here.
 ///
 /// An application that needs the device to build its tree wants [`open`], which brings it up and hands the build in flight the very same objects.
 ///
-/// [`App::mount`]: https://docs.rs/telar/latest/telar/trait.App.html#method.mount
+/// [`AppRuntime::mount`]: https://docs.rs/telar/latest/telar/trait.AppRuntime.html#method.mount
 pub fn shared() -> Option<SharedGpu> {
     SHARED_GPU.get().cloned()
 }

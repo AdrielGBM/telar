@@ -98,7 +98,7 @@ where
     } = config;
     let window = super::resolved_window(window, &app);
     let handler = build_app_handler::<P::Window, D>(
-        Box::new(app),
+        Box::new(crate::app_runtime::LocalApp(app)),
         paths,
         font_paths,
         font_data,

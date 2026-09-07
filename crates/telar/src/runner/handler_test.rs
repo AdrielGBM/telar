@@ -1,4 +1,6 @@
 use super::*;
+use crate::app::App;
+use crate::app_runtime::LocalApp;
 use platform_headless::HeadlessWindow;
 
 /// An app whose content never changes — a shell's frame ring, a wallpaper, a static diagram. Its tree's own generation is fixed for the life of the tree, which is what makes the collision below reachable.
@@ -19,7 +21,7 @@ impl App for Unchanging {
 
 fn handler() -> AppHandler<HeadlessWindow, ()> {
     build_app_handler::<HeadlessWindow, ()>(
-        Box::new(Unchanging),
+        Box::new(LocalApp(Unchanging)),
         Arc::new(services_core::NoPaths),
         Vec::new(),
         Vec::new(),
@@ -96,7 +98,7 @@ impl App for Tinted {
 fn new_commands_never_go_out_under_the_previous_generation() {
     let tint = reactive_core::signal(0.0f32);
     let mut handler = build_app_handler::<HeadlessWindow, ()>(
-        Box::new(Tinted(tint)),
+        Box::new(LocalApp(Tinted(tint))),
         Arc::new(services_core::NoPaths),
         Vec::new(),
         Vec::new(),

@@ -77,7 +77,7 @@ pub fn open_window<A: App>(app: A) -> SurfaceToken {
         .backend
         .unwrap_or_else(crate::config::compile_time_backend);
     let mut handler = super::handler::build_app_handler::<WinitWindow, ()>(
-        Box::new(app),
+        Box::new(crate::app_runtime::LocalApp(app)),
         paths,
         Vec::new(),
         Vec::new(),

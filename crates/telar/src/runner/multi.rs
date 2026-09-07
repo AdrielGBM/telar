@@ -58,7 +58,7 @@ where
         let backend = prefs.backend.unwrap_or_else(config::compile_time_backend);
         let (font_paths, font_data, font_family) = fonts.get(&id).cloned().unwrap_or_default();
         let mut handler = build_app_handler::<P::Window, ()>(
-            Box::new(app),
+            Box::new(crate::app_runtime::LocalApp(app)),
             paths,
             font_paths,
             font_data,
@@ -74,7 +74,9 @@ where
     })
 }
 
-/// Build a driven-ready [`EventHandler`] for a **secondary surface** from an [`App`], boxed so a multi-surface backend can hold it alongside its statically-declared handlers. Mirrors what [`run_multi_with_platform`]'s factory produces — a handler carrying its own `ui_core::Surface` world — but for surfaces opened at runtime (via a `SurfaceHost`), so the backend can enqueue the handler into its single UI-thread loop instead of spawning a thread. Builds no renderer and touches no thread-local reactive state; the loop drives it.
+/// Build a driven-ready [`EventHandler`] for a **secondary surface** from an [`AppRuntime`](crate::AppRuntime), boxed so a multi-surface backend can hold it alongside its statically-declared handlers. Mirrors what [`run_multi_with_platform`]'s factory produces — a handler carrying its own `ui_core::Surface` world — but for surfaces opened at runtime (via a `SurfaceHost`), so the backend can enqueue the handler into its single UI-thread loop instead of spawning a thread. Builds no renderer and touches no thread-local reactive state; the loop drives it.
+///
+/// Takes a runtime rather than an [`App`] because a secondary surface is not always a tree in this process: the dev host opens one for a dylib-backed application, whose runtime is the far side of an FFI boundary. Wrap a plain application in [`LocalApp`](crate::LocalApp).
 pub fn build_surface_handler<W, A>(
     app: A,
     paths: Arc<dyn AppPathsProvider>,
@@ -83,7 +85,7 @@ pub fn build_surface_handler<W, A>(
 ) -> Box<dyn EventHandler<W>>
 where
     W: super::host::SurfaceWindow,
-    A: App + 'static,
+    A: crate::app_runtime::AppRuntime,
 {
     let prefs = UserPrefs::load(app_name, paths.as_ref());
     let backend = prefs.backend.unwrap_or_else(config::compile_time_backend);
