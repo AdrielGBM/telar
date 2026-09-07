@@ -85,3 +85,7 @@ pub fn write_if_changed_atomic(path: &Path, content: &str) -> std::io::Result<()
     std::fs::write(&tmp_path, content)?;
     std::fs::rename(&tmp_path, path)
 }
+
+#[cfg(test)]
+#[path = "paths_test.rs"]
+mod tests;
