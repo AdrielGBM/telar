@@ -39,8 +39,6 @@ pub mod files;
 pub mod hot;
 #[cfg(feature = "dev")]
 pub mod hot_state;
-#[cfg(feature = "plugin")]
-pub mod plugin;
 #[cfg(feature = "runtime")]
 pub mod prefs;
 #[cfg(feature = "headless")]
@@ -86,8 +84,6 @@ pub use layout_core::{
     AlignItems, AvailableSpace, Direction, JustifyContent, LayoutError, LayoutStyle, Margin,
     SizeDimension, TemplateTrack,
 };
-#[cfg(feature = "plugin")]
-pub use plugin::EmbeddedApp;
 #[cfg(feature = "runtime")]
 pub use prefs::UserPrefs;
 pub use raw_window_handle::{RawDisplayHandle, RawWindowHandle};

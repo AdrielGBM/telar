@@ -44,6 +44,7 @@ members = [
     "crates/reactive/reactive-local",
     "crates/i18n/i18n-fixture",
     "crates/telar-dynamic",
+    "crates/telar-plugin",
 ]
 
 default-members = [
@@ -78,6 +79,7 @@ default-members = [
     "crates/tools/telar-baker",
     "apps/sandbox",
     "crates/telar-dynamic",
+    "crates/telar-plugin",
 ]
 
 [workspace.package]
@@ -152,6 +154,7 @@ telar = { path = "crates/telar", version = "0.1.8", default-features = false }
 telar-baker = { path = "crates/tools/telar-baker", version = "0.1.8" }
 telar-diagnostics = { path = "crates/tools/telar-diagnostics", version = "0.1.8" }
 telar-dynamic = { path = "crates/telar-dynamic", version = "0.1.8" }
+telar-plugin = { path = "crates/telar-plugin", version = "0.1.8" }
 telar-macros = { path = "crates/tools/telar-macros", version = "0.1.8" }
 telar-parser = { path = "crates/tools/telar-parser", version = "0.1.8" }
 telar-transpiler = { path = "crates/tools/telar-transpiler", version = "0.1.8", default-features = false }

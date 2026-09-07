@@ -4,7 +4,17 @@
 //!
 //! The novel part hot-reload never needed is **compositing two runtimes into one window**: the plugin flattens its own view tree to a self-contained `Vec<DrawCommand>` ([`PluginInstance::paint`]) and hands it back; the host translates + clips those commands into the plugin's sub-rect and splices them into its own frame. No offscreen texture, no shared GPU device — the host's renderer paints everything in one pass.
 //!
-//! Layering: this module is app-agnostic. A plugin author implements [`EmbeddedApp`] (or an adapter to it) and calls the [`plugin!`](crate::plugin!) macro to export the shims. The host calls [`load_plugin`] and drives the returned [`LoadedPlugin`]. Nothing here knows about any particular app.
+//! Layering: this crate is app-agnostic. A plugin author implements [`EmbeddedApp`] (or an adapter to it) and calls the [`plugin!`](crate::plugin) macro to export the shims. The host enables `host`, calls [`load_plugin`] and drives the returned [`LoadedPlugin`]. Nothing here knows about any particular app.
+//!
+//! **A second dependency, like `telar-dynamic`.** It knows nothing of `telar` — a plugin builds a `ui-core` tree and hands back draw commands, which is a layer below the facade — so it is the application that names both, and keeping them on one version is the same lockstep `telar` and `telar-macros` already have.
+//!
+//! # Feature flags
+#![cfg_attr(
+    feature = "document-features",
+    doc = document_features::document_features!()
+)]
+#![warn(rustdoc::broken_intra_doc_links)]
+#![cfg_attr(docsrs, feature(doc_auto_cfg))]
 
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -24,7 +34,7 @@ pub type DrawList = Vec<DrawCommand>;
 /// Owned window-command list drained from the plugin's own queue (a title bar's drag/close etc.).
 pub type WindowCommands = Vec<WindowCommand>;
 
-// Re-exported for the `plugin!` macro's shim signatures, so a plugin crate needs only `$crate::plugin::*`.
+// Re-exported for the `plugin!` macro's shim signatures, so a plugin crate needs only `telar_plugin::*`.
 pub use platform_core::Event as PluginEvent;
 pub use renderer_core::Color as PluginColor;
 
@@ -53,7 +63,7 @@ pub fn composite(rect: Rect, image_salt: u64, mut commands: DrawList) -> RenderN
     )
 }
 
-/// An embeddable rsx UI a host can drive as a plugin. The generic union of "build a view tree, render it, handle events, run per-frame background work, and present a title/icon" — no app-specific semantics. A concrete app (or an adapter over one) implements this; the [`plugin!`](crate::plugin!) macro exports it.
+/// An embeddable rsx UI a host can drive as a plugin. The generic union of "build a view tree, render it, handle events, run per-frame background work, and present a title/icon" — no app-specific semantics. A concrete app (or an adapter over one) implements this; the [`plugin!`](crate::plugin) macro exports it.
 ///
 /// Lifecycle the driver enforces: [`build`](Self::build) runs once, inside the plugin's freshly-entered [`Surface`], so the content's layout nodes land in *this* surface's world; afterwards [`layout_root`](Self::layout_root) is the node the driver sizes to the host's sub-rect.
 pub trait EmbeddedApp: 'static {
@@ -75,7 +85,7 @@ pub trait EmbeddedApp: 'static {
     /// Called when the content becomes visible (the host activated its tab). Autofocus the primary input here.
     fn activate(&mut self) {}
 
-    /// Drain background-work channels into signals (see [`crate::RedrawWaker`]); the host forwards its `ctx`.
+    /// Drain background-work channels into signals (see [`platform_core::RedrawWaker`]); the host forwards its `ctx`.
     fn on_frame(&mut self, _ctx: &mut AppCtx) {}
 
     /// The window/tab clear color, if the content wants one.
@@ -378,42 +388,42 @@ pub struct PluginVTable {
 macro_rules! plugin {
     ($factory:expr) => {
         #[unsafe(no_mangle)]
-        pub static _rsx_plugin_vtable: $crate::plugin::PluginVTable = {
+        pub static _rsx_plugin_vtable: $crate::PluginVTable = {
             unsafe extern "Rust" fn create(
                 args: &[::std::string::String],
-            ) -> *mut $crate::plugin::PluginInstance {
-                $crate::plugin::__plugin_create(($factory)(args))
+            ) -> *mut $crate::PluginInstance {
+                $crate::__plugin_create(($factory)(args))
             }
-            $crate::plugin::PluginVTable {
-                abi: $crate::plugin::TELAR_PLUGIN_ABI,
+            $crate::PluginVTable {
+                abi: $crate::TELAR_PLUGIN_ABI,
                 create,
-                destroy: $crate::plugin::__plugin_destroy,
-                relayout: $crate::plugin::__plugin_relayout,
-                relayout_dirty: $crate::plugin::__plugin_relayout_dirty,
-                paint: $crate::plugin::__plugin_paint,
-                generation: $crate::plugin::__plugin_generation,
-                on_event: $crate::plugin::__plugin_on_event,
-                dispatch_overlays: $crate::plugin::__plugin_dispatch_overlays,
-                end_frame: $crate::plugin::__plugin_end_frame,
-                motion_tick: $crate::plugin::__plugin_motion_tick,
-                motion_active: $crate::plugin::__plugin_motion_active,
-                drain_window_commands: $crate::plugin::__plugin_drain_window_commands,
-                set_system_dark: $crate::plugin::__plugin_set_system_dark,
-                activate: $crate::plugin::__plugin_activate,
-                clear_color: $crate::plugin::__plugin_clear_color,
-                title: $crate::plugin::__plugin_title,
-                icon: $crate::plugin::__plugin_icon,
-                id: $crate::plugin::__plugin_id,
-                on_frame: $crate::plugin::__plugin_on_frame,
+                destroy: $crate::__plugin_destroy,
+                relayout: $crate::__plugin_relayout,
+                relayout_dirty: $crate::__plugin_relayout_dirty,
+                paint: $crate::__plugin_paint,
+                generation: $crate::__plugin_generation,
+                on_event: $crate::__plugin_on_event,
+                dispatch_overlays: $crate::__plugin_dispatch_overlays,
+                end_frame: $crate::__plugin_end_frame,
+                motion_tick: $crate::__plugin_motion_tick,
+                motion_active: $crate::__plugin_motion_active,
+                drain_window_commands: $crate::__plugin_drain_window_commands,
+                set_system_dark: $crate::__plugin_set_system_dark,
+                activate: $crate::__plugin_activate,
+                clear_color: $crate::__plugin_clear_color,
+                title: $crate::__plugin_title,
+                icon: $crate::__plugin_icon,
+                id: $crate::__plugin_id,
+                on_frame: $crate::__plugin_on_frame,
             }
         };
     };
 }
 
-#[cfg(feature = "plugin-host")]
+#[cfg(feature = "host")]
 pub use host::{LoadedPlugin, load_plugin};
 
-#[cfg(feature = "plugin-host")]
+#[cfg(feature = "host")]
 mod host {
     use super::*;
     use std::path::Path;
@@ -524,5 +534,5 @@ mod host {
 }
 
 #[cfg(test)]
-#[path = "plugin_test.rs"]
+#[path = "lib_test.rs"]
 mod tests;

@@ -1,0 +1,52 @@
+[package]
+name = "telar-plugin"
+version = { workspace = true }
+edition = { workspace = true }
+rust-version = { workspace = true }
+description = "Embedding a separately-compiled Telar UI inside a Telar application: the guest half a plugin exports, and the loader a host drives it through."
+keywords = ["telar", "plugin", "dylib", "gui", "embedding"]
+categories = ["gui", "api-bindings"]
+readme = "README.md"
+license = { workspace = true }
+repository = { workspace = true }
+
+# docs.rs builds with everything on, so the loader is documented beside the guest half rather than hidden
+# behind the feature only a host enables.
+
+[package.metadata.docs.rs]
+all-features = true
+rustdoc-args = ["--cfg", "docsrs"]
+
+[features]
+#! A plugin and its host are two different builds of two different binaries, and each wants one half of this
+#! crate. The guest half is the default because it is what the plugin — the thing being written — needs.
+default = ["guest"]
+
+## The plugin's own side: [`EmbeddedApp`](crate::EmbeddedApp), the driver that runs its tree in a surface of
+## its own, and the [`plugin!`](crate::plugin) macro that exports the shims a host calls.
+guest = []
+
+## The host's side: [`load_plugin`](crate::load_plugin) and the handle it returns. Brings a dynamic loader,
+## which is why it is not in `default` — an application that only *is* a plugin never loads one.
+host = ["guest", "platform-core/dylib", "dep:libloading"]
+
+## Renders this feature list into the crate documentation. docs.rs only; never enable it yourself.
+document-features = ["dep:document-features"]
+
+[dependencies]
+geometry-core = { workspace = true }
+layout-core = { workspace = true }
+motion-core = { workspace = true }
+platform-core = { workspace = true }
+reactive-core = { workspace = true }
+renderer-core = { workspace = true }
+theme-core = { workspace = true }
+ui-core = { workspace = true }
+ui-tree = { workspace = true }
+
+document-features = { workspace = true, optional = true }
+libloading = { version = "0.8", optional = true }
+web-time = { workspace = true }
+
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(docsrs)'] }

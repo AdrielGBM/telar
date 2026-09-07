@@ -5658,6 +5658,24 @@ dependencies = [
 ]
 
 [[package]]
+name = "telar-plugin"
+version = "0.1.8"
+dependencies = [
+ "document-features",
+ "libloading",
+ "telar-geometry-core",
+ "telar-layout-core",
+ "telar-motion-core",
+ "telar-platform-core",
+ "telar-reactive-core",
+ "telar-renderer-core",
+ "telar-theme-core",
+ "telar-ui-core",
+ "telar-ui-tree",
+ "web-time",
+]
+
+[[package]]
 name = "telar-reactive-core"
 version = "0.1.8"
 dependencies = [

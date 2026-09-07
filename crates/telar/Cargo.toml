@@ -234,16 +234,6 @@ testing = ["runtime"]
 ## Renders this feature list into the crate documentation. docs.rs only; never enable it yourself.
 document-features = ["dep:document-features"]
 
-#! ## Embedding
-#!
-#! For hosting Telar inside something else, or something else inside Telar.
-
-## The dylib side of a production plugin, distinct from dev hot-reload.
-plugin = ["runtime"]
-
-## The loader for one.
-plugin-host = ["plugin", "platform-core/dylib", "dep:libloading"]
-
 #! ## Building blocks
 #!
 #! What the target features above are assembled from. An out-of-tree frontend installing its own platform
