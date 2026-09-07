@@ -19,6 +19,7 @@ pub(crate) fn transpile_workspace() {
     let workspace_root = telar_transpiler::find_workspace_root(&dir).unwrap_or_else(|| dir.clone());
     let telar_version = telar_transpiler::resolve_telar_version(&workspace_root)
         .unwrap_or_else(|| env!("CARGO_PKG_VERSION").to_string());
+    super::config::warn_if_foreign_version(&telar_version);
     let producer = format!("cargo-telar {}", env!("CARGO_PKG_VERSION"));
 
     for member in member_dirs(&workspace_root) {

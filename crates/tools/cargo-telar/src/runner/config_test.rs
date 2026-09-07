@@ -209,3 +209,19 @@ fn an_unreadable_manifest_still_falls_back() {
     assert_eq!(resolved.version(), "0.1.0");
     assert_eq!(resolved.maintainer(), None);
 }
+
+/// The failure this exists to explain: an installed CLI that is not the project's produces an artifact the project's macro may refuse, and the refusal names a command without naming the reason.
+#[test]
+fn a_project_on_another_telar_is_named() {
+    let note = foreign_version_note("0.1.7").expect("0.1.7 is not this binary's version");
+
+    assert!(note.contains("0.1.7"), "{note}");
+    assert!(note.contains(env!("CARGO_PKG_VERSION")), "{note}");
+    assert!(note.contains("cargo install cargo-telar"), "{note}");
+}
+
+/// The common case says nothing: most builds are run by the CLI the project was written against.
+#[test]
+fn the_matching_version_says_nothing() {
+    assert_eq!(foreign_version_note(env!("CARGO_PKG_VERSION")), None);
+}

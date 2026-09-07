@@ -422,6 +422,29 @@ pub(crate) fn split_android_flag(args: Vec<String>) -> (bool, Vec<String>) {
     (android, rest)
 }
 
+/// Says so when this binary is not the one the project it is about to build was written against.
+///
+/// The two halves agree through the artifact format, not through version numbers, so a difference here is usually harmless: same format, compatible output, nothing to do. What it must not be is *invisible*. When the formats do differ the macro refuses with a message naming a command, and the one fact that would explain it — that the installed CLI is not this project's — is the one nobody is told. Hence a note rather than a warning: most of the time it is not the problem.
+pub(crate) fn foreign_version_note(project_telar: &str) -> Option<String> {
+    let ours = env!("CARGO_PKG_VERSION");
+    if project_telar == ours {
+        return None;
+    }
+    Some(format!(
+        "[cargo-telar] note: this project builds telar {project_telar}, and this is cargo-telar {ours}. If a build refuses what was transpiled, the versions are why: cargo install cargo-telar --version {project_telar} --force"
+    ))
+}
+
+/// The same, said once per invocation however many passes ask.
+pub(crate) fn warn_if_foreign_version(project_telar: &str) {
+    static WARNED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+    if let Some(note) = foreign_version_note(project_telar)
+        && !WARNED.swap(true, std::sync::atomic::Ordering::Relaxed)
+    {
+        eprintln!("{note}");
+    }
+}
+
 #[cfg(test)]
 #[path = "config_test.rs"]
 mod tests;
