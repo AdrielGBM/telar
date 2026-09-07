@@ -48,7 +48,7 @@ where
             let mut scale_scratch = renderer_core::ScaleScratch::new();
             let scales_itself = renderer.applies_scale_factor();
             // The hint session must carry this thread's own TID, so `reportActualWorkDuration` drives the scheduler for the thread that submits the work. It is not `Send`, so it is created, used and dropped here.
-            #[cfg(all(feature = "android", target_os = "android"))]
+            #[cfg(all(feature = "android-bare", target_os = "android"))]
             let hint_session = platform_android::AdpfSession::new(16_666_667, None);
             let idle_sweep_after = renderer.idle_sweep_after();
             loop {
@@ -76,7 +76,7 @@ where
                     let _ = ret_tx.send(msg.commands);
                     continue;
                 }
-                #[cfg(target_os = "android")]
+                #[cfg(all(feature = "android-bare", target_os = "android"))]
                 let frame_start = web_time::Instant::now();
                 // `begin_frame` reconfigures the swapchain, and a wgpu fatal error there is a panic rather than an `Err`, so catch it and drop the frame instead of unwinding into an abort.
                 let began = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
@@ -98,7 +98,7 @@ where
                         };
                     renderer.render_frame(commands, msg.clear)
                 }));
-                #[cfg(all(feature = "android", target_os = "android"))]
+                #[cfg(all(feature = "android-bare", target_os = "android"))]
                 if let Some(session) = &hint_session {
                     let duration_ns = frame_start.elapsed().as_nanos() as i64;
                     session.report(duration_ns);

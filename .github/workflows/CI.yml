@@ -59,7 +59,8 @@ jobs:
         with:
           ndk-version: r27c
       - run: cargo run -q -p cargo-telar -- bake
-      - run: cargo check -p sandbox -p telar-platform-android --target aarch64-linux-android --lib
+      # `sandbox`'s own default is `desktop`, so without this the job cross-compiled a winit build to Android and never touched the frontend it is named after.
+      - run: cargo check -p sandbox --no-default-features --features sandbox/android -p telar-platform-android --target aarch64-linux-android --lib
         env:
           CARGO_TARGET_AARCH64_LINUX_ANDROID_LINKER: ${{ steps.setup-ndk.outputs.ndk-path }}/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android24-clang
 

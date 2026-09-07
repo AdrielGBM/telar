@@ -294,11 +294,11 @@ where
     let _ = key;
     reactive_core::signal(init)
 }
-#[cfg(all(feature = "android", target_os = "android"))]
+#[cfg(all(feature = "android-bare", target_os = "android"))]
 pub use platform_android::AndroidApp;
 #[cfg(all(feature = "runtime", not(target_os = "android")))]
 pub use runner::build_surface_handler;
-#[cfg(all(feature = "runtime", target_os = "android"))]
+#[cfg(all(feature = "android-bare", target_os = "android"))]
 pub use runner::run_android_app_with_name;
 #[cfg(all(
     feature = "dev",
