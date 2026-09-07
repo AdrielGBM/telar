@@ -6,6 +6,8 @@
 //!
 //! **Keep this crate on the same version as `telar`.** Both depend on `renderer-assets` for `SvgData`, so a mismatch resolves two copies of it and the `Arc<SvgData>` a decoder here produces stops being the type the widget over there accepts — a type error naming one struct twice. It is the same lockstep `telar` and `telar-macros` already have, and for the same reason.
 //!
+//! Which is why every type a decoder here hands back is re-exported from this crate — [`SvgData`], [`ImageData`], [`Catalog`]. Naming one of them used to mean depending on `renderer-assets` or `renderer-core` directly, and a third dependency on a crate behind the facade is the most likely way to arrive at the mismatch above by accident. Two dependencies, `telar` and this one, are all an application needs.
+//!
 //! Be clear about what the split does and does not buy. It costs the same to compile: enabling `telar-dynamic/svg-text` links exactly what `telar/svg-text` used to. What it buys is that `telar` no longer carries twenty knobs about formats most applications never touch, and that a third-party decoder arrives through the same door as ours.
 //!
 //! ```ignore
@@ -63,5 +65,17 @@ pub use svg::SvgDecoder;
 
 pub use ui_core::{AssetCache, AssetDecoder, AssetError, AssetKey, AssetTransport, Reply};
 
+// What the decoders above hand back, re-exported so an application names this crate and `telar` and nothing else. Without them the type of `ImageDecoder`'s output is spelled in `telar-renderer-core`, which is a crate behind the facade that nobody should have to depend on to write down what they already hold — and depending on it directly is exactly how the two copies this crate's version note warns about get resolved.
+#[cfg(feature = "catalog")]
+pub use i18n_core::Catalog;
+#[cfg(feature = "svg")]
+pub use renderer_assets::SvgData;
+#[cfg(feature = "image")]
+pub use renderer_core::ImageData;
+
 /// How a cache is bounded: a byte budget, an optional idle horizon, and whether a value must be offered twice before it is kept. Re-exported for [`MemoryCache::with_policy`].
 pub use renderer_cache::{CacheStat, Policy};
+
+#[cfg(test)]
+#[path = "lib_test.rs"]
+mod tests;
