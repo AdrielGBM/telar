@@ -1,13 +1,13 @@
-//! The seam the in-app devtools overlay plugs into, and the tree model it reads.
+//! The seam an in-app devtools overlay plugs into.
 //!
-//! A runtime with no overlay compiled in runs `()` through the same trait, so the frame loop has one shape whether or not `dev` is on.
+//! A runtime with no overlay compiled in runs `()` through the same trait, so the frame loop has one shape whether or not one is installed. It lives here, beside [`SegmentNodeInfo`], because the tree an inspector reads is what the seam is *about* — and because a crate implementing an overlay should not have to depend on the facade to do it.
 
 use std::borrow::Cow;
 use std::time::Duration;
 
+use crate::SegmentNodeInfo;
 use platform_core::{Key, ModifiersState};
 use renderer_core::DrawCommand;
-use ui_tree::SegmentNodeInfo;
 
 /// What a dev overlay asks the runner to do.
 pub enum DevAction {

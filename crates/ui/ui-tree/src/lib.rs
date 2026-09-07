@@ -3,6 +3,7 @@
 #![warn(rustdoc::broken_intra_doc_links)]
 
 mod component;
+mod dev;
 mod element;
 mod overlay_dispatch;
 mod render_node;
@@ -11,6 +12,7 @@ mod tree;
 mod wheel;
 
 pub use component::{Component, EventResult};
+pub use dev::{DevAction, DevPlugin};
 pub use element::{element_capture, set_element_capture};
 pub use overlay_dispatch::{
     OverlayContext, OverlayGuard, OverlaySink, dispatch_overlays, register_overlay,

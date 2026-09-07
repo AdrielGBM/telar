@@ -5,13 +5,13 @@ use std::collections::VecDeque;
 use std::time::Duration;
 use web_time::Instant;
 
-use crate::dev_plugin::{DevAction, DevPlugin};
 use geometry_core::Rect;
 use platform_core::{Key, ModifiersState};
 use renderer_core::{
     Border, BorderRadius, Color, DrawCommand, Paint, RectStyle, ShapeStyle, TextStyle,
 };
 use ui_tree::SegmentNodeInfo;
+use ui_tree::{DevAction, DevPlugin};
 
 fn rect_command(rect: Rect, style: RectStyle) -> DrawCommand {
     DrawCommand::Rect {

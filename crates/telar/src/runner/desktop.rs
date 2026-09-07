@@ -4,11 +4,11 @@ use std::cell::RefCell;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 
-use crate::dev_plugin::DevPlugin;
 use platform_core::{EventHandler, SurfaceId};
 use platform_desktop::{DesktopPathsProvider, WinitPlatform, WinitWindow, request_dynamic_surface};
 use services_core::AppPathsProvider;
 use ui_core::Surface;
+use ui_tree::DevPlugin;
 
 use crate::app::App;
 use crate::app_config::AppConfig;

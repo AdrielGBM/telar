@@ -1,10 +1,10 @@
 //! The backend-agnostic entry point: the runner a frontend hands its own platform to.
 
-use crate::dev_plugin::DevPlugin;
 use platform_core::{Platform, PlatformError};
 use renderer_core::RendererFactory;
 use services_core::AppPathsProvider;
 use std::sync::Arc;
+use ui_tree::DevPlugin;
 
 use crate::app::App;
 use crate::app_config::AppConfig;

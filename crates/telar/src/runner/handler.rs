@@ -1,12 +1,12 @@
 //! The frame loop: one surface's [`EventHandler`](platform_core::EventHandler), from resume to teardown.
 
-use crate::dev_plugin::{DevAction, DevPlugin};
 use platform_core::{Event, EventHandler, Window, WindowCommand};
 use reactive_core::{FlushNotifyHandle, begin_batch, end_batch, set_flush_notify};
 use renderer_core::RenderBackend;
 use services_core::AppPathsProvider;
 use std::sync::Arc;
 use ui_core::EventResult;
+use ui_tree::{DevAction, DevPlugin};
 
 use crate::app_runtime::AppRuntime;
 use crate::config::{self, RendererBackend};

@@ -23,8 +23,6 @@ pub mod app;
 pub mod app_config;
 #[cfg(feature = "runtime")]
 pub mod app_runtime;
-#[cfg(feature = "runtime")]
-pub mod dev_plugin;
 #[cfg(feature = "dev")]
 pub mod dev_tools;
 #[cfg(feature = "runtime")]
@@ -76,8 +74,6 @@ pub use platform_core::{AppCtx, RedrawWaker};
 #[cfg(feature = "runtime")]
 pub use app_runtime::{AppRuntime, LocalApp};
 #[cfg(feature = "runtime")]
-pub use dev_plugin::{DevAction, DevPlugin};
-#[cfg(feature = "runtime")]
 pub use geometry_core::{ObjectFit, Point, Rect, Transform};
 #[cfg(feature = "runtime")]
 pub use layout_core::{
@@ -89,6 +85,8 @@ pub use prefs::UserPrefs;
 pub use raw_window_handle::{RawDisplayHandle, RawWindowHandle};
 #[cfg(feature = "runtime")]
 pub use tree::{Frame, HotTree, LocalTree, UiTree};
+#[cfg(feature = "runtime")]
+pub use ui_tree::{DevAction, DevPlugin};
 // Named in the tree shims the `app!` macro exports, so it has to be reachable through the facade.
 #[cfg(feature = "runtime")]
 pub use ui_tree::SegmentNodeInfo;

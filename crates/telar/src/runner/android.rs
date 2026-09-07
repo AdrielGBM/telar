@@ -4,8 +4,8 @@ use std::sync::Arc;
 
 use crate::app::App;
 use crate::app_config::AppConfig;
-use crate::dev_plugin::DevPlugin;
 use services_core::AppPathsProvider;
+use ui_tree::DevPlugin;
 
 // App processes do not inherit the adb shell environment, so the engine's env-var debug flags are unreachable. Bridged from `debug.telar.<k>` system properties, which need no root. Must run before any `OnceLock` reads them or the render thread spawns.
 #[cfg(feature = "runtime")]
