@@ -46,6 +46,10 @@ image = ["dep:image"]
 
 ## A translation catalog parsed from TOML at runtime, so a downloaded locale resolves through the same
 ## transport/cache/decoder path an icon does — validated before it is cached, which a plain download is not.
+##
+## The same switch as `telar/runtime-catalog`, reached for a different reason: that one is for an application
+## that already holds the TOML and calls `set_catalog` itself, this one for a catalog that arrives over a
+## transport. An application doing both names either — they resolve to one parser.
 catalog = ["i18n-core/runtime-catalog"]
 
 #! ## Sources

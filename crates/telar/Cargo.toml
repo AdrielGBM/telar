@@ -155,6 +155,10 @@ di = ["services-core/di"]
 
 ## Loading a translation catalog from TOML instead of linking one the transpiler baked — what an
 ## application with no `.rsx` file in it needs to reach i18n at all.
+##
+## For a catalog that *arrives* rather than one you already hold — downloaded, or picked by the user — the
+## same parser is behind `telar-dynamic`'s `catalog`, which routes it through the asset seam so a corrupt
+## file fails before it is cached instead of after.
 runtime-catalog = ["i18n-core/runtime-catalog"]
 
 ## Filesystem watching delivered on the UI thread. Opt-in: an application that reloads nothing should not
