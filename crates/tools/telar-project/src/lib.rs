@@ -10,6 +10,7 @@ mod assets;
 mod build;
 mod catalog;
 mod discovery;
+mod manifest;
 pub mod naming;
 mod paths;
 mod theme;
@@ -31,8 +32,11 @@ pub use catalog::{
 };
 pub use discovery::{
     assets_root, auto_modules_enabled, collect_files_by_ext, component_name, discover_rust_modules,
-    find_rsx_files, find_rsx_files_in_tree, prune_stale_generated, read_rsx_section,
-    relative_output_path,
+    find_rsx_files, find_rsx_files_in_tree, prune_stale_generated, relative_output_path,
+};
+pub use manifest::{
+    DevSection, I18nSection, MANIFEST_FILENAME, ManifestError, RendererBackend, TelarManifest,
+    TelarSection, WindowSection,
 };
 pub use paths::{
     find_ancestor_dir, find_telar_root, find_workspace_root, resolve_telar_version,

@@ -5,53 +5,27 @@ use std::path::{Path, PathBuf};
 use clap::ValueEnum;
 use serde::Deserialize;
 
-/// Which renderer the built app selects at startup. Declared here rather than imported from `telar` because the value never crosses the boundary: [`backend_as_str`] lowers it to the `TELAR_RENDERER_BACKEND` env var, which the runtime re-parses from `option_env!` — so importing it cost the CLI the whole facade.
-#[derive(Deserialize, Clone, Copy, PartialEq, Eq, Default, ValueEnum)]
-#[serde(rename_all = "lowercase")]
-pub(crate) enum RendererBackend {
-    #[default]
+pub(crate) use telar_project::{DevSection, TelarSection, WindowSection};
+use telar_project::{RendererBackend, TelarManifest};
+
+/// The three words the `--backend` flag takes.
+///
+/// A CLI vocabulary, not a config one: [`telar_project::RendererBackend`] is the same three words parsed by serde out of `telar.toml`, and this is what clap parses out of an argument. They convert; they are not one type because `ValueEnum` cannot be derived for a type from another crate.
+#[derive(Clone, Copy, ValueEnum)]
+pub(crate) enum BackendArg {
     Auto,
     Hardware,
     Software,
 }
 
-#[derive(Deserialize, Default, Clone)]
-pub(crate) struct WindowConfig {
-    pub title: Option<String>,
-    pub width: Option<u32>,
-    pub height: Option<u32>,
-    pub decorations: Option<bool>,
-    pub resizable: Option<bool>,
-    pub transparent: Option<bool>,
-    // "disabled" | "borderless" | "exclusive"
-    pub fullscreen: Option<String>,
-    // "centered" | "<x>,<y>"
-    pub position: Option<String>,
-}
-
-#[derive(Deserialize, Default, Clone)]
-pub(crate) struct DevConfig {
-    #[serde(default)]
-    pub window: Option<WindowConfig>,
-    #[serde(default)]
-    pub devtools: Option<bool>,
-}
-
-#[derive(Deserialize, Default, Clone)]
-pub(crate) struct TelarConfig {
-    #[serde(default)]
-    pub backend: Option<RendererBackend>,
-    #[serde(default)]
-    pub dev: Option<DevConfig>,
-    // `[telar] auto_modules` is read directly by the `telar::app!` macro, and serde ignores the unknown key here.
-}
-
-// The field name is the table name in telar.toml. It was `rsx` before the rename and nothing caught it: the table is `#[serde(default)]`, so a file writing `[telar]` parsed clean and every key in it was ignored.
-#[derive(Deserialize, Default)]
-#[serde(deny_unknown_fields)]
-struct TelarToml {
-    #[serde(default)]
-    pub telar: TelarConfig,
+impl From<BackendArg> for RendererBackend {
+    fn from(arg: BackendArg) -> Self {
+        match arg {
+            BackendArg::Auto => Self::Auto,
+            BackendArg::Hardware => Self::Hardware,
+            BackendArg::Software => Self::Software,
+        }
+    }
 }
 
 #[derive(Deserialize, Default)]
@@ -133,7 +107,7 @@ impl<T: Clone> Inheritable<T> {
 pub(crate) struct CargoPackageMetadata {
     pub(crate) android: Option<AndroidMetadata>,
     // `[package.metadata.telar]` — same schema as telar.toml's `[telar]`, but overridden by telar.toml.
-    pub(crate) telar: Option<TelarConfig>,
+    pub(crate) telar: Option<TelarSection>,
 }
 #[derive(Deserialize, Default)]
 pub(crate) struct AndroidMetadata {
@@ -326,9 +300,9 @@ pub(crate) fn default_app_id(name: &str) -> String {
 }
 
 // Reads `[package.metadata.telar]` from the package's Cargo.toml (the lowest-precedence file source).
-fn read_manifest_config(dir: &Path) -> TelarConfig {
+fn read_manifest_config(dir: &Path) -> TelarSection {
     let Ok(content) = std::fs::read_to_string(dir.join("Cargo.toml")) else {
-        return TelarConfig::default();
+        return TelarSection::default();
     };
     toml::from_str::<CargoManifest>(&content)
         .ok()
@@ -350,26 +324,20 @@ pub(crate) fn manifest_has_telar(dir: &Path) -> bool {
 }
 
 // Reads `[telar]` from telar.toml, which overrides the manifest metadata.
-fn read_toml_config(dir: &Path) -> TelarConfig {
-    let path = dir.join("telar.toml");
-    match std::fs::read_to_string(&path) {
-        Ok(content) => {
-            toml::from_str::<TelarToml>(&content)
-                .unwrap_or_else(|e| {
-                    eprintln!(
-                        "[cargo-telar] Warning: failed to parse {}: {e}",
-                        path.display()
-                    );
-                    TelarToml::default()
-                })
-                .telar
+//
+// Fatal rather than a warning, which is what it used to be. The schema refuses a key it does not recognise, and a project that misspelled one has configured nothing — carrying on would run the build the author did not ask for and say so in a line they have already scrolled past.
+fn read_toml_config(dir: &Path) -> TelarSection {
+    match TelarManifest::load(dir) {
+        Ok(manifest) => manifest.telar,
+        Err(e) => {
+            eprintln!("[cargo-telar] {e}");
+            std::process::exit(2);
         }
-        Err(_) => TelarConfig::default(),
     }
 }
 
 // Lowest to highest: built-in defaults, `[package.metadata.telar]`, `telar.toml`, CLI flags. The flags are layered on by each command after this returns.
-pub(crate) fn load_config(args: &[String]) -> TelarConfig {
+pub(crate) fn load_config(args: &[String]) -> TelarSection {
     let dir = find_package_dir(args);
     merge_config(read_manifest_config(&dir), read_toml_config(&dir))
 }
@@ -381,8 +349,8 @@ fn merge_opt<T>(base: Option<T>, over: Option<T>, merge: impl FnOnce(T, T) -> T)
     }
 }
 
-fn merge_window(base: WindowConfig, over: WindowConfig) -> WindowConfig {
-    WindowConfig {
+fn merge_window(base: WindowSection, over: WindowSection) -> WindowSection {
+    WindowSection {
         title: over.title.or(base.title),
         width: over.width.or(base.width),
         height: over.height.or(base.height),
@@ -394,17 +362,19 @@ fn merge_window(base: WindowConfig, over: WindowConfig) -> WindowConfig {
     }
 }
 
-fn merge_dev(base: DevConfig, over: DevConfig) -> DevConfig {
-    DevConfig {
+fn merge_dev(base: DevSection, over: DevSection) -> DevSection {
+    DevSection {
         window: merge_opt(base.window, over.window, merge_window),
         devtools: over.devtools.or(base.devtools),
     }
 }
 
-fn merge_config(base: TelarConfig, over: TelarConfig) -> TelarConfig {
-    TelarConfig {
+fn merge_config(base: TelarSection, over: TelarSection) -> TelarSection {
+    TelarSection {
         backend: over.backend.or(base.backend),
-        dev: merge_opt(base.dev, over.dev, merge_dev),
+        dev: merge_dev(base.dev, over.dev),
+        // Everything else is read from the package's own `telar.toml` by whoever needs it, never from `[package.metadata.telar]`, so a merge would only invent a precedence nothing reads.
+        ..over
     }
 }
 

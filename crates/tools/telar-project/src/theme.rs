@@ -10,10 +10,9 @@ use std::path::Path;
 ///
 /// This is the *declaration*, not the resolution: `telar_transpiler::resolve_theme_type` falls back to the source when it is absent, and `app!` compares against this one to refuse a `telar.toml` that says something the code does not.
 pub fn theme_type_in_config(package_dir: &Path) -> Option<String> {
-    let declared = crate::read_rsx_section(package_dir)?
-        .get("theme")?
-        .as_str()?
-        .to_string();
+    let declared = crate::TelarManifest::load_or_default(package_dir)
+        .telar
+        .theme?;
     Some(normalize_theme_path(&declared))
 }
 

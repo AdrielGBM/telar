@@ -2,7 +2,7 @@
 
 use clap::{Parser, Subcommand, ValueEnum};
 
-use crate::runner::config::RendererBackend;
+use crate::runner::config::BackendArg;
 
 #[derive(Parser)]
 #[command(
@@ -87,7 +87,7 @@ pub(crate) struct CommonArgs {
     pub(crate) target: Target,
     /// Renderer backend
     #[arg(long, value_enum)]
-    pub(crate) backend: Option<RendererBackend>,
+    pub(crate) backend: Option<BackendArg>,
     /// Which renderer a browser build draws with (`--target web`)
     #[arg(long, value_enum)]
     pub(crate) renderer: Option<WebRenderer>,

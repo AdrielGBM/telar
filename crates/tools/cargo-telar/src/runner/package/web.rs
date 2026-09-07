@@ -5,7 +5,7 @@ use std::process::Command;
 
 use super::{dist_dir, tool_missing};
 use crate::runner::cli::WebRenderer;
-use crate::runner::config::{TelarConfig, resolve_package, split_android_flag};
+use crate::runner::config::{TelarSection, resolve_package, split_android_flag};
 
 /// The name `wasm-bindgen` gives its output, and what the generated page imports.
 const BUNDLE: &str = "app";
@@ -28,7 +28,7 @@ fn telar_feature(renderer: Option<WebRenderer>) -> &'static str {
 /// Three tools rather than one, because that is what the toolchain is: cargo produces a wasm module whose imports are `wasm-bindgen`'s ABI, `wasm-bindgen` writes the JavaScript that satisfies them, and `wasm-opt` shrinks the result. The first two are required; the third is skipped with a note if it is not installed.
 pub(crate) fn build_web(
     cargo_args: Vec<String>,
-    config: TelarConfig,
+    config: TelarSection,
     release: bool,
     renderer: Option<WebRenderer>,
 ) -> ! {
@@ -46,7 +46,7 @@ pub(crate) fn build_web(
 /// The same build, as a function that returns rather than exits — what `dev --target web` rebuilds with.
 pub(crate) fn build_web_bundle(
     cargo_args: Vec<String>,
-    _config: TelarConfig,
+    _config: TelarSection,
     release: bool,
     renderer: Option<WebRenderer>,
 ) -> Result<PathBuf, String> {

@@ -2,7 +2,7 @@
 
 use std::process::Command;
 
-use super::super::config::{TelarConfig, resolve_package};
+use super::super::config::{TelarSection, resolve_package};
 use super::{
     create_dir_or_exit, desktop_entry_file, dist_dir, run_bundler_tool, run_release_build,
     stage_binary, write_or_exit,
@@ -29,7 +29,7 @@ fn deb_control_file(
     )
 }
 
-pub(crate) fn build_deb(cargo_args: Vec<String>, config: TelarConfig) -> ! {
+pub(crate) fn build_deb(cargo_args: Vec<String>, config: TelarSection) -> ! {
     // Resolved before the build: failing on a missing manifest field after a full release compile wastes the one thing the author cannot get back.
     let Some(maintainer) = resolve_package(&cargo_args).maintainer() else {
         eprintln!(

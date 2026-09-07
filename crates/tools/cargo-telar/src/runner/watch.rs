@@ -11,7 +11,7 @@ use telar_project::ASSET_KINDS;
 
 use super::android::{android_install_and_launch, make_android_cmd};
 use super::config::{
-    TelarConfig, WindowConfig, backend_as_str, resolve_package, split_android_flag,
+    TelarSection, WindowSection, backend_as_str, resolve_package, split_android_flag,
 };
 use super::diagnostics;
 use super::package::{package_bin_path, package_lib_path, profile_of};
@@ -69,7 +69,7 @@ fn make_lib_build_args(args: &[String], features: &[&str]) -> Vec<String> {
     lib_build_args
 }
 
-fn apply_dev_window_env(envs: &mut Vec<(String, String)>, window: &WindowConfig) {
+fn apply_dev_window_env(envs: &mut Vec<(String, String)>, window: &WindowSection) {
     if let Some(title) = &window.title {
         envs.push(("TELAR_DEV_WINDOW_TITLE".to_string(), title.clone()));
     }
@@ -408,7 +408,7 @@ impl HotMode {
 
 pub(crate) struct HotLoopOpts {
     pub(crate) args: Vec<String>,
-    pub(crate) config: TelarConfig,
+    pub(crate) config: TelarSection,
     pub(crate) no_hot_reload: bool,
 }
 
@@ -450,13 +450,10 @@ pub(crate) fn run_hot_loop(mode: HotMode, opts: HotLoopOpts) -> ! {
     if is_preview {
         launch_envs.push(("TELAR_PREVIEW".to_string(), "1".to_string()));
     }
-    let devtools_disabled = config.dev.as_ref().and_then(|d| d.devtools) == Some(false);
-    if devtools_disabled {
+    if config.dev.devtools == Some(false) {
         launch_envs.push(("TELAR_DEVTOOLS".to_string(), "0".to_string()));
     }
-    if let Some(dev) = &config.dev
-        && let Some(window) = &dev.window
-    {
+    if let Some(window) = &config.dev.window {
         apply_dev_window_env(&mut launch_envs, window);
     }
 

@@ -113,12 +113,11 @@ fn run_dev_cmd(args: DevArgs) {
     let terminal = select_frontend(target, &mut cargo_args);
     let mut config = load_config(&cargo_args);
     if let Some(backend) = backend {
-        config.backend = Some(backend);
+        config.backend = Some(backend.into());
     }
     // CLI `--devtools off` overrides any config-file setting.
     if let Some(devtools) = devtools {
-        config.dev.get_or_insert_with(Default::default).devtools =
-            Some(matches!(devtools, DevtoolsArg::On));
+        config.dev.devtools = Some(matches!(devtools, DevtoolsArg::On));
     }
     if target == Target::Web {
         run_web_dev(cargo_args, config, WEB_DEV_PORT, renderer);
@@ -180,7 +179,7 @@ fn run_preview_cmd(args: PreviewArgs) {
     }
     let mut config = load_config(&cargo_args);
     if let Some(backend) = backend {
-        config.backend = Some(backend);
+        config.backend = Some(backend.into());
     }
     // A preview renders one component in a window of its own; there is no page to draw it as a document.
     let _ = renderer;
@@ -319,7 +318,7 @@ fn run_build_cmd(args: BuildArgs) -> ! {
     }
     let mut config = load_config(&cargo_args);
     if let Some(backend) = backend {
-        config.backend = Some(backend);
+        config.backend = Some(backend.into());
     }
 
     if android {

@@ -10,7 +10,7 @@ use std::time::Duration;
 use notify::{Config as NotifyConfig, EventKind, RecommendedWatcher, RecursiveMode, Watcher};
 
 use super::cli::WebRenderer;
-use super::config::TelarConfig;
+use super::config::TelarSection;
 use super::package::build_web_bundle;
 
 /// How long to let a burst of file events settle before rebuilding. An editor writing a file produces several, and a save that touches a whole directory produces one per file.
@@ -21,7 +21,7 @@ static BUILD: AtomicU64 = AtomicU64::new(1);
 
 pub(crate) fn run_web_dev(
     cargo_args: Vec<String>,
-    config: TelarConfig,
+    config: TelarSection,
     port: u16,
     renderer: Option<WebRenderer>,
 ) -> ! {
@@ -57,7 +57,7 @@ pub(crate) fn run_web_dev(
 
 fn watch_and_rebuild(
     cargo_args: Vec<String>,
-    config: TelarConfig,
+    config: TelarSection,
     dist: &Path,
     renderer: Option<WebRenderer>,
 ) -> ! {

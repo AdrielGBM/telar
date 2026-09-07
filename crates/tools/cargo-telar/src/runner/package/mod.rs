@@ -4,7 +4,7 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 
 use super::config::{
-    ResolvedPackage, TelarConfig, backend_as_str, resolve_package, split_android_flag,
+    ResolvedPackage, TelarSection, backend_as_str, resolve_package, split_android_flag,
 };
 
 mod appimage;
@@ -93,7 +93,7 @@ fn run_bundler_tool(
 }
 
 // Returns the built binary path alongside the resolved package: workspace root plus the manifest fields the bundlers read.
-fn run_release_build(cargo_args: Vec<String>, config: TelarConfig) -> (PathBuf, ResolvedPackage) {
+fn run_release_build(cargo_args: Vec<String>, config: TelarSection) -> (PathBuf, ResolvedPackage) {
     let (_android, rest) = split_android_flag(cargo_args);
     let backend_value = backend_as_str(config.backend.unwrap_or_default());
 
@@ -124,7 +124,7 @@ fn run_release_build(cargo_args: Vec<String>, config: TelarConfig) -> (PathBuf, 
     (bin_path, resolved)
 }
 
-pub(crate) fn build_desktop_dir(cargo_args: Vec<String>, config: TelarConfig) -> ! {
+pub(crate) fn build_desktop_dir(cargo_args: Vec<String>, config: TelarSection) -> ! {
     let (bin_path, resolved) = run_release_build(cargo_args, config);
     let package_name = resolved.name();
 

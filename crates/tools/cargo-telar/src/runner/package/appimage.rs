@@ -2,7 +2,7 @@
 
 use std::process::Command;
 
-use super::super::config::TelarConfig;
+use super::super::config::TelarSection;
 use super::{
     create_dir_or_exit, desktop_entry_file, dist_dir, run_bundler_tool, run_release_build,
     set_executable, stage_binary, write_or_exit,
@@ -23,7 +23,7 @@ fn apprun_script(name: &str) -> String {
     )
 }
 
-pub(crate) fn build_appimage(cargo_args: Vec<String>, config: TelarConfig) -> ! {
+pub(crate) fn build_appimage(cargo_args: Vec<String>, config: TelarSection) -> ! {
     let (bin_path, resolved) = run_release_build(cargo_args, config);
     let package_name = resolved.name();
     // appimagetool wants the host arch label (x86_64/aarch64), which is exactly what Rust reports.

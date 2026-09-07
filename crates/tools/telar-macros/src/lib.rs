@@ -538,6 +538,12 @@ fn transpile_project(theme_type_str: Option<&str>) -> Result<TranspileOutput, To
     // This crate's own version, because it is the one whose generated code the artifact's `assets.rs` calls into. `telar` and `telar-macros` share the workspace version, but the handshake compares against whoever loads the module, not whoever wrote the check.
     let assets = telar_project::AssetContext::load(&manifest_dir, env!("CARGO_PKG_VERSION"));
 
+    // Before anything reads a setting out of it: every reader below falls back to a default on a manifest it cannot parse, which is right for them and wrong as the only answer — a misspelled key would configure nothing and say nothing.
+    if let Err(e) = telar_project::TelarManifest::load(&manifest_dir) {
+        let msg = format!("rsx: {e}");
+        return Err(quote! { compile_error!(#msg); });
+    }
+
     check_theme_agrees(&manifest_dir, theme_type_str)?;
 
     let wired = wire_sources(
@@ -585,7 +591,7 @@ fn transpile_project(theme_type_str: Option<&str>) -> Result<TranspileOutput, To
         .unwrap_or_else(|| src_dir.clone());
     let invoked_at_root = invoked_in == src_dir;
 
-    let telar_toml = manifest_dir.join("telar.toml");
+    let telar_toml = manifest_dir.join(telar_project::MANIFEST_FILENAME);
     if telar_toml.exists() {
         // Re-run the macro when telar.toml changes (e.g. toggling auto_modules), like the `.rsx` sources.
         let telar_toml_str = telar_toml.to_string_lossy().to_string();

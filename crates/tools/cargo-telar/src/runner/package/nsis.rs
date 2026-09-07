@@ -3,7 +3,7 @@
 use std::path::Path;
 use std::process::Command;
 
-use super::super::config::TelarConfig;
+use super::super::config::TelarSection;
 use super::{create_dir_or_exit, dist_dir, run_bundler_tool, run_release_build, write_or_exit};
 
 fn nsis_script(name: &str, bin_path: &Path, installer_path: &Path) -> String {
@@ -35,7 +35,7 @@ SectionEnd
     )
 }
 
-pub(crate) fn build_nsis(cargo_args: Vec<String>, config: TelarConfig) -> ! {
+pub(crate) fn build_nsis(cargo_args: Vec<String>, config: TelarSection) -> ! {
     // The installer wraps the host-built .exe, so it must be produced on a Windows host (no cross-compilation).
     if !cfg!(target_os = "windows") {
         eprintln!(

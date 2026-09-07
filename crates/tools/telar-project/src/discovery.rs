@@ -4,7 +4,9 @@ use std::collections::HashSet;
 use std::fmt::Write;
 use std::path::{Path, PathBuf};
 
-/// Recursively collects files with `extension` under `dir`, descending into a subdirectory only when `keep_dir` returns true for its name. The result is sorted.
+/// Recursively collects files with any of `extensions` under `root`, descending into a subdirectory only when `keep_dir` returns true for its name. The result is sorted.
+///
+/// A `root` that names a file is that file, if it matches — so a caller taking paths from a command line does not need a second walk for the case where the user pointed at one thing.
 pub fn collect_files_by_ext(
     dir: &Path,
     extension: &str,
@@ -53,30 +55,18 @@ pub fn find_rsx_files_in_tree(root: &Path) -> Vec<PathBuf> {
     })
 }
 
-/// Parses the `[telar]` table from `<package_root>/telar.toml`, or `None` if the file/section is absent.
-pub fn read_rsx_section(package_root: &Path) -> Option<toml::Table> {
-    let content = std::fs::read_to_string(package_root.join("telar.toml")).ok()?;
-    content
-        .parse::<toml::Table>()
-        .ok()?
-        .get("telar")?
-        .as_table()
-        .cloned()
-}
-
-/// Reads `[telar] auto_modules` from `telar.toml`. A missing file or key yields `false`, so filesystem module discovery is strictly opt-in.
+/// Reads `[telar] auto_modules`. A missing file or key yields `false`, so filesystem module discovery is strictly opt-in.
 pub fn auto_modules_enabled(package_root: &Path) -> bool {
-    read_rsx_section(package_root)
-        .and_then(|s| s.get("auto_modules")?.as_bool())
-        .unwrap_or(false)
+    crate::TelarManifest::load_or_default(package_root)
+        .telar
+        .auto_modules
 }
 
 /// The directory that baked `src:"..."` asset paths resolve against: `[telar] assets` in `telar.toml` (default `"assets"`), joined onto the package root — so assets live in one place (e.g. `./assets`) regardless of which `.rsx` references them, instead of being tied to each `.rsx`'s own directory.
 pub fn assets_root(package_root: &Path) -> PathBuf {
-    let configured = read_rsx_section(package_root)
-        .and_then(|s| s.get("assets")?.as_str().map(str::to_string))
-        .unwrap_or_else(|| "assets".to_string());
-    package_root.join(configured)
+    crate::TelarManifest::load_or_default(package_root)
+        .telar
+        .assets_root(package_root)
 }
 
 /// Declares `pub mod` for every hand-written `.rs` module mirroring the `src_dir` tree, so an app can rely on filesystem module discovery instead of hand-written `mod.rs`/`mod` statements. Returns the top-level declarations and, for each discovered subdirectory, writes a generated file under `modtree_dir` holding that directory's children. Skips the crate roots (`lib.rs`, `main.rs`) and directories with no `.rs` under them (asset- or markup-only dirs). A directory that has its own `mod.rs` is declared but not descended into, so it stays hand-managed — the escape hatch for opting a subtree out of discovery.

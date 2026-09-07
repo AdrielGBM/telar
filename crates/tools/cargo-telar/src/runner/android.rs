@@ -4,7 +4,7 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 
 use super::config::{
-    TelarConfig, backend_as_str, default_app_id, read_package_manifest, resolve_package,
+    TelarSection, backend_as_str, default_app_id, read_package_manifest, resolve_package,
     split_android_flag,
 };
 use super::package::{dist_dir, profile_of};
@@ -81,7 +81,7 @@ fn load_dotenv(cmd: &mut Command) {
     }
 }
 
-pub(crate) fn make_android_cmd(cargo_args: Vec<String>, config: TelarConfig) -> Command {
+pub(crate) fn make_android_cmd(cargo_args: Vec<String>, config: TelarSection) -> Command {
     let ndk_root = resolve_ndk_root();
     let backend_value = backend_as_str(config.backend.unwrap_or_default());
     let mut cmd = Command::new("cargo");
@@ -138,7 +138,7 @@ pub(crate) fn installed_android_platforms(sdk_root: &Path) -> Vec<u32> {
     versions
 }
 
-pub(crate) fn build_android_package(cargo_args: Vec<String>, config: TelarConfig) -> ! {
+pub(crate) fn build_android_package(cargo_args: Vec<String>, config: TelarSection) -> ! {
     let (_android, rest) = split_android_flag(cargo_args);
     let mut build_args = vec!["apk".to_string(), "build".to_string(), "--lib".to_string()];
     build_args.extend(rest.clone());

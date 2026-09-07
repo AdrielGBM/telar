@@ -109,39 +109,22 @@ pub fn bake_catalog(
     Some(report)
 }
 
-/// How the catalog is discovered, from `[telar.i18n]` in `telar.toml` (with back-compat fallbacks to the older `[telar] locales` / `[telar] default_locale`). Both discovery sources may be active at once; set either name to `""` to disable it.
+/// How the catalog is discovered, read from the one `telar.toml` schema. Both sources may be active at once; either name set to `""` disables it.
 struct I18nConfig {
-    /// Project-wide catalog directory joined onto the package root (default `"locales"`): holds `<tag>.toml` or `<tag>/<module>.toml`. `""` disables it.
     root: String,
-    /// Directory name discovered recursively under `src/` for co-located, per-module catalogs (default `"i18n"`): every `src/**/<scan>/<tag>.toml` contributes to locale `<tag>`. `""` disables it.
     scan: String,
-    /// Fallback locale when the active one lacks a key. `None` → `"en"` if present, else the first tag.
     default: Option<String>,
 }
 
 fn read_i18n_config(package_root: &Path) -> I18nConfig {
-    let rsx = telar_project::read_rsx_section(package_root);
-    let i18n = rsx
-        .as_ref()
-        .and_then(|t| t.get("i18n"))
-        .and_then(|v| v.as_table());
-    let sub = |key: &str| {
-        i18n.and_then(|t| t.get(key))
-            .and_then(|v| v.as_str())
-            .map(str::to_string)
-    };
-    let top = |key: &str| {
-        rsx.as_ref()
-            .and_then(|t| t.get(key))
-            .and_then(|v| v.as_str())
-            .map(str::to_string)
-    };
+    let telar = telar_project::TelarManifest::load_or_default(package_root).telar;
     I18nConfig {
-        root: sub("root")
-            .or_else(|| top("locales"))
-            .unwrap_or_else(|| "locales".to_string()),
-        scan: sub("scan").unwrap_or_else(|| "i18n".to_string()),
-        default: sub("default").or_else(|| top("default_locale")),
+        root: telar
+            .locales_root(Path::new(""))
+            .map(|p| p.to_string_lossy().into_owned())
+            .unwrap_or_default(),
+        scan: telar.catalog_scan_dir(),
+        default: telar.default_locale(),
     }
 }
 

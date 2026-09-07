@@ -2,7 +2,7 @@
 
 use std::process::Command;
 
-use super::super::config::{TelarConfig, default_app_id};
+use super::super::config::{TelarSection, default_app_id};
 use super::{
     create_dir_or_exit, dist_dir, run_bundler_tool, run_release_build, stage_binary, write_or_exit,
 };
@@ -28,7 +28,7 @@ fn info_plist(name: &str, version: &str) -> String {
     )
 }
 
-pub(crate) fn build_dmg(cargo_args: Vec<String>, config: TelarConfig) -> ! {
+pub(crate) fn build_dmg(cargo_args: Vec<String>, config: TelarSection) -> ! {
     // hdiutil only exists on macOS and rsx does not cross-compile, so the bundle must be produced on a mac host.
     if !cfg!(target_os = "macos") {
         eprintln!(
