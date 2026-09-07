@@ -139,6 +139,7 @@ fn run_preview_cmd(args: PreviewArgs) {
         hot,
         component,
         list,
+        png,
     } = args;
     // The preview host process inherits our env; it filters PreviewEntries by this when set.
     if let Some(component) = &component {
@@ -150,17 +151,19 @@ fn run_preview_cmd(args: PreviewArgs) {
         release,
         no_hot_reload,
     } = hot;
+    // Makes the generated entrypoint print "component\tpreview" lines and exit instead of opening a window.
     if list {
-        // Makes the generated entrypoint print "component\tpreview" lines and exit instead of opening a window.
-        let mut cargo_args = vec!["run".to_string()];
-        cargo_args.extend(build_cargo_args(&common.package, release, &common.features));
-        cargo_args.extend(common.cargo_args);
-        let status = Command::new("cargo")
-            .args(&cargo_args)
-            .env("TELAR_PREVIEW_LIST", "1")
-            .status()
-            .expect("[cargo-telar] failed to invoke cargo");
-        std::process::exit(status.code().unwrap_or(1));
+        run_preview_once(&common, release, "previews", "TELAR_PREVIEW_LIST", "1");
+    }
+    // The only answer for a shell with no display, and what a golden-image run compares.
+    if let Some(dir) = &png {
+        run_preview_once(
+            &common,
+            release,
+            "preview-headless",
+            "TELAR_PREVIEW_PNG",
+            &dir.display().to_string(),
+        );
     }
     let CommonArgs {
         package,
@@ -189,6 +192,29 @@ fn run_preview_cmd(args: PreviewArgs) {
             no_hot_reload,
         },
     );
+}
+
+/// Runs the app binary once with `var` set, under the `telar` feature that makes it answer, and exits with its code.
+///
+/// The feature is the half that was missing. These entry points are reached through an environment variable the generated `run()` reads, and that `run()` only reads one in a build carrying previews — so without naming a feature here the binary starts the application instead, which is what `--png` would have done for as long as the feature behind it existed.
+fn run_preview_once(
+    common: &CommonArgs,
+    release: bool,
+    feature: &str,
+    var: &str,
+    value: &str,
+) -> ! {
+    let mut cargo_args = vec!["run".to_string()];
+    cargo_args.extend(build_cargo_args(&common.package, release, &common.features));
+    cargo_args.extend(common.cargo_args.clone());
+    cargo_args.push("--features".to_string());
+    cargo_args.push(format!("telar/{feature}"));
+    let status = Command::new("cargo")
+        .args(&cargo_args)
+        .env(var, value)
+        .status()
+        .expect("[cargo-telar] failed to invoke cargo");
+    std::process::exit(status.code().unwrap_or(1));
 }
 
 fn run_test_cmd(args: TestArgs) -> ! {

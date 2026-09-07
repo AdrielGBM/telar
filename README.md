@@ -90,6 +90,7 @@ Then:
 ```sh
 cargo telar dev        # run with hot reload
 cargo telar preview    # render every [preview] block, hot-reloaded
+cargo telar preview --png out/   # render each one to a PNG instead, with no window
 cargo telar test       # render all previews headlessly and report failures
 cargo telar check      # type-check, with .rsx errors on the lines you wrote
 cargo telar build --format deb   # appimage | deb | dmg | nsis | apk | dir

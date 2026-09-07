@@ -128,6 +128,9 @@ pub(crate) struct PreviewArgs {
     /// List all available previews and exit
     #[arg(long)]
     pub(crate) list: bool,
+    /// Render every preview to a PNG in this directory and exit, with no window
+    #[arg(long, value_name = "DIR", conflicts_with = "list")]
+    pub(crate) png: Option<std::path::PathBuf>,
 }
 
 /// `cargo check` cannot do this job: a `.rsx` compiles to a generated file under `.telar/build/`, so every error past the parse stage names a file the author never wrote. The per-line source map beside each generated file is what puts them back, and nothing outside the VS Code extension read it before this.
