@@ -1,4 +1,6 @@
-//! Live mirror of the `app!` macro's compile-time output. On every successful parse of a `.rsx`, the transpiled Rust is written to `<crate>/.telar/build/<rel>.rs` (and its `.rs.map`) so the workspace rust-analyzer analyzes the in-flight buffer — making completion / hover / definition live instead of one `cargo check` behind, since rust-analyzer re-reads the changed file from disk.
+//! The transpiled view of the buffer being typed: computed on every successful parse, handed to the embedded analyzer in memory, and left on disk only where something other than the analyzer has to read it.
+//!
+//! What is live is the overlay ([`generated_target`] into `ra::vfs`), not the file. The generated `.rs` is written once, to give a newly created `.rsx` something the loaded workspace graph can carry, and never rewritten — `.telar/build/` is what a build compiles, and a second writer putting unsaved text there is how a build comes to compile something nobody saved. The `.rs.map` beside it is rewritten every time, because reverse-mapping a position has to follow the buffer and no build reads it.
 
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -99,7 +101,7 @@ fn bake_if_unanswered(package_dir: &Path, document: &RsxDocument) {
     telar_baker::bake_package(package_dir, &producer, &version);
 }
 
-/// Transpiles `source` and writes `<crate>/.telar/build/<rel>.rs` + `.rs.map`, mirroring the macro's output so rust-analyzer sees the live buffer. `theme_type` matches the analyzer's project discovery. A no-op when the file is outside a crate's `src/` or transpilation fails — the last good build stays, so IntelliSense keeps working against the last parseable state.
+/// Bakes what the buffer references if the artifact cannot answer for it, then leaves the map beside the generated file — and the file itself if nothing has produced one yet. `theme_type` matches the analyzer's project discovery. A no-op when the file is outside a crate's `src/` or transpilation fails, so IntelliSense keeps working against the last parseable state.
 pub fn sync_build_file(
     rsx_path: &Path,
     source: &str,
@@ -116,8 +118,11 @@ pub fn sync_build_file(
     if let Some(parent) = path.parent() {
         let _ = std::fs::create_dir_all(parent);
     }
-    // The same writer the build uses, so a mirror write and a build write of one file cannot differ in atomicity — the two race over this directory by design.
-    let _ = telar_transpiler::write_if_changed_atomic(&path, &code);
+    // Written to give the file something to exist as, and never rewritten. The embedded analyzer only knows a file the loaded workspace graph carries, and a `.rsx` created in the editor has no generated Rust until something builds it; every edit after that is served by the in-memory overlay, so overwriting here would buy nothing and cost the one thing this directory has to guarantee — that what a build compiles came from what is on disk, and not from a buffer nobody has saved.
+    if !path.exists() {
+        let _ = telar_transpiler::write_if_changed_atomic(&path, &code);
+    }
+    // The map does track the live buffer: it is what turns a position in the overlaid Rust back into one in the `.rsx` being typed, and it is not what the build artifact attests to.
     let _ =
         telar_transpiler::write_if_changed_atomic(&path.with_extension("rs.map"), &map.to_json());
 }

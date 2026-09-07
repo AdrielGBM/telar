@@ -28,7 +28,7 @@ fn a_never_baked_asset_is_baked_rather_than_mirrored_as_an_error() {
         root.join(".telar/assets.json").is_file(),
         "the editor should have baked the artifact it found missing"
     );
-    let mirrored = std::fs::read_to_string(root.join(".telar/build/view.rs")).unwrap();
+    let mirrored = generated_target(&rsx, source, None).unwrap().code;
     assert!(
         mirrored.contains("crate::__rsx_assets::ASSET_"),
         "the mirror should reference the baked static:\n{mirrored}"
@@ -56,7 +56,7 @@ fn a_src_naming_no_file_bakes_nothing() {
         !root.join(".telar/assets.json").exists(),
         "a missing file is not something a bake can supply"
     );
-    let mirrored = std::fs::read_to_string(root.join(".telar/build/view.rs")).unwrap();
+    let mirrored = generated_target(&rsx, source, None).unwrap().code;
     assert!(mirrored.contains("compile_error!"), "{mirrored}");
 
     let _ = std::fs::remove_dir_all(&root);
@@ -79,7 +79,7 @@ fn an_asset_created_after_a_failed_sync_is_picked_up() {
     std::fs::write(root.join("assets/later.svg"), ICON_SVG).unwrap();
     sync_build_file(&rsx, source, &document, None);
 
-    let mirrored = std::fs::read_to_string(root.join(".telar/build/view.rs")).unwrap();
+    let mirrored = generated_target(&rsx, source, None).unwrap().code;
     assert!(
         mirrored.contains("crate::__rsx_assets::ASSET_"),
         "{mirrored}"
@@ -104,8 +104,37 @@ fn an_asset_edited_since_the_bake_is_rebaked() {
 
     let second = std::fs::read_to_string(root.join(".telar/assets.json")).unwrap();
     assert_ne!(first, second, "the hash should have been rewritten");
-    let mirrored = std::fs::read_to_string(root.join(".telar/build/view.rs")).unwrap();
+    let mirrored = generated_target(&rsx, source, None).unwrap().code;
     assert!(!mirrored.contains("compile_error!"), "{mirrored}");
+
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+/// The single-writer rule `.telar/build/` rests on: a build compiles what is on disk, and the editor typing into a buffer nobody has saved must not put that text where a build will find it. The overlay is what carries the live view; the file is only bootstrapped once so a newly created `.rsx` has something the workspace graph can load.
+#[test]
+fn an_existing_generated_file_is_never_rewritten() {
+    let root = unbaked_crate("single_writer");
+    let rsx = root.join("src/view.rsx");
+    let built = "[view]\ntext \"what a build produced\"\n";
+    std::fs::write(&rsx, built).unwrap();
+    sync_build_file(&rsx, built, &telar_parser::parse(built).unwrap(), None);
+    let on_disk = std::fs::read_to_string(root.join(".telar/build/view.rs")).unwrap();
+
+    let unsaved = "[view]\ntext \"what the editor is showing\"\n";
+    sync_build_file(&rsx, unsaved, &telar_parser::parse(unsaved).unwrap(), None);
+
+    assert_eq!(
+        std::fs::read_to_string(root.join(".telar/build/view.rs")).unwrap(),
+        on_disk,
+        "an unsaved buffer reached the file a build compiles"
+    );
+    assert!(
+        generated_target(&rsx, unsaved, None)
+            .unwrap()
+            .code
+            .contains("what the editor is showing"),
+        "the overlay still has to carry the live view"
+    );
 
     let _ = std::fs::remove_dir_all(&root);
 }
