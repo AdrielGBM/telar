@@ -6,7 +6,7 @@
 
 use std::path::{Path, PathBuf};
 
-use telar_transpiler::{RsxSpan, SourceMap, TranspiledSource};
+use telar_transpiler::{GeneratedFile, RsxSpan, SourceMap, TranspiledSource};
 
 /// One package whose `src/` tree the harness transpiles, with the theme type its `app!` invocation names — `use_theme::<T>()` is typed by it, so the wrong one here would snapshot code the build never emits.
 struct Project {
@@ -40,8 +40,8 @@ fn golden_dir() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("golden")
 }
 
-/// Transpiles one package exactly the way `app!` does: the same component name (the file stem), the same baked artifact. There is no pre-pass to match any more — a file transpiles knowing only itself.
-fn transpile_project(project: &Project) -> Vec<(PathBuf, TranspiledSource)> {
+/// Transpiles one package exactly the way `app!` does — the same walk, the same component names, the same baked artifact, the same theme — because it calls the same function the macro calls. Nothing is written: the snapshots are compared against what a build *would* produce, not against what one left behind.
+fn transpile_project(project: &Project) -> Vec<GeneratedFile> {
     let manifest = workspace_root().join(project.manifest);
     let src_dir = manifest.join("src");
     let assets = telar_transpiler::AssetContext::load(&manifest, env!("CARGO_PKG_VERSION"));
@@ -51,32 +51,19 @@ fn transpile_project(project: &Project) -> Vec<(PathBuf, TranspiledSource)> {
         "{} has no usable baked asset artifact — run `cargo run -p cargo-telar -- bake` first",
         project.name
     );
-    let mut files = telar_transpiler::find_rsx_files(&src_dir);
-    files.sort();
+    let files = telar_transpiler::transpile_package(&telar_transpiler::PackageOptions {
+        src_dir: &src_dir,
+        theme_type: Some(project.theme),
+        assets: Some(&assets),
+        flavour: telar_transpiler::BuildFlavour::Plain,
+    })
+    .unwrap_or_else(|e| panic!("{} failed to transpile: {e}", project.name));
     assert!(
         !files.is_empty(),
         "{} has no .rsx files — the harness would pass by covering nothing",
         project.name
     );
-
     files
-        .into_iter()
-        .map(|rsx| {
-            let source = std::fs::read_to_string(&rsx)
-                .unwrap_or_else(|e| panic!("cannot read {}: {e}", rsx.display()));
-            let stem = telar_transpiler::component_name(&rsx);
-            let out = telar_transpiler::transpile_source(
-                &source,
-                &stem,
-                Some(project.theme),
-                Some(&assets),
-            )
-            .unwrap_or_else(|e| panic!("{} failed to transpile: {e}", rsx.display()));
-            let rel = telar_transpiler::relative_output_path(&rsx, &src_dir)
-                .unwrap_or_else(|| panic!("{} is not under src/", rsx.display()));
-            (rel, out)
-        })
-        .collect()
 }
 
 /// The source map as a reviewable snapshot: one line per generated line, and the verbatim expression spans with the `.rsx` text they claim to cover.
@@ -151,15 +138,13 @@ fn generated_rust_and_source_maps_match_the_snapshots() {
     let mut covered = 0usize;
 
     for project in PROJECTS {
-        let src_dir = workspace_root().join(project.manifest).join("src");
-        for (rel, out) in transpile_project(project) {
-            let rsx = src_dir.join(&rel).with_extension("rsx");
-            let source = std::fs::read_to_string(&rsx).unwrap_or_default();
-            let base = golden_dir().join(project.name).join(&rel);
-            check(&base, &out.rust_code, &mut failures);
+        for file in transpile_project(project) {
+            let source = std::fs::read_to_string(&file.rsx_path).unwrap_or_default();
+            let base = golden_dir().join(project.name).join(&file.rel_out);
+            check(&base, &file.source.rust_code, &mut failures);
             check(
                 &base.with_extension("rs.map"),
-                &render_map(&out, &source),
+                &render_map(&file.source, &source),
                 &mut failures,
             );
             covered += 1;
@@ -186,9 +171,9 @@ fn every_verbatim_span_locates_back_to_the_text_it_came_from() {
     let mut checked = 0usize;
 
     for project in PROJECTS {
-        let src_dir = workspace_root().join(project.manifest).join("src");
-        for (rel, out) in transpile_project(project) {
-            let rsx_path = src_dir.join(&rel).with_extension("rsx");
+        for file in transpile_project(project) {
+            let rsx_path = file.rsx_path;
+            let out = file.source;
             let rsx = std::fs::read_to_string(&rsx_path).expect("the file just transpiled");
             let map = SourceMap::new(out.source_map.clone(), out.expr_spans.clone());
 

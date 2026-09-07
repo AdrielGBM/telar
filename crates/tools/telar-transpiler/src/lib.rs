@@ -11,6 +11,7 @@ mod error;
 mod gradient;
 pub mod naming;
 mod paths;
+mod project;
 mod registry;
 mod rust;
 mod signal_scan;
@@ -38,6 +39,10 @@ pub use discovery::{
 };
 pub use error::TranspileError;
 pub use paths::{find_ancestor_dir, find_telar_root, find_workspace_root, write_if_changed_atomic};
+pub use project::{
+    BuildFlavour, GeneratedFile, PackageError, PackageOptions, generated_dir, transpile_package,
+    write_package,
+};
 pub use registry::{
     AttrSpec, ROLE_VALUES, ValueKind, attr_doc, attr_spec, builtin_tags, color_attr_keys,
     color_keywords, is_builtin_tag, is_control_flow_keyword, keyword_color_rgba, layout_attr_keys,

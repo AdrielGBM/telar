@@ -163,9 +163,12 @@ pub(crate) struct TranspileInput<'a> {
     pub theme_type: Option<&'a str>,
     /// The package's baked asset artifact, which static `svg`/`img` paths (`src:"path"`) resolve against. `None` when no package anchors this transpile (e.g. some analyzer/test paths), in which case a static asset yields a `compile_error!`.
     pub assets: Option<&'a AssetContext>,
+    /// Emit signal declarations in the keyed form the dev host restores across a dylib swap. An argument rather than an ambient one: this was read from the environment, which made the generated code depend on who ran the process — the editor mirror, the golden snapshots and the build could each produce a different file from the same source and none of them was wrong to.
+    pub hot_reload: bool,
 }
 
 /// The generated Rust source for one `.rsx` file.
+#[derive(Debug)]
 pub struct TranspiledSource {
     pub rust_code: String,
     pub preview_names: Vec<String>,
@@ -190,6 +193,7 @@ pub fn transpile_source(
         component_name,
         theme_type,
         assets,
+        hot_reload: false,
     })
 }
 
@@ -211,7 +215,7 @@ impl Code {
     }
 }
 
-fn transpile(input: TranspileInput<'_>) -> Result<TranspiledSource, TranspileError> {
+pub(crate) fn transpile(input: TranspileInput<'_>) -> Result<TranspiledSource, TranspileError> {
     let doc = input.document;
     let fn_name = to_snake_case(input.component_name);
     if fn_name.is_empty() {
@@ -365,8 +369,6 @@ fn transpile(input: TranspileInput<'_>) -> Result<TranspiledSource, TranspileErr
     }
 
     if !logic.is_empty() {
-        // Set by cargo-telar for hot-reload builds; keyed signals let the dev host restore state across dylib swaps.
-        let hot_build = std::env::var("TELAR_HOT_RELOAD_BUILD").is_ok();
         // A `move` closure at depth 0 starts a statement, so a `let` clone may precede it; inside an unclosed call that would not parse and the clone must wrap the closure instead.
         let mut arg_depth = 0i32;
         for (j, line) in logic.lines().enumerate() {
@@ -379,7 +381,7 @@ fn transpile(input: TranspileInput<'_>) -> Result<TranspiledSource, TranspileErr
                 continue;
             }
             let mut emitted_line = line.to_string();
-            if hot_build
+            if input.hot_reload
                 && let Some(rewritten) =
                     crate::signal_scan::hot_rewrite_signal_decl(&emitted_line, &fn_name)
             {

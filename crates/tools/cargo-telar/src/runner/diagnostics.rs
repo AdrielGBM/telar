@@ -12,7 +12,7 @@ use std::collections::HashMap;
 use std::io::BufRead;
 use std::path::{Component, Path, PathBuf};
 
-use telar_transpiler::{RsxSpan, SourceMap};
+use telar_transpiler::{BuildFlavour, RsxSpan, SourceMap};
 
 /// A `help:`/`note:` rustc hung off a diagnostic. Dropping these used to cost the half of a type error that says what to do about it.
 pub(crate) struct Note {
@@ -266,7 +266,7 @@ fn primary_spans(message: &serde_json::Value) -> Vec<&serde_json::Value> {
         .unwrap_or_default()
 }
 
-/// `<crate>/.telar/build/<rel>.rs` — or `build-hot`, which a hot-reload build writes instead.
+/// `<crate>/.telar/build/<rel>.rs` — or `build-hot`, which a hot-reload build writes instead. The two names come from [`BuildFlavour`], so a third flavour is not something this has to be told about twice.
 fn is_generated(path: &Path) -> bool {
     if path.extension().and_then(|e| e.to_str()) != Some("rs") {
         return false;
@@ -279,10 +279,11 @@ fn build_root(path: &Path) -> Option<usize> {
     let parts: Vec<Component> = path.components().collect();
     parts.iter().enumerate().position(|(i, part)| {
         part.as_os_str() == ".telar"
-            && matches!(
-                parts.get(i + 1).map(|part| part.as_os_str()),
-                Some(next) if next == "build" || next == "build-hot"
-            )
+            && parts.get(i + 1).is_some_and(|next| {
+                BuildFlavour::DIR_NAMES
+                    .iter()
+                    .any(|name| next.as_os_str() == *name)
+            })
     })
 }
 

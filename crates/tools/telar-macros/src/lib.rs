@@ -393,6 +393,12 @@ fn hot_reload_build() -> bool {
     std::env::var("TELAR_HOT_RELOAD_BUILD").is_ok()
 }
 
+/// Relays a package-transpile failure as the `compile_error!` the caller emits. [`telar_transpiler::PackageError`] already names the file — and for a parse error the line — so there is nothing to re-derive here.
+fn compile_error_from(error: telar_transpiler::PackageError) -> TokenStream2 {
+    let msg = error.to_string();
+    quote! { compile_error!(#msg); }
+}
+
 struct TranspileOutput {
     include_stmts: TokenStream2,
     rerun_stmts: TokenStream2,
@@ -423,103 +429,49 @@ fn transpile_project(theme_type_str: Option<&str>) -> Result<TranspileOutput, To
         .map_err(|_| quote! { compile_error!("CARGO_MANIFEST_DIR not set"); })?;
 
     // A hot-reload build emits different code for the same `.rsx`, so it needs its own output dir: sharing one has the two flavours — and the analyzer's live mirror, which always writes the plain one — overwrite each other on every build, leaving each cargo unit permanently stale.
-    let flavour = if hot_reload_build() {
-        "build-hot"
-    } else {
-        "build"
+    let flavour = match hot_reload_build() {
+        true => telar_transpiler::BuildFlavour::Hot,
+        false => telar_transpiler::BuildFlavour::Plain,
     };
-    let generated_dir = manifest_dir.join(".telar").join(flavour);
+    let generated_dir = telar_transpiler::generated_dir(&manifest_dir, flavour);
     if let Err(e) = std::fs::create_dir_all(&generated_dir) {
         let msg = format!("Failed to create {}: {e}", generated_dir.display());
         return Err(quote! { compile_error!(#msg); });
     }
 
     let src_dir = manifest_dir.join("src");
-    let rsx_files = telar_transpiler::find_rsx_files(&src_dir);
     // This crate's own version, because it is the one whose generated code the artifact's `assets.rs` calls into. `telar` and `telar-macros` share the workspace version, but the handshake compares against whoever loads the module, not whoever wrote the check.
     let assets = telar_transpiler::AssetContext::load(&manifest_dir, env!("CARGO_PKG_VERSION"));
+
+    let files = telar_transpiler::transpile_package(&telar_transpiler::PackageOptions {
+        src_dir: &src_dir,
+        theme_type: theme_type_str,
+        assets: Some(&assets),
+        flavour,
+    })
+    .map_err(compile_error_from)?;
+    // Every path this run writes under `generated_dir`, so a stale file left behind by a renamed or deleted `.rsx` (or a toggled-off `auto_modules`/i18n catalog) can be told apart from live output and pruned.
+    let mut written_files =
+        telar_transpiler::write_package(&files, &generated_dir).map_err(compile_error_from)?;
 
     let mut include_stmts = TokenStream2::new();
     let mut rerun_stmts = TokenStream2::new();
     let mut preview_const_idents: Vec<TokenStream2> = Vec::new();
-    // Every path this run writes under `generated_dir`, so a stale file left behind by a renamed or deleted `.rsx` (or a toggled-off `auto_modules`/i18n catalog) can be told apart from live output and pruned.
-    let mut written_files: std::collections::HashSet<PathBuf> = std::collections::HashSet::new();
 
-    for rsx_file in &rsx_files {
-        let source = match std::fs::read_to_string(rsx_file) {
-            Ok(s) => s,
-            Err(e) => {
-                let msg = format!("Failed to read {}: {e}", rsx_file.display());
-                return Err(quote! { compile_error!(#msg); });
-            }
-        };
-
-        let stem = telar_transpiler::component_name(&rsx_file);
-
-        let result =
-            match telar_transpiler::transpile_source(&source, &stem, theme_type_str, Some(&assets))
-            {
-                Ok(r) => r,
-                Err(telar_transpiler::TranspileError::Parse(ref pe)) => {
-                    let msg = format!("{}:{}: {}", rsx_file.display(), pe.line, pe.message);
-                    return Err(quote! { compile_error!(#msg); });
-                }
-                Err(e) => {
-                    let msg = format!("Failed to transpile {}: {e}", rsx_file.display());
-                    return Err(quote! { compile_error!(#msg); });
-                }
-            };
-
-        // Mirror the source tree under .telar/build/ so files in different directories never collide. find_rsx_files only yields paths under src_dir, so None is unreachable here.
-        let Some(rel_out) = telar_transpiler::relative_output_path(rsx_file, &src_dir) else {
-            continue;
-        };
-        let out_path = generated_dir.join(rel_out);
-        written_files.insert(out_path.clone());
-        if let Some(parent) = out_path.parent() {
-            if let Err(e) = std::fs::create_dir_all(parent) {
-                let msg = format!("Failed to create {}: {e}", parent.display());
-                return Err(quote! { compile_error!(#msg); });
-            }
-        }
-
-        // Only write when content changed to avoid spurious recompilation.
-        let needs_write = std::fs::read_to_string(&out_path)
-            .map(|existing| existing != result.rust_code)
-            .unwrap_or(true);
-        if needs_write {
-            if let Err(e) = std::fs::write(&out_path, &result.rust_code) {
-                let msg = format!("Failed to write {}: {e}", out_path.display());
-                return Err(quote! { compile_error!(#msg); });
-            }
-        }
-
-        // Persisted next to the build file, so the editor extension and `cargo telar check` can map diagnostics on the generated Rust back onto the `.rsx` the author wrote: the lines, and the verbatim expression spans that make a column mean something.
-        let map_path = out_path.with_extension("rs.map");
-        let map_json =
-            telar_transpiler::SourceMap::new(result.source_map.clone(), result.expr_spans.clone())
-                .to_json();
-        let map_stale = std::fs::read_to_string(&map_path)
-            .map(|existing| existing != map_json)
-            .unwrap_or(true);
-        if map_stale {
-            let _ = std::fs::write(&map_path, &map_json);
-        }
-
+    for file in &files {
         // A real `#[path] mod`, not `include!`, so rust-analyzer treats it as a first-class module and offers completion inside it. `pub use` keeps the component fns, preview consts and `Props` types reachable by bare name, exactly as `include!` did.
-
-        let rsx_path_str = rsx_file.to_string_lossy().to_string();
+        let rsx_path_str = file.rsx_path.to_string_lossy().to_string();
         rerun_stmts.extend(quote! { const _: &str = include_str!(#rsx_path_str); });
 
-        if !result.preview_names.is_empty() {
+        if !file.source.preview_names.is_empty() {
             // The const lives inside the file's own module now, so it is named by its path rather than reached by a bare name the crate root used to re-export.
-            let module: Vec<Ident> = telar_transpiler::relative_output_path(rsx_file, &src_dir)
-                .unwrap_or_default()
+            let module: Vec<Ident> = file
+                .rel_out
                 .with_extension("")
                 .components()
                 .map(|c| Ident::new(&c.as_os_str().to_string_lossy(), Span::call_site()))
                 .collect();
-            let name = preview_const_ident(&stem);
+            let name = preview_const_ident(&telar_transpiler::component_name(&file.rsx_path));
             preview_const_idents.push(quote! { crate::#(#module)::*::#name });
         }
     }

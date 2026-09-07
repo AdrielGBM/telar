@@ -6,7 +6,7 @@ use std::sync::{Mutex, OnceLock};
 use std::time::SystemTime;
 
 use telar_parser::RsxDocument;
-use telar_transpiler::{AssetContext, SourceMap, find_ancestor_dir};
+use telar_transpiler::{AssetContext, BuildFlavour, SourceMap, find_ancestor_dir};
 
 /// Nearest ancestor holding a `Cargo.toml` — the crate root, i.e. the macro's `CARGO_MANIFEST_DIR`. Anchored on `Cargo.toml` (not `telar.toml`) so this works in crates without an rsx config too.
 pub fn crate_root(rsx_path: &Path) -> Option<PathBuf> {
@@ -18,7 +18,7 @@ pub fn generated_path(rsx_path: &Path) -> Option<PathBuf> {
     let root = crate_root(rsx_path)?;
     let src_dir = root.join("src");
     let rel = telar_transpiler::relative_output_path(rsx_path, &src_dir)?;
-    Some(root.join(".telar").join("build").join(rel))
+    Some(telar_transpiler::generated_dir(&root, BuildFlavour::Plain).join(rel))
 }
 
 /// The transpiler output for one `.rsx`, computed in-memory (no disk). Shared by [`sync_build_file`] and the embedded-analyzer query paths so both see byte-identical generated text.
@@ -46,7 +46,7 @@ pub fn generated_target(
     // No cross-file pre-pass: the editor mirrors the build exactly, because neither needs to know what any other file declares. A component call spells names, and the callee's own type answers for them.
     let result =
         telar_transpiler::transpile_source(source, &stem, theme_type, Some(&assets)).ok()?;
-    let out_path = root.join(".telar").join("build").join(&rel);
+    let out_path = telar_transpiler::generated_dir(&root, BuildFlavour::Plain).join(&rel);
     Some(GeneratedTarget {
         path: out_path,
         code: result.rust_code,
@@ -113,8 +113,13 @@ pub fn sync_build_file(
     else {
         return;
     };
-    write_if_changed(&path, &code);
-    write_if_changed(&path.with_extension("rs.map"), &map.to_json());
+    if let Some(parent) = path.parent() {
+        let _ = std::fs::create_dir_all(parent);
+    }
+    // The same writer the build uses, so a mirror write and a build write of one file cannot differ in atomicity — the two race over this directory by design.
+    let _ = telar_transpiler::write_if_changed_atomic(&path, &code);
+    let _ =
+        telar_transpiler::write_if_changed_atomic(&path.with_extension("rs.map"), &map.to_json());
 }
 
 /// The `<crate>/.telar/build/` path segment that marks a generated file (platform separators). Splits `<crate>/.telar/build/<rel>.rs` into (`<crate>`, `<rel>.rs`). Component-based instead of string matching so Windows paths with mixed `/`/`\` separators still classify.
@@ -147,20 +152,6 @@ fn rsx_source_for(build_path: &Path) -> Option<PathBuf> {
     let (root, rel) = split_at_build_dir(build_path)?;
     let rel = rel.to_str()?.strip_suffix(".rs")?.to_string();
     Some(root.join("src").join(format!("{rel}.rsx")))
-}
-
-/// Writes only when the content differs, so rust-analyzer's file watcher doesn't churn on no-op edits.
-fn write_if_changed(path: &Path, content: &str) {
-    if std::fs::read_to_string(path)
-        .map(|existing| existing == content)
-        .unwrap_or(false)
-    {
-        return;
-    }
-    if let Some(parent) = path.parent() {
-        let _ = std::fs::create_dir_all(parent);
-    }
-    let _ = std::fs::write(path, content);
 }
 
 #[cfg(test)]
