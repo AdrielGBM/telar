@@ -193,23 +193,8 @@ fn stage_binary(bin_path: &Path, dest: &Path) {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn desktop_entry_includes_icon_only_when_requested() {
-        let plain = desktop_entry_file("myapp", false);
-        assert!(plain.contains("[Desktop Entry]"));
-        assert!(plain.contains("Type=Application"));
-        assert!(plain.contains("Name=myapp"));
-        assert!(plain.contains("Exec=myapp"));
-        assert!(plain.contains("Categories=Utility;"));
-        assert!(!plain.contains("Icon="));
-
-        let with_icon = desktop_entry_file("myapp", true);
-        assert!(with_icon.contains("Icon=myapp"));
-    }
-}
+#[path = "package_test.rs"]
+mod tests;
 
 /// The message for a tool the build needs and cannot find.
 pub(crate) fn tool_missing(tool: &str, install: &str) -> String {

@@ -184,72 +184,9 @@ pub fn hot_rewrite_signal_decl(line: &str, fn_name: &str) -> Option<String> {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn hot_rewrite_keys_signal_binding() {
-        let out = hot_rewrite_signal_decl("let count = signal(0i32);", "counter").unwrap();
-        assert_eq!(
-            out,
-            "let count = telar::hot_signal_auto!(\"counter::count\", 0i32);"
-        );
-    }
-
-    #[test]
-    fn hot_rewrite_skips_memos_and_plain_lets() {
-        assert!(hot_rewrite_signal_decl("let d = memo(move || 1);", "c").is_none());
-        assert!(hot_rewrite_signal_decl("let x = 5;", "c").is_none());
-        assert!(hot_rewrite_signal_decl("count.set(signal_like);", "c").is_none());
-    }
-
-    #[test]
-    fn hot_rewrite_preserves_nested_parens_and_mut() {
-        let out = hot_rewrite_signal_decl("let mut v = signal(vec![(1, 2)]);", "grid").unwrap();
-        assert_eq!(
-            out,
-            "let mut v = telar::hot_signal_auto!(\"grid::v\", vec![(1, 2)]);"
-        );
-    }
-
-    #[test]
-    fn detects_rw_signal() {
-        let s = scan_signals("let count = signal(0i32);");
-        assert_eq!(s.len(), 1);
-        assert_eq!(s[0].name, "count");
-        assert_eq!(s[0].kind, SignalKind::RwSignal);
-    }
-
-    #[test]
-    fn detects_memo() {
-        let s = scan_signals("let double = memo(move |_| count.get() * 2);");
-        assert_eq!(s[0].name, "double");
-        assert_eq!(s[0].kind, SignalKind::Memo);
-    }
-
-    #[test]
-    fn ignores_plain_let() {
-        let s = scan_signals("let x = 5;");
-        assert!(s.is_empty());
-    }
-}
+#[path = "signal_scan_test.rs"]
+mod tests;
 
 #[cfg(test)]
-mod effect_scan_tests {
-    use super::*;
-
-    /// The spelling the scanner used to miss, and the one every application outside a `use telar::*` writes.
-    #[test]
-    fn a_path_qualified_effect_is_recognised() {
-        assert_eq!(scan_effects("let e = telar::effect(|| {});"), vec!["e"]);
-        assert_eq!(scan_effects("let e = crate::effect(|| {});"), vec!["e"]);
-        assert_eq!(scan_effects("let e = effect(|| {});"), vec!["e"]);
-    }
-
-    #[test]
-    fn a_binding_that_is_not_an_effect_is_left_alone() {
-        assert!(scan_effects("let s = signal(0);").is_empty());
-        assert!(scan_effects("let m = memo(|| 1);").is_empty());
-        assert!(scan_effects("let e = side_effect(|| {});").is_empty());
-    }
-}
+#[path = "signal_scan_effect_scan_test.rs"]
+mod effect_scan_tests;

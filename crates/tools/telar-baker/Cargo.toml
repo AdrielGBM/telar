@@ -29,3 +29,7 @@ toml = { workspace = true }
 # because the answer must be whatever `renderer-assets` turned on, which cargo unifies into this same build —
 # naming the formats again here would be a second list to keep in step, which is the bug the test exists to catch.
 image = { workspace = true }
+
+[[test]]
+name = "formats"
+path = "src/formats_test.rs"

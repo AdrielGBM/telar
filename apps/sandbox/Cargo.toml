@@ -63,6 +63,26 @@ ui-core = { workspace = true }
 criterion = { workspace = true }
 pollster = { workspace = true }
 
+[[test]]
+name = "baked_assets"
+path = "src/baked_assets_test.rs"
+
+[[test]]
+name = "cell_grid"
+path = "src/cell_grid_test.rs"
+
+[[test]]
+name = "frame_pacing"
+path = "src/frame_pacing_test.rs"
+
+[[test]]
+name = "frontend_isolation"
+path = "src/frontend_isolation_test.rs"
+
+[[test]]
+name = "hot_tree"
+path = "src/hot_tree_test.rs"
+
 [[bench]]
 name = "frontend_frame"
 harness = false

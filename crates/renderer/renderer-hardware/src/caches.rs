@@ -412,11 +412,5 @@ pub(crate) fn with_shared<R>(f: impl FnOnce(&mut SharedCaches) -> R) -> Option<R
 }
 
 #[cfg(test)]
-mod send_probe {
-    // A global behind a Mutex needs `Send`.
-    #[test]
-    fn shared_caches_is_send() {
-        fn assert_send<T: Send>() {}
-        assert_send::<super::SharedCaches>();
-    }
-}
+#[path = "caches_test.rs"]
+mod tests;

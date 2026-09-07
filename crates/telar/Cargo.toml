@@ -14,6 +14,58 @@ repository = { workspace = true }
 # desktop app and silently hides the terminal, browser and Android frontends. `--cfg docsrs` is what turns
 # on the per-item "Available on crate feature ..." badges.
 
+[[test]]
+name = "component"
+path = "src/component_test.rs"
+
+[[test]]
+name = "frame_budget"
+path = "src/frame_budget_test.rs"
+
+[[test]]
+name = "headless_multi_surface"
+path = "src/headless_multi_surface_test.rs"
+
+[[test]]
+name = "headless_pixels"
+path = "src/headless_pixels_test.rs"
+
+[[test]]
+name = "headless_spawn_task"
+path = "src/headless_spawn_task_test.rs"
+
+[[test]]
+name = "installed_renderer"
+path = "src/installed_renderer_test.rs"
+
+[[test]]
+name = "local_tree_repaints"
+path = "src/local_tree_repaints_test.rs"
+
+[[test]]
+name = "max_width_wrapping"
+path = "src/max_width_wrapping_test.rs"
+
+[[test]]
+name = "path_lays_out"
+path = "src/path_lays_out_test.rs"
+
+[[test]]
+name = "text_style_baseline"
+path = "src/text_style_baseline_test.rs"
+
+[[test]]
+name = "texture_ui"
+path = "src/texture_ui_test.rs"
+
+[[test]]
+name = "theme_repaints"
+path = "src/theme_repaints_test.rs"
+
+[[test]]
+name = "watch_path"
+path = "src/watch_path_test.rs"
+
 [package.metadata.docs.rs]
 all-features = true
 rustdoc-args = ["--cfg", "docsrs"]
@@ -258,7 +310,7 @@ libc = { workspace = true, optional = true }
 platform-headless = { workspace = true }
 renderer-record = { workspace = true }
 # Self-referencing so the integration tests get the opt-in `testing` module without it being a default that
-# ships in every binary. Nothing here covers an asset transport any more: `tests/http_assets.rs` moved to
+# ships in every binary. Nothing here covers an asset transport any more: `src/http_assets_test.rs` moved to
 # `telar-dynamic` along with the transport it exercises.
 telar = { path = ".", features = ["testing", "watch"] }
 

@@ -22,3 +22,7 @@ toml = { workspace = true }
 
 [dev-dependencies]
 semantics-core = { workspace = true }
+
+[[test]]
+name = "golden"
+path = "src/golden_test.rs"

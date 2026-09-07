@@ -38,20 +38,5 @@ pub fn is_detached() -> bool {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn a_panic_inside_leaves_the_depth_where_it_found_it() {
-        let outcome = std::panic::catch_unwind(|| {
-            detached(|| {
-                detached(|| panic!("boom"));
-            })
-        });
-        assert!(outcome.is_err());
-        assert!(
-            !is_detached(),
-            "an unwind must not leave the thread detached"
-        );
-    }
-}
+#[path = "detached_test.rs"]
+mod tests;

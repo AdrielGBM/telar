@@ -31,7 +31,7 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
       # `--all-targets` so the test targets no other job compiles cannot rot unnoticed: `sandbox/dev` is off
-      # in the `test` job, which leaves `apps/sandbox/tests/hot_tree.rs` — the only guard for the
+      # in the `test` job, which leaves `apps/sandbox/src/hot_tree_test.rs` — the only guard for the
       # split-runtime regression — never even type-checked.
       - run: cargo run -q -p cargo-telar -- bake
       - run: cargo check --workspace --all-features --all-targets --exclude telar-platform-android --exclude telar-analyzer --exclude telar-diagnostics
@@ -92,7 +92,7 @@ jobs:
 
   # The document renderer is the one backend that positions nothing itself: CSS does, from what each box asked
   # layout for. Nothing but a browser can say whether that lands where Taffy computed, so this leg is where the
-  # claim is actually checked — see `crates/renderer/renderer-dom/tests/layout_parity.rs`.
+  # claim is actually checked — see `crates/renderer/renderer-dom/src/layout_parity_test.rs`.
   parity-web-dom:
     runs-on: ubuntu-latest
     steps:
@@ -161,7 +161,7 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
       # A software Vulkan adapter, so the 15 GPU tests run somewhere instead of skipping on every runner —
-      # `crates/telar/tests/texture_ui.rs` is the only in-tree proof of the seam pixel-art builds on.
+      # `crates/telar/src/texture_ui_test.rs` is the only in-tree proof of the seam pixel-art builds on.
       # `TELAR_REQUIRE_GPU` below turns a missing adapter into a failure on this leg, so the suite cannot go
       # back to skipping silently.
       - name: Install lavapipe

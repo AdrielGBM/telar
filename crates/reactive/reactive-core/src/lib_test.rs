@@ -1,0 +1,338 @@
+use std::cell::RefCell;
+use std::rc::Rc;
+
+use super::*;
+
+#[test]
+fn signal_get_set() {
+    let count = signal(0i32);
+    assert_eq!(count.get(), 0);
+    count.set(42);
+    assert_eq!(count.get(), 42);
+}
+
+// The shared runtime stamps each effect with the surface active at registration, and the flush re-enters that surface before running it, even when the write that scheduled it happened under another.
+#[test]
+fn effect_runs_under_its_own_surface_context() {
+    use std::cell::RefCell;
+    use std::rc::Rc;
+
+    let entered: Rc<RefCell<Vec<u64>>> = Rc::new(RefCell::new(Vec::new()));
+    let entered_hook = Rc::clone(&entered);
+    set_surface_enter_hook(move |handle| {
+        let prev = set_current_surface(handle);
+        entered_hook.borrow_mut().push(handle.0);
+        SurfaceEnterGuard::new(move || {
+            set_current_surface(prev);
+        })
+    });
+
+    let trigger = signal(0i32);
+    let read = trigger.read_only();
+    let _guard_a = SurfaceHandle(1).enter();
+    let _e = effect(move || {
+        read.get();
+    });
+    drop(_guard_a);
+
+    entered.borrow_mut().clear();
+
+    let _guard_b = SurfaceHandle(2).enter();
+    trigger.set(1);
+    drop(_guard_b);
+
+    assert!(
+        entered.borrow().contains(&1),
+        "flush must re-enter the effect's own surface (A=1): {:?}",
+        entered.borrow()
+    );
+}
+
+// A panic inside `batch` must leave the shared runtime consistent, so a later write still schedules and flushes. Without the RAII guards this would wedge the runtime.
+#[test]
+fn runtime_recovers_after_panic_in_batch() {
+    use std::cell::RefCell;
+    use std::panic::{AssertUnwindSafe, catch_unwind};
+    use std::rc::Rc;
+
+    let count = signal(0i32);
+    let read = count.read_only();
+    let seen: Rc<RefCell<Vec<i32>>> = Rc::new(RefCell::new(Vec::new()));
+    let seen_c = Rc::clone(&seen);
+    let _e = effect(move || {
+        seen_c.borrow_mut().push(read.get());
+    });
+
+    let result = catch_unwind(AssertUnwindSafe(|| {
+        batch(|| {
+            count.set(1);
+            panic!("boom");
+        });
+    }));
+    assert!(result.is_err(), "the batch closure should have panicked");
+
+    count.set(2);
+    assert!(
+        seen.borrow().contains(&2),
+        "runtime wedged after panic-in-batch; effect never re-ran: {:?}",
+        seen.borrow()
+    );
+}
+
+// Regression: the flush-wide epoch stamp turned the reader's second run into a no-op with nothing left to reschedule it, so it kept the stale value until some later, unrelated write opened a fresh flush.
+#[test]
+fn an_effect_reruns_when_a_later_effect_in_the_same_flush_writes_its_source() {
+    let trigger = signal(0i32);
+    let source = signal(0i32);
+    let seen: Rc<RefCell<Vec<i32>>> = Rc::new(RefCell::new(Vec::new()));
+
+    let read_trigger = trigger.read_only();
+    let read_source = source.read_only();
+    let seen_c = Rc::clone(&seen);
+    let _reader = effect(move || {
+        read_trigger.get();
+        seen_c.borrow_mut().push(read_source.get());
+    });
+
+    let read_trigger = trigger.read_only();
+    let write_source = source;
+    let _writer = effect(move || {
+        let v = read_trigger.get();
+        if v > 0 {
+            write_source.set(v);
+        }
+    });
+
+    seen.borrow_mut().clear();
+    trigger.set(7);
+    assert_eq!(
+        seen.borrow().last().copied(),
+        Some(7),
+        "the reader never saw a write made later in the same flush: {:?}",
+        seen.borrow()
+    );
+}
+
+#[test]
+fn signal_update() {
+    let count = signal(10i32);
+    count.update(|v| *v *= 2);
+    assert_eq!(count.get(), 20);
+}
+
+#[test]
+fn signal_with() {
+    let name = signal(String::from("rsx"));
+    let len = name.with(|s| s.len());
+    assert_eq!(len, 3);
+}
+
+#[test]
+fn rw_signal() {
+    let count = signal(0i32);
+    count.set(10);
+    assert_eq!(count.get(), 10);
+    count.update(|v| *v += 5);
+    assert_eq!(count.get(), 15);
+}
+
+#[test]
+fn rw_signal_read_only() {
+    let sig = signal(0i32);
+    let read = sig.read_only();
+    sig.set(7);
+    assert_eq!(read.get(), 7);
+}
+
+#[test]
+fn bool_signal_toggle() {
+    let flag = signal(false);
+    flag.toggle();
+    assert!(flag.get(), "toggle flips false to true");
+    flag.toggle();
+    assert!(!flag.get(), "and back again");
+}
+
+#[test]
+fn effect_runs_immediately() {
+    let ran = Rc::new(RefCell::new(false));
+    let ran_clone = Rc::clone(&ran);
+    let _e = effect(move || {
+        *ran_clone.borrow_mut() = true;
+    });
+    assert!(
+        *ran.borrow(),
+        "an effect runs once at creation, not only on the next change"
+    );
+}
+
+#[test]
+fn effect_reruns_on_signal_change() {
+    let count = signal(0i32);
+    let log: Rc<RefCell<Vec<i32>>> = Rc::new(RefCell::new(Vec::new()));
+    let log_clone = Rc::clone(&log);
+
+    let read = count.read_only();
+    let _e = effect(move || {
+        log_clone.borrow_mut().push(read.get());
+    });
+
+    count.set(1);
+    count.set(2);
+
+    assert_eq!(*log.borrow(), vec![0, 1, 2]);
+}
+
+#[test]
+fn memo_derives_value() {
+    let count = signal(2i32);
+    let read = count.read_only();
+    let doubled = memo(move || read.get() * 2);
+
+    assert_eq!(doubled.get(), 4);
+    count.set(5);
+    assert_eq!(doubled.get(), 10);
+}
+
+#[test]
+fn effect_reruns_when_memo_changes() {
+    let count = signal(0i32);
+    let read = count.read_only();
+    let doubled = memo(move || read.get() * 2);
+    let log: Rc<RefCell<Vec<i32>>> = Rc::new(RefCell::new(Vec::new()));
+    let log_clone = Rc::clone(&log);
+    let doubled_read = doubled;
+    let _e = effect(move || {
+        log_clone.borrow_mut().push(doubled_read.get());
+    });
+    assert_eq!(*log.borrow(), vec![0]);
+    count.set(3);
+    assert_eq!(*log.borrow(), vec![0, 6]);
+}
+
+// Regression: `run_effect`'s signal-version shortcut skipped an effect tracking both a signal and a memo, because memo deps are invisible to `sources`.
+#[test]
+fn effect_with_signal_and_memo_sources_reruns_on_memo_change() {
+    let unrelated = signal(0i32);
+    let count = signal(0i32);
+    let read = count.read_only();
+    let doubled = memo(move || read.get() * 2);
+    let log: Rc<RefCell<Vec<i32>>> = Rc::new(RefCell::new(Vec::new()));
+    let log_clone = Rc::clone(&log);
+    let unrelated_read = unrelated.read_only();
+    let doubled_read = doubled;
+    let _e = effect(move || {
+        unrelated_read.get();
+        log_clone.borrow_mut().push(doubled_read.get());
+    });
+    assert_eq!(*log.borrow(), vec![0]);
+    count.set(3);
+    assert_eq!(*log.borrow(), vec![0, 6]);
+}
+
+#[test]
+fn effect_reruns_when_memo_changes_inside_batch() {
+    let count = signal(0i32);
+    let read = count.read_only();
+    let doubled = memo(move || read.get() * 2);
+    let log: Rc<RefCell<Vec<i32>>> = Rc::new(RefCell::new(Vec::new()));
+    let log_clone = Rc::clone(&log);
+    let doubled_read = doubled;
+    let _e = effect(move || {
+        log_clone.borrow_mut().push(doubled_read.get());
+    });
+    batch(|| count.set(3));
+    assert_eq!(*log.borrow(), vec![0, 6]);
+}
+
+#[test]
+fn memo_chains() {
+    let n = signal(3i32);
+    let read = n.read_only();
+    let doubled = memo(move || read.get() * 2);
+    let doubled_for_quad = doubled;
+    let quadrupled = memo(move || doubled_for_quad.get() * 2);
+
+    assert_eq!(quadrupled.get(), 12);
+    n.set(5);
+    assert_eq!(quadrupled.get(), 20);
+}
+
+#[test]
+fn batch_fires_effect_once() {
+    let a = signal(0i32);
+    let b = signal(0i32);
+    let runs = Rc::new(RefCell::new(0usize));
+    let runs_clone = Rc::clone(&runs);
+
+    let a_read = a.read_only();
+    let b_read = b.read_only();
+    let _e = effect(move || {
+        let _ = a_read.get() + b_read.get();
+        *runs_clone.borrow_mut() += 1;
+    });
+
+    assert_eq!(*runs.borrow(), 1);
+
+    batch(|| {
+        a.set(1);
+        b.set(2);
+    });
+
+    assert_eq!(*runs.borrow(), 2);
+}
+
+#[test]
+fn disposing_one_subscriber_keeps_others_consistent() {
+    // Disposing the middle owner and then writing repeatedly must keep the survivors firing, exercising the in-place subscriber-list cleanup that runs alongside the reused scratch buffer.
+    let count = signal(0i32);
+    let a = Rc::new(RefCell::new(0i32));
+    let b = Rc::new(RefCell::new(0i32));
+    let c = Rc::new(RefCell::new(0i32));
+
+    let mk = |sink: &Rc<RefCell<i32>>, sig: &RwSignal<i32>| {
+        let scope = owner_scope();
+        let read = sig.read_only();
+        let sink = Rc::clone(sink);
+        effect(move || {
+            *sink.borrow_mut() = read.get();
+        });
+        scope.id()
+    };
+
+    let _ea = mk(&a, &count);
+    let eb = mk(&b, &count);
+    let _ec = mk(&c, &count);
+
+    count.set(1);
+    assert_eq!((*a.borrow(), *b.borrow(), *c.borrow()), (1, 1, 1));
+
+    dispose_owner(eb);
+    count.set(2);
+    count.set(3);
+
+    assert_eq!(*a.borrow(), 3);
+    assert_eq!(*c.borrow(), 3);
+    assert_eq!(*b.borrow(), 1);
+}
+
+// Disposal frees a signal's storage under the runtime borrow and drops the value after releasing it. The value can be anything, including something whose own `Drop` reads a signal, which under the borrow would abort rather than panic. It used to be about signal handles specifically; they have no destructor now, so the hazard is a user type's.
+#[test]
+fn disposing_a_signal_whose_value_touches_the_runtime_does_not_double_borrow() {
+    struct Reads(ReadSignal<i32>);
+    impl Drop for Reads {
+        fn drop(&mut self) {
+            let _ = self.0.get();
+        }
+    }
+
+    let watched = signal(1i32);
+    let scope = owner_scope();
+    let owner = scope.id();
+    let _holder = signal(Reads(watched.read_only()));
+    drop(scope);
+    dispose_owner(owner);
+
+    let after = signal(5i32);
+    assert_eq!(after.get(), 5);
+}

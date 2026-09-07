@@ -48,3 +48,7 @@ layout-core = { workspace = true }
 
 # Pinned to the release whose glue and `wasm-bindgen-test-runner` match the `wasm-bindgen` pin in [workspace.dependencies]. The two move together.
 wasm-bindgen-test = "=0.3.77"
+
+[[test]]
+name = "layout_parity"
+path = "src/layout_parity_test.rs"

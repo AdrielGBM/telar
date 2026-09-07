@@ -1,0 +1,1280 @@
+use super::signals::normalize_closure;
+use super::*;
+
+fn make_gen<'a>() -> ViewGen<'a> {
+    ViewGen::with_theme(&[], None, None)
+}
+
+#[test]
+fn literal_content() {
+    let g = make_gen();
+    assert_eq!(
+        g.interpolate_content("hello", 0),
+        "|| \"hello\".to_string()"
+    );
+}
+
+#[test]
+fn signal_interpolation() {
+    let g = make_gen();
+    assert_eq!(
+        g.interpolate_content("Count: {$count}", 0),
+        "move || format!(\"Count: {}\", { count.get() })"
+    );
+}
+
+#[test]
+fn closure_passthrough() {
+    assert_eq!(
+        normalize_closure("|| count.update(|n| *n += 1)"),
+        "|| count.update(|n| *n += 1)"
+    );
+}
+
+#[test]
+fn a_non_reactive_branch_still_takes_a_widget() {
+    let src = "[logic]\nlet icon = make_icon()?;\nlet vertical = true;\n[view]\nrow\n    if vertical\n        widget \"icon\"\n";
+    let out = crate::transpile_source(src, "demo", None, None).unwrap();
+    assert!(
+        !out.rust_code.contains("compile_error!"),
+        "a one-shot `if` is not a reactive region:\n{}",
+        out.rust_code
+    );
+}
+
+/// `field: Type = expr` sugar reaches the builder as the attribute that says the same thing. The struct stops deriving `Default` along the way: nothing constructs a `Props` that way any more, and keeping it would demand a `Default` of every field type the builder does not need one for.
+#[test]
+fn an_inline_field_default_becomes_a_props_attribute() {
+    let src = "[logic]\n#[derive(Default)]\npub struct Props {\n    pub gap: f32,\n    pub pad: f32 = 16.0,\n}\n[view]\ntext \"x\"\n";
+    let out = crate::transpile_source(src, "card", None, None).unwrap();
+    let code = &out.rust_code;
+    assert!(
+        code.contains("pub pad: f32,"),
+        "the `= 16.0` must come off the field — Rust has no field defaults:\n{code}"
+    );
+    assert!(
+        code.contains("#[props(default = 16.0)]"),
+        "and land on the attribute that carries it:\n{code}"
+    );
+    assert!(
+        code.contains("#[props(default)]"),
+        "a field the struct defaulted wholesale is optional too:\n{code}"
+    );
+    assert!(
+        code.contains("#[derive(::telar::Props)]") && !code.contains("#[derive(Default)]"),
+        "the builder replaces `Default` rather than sitting beside it:\n{code}"
+    );
+}
+
+#[test]
+fn unknown_tag_becomes_component_call() {
+    let src = "[logic]\n[view]\nmy_card\n";
+    let out = crate::transpile_source(src, "demo", None, None).unwrap();
+    assert!(
+        out.rust_code
+            .contains("my_card(MyCardProps::props().build(), Children::default())?"),
+        "no-attr tag should call fn directly"
+    );
+}
+
+#[test]
+fn class_paint_promotes_container_and_is_consumed() {
+    let src = "[style]\n@card\n    fill: #ffffff\n    radius: 12\n    padding: 8\n[view]\ncol @card\n    text \"hi\"\n";
+    let out = crate::transpile_source(src, "demo", None, None).unwrap();
+    let code = &out.rust_code;
+    assert!(
+        code.contains("StyledContainer::new(style_card()"),
+        "painted col should be a StyledContainer:\n{code}"
+    );
+    assert!(
+        code.contains("with_fill"),
+        "class fill should reach the RectStyle:\n{code}"
+    );
+}
+
+#[test]
+fn multiple_classes_compose_layout_and_paint() {
+    let src = "[style]\n@a\n    align: center\n@b\n    align: start\n    fill: #ff0000\n[view]\nbox @a @b\n    text \"hi\"\n";
+    let out = crate::transpile_source(src, "demo", None, None).unwrap();
+    let code = &out.rust_code;
+    assert!(
+        code.contains("style_a().align_items(AlignItems::START)"),
+        "second class's layout should compose on top of the first:\n{code}"
+    );
+    assert!(
+        code.contains("with_fill"),
+        "a class's fill should reach the RectStyle:\n{code}"
+    );
+}
+
+#[test]
+fn classed_box_is_a_flex_container() {
+    // A `style_*()` class fn is `LayoutStyle::new()` (display:block), so a classed `box` still needs `.flex_column()` for its children to centre.
+    let src = "[style]\n@center\n    align: center\n    justify: center\n[view]\nbox @center width:100 height:60\n    text \"hi\"\n";
+    let out = crate::transpile_source(src, "demo", None, None).unwrap();
+    assert!(
+        out.rust_code.contains("style_center().flex_column()"),
+        "a classed box must be a flex container so align/justify apply:\n{}",
+        out.rust_code
+    );
+}
+
+#[test]
+fn container_on_press_emits_click_handler() {
+    let src = "[logic]\nlet n = signal(0i32);\n[view]\ncol\n    box fill:primary on_press:(|| $n.update(|v| *v += 1))\n    col on_press:(|| $n.set(0))\n        text \"x\"\n";
+    let out = crate::transpile_source(src, "demo", None, None).unwrap();
+    let code = &out.rust_code;
+    assert!(
+        code.matches(".on_press(").count() >= 2,
+        "both box and col should emit .on_press:\n{code}"
+    );
+    assert!(
+        code.contains("let n = n.clone();"),
+        "on_press closure should clone the captured signal:\n{code}"
+    );
+    assert!(
+        code.contains("n.update(") && code.contains("n.set(0)"),
+        "$n should be substituted to the handle:\n{code}"
+    );
+}
+
+#[test]
+fn a_forwarded_on_press_on_a_plain_row_upgrades_to_styled_container() {
+    let src = "[logic]\npub struct Props {\n    pub on_press: Box<dyn Fn()>,\n}\n\n[view]\nrow on_press:(props.on_press)\n    text \"x\"\n";
+    let code = crate::transpile_source(src, "demo", None, None)
+        .unwrap()
+        .rust_code;
+    assert!(
+        code.contains("StyledContainer::new(") && code.contains(".maybe_on_press("),
+        "a forwarded on_press must upgrade a plain row to StyledContainer:\n{code}"
+    );
+}
+
+// Regression: `lazy` got its column from `set_display(true)` forcing `Display::Flex`; once that call began restoring the declared display, the tag had to declare it.
+#[test]
+fn lazy_declares_a_flex_column() {
+    let src = "[logic]\nlet open = signal(false);\n[view]\nlazy when:$open\n    text \"a\"\n    text \"b\"\n";
+    let code = crate::transpile_source(src, "demo", None, None)
+        .unwrap()
+        .rust_code;
+    let lazy_call = code
+        .split_once("Lazy::new(")
+        .expect("lazy must emit Lazy::new")
+        .1;
+    assert!(
+        lazy_call
+            .trim_start()
+            .starts_with("LayoutStyle::new().flex_column()"),
+        "lazy's container style must be a flex column, not the Display::Block default:\n{code}"
+    );
+}
+
+#[test]
+fn compound_assign_sugar_rewrites_to_update() {
+    let src = "[logic]\nlet count = signal(0i32);\n[view]\ncol\n    button on_press:(|| $count += 1)\n    button on_press:(|| $count -= 2)\n";
+    let out = crate::transpile_source(src, "demo", None, None).unwrap();
+    let code = &out.rust_code;
+    assert!(
+        code.contains("count.update(|__v| *__v += 1)"),
+        "+= should desugar to update:\n{code}"
+    );
+    assert!(
+        code.contains("count.update(|__v| *__v -= 2)"),
+        "-= should desugar to update:\n{code}"
+    );
+}
+
+#[test]
+fn toggle_and_update_closures_pass_through() {
+    let src = "[logic]\nlet flag = signal(false);\nlet count = signal(0i32);\n[view]\ncol\n    button on_press:(|| $flag.toggle())\n    button on_press:(|| $count.update(|n| *n += 1))\n";
+    let out = crate::transpile_source(src, "demo", None, None).unwrap();
+    let code = &out.rust_code;
+    assert!(
+        code.contains("flag.toggle()"),
+        "toggle passes through:\n{code}"
+    );
+    assert!(
+        code.contains("count.update(|n| *n += 1)"),
+        ".update must be left untouched:\n{code}"
+    );
+}
+
+#[test]
+fn quoted_escape_decodes_then_reemits() {
+    let src = "[logic]\n[view]\ntext \"say \\\"hi\\\"\"\n";
+    let out = crate::transpile_source(src, "demo", None, None).unwrap();
+    let code = &out.rust_code;
+    assert!(
+        code.contains(r#"say \"hi\""#),
+        "escaped quotes should round-trip:\n{code}"
+    );
+}
+
+#[test]
+fn paren_attr_form_captures_nested_and_coexists() {
+    let src = "[logic]\nlet count = signal(0i32);\n[view]\nbox fill:primary transition(fill 200ms ease-out) on_press:(|| $count.update(|n| *n += 1))\n    text \"x\"\n";
+    let out = crate::transpile_source(src, "demo", None, None).unwrap();
+    let code = &out.rust_code;
+    assert!(
+        code.contains(".on_press("),
+        "paren on_press should emit a handler:\n{code}"
+    );
+    assert!(
+        code.contains("count.update(|n| *n += 1)"),
+        "nested-paren closure should be captured whole:\n{code}"
+    );
+    assert!(
+        code.contains("motion::Animated::new"),
+        "transition should still wire even when it precedes on_press:\n{code}"
+    );
+}
+
+#[test]
+fn overlay_builds_overlay_widget() {
+    let src = "[view]\ncol\n    text \"behind\"\n    overlay align:center justify:center\n        text \"on top\"\n";
+    let code = crate::transpile_source(src, "demo", None, None)
+        .unwrap()
+        .rust_code;
+    assert!(
+        code.contains("Overlay::new("),
+        "overlay emits an Overlay widget:\n{code}"
+    );
+    assert!(
+        code.contains(".align_items(") && code.contains(".justify_content("),
+        "overlay forwards layout attrs for positioning content:\n{code}"
+    );
+}
+
+#[test]
+fn box_hover_emits_hover_style() {
+    let src = "[view]\nbox fill:#101010 hover_style(fill:#f0f0f0 stroke:#ff0000) radius:10\n    text \"x\"\n";
+    let out = crate::transpile_source(src, "demo", None, None).unwrap();
+    assert!(
+        out.rust_code.contains(".hover_style("),
+        "hover(...) should wire hover_style:\n{}",
+        out.rust_code
+    );
+}
+
+#[test]
+fn on_drag_wires_and_upgrades_container() {
+    let src = "[logic]\nlet x = signal(0.0f32);\n[view]\ncol on_drag:(|px, _py| $x.set(px))\n    text \"t\"\n";
+    let out = crate::transpile_source(src, "demo", None, None).unwrap();
+    let code = &out.rust_code;
+    assert!(
+        code.contains("StyledContainer::new("),
+        "on_drag upgrades a plain col to a StyledContainer:\n{code}"
+    );
+    assert!(
+        code.contains(".on_drag(") && code.contains("move |px, _py| x.set(px)"),
+        "on_drag wires the handler (with the $signal cloned in):\n{code}"
+    );
+}
+
+#[test]
+fn plain_col_with_hover_upgrades_to_styled_container() {
+    let src = "[view]\ncol hover_style(fill:#f0f0f0)\n    text \"x\"\n";
+    let out = crate::transpile_source(src, "demo", None, None).unwrap();
+    let code = &out.rust_code;
+    assert!(
+        code.contains("StyledContainer::new("),
+        "a col with hover should become a StyledContainer:\n{code}"
+    );
+    assert!(
+        code.contains(".hover_style("),
+        "and wire hover_style:\n{code}"
+    );
+}
+
+#[test]
+fn box_active_style_emits_active_style() {
+    let src = "[view]\nbox fill:#101010 active_style(fill:#303030) radius:10\n    text \"x\"\n";
+    let out = crate::transpile_source(src, "demo", None, None).unwrap();
+    assert!(
+        out.rust_code.contains(".active_style("),
+        "active_style(...) should wire active_style:\n{}",
+        out.rust_code
+    );
+}
+
+#[test]
+fn plain_col_with_active_style_upgrades_to_styled_container() {
+    let src = "[view]\ncol active_style(fill:#303030)\n    text \"x\"\n";
+    let out = crate::transpile_source(src, "demo", None, None).unwrap();
+    let code = &out.rust_code;
+    assert!(
+        code.contains("StyledContainer::new(") && code.contains(".active_style("),
+        "a col with only active_style should become a StyledContainer and wire it:\n{code}"
+    );
+}
+
+#[test]
+fn component_default_slot_takes_slots_arg() {
+    let src = "[view]\nbox fill:#101010 pad:16\n    children\n";
+    let out = crate::transpile_source(src, "card", None, None).unwrap();
+    let code = &out.rust_code;
+    assert!(
+        code.contains("children: Children"),
+        "a slotted component takes a Slots argument:\n{code}"
+    );
+    assert!(
+        code.contains("__children.extend(__slots.take_default());"),
+        "the default slot splices take_default():\n{code}"
+    );
+}
+
+#[test]
+fn component_named_and_default_slots() {
+    let src = "[view]\nbox pad:16\n    children name:\"header\"\n    children\n";
+    let out = crate::transpile_source(src, "panel", None, None).unwrap();
+    let code = &out.rust_code;
+    assert!(
+        code.contains("__children.extend(__slots.take(\"header\"));"),
+        "named slot drains take(\"header\"):\n{code}"
+    );
+    assert!(
+        code.contains("__children.extend(__slots.take_default());"),
+        "default slot drains take_default():\n{code}"
+    );
+}
+
+#[test]
+fn component_call_with_children_builds_slots() {
+    let src = "[view]\ncard\n    text \"hi\"\n";
+    let out = crate::transpile_source(src, "demo", None, None).unwrap();
+    let code = &out.rust_code;
+    assert!(
+        code.contains("let mut __slots = Slots::new();"),
+        "a call with children builds a Slots:\n{code}"
+    );
+    assert!(
+        code.contains("card(CardProps::props().build(), __deferred)?"),
+        "the Slots is the trailing arg:\n{code}"
+    );
+}
+
+#[test]
+fn component_call_routes_named_slot() {
+    let src = "[view]\npanel\n    text \"T\" slot:\"header\"\n    text \"B\"\n";
+    let out = crate::transpile_source(src, "demo", None, None).unwrap();
+    let code = &out.rust_code;
+    assert!(
+        code.contains("__slots.push(Some(\"header\"), box_item("),
+        "slot:\"header\" routes to the named slot:\n{code}"
+    );
+    assert!(
+        code.contains("__children.push(box_item("),
+        "a bare child goes to the default slot:\n{code}"
+    );
+}
+
+#[test]
+fn component_bool_flag_prop() {
+    let src = "[view]\ncard elevated\n    text \"x\"\n";
+    let out = crate::transpile_source(src, "demo", None, None).unwrap();
+    let code = &out.rust_code;
+    assert!(
+        code.contains("CardProps::props().elevated(true).build()"),
+        "a bare flag prop should be bool true:\n{code}"
+    );
+}
+
+#[test]
+fn component_signal_prop_clones_handle() {
+    let src = "[logic]\nlet count = signal(0i32);\n[view]\ncard count:$count\n    text \"x\"\n";
+    let out = crate::transpile_source(src, "demo", None, None).unwrap();
+    let code = &out.rust_code;
+    assert!(
+        code.contains(".count(count.clone())"),
+        "a $signal prop should pass the cloned handle:\n{code}"
+    );
+}
+
+#[test]
+fn component_closure_prop_is_boxed() {
+    let src = "[logic]\nlet count = signal(0i32);\n[view]\ncard on_tap:(|| $count += 1)\n    text \"x\"\n";
+    let out = crate::transpile_source(src, "demo", None, None).unwrap();
+    let code = &out.rust_code;
+    assert!(
+        code.contains("Box::new("),
+        "a closure prop should be boxed:\n{code}"
+    );
+    assert!(
+        code.contains("count.update(|__v| *__v += 1)"),
+        "the closure's $ sugar should desugar:\n{code}"
+    );
+}
+
+#[test]
+fn component_free_closure_prop_carries_source_span() {
+    let src = "[view]\ncard on_tap:(|| toggle())\n    text \"x\"\n";
+    let out = crate::transpile_source(src, "demo", None, None).unwrap();
+    assert!(!out.rust_code.contains("@RSX@"), "markers must be stripped");
+    let span = out
+        .expr_spans
+        .iter()
+        .find(|s| &src[s.rsx_start as usize..(s.rsx_start + s.len) as usize] == "|| toggle()")
+        .expect("closure prop should emit a source span");
+    let gen_frag = &out.rust_code[span.gen_start as usize..(span.gen_start + span.len) as usize];
+    assert_eq!(
+        gen_frag, "|| toggle()",
+        "span must map verbatim onto the generated closure"
+    );
+}
+
+#[test]
+fn text_rich_weight_italic_align() {
+    let src = "[view]\ntext \"Hi\" font_weight:bold font_style:italic text_align:center\n";
+    let out = crate::transpile_source(src, "demo", None, None).unwrap();
+    let code = &out.rust_code;
+    assert!(
+        code.contains(".with_font_weight(700)"),
+        "weight keyword:\n{code}"
+    );
+    assert!(
+        code.contains(".with_font_style(FontStyle::Italic)"),
+        "slant:\n{code}"
+    );
+    assert!(
+        code.contains(".with_text_align(TextAlign::Center)"),
+        "align:\n{code}"
+    );
+}
+
+#[test]
+fn text_rich_numeric_weight_and_align_end() {
+    let src = "[view]\ntext \"Hi\" font_weight:600 text_align:right\n";
+    let code = crate::transpile_source(src, "demo", None, None)
+        .unwrap()
+        .rust_code;
+    assert!(
+        code.contains(".with_font_weight(600)"),
+        "numeric weight:\n{code}"
+    );
+    assert!(
+        code.contains(".with_text_align(TextAlign::End)"),
+        "align end:\n{code}"
+    );
+    assert!(
+        !code.contains(".with_font_style"),
+        "no slant when absent:\n{code}"
+    );
+}
+
+#[test]
+fn text_lines_and_ellipsis() {
+    let src = "[view]\ntext \"Long copy here\" lines:2 ellipsis max_width:200\n";
+    let code = crate::transpile_source(src, "demo", None, None)
+        .unwrap()
+        .rust_code;
+    assert!(code.contains(".with_clamp(2, true)"), "{code}");
+
+    let unclamped = "[view]\ntext \"Long copy here\" ellipsis\n";
+    let code = crate::transpile_source(unclamped, "demo", None, None)
+        .unwrap()
+        .rust_code;
+    assert!(!code.contains("with_clamp"), "{code}");
+}
+
+#[test]
+fn input_binds_value_style_and_submit() {
+    let src = "[logic]\nlet name = signal(String::new());\n[view]\ninput value:$name font_size:16 color:$theme.primary width:200 on_submit:(|| $name.set(String::new()))\n";
+    let code = crate::transpile_source(src, "demo", Some("SandboxTheme"), None)
+        .unwrap()
+        .rust_code;
+    assert!(
+        code.contains("Input::declaring(name.clone(),"),
+        "binds the value signal (cloned):\n{code}"
+    );
+    assert!(
+        code.contains(".with_font_size(16.0).with_color(theme.get().primary)"),
+        "amends what the tree declared rather than building a style from nothing:\n{code}"
+    );
+    assert!(
+        code.contains(".width(200"),
+        "forwards layout attrs:\n{code}"
+    );
+    assert!(code.contains(".on_submit("), "wires on_submit:\n{code}");
+}
+
+#[test]
+fn reactive_for_emits_reactive_list() {
+    let src = "[logic]\nlet items = signal(vec![1i32, 2, 3]);\n[view]\ncol\n    for n in $items key *n\n        text \"x\"\n";
+    let code = crate::transpile_source(src, "demo", None, None)
+        .unwrap()
+        .rust_code;
+    assert!(
+        code.contains("fragment(") && !code.contains("ReactiveList"),
+        "a reactive for in a container should be a transparent fragment, not a boxed list:\n{code}"
+    );
+    assert!(
+        code.contains("Container::from_slots("),
+        "the host container collects slots:\n{code}"
+    );
+    assert!(
+        code.contains("move || items.get()"),
+        "source reads the signal:\n{code}"
+    );
+    assert!(
+        code.contains("|n| *n"),
+        "key closure from `key *n`:\n{code}"
+    );
+    assert!(code.contains("move |n|"), "item builder closure:\n{code}");
+}
+
+#[test]
+fn reactive_for_without_key_uses_positional_reconciliation() {
+    let src = "[view]\ncol\n    for n in $items\n        text \"x\"\n";
+    let code = crate::transpile_source(src, "demo", None, None)
+        .unwrap()
+        .rust_code;
+    assert!(
+        code.contains("fragment_positional("),
+        "a keyless reactive for should reconcile by position:\n{code}"
+    );
+    assert!(
+        !code.contains("compile_error!"),
+        "a keyless reactive for must compile, not error:\n{code}"
+    );
+}
+
+#[test]
+fn reactive_for_in_row_is_transparent_between_static_siblings() {
+    let src = "[logic]\nlet ws = signal(vec![1i32, 2]);\n[view]\nrow\n    text \"L\"\n    for w in $ws key *w\n        text \"x\"\n    text \"R\"\n";
+    let code = crate::transpile_source(src, "demo", None, None)
+        .unwrap()
+        .rust_code;
+    assert!(
+        code.contains("Container::from_slots(") && code.contains("flex_row"),
+        "the row hosts slots and keeps its row axis:\n{code}"
+    );
+    assert!(
+        code.contains("fragment(") && !code.contains("ReactiveList"),
+        "the reactive for is a transparent fragment, not a boxed list:\n{code}"
+    );
+    assert!(
+        code.contains("ChildSlot::stat(") && code.contains("__slots.push("),
+        "static siblings and the fragment share the row's slot collection:\n{code}"
+    );
+}
+
+#[test]
+fn reactive_for_with_gap_in_row_is_transparent_gap_fragment() {
+    let src = "[logic]\nlet ws = signal(vec![1i32, 2]);\n[view]\nrow\n    for w in $ws key *w gap:6\n        text \"x\"\n";
+    let code = crate::transpile_source(src, "demo", None, None)
+        .unwrap()
+        .rust_code;
+    assert!(
+        code.contains("fragment(") && !code.contains("ReactiveList"),
+        "a reactive for with gap in a slot host is a transparent gap fragment, not a boxed list:\n{code}"
+    );
+    assert!(
+        code.contains("(6) as f32"),
+        "the gap value is passed to fragment:\n{code}"
+    );
+    assert!(
+        code.contains("Container::from_slots(") && code.contains("flex_row"),
+        "the host row keeps its row axis and hosts slots:\n{code}"
+    );
+}
+
+#[test]
+fn reactive_for_with_gap_keyless_uses_positional_gap_fragment() {
+    let src = "[view]\nrow\n    for w in $ws gap:4\n        text \"x\"\n";
+    let code = crate::transpile_source(src, "demo", None, None)
+        .unwrap()
+        .rust_code;
+    assert!(
+        code.contains("fragment_positional(") && code.contains("(4) as f32"),
+        "a keyless reactive for with gap is a positional gap fragment:\n{code}"
+    );
+}
+
+#[test]
+fn static_for_stays_construction_loop() {
+    let src = "[view]\ncol\n    for n in 0..3\n        text \"x\"\n";
+    let code = crate::transpile_source(src, "demo", None, None)
+        .unwrap()
+        .rust_code;
+    assert!(
+        !code.contains("ReactiveList"),
+        "a plain for must not be reactive:\n{code}"
+    );
+    assert!(
+        code.contains("for n in 0..3"),
+        "construction loop preserved:\n{code}"
+    );
+}
+
+#[test]
+fn reactive_if_emits_reactive_list() {
+    let src = "[logic]\nlet show = signal(true);\n[view]\ncol\n    if $show\n        text \"yes\"\n    else\n        text \"no\"\n";
+    let code = crate::transpile_source(src, "demo", None, None)
+        .unwrap()
+        .rust_code;
+    assert!(
+        code.contains("fragment(") && !code.contains("ReactiveList"),
+        "a reactive if in a container should be a transparent fragment:\n{code}"
+    );
+    assert!(
+        code.contains("move || vec![show.get()]"),
+        "condition read as source:\n{code}"
+    );
+    assert!(
+        code.contains("|__cond: &bool| *__cond"),
+        "bool key:\n{code}"
+    );
+    assert!(code.contains("if __cond"), "branch selector:\n{code}");
+}
+
+#[test]
+fn static_if_stays_construction() {
+    let src = "[view]\ncol\n    if some_flag\n        text \"x\"\n";
+    let code = crate::transpile_source(src, "demo", None, None)
+        .unwrap()
+        .rust_code;
+    assert!(
+        !code.contains("ReactiveList"),
+        "a plain if must not be reactive:\n{code}"
+    );
+    assert!(
+        code.contains("some_flag"),
+        "condition emitted verbatim:\n{code}"
+    );
+}
+
+// An injected `Container::column` wrapper would trap a `row align:stretch` root at content height.
+#[test]
+fn root_static_if_returns_branch_directly_without_wrapper() {
+    let src =
+        "[view]\nif vertical\n    col\n        text \"a\"\nelse\n    row\n        text \"b\"\n";
+    let code = crate::transpile_source(src, "demo", None, None)
+        .unwrap()
+        .rust_code;
+    assert!(
+        !code.contains("Container::column(children![__"),
+        "a single-if root must not wrap its branch in an injected column:\n{code}"
+    );
+    assert!(
+        code.contains("Ok(Box::new(__col_0))") && code.contains("Ok(Box::new(__row_0))"),
+        "each branch's element is returned directly as the component root:\n{code}"
+    );
+    assert!(
+        code.contains("if vertical {") && code.contains("} else {"),
+        "the conditional drives which branch becomes the root:\n{code}"
+    );
+}
+
+#[test]
+fn reactive_for_single_child_item_is_not_wrapped() {
+    let src = "[logic]\nlet items = signal(vec![1i32, 2]);\n[view]\nrow align:stretch\n    for n in $items key *n\n        box fill:primary\n            text \"x\"\n";
+    let code = crate::transpile_source(src, "demo", None, None)
+        .unwrap()
+        .rust_code;
+    assert!(
+        !code.contains("Ok(box_item(Container::new(LayoutStyle::new().flex_column()"),
+        "a single-widget for item must not be wrapped in a collapsing flex-column cell:\n{code}"
+    );
+    assert!(
+        code.contains("Ok(box_item(__sbox_0))"),
+        "the item's styled box is returned bare so the row can stretch it:\n{code}"
+    );
+}
+
+#[test]
+fn transform_attrs_emit_with_transform() {
+    let src = "[view]\ncol\n    box fill:primary rotate:30 scale:1.2\n        text \"x\"\n";
+    let code = crate::transpile_source(src, "demo", None, None)
+        .unwrap()
+        .rust_code;
+    assert!(
+        code.contains(".with_transform("),
+        "emits with_transform:\n{code}"
+    );
+    assert!(
+        code.contains("box_transform(__r,"),
+        "calls the helper:\n{code}"
+    );
+    assert!(
+        code.contains("(30) as f32"),
+        "rotate arg cast to f32:\n{code}"
+    );
+    assert!(
+        code.matches("(1.2) as f32").count() >= 2,
+        "scale fills both axes:\n{code}"
+    );
+}
+
+#[test]
+fn transform_promotes_plain_container() {
+    let src = "[view]\ncol\n    col rotate:5\n        text \"x\"\n";
+    let code = crate::transpile_source(src, "demo", None, None)
+        .unwrap()
+        .rust_code;
+    assert!(
+        code.contains("StyledContainer"),
+        "promoted to styled:\n{code}"
+    );
+    assert!(
+        code.contains(".with_transform("),
+        "carries the transform:\n{code}"
+    );
+}
+
+#[test]
+fn no_transform_no_call() {
+    let src = "[view]\ncol\n    box fill:primary\n        text \"x\"\n";
+    let code = crate::transpile_source(src, "demo", None, None)
+        .unwrap()
+        .rust_code;
+    assert!(
+        !code.contains(".with_transform("),
+        "no transform, no call:\n{code}"
+    );
+}
+
+#[test]
+fn event_callbacks_emit_on_hover_and_on_key() {
+    let src = "[logic]\nlet hot = signal(false);\nlet n = signal(0i32);\n[view]\ncol\n    box fill:primary on_hover:(|h| $hot.set(h)) on_key:(|_k| $n += 1)\n        text \"x\"\n";
+    let code = crate::transpile_source(src, "demo", None, None)
+        .unwrap()
+        .rust_code;
+    assert!(code.contains(".on_hover("), "emits on_hover:\n{code}");
+    assert!(code.contains(".on_key("), "emits on_key:\n{code}");
+}
+
+#[test]
+fn on_pointer_move_emits_the_container_method() {
+    let src = "[logic]\nlet at = signal((0.0f32, 0.0f32));\n[view]\ncol\n    box on_pointer_move:(|x, y| $at.set((x, y)))\n        text \"x\"\n";
+    let code = crate::transpile_source(src, "demo", None, None)
+        .unwrap()
+        .rust_code;
+    assert!(
+        code.contains(".on_pointer_move("),
+        "emits on_pointer_move:\n{code}"
+    );
+    assert!(
+        code.contains("move |x, y| at.set((x, y))"),
+        "with the $signal cloned in:\n{code}"
+    );
+}
+
+/// `drag_threshold` is how far a press must travel before it is a drag rather than a click on what sits under it — the knob a viewport needs and a slider must not have.
+#[test]
+fn drag_threshold_emits_the_slop_distance() {
+    let src = "[view]\ncol\n    box drag_threshold:4 on_drag:(|_x, _y| ())\n        text \"x\"\n";
+    let code = crate::transpile_source(src, "demo", None, None)
+        .unwrap()
+        .rust_code;
+    assert!(
+        code.contains(".drag_threshold(4.0)"),
+        "the threshold reaches the widget:\n{code}"
+    );
+}
+
+#[test]
+fn drag_button_emits_the_extra_buttons() {
+    let src = "[view]\ncol\n    box drag_button:secondary,auxiliary on_drag:(|_x, _y| ())\n        text \"x\"\n";
+    let code = crate::transpile_source(src, "demo", None, None)
+        .unwrap()
+        .rust_code;
+    assert!(
+        code.contains(
+            ".drag_button(PointerButton::Secondary).drag_button(PointerButton::Auxiliary)"
+        ),
+        "emits one call per button:\n{code}"
+    );
+}
+
+#[test]
+fn on_hover_promotes_plain_container() {
+    let src = "[view]\ncol\n    col on_hover:(|_h| ())\n        text \"x\"\n";
+    let code = crate::transpile_source(src, "demo", None, None)
+        .unwrap()
+        .rust_code;
+    assert!(
+        code.contains("StyledContainer"),
+        "promoted to styled:\n{code}"
+    );
+    assert!(code.contains(".on_hover("), "carries the callback:\n{code}");
+}
+
+#[test]
+fn heading_resolves_as_widget_component() {
+    let src = "[view]\ncol\n    heading text:\"Title\"\n";
+    let code = crate::transpile_source(src, "demo", None, None)
+        .unwrap()
+        .rust_code;
+    assert!(
+        code.contains(
+            "heading(HeadingProps::props().text(\"Title\").build(), Children::default())"
+        ),
+        "heading is a component call carrying its text:\n{code}"
+    );
+}
+
+#[test]
+/// A `$signal` on a reactive prop hands over the *handle*, and the prop's own type turns it into a reading. The emitter used to build that closure itself, which is why it needed a table saying which props were reactive; `From<RwSignal<T>> for Reactive<T>` is where the `.get()` lives now.
+fn btn_signal_color_reaches_the_prop_as_a_handle() {
+    let src = "[logic]\nlet c = signal(Color::WHITE);\n[view]\nbutton label:\"x\" fill:$c\n";
+    let code = crate::transpile_source(src, "demo", None, None)
+        .unwrap()
+        .rust_code;
+    assert!(
+        code.contains(".fill(c.clone())"),
+        "the signal reaches the prop as a handle, not as a sampled colour:\n{code}"
+    );
+    assert!(
+        !code.contains("Box::new(move || c.get())"),
+        "and the emitter no longer hand-builds the reading:\n{code}"
+    );
+}
+
+#[test]
+fn box_fill_computed_expression_is_reactive() {
+    let src = "[logic]\nlet snap = signal(0i32);\nlet ids = signal(vec![1i32]);\n[view]\nrow\n    for id in $ids key id\n        box fill:(chip_fill($snap, id)) radius:6\n            text \"x\"\n";
+    let code = crate::transpile_source(src, "demo", None, None)
+        .unwrap()
+        .rust_code;
+    assert!(
+        code.contains("chip_fill(snap.get(), id)"),
+        "the fill expr reads the signal reactively and keeps the loop var verbatim:\n{code}"
+    );
+    assert!(
+        code.contains("let snap = snap.clone();"),
+        "the captured signal is cloned into the paint closure:\n{code}"
+    );
+}
+
+#[test]
+fn text_color_computed_expression_is_reactive() {
+    let src = "[logic]\nlet snap = signal(0i32);\n[view]\ntext \"hi\" color:(text_color($snap))\n";
+    let code = crate::transpile_source(src, "demo", None, None)
+        .unwrap()
+        .rust_code;
+    assert!(
+        code.contains("text_color(snap.get())"),
+        "the color expr reads the signal reactively:\n{code}"
+    );
+    assert!(
+        code.contains("let snap = snap.clone();"),
+        "the captured signal is cloned into the style closure:\n{code}"
+    );
+}
+
+/// D2's bug: a layout value that reads state through a *call* was frozen, because the reactivity test was `contains('$')` and a call carries no sigil. `styled_by` is what re-resolves a `LayoutStyle`, and the runtime tracks whatever the closure reads — so the closure is all the emitter has to produce.
+#[test]
+fn a_computed_layout_value_is_re_resolved_even_without_a_sigil() {
+    let src = "[logic]\nlet dock = signal(0.0f32);\nfn measured() -> f32 { 12.0 }\n[view]\ncol gap:measured() pad:8\n    text \"x\"\n";
+    let out = crate::transpile_source(src, "demo", None, None).unwrap();
+    assert!(
+        out.rust_code.contains(
+            ".styled_by(move || LayoutStyle::new().flex_column().gap(measured()).padding_all(8.0))"
+        ),
+        "a call is a reading:\n{}",
+        out.rust_code
+    );
+
+    let flat = crate::transpile_source(
+        "[view]\ncol gap:8 pad:12 align:center\n    text \"x\"\n",
+        "demo",
+        None,
+        None,
+    )
+    .unwrap()
+    .rust_code;
+    assert!(!flat.contains(".styled_by("), "{flat}");
+}
+
+/// A closure that runs again cannot move what it names, and a computed value names whatever the author had in scope — including `props`, which the generated scope binds and `#[derive(Props)]` makes cloneable for exactly this.
+#[test]
+fn a_re_resolving_style_clones_what_it_names_instead_of_moving_it() {
+    let src = "[logic]\nlet side = 4.0f32;\n[view]\ncol gap:side pad:props.pad\n    text \"x\"\n";
+    let out = crate::transpile_source(src, "demo", None, None).unwrap();
+    assert!(
+        out.rust_code
+            .contains(".styled_by({ let props = props.clone(); let side = side.clone(); move ||"),
+        "{}",
+        out.rust_code
+    );
+}
+
+/// The parens a value needs to hold a space are the markup's delimiters, not part of the expression: emitted, they warn `unused_parens` in code the author cannot edit.
+#[test]
+fn a_values_own_parens_do_not_reach_the_output() {
+    let src =
+        "[view]\ncol gap:(space::lg() * 2.0) pad:(::ui::scale::md())\n    box fill:(tint(on))\n";
+    let out = crate::transpile_source(src, "demo", None, None)
+        .unwrap()
+        .rust_code;
+    assert!(out.contains(".gap(space::lg() * 2.0)"), "{out}");
+    assert!(out.contains(".padding_all(::ui::scale::md())"), "{out}");
+    assert!(out.contains("with_fill(tint(on))"), "{out}");
+}
+
+/// A theme read is a `$` read: the view binds `theme` as a handle, so the same sugar that reads a signal reads the theme, and it re-reads inside the paint closure instead of freezing at construction.
+#[test]
+fn a_theme_read_is_a_dollar_read_like_any_other() {
+    let src = "[view]\nbox fill:$theme.primary\n    text \"x\"\n";
+    let code = crate::transpile_source(src, "demo", Some("MyTheme"), None)
+        .unwrap()
+        .rust_code;
+    assert!(
+        code.contains("let theme = telar::Theme::<MyTheme>::default();"),
+        "the view binds the handle:\n{code}"
+    );
+    assert!(
+        code.contains("theme.get().primary"),
+        "and the read happens where it is written:\n{code}"
+    );
+}
+
+// A tag with no dispatch arm falls through to `emit_component_call` and is emitted as a bare component call, so this guards the registry table and the dispatch `match` against drift.
+#[test]
+fn every_builtin_tag_has_a_dispatch_arm() {
+    for &(tag, _ctor) in crate::registry::builtin_tags() {
+        let src = format!("[view]\n{tag}\n");
+        // A real emit arm may still reject a bare instance; that is not a fall-through, since `emit_component_call` returns unconditionally.
+        let Ok(out) = crate::transpile_source(&src, "demo", None, None) else {
+            continue;
+        };
+        assert!(
+            !out.rust_code.contains(&format!("{tag}()?")),
+            "builtin tag `{tag}` fell through to emit_component_call (no dispatch arm):\n{}",
+            out.rust_code
+        );
+    }
+}
+
+/// The language used to be strict about keys and silent about values: a misspelled `align` laid out unaligned, with the attribute simply skipped and nothing to point at.
+#[test]
+fn a_misspelled_keyword_stops_the_build_the_way_a_misspelled_key_does() {
+    let src = "[view]\ncol align:centre\n    text \"x\"\n";
+    let out = crate::transpile_source(src, "demo", None, None).unwrap();
+    assert!(
+        out.rust_code.contains("is not a value of `align`"),
+        "{}",
+        out.rust_code
+    );
+}
+
+/// `img fit:covr` used to be *replaced by a default* rather than skipped, so the picture came out fitted the other way with nothing anywhere saying so.
+#[test]
+fn a_media_keyword_is_rejected_instead_of_defaulted() {
+    let src = "[view]\nimg src:\"a.png\" fit:covr\n";
+    let out = crate::transpile_source(src, "demo", None, None).unwrap();
+    assert!(
+        out.rust_code.contains("is not a value of `fit`"),
+        "{}",
+        out.rust_code
+    );
+}
+
+/// A `text`'s `align` is a different property from a container's `align` of the same name, so it takes a different closed set: `justify` is a paragraph, and a typo under either must not pass as the other.
+#[test]
+fn align_is_checked_against_the_set_its_own_tag_has() {
+    let paragraph = "[view]\ntext \"x\" text_align:justify\n";
+    let out = crate::transpile_source(paragraph, "demo", None, None).unwrap();
+    assert!(
+        !out.rust_code.contains("compile_error!"),
+        "{}",
+        out.rust_code
+    );
+    assert!(
+        out.rust_code.contains("TextAlign::Justify"),
+        "{}",
+        out.rust_code
+    );
+
+    let container = "[view]\ncol align:justify\n    text \"x\"\n";
+    let out = crate::transpile_source(container, "demo", None, None).unwrap();
+    assert!(
+        out.rust_code.contains("is not a value of `align`"),
+        "the error must name the attribute: {}",
+        out.rust_code
+    );
+}
+
+/// Six keys that meant nothing apart become one value, and the three that sat among the colour keys stop reading as properties a box has.
+#[test]
+fn a_gradient_is_a_value_of_fill_and_not_six_keys_of_its_own() {
+    let code = crate::transpile_source(
+        "[view]\nbox fill:linear(horizontal, #ff0000, #0000ff)\n    text \"x\"\n",
+        "demo",
+        None,
+        None,
+    )
+    .unwrap()
+    .rust_code;
+    assert!(!code.contains("compile_error!"), "{code}");
+    assert!(
+        code.contains("Paint::Gradient(Gradient::linear(Point::new(r.x, r.y + r.height * 0.5)"),
+        "the axis leads:\n{code}"
+    );
+
+    let gone = crate::transpile_source(
+        "[view]\nbox gradient:horizontal from:#ff0000 to:#0000ff\n    text \"x\"\n",
+        "demo",
+        None,
+        None,
+    )
+    .unwrap()
+    .rust_code;
+    assert!(
+        gone.contains("`gradient` is not an attribute of `box`"),
+        "{gone}"
+    );
+    assert!(
+        gone.contains("`from` is not an attribute of `box`"),
+        "{gone}"
+    );
+}
+
+/// A gradient's *shape* is the one thing about it this crate can judge — its stops are Rust expressions, reported by rustc against the attribute's own line.
+#[test]
+fn a_gradient_that_is_not_one_is_reported_on_the_fill_that_holds_it() {
+    let code = crate::transpile_source(
+        "[view]\nbox fill:linear(#ff0000)\n    text \"x\"\n",
+        "demo",
+        None,
+        None,
+    )
+    .unwrap()
+    .rust_code;
+    assert!(code.contains("is not a gradient"), "{code}");
+}
+
+/// A synonym is cost with nothing bought, and every one of these had a shorter or plainer spelling that stays. They are errors rather than silences, which is what makes deleting them safe.
+#[test]
+fn a_second_spelling_of_a_value_is_not_a_value() {
+    for (src, expected) in [
+        ("[view]\ntext \"x\" font_weight:demibold\n", "`semibold`"),
+        ("[view]\ntext \"x\" font_weight:black\n", "`heavy`"),
+        (
+            "[view]\ncol wrap:wrap\n    text \"x\"\n",
+            "`wrap` takes no value",
+        ),
+        (
+            "[view]\ntext \"x\" lines:2 ellipsis:true\n",
+            "`ellipsis` takes no value",
+        ),
+        (
+            "[view]\ngrid cols(240px 1fr)\n    text \"x\"\n",
+            "is not a track list",
+        ),
+    ] {
+        let code = crate::transpile_source(src, "demo", None, None)
+            .unwrap()
+            .rust_code;
+        assert!(
+            code.contains(expected),
+            "expected {expected:?} for {src:?}:\n{code}"
+        );
+    }
+}
+
+/// `white` and `black` stop being colours, so the name falls through to what a bare ident means — a `[style]` constant — instead of quietly painting one.
+#[test]
+fn a_named_colour_is_only_transparent_now() {
+    let code = crate::transpile_source("[view]\ntext \"x\" color:white\n", "demo", None, None)
+        .unwrap()
+        .rust_code;
+    assert!(!code.contains("Color::WHITE"), "{code}");
+
+    let kept =
+        crate::transpile_source("[view]\ntext \"x\" color:transparent\n", "demo", None, None)
+            .unwrap()
+            .rust_code;
+    assert!(kept.contains("Color::TRANSPARENT"), "{kept}");
+}
+
+/// The spellings that stay, so the trim is a trim and not an amputation.
+#[test]
+fn the_one_spelling_of_each_still_works() {
+    for (src, expected) in [
+        (
+            "[view]\ntext \"x\" font_weight:semibold\n",
+            ".with_font_weight(600)",
+        ),
+        (
+            "[view]\ntext \"x\" font_weight:heavy\n",
+            ".with_font_weight(900)",
+        ),
+        (
+            "[view]\ntext \"x\" font_weight:600\n",
+            ".with_font_weight(600)",
+        ),
+        ("[view]\ncol wrap\n    text \"x\"\n", ".flex_wrap()"),
+        (
+            "[view]\ntext \"x\" lines:2 ellipsis\n",
+            ".with_clamp(2, true)",
+        ),
+        (
+            "[view]\ngrid cols(240 1fr)\n    text \"x\"\n",
+            "TemplateTrack::px(240.0)",
+        ),
+    ] {
+        let code = crate::transpile_source(src, "demo", None, None)
+            .unwrap()
+            .rust_code;
+        assert!(!code.contains("compile_error!"), "{src:?}:\n{code}");
+        assert!(code.contains(expected), "{src:?}:\n{code}");
+    }
+}
+
+/// `@heading { font_size: 22 }` used to compile and do nothing: a class reached a container's paint and a container's layout, and a `text` never looked at its classes at all.
+#[test]
+fn a_class_carries_text_properties_to_a_text() {
+    let src =
+        "[style]\n@heading\n    font_size: 22\n    color: #ff0000\n\n[view]\ntext \"x\" @heading\n";
+    let out = crate::transpile_source(src, "demo", None, None).unwrap();
+    let code = &out.rust_code;
+    assert!(!code.contains("compile_error!"), "{code}");
+    assert!(
+        code.contains(".with_font_size(22.0)") && code.contains(".with_color("),
+        "the class's size and colour reach the leaf:\n{code}"
+    );
+}
+
+/// An inline attribute is nearer than the class it sits beside, and wins.
+#[test]
+fn an_inline_attribute_beats_the_class_beside_it() {
+    let src = "[style]\n@heading\n    font_size: 22\n\n[view]\ntext \"x\" @heading font_size:11\n";
+    let code = crate::transpile_source(src, "demo", None, None)
+        .unwrap()
+        .rust_code;
+    assert!(code.contains(".with_font_size(11.0)"), "{code}");
+    assert!(!code.contains(".with_font_size(22.0)"), "{code}");
+}
+
+/// The same class on a container declares for everything below it instead — one spelling, two reaches.
+#[test]
+fn a_class_on_a_container_declares_for_the_subtree() {
+    let src = "[style]\n@heading\n    font_size: 22\n\n[view]\ncol @heading\n    text \"x\"\n";
+    let code = crate::transpile_source(src, "demo", None, None)
+        .unwrap()
+        .rust_code;
+    assert!(
+        code.contains(".declaring(move || Declared::default().with_font_size(22.0))"),
+        "{code}"
+    );
+}
+
+/// The line this whole document exists for: a container that draws no text says what the text under it looks like, and `font_size:` on a `col` used to be a `compile_error!`.
+#[test]
+fn a_container_declares_the_text_below_it() {
+    let src = "[view]\ncol font_size:11 color:#ff0000 raster:pixel\n    text \"x\"\n";
+    let out = crate::transpile_source(src, "demo", None, None).unwrap();
+    let code = &out.rust_code;
+    assert!(!code.contains("compile_error!"), "{code}");
+    assert!(
+        code.contains(".declaring(move || Declared::default().with_font_size(11.0).with_color("),
+        "size and colour reach the declaration:\n{code}"
+    );
+    assert!(
+        code.contains(".with_raster(Raster::Pixel))"),
+        "and so does the raster:\n{code}"
+    );
+}
+
+/// A clamp is one paragraph's business, so it stays where it was and never reaches a container.
+#[test]
+fn a_container_cannot_clamp_the_text_below_it() {
+    let src = "[view]\ncol lines:2\n    text \"x\"\n";
+    let out = crate::transpile_source(src, "demo", None, None).unwrap();
+    assert!(
+        out.rust_code
+            .contains("`lines` is not an attribute of `col`"),
+        "{}",
+        out.rust_code
+    );
+}
+
+/// A container naming nothing inheritable declares nothing, so the map the cascade walks stays empty for every tree that does not use the feature.
+#[test]
+fn a_container_that_says_nothing_declares_nothing() {
+    let src = "[view]\ncol gap:8\n    text \"x\"\n";
+    let out = crate::transpile_source(src, "demo", None, None).unwrap();
+    assert!(!out.rust_code.contains(".declaring("), "{}", out.rust_code);
+}
+
+/// The names the transpiler cannot enumerate — a `[logic]` binding, a `const`, a props field — still reach rustc, which names them against this `.rsx` line through the source map.
+#[test]
+fn a_name_the_author_has_in_scope_is_still_carried_through() {
+    let src = "[logic]\nlet gutter = 8.0;\n[view]\ncol gap:gutter pad:props.pad\n    text \"x\"\n";
+    let out = crate::transpile_source(src, "demo", None, None).unwrap();
+    assert!(
+        !out.rust_code.contains("compile_error!"),
+        "{}",
+        out.rust_code
+    );
+    assert!(
+        out.rust_code.contains(".gap(gutter)"),
+        "a name in scope is passed through untouched: {}",
+        out.rust_code
+    );
+    assert!(
+        out.rust_code.contains(".padding_all(props.pad)"),
+        "and so is a field access: {}",
+        out.rust_code
+    );
+}
+
+/// B1: the family was a process-wide global, so a `text` could not name one at all — the whole reason "one font here and another in the window around it" was inexpressible.
+#[test]
+fn a_text_can_name_the_face_it_shapes_in() {
+    let src = "[view]\ntext \"x\" font_family:\"LanaPixel\"\n";
+    let out = crate::transpile_source(src, "demo", None, None).unwrap();
+    assert!(
+        out.rust_code.contains(r#".with_font_family("LanaPixel")"#),
+        "{}",
+        out.rust_code
+    );
+}
+
+/// The families an application has are its own vocabulary, so an unquoted value is carried through the way a `theme.` read or a `[logic]` binding is everywhere else.
+#[test]
+fn an_unquoted_family_is_the_authors_own_expression() {
+    let src = "[logic]\nlet face = \"LanaPixel\";\n[view]\ntext \"x\" font_family:face\n";
+    let out = crate::transpile_source(src, "demo", None, None).unwrap();
+    assert!(
+        out.rust_code.contains(".with_font_family(face)"),
+        "{}",
+        out.rust_code
+    );
+}
+
+/// A `text` naming no family must emit no family call at all, so it keeps shaping in the configured sans-serif face exactly as it did before the axis existed.
+#[test]
+fn a_text_naming_no_family_is_untouched() {
+    let src = "[view]\ntext \"x\" font_size:12\n";
+    let out = crate::transpile_source(src, "demo", None, None).unwrap();
+    assert!(
+        !out.rust_code.contains("with_font_family"),
+        "a text naming no family must not ask for one: {}",
+        out.rust_code
+    );
+}
+
+/// A `Canvas` is a `ui-core` primitive that had no tag, so the only way to place one was to build it in `[logic]` and splice the binding through `widget` — which is also why a canvas could never sit inside anything that rebuilds. Named as a tag, it is constructed where it is placed.
+#[test]
+fn canvas_tag_builds_the_primitive_where_it_is_placed() {
+    let src = "[logic]\nlet paint = |rect: Rect| RenderNode::group([]);\n\n[view]\ncol\n    canvas paint:paint width:196 height:56\n";
+    let code = crate::transpile_source(src, "demo", None, None)
+        .unwrap()
+        .rust_code;
+    assert!(
+        code.contains("Canvas::new(LayoutStyle::new().width(196.0).height(56.0), paint)?"),
+        "the layout attrs shape the leaf and the closure paints it:\n{code}"
+    );
+}
+
+/// Without one there is nothing to draw, and the leaf would be a silent empty rect.
+#[test]
+fn a_canvas_without_paint_says_so() {
+    let src = "[view]\ncol\n    canvas width:10 height:10\n";
+    let code = crate::transpile_source(src, "demo", None, None)
+        .unwrap()
+        .rust_code;
+    assert!(code.contains("compile_error!"), "{code}");
+}

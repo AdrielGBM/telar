@@ -71,21 +71,5 @@ pub(crate) fn build_nsis(cargo_args: Vec<String>, config: TelarConfig) -> ! {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn nsis_script_installs_and_uninstalls_the_renamed_exe() {
-        let script = nsis_script(
-            "demo",
-            Path::new("C:\\repo\\target\\release\\demo.exe"),
-            Path::new("C:\\repo\\target\\telar-dist\\demo_1.0_setup.exe"),
-        );
-        assert!(script.contains("OutFile \"C:\\repo\\target\\telar-dist\\demo_1.0_setup.exe\""));
-        assert!(
-            script.contains("File \"/oname=demo.exe\" \"C:\\repo\\target\\release\\demo.exe\"")
-        );
-        assert!(script.contains("InstallDir \"$PROGRAMFILES64\\demo\""));
-        assert!(script.contains("Delete \"$INSTDIR\\demo.exe\""));
-    }
-}
+#[path = "nsis_test.rs"]
+mod tests;

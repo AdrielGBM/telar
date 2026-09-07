@@ -16,7 +16,7 @@ internals.
 
 ## Running the browser test
 
-`tests/layout_parity.rs` lays one tree out twice — once through Taffy, once as the CSS this crate writes —
+`src/layout_parity_test.rs` lays one tree out twice — once through Taffy, once as the CSS this crate writes —
 and compares every box against `getBoundingClientRect`. It needs a real browser, so it runs on the wasm
 target through `wasm-bindgen-test-runner`:
 

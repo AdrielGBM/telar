@@ -61,13 +61,5 @@ pub(crate) fn build_appimage(cargo_args: Vec<String>, config: TelarConfig) -> ! 
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn apprun_execs_the_bundled_binary() {
-        let script = apprun_script("myapp");
-        assert!(script.starts_with("#!/bin/sh\n"));
-        assert!(script.contains("exec \"$HERE/usr/bin/myapp\" \"$@\""));
-    }
-}
+#[path = "appimage_test.rs"]
+mod tests;

@@ -1,0 +1,288 @@
+//! Headless render gallery for the ui-components catalogue: builds the inline form widgets in visible states and renders them to a PNG for eyeballing. Runs in CI (asserts it renders with content); pass TELAR_WIDGETS_OUT=/path.png to also dump the image.
+
+#[path = "test_common.rs"]
+mod common;
+
+use layout_core::{AvailableSpace, LayoutStyle};
+use platform_headless::HeadlessWindow;
+use reactive_core::signal;
+use renderer_core::TextStyle;
+use renderer_core::{Color, RenderBackend};
+use telar_renderer_software::{SoftwareRenderer, SoftwareRendererConfig};
+use ui_components::{
+    CheckboxProps, RadioProps, SliderProps, TextFieldProps, ToggleProps, checkbox, radio, slider,
+    text_field, toggle,
+};
+use ui_components::{ModalProps, modal};
+use ui_core::{
+    Children, Container, LayoutItem, Slots, Text, box_item, compute_layout, new_container,
+    relayout_if_dirty, reset_layout_runtime,
+};
+use ui_tree::ComponentList;
+
+#[test]
+fn form_widgets_render() {
+    let (w, h) = (360u32, 400u32);
+    common::install_text_metrics();
+    reset_layout_runtime();
+
+    let cb = checkbox(
+        CheckboxProps::props()
+            .checked(signal(true))
+            .label("I agree to the terms")
+            .build(),
+        Children::default(),
+    )
+    .unwrap();
+    let tg = toggle(
+        ToggleProps::props()
+            .checked(signal(true))
+            .label("Notifications on")
+            .build(),
+        Children::default(),
+    )
+    .unwrap();
+    let choice = signal(1u32);
+    let r0 = radio(
+        RadioProps::props()
+            .selected(choice)
+            .value(0)
+            .label("Small")
+            .build(),
+        Children::default(),
+    )
+    .unwrap();
+    let r1 = radio(
+        RadioProps::props()
+            .selected(choice)
+            .value(1)
+            .label("Medium (selected)")
+            .build(),
+        Children::default(),
+    )
+    .unwrap();
+    let sl = slider(
+        SliderProps::props()
+            .value(signal(0.62))
+            .width(260.0)
+            .build(),
+        Children::default(),
+    )
+    .unwrap();
+    let tf = text_field(
+        TextFieldProps::props()
+            .value(signal("Ada".to_string()))
+            .label("Name")
+            .width(260.0)
+            .build(),
+        Children::default(),
+    )
+    .unwrap();
+    let tf2 = text_field(
+        TextFieldProps::props()
+            .value(signal(String::new()))
+            .placeholder("Search…")
+            .width(260.0)
+            .build(),
+        Children::default(),
+    )
+    .unwrap();
+
+    let col = Container::new(
+        LayoutStyle::new()
+            .flex_column()
+            .gap(16.0)
+            .padding_all(20.0)
+            .width(w as f32)
+            .height(h as f32),
+        vec![
+            Box::new(cb),
+            Box::new(tg),
+            Box::new(r0),
+            Box::new(r1),
+            Box::new(sl),
+            Box::new(tf),
+            Box::new(tf2),
+        ],
+    )
+    .unwrap();
+    let root = col.layout_node();
+    compute_layout(
+        root,
+        AvailableSpace::Definite(w as f32),
+        AvailableSpace::Definite(h as f32),
+    )
+    .unwrap();
+
+    let tree = ComponentList::new(col);
+    let mut renderer = SoftwareRenderer::<HeadlessWindow, HeadlessWindow>::new_headless(
+        w,
+        h,
+        SoftwareRendererConfig::default(),
+    );
+    renderer.begin_frame(w, h, 1.0, 0).unwrap();
+    renderer
+        .render_frame(&tree.commands(), Some(Color::from_rgb_u8(244, 245, 248)))
+        .unwrap();
+    let rgba = renderer.read_rgba().expect("pixmap after a frame");
+    assert_eq!(rgba.len(), (w * h * 4) as usize);
+    assert!(
+        rgba.chunks_exact(4).any(|px| px[0] != 244),
+        "expected widgets to draw content over the clear color"
+    );
+    common::save_png_if_requested("TELAR_WIDGETS_OUT", w, h, &rgba);
+}
+
+#[test]
+fn modal_renders_over_a_page() {
+    let (w, h) = (420u32, 300u32);
+    common::install_text_metrics();
+    reset_layout_runtime();
+    let open = signal(false);
+
+    let body = Text::new(
+        || "Are you sure you want to continue?".to_string(),
+        LayoutStyle::new().height(20.0),
+        || TextStyle::new(14.0, Color::from_rgb_u8(40, 42, 52)),
+    )
+    .unwrap();
+    let mut slots = Slots::new();
+    slots.push(None, box_item(body));
+    let dialog = modal(
+        ModalProps::props()
+            .open(open)
+            .title("Confirm action")
+            .build(),
+        Children::from(slots),
+    )
+    .unwrap();
+
+    // A parent-less root computed against the window registers the overlay host the portal attaches to.
+    let root = new_container(
+        LayoutStyle::new()
+            .flex_column()
+            .width(w as f32)
+            .height(h as f32),
+        &[dialog.layout_node()],
+    )
+    .unwrap();
+    compute_layout(
+        root,
+        AvailableSpace::Definite(w as f32),
+        AvailableSpace::Definite(h as f32),
+    )
+    .unwrap();
+    let tree = ComponentList::new(dialog);
+
+    open.set(true);
+    relayout_if_dirty();
+
+    let mut renderer = SoftwareRenderer::<HeadlessWindow, HeadlessWindow>::new_headless(
+        w,
+        h,
+        SoftwareRendererConfig::default(),
+    );
+    renderer.begin_frame(w, h, 1.0, 0).unwrap();
+    renderer
+        .render_frame(&tree.commands(), Some(Color::from_rgb_u8(238, 240, 245)))
+        .unwrap();
+    let rgba = renderer.read_rgba().expect("pixmap after a frame");
+    assert!(
+        rgba.chunks_exact(4).any(|px| px[0] != 238),
+        "expected the modal to draw over the page"
+    );
+    common::save_png_if_requested("TELAR_MODAL_OUT", w, h, &rgba);
+}
+
+#[test]
+fn select_open_renders() {
+    use platform_core::{Event, PointerButton, PointerSource};
+    use ui_components::{ItemProps, SelectProps, item, select};
+    use ui_core::{Children, EventResult, Slots, dispatch_overlays, track_layout};
+
+    let (w, h) = (300u32, 240u32);
+    common::install_text_metrics();
+    reset_layout_runtime();
+    let picked = signal(1u32);
+    let sel = select(
+        SelectProps::props().selected(picked).build(),
+        Children::new(|| {
+            let mut slots = Slots::new();
+            for label in ["Small", "Medium", "Large"] {
+                slots.push(
+                    None,
+                    item(
+                        ItemProps::props().label(label.to_string()).build(),
+                        Children::default(),
+                    )?,
+                );
+            }
+            Ok(slots)
+        }),
+    )
+    .unwrap();
+    let trigger_node = sel.layout_node();
+    let trigger_rect = track_layout(trigger_node).unwrap();
+    // A parent-less root registers the overlay host so the dropdown portals to the viewport.
+    let root = new_container(
+        LayoutStyle::new()
+            .flex_column()
+            .padding_all(16.0)
+            .width(w as f32)
+            .height(h as f32),
+        &[trigger_node],
+    )
+    .unwrap();
+    compute_layout(
+        root,
+        AvailableSpace::Definite(w as f32),
+        AvailableSpace::Definite(h as f32),
+    )
+    .unwrap();
+
+    let mut tree = ComponentList::new(sel);
+    let _ = tree.commands();
+    let r = trigger_rect.get();
+    let (cx, cy) = ((r.x + r.width / 2.0) as f64, (r.y + r.height / 2.0) as f64);
+    for ev in [
+        Event::PointerPressed {
+            x: cx,
+            y: cy,
+            button: PointerButton::Primary,
+            source: PointerSource::Mouse,
+        },
+        Event::PointerReleased {
+            x: cx,
+            y: cy,
+            button: PointerButton::Primary,
+            source: PointerSource::Mouse,
+        },
+    ] {
+        if dispatch_overlays(&ev) == EventResult::Ignored {
+            tree.on_event(&ev);
+        }
+    }
+    relayout_if_dirty();
+
+    let mut renderer = SoftwareRenderer::<HeadlessWindow, HeadlessWindow>::new_headless(
+        w,
+        h,
+        SoftwareRendererConfig::default(),
+    );
+    renderer.begin_frame(w, h, 1.0, 0).unwrap();
+    renderer
+        .render_frame(&tree.commands(), Some(Color::from_rgb_u8(244, 245, 248)))
+        .unwrap();
+    let rgba = renderer.read_rgba().expect("pixmap");
+    // An open panel is an overlay composed from a different layer than the trigger, and its rows have to survive that trip to the pixels.
+    let panel_rows = rgba
+        .chunks_exact(4)
+        .skip((w as usize) * 90 * 1)
+        .filter(|px| px[0] != 244)
+        .count();
+    assert!(
+        panel_rows > 0,
+        "expected the open panel's rows to draw below the trigger"
+    );
+    common::save_png_if_requested("TELAR_SELECT_OUT", w, h, &rgba);
+}

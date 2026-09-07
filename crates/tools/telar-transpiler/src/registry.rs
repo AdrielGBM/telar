@@ -591,58 +591,8 @@ pub fn tag_attr_keys(tag: &str) -> Vec<&'static str> {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn builtin_and_control_flow_classification() {
-        assert!(is_builtin_tag("col") && is_builtin_tag("text"));
-        assert!(!is_builtin_tag("feature_card"));
-        assert!(!is_builtin_tag("btn") && !is_builtin_tag("heading") && !is_builtin_tag("section"));
-        assert!(is_control_flow_keyword("for") && !is_control_flow_keyword("col"));
-    }
-
-    #[test]
-    fn tag_attr_keys_layer_layout_and_tag_specific() {
-        assert!(tag_attr_keys("col").contains(&"gap"));
-        assert!(tag_attr_keys("btn").is_empty());
-        assert!(tag_attr_keys("img").contains(&"src"));
-        let svg = tag_attr_keys("svg");
-        assert!(svg.contains(&"src") && svg.contains(&"color") && svg.contains(&"gap"));
-        assert!(tag_attr_keys("feature_card").is_empty());
-        assert!(tag_attr_keys("box").contains(&"transition"));
-        assert!(tag_attr_keys("text").contains(&"transition"));
-        assert!(tag_attr_keys("col").contains(&"transition"));
-        for tag in ["box", "col", "row", "grid"] {
-            for spec in TRANSFORM_ATTRS {
-                assert!(
-                    tag_attr_keys(tag).contains(&spec.key),
-                    "{tag} missing {}",
-                    spec.key
-                );
-            }
-        }
-    }
-
-    #[test]
-    fn color_keywords_match_keyword_color_rgba() {
-        assert_eq!(color_keywords(), &["transparent"]);
-        assert_eq!(keyword_color_rgba("transparent"), Some([0, 0, 0, 0]));
-        assert_eq!(keyword_color_rgba("cerulean"), None);
-        assert_eq!(keyword_color_rgba("white"), None);
-        assert_eq!(keyword_color_rgba("black"), None);
-    }
-
-    #[test]
-    fn color_keys_cover_every_attribute_that_paints() {
-        for key in ["color", "fill", "stroke", "outline", "shadow_color"] {
-            assert!(color_attr_keys().contains(&key), "missing {key}");
-        }
-        for key in ["gradient", "from", "to", "mid", "mid_pos", "radial_radius"] {
-            assert!(!color_attr_keys().contains(&key), "{key} should be gone");
-        }
-    }
-}
+#[path = "registry_test.rs"]
+mod tests;
 
 /// The roles an application may name on a box, and the variant each one is.
 ///
@@ -706,85 +656,9 @@ pub fn role_variant(name: &str) -> Option<&'static str> {
 }
 
 #[cfg(test)]
-mod role_tests {
-    use super::*;
-
-    /// The transpiler emits a path and the runtime parses a name; they are two tables and they have to agree, or a role an author is offered is one the vocabulary does not have.
-    #[test]
-    fn every_spelling_is_one_the_vocabulary_answers_to() {
-        for (name, _) in role_values() {
-            assert!(
-                semantics_core::Role::parse(name).is_some(),
-                "`{name}` is offered but the vocabulary does not know it"
-            );
-        }
-    }
-}
+#[path = "registry_role_test.rs"]
+mod role_tests;
 
 #[cfg(test)]
-mod vocabulary_tests {
-    use super::*;
-
-    /// The emitter and the tables were two lists of the same vocabulary, and they drifted: `aspect`, `aspect_ratio` and `flex_basis` were emitted by `layout_prop_call` for years while completion never offered them and the unknown-attribute check refused them. One table now, and this is what holds it to one.
-    #[test]
-    fn every_layout_key_offered_is_one_the_emitter_accepts() {
-        let probe = |key: &str| match value_kind("box", key) {
-            Some(ValueKind::Keywords(table)) | Some(ValueKind::KeywordsOrNumber(table)) => {
-                table.first().map(|(name, _)| *name).unwrap_or("")
-            }
-            Some(ValueKind::Boolean) => "true",
-            Some(ValueKind::Color) => "#000000",
-            _ => "1",
-        };
-        for key in layout_attr_keys() {
-            assert!(
-                !matches!(
-                    crate::style::layout_prop_call(key, probe(key)),
-                    crate::style::PropCall::Invalid(_)
-                ),
-                "`{key}` is offered and the emitter refuses it"
-            );
-        }
-        for key in ["aspect", "aspect_ratio", "flex_basis"] {
-            assert!(
-                matches!(
-                    crate::style::layout_prop_call(key, "1"),
-                    crate::style::PropCall::Call(_)
-                ) && layout_attr_keys().contains(&key),
-                "`{key}` drifted out of the table again"
-            );
-        }
-    }
-
-    /// A key is offered by completion and validated by the build off the same entry, so neither can name one the other does not.
-    #[test]
-    fn every_offered_key_resolves_to_its_own_spec() {
-        for (tag, _) in builtin_tags() {
-            for key in tag_attr_keys(tag) {
-                assert!(
-                    attr_spec(tag, key).is_some(),
-                    "`{tag}` offers `{key}` and nothing describes it"
-                );
-            }
-        }
-    }
-
-    /// One name is still two properties, and the per-tag tables are what keep them apart.
-    #[test]
-    fn stroke_means_what_the_tag_says_it_means() {
-        assert!(matches!(
-            value_kind("box", "stroke"),
-            Some(ValueKind::Color)
-        ));
-        assert!(matches!(
-            value_kind("svg", "stroke"),
-            Some(ValueKind::Number)
-        ));
-        assert!(value_kind("path", "stroke").is_none());
-        assert!(matches!(
-            value_kind("box", "stroke_width"),
-            Some(ValueKind::Edges)
-        ));
-        assert!(value_kind("path", "stroke_width").is_none());
-    }
-}
+#[path = "registry_vocabulary_test.rs"]
+mod vocabulary_tests;

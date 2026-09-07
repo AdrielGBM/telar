@@ -30,6 +30,14 @@ platform-headless = { workspace = true }
 
 criterion = { workspace = true }
 
+[[test]]
+name = "app_owned_texture"
+path = "src/app_owned_texture_test.rs"
+
+[[test]]
+name = "headless_smoke"
+path = "src/headless_smoke_test.rs"
+
 [[bench]]
 name = "render_frame"
 harness = false

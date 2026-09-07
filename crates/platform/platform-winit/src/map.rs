@@ -119,41 +119,8 @@ pub fn map_modifiers(mods: &Modifiers) -> platform_core::ModifiersState {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-    use platform_core::{Key, NamedKey};
-    use winit::keyboard::SmolStr;
-
-    fn character(s: &str) -> WinitKey {
-        WinitKey::Character(SmolStr::new(s))
-    }
-
-    /// The keypad and the digit row send the same logical key; only the location tells them apart. An application that binds Numpad 7 to a view means that key and not the 7 above the letters.
-    #[test]
-    fn the_keypad_is_its_own_set_of_keys() {
-        assert_eq!(
-            map_key(&character("7"), KeyLocation::Numpad),
-            Some(Key::Named(NamedKey::Numpad7))
-        );
-        assert_eq!(
-            map_key(&character("7"), KeyLocation::Standard),
-            Some(Key::Char('7'))
-        );
-        assert_eq!(
-            map_key(&WinitKey::Named(WinitNamedKey::Enter), KeyLocation::Numpad),
-            Some(Key::Named(NamedKey::NumpadEnter))
-        );
-    }
-
-    /// With Num Lock off the OS says the keypad's 1 is `End`, and that is what it reports: overriding it would take the arrows away from someone navigating with the keypad.
-    #[test]
-    fn a_keypad_key_without_num_lock_stays_what_the_os_calls_it() {
-        assert_eq!(
-            map_key(&WinitKey::Named(WinitNamedKey::End), KeyLocation::Numpad),
-            Some(Key::Named(NamedKey::End))
-        );
-    }
-}
+#[path = "map_test.rs"]
+mod tests;
 
 // What a mapped winit `WindowEvent` means at the platform level, decoupled from how it is applied. Keeping the mapping here and the application at the call site lets the single- and multi-window runners share one translation.
 /// Lines one detent of a mouse wheel is worth.
@@ -356,40 +323,5 @@ pub fn map_window_event(
 }
 
 #[cfg(test)]
-mod touch_tests {
-    use super::*;
-
-    fn drag(touch: &mut TouchDrag, x: f64, y: f64) -> Option<(f32, f32)> {
-        touch.advance(x, y, 1)
-    }
-
-    #[test]
-    fn a_finger_that_moves_covers_the_distance_between_its_reports() {
-        let mut touch = TouchDrag::default();
-        assert_eq!(
-            drag(&mut touch, 100.0, 200.0),
-            None,
-            "nothing to measure yet"
-        );
-        assert_eq!(drag(&mut touch, 100.0, 180.0), Some((0.0, -20.0)));
-        assert_eq!(drag(&mut touch, 90.0, 170.0), Some((-10.0, -10.0)));
-    }
-
-    #[test]
-    fn a_finger_lifting_leaves_nothing_behind_for_the_next_one() {
-        let mut touch = TouchDrag::default();
-        drag(&mut touch, 0.0, 0.0);
-        drag(&mut touch, 0.0, 50.0);
-        touch.end();
-        // Without the reset the next gesture opens with the jump from wherever the last one ended, which on a long page is the whole list moving at once.
-        assert_eq!(drag(&mut touch, 0.0, 400.0), None);
-    }
-
-    #[test]
-    fn a_second_finger_landing_is_not_a_distance_from_the_first() {
-        let mut touch = TouchDrag::default();
-        touch.advance(0.0, 0.0, 1);
-        assert_eq!(touch.advance(300.0, 0.0, 2), None);
-        assert_eq!(touch.advance(300.0, 40.0, 2), Some((0.0, 40.0)));
-    }
-}
+#[path = "map_touch_test.rs"]
+mod touch_tests;
