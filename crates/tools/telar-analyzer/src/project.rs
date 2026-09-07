@@ -46,8 +46,8 @@ impl ProjectInfo {
 
     pub fn discover(file_path: &Path) -> Option<Self> {
         let root = telar_transpiler::find_telar_root(file_path)?;
-        let toml_path = root.join("telar.toml");
-        let theme_type = read_theme_type(&toml_path);
+        // The same resolution the build uses, which is the whole point: reading `[telar] theme` alone answered `None` for every project that names its theme in `app!` and never set the key, so the mirror wrote `Theme::<>` over the correct output the build had written on each keystroke.
+        let theme_type = telar_transpiler::resolve_theme_type(&root);
         let theme_fields = if let Some(ref type_name) = theme_type {
             scan_project_theme_fields(&root, type_name)
         } else {
@@ -69,16 +69,6 @@ impl ProjectInfo {
             i18n_keys,
         })
     }
-}
-
-fn read_theme_type(toml_path: &Path) -> Option<String> {
-    let content = std::fs::read_to_string(toml_path).ok()?;
-    let table: toml::Value = content.parse().ok()?;
-    table
-        .get("telar")?
-        .get("theme")?
-        .as_str()
-        .map(|s| s.to_string())
 }
 
 fn scan_project_theme_fields(root: &Path, type_name: &str) -> HashSet<String> {

@@ -113,11 +113,9 @@ pub fn app(input: TokenStream) -> TokenStream {
         Err(e) => return e.to_compile_error().into(),
     };
 
-    // The transpiler has no runtime access to the theme type, so it is passed as a source string; to_string inserts spaces around `::` so we collapse them for a valid turbofish.
-    let theme_type_str = theme_type
-        .to_token_stream()
-        .to_string()
-        .replace(" :: ", "::");
+    // The transpiler has no runtime access to the theme type, so it is passed as a source string, spelled the one way everything that resolves a theme spells it.
+    let theme_type_str =
+        telar_transpiler::normalize_theme_path(&theme_type.to_token_stream().to_string());
 
     let TranspileOutput {
         include_stmts,
@@ -393,6 +391,26 @@ fn hot_reload_build() -> bool {
     std::env::var("TELAR_HOT_RELOAD_BUILD").is_ok()
 }
 
+/// Refuses a `telar.toml` whose `[telar] theme` is not what the invocation names.
+///
+/// Nothing else in the build reads that key — the macro is handed the type directly — but everything that transpiles the same file *without* a macro to read does: the editor's live mirror and the golden harness both resolve the theme through [`telar_transpiler::resolve_theme_type`], which answers with this key when it is set. Two answers means two different files generated from one source, and the last writer wins.
+fn check_theme_agrees(package_dir: &Path, given: Option<&str>) -> Result<(), TokenStream2> {
+    let Some(declared) = telar_transpiler::theme_type_in_config(package_dir) else {
+        return Ok(());
+    };
+    if given == Some(declared.as_str()) {
+        return Ok(());
+    }
+    let named = match given {
+        Some(given) => format!("names `{given}`"),
+        None => "names none".to_string(),
+    };
+    let msg = format!(
+        "rsx: telar.toml declares `theme = \"{declared}\"`, but this invocation {named}. The editor and the golden snapshots resolve the theme from telar.toml, so a difference here generates two different files from one source: pass `{declared}` here, or drop the key."
+    );
+    Err(quote! { compile_error!(#msg); })
+}
+
 /// Relays a package-transpile failure as the `compile_error!` the caller emits. [`telar_transpiler::PackageError`] already names the file — and for a parse error the line — so there is nothing to re-derive here.
 fn compile_error_from(error: telar_transpiler::PackageError) -> TokenStream2 {
     let msg = error.to_string();
@@ -442,6 +460,8 @@ fn transpile_project(theme_type_str: Option<&str>) -> Result<TranspileOutput, To
     let src_dir = manifest_dir.join("src");
     // This crate's own version, because it is the one whose generated code the artifact's `assets.rs` calls into. `telar` and `telar-macros` share the workspace version, but the handshake compares against whoever loads the module, not whoever wrote the check.
     let assets = telar_transpiler::AssetContext::load(&manifest_dir, env!("CARGO_PKG_VERSION"));
+
+    check_theme_agrees(&manifest_dir, theme_type_str)?;
 
     let files = telar_transpiler::transpile_package(&telar_transpiler::PackageOptions {
         src_dir: &src_dir,
@@ -596,7 +616,9 @@ pub fn rsx_modules(input: TokenStream) -> TokenStream {
         None
     } else {
         match syn::parse::<syn::Path>(input) {
-            Ok(path) => Some(path.to_token_stream().to_string().replace(" :: ", "::")),
+            Ok(path) => Some(telar_transpiler::normalize_theme_path(
+                &path.to_token_stream().to_string(),
+            )),
             Err(e) => return e.to_compile_error().into(),
         }
     };

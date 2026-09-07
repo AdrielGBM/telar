@@ -8,23 +8,20 @@ use std::path::{Path, PathBuf};
 
 use telar_transpiler::{GeneratedFile, RsxSpan, SourceMap, TranspiledSource};
 
-/// One package whose `src/` tree the harness transpiles, with the theme type its `app!` invocation names — `use_theme::<T>()` is typed by it, so the wrong one here would snapshot code the build never emits.
+/// One package whose `src/` tree the harness transpiles. The theme is not listed: it used to be, copied out of each `app!` invocation by hand, and a copy of the one thing that decides whether `use_theme::<T>()` is typed at all is a copy that can be wrong while every snapshot passes. It is resolved the same way the editor resolves it now.
 struct Project {
     name: &'static str,
     manifest: &'static str,
-    theme: &'static str,
 }
 
 const PROJECTS: &[Project] = &[
     Project {
         name: "sandbox",
         manifest: "apps/sandbox",
-        theme: "core::theme::SandboxTheme",
     },
     Project {
         name: "landing",
         manifest: "apps/landing",
-        theme: "theme::LandingTheme",
     },
 ];
 
@@ -51,9 +48,16 @@ fn transpile_project(project: &Project) -> Vec<GeneratedFile> {
         "{} has no usable baked asset artifact — run `cargo run -p cargo-telar -- bake` first",
         project.name
     );
+    let theme_type = telar_transpiler::resolve_theme_type(&manifest);
+    assert!(
+        theme_type.is_some(),
+        "{} names no theme — `use_theme::<T>()` would snapshot untyped, which is not what its build compiles",
+        project.name
+    );
+
     let files = telar_transpiler::transpile_package(&telar_transpiler::PackageOptions {
         src_dir: &src_dir,
-        theme_type: Some(project.theme),
+        theme_type: theme_type.as_deref(),
         assets: Some(&assets),
         flavour: telar_transpiler::BuildFlavour::Plain,
     })

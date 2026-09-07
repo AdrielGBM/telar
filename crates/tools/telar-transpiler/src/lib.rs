@@ -17,6 +17,7 @@ mod rust;
 mod signal_scan;
 mod source_map;
 mod style;
+mod theme;
 mod transition;
 mod view;
 
@@ -50,6 +51,7 @@ pub use registry::{
 };
 pub use signal_scan::{SignalInfo, scan_effects, scan_locals, scan_signals};
 pub use source_map::{ExprSpan, RsxSpan, SourceMap, nth_line};
+pub use theme::{normalize_theme_path, resolve_theme_type, theme_type_in_config};
 
 #[cfg(test)]
 #[path = "lib_test.rs"]
