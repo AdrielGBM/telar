@@ -24,9 +24,9 @@ use bake::bake_workspace;
 use check::run_check_cmd;
 use cli::{
     BuildArgs, BuildFormat, Cli, CommonArgs, DevArgs, DevtoolsArg, HotArgs, PreviewArgs, Target,
-    TelarCommand, TestArgs,
+    TelarCommand, TestArgs, WebRenderer,
 };
-use config::load_config;
+use config::{TelarSection, load_config};
 use doctor::run_doctor_cmd;
 use fmt::run_fmt_cmd;
 use migrate::run_migrate_cmd;
@@ -90,6 +90,56 @@ fn default_dev_command() -> TelarCommand {
     })
 }
 
+/// What every compiling subcommand works out before it does anything of its own: the cargo invocation, the resolved configuration, and whether this run ends up in the terminal.
+///
+/// It was written out four times. `cargo telar test` is the one that legitimately does not want it — it drops `--backend` and `--renderer` on purpose, because the value is read through `option_env!` and setting it would change the build fingerprint for nothing — so it keeps its own preamble and says why.
+struct BuildPlan {
+    cargo_args: Vec<String>,
+    config: TelarSection,
+    target: Target,
+    renderer: Option<WebRenderer>,
+    /// Whether the application will run in the terminal this command was launched from, which only `--target tui` makes true.
+    terminal: bool,
+}
+
+impl BuildPlan {
+    /// `select_frontend` is what names the `telar/` feature the target needs and points the binary at it, so it runs for every command rather than the two that remembered.
+    fn new(common: CommonArgs, release: bool) -> Self {
+        let CommonArgs {
+            package,
+            features,
+            target,
+            backend,
+            renderer,
+            cargo_args: extra,
+        } = common;
+        let mut cargo_args = build_cargo_args(&package, release, &features);
+        cargo_args.extend(extra);
+        if matches!(target, Target::Android) {
+            cargo_args.push("--android".to_string());
+        }
+        let terminal = select_frontend(target, &mut cargo_args);
+        let mut config = load_config(&cargo_args);
+        if let Some(backend) = backend {
+            config.backend = Some(backend.into());
+        }
+        Self {
+            cargo_args,
+            config,
+            target,
+            renderer,
+            terminal,
+        }
+    }
+
+    /// The same, with a `telar/` feature this command needs on top.
+    fn with_feature(mut self, feature: &str) -> Self {
+        self.cargo_args.push("--features".to_string());
+        self.cargo_args.push(format!("telar/{feature}"));
+        self
+    }
+}
+
 fn run_dev_cmd(args: DevArgs) {
     let DevArgs { hot, devtools } = args;
     let HotArgs {
@@ -97,36 +147,20 @@ fn run_dev_cmd(args: DevArgs) {
         release,
         no_hot_reload,
     } = hot;
-    let CommonArgs {
-        package,
-        features,
-        target,
-        backend,
-        renderer,
-        cargo_args: extra,
-    } = common;
-    let mut cargo_args = build_cargo_args(&package, release, &features);
-    cargo_args.extend(extra);
-    if matches!(target, Target::Android) {
-        cargo_args.push("--android".to_string());
-    }
-    let terminal = select_frontend(target, &mut cargo_args);
-    let mut config = load_config(&cargo_args);
-    if let Some(backend) = backend {
-        config.backend = Some(backend.into());
-    }
+    let mut plan = BuildPlan::new(common, release);
     // CLI `--devtools off` overrides any config-file setting.
     if let Some(devtools) = devtools {
-        config.dev.devtools = Some(matches!(devtools, DevtoolsArg::On));
+        plan.config.dev.devtools = Some(matches!(devtools, DevtoolsArg::On));
     }
-    if target == Target::Web {
-        run_web_dev(cargo_args, config, WEB_DEV_PORT, renderer);
+    if plan.target == Target::Web {
+        run_web_dev(plan.cargo_args, plan.config, WEB_DEV_PORT, plan.renderer);
     }
+    let terminal = plan.terminal;
     run_hot_loop(
         HotMode::Dev,
         HotLoopOpts {
-            args: cargo_args,
-            config,
+            args: plan.cargo_args,
+            config: plan.config,
             // The hot-reload host opens a window of its own, so an app running in the terminal restarts on a change instead. Reloading in place is the only thing lost: the rebuild is the same one.
             no_hot_reload: no_hot_reload || terminal,
         },
@@ -164,30 +198,13 @@ fn run_preview_cmd(args: PreviewArgs) {
             &dir.display().to_string(),
         );
     }
-    let CommonArgs {
-        package,
-        features,
-        target,
-        backend,
-        renderer,
-        cargo_args: extra,
-    } = common;
-    let mut cargo_args = build_cargo_args(&package, release, &features);
-    cargo_args.extend(extra);
-    if matches!(target, Target::Android) {
-        cargo_args.push("--android".to_string());
-    }
-    let mut config = load_config(&cargo_args);
-    if let Some(backend) = backend {
-        config.backend = Some(backend.into());
-    }
-    // A preview renders one component in a window of its own; there is no page to draw it as a document.
-    let _ = renderer;
+    // A preview renders one component in a window of its own; there is no page to draw it as a document, so the plan's `renderer` goes unread here.
+    let plan = BuildPlan::new(common, release);
     run_hot_loop(
         HotMode::Preview,
         HotLoopOpts {
-            args: cargo_args,
-            config,
+            args: plan.cargo_args,
+            config: plan.config,
             no_hot_reload,
         },
     );
@@ -262,43 +279,21 @@ fn build_format_name(format: &BuildFormat) -> &'static str {
 }
 
 fn run_build_cmd(args: BuildArgs) -> ! {
-    let BuildArgs { common, format } = args;
-    let CommonArgs {
-        package,
-        features,
-        target,
-        backend,
-        renderer,
-        cargo_args: extra,
-    } = common;
-    let mut android = matches!(target, Target::Android);
-    let terminal = target == Target::Tui;
+    let BuildArgs { mut common, format } = args;
 
-    if target == Target::Web {
-        if format.is_some() {
-            eprintln!(
-                "[cargo-telar] `--format` is for native installers; a web build is a directory of files."
-            );
-            std::process::exit(2);
-        }
-        let mut cargo_args = build_cargo_args(&package, true, &features);
-        cargo_args.extend(extra);
-        build_web(cargo_args, load_config(&[]), true, renderer);
-    }
-
-    // All desktop formats reject `--target android`, and `--format apk` implies Android. Host-OS gating happens in each build fn, since telar does not cross-compile.
+    // All desktop formats reject `--target android`, and `--format apk` implies Android. Resolved before the plan is built, because the format can move the target and the plan is what the target decides.
     match &format {
         Some(
             fmt @ (BuildFormat::Deb | BuildFormat::Appimage | BuildFormat::Dmg | BuildFormat::Nsis),
-        ) if android => {
+        ) if common.target == Target::Android => {
             eprintln!(
                 "[cargo-telar] `--format {}` is desktop-only; drop `--target android` (use `--format apk` for Android).",
                 build_format_name(fmt)
             );
             std::process::exit(2);
         }
-        Some(BuildFormat::Apk) => android = true,
-        Some(BuildFormat::Dir) if android => {
+        Some(BuildFormat::Apk) => common.target = Target::Android,
+        Some(BuildFormat::Dir) if common.target == Target::Android => {
             eprintln!(
                 "[cargo-telar] `--format dir` is desktop-only; use `--target android` (or `--format apk`) for Android."
             );
@@ -306,30 +301,27 @@ fn run_build_cmd(args: BuildArgs) -> ! {
         }
         _ => {}
     }
+    if common.target == Target::Web && format.is_some() {
+        eprintln!(
+            "[cargo-telar] `--format` is for native installers; a web build is a directory of files."
+        );
+        std::process::exit(2);
+    }
 
     // Build always implies --release.
-    let mut cargo_args = build_cargo_args(&package, true, &features);
-    cargo_args.extend(extra);
-    if android {
-        cargo_args.push("--android".to_string());
+    let plan = BuildPlan::new(common, true);
+    if plan.target == Target::Web {
+        build_web(plan.cargo_args, plan.config, true, plan.renderer);
     }
-    if terminal {
-        select_frontend(target, &mut cargo_args);
-    }
-    let mut config = load_config(&cargo_args);
-    if let Some(backend) = backend {
-        config.backend = Some(backend.into());
-    }
-
-    if android {
-        build_android_package(cargo_args, config)
+    if plan.target == Target::Android {
+        build_android_package(plan.cargo_args, plan.config)
     } else {
         match format {
-            Some(BuildFormat::Deb) => build_deb(cargo_args, config),
-            Some(BuildFormat::Appimage) => build_appimage(cargo_args, config),
-            Some(BuildFormat::Dmg) => build_dmg(cargo_args, config),
-            Some(BuildFormat::Nsis) => build_nsis(cargo_args, config),
-            _ => build_desktop_dir(cargo_args, config),
+            Some(BuildFormat::Deb) => build_deb(plan.cargo_args, plan.config),
+            Some(BuildFormat::Appimage) => build_appimage(plan.cargo_args, plan.config),
+            Some(BuildFormat::Dmg) => build_dmg(plan.cargo_args, plan.config),
+            Some(BuildFormat::Nsis) => build_nsis(plan.cargo_args, plan.config),
+            _ => build_desktop_dir(plan.cargo_args, plan.config),
         }
     }
 }
