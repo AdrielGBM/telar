@@ -10,14 +10,20 @@ readme = "README.md"
 license = { workspace = true }
 repository = { workspace = true }
 
+[features]
+default = ["transpile"]
+
+## Turning `.rsx` into Rust. Without it this crate only *places* what a transpile produced — the walk over `src/`, the output paths, the build and asset artifacts, the handshakes that say whether one still answers — which is the whole of what a build needs once `cargo telar transpile` has run, and it leaves the parser and the code generator out of that build entirely.
+transpile = ["dep:telar-parser", "dep:thiserror"]
+
 [dependencies]
-telar-parser = { workspace = true }
+telar-parser = { workspace = true, optional = true }
 
 proc-macro2 = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
 syn = { workspace = true, features = ["visit"] }
-thiserror = { workspace = true }
+thiserror = { workspace = true, optional = true }
 toml = { workspace = true }
 
 [dev-dependencies]

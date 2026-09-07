@@ -6,17 +6,23 @@
 
 mod artifact;
 
+#[cfg(feature = "transpile")]
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 
+#[cfg(feature = "transpile")]
+use artifact::relative_source;
 pub use artifact::{
-    BUILD_ARTIFACT_FORMAT, BuildEntry, BuildIndex, read_build_index, relative_source,
-    write_build_index,
+    BUILD_ARTIFACT_FORMAT, BuildEntry, BuildIndex, read_build_index, write_build_index,
 };
 
+#[cfg(feature = "transpile")]
 use crate::assets::AssetContext;
+#[cfg(feature = "transpile")]
 use crate::codegen::{TranspileInput, TranspiledSource, transpile};
+#[cfg(feature = "transpile")]
 use crate::error::TranspileError;
+#[cfg(feature = "transpile")]
 use crate::source_map::SourceMap;
 
 /// Which of the two shapes a package's `.rsx` is compiled into.
@@ -62,6 +68,7 @@ pub fn generated_dir(package_dir: &Path, flavour: BuildFlavour) -> PathBuf {
 }
 
 /// Everything a package transpile needs to know, and nothing it can read behind the caller's back.
+#[cfg(feature = "transpile")]
 pub struct PackageOptions<'a> {
     /// The package's `src/`, which every `.rsx` under it is transpiled and every output path is mirrored from.
     pub src_dir: &'a Path,
@@ -73,6 +80,7 @@ pub struct PackageOptions<'a> {
 }
 
 /// One transpiled `.rsx`: where it came from, where it goes, and what it produced.
+#[cfg(feature = "transpile")]
 #[derive(Debug)]
 pub struct GeneratedFile {
     pub rsx_path: PathBuf,
@@ -83,6 +91,7 @@ pub struct GeneratedFile {
     pub source: TranspiledSource,
 }
 
+#[cfg(feature = "transpile")]
 impl GeneratedFile {
     /// The `.rs` this file is written to under `generated_dir`.
     pub fn out_path(&self, generated_dir: &Path) -> PathBuf {
@@ -90,6 +99,7 @@ impl GeneratedFile {
     }
 }
 
+#[cfg(feature = "transpile")]
 /// What stopped a package transpile, with the file it happened in — the whole reason this is not a bare [`TranspileError`], which knows a line but not which file's.
 #[derive(Debug, thiserror::Error)]
 pub enum PackageError {
@@ -117,6 +127,7 @@ pub enum PackageError {
     },
 }
 
+#[cfg(feature = "transpile")]
 /// Transpiles every `.rsx` under `options.src_dir`, in a stable order, touching no disk beyond reading the sources.
 ///
 /// Each file is transpiled under its own stem and knows nothing of its siblings, so this is a plain map over the walk: there is no cross-file pre-pass to keep in step, and adding one would be what makes a single-file edit re-read the whole package.
@@ -131,6 +142,7 @@ pub fn transpile_package(options: &PackageOptions<'_>) -> Result<Vec<GeneratedFi
         .collect()
 }
 
+#[cfg(feature = "transpile")]
 fn transpile_one(
     rsx_path: PathBuf,
     rel_out: PathBuf,
@@ -166,6 +178,7 @@ fn transpile_one(
     })
 }
 
+#[cfg(feature = "transpile")]
 /// Writes each file's Rust and its `.rs.map` sidecar under `generated_dir`, returning every `.rs` path written.
 ///
 /// The returned set is what tells live output from an orphan: anything else under the directory belongs to a `.rsx` that was renamed or deleted, which is [`crate::prune_stale_generated`]'s input.
@@ -198,9 +211,39 @@ pub fn write_package(
     Ok(written)
 }
 
+#[cfg(feature = "transpile")]
 /// The index describing what a transpile produced, for a reader that would rather wire the output than produce it again.
 ///
 /// Written by `cargo telar transpile` beside the generated directory; read by the macro, which compares it against the sources on disk before trusting a line of it.
+///
+/// **A project that will not install the CLI produces its own**, from a `build.rs` with this crate as a build-dependency — which cargo re-runs on a `.rsx` edit for real, rather than through the `include_str!` a proc macro has to fake it with:
+///
+/// ```no_run
+/// # fn main() -> Result<(), Box<dyn std::error::Error>> {
+/// let package = std::path::PathBuf::from(std::env::var("CARGO_MANIFEST_DIR")?);
+/// let src_dir = package.join("src");
+/// let theme = telar_transpiler::resolve_theme_type(&package);
+/// // The `telar` this project resolves, which is what the macro compares the index against.
+/// let telar_version = "0.1.8";
+/// let assets = telar_transpiler::AssetContext::load(&package, telar_version);
+///
+/// let flavour = telar_transpiler::BuildFlavour::Plain;
+/// let files = telar_transpiler::transpile_package(&telar_transpiler::PackageOptions {
+///     src_dir: &src_dir,
+///     theme_type: theme.as_deref(),
+///     assets: Some(&assets),
+///     flavour,
+/// })?;
+/// telar_transpiler::write_package(&files, &telar_transpiler::generated_dir(&package, flavour))?;
+/// let index = telar_transpiler::build_index(&files, &src_dir, theme.as_deref(), "build.rs", telar_version);
+/// telar_transpiler::write_build_index(&package, flavour, &index)?;
+///
+/// for file in &files {
+///     println!("cargo:rerun-if-changed={}", file.rsx_path.display());
+/// }
+/// # Ok(())
+/// # }
+/// ```
 pub fn build_index(
     files: &[GeneratedFile],
     src_dir: &Path,
@@ -230,6 +273,7 @@ pub fn build_index(
     }
 }
 
+#[cfg(feature = "transpile")]
 fn write_error(path: &Path, result: std::io::Result<()>) -> Result<(), PackageError> {
     result.map_err(|source| PackageError::Write {
         path: path.to_path_buf(),
@@ -237,6 +281,6 @@ fn write_error(path: &Path, result: std::io::Result<()>) -> Result<(), PackageEr
     })
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature = "transpile"))]
 #[path = "project_test.rs"]
 mod tests;

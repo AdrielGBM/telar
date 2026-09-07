@@ -137,6 +137,6 @@ fn index_path(package_dir: &Path, flavour: BuildFlavour) -> std::path::PathBuf {
     package_dir.join(".telar").join(flavour.index_filename())
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature = "transpile"))]
 #[path = "artifact_test.rs"]
 mod tests;

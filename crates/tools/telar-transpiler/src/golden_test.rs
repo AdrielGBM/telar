@@ -4,6 +4,9 @@
 //!
 //! Run with `UPDATE_GOLDEN=1` to rewrite the snapshots after a deliberate change, then read the diff.
 
+// The corpus is transpiled, not merely placed, so there is nothing here to check in a build that carries no transpiler.
+#![cfg(feature = "transpile")]
+
 use std::path::{Path, PathBuf};
 
 use telar_transpiler::{GeneratedFile, RsxSpan, SourceMap, TranspiledSource};

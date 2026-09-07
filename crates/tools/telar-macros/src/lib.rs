@@ -419,12 +419,6 @@ fn stale_cli_message(hot_requested_by_env: bool) -> Option<String> {
     ))
 }
 
-/// Relays a package-transpile failure as the `compile_error!` the caller emits. [`telar_transpiler::PackageError`] already names the file — and for a parse error the line — so there is nothing to re-derive here.
-fn compile_error_from(error: telar_transpiler::PackageError) -> TokenStream2 {
-    let msg = error.to_string();
-    quote! { compile_error!(#msg); }
-}
-
 /// Refuses a `telar.toml` whose `[telar] theme` is not what the invocation names.
 ///
 /// Nothing else in the build reads that key — the macro is handed the type directly — but everything that transpiles the same file *without* a macro to read does: the editor's live mirror and the golden harness both resolve the theme through [`telar_transpiler::resolve_theme_type`], which answers with this key when it is set. Two answers means two different files generated from one source, and the last writer wins.
@@ -471,6 +465,10 @@ fn wire_sources(
     flavour: telar_transpiler::BuildFlavour,
     assets: &telar_transpiler::AssetContext,
 ) -> Result<Vec<WiredFile>, TokenStream2> {
+    // A package with no markup needs nothing produced and nothing attested to, so it never reaches for an artifact — `rsx_modules!()` in a crate that only wires an i18n catalog is exactly this.
+    if telar_transpiler::find_rsx_files(src_dir).is_empty() {
+        return Ok(Vec::new());
+    }
     if let Some(index) = telar_transpiler::read_build_index(package_dir, flavour)
         && index.answers_for(
             src_dir,
@@ -496,23 +494,12 @@ fn wire_sources(
             .collect());
     }
 
-    let files = telar_transpiler::transpile_package(&telar_transpiler::PackageOptions {
-        src_dir,
-        theme_type: theme_type_str,
-        assets: Some(assets),
-        flavour,
-    })
-    .map_err(compile_error_from)?;
-    telar_transpiler::write_package(&files, generated_dir).map_err(compile_error_from)?;
-    Ok(files
-        .into_iter()
-        .map(|file| WiredFile {
-            out_path: file.out_path(generated_dir),
-            rsx_path: file.rsx_path,
-            rel_out: file.rel_out,
-            previews: !file.source.preview_names.is_empty(),
-        })
-        .collect())
+    // Nothing here can produce the Rust: this crate carries no transpiler, on purpose. Reached whenever the artifact cannot answer — never transpiled, a `.rsx` edited or added since, a generated file rewritten, another theme, another `telar` — and the command that fixes it is the same one in every case, so the message does not try to say which.
+    let msg = format!(
+        "rsx: no transpiled `.rsx` for this package, or its sources have changed since the last one. `.rsx` is compiled by the CLI, not by the compiler. Run: cargo telar transpile (or build through cargo telar check/dev/build/test, which transpile first). Install it with: cargo install cargo-telar --version {v}",
+        v = env!("CARGO_PKG_VERSION")
+    );
+    Err(quote! { compile_error!(#msg); })
 }
 
 /// The `src`-relative directory the macro was written in.

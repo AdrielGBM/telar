@@ -172,7 +172,7 @@ Everything here is either always present or one word away. Nothing is bundled.
 - **Images and SVG** — baked into the binary at build time out of `src:"…"`, with no parser in the binary. → `svg`
 - **Translation catalogs** baked the same way, with `t!` validating keys and arguments at compile time.
 
-Both are baked by the CLI, not by the compiler: build through `cargo telar check`/`dev`/`build`/`test`, or run `cargo telar bake` first. A plain `cargo build` on a project that uses either fails with a message naming that command, rather than compiling something stale. It is what keeps the decoders and the TOML parser out of every project's own build.
+Both are baked by the CLI, and so is the `.rsx` itself: build through `cargo telar check`/`dev`/`build`/`test`, or run `cargo telar transpile` first. A plain `cargo build` fails with a message naming that command rather than compiling something stale, which is what keeps the decoders, the parser and the code generator out of every project's own build. A project that will not install the CLI produces the artifact itself from a `build.rs`, which is one call into `telar-transpiler` and gets real `cargo:rerun-if-changed` out of it.
 - **Assets that arrive later**, behind a transport-agnostic reactive seam: a signal that advances `Loading` → `Ready`/`Failed`, with the transport, the cache and the decoder each yours to choose. → `async-assets`
 - **Decoders and transports for that seam** — SVG, bitmaps, translation catalogs, over HTTP or from a directory — in the companion crate [`telar-dynamic`](crates/telar-dynamic), one feature each. Yours plugs in the same way.
 - **Hot reload** in `cargo telar dev`, and an in-app devtools overlay for inspecting the live component tree. *(the CLI sets this one)*

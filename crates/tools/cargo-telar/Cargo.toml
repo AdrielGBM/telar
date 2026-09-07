@@ -13,7 +13,7 @@ repository = { workspace = true }
 [dependencies]
 telar-baker = { workspace = true }
 telar-parser = { workspace = true }
-telar-transpiler = { workspace = true }
+telar-transpiler = { workspace = true, features = ["transpile"] }
 
 brotli = { version = "9.0.0", default-features = false, features = ["std"] }
 clap = { version = "4.6.1", features = ["derive"] }

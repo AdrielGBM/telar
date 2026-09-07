@@ -18,7 +18,7 @@ i18n-core = { workspace = true, features = ["runtime-catalog"] }
 # bake whatever an `.rsx` points at without asking an app to widen its own runtime decoder for it.
 renderer-assets = { workspace = true, features = ["bake"] }
 telar-parser = { workspace = true }
-telar-transpiler = { workspace = true }
+telar-transpiler = { workspace = true, features = ["transpile"] }
 
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }

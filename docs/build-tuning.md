@@ -68,14 +68,26 @@ host's linker instead of the NDK's. `lld` works the same way with `-fuse-ld=lld`
 and needs none of this; MSVC takes no `-fuse-ld=` at all. `cargo telar doctor` reports whether one is
 installed; it never selects or installs anything.
 
-## Where assets are baked
+## Where the build happens
 
 `svg src:"…"` and `img src:"…"` become Rust source at build time, and **`cargo telar` produces it, not the
 compiler**. The baker — usvg, resvg, `image`, about 66 crates — lives in the CLI, so it compiles once per
 machine instead of once per project: no build of yours carries it, on any target, whether or not you bake
 an asset. That is the largest single cut available to a cold build, and it needs no feature to claim.
 
-The artifact lands in `.telar/assets.rs` and `.telar/assets.json`, and `cargo telar check` / `dev` /
-`build` / `test` / `preview` refresh it before they invoke cargo. A plain `cargo build` does not: if the
-artifact is missing or older than the asset, the macro fails with a message naming `cargo telar bake`
-rather than drawing nothing at runtime. Add it to CI ahead of whatever compiles your app.
+The same holds for the `.rsx` itself. The parser and the code generator — about ten thousand lines — live
+behind the CLI too, so `cargo telar transpile` writes `.telar/build/` and an index beside it, and the macro
+wires what it finds there instead of producing it. Every source and every generated file is re-hashed
+against that index before a line of it is used, so an artifact that has fallen behind is never quietly
+compiled.
+
+All of it lands under `.telar/`, and `cargo telar check` / `dev` / `build` / `test` / `preview` refresh it
+before they invoke cargo. A plain `cargo build` does not, and fails with a message naming the command that
+would. Add it to CI ahead of whatever compiles your app.
+
+There is no second path inside the compiler: the macro carries no transpiler, so there is nothing there to
+fall back to. A project that will not install the CLI writes the artifact itself from a `build.rs` — `telar-transpiler`
+as a build-dependency, one call to `transpile_package`, one to `write_build_index`, and a
+`cargo:rerun-if-changed` per `.rsx`, which is a re-run trigger a proc macro cannot have. See
+[`build_index`](https://docs.rs/telar-transpiler/latest/telar_transpiler/fn.build_index.html) for the whole
+of it.
