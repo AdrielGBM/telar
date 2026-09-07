@@ -1,10 +1,8 @@
 //! [`App`]: what an application answers for.
 
-use platform_core::WindowConfig;
+use platform_core::{AppCtx, WindowConfig};
 use renderer_core::Color;
 use ui_core::Component;
-
-use crate::app_context::AppCtx;
 
 /// What an application answers for: the tree it builds, the window it wants, and what it does each frame.
 ///

@@ -5586,6 +5586,9 @@ dependencies = [
 name = "telar-platform-core"
 version = "0.1.8"
 dependencies = [
+ "libc",
+ "libloading",
+ "raw-window-handle",
  "telar-geometry-core",
  "telar-reactive-local",
  "telar-semantics-core",

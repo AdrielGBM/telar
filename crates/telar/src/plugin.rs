@@ -17,7 +17,7 @@ use renderer_core::{BorderRadius, Color, DrawCommand};
 use ui_core::{ComponentList, EventResult, NodeId, Surface, compute_layout, mark_dirty};
 use ui_tree::{Component, RenderNode};
 
-use crate::app_context::AppCtx;
+use platform_core::AppCtx;
 
 /// Owned draw-command list returned across the FFI boundary (the plugin's flattened frame). Self-contained: baked geometry, `Arc`-shared styles/data — the host can render it directly (same-toolchain ABI, as with hot-reload's `Vec<WindowCommand>`).
 pub type DrawList = Vec<DrawCommand>;
@@ -433,7 +433,7 @@ mod host {
         path: &Path,
         args: &[String],
     ) -> Result<LoadedPlugin, Box<dyn std::error::Error>> {
-        let lib = crate::dylib::open(path)?;
+        let lib = platform_core::guest::open(path)?;
 
         let symbol: libloading::Symbol<*const PluginVTable> =
             unsafe { lib.get(b"_rsx_plugin_vtable\0")? };

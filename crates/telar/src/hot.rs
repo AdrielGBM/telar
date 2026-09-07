@@ -109,7 +109,7 @@ impl crate::app_runtime::AppRuntime for HotApp {
         self.inner.clear_color()
     }
 
-    fn on_frame(&mut self, ctx: &mut crate::app_context::AppCtx) {
+    fn on_frame(&mut self, ctx: &mut platform_core::AppCtx) {
         self.inner.on_frame(ctx)
     }
 
@@ -235,10 +235,10 @@ impl crate::app_runtime::AppRuntime for HotApp {
     }
 
     // So a worker finishing inside the dylib can run a frame. A missing symbol degrades to a no-op: results then wait for the next input event.
-    fn install_task_waker(&self, waker: crate::app_context::RedrawWaker) {
+    fn install_task_waker(&self, waker: platform_core::RedrawWaker) {
         if let Ok(install) = unsafe {
             self._lib
-                .get::<unsafe extern "Rust" fn(crate::app_context::RedrawWaker)>(
+                .get::<unsafe extern "Rust" fn(platform_core::RedrawWaker)>(
                     b"_rsx_hot_install_task_waker\0",
                 )
         } {
@@ -260,7 +260,7 @@ pub fn load_hot_app(path: &std::path::Path) -> Result<HotApp, Box<dyn std::error
     ));
     std::fs::copy(path, &unique)?;
     // `RUNTIME` and `THEME` use trivially-destructible TLS types, so the dylib registers no TLS destructors and `dlclose` without `RTLD_NODELETE` is safe.
-    let lib_result = crate::dylib::open(&unique);
+    let lib_result = platform_core::guest::open(&unique);
     let _ = std::fs::remove_file(&unique);
     let lib = lib_result?;
     let create: libloading::Symbol<unsafe extern "Rust" fn() -> Box<dyn crate::app::App>> =

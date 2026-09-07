@@ -22,8 +22,6 @@ pub mod app;
 #[cfg(feature = "runtime")]
 pub mod app_config;
 #[cfg(feature = "runtime")]
-pub mod app_context;
-#[cfg(feature = "runtime")]
 pub mod app_runtime;
 #[cfg(feature = "runtime")]
 pub mod dev_plugin;
@@ -31,15 +29,6 @@ pub mod dev_plugin;
 pub mod dev_tools;
 #[cfg(feature = "runtime")]
 mod direction;
-#[cfg(any(
-    all(
-        feature = "dev",
-        not(target_os = "android"),
-        not(target_arch = "wasm32")
-    ),
-    feature = "plugin-host"
-))]
-mod dylib;
 #[cfg(feature = "runtime")]
 pub mod files;
 #[cfg(all(
@@ -84,7 +73,7 @@ pub use app::App;
 #[cfg(feature = "runtime")]
 pub use app_config::AppConfig;
 #[cfg(feature = "runtime")]
-pub use app_context::{AppCtx, RedrawWaker};
+pub use platform_core::{AppCtx, RedrawWaker};
 // For a backend author driving a handler by hand. An application implements `App` and names neither.
 #[cfg(feature = "runtime")]
 pub use app_runtime::{AppRuntime, LocalApp};

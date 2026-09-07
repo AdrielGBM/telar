@@ -15,4 +15,17 @@ geometry-core = { workspace = true }
 reactive-local = { workspace = true }
 semantics-core = { workspace = true }
 
+libloading = { version = "0.8", optional = true }
+raw-window-handle = { workspace = true }
 thiserror = { workspace = true }
+
+[features]
+default = []
+
+# Loading a dylib that links its own copy of the runtime — `cargo telar dev`'s hot reload, and a production
+# plugin. Off by default: it is the only thing here that reaches for a dynamic loader, and nothing that draws
+# a window needs one.
+dylib = ["dep:libloading", "dep:libc"]
+
+[target.'cfg(unix)'.dependencies]
+libc = { workspace = true, optional = true }

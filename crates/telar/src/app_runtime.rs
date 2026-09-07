@@ -6,12 +6,11 @@
 //!
 //! **It used to be part of [`App`].** Fourteen `#[doc(hidden)]` methods sat on the trait an application implements, every one of them carrying a paragraph explaining that only the dylib-backed app overrides it — so what an author saw was eighteen methods of which four were theirs, and `impl App for Box<A>` redelegated all eighteen by hand. None of it was reachable from application code and none of it belonged in its way.
 
-use platform_core::{Event, WindowCommand, WindowConfig};
+use platform_core::{AppCtx, Event, RedrawWaker, WindowCommand, WindowConfig};
 use renderer_core::Color;
 use web_time::Instant;
 
 use crate::app::App;
-use crate::app_context::{AppCtx, RedrawWaker};
 use crate::tree::{LocalTree, UiTree};
 
 /// The application as the runner drives it: mount its tree, and reach the runtime that tree lives in.

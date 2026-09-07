@@ -52,7 +52,7 @@ where
     // Set when the app pushed `WindowCommand::Close`; polled via `take_exit_request` to leave the run loop.
     pub(super) exit_requested: bool,
     // Built from the window at resume and handed to app code, so background threads can request a redraw.
-    pub(super) redraw_waker: Option<crate::app_context::RedrawWaker>,
+    pub(super) redraw_waker: Option<platform_core::RedrawWaker>,
     // Reused across frames, so command scaling allocates neither a fresh Vec nor redundant style Arcs.
     pub(super) scale_scratch: renderer_core::ScaleScratch,
     pub(super) app_name: String,
@@ -487,12 +487,12 @@ where
                 .raw_handles
                 .map(|of| of(window))
                 .unwrap_or((None, None));
-            let mut ctx = crate::app_context::AppCtx {
-                redraw_requested: &mut redraw_requested,
-                redraw_waker: self.redraw_waker.as_ref(),
+            let mut ctx = platform_core::AppCtx::new(
+                &mut redraw_requested,
+                self.redraw_waker.as_ref(),
                 raw_window_handle,
                 raw_display_handle,
-            };
+            );
             self.app.on_frame(&mut ctx);
         }
         // After `on_frame`, where an app reads them: a press answers true for the whole frame it arrived in.
@@ -676,7 +676,7 @@ where
         // The process-global loop wake redraws every surface without holding any window, so an app can cache it or hand it to a worker and it still reaches content later moved to another window. Falls back to the window's own waker, and to none where a window cannot hand one out.
         self.redraw_waker = platform_core::loop_waker()
             .or_else(|| window.redraw_waker())
-            .map(|wake| crate::app_context::RedrawWaker::new(move || wake()));
+            .map(|wake| platform_core::RedrawWaker::new(move || wake()));
         // The same wake reaches the app's reactive runtime, so `spawn_task` needs no waker ceremony. Under the per-window fallback this points at whichever surface resumed last, which is enough: every frame drains the whole task queue.
         if let Some(waker) = self.redraw_waker.clone() {
             self.app.install_task_waker(waker);

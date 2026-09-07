@@ -5,14 +5,18 @@
 #![warn(rustdoc::broken_intra_doc_links)]
 
 pub mod accessibility;
+pub mod app_ctx;
 pub mod error;
 pub mod event;
 pub mod event_sink;
+#[cfg(feature = "dylib")]
+pub mod guest;
 pub mod loop_waker;
 pub mod window;
 pub mod window_command;
 
 pub use accessibility::{AccessNode, NumericValue, Role};
+pub use app_ctx::{AppCtx, RedrawWaker};
 pub use error::PlatformError;
 pub use event::{Event, Key, ModifiersState, NamedKey, PointerButton, PointerSource, ScrollDelta};
 pub use event_sink::{post_event, set_event_sink};

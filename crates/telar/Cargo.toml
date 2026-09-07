@@ -197,7 +197,7 @@ system-theme = ["platform-desktop?/system-theme"]
 
 ## Hot reload and the in-app devtools overlay. Injected by `cargo telar dev`. Takes the bare window rather
 ## than `desktop`, so `--target tui` does not acquire a GPU renderer on the way to a terminal.
-dev = ["runtime", "desktop-bare", "dep:libloading", "dep:serde_json"]
+dev = ["runtime", "desktop-bare", "platform-core/dylib", "dep:libloading", "dep:serde_json"]
 
 ## The dylib half of that loop, which only `cargo telar dev` turns on and only for a package that can produce
 ## one: `.rsx` signal declarations become keyed bindings whose values survive a swap, the runner exports the
@@ -242,7 +242,7 @@ document-features = ["dep:document-features"]
 plugin = ["runtime"]
 
 ## The loader for one.
-plugin-host = ["plugin", "dep:libloading"]
+plugin-host = ["plugin", "platform-core/dylib", "dep:libloading"]
 
 #! ## Building blocks
 #!

@@ -4,12 +4,12 @@ use std::sync::Arc;
 
 use raw_window_handle::{RawDisplayHandle, RawWindowHandle};
 
-/// A `Send`/`Sync`, cloneable handle that wakes the UI event loop (requests a redraw). Hand it to a background thread (a file dialog, a `notify` watcher, a network fetch) so that when the thread has produced a result — delivered over a channel — it can wake the loop; the app then drains the channel in [`crate::App::on_frame`] and writes the result into signals. This is the bridge between off-thread work and the single-threaded reactive/UI world (signals are `!Send`, so the data itself must cross via a channel, not a signal).
+/// A `Send`/`Sync`, cloneable handle that wakes the UI event loop (requests a redraw). Hand it to a background thread (a file dialog, a `notify` watcher, a network fetch) so that when the thread has produced a result — delivered over a channel — it can wake the loop; the app then drains the channel in its per-frame hook and writes the result into signals. This is the bridge between off-thread work and the single-threaded reactive/UI world (signals are `!Send`, so the data itself must cross via a channel, not a signal).
 #[derive(Clone)]
 pub struct RedrawWaker(Arc<dyn Fn() + Send + Sync>);
 
 impl RedrawWaker {
-    pub(crate) fn new(f: impl Fn() + Send + Sync + 'static) -> Self {
+    pub fn new(f: impl Fn() + Send + Sync + 'static) -> Self {
         Self(Arc::new(f))
     }
 
@@ -21,14 +21,29 @@ impl RedrawWaker {
 
 /// What an application is handed each frame: its window handles, its redraw waker and its paths.
 pub struct AppCtx<'a> {
-    pub(crate) redraw_requested: &'a mut bool,
-    pub(crate) redraw_waker: Option<&'a RedrawWaker>,
+    redraw_requested: &'a mut bool,
+    redraw_waker: Option<&'a RedrawWaker>,
     // Standard backend-agnostic types, for app code doing native platform integration. `None` on backends that cannot report them.
-    pub(crate) raw_window_handle: Option<RawWindowHandle>,
-    pub(crate) raw_display_handle: Option<RawDisplayHandle>,
+    raw_window_handle: Option<RawWindowHandle>,
+    raw_display_handle: Option<RawDisplayHandle>,
 }
 
 impl<'a> AppCtx<'a> {
+    /// Assembles the context for one frame. A frontend driving its own loop builds one per frame from whatever its window can report; `None` handles are the honest answer for a surface that has none.
+    pub fn new(
+        redraw_requested: &'a mut bool,
+        redraw_waker: Option<&'a RedrawWaker>,
+        raw_window_handle: Option<RawWindowHandle>,
+        raw_display_handle: Option<RawDisplayHandle>,
+    ) -> Self {
+        Self {
+            redraw_requested,
+            redraw_waker,
+            raw_window_handle,
+            raw_display_handle,
+        }
+    }
+
     pub fn request_redraw(&mut self) {
         *self.redraw_requested = true;
     }
