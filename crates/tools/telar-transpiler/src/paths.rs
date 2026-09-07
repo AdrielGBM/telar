@@ -24,6 +24,35 @@ pub fn find_telar_root(start: &Path) -> Option<PathBuf> {
     find_ancestor_dir(start, |dir| dir.join("telar.toml").exists())
 }
 
+/// The `telar`/`telar-macros` version a generated artifact must be written against: the version `telar` actually resolves to for `workspace_root`, not the producing binary's own — a project can pin an older `telar` than whatever produced its artifact, and the version recorded in one exists precisely to catch that. `--no-deps` would miss it whenever `telar` is a published dependency rather than a workspace member (as in every project but this one), so this runs the full resolve. `None` when cargo cannot be run at all or names no `telar` dependency; a caller with a sensible fallback is better placed to choose one than this.
+pub fn resolve_telar_version(workspace_root: &Path) -> Option<String> {
+    std::process::Command::new("cargo")
+        .args(["metadata", "--format-version", "1"])
+        .current_dir(workspace_root)
+        .output()
+        .ok()
+        .filter(|output| output.status.success())
+        .and_then(|output| serde_json::from_slice::<CargoMetadata>(&output.stdout).ok())
+        .and_then(|metadata| {
+            metadata
+                .packages
+                .into_iter()
+                .find(|pkg| pkg.name == "telar")
+        })
+        .map(|pkg| pkg.version)
+}
+
+#[derive(serde::Deserialize)]
+struct CargoMetadata {
+    packages: Vec<CargoMetadataPackage>,
+}
+
+#[derive(serde::Deserialize)]
+struct CargoMetadataPackage {
+    name: String,
+    version: String,
+}
+
 /// Nearest ancestor directory whose `Cargo.toml` declares a `[workspace]` table.
 pub fn find_workspace_root(start: &Path) -> Option<PathBuf> {
     find_ancestor_dir(start, is_workspace_root_dir)

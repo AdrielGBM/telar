@@ -17,7 +17,7 @@ use super::config::find_package_dir;
 pub(crate) fn transpile_workspace() {
     let dir = find_package_dir(&[]);
     let workspace_root = telar_transpiler::find_workspace_root(&dir).unwrap_or_else(|| dir.clone());
-    let telar_version = telar_baker::resolve_telar_version(&workspace_root)
+    let telar_version = telar_transpiler::resolve_telar_version(&workspace_root)
         .unwrap_or_else(|| env!("CARGO_PKG_VERSION").to_string());
     let producer = format!("cargo-telar {}", env!("CARGO_PKG_VERSION"));
 

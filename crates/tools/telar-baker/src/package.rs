@@ -6,9 +6,7 @@
 
 use std::collections::BTreeSet;
 use std::path::Path;
-use std::process::Command;
 
-use serde::Deserialize;
 use telar_parser::{RsxDocument, ViewNode};
 use telar_transpiler::{AssetKind, BakedAsset, asset_kind_for_tag, assets_root};
 
@@ -23,7 +21,7 @@ pub struct BakeReport {
 
 /// Bakes every asset `package_dir`'s `.rsx` files reference, writing `<package_dir>/.telar/assets.{json,rs}`. `None` when the package holds no `.rsx` at all, so a crate with nothing to bake never grows a `.telar/`.
 ///
-/// `telar_version` is the version of `telar` the *project* resolves — see [`resolve_telar_version`]. Writing this binary's own version here would hand the macro a mismatch it cannot act on.
+/// `telar_version` is the version of `telar` the *project* resolves — see [`telar_transpiler::resolve_telar_version`]. Writing this binary's own version here would hand the macro a mismatch it cannot act on.
 pub fn bake_package(package_dir: &Path, producer: &str, telar_version: &str) -> Option<BakeReport> {
     let rsx_files = telar_transpiler::find_rsx_files_in_tree(package_dir);
     if rsx_files.is_empty() {
@@ -130,35 +128,6 @@ pub fn bake_package(package_dir: &Path, producer: &str, telar_version: &str) -> 
         report.changed = false;
     }
     Some(report)
-}
-
-#[derive(Deserialize)]
-struct CargoMetadata {
-    packages: Vec<CargoMetadataPackage>,
-}
-
-#[derive(Deserialize)]
-struct CargoMetadataPackage {
-    name: String,
-    version: String,
-}
-
-/// The `telar`/`telar-macros` version a baked `assets.rs` must be written against: the version `telar` actually resolves to for `workspace_root`, not the baking binary's own — a project can pin an older `telar` than whatever baked it, and `AssetIndex::telar_version` exists precisely to catch that. `--no-deps` would miss it whenever `telar` is a published dependency rather than a workspace member (as in every project but this one), so this runs the full resolve. `None` when cargo cannot be run at all or names no `telar` dependency; a caller with a sensible fallback is better placed to choose one than this.
-pub fn resolve_telar_version(workspace_root: &Path) -> Option<String> {
-    Command::new("cargo")
-        .args(["metadata", "--format-version", "1"])
-        .current_dir(workspace_root)
-        .output()
-        .ok()
-        .filter(|output| output.status.success())
-        .and_then(|output| serde_json::from_slice::<CargoMetadata>(&output.stdout).ok())
-        .and_then(|metadata| {
-            metadata
-                .packages
-                .into_iter()
-                .find(|pkg| pkg.name == "telar")
-        })
-        .map(|pkg| pkg.version)
 }
 
 /// The Rust expression a previous bake already wrote for `static_name`, reused so an asset whose content hash is unchanged is never re-decoded through `usvg`/`resvg`/`image` on every bake. Parses the exact single-line shape [`telar_transpiler::generate_assets`] emits for one entry — brittle to that shape changing, which is exactly what bumping `ASSET_ARTIFACT_FORMAT` is for.

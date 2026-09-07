@@ -76,7 +76,7 @@ fn project_telar_version(package_dir: &Path) -> String {
         return version.clone();
     }
     // Falling back to this binary's version keeps the mirror working when cargo cannot run at all; it is wrong for a project pinning another `telar`, but so is every other answer available here.
-    let version = telar_baker::resolve_telar_version(&workspace_root)
+    let version = telar_transpiler::resolve_telar_version(&workspace_root)
         .unwrap_or_else(|| env!("CARGO_PKG_VERSION").to_string());
     cache.insert(workspace_root, (stamp, version.clone()));
     version
