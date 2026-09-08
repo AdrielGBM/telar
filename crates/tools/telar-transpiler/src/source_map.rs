@@ -18,6 +18,17 @@ pub struct ExprSpan {
     pub gen_start: u32,
 }
 
+/// A binding the transpiler introduced that stands for one the `.rsx` declares: the `let x = x.clone();` the clone pass writes so a `move` closure captures without consuming.
+///
+/// rust-analyzer sees two bindings and is right to — the shadow's uses are references to *it*, not to the source symbol. Only the transpiler knows they are the same thing, so it says so here rather than leaving the analyzer to infer it from the text. A rename that skipped this would edit the declaration and leave every use inside the closure behind.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ShadowBinding {
+    /// Byte offset, in the generated Rust, of the name the shadow declares.
+    pub gen_decl: u32,
+    /// The `.rsx` binding it stands for. A name is enough to identify it: the clone pass shadows only captures that are not loop variables, so within one generated file the name resolves to the `[logic]` binding or prop of that name and nothing else.
+    pub name: String,
+}
+
 /// Everything the generated Rust knows about where it came from.
 #[derive(Debug, Default, Clone, Serialize, Deserialize)]
 pub struct SourceMap {
@@ -25,6 +36,9 @@ pub struct SourceMap {
     pub lines: Vec<Option<u32>>,
     /// The verbatim fragments, which are what make a *column* trustworthy rather than just a line.
     pub exprs: Vec<ExprSpan>,
+    /// The bindings the transpiler introduced that stand for source ones, which a rename has to reach through.
+    #[serde(default)]
+    pub shadows: Vec<ShadowBinding>,
 }
 
 /// Where a span of generated Rust belongs in the `.rsx` that produced it.
@@ -37,8 +51,13 @@ pub enum RsxSpan {
 }
 
 impl SourceMap {
+    /// Without shadows: the `.rs.map` on disk is read by editors that only ask about positions, and a rename resolves against the in-memory map instead.
     pub fn new(lines: Vec<Option<u32>>, exprs: Vec<ExprSpan>) -> Self {
-        Self { lines, exprs }
+        Self {
+            lines,
+            exprs,
+            shadows: Vec::new(),
+        }
     }
 
     pub fn to_json(&self) -> String {

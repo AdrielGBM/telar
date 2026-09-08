@@ -44,6 +44,22 @@ pub(crate) fn map_definition_targets(targets: Vec<DefinitionTarget>) -> Vec<Loca
     locations
 }
 
+/// Whether `target` sits on either half of a `let x = x.clone();` the transpiler wrote — the name it declares, or the name it reads to initialise it. Both are generated text with no `.rsx` counterpart, and both come back with the new spelling when the file is transpiled again, so a rename has nothing to do about them and no reason to refuse over them.
+fn lands_on_a_shadow(target: &RefTarget, gen_code: &str, map: &SourceMap) -> bool {
+    let Some(at) = crate::text::byte_offset(
+        gen_code,
+        target.range.start.line,
+        target.range.start.character,
+    ) else {
+        return false;
+    };
+    map.shadows.iter().any(|shadow| {
+        let declared = shadow.gen_decl as usize;
+        // The statement is emitted as `let {name} = {name}.clone();`, so the initialiser's name follows the declared one by the ` = ` between them.
+        let initialiser = declared + shadow.name.len() + 3;
+        at == declared || at == initialiser
+    })
+}
 /// Reverse-maps analyzer references onto `.rsx` `Location`s with precise ranges: a real source file passes through verbatim; a reference in *this* file's generated module maps back through the expr-span map (`[view]` verbatim expressions) or the line map (`[logic]` / Props struct); a reference in *another* generated module can't be precisely mapped here. Duplicates are coalesced. Returns `(locations, unmapped)` where `unmapped` counts generated-file references that produced no location — non-zero means the result is incomplete, so a rename must refuse rather than half-apply.
 pub(crate) fn reverse_map_rust_refs(
     targets: Vec<RefTarget>,
@@ -64,6 +80,10 @@ pub(crate) fn reverse_map_rust_refs(
                 range: target.range,
             })
         } else if target.path == current_gen_path {
+            // A reference to the shadow's own `let` is not a use anywhere: the transpiler writes that line, and regenerating the file after the rename writes it again under the new name. Counting it as unmapped is what refused a rename that had nothing left to place.
+            if lands_on_a_shadow(&target, gen_code, map) {
+                continue;
+            }
             reverse_map_current_file(&target, gen_code, map, rsx_source).map(|range| Location {
                 uri: rsx_uri.clone(),
                 range,

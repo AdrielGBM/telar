@@ -45,7 +45,11 @@ pub fn generated_target(
     Some(GeneratedTarget {
         path: out_path,
         code: result.rust_code,
-        map: SourceMap::new(result.source_map, result.expr_spans),
+        map: {
+            let mut map = SourceMap::new(result.source_map, result.expr_spans);
+            map.shadows = result.shadows;
+            map
+        },
     })
 }
 

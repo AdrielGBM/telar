@@ -5,7 +5,7 @@ use telar_parser::{RsxDocument, ViewNode};
 use crate::error::TranspileError;
 use crate::lexer::{contains_ident, literal_or_comment_end, replace_whole_word};
 use crate::signal_scan::{scan_locals, scan_signals};
-use crate::source_map::ExprSpan;
+use crate::source_map::{ExprSpan, ShadowBinding};
 use crate::style::generate_style_section;
 use crate::view::ViewGen;
 use telar_project::AssetContext;
@@ -180,6 +180,8 @@ pub struct TranspiledSource {
     pub source_map: Vec<Option<u32>>,
     /// Byte spans of verbatim `[view]` Rust expressions, mapping a `.rsx` source range to the generated Rust. The half of the map that makes a *column* mean something; persisted into the `.rs.map` beside [`Self::source_map`]. See [`ExprSpan`].
     pub expr_spans: Vec<ExprSpan>,
+    /// The bindings the clone pass introduced that stand for source ones. See [`ShadowBinding`].
+    pub shadows: Vec<ShadowBinding>,
 }
 
 /// Parses `source` and generates Rust for `component_name`, resolving `[style]` colors through `theme_type` when provided so theme switching at runtime takes effect. `assets` is the package's baked artifact, against which static `svg`/`img` `src:"path"` references are resolved.
@@ -433,6 +435,14 @@ pub(crate) fn transpile(input: TranspileInput<'_>) -> Result<TranspiledSource, T
         code.push(line, *src);
         code.push("\n", *src);
     }
+    let mut shadows: Vec<ShadowBinding> = resolved
+        .shadows
+        .iter()
+        .map(|(rel, name)| ShadowBinding {
+            gen_decl: (view_prefix_len + rel) as u32,
+            name: name.clone(),
+        })
+        .collect();
     let mut expr_spans: Vec<ExprSpan> = resolved
         .expr_spans
         .iter()
@@ -486,6 +496,12 @@ pub(crate) fn transpile(input: TranspileInput<'_>) -> Result<TranspiledSource, T
                     gen_start: (prefix + rel) as u32,
                 });
             }
+            for (rel, name) in &resolved.shadows {
+                shadows.push(ShadowBinding {
+                    gen_decl: (prefix + rel) as u32,
+                    name: name.clone(),
+                });
+            }
             if !code.out.ends_with('\n') {
                 code.push("\n", None);
             }
@@ -521,6 +537,7 @@ pub(crate) fn transpile(input: TranspileInput<'_>) -> Result<TranspiledSource, T
         },
         source_map: code.map,
         expr_spans,
+        shadows,
     })
 }
 

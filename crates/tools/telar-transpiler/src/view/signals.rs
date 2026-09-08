@@ -320,7 +320,7 @@ fn clone_block(idents: &[String], closure_expr: String) -> String {
     }
     let prefix: String = idents
         .iter()
-        .map(|s| format!("let {s} = {s}.clone(); "))
+        .map(|s| format!("let {}{s} = {s}.clone(); ", super::shadow_marker(s)))
         .collect();
     format!("{{ {prefix}{closure_expr} }}")
 }
@@ -393,7 +393,11 @@ pub(super) fn clone_block_multiline(idents: &[String], closure: String, pad: &st
     }
     let mut out = format!("{pad}{{\n");
     for name in idents {
-        let _ = writeln!(out, "{pad}    let {name} = {name}.clone();");
+        let _ = writeln!(
+            out,
+            "{pad}    let {}{name} = {name}.clone();",
+            super::shadow_marker(name)
+        );
     }
     let _ = write!(out, "{closure}\n{pad}}}");
     out

@@ -118,10 +118,14 @@ impl Backend {
         theme: Option<String>,
         pos: Position,
     ) -> Option<(Vec<Location>, usize)> {
-        let refs = self
+        let mut refs = self
             .rust_references(rsx_path.clone(), source.clone(), theme.clone(), pos)
             .await?;
         let target = crate::build_sync::generated_target(&rsx_path, &source, theme.as_deref())?;
+        refs.extend(
+            self.shadow_references(&rsx_path, &source, &target, pos)
+                .await,
+        );
         Some(reverse_map_rust_refs(
             refs,
             &target.path,
@@ -131,8 +135,57 @@ impl Backend {
             uri,
         ))
     }
+
+    /// References to the bindings the transpiler introduced for the symbol under the cursor.
+    ///
+    /// The clone pass rebinds a captured name so a `move` closure can take it without consuming the original, and rust-analyzer reads each rebinding as its own symbol — correctly, since in the generated code they are. Asking it again at each one is the only way to reach the uses inside those closures, and leaving them out is what made a rename edit the declaration and abandon the `[view]`.
+    async fn shadow_references(
+        &self,
+        rsx_path: &std::path::Path,
+        source: &str,
+        target: &crate::build_sync::GeneratedTarget,
+        pos: Position,
+    ) -> Vec<RefTarget> {
+        let Some(name) = symbol_at(source, pos) else {
+            return Vec::new();
+        };
+        let offsets: Vec<usize> = target
+            .map
+            .shadows
+            .iter()
+            .filter(|shadow| shadow.name == name)
+            .map(|shadow| shadow.gen_decl as usize)
+            .collect();
+        if offsets.is_empty() {
+            return Vec::new();
+        }
+        let Some(root) = crate::build_sync::crate_root(rsx_path) else {
+            return Vec::new();
+        };
+        let gen_path = target.path.clone();
+        let gen_code = target.code.clone();
+        self.run_analyzer(root, move |analyzer| async move {
+            let mut found = Vec::new();
+            for offset in offsets {
+                found.extend(
+                    analyzer
+                        .references(&gen_path, &gen_code, offset)
+                        .await
+                        .unwrap_or_default(),
+                );
+            }
+            Some(found)
+        })
+        .await
+        .unwrap_or_default()
+    }
 }
 
+/// The identifier under the cursor in the `.rsx`, which is the name a shadow binding would carry.
+fn symbol_at(source: &str, pos: Position) -> Option<String> {
+    let line = telar_transpiler::nth_line(source, pos.line as usize)?;
+    crate::text::ident_at(line, pos.character).map(|(_, ident)| ident.to_owned())
+}
 /// Where the `.rsx` cursor lands inside the generated module, or `None` when no Rust sits under it.
 ///
 /// `[logic]` is emitted verbatim, so the line map places it and the column only shifts by the body indent. `[view]` has no lines of its own in the output — only the verbatim expressions the transpiler copied — so it resolves through the expression-span map, and a cursor outside every span yields `None`, which is what leaves native element/attribute completion in charge. The offset is a UTF-8 char boundary by construction: the fragment is byte-identical in source and output, and the cursor resolves on a boundary.

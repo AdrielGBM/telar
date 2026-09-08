@@ -189,7 +189,7 @@ impl ViewGen<'_> {
         // Cloned in so the closure owns `'static` handles independent of any sibling closure on the same widget. Empty for a static value, whose branches emit no `move` closure.
         let clone_prefix: String = captured_idents(&[value], &self.loop_variables)
             .iter()
-            .map(|s| format!("let {s} = {s}.clone(); "))
+            .map(|s| format!("let {}{s} = {s}.clone(); ", super::shadow_marker(s)))
             .collect();
         if let Some(curve) = transitions.get("opacity") {
             let name = self.next_transition_name();

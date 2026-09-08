@@ -176,7 +176,11 @@ impl ViewGen<'_> {
     pub(super) fn clone_bindings(&self, snippets: &[&str], pad: &str, extra: &str) -> String {
         let mut out = String::new();
         for name in captured_idents(snippets, &self.loop_variables) {
-            let _ = writeln!(out, "{pad}{extra}let {name} = {name}.clone();");
+            let _ = writeln!(
+                out,
+                "{pad}{extra}let {}{name} = {name}.clone();",
+                super::shadow_marker(&name)
+            );
         }
         out
     }

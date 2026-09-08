@@ -64,7 +64,12 @@ impl ViewGen<'_> {
         // Twice on purpose: the outer clone leaves the surrounding view its binding, the inner gives each run its own, since a body that hands a binding to a widget moves it.
         let per_run: String = idents
             .iter()
-            .map(|name| format!("{pad}        let {name} = {name}.clone();\n"))
+            .map(|name| {
+                format!(
+                    "{pad}        let {}{name} = {name}.clone();\n",
+                    super::shadow_marker(name)
+                )
+            })
             .collect();
         let inner = format!("{pad}    move || {{\n{per_run}{closure}\n{pad}    }}");
         let built = super::signals::clone_block_multiline(&idents, inner, &format!("{pad}    "));

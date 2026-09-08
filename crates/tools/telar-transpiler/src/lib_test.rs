@@ -2271,3 +2271,32 @@ fn every_verbatim_view_value_maps_back_to_its_exact_source_bytes() {
         );
     }
 }
+
+/// The clone pass rebinds a captured name so a `move` closure can take it without consuming the original. rust-analyzer reads those as separate symbols and is right to, so a rename that stopped at the source binding would leave every use inside the closure behind — this is what lets it reach them.
+#[test]
+fn every_shadow_the_clone_pass_writes_names_the_binding_it_stands_for() {
+    let src = "[logic]\nlet name = props.name;\n\n[view]\ncol\n    text \"{$name}\"\n    row on_press:(|| name.go())\n";
+    let out = transpile_source(src, "demo", None, None).unwrap();
+    eprintln!(
+        "RAW: {}",
+        out.rust_code
+            .lines()
+            .filter(|l| l.contains("clone()"))
+            .collect::<Vec<_>>()
+            .join(" | ")
+    );
+    let named: Vec<&str> = out.shadows.iter().map(|s| s.name.as_str()).collect();
+    assert!(
+        named.contains(&"name"),
+        "the shadow of `name` went unrecorded: {named:?}"
+    );
+    for shadow in &out.shadows {
+        let at = shadow.gen_decl as usize;
+        // The analyzer reads the initialiser by stepping over the ` = ` between the two names, so the shape is load-bearing and not merely cosmetic: a rename drops both halves of this statement instead of refusing over them.
+        let statement = format!("{} = {}.clone();", shadow.name, shadow.name);
+        assert!(
+            out.rust_code[at..].starts_with(&statement),
+            "a shadow does not read `{statement}` at its recorded offset, which is the shape the analyzer steps through"
+        );
+    }
+}

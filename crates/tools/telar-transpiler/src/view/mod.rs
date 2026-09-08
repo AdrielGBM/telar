@@ -31,6 +31,14 @@ const SRC_POP: &str = "//@RSX@POP";
 const SRC_EXPR_OPEN: &str = "/*@RSX@EXPR:";
 const SRC_EXPR_CLOSE: &str = "@*/";
 
+/// Inline marker emitted immediately before the name a shadow binding declares — the `let x = x.clone();` the clone pass writes so a `move` closure can capture without consuming. Stripped by [`resolve_source_map`], which records where the shadow is declared in the generated body. Payload: the name of the source binding it stands for, which is what a rename has to reach through it. Only the transpiler knows the two are the same symbol; rust-analyzer sees two bindings and is right to.
+const SRC_SHADOW_OPEN: &str = "/*@RSX@SHADOW:";
+
+/// Builds an [`SRC_SHADOW_OPEN`] marker for a shadow of the source binding `name`.
+pub(super) fn shadow_marker(name: &str) -> String {
+    format!("{SRC_SHADOW_OPEN}{name}{SRC_EXPR_CLOSE}")
+}
+
 /// Builds an [`SRC_EXPR_OPEN`] marker for a verbatim expression at source byte offset `rsx_start` spanning `len` bytes.
 fn expr_marker(rsx_start: usize, len: usize) -> String {
     format!("{SRC_EXPR_OPEN}{rsx_start}:{len}{SRC_EXPR_CLOSE}")
@@ -47,13 +55,16 @@ pub(crate) struct ResolvedView {
     pub lines: Vec<(String, Option<u32>)>,
     /// Per expression: `(byte offset within the streamed body, rsx_start, len)`. The streamed body is the lines joined with `\n` (each line followed by a newline), matching how `transpile` appends them, so a caller adds the body's start offset in the final file to get the generated offset.
     pub expr_spans: Vec<(usize, u32, u32)>,
+    /// Per shadow binding: `(byte offset within the streamed body of the name it declares, the source binding it stands for)`.
+    pub shadows: Vec<(usize, String)>,
 }
 
-/// Strips the source markers from a generated view body, returning each real line paired with the `.rsx` line it originated from (a stack tracks nesting, so a node's own lines map to itself and its children's lines map to the children) plus the verbatim-expression byte spans. Lines outside any marker (root boilerplate) map to `None`.
+/// Strips the source markers from a generated view body, returning each real line paired with the `.rsx` line it originated from (a stack tracks nesting, so a node's own lines map to itself and its children's lines map to the children), the verbatim-expression byte spans, and the shadow bindings. Lines outside any marker (root boilerplate) map to `None`.
 pub(crate) fn resolve_source_map(marked: &str) -> ResolvedView {
     let mut stack: Vec<u32> = Vec::new();
     let mut lines = Vec::new();
     let mut expr_spans = Vec::new();
+    let mut shadows = Vec::new();
     let mut body_len = 0usize;
     for line in marked.split('\n') {
         if let Some(rest) = line.strip_prefix(SRC_PUSH) {
@@ -63,37 +74,77 @@ pub(crate) fn resolve_source_map(marked: &str) -> ResolvedView {
         } else if line == SRC_POP {
             stack.pop();
         } else {
-            let (clean, spans) = strip_expr_markers(line, body_len);
-            expr_spans.extend(spans);
-            body_len += clean.len() + 1;
-            lines.push((clean, stack.last().copied()));
+            let stripped = strip_markers(line, body_len);
+            expr_spans.extend(stripped.expr_spans);
+            shadows.extend(stripped.shadows);
+            body_len += stripped.clean.len() + 1;
+            lines.push((stripped.clean, stack.last().copied()));
         }
     }
-    ResolvedView { lines, expr_spans }
+    ResolvedView {
+        lines,
+        expr_spans,
+        shadows,
+    }
 }
 
-/// Removes inline [`SRC_EXPR_OPEN`] markers from a single output `line`, returning the cleaned line and, for each marker, `(body offset of the following expression, rsx_start, len)`. `base` is the body byte offset of this line's start; the expression begins exactly where the marker was, so its offset is `base + <cleaned bytes emitted so far>`.
-fn strip_expr_markers(line: &str, base: usize) -> (String, Vec<(usize, u32, u32)>) {
+/// Removes the inline markers from a single output `line`, returning the cleaned line plus what each marker described. `base` is the body byte offset of this line's start; a marker sits exactly where the thing it describes begins, so that thing's offset is `base + <cleaned bytes emitted so far>`.
+/// One line with its markers removed, alongside what each of them described.
+struct StrippedLine {
+    clean: String,
+    expr_spans: Vec<(usize, u32, u32)>,
+    shadows: Vec<(usize, String)>,
+}
+
+fn strip_markers(line: &str, base: usize) -> StrippedLine {
     let mut out = String::with_capacity(line.len());
     let mut spans = Vec::new();
+    let mut shadows = Vec::new();
     let mut rest = line;
-    while let Some(open) = rest.find(SRC_EXPR_OPEN) {
+    loop {
+        // Whichever comes first, so the running offset of the cleaned text stays right for both kinds.
+        let (open, is_expr) = match (rest.find(SRC_EXPR_OPEN), rest.find(SRC_SHADOW_OPEN)) {
+            (Some(expr), Some(shadow)) => match expr < shadow {
+                true => (expr, true),
+                false => (shadow, false),
+            },
+            (Some(expr), None) => (expr, true),
+            (None, Some(shadow)) => (shadow, false),
+            (None, None) => break,
+        };
         out.push_str(&rest[..open]);
-        let after_open = &rest[open + SRC_EXPR_OPEN.len()..];
+        let opener = match is_expr {
+            true => SRC_EXPR_OPEN,
+            false => SRC_SHADOW_OPEN,
+        };
+        let after_open = &rest[open + opener.len()..];
         let Some(close) = after_open.find(SRC_EXPR_CLOSE) else {
             out.push_str(rest);
-            return (out, spans);
+            return StrippedLine {
+                clean: out,
+                expr_spans: spans,
+                shadows,
+            };
         };
         let payload = &after_open[..close];
-        if let Some((rsx_start, len)) = payload.split_once(':')
-            && let (Ok(rsx_start), Ok(len)) = (rsx_start.parse::<u32>(), len.parse::<u32>())
-        {
-            spans.push((base + out.len(), rsx_start, len));
+        match is_expr {
+            true => {
+                if let Some((rsx_start, len)) = payload.split_once(':')
+                    && let (Ok(rsx_start), Ok(len)) = (rsx_start.parse::<u32>(), len.parse::<u32>())
+                {
+                    spans.push((base + out.len(), rsx_start, len));
+                }
+            }
+            false => shadows.push((base + out.len(), payload.to_string())),
         }
         rest = &after_open[close + SRC_EXPR_CLOSE.len()..];
     }
     out.push_str(rest);
-    (out, spans)
+    StrippedLine {
+        clean: out,
+        expr_spans: spans,
+        shadows,
+    }
 }
 
 /// How a container collects its children: a `children![...]` literal (all static, no control flow), a `Vec<Box<dyn LayoutItem>>` mutated by static control flow, or a `Vec<ChildSlot>` when a reactive fragment is among the siblings (so it and the statics reconcile into the same node — the transparent `for`/`if`).
