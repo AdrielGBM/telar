@@ -14,6 +14,9 @@ use crate::ra::Analyzer;
 
 use super::{AnalyzerHandle, AnalyzerState, Backend};
 
+/// How still the buffer has to be before rust-analyzer is asked about it. Long enough to sit out a burst of typing, short enough that a pause reads as instant.
+const RUST_DIAGNOSTICS_QUIET: std::time::Duration = std::time::Duration::from_millis(300);
+
 impl AnalyzerHandle {
     /// The workspace's rust-analyzer, booting it on first use. `None` while a boot another query started is still in flight, or after one failed — rust-analyzer keeps its own workspace up to date once running, so there is nothing here to invalidate or reload.
     pub(crate) async fn get(&self, root: PathBuf) -> Option<Arc<Analyzer>> {
@@ -131,6 +134,8 @@ impl Backend {
     }
 
     /// Off-loop merge of rust-analyzer's diagnostics: maps each back onto the `.rsx` via the line map (dropping generated lines with no `.rsx` origin) and republishes native+rust. A staleness guard skips the publish if the buffer changed meanwhile, so out-of-order task completions never resurrect diagnostics for an older revision.
+    ///
+    /// Held back until the typing stops. Asking is not free for anyone: the question is answered against the whole generated file, and the overlay it carries invalidates rust-analyzer's analysis of that file — which cancels whatever completion or hover is in flight and starts it over. Per keystroke that is a query the user never sees costing them the one they are waiting on.
     fn spawn_rust_diagnostics(
         &self,
         uri: Uri,
@@ -140,27 +145,27 @@ impl Backend {
         native: Vec<Diagnostic>,
         revision: u64,
     ) {
-        let Some(crate::build_sync::GeneratedTarget {
-            path: gen_path,
-            code: gen_text,
-            map,
-        }) = crate::build_sync::generated_target(&rsx_path, &source, theme.as_deref())
-        else {
-            return;
-        };
-        let Some(root) = crate::build_sync::crate_root(&rsx_path) else {
-            return;
-        };
-
         let analyzer = self.analyzer.clone();
         let outgoing = self.outgoing.clone();
         let store = self.store.clone();
         let revisions = self.revision.clone();
         tokio::spawn(async move {
-            // A newer edit already superseded this one, so skip the round-trip entirely.
+            tokio::time::sleep(RUST_DIAGNOSTICS_QUIET).await;
+            // A newer edit already superseded this one, so skip the transpile and the round-trip entirely.
             if revisions.load(Ordering::Relaxed) != revision {
                 return;
             }
+            let Some(crate::build_sync::GeneratedTarget {
+                path: gen_path,
+                code: gen_text,
+                map,
+            }) = crate::build_sync::generated_target(&rsx_path, &source, theme.as_deref())
+            else {
+                return;
+            };
+            let Some(root) = crate::build_sync::crate_root(&rsx_path) else {
+                return;
+            };
             let Some(analyzer) = analyzer.get(root).await else {
                 return;
             };
