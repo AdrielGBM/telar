@@ -2247,3 +2247,26 @@ fn a_reactive_for_is_not_flagged() {
     assert!(!code.contains("compile_error!"), "{code}");
     assert!(code.contains("ReactiveList::"), "{code}");
 }
+
+/// The expression map is what makes a *column* mean something in `[view]`: go-to-definition and rename resolve a cursor through it, and a value with no span — or one shifted by the delimiting paren — answers nothing at all rather than answering wrongly.
+#[test]
+fn every_verbatim_view_value_maps_back_to_its_exact_source_bytes() {
+    let src = "[view]\ncol\n    row fill:(row_fill(state, 0, false)) on_press:(|| state.press(0))\n        my_comp bytes:(icon(&e)) color:(ink(state, 0))\n";
+    let out = transpile_source(src, "demo", None, None).unwrap();
+    let spans: Vec<&str> = out
+        .expr_spans
+        .iter()
+        .map(|s| &src[s.rsx_start as usize..(s.rsx_start + s.len) as usize])
+        .collect();
+    for expected in [
+        "row_fill(state, 0, false)",
+        "icon(&e)",
+        "ink(state, 0)",
+        "|| state.press(0)",
+    ] {
+        assert!(
+            spans.contains(&expected),
+            "no span covers exactly {expected:?}; got {spans:?}"
+        );
+    }
+}

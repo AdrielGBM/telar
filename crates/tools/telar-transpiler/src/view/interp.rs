@@ -1,6 +1,7 @@
 //! Text interpolation and color resolution for the view emitters.
 
 use crate::style::hex_to_color_expr;
+use telar_parser::Attr;
 use telar_project::naming::is_ident;
 
 use super::ViewGen;
@@ -100,6 +101,24 @@ impl ViewGen<'_> {
             return v.to_string();
         }
         v.to_string()
+    }
+
+    /// [`Self::color_expr`] with a source marker when the value reaches the output byte for byte — a plain Rust call such as `fill:(row_fill(state, index))`. A `$` read, a hex literal or a colour keyword is rewritten on the way, so there is no span to record and the cursor falls back to its line.
+    pub(super) fn color_expr_marked(&self, attr: &Attr) -> String {
+        let emitted = self.color_expr(attr.value.text());
+        let text = attr.value.text();
+        let (inner, delimiters) = match super::redundant_parens(text.trim()) {
+            Some(inner) => (inner, 1),
+            None => (text.trim(), 0),
+        };
+        if emitted != inner {
+            return emitted;
+        }
+        let lead = text.len() - text.trim_start().len() + delimiters;
+        format!(
+            "{}{emitted}",
+            expr_marker(attr.value_start + lead, inner.len())
+        )
     }
 
     /// Whether codegen resolves any color through `use_theme`, requiring the import.

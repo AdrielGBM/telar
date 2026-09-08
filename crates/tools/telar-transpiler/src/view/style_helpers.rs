@@ -81,11 +81,11 @@ impl ViewGen<'_> {
             .iter()
             .find(|a| a.key == "fill")
             .filter(|_| gradient.is_none())
-            .map(|a| self.color_expr(a.value.text()));
+            .map(|a| self.color_expr_marked(a));
         let mut stroke = pattrs
             .iter()
             .find(|a| a.key == "stroke")
-            .map(|a| self.color_expr(a.value.text()));
+            .map(|a| self.color_expr_marked(a));
         if let Some(curve) = transitions.get("fill")
             && let Some(fill) = solid_fill.take()
         {

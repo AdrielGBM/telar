@@ -239,7 +239,10 @@ impl ViewGen<'_> {
             return v.to_string();
         }
         // Boxed like `on_press`, so a `$`-free closure keeps its source span for LSP completion. The delimiting parens come off first: they are the value's delimiters, not part of the closure.
-        let v = super::redundant_parens(v).unwrap_or(v);
+        let (v, delimiters) = match super::redundant_parens(v) {
+            Some(inner) => (inner, 1),
+            None => (v, 0),
+        };
         if v.starts_with('|') || v.starts_with("move |") {
             return format!("std::rc::Rc::new({})", self.emit_closure_value(attr));
         }
@@ -256,7 +259,8 @@ impl ViewGen<'_> {
         if let Ok(n) = v.parse::<f32>() {
             return format_f32(n);
         }
-        let lead = attr.value.text().len() - attr.value.text().trim_start().len();
+        // Includes the delimiting paren stripped above: `value_start` still points at it, so a span built from `v` would start one byte early and end one short.
+        let lead = attr.value.text().len() - attr.value.text().trim_start().len() + delimiters;
         // Cloned only where the clone is load-bearing: a reactive builder closure runs again and cannot consume its capture. Outside one, moving is correct, and cloning would demand `Clone` of every forwarded binding — which a `Box<dyn Fn()>` prop can never satisfy. A loop variable counts as a local; without that a bare `panel:p` fell through to the style scope and resolved `p` against the theme as a colour.
         let in_loop = self.loop_variables.iter().any(|l| l == v);
         if self.is_local(v) || in_loop {
