@@ -16,9 +16,10 @@ jobs:
           components: clippy, rustfmt
       - uses: Swatinem/rust-cache@v2
       - run: cargo fmt --all -- --check
-      # Every job that compiles `apps/sandbox` runs this first. A `src:"…"` asset resolves against the artifact
-      # it writes, and the macro emits an error naming this command rather than baking one itself.
-      - run: cargo run -q -p cargo-telar -- bake
+      # Every job that compiles `apps/sandbox` runs this first: rustc no longer transpiles a `.rsx`, and the
+      # macro emits an error naming this command instead. It bakes on the way through, so a `src:"…"` asset
+      # still resolves against an artifact that is there before anything reads it.
+      - run: cargo run -q -p cargo-telar -- transpile
       # Not `-D warnings`: the tree carries 247 of them today. This catches the `deny`-level lints, which is
       # what went unnoticed for two days when a `never_loop` in `telar-macros` stopped clippy reaching
       # anything downstream of it.
@@ -33,7 +34,7 @@ jobs:
       # `--all-targets` so the test targets no other job compiles cannot rot unnoticed: `sandbox/dev` is off
       # in the `test` job, which leaves `apps/sandbox/src/hot_tree_test.rs` — the only guard for the
       # split-runtime regression — never even type-checked.
-      - run: cargo run -q -p cargo-telar -- bake
+      - run: cargo run -q -p cargo-telar -- transpile
       - run: cargo check --workspace --all-features --all-targets --exclude telar-platform-android --exclude telar-analyzer --exclude telar-diagnostics
 
   msrv:
@@ -43,7 +44,7 @@ jobs:
       # Must match `rust-version` in [workspace.package].
       - uses: dtolnay/rust-toolchain@1.95.0
       - uses: Swatinem/rust-cache@v2
-      - run: cargo run -q -p cargo-telar -- bake
+      - run: cargo run -q -p cargo-telar -- transpile
       - run: cargo check --workspace --all-features --exclude telar-platform-android --exclude telar-analyzer --exclude telar-diagnostics
 
   # The IDE server embeds rust-analyzer: 133 crates every other job here excludes, because no application links them. It still has to compile — a rename in `telar-transpiler` breaks the language server — so it compiles once, alone.
@@ -71,7 +72,7 @@ jobs:
         id: setup-ndk
         with:
           ndk-version: r27c
-      - run: cargo run -q -p cargo-telar -- bake
+      - run: cargo run -q -p cargo-telar -- transpile
       # `sandbox`'s own default is `desktop`, so without this the job cross-compiled a winit build to Android and never touched the frontend it is named after.
       - run: cargo check -p sandbox --no-default-features --features sandbox/android -p telar-platform-android --target aarch64-linux-android --lib
         env:
@@ -87,7 +88,7 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       # The only leg that compiles the document renderer, the WebGPU one and the web platform at all: they are
       # `cfg`'d to nothing off wasm, so every other check here passes with them broken.
-      - run: cargo run -q -p cargo-telar -- bake
+      - run: cargo run -q -p cargo-telar -- transpile
       - run: cargo check -p sandbox --lib --target wasm32-unknown-unknown --features telar/web
 
   # The document renderer is the one backend that positions nothing itself: CSS does, from what each box asked
@@ -169,7 +170,7 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y mesa-vulkan-drivers
-      - run: cargo run -q -p cargo-telar -- bake
+      - run: cargo run -q -p cargo-telar -- transpile
       - run: cargo test --workspace --exclude telar-platform-android --exclude telar-analyzer --exclude telar-diagnostics
         env:
           TELAR_REQUIRE_GPU: ${{ matrix.os == 'ubuntu-latest' && '1' || '' }}
