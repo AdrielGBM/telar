@@ -66,6 +66,8 @@ fn undefined_style_class_warns() {
     assert!(diags[0].message.contains("@missing"));
 }
 
+// The conversion this covers is behind the same feature, so without the gate the crate's own `cargo test` fails to compile on an unresolved `lsp_types`.
+#[cfg(feature = "lsp")]
 #[test]
 fn lsp_conversion_maps_severity_and_zero_based_line() {
     use lsp_types::{Diagnostic as LspDiagnostic, DiagnosticSeverity};
