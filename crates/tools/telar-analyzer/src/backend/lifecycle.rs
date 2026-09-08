@@ -2,6 +2,7 @@
 
 use std::path::PathBuf;
 use std::sync::atomic::Ordering;
+use std::time::Instant;
 
 use lsp_types::*;
 use telar_diagnostics::semantic_diagnostics;
@@ -10,7 +11,7 @@ use crate::index::WorkspaceIndex;
 use crate::project::ProjectInfo;
 use crate::ra::EmbeddedAnalyzer;
 
-use super::{AnalyzerState, Backend, RELOAD_DEBOUNCE, mark_reload};
+use super::{AnalyzerState, Backend, IDLE_TTL, RELOAD_DEBOUNCE, mark_reload};
 
 impl Backend {
     pub(crate) async fn reparse_and_diagnose(&self, uri: Uri, text: String) -> Vec<Diagnostic> {
@@ -184,6 +185,7 @@ impl Backend {
 
     /// Starts the (slow) workspace load on a blocking thread if it hasn't started yet. Returns immediately; queries that arrive while loading simply yield nothing.
     pub(crate) fn ensure_loading(&self, root: PathBuf, warm: Option<PathBuf>) {
+        self.touch();
         // `try_lock`, never `lock`: this runs on the single-threaded runtime and a blocking query can hold the mutex for the length of its call. Contention means the analyzer is already busy, so there is nothing to start, and a state that just reset to `Idle` is picked up by the next edit.
         let Ok(mut state) = self.analyzer.try_lock() else {
             return;
@@ -238,4 +240,46 @@ impl Backend {
             });
         }
     }
+
+    /// Records demand for the analyzer, pushing out its idle deadline. Called from [`Backend::ensure_loading`], which every query path runs first, so a load still in flight counts as demand exactly as a `Ready` one does.
+    pub(crate) fn touch(&self) {
+        if let Ok(mut at) = self.last_used.lock() {
+            *at = Instant::now();
+        }
+    }
+
+    /// Releases the workspace once it has gone [`IDLE_TTL`] without demand, reporting whether it did. The counterpart to [`Backend::ensure_loading`], and called off the runtime thread for the same reason: the assignment frees a multi-GB `RootDatabase`.
+    pub(crate) fn evict_if_idle(&self) -> bool {
+        // `try_lock`, never `lock`: a held mutex means a query is running, which is demand in itself.
+        let Ok(mut state) = self.analyzer.try_lock() else {
+            return false;
+        };
+        // Only `Ready` holds a database. Evicting `Loading` would strand the load that is about to overwrite this state anyway.
+        if !matches!(*state, AnalyzerState::Ready(_)) {
+            return false;
+        }
+        // Read while holding the analyzer, which `ensure_loading` touches *before* it contends for: a query that got that far cannot have its workspace evicted out from under it here.
+        let idle = self
+            .last_used
+            .lock()
+            .map(|at| at.elapsed())
+            .unwrap_or_default();
+        if idle < IDLE_TTL {
+            return false;
+        }
+        *state = AnalyzerState::Idle;
+        drop(state);
+        self.outgoing.log_message(
+            MessageType::INFO,
+            format!(
+                "telar-analyzer: workspace released after {}s idle",
+                idle.as_secs()
+            ),
+        );
+        true
+    }
 }
+
+#[cfg(test)]
+#[path = "lifecycle_test.rs"]
+mod tests;

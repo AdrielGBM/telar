@@ -45,6 +45,12 @@ enum AnalyzerState {
 /// How long invalidations are coalesced before the workspace is actually torn down and reloaded. Measured from the *first* pending invalidation, never extended, so a steady stream of queries against an unknown file cannot starve the reload. Amortizes a ~15s load, so the exact value matters little.
 const RELOAD_DEBOUNCE: Duration = Duration::from_millis(500);
 
+/// How long the workspace may go unqueried before its `RootDatabase` is released. A `.rsx` left open in a background tab otherwise pins the whole index for the editor session, next to the one rust-analyzer holds over the same crates. The reload it costs is the ~15s the first load already paid, and only after an idle stretch long enough that the editor has moved on.
+const IDLE_TTL: Duration = Duration::from_secs(300);
+
+/// How often [`Backend::evict_if_idle`] looks. Coarse deliberately: the deadline it enforces is minutes, and every tick contends for the analyzer mutex.
+pub(crate) const IDLE_POLL: Duration = Duration::from_secs(30);
+
 /// Records that the crate graph is out of date without dropping the `RootDatabase`. A single `cargo add` touches `Cargo.toml` *and* `Cargo.lock`, and a branch switch touches dozens of files; tearing down per event would pay the full reload for each. Only [`Backend::ensure_loading`] acts on the mark, which keeps teardown to one place.
 fn mark_reload(reload_at: &Mutex<Option<Instant>>) {
     if let Ok(mut mark) = reload_at.lock() {
@@ -76,6 +82,8 @@ pub struct Backend {
     // A spawned diagnostics task captures the value it was queued for and bails before the expensive query if a newer edit superseded it, so keystroke-rate edits do not pile up behind the lock.
     revision: Arc<AtomicU64>,
     reload_at: Arc<Mutex<Option<Instant>>>,
+    // A separate mutex from `analyzer`, so recording demand never waits on a running query.
+    last_used: Arc<Mutex<Instant>>,
 }
 
 impl Backend {
@@ -88,6 +96,7 @@ impl Backend {
             completion_cache: Arc::new(Mutex::new(CompletionCache::default())),
             revision: Arc::new(AtomicU64::new(0)),
             reload_at: Arc::new(Mutex::new(None)),
+            last_used: Arc::new(Mutex::new(Instant::now())),
         }
     }
 

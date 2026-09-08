@@ -19,6 +19,7 @@ pub async fn run() {
     let backend = Arc::new(Backend::new(OutgoingSender::new(tx)));
 
     spawn_shutdown_signals(Arc::downgrade(&backend));
+    spawn_idle_reaper(Arc::downgrade(&backend));
 
     // A single writer task owns stdout so server-originated messages never interleave.
     let writer = tokio::spawn(async move {
@@ -111,6 +112,22 @@ fn spawn_shutdown_signals(backend: Weak<Backend>) {
 
 #[cfg(not(unix))]
 fn spawn_shutdown_signals(_backend: Weak<Backend>) {}
+
+/// Releases the embedded analyzer once it has gone long enough without a query, so a `.rsx` left open in a background tab stops pinning a multi-GB index alongside the one rust-analyzer holds over the same crates. The deadline itself lives with [`Backend::evict_if_idle`].
+// Holds a `Weak` for the reason [`spawn_shutdown_signals`] gives: this task outlives the read loop, so a strong handle would keep the outgoing channel's last sender alive past the `drop` in [`run`].
+fn spawn_idle_reaper(backend: Weak<Backend>) {
+    tokio::spawn(async move {
+        let mut ticks = tokio::time::interval(crate::backend::IDLE_POLL);
+        loop {
+            ticks.tick().await;
+            let Some(alive) = backend.upgrade() else {
+                return;
+            };
+            // Off the runtime thread: the eviction frees a multi-GB database, and the mutex it needs may be held by a blocking query.
+            let _ = tokio::task::spawn_blocking(move || alive.evict_if_idle()).await;
+        }
+    });
+}
 
 /// Exits when the client vanishes without closing stdin. `initialize` carries `processId` so a server can detect exactly this; stdio normally delivers EOF first, so this only backstops a client that leaked the pipe's write end to a surviving child.
 #[cfg(unix)]
