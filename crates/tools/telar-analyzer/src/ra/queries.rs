@@ -3,6 +3,7 @@
 //! Every one of them syncs the live transpile first, so the answer is against the buffer the editor holds rather than whatever was last built. Offsets come in as bytes because that is what the transpiler's source map speaks; they are converted at this boundary, since LSP counts UTF-16 units from a line.
 
 use std::path::{Path, PathBuf};
+use std::time::Duration;
 
 use lsp_types::{
     CompletionItem, Diagnostic, Hover, InlayHint, InlayHintLabel, Location, Position, Range,
@@ -10,7 +11,9 @@ use lsp_types::{
 };
 use serde_json::{Value, json};
 
-use super::{Analyzer, DefinitionTarget, InlayHintRaw, QUERY_TIMEOUT, RefTarget};
+use super::{
+    Analyzer, DefinitionTarget, InlayHintRaw, KEYSTROKE_TIMEOUT, QUERY_TIMEOUT, RefTarget,
+};
 
 impl Analyzer {
     pub async fn completions(
@@ -20,7 +23,14 @@ impl Analyzer {
         offset: usize,
     ) -> Vec<CompletionItem> {
         let Some(result) = self
-            .at_offset("textDocument/completion", gen_path, generated, offset, None)
+            .at_offset(
+                "textDocument/completion",
+                gen_path,
+                generated,
+                offset,
+                None,
+                KEYSTROKE_TIMEOUT,
+            )
             .await
         else {
             return Vec::new();
@@ -49,6 +59,7 @@ impl Analyzer {
                 generated,
                 offset,
                 None,
+                KEYSTROKE_TIMEOUT,
             )
             .await?;
         serde_json::from_value(result).ok()
@@ -57,7 +68,14 @@ impl Analyzer {
     /// The range is dropped so the client highlights the hovered `.rsx` word itself — reverse-mapping a generated-file range is pointless for a tooltip.
     pub async fn hover(&self, gen_path: &Path, generated: &str, offset: usize) -> Option<Hover> {
         let result = self
-            .at_offset("textDocument/hover", gen_path, generated, offset, None)
+            .at_offset(
+                "textDocument/hover",
+                gen_path,
+                generated,
+                offset,
+                None,
+                KEYSTROKE_TIMEOUT,
+            )
             .await?;
         let mut hover: Hover = serde_json::from_value(result).ok()?;
         hover.range = None;
@@ -71,7 +89,14 @@ impl Analyzer {
         offset: usize,
     ) -> Option<Vec<DefinitionTarget>> {
         let result = self
-            .at_offset("textDocument/definition", gen_path, generated, offset, None)
+            .at_offset(
+                "textDocument/definition",
+                gen_path,
+                generated,
+                offset,
+                None,
+                QUERY_TIMEOUT,
+            )
             .await?;
         Some(
             locations(result)
@@ -95,6 +120,7 @@ impl Analyzer {
                 generated,
                 offset,
                 Some(json!({ "context": { "includeDeclaration": true } })),
+                QUERY_TIMEOUT,
             )
             .await?;
         Some(
@@ -171,6 +197,7 @@ impl Analyzer {
         generated: &str,
         offset: usize,
         extra: Option<Value>,
+        timeout: Duration,
     ) -> Option<Value> {
         self.inner.sync(gen_path, generated);
         let mut params = json!({
@@ -180,7 +207,7 @@ impl Analyzer {
         if let (Some(Value::Object(extra)), Some(params)) = (extra, params.as_object_mut()) {
             params.extend(extra);
         }
-        let result = self.inner.request(method, params, QUERY_TIMEOUT).await?;
+        let result = self.inner.request(method, params, timeout).await?;
         (!result.is_null()).then_some(result)
     }
 }

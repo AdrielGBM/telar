@@ -16,6 +16,9 @@ mod queries;
 /// How long a query waits for rust-analyzer. Past this it is either still loading the workspace or wedged, and either way the backend answers with what the `.rsx` side worked out natively rather than holding the editor.
 const QUERY_TIMEOUT: Duration = Duration::from_secs(10);
 
+/// The same, for the queries a keystroke triggers. Shorter because nobody asked for these: a loaded workspace answers them in tens of milliseconds, so a wait measured in seconds only ever means the workspace is not loaded yet — and a suggestion list that arrives ten seconds into typing is one the user has already typed past.
+const KEYSTROKE_TIMEOUT: Duration = Duration::from_secs(3);
+
 /// A go-to-definition target: the target file's path and the name range within it. The backend decides whether the path is a generated `.telar/build/*.rs` (reverse-mapped to the `.rsx`) or a real file (used verbatim).
 pub struct DefinitionTarget {
     pub path: PathBuf,
