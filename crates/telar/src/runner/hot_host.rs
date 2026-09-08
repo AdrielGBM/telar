@@ -59,9 +59,11 @@ pub fn run_hot_reload_host(
     let mut handler = build_app_handler::<WinitWindow, crate::DefaultDevTools>(
         Box::new(initial_app),
         paths,
-        font_paths,
-        font_data,
-        font_family,
+        crate::runner::font_config::FontSetup {
+            paths: font_paths,
+            data: font_data,
+            family: font_family,
+        },
         backend,
         prefs,
         app_name.to_owned(),

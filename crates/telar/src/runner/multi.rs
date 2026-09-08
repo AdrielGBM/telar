@@ -11,10 +11,8 @@ use crate::app_config::AppConfig;
 use crate::config;
 use crate::prefs::UserPrefs;
 
+use super::font_config::FontSetup;
 use super::handler::build_app_handler;
-
-/// One surface's fonts, split out of its [`AppConfig`] until its handler is built: the faces to load, and the family among them its text shapes in.
-type SurfaceFonts = (Vec<std::path::PathBuf>, Vec<Vec<u8>>, Option<String>);
 
 /// Drive **N** independent rsx apps on a [`MultiSurfacePlatform`] backend — one reactive tree per surface, the shape a multi-window app or a desktop shell (a bar/OSD/notification per monitor) needs.
 ///
@@ -37,7 +35,7 @@ where
 {
     // Split into the `WindowConfig` the platform needs and the fonts the handler factory needs, keyed by `SurfaceId` and shared read-only across the surface threads.
     let mut window_configs = Vec::with_capacity(surfaces.len());
-    let mut fonts: HashMap<SurfaceId, SurfaceFonts> = HashMap::new();
+    let mut fonts: HashMap<SurfaceId, FontSetup> = HashMap::new();
     for (id, cfg) in surfaces {
         let AppConfig {
             window,
@@ -46,7 +44,14 @@ where
             font_family,
         } = cfg;
         window_configs.push((id, window));
-        fonts.insert(id, (font_paths, font_data, font_family));
+        fonts.insert(
+            id,
+            FontSetup {
+                paths: font_paths,
+                data: font_data,
+                family: font_family,
+            },
+        );
     }
     let fonts = Arc::new(fonts);
     let app_name = app_name.to_owned();
@@ -56,13 +61,11 @@ where
         let paths = paths_factory(id);
         let prefs = UserPrefs::load(&app_name, paths.as_ref());
         let backend = prefs.backend.unwrap_or_else(config::compile_time_backend);
-        let (font_paths, font_data, font_family) = fonts.get(&id).cloned().unwrap_or_default();
+        let fonts = fonts.get(&id).cloned().unwrap_or_default();
         let mut handler = build_app_handler::<P::Window, ()>(
             Box::new(crate::app_runtime::LocalApp(app)),
             paths,
-            font_paths,
-            font_data,
-            font_family,
+            fonts,
             backend,
             prefs,
             app_name.clone(),
@@ -96,12 +99,15 @@ where
         font_data,
         font_family,
     } = fonts;
+    let fonts = FontSetup {
+        paths: font_paths,
+        data: font_data,
+        family: font_family,
+    };
     let mut handler = build_app_handler::<W, ()>(
         Box::new(app),
         paths,
-        font_paths,
-        font_data,
-        font_family,
+        fonts,
         backend,
         prefs,
         app_name.to_string(),

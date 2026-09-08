@@ -100,9 +100,11 @@ where
     let handler = build_app_handler::<P::Window, D>(
         Box::new(crate::app_runtime::LocalApp(app)),
         paths,
-        font_paths,
-        font_data,
-        font_family,
+        crate::runner::font_config::FontSetup {
+            paths: font_paths,
+            data: font_data,
+            family: font_family,
+        },
         backend,
         prefs,
         app_name.to_owned(),

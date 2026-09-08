@@ -17,8 +17,9 @@ mod desktop;
     target_os = "android"
 ))]
 mod dev_window;
-mod font_config;
+pub mod font_config;
 mod frame_thread;
+mod state;
 #[cfg(feature = "hardware")]
 pub(crate) use font_config::offscreen_hardware_font_config;
 mod entry;

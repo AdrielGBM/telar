@@ -104,7 +104,12 @@ impl TextureUi {
         scale: f32,
         build: impl FnOnce() -> Result<Box<dyn LayoutItem>, LayoutError>,
     ) -> Result<Self, TextureUiError> {
-        Self::with_fonts(target, scale, Vec::new(), Vec::new(), None, build)
+        Self::with_fonts(
+            target,
+            scale,
+            crate::runner::font_config::FontSetup::default(),
+            build,
+        )
     }
 
     /// [`new`](Self::new) carrying fonts of its own — `font_paths` on disk, `font_data` embedded, and `font_family` naming which of them its text shapes in — in the same shape [`AppConfig`](crate::AppConfig) takes them. The reason to reach for it is a face drawn on a pixel grid, to pair with [`Raster::Pixel`](crate::Raster::Pixel).
@@ -115,9 +120,7 @@ impl TextureUi {
     pub fn with_fonts(
         target: wgpu::Texture,
         scale: f32,
-        font_paths: Vec<std::path::PathBuf>,
-        font_data: Vec<Vec<u8>>,
-        font_family: Option<String>,
+        fonts: crate::runner::font_config::FontSetup,
         build: impl FnOnce() -> Result<Box<dyn LayoutItem>, LayoutError>,
     ) -> Result<Self, TextureUiError> {
         // The tree built below measures its text, and a texture UI can be the only Telar in the process — there may be no runner that installed a measurer.
@@ -127,7 +130,7 @@ impl TextureUi {
             target,
             None,
             false,
-            crate::runner::offscreen_hardware_font_config(font_paths, font_data, font_family),
+            crate::runner::offscreen_hardware_font_config(fonts),
         )?;
 
         let surface = Surface::new();

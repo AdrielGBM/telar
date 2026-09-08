@@ -71,6 +71,9 @@ pub use platform_core::{AppCtx, RedrawWaker};
 // For a backend author driving a handler by hand. An application implements `App` and names neither.
 #[cfg(feature = "runtime")]
 pub use app_runtime::{AppRuntime, LocalApp};
+// The faces a surface loads and the family it shapes in — what an `AppConfig` carries, as one value, for the seams that take it directly.
+#[cfg(feature = "runtime")]
+pub use runner::font_config::FontSetup;
 #[cfg(feature = "runtime")]
 pub use ui_tree::{DevAction, DevPlugin};
 

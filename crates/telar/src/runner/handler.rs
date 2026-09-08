@@ -17,6 +17,7 @@ use super::COMMAND_BUF_POOL_CAP;
 use super::font_config::{SystemFonts, build_font_config};
 use super::frame_thread::FrameMsg;
 use super::host::{RawHandles, RendererHost, RendererRequest, RendererStart, SurfaceRenderer};
+use super::state::{AppEnv, FramePacer};
 use super::{FRAME_BUDGET, HW_KEEPALIVE_INTERVAL, IDLE_GRACE};
 
 pub(super) struct AppHandler<W, D: DevPlugin>
@@ -36,16 +37,12 @@ where
     pub(super) renderer_host: Box<dyn RendererHost<W>>,
     // `None` when the window has none, so the entry point that knows the window type supplies this.
     pub(super) raw_handles: Option<RawHandles<W>>,
-    pub(super) renderer_keepalive: bool,
-    /// Whether this window has the keyboard. The keepalive rides on it: somebody who can type is somebody whose next frame should not wait for the GPU to wake up.
-    pub(super) focused: bool,
-    pub(super) last_input: web_time::Instant,
+    pub(super) pacer: FramePacer,
     // The transparency the live renderer was built for. Only `remount` reads it: asking the app after a rebuild would compare the new answer with itself.
     pub(super) renderer_transparent: bool,
     pub(super) generation: FrameGeneration,
     pub(super) backend: RendererBackend,
-    pub(super) prefs: UserPrefs,
-    pub(super) paths: Arc<dyn AppPathsProvider>,
+    pub(super) env: AppEnv,
     pub(super) pending_restart: bool,
     pub(super) _flush_notify: Option<FlushNotifyHandle>,
     pub(super) scale_factor: f32,
@@ -55,16 +52,8 @@ where
     pub(super) redraw_waker: Option<platform_core::RedrawWaker>,
     // Reused across frames, so command scaling allocates neither a fresh Vec nor redundant style Arcs.
     pub(super) scale_scratch: renderer_core::ScaleScratch,
-    pub(super) app_name: String,
-    pub(super) last_frame: web_time::Instant,
-    // Unlike `last_frame`, which advances only on a frame carrying new content, so the pass costs the same however often the platform calls `on_redraw`.
-    pub(super) last_tick: web_time::Instant,
-    // Content or keepalive; paces the keepalive blit.
-    pub(super) last_submit: web_time::Instant,
     pub(super) dev: D,
-    pub(super) font_paths: Vec<std::path::PathBuf>,
-    pub(super) font_data: Vec<Vec<u8>>,
-    pub(super) font_family: Option<String>,
+    pub(super) fonts: super::font_config::FontSetup,
     pub(super) _window: std::marker::PhantomData<W>,
     // Refilled by the send path with buffers the render thread hands back, instead of allocating each frame.
     pub(super) command_buf_pool: Vec<Vec<renderer_core::DrawCommand>>,
@@ -115,9 +104,7 @@ impl FrameGeneration {
 pub(super) fn build_app_handler<W, D>(
     app: Box<dyn AppRuntime>,
     paths: Arc<dyn AppPathsProvider>,
-    font_paths: Vec<std::path::PathBuf>,
-    font_data: Vec<Vec<u8>>,
-    font_family: Option<String>,
+    fonts: super::font_config::FontSetup,
     backend: crate::config::RendererBackend,
     prefs: UserPrefs,
     app_name: String,
@@ -136,34 +123,23 @@ where
         renderer: None,
         renderer_host: host,
         raw_handles,
-        renderer_keepalive: false,
-        // A platform that never reports focus is one whose window is the only thing on screen, so being believed focused is both the safe answer and the true one.
-        focused: true,
-        last_input: web_time::Instant::now(),
+        pacer: FramePacer::default(),
         renderer_transparent: false,
         generation: FrameGeneration::default(),
         backend,
-        prefs,
         pending_restart: false,
         _flush_notify: None,
         scale_factor: 1.0,
         exit_requested: false,
         redraw_waker: None,
         scale_scratch: renderer_core::ScaleScratch::new(),
-        app_name,
-        last_frame: web_time::Instant::now(),
-        // Backdated so the first `on_redraw` after resume composes immediately.
-        last_tick: web_time::Instant::now()
-            .checked_sub(FRAME_BUDGET)
-            .unwrap_or_else(web_time::Instant::now),
-        last_submit: web_time::Instant::now()
-            .checked_sub(HW_KEEPALIVE_INTERVAL)
-            .unwrap_or_else(web_time::Instant::now),
         dev: D::default(),
-        paths,
-        font_paths,
-        font_data,
-        font_family,
+        env: AppEnv {
+            app_name,
+            paths,
+            prefs,
+        },
+        fonts,
         _window: std::marker::PhantomData,
         command_buf_pool: Vec::new(),
         frame_text: Vec::new(),
@@ -296,15 +272,13 @@ where
         let request = RendererRequest {
             backend,
             transparent,
-            font_paths: &self.font_paths,
-            font_data: &self.font_data,
-            font_family: self.font_family.as_deref(),
-            paths: self.paths.as_ref(),
-            app_name: &self.app_name,
+            fonts: &self.fonts,
+            paths: self.env.paths.as_ref(),
+            app_name: &self.env.app_name,
         };
         match self.renderer_host.start(window, &request) {
             RendererStart::Started { keepalive, label } => {
-                self.renderer_keepalive = keepalive;
+                self.pacer.renderer_keepalive = keepalive;
                 self.dev.set_renderer_info(label);
                 // A renderer that cannot leave this thread is driven here. `channels()` stays empty, which routes the frame to `render_inline`.
                 self.renderer = self.renderer_host.take_inline();
@@ -330,7 +304,7 @@ where
         };
         match outcome {
             RendererStart::Started { keepalive, label } => {
-                self.renderer_keepalive = keepalive;
+                self.pacer.renderer_keepalive = keepalive;
                 self.dev.set_renderer_info(label);
             }
             RendererStart::Building => {}
@@ -355,6 +329,7 @@ where
         self.pending_restart = false;
         self.renderer_transparent = self.is_transparent();
         self.backend = self
+            .env
             .prefs
             .backend
             .unwrap_or_else(config::compile_time_backend);
@@ -374,7 +349,9 @@ where
         if self.dev.keepalive_interval().is_some() {
             return true;
         }
-        self.renderer_keepalive && self.focused && self.last_input.elapsed() < IDLE_GRACE
+        self.pacer.renderer_keepalive
+            && self.pacer.focused
+            && self.pacer.last_input.elapsed() < IDLE_GRACE
     }
 
     /// Whether to submit a frame now, and whether it carries new content. The second of the pass's three clocks: the frame budget gates the whole pass, this gates submission, `about_to_wait` reports the next wake. `None` means skip this turn.
@@ -391,7 +368,7 @@ where
             .dev
             .keepalive_interval()
             .unwrap_or(HW_KEEPALIVE_INTERVAL);
-        if !has_content && now.duration_since(self.last_submit) < keepalive_interval {
+        if !has_content && now.duration_since(self.pacer.last_submit) < keepalive_interval {
             return None;
         }
         Some(has_content)
@@ -458,10 +435,10 @@ where
     /// Ahead of every other phase because everything below it composes a frame: a platform may call `on_redraw` every loop turn, and the tick's own writes notify it to redraw again, so an ungated pass would free-run instead of sleeping.
     fn claim_frame_budget(&mut self) -> Option<web_time::Instant> {
         let now = web_time::Instant::now();
-        if now.duration_since(self.last_tick) < FRAME_BUDGET {
+        if now.duration_since(self.pacer.last_tick) < FRAME_BUDGET {
             return None;
         }
-        self.last_tick = now;
+        self.pacer.last_tick = now;
         Some(now)
     }
 
@@ -516,10 +493,10 @@ where
     /// The reactive flush lands here rather than in [`build_frame`](Self::build_frame) so `clear_color` and the draw commands come from one pass: without it a redraw firing before `about_to_wait` reads the new colour against commands from the previous `view()`. [`FramePass::generation`] is stamped after that flush, since the number has to describe the commands this frame ships and the effects deciding them have only just run.
     fn open_frame_pass(&mut self, now: web_time::Instant, window: &W) -> Option<FramePass> {
         let has_content = self.frame_is_due(now)?;
-        self.last_submit = now;
+        self.pacer.last_submit = now;
         // Keepalive blits must not reset the budget clock, which would delay the next content render.
         if has_content {
-            self.last_frame = now;
+            self.pacer.last_frame = now;
         }
         let size = (window.width(), window.height());
         tracing::debug!(
@@ -642,13 +619,8 @@ where
         // Before the tree measures a word of text. Building a renderer loads them too — which is what makes measure and draw agree — but a hardware renderer builds on its own thread, so the first layout would be sized in the platform's fonts. A renderer that does not shape glyphs skips the scan, keeping its own measurer.
         #[cfg(feature = "shaper")]
         if self.renderer_host.shapes_text() {
-            let system_fonts = SystemFonts::from_provider(self.paths.as_ref());
-            renderer_text::fonts::install(build_font_config(
-                self.font_paths.clone(),
-                self.font_data.clone(),
-                self.font_family.clone(),
-                &system_fonts,
-            ));
+            let system_fonts = SystemFonts::from_provider(self.env.paths.as_ref());
+            renderer_text::fonts::install(build_font_config(self.fonts.clone(), &system_fonts));
         }
         // Offscreen windows have no surface for a windowed renderer to create, so they rasterize into a CPU pixmap regardless of the configured backend and need no GPU adapter.
         let renderer_ok = if window.is_offscreen() {
@@ -656,11 +628,9 @@ where
             let request = RendererRequest {
                 backend: self.backend,
                 transparent,
-                font_paths: &self.font_paths,
-                font_data: &self.font_data,
-                font_family: self.font_family.as_deref(),
-                paths: self.paths.as_ref(),
-                app_name: &self.app_name,
+                fonts: &self.fonts,
+                paths: self.env.paths.as_ref(),
+                app_name: &self.env.app_name,
             };
             self.renderer = self.renderer_host.build_offscreen(window, &request);
             self.renderer.is_some()
@@ -728,7 +698,7 @@ where
         ui_core::observe_pointer(&event);
         // Kept here rather than in the match below, because it reads across events the runner lets straight through.
         if let Event::FocusChanged { is_focused } = &event {
-            self.focused = *is_focused;
+            self.pacer.focused = *is_focused;
         }
         if matches!(
             event,
@@ -739,7 +709,7 @@ where
                 | Event::PointerReleased { .. }
                 | Event::Scrolled { .. }
         ) {
-            self.last_input = web_time::Instant::now();
+            self.pacer.last_input = web_time::Instant::now();
         }
         // Matched once. As four sequential `if let`s it re-tested the same value each time, and the two that end the dispatch read as guards on the ones above them rather than exits.
         match &event {
@@ -755,14 +725,12 @@ where
             Event::KeyPressed { key, modifiers } => match self.dev.on_key(key, *modifiers) {
                 DevAction::Redraw => window.request_redraw(),
                 DevAction::ToggleBackend => {
-                    let next = match self.prefs.backend.unwrap_or(RendererBackend::Auto) {
+                    let next = match self.env.prefs.backend.unwrap_or(RendererBackend::Auto) {
                         RendererBackend::Hardware => RendererBackend::Software,
                         _ => RendererBackend::Hardware,
                     };
-                    self.prefs.backend = Some(next);
-                    if let Err(e) = self.prefs.save(&self.app_name, self.paths.as_ref()) {
-                        tracing::warn!("Could not save preferences: {e}");
-                    }
+                    self.env.prefs.backend = Some(next);
+                    self.env.save_prefs();
                     match next {
                         RendererBackend::Software => self.pending_restart = true,
                         // Straight to a background build, so the running renderer keeps presenting until the new one lands.
@@ -845,7 +813,7 @@ where
         // An unsettled animation must keep the loop scheduling frames even while the tree is momentarily clean.
         if tree_dirty || self.app.motion_has_active() || self.app.motion_has_continuous() {
             // Against `last_tick`, the clock `on_redraw` gates on: reporting a deadline the pass would decline wakes the loop early and it spins re-asking.
-            Some(FRAME_BUDGET.saturating_sub(self.last_tick.elapsed()))
+            Some(FRAME_BUDGET.saturating_sub(self.pacer.last_tick.elapsed()))
         } else {
             if let Some(interval) = self.dev.keepalive_interval() {
                 // The dev plugin drives its own cadence.

@@ -23,9 +23,7 @@ fn handler() -> AppHandler<HeadlessWindow, ()> {
     build_app_handler::<HeadlessWindow, ()>(
         Box::new(LocalApp(Unchanging)),
         Arc::new(services_core::NoPaths),
-        Vec::new(),
-        Vec::new(),
-        None,
+        crate::runner::font_config::FontSetup::default(),
         RendererBackend::Software,
         UserPrefs::default(),
         "generation-test".to_string(),
@@ -37,21 +35,21 @@ fn handler() -> AppHandler<HeadlessWindow, ()> {
 #[test]
 fn the_gpu_is_held_awake_for_whoever_is_there_to_notice() {
     let mut handler = handler();
-    handler.renderer_keepalive = true;
+    handler.pacer.renderer_keepalive = true;
 
     assert!(
         handler.keepalive_due(),
         "a focused window keeps the GPU warm however long it has been still"
     );
 
-    handler.focused = false;
+    handler.pacer.focused = false;
     assert!(
         !handler.keepalive_due(),
         "a window nobody is looking at will not be typed into"
     );
 
-    handler.focused = true;
-    handler.last_input = web_time::Instant::now() - IDLE_GRACE - FRAME_BUDGET;
+    handler.pacer.focused = true;
+    handler.pacer.last_input = web_time::Instant::now() - IDLE_GRACE - FRAME_BUDGET;
     assert!(
         !handler.keepalive_due(),
         "a window left focused and abandoned sleeps on the backstop"
@@ -62,7 +60,7 @@ fn the_gpu_is_held_awake_for_whoever_is_there_to_notice() {
 #[test]
 fn the_rasteriser_never_asks_for_an_idle_frame() {
     let mut handler = handler();
-    handler.renderer_keepalive = false;
+    handler.pacer.renderer_keepalive = false;
     assert!(
         !handler.keepalive_due(),
         "a rasterising run draws on demand, never on a timer"
@@ -100,9 +98,7 @@ fn new_commands_never_go_out_under_the_previous_generation() {
     let mut handler = build_app_handler::<HeadlessWindow, ()>(
         Box::new(LocalApp(Tinted(tint))),
         Arc::new(services_core::NoPaths),
-        Vec::new(),
-        Vec::new(),
-        None,
+        crate::runner::font_config::FontSetup::default(),
         RendererBackend::Software,
         UserPrefs::default(),
         "generation-test".to_string(),
@@ -207,22 +203,22 @@ fn a_clean_tree_with_a_continuous_region_is_still_worth_a_frame() {
     // Forced open before each pass: this is about what counts as content, not about the frame clock.
     let opened = || web_time::Instant::now() - FRAME_BUDGET * 2;
 
-    handler.last_tick = opened();
+    handler.pacer.last_tick = opened();
     handler.on_redraw(&window);
-    let first = handler.last_submit;
+    let first = handler.pacer.last_submit;
 
-    handler.last_tick = opened();
+    handler.pacer.last_tick = opened();
     handler.on_redraw(&window);
     assert_eq!(
-        handler.last_submit, first,
+        handler.pacer.last_submit, first,
         "a clean tree with nothing else to say must not submit a frame"
     );
 
     let _awake = motion_core::Continuous::new();
-    handler.last_tick = opened();
+    handler.pacer.last_tick = opened();
     handler.on_redraw(&window);
     assert!(
-        handler.last_submit > first,
+        handler.pacer.last_submit > first,
         "the region says the picture changed even though the tree cannot, so this frame had to go out"
     );
 }

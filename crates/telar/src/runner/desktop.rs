@@ -86,9 +86,7 @@ pub fn open_window<A: App>(app: A) -> SurfaceToken {
     let mut handler = super::handler::build_app_handler::<WinitWindow, ()>(
         Box::new(crate::app_runtime::LocalApp(app)),
         paths,
-        Vec::new(),
-        Vec::new(),
-        None,
+        crate::runner::font_config::FontSetup::default(),
         backend,
         prefs,
         "telar-window".to_string(),
