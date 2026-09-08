@@ -82,7 +82,13 @@ fn labels(result: &Value) -> Vec<String> {
 async fn completion_answers_from_the_overlay_rather_than_from_disk() {
     let workspace = Workspace::create("overlay");
     let lib_rs = workspace.lib_rs();
-    let inner = Inner::start(&workspace.0).expect("rust-analyzer failed to start");
+    let (tx, _editor) = tokio::sync::mpsc::unbounded_channel();
+    let inner = Inner::start(
+        &workspace.0,
+        Value::Null,
+        crate::rpc::OutgoingSender::new(tx),
+    )
+    .expect("rust-analyzer failed to start");
 
     inner.sync(&lib_rs, IN_FLIGHT);
 

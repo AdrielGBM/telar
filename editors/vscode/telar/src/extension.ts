@@ -3,15 +3,6 @@ import * as fs from "fs";
 import * as os from "os";
 import * as vscode from "vscode";
 import { exec } from "child_process";
-import {
-  LanguageClient,
-  LanguageClientOptions,
-  ServerOptions,
-  State,
-  TransportKind,
-} from "vscode-languageclient/node";
-
-let client: LanguageClient | undefined;
 
 const PATCHED_VERSION_KEY = "telar.patchedServerVersion";
 
@@ -28,69 +19,9 @@ export async function activate(
 
   warnIfToolchainMissing();
 
-  const serverOptions: ServerOptions = {
-    command: serverPath,
-    transport: TransportKind.stdio,
-  };
+  await handOverToRustAnalyzer(serverPath);
 
-  const clientOptions: LanguageClientOptions = {
-    documentSelector: [{ scheme: "file", language: "rsx" }],
-    // The embedded rust-analyzer loads hand-written Rust once, so the server needs didChangeWatchedFiles to refresh it — the LSP never sends didChange for non-`.rsx` files.
-    // A lockfile change (e.g. `cargo add`) shifts the dependency graph, so it forces a full reload just like `Cargo.toml`. Watched `.rsx` events keep the workspace symbol index fresh.
-    // The `.rs` globs follow cargo's source layout instead of `**`: every workspace load runs `cargo check`, which writes generated `.rs` under `target/`, and watching those would feed a reload loop.
-    synchronize: {
-      fileEvents: [
-        vscode.workspace.createFileSystemWatcher("**/*.rsx"),
-        vscode.workspace.createFileSystemWatcher("**/src/**/*.rs"),
-        vscode.workspace.createFileSystemWatcher("**/build.rs"),
-        vscode.workspace.createFileSystemWatcher("**/Cargo.toml"),
-        vscode.workspace.createFileSystemWatcher("**/Cargo.lock"),
-      ],
-    },
-  };
-
-  client = new LanguageClient(
-    "telar-analyzer",
-    "telar-analyzer",
-    serverOptions,
-    clientOptions,
-  );
-
-  // Status bar item reflecting the LSP connection state. The listener MUST be attached before
-  // `client.start()`: for a local stdio server the Starting→Running transition can complete before a
-  // post-start listener exists, which left the item stuck on the spinner (never reaching the check).
-  // Clicking it reveals the server log. (The embedded-analyzer "workspace ready" state — logged there
-  // ~15s after connect — is a future refinement to surface here.)
-  const status = vscode.window.createStatusBarItem(
-    vscode.StatusBarAlignment.Left,
-    100,
-  );
-  status.text = "$(loading~spin) rsx";
-  status.tooltip = "telar-analyzer language server — click to show its log";
-  status.command = "telar.showServerLog";
-  status.show();
-  context.subscriptions.push(status);
-  context.subscriptions.push(
-    client.onDidChangeState((e) => {
-      if (e.newState === State.Running) status.text = "$(check) rsx";
-      else if (e.newState === State.Starting)
-        status.text = "$(loading~spin) rsx";
-      else status.text = "$(error) rsx";
-    }),
-  );
-  context.subscriptions.push(
-    vscode.commands.registerCommand("telar.showServerLog", () =>
-      client?.outputChannel.show(),
-    ),
-  );
-
-  // Hover, go-to-definition and Rust diagnostics for `[logic]`/`[view]` are now served in-process by
-  // the telar-analyzer LSP via its embedded rust-analyzer (T-C1), so there are no client-side bridges:
-  // the LSP is the single source of truth, with no duplicate providers or cross-process diagnostics race.
-  client.start();
-  context.subscriptions.push(client);
-
-  // Project the stock rust-analyzer's `cargo check` errors (which land on the generated
+  // Project the `cargo check` errors that land on the generated `.telar/build/*.rs` back onto the `.rsx`.
   // `.telar/build/*.rs`) back onto the `.rsx`. This reuses the check the user's rust-analyzer already runs
   // on save — no duplicate cargo check — and gives clean, cascade-free semantic errors (wrong fn names,
   // unknown tags, type mismatches) on the source line. Our LSP keeps providing instant syntax errors.
@@ -237,9 +168,33 @@ function findCrateDir(file: string): string | undefined {
   }
 }
 
-export function deactivate(): Thenable<void> | undefined {
-  return client?.stop();
+/// telar-analyzer answers for `.rs` and `.rsx` from one process, so it has to be the binary rust-analyzer's own extension launches — starting a client of our own here would put a second rust-analyzer beside it, each with its own index of the same crates. Its client selects `rust` only; the server registers the `.rsx` documents with it at runtime.
+async function handOverToRustAnalyzer(serverPath: string): Promise<void> {
+  const ra = vscode.extensions.getExtension("rust-lang.rust-analyzer");
+  if (!ra) {
+    vscode.window.showErrorMessage(
+      "Telar needs the rust-analyzer extension installed: it is the client that drives telar-analyzer, for .rsx as much as for .rs.",
+    );
+    return;
+  }
+  const api = await ra.activate();
+  if (typeof api?.addConfiguration !== "function") {
+    vscode.window.showWarningMessage(
+      `This rust-analyzer build cannot be pointed at telar-analyzer automatically. Set "rust-analyzer.server.path" to ${serverPath} for .rsx support.`,
+    );
+    return;
+  }
+  // Only when it is not already ours. Setting it again is not free: rust-analyzer compares its before and after configuration by reference, and two deep clones never match, so any call reports `rust-analyzer.server` as changed and prompts for a restart — on every window, forever.
+  if (api.serverPath === serverPath) {
+    return;
+  }
+  // Ignored if the user has set `rust-analyzer.server.path` themselves, at any scope — theirs wins, and rust-analyzer logs that it skipped ours.
+  await api.addConfiguration("telar.telar-analyzer", {
+    "server.path": serverPath,
+  });
 }
+
+export function deactivate(): void {}
 
 // === server discovery ======================================================
 

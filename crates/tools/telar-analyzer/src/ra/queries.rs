@@ -27,7 +27,13 @@ impl Analyzer {
         };
         // A `CompletionList` when rust-analyzer flags incompleteness, a bare array otherwise.
         let items = result.get("items").cloned().unwrap_or(result);
-        serde_json::from_value(items).unwrap_or_default()
+        let mut items: Vec<CompletionItem> = serde_json::from_value(items).unwrap_or_default();
+        for item in &mut items {
+            // Both carry ranges in generated-file coordinates, which land nowhere near the cursor once the editor reads them against the `.rsx`: it drops such an item without a word, so the list looks empty however good the answer was. Without them the client inserts at the cursor itself.
+            item.text_edit = None;
+            item.additional_text_edits = None;
+        }
+        items
     }
 
     pub async fn signature_help(
@@ -198,5 +204,23 @@ fn whole_of(text: &str) -> Range {
             character: 0,
         },
         end: crate::text::offset_to_position(text, text.len()),
+    }
+}
+
+impl Analyzer {
+    /// Rust symbols for a `workspace/symbol` query. Ours knows the `.rsx` components and rust-analyzer knows the Rust, so neither answer is complete on its own.
+    pub async fn workspace_symbols(&self, query: &str) -> Vec<lsp_types::SymbolInformation> {
+        let Some(result) = self
+            .inner
+            .request(
+                "workspace/symbol",
+                json!({ "query": query }),
+                super::QUERY_TIMEOUT,
+            )
+            .await
+        else {
+            return Vec::new();
+        };
+        serde_json::from_value(result).unwrap_or_default()
     }
 }

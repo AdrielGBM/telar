@@ -5,6 +5,7 @@ use std::sync::Arc;
 use std::sync::atomic::Ordering;
 
 use lsp_types::*;
+use serde_json::Value;
 use telar_diagnostics::semantic_diagnostics;
 
 use crate::index::WorkspaceIndex;
@@ -25,10 +26,17 @@ impl AnalyzerHandle {
             }
         }
 
+        let options = self
+            .options
+            .lock()
+            .map(|options| options.clone())
+            .unwrap_or(Value::Null);
+        let outgoing = self.outgoing.clone();
         // Off the runtime thread: the handshake waits on another thread's reply, and workspace discovery walks the filesystem.
-        let started = tokio::task::spawn_blocking(move || Analyzer::start(&root))
-            .await
-            .ok()?;
+        let started =
+            tokio::task::spawn_blocking(move || Analyzer::start(&root, options, outgoing))
+                .await
+                .ok()?;
 
         let mut state = self.state.lock().ok()?;
         match started {
@@ -45,6 +53,20 @@ impl AnalyzerHandle {
                 );
                 None
             }
+        }
+    }
+
+    /// The running analyzer, without booting one. The passthrough uses this: an editor request for a `.rs` file cannot sit waiting on a workspace load, and `initialize` has already started the boot.
+    pub(crate) fn ready(&self) -> Option<Arc<Analyzer>> {
+        match &*self.state.lock().ok()? {
+            AnalyzerState::Ready(analyzer) => Some(analyzer.clone()),
+            _ => None,
+        }
+    }
+    /// Records the editor's `initializationOptions` for the session we boot. Written once from `initialize`, before any query can ask for the analyzer.
+    pub(crate) fn set_options(&self, options: Value) {
+        if let Ok(mut slot) = self.options.lock() {
+            *slot = options;
         }
     }
 

@@ -6,8 +6,10 @@ use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 use lsp_types::{InlayHintKind, Range};
+use serde_json::Value;
 
 use crate::inner::Inner;
+use crate::rpc::OutgoingSender;
 
 mod queries;
 
@@ -42,10 +44,26 @@ pub struct Analyzer {
 }
 
 impl Analyzer {
-    /// Boots rust-analyzer over the workspace at `root`. Blocking; callers run it off the runtime thread.
-    pub fn start(root: &Path) -> anyhow::Result<Self> {
+    /// Boots rust-analyzer over the workspace at `root`, handing it the editor's own `initializationOptions`. Blocking; callers run it off the runtime thread.
+    pub fn start(root: &Path, options: Value, outgoing: OutgoingSender) -> anyhow::Result<Self> {
         Ok(Self {
-            inner: Inner::start(root)?,
+            inner: Inner::start(root, options, outgoing)?,
         })
+    }
+
+    pub fn capabilities(&self) -> &Value {
+        self.inner.capabilities()
+    }
+
+    pub fn pass_request(&self, id: Value, method: &str, params: Value) {
+        self.inner.pass_request(id, method, params);
+    }
+
+    pub fn pass_notification(&self, method: &str, params: Value) {
+        self.inner.notify(method, params);
+    }
+
+    pub fn relay_reply(&self, id: i32, result: Option<Value>, error: Option<Value>) {
+        self.inner.relay_reply(id, result, error);
     }
 }

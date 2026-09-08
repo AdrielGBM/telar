@@ -1,11 +1,12 @@
 //! The LSP backend: the server state, and the request handlers that split work between the native `.rsx` analysis and the embedded rust-analyzer.
 
 use std::path::{Path, PathBuf};
+use std::str::FromStr;
 use std::sync::atomic::AtomicU64;
 use std::sync::{Arc, Mutex};
 
 use lsp_types::*;
-use serde_json::json;
+use serde_json::{Value, json};
 use tokio::sync::RwLock;
 
 use crate::analysis::completions::{
@@ -43,11 +44,41 @@ enum AnalyzerState {
 pub(crate) struct AnalyzerHandle {
     state: Mutex<AnalyzerState>,
     outgoing: OutgoingSender,
+    /// The editor's `initializationOptions`, kept so the user's `rust-analyzer.*` settings reach the session we boot rather than its defaults.
+    options: Mutex<serde_json::Value>,
 }
 
 /// Whether `path` sits inside a cargo build directory. rust-analyzer runs `cargo check` to discover build scripts, which writes generated `.rs` under `target/`; treating those as `.rsx` neighbours would churn the symbol index for files nobody wrote. The client cannot be trusted to exclude them — a non-VS Code editor registers its own watchers.
 fn is_under_target_dir(path: &Path) -> bool {
     path.components().any(|c| c.as_os_str() == "target")
+}
+
+/// The workspace the editor opened, from whichever of the three fields it filled in.
+fn workspace_root(params: &Value) -> Option<PathBuf> {
+    let uri = params.get("rootUri").and_then(Value::as_str).or_else(|| {
+        params
+            .pointer("/workspaceFolders/0/uri")
+            .and_then(Value::as_str)
+    });
+    if let Some(uri) = uri
+        && let Ok(uri) = Uri::from_str(uri)
+        && let Some(path) = crate::uri::to_path(&uri)
+    {
+        return Some(path);
+    }
+    params
+        .get("rootPath")
+        .and_then(Value::as_str)
+        .map(PathBuf::from)
+}
+
+/// The capabilities the editor is offered — rust-analyzer's alone, deliberately: the client's own document selector is `rust`, so anything advertised here is a promise about `.rs` files, and promising what only the `.rsx` side implements has the editor ask rust-analyzer for colours and document links it does not serve. Everything of ours reaches the editor through the `.rsx` registrations instead.
+fn merge_capabilities(theirs: &Value, ours: Value) -> Value {
+    match theirs.is_object() {
+        true => theirs.clone(),
+        // No session to speak for `.rs`, so ours is all there is.
+        false => ours,
+    }
 }
 
 /// Server-side docs for one batch of rust-analyzer completion items, keyed by generation. The wire items are sent without documentation (lean list); `completionItem/resolve` re-attaches it from here. A new completion batch bumps `generation`, invalidating the previous batch's `data` references.
@@ -68,6 +99,10 @@ pub struct Backend {
     completion_cache: Arc<Mutex<CompletionCache>>,
     // A spawned diagnostics task captures the value it was queued for and bails before the round-trip if a newer edit superseded it, so keystroke-rate edits do not pile up.
     revision: Arc<AtomicU64>,
+    // Our semantic token types as indices into the legend actually advertised, which is rust-analyzer's. `None` until `initialize` has one to map against.
+    token_types: Mutex<Option<Vec<u32>>>,
+    // The capabilities actually advertised, so the `.rsx` registrations can reuse the shapes already negotiated — the semantic token legend above all, which has to be the one the editor decodes against.
+    advertised: Mutex<Option<Value>>,
 }
 
 impl Backend {
@@ -77,12 +112,15 @@ impl Backend {
             analyzer: Arc::new(AnalyzerHandle {
                 state: Mutex::new(AnalyzerState::Idle),
                 outgoing: outgoing.clone(),
+                options: Mutex::new(serde_json::Value::Null),
             }),
             outgoing,
             store: Arc::new(RwLock::new(Store::new())),
             index: Arc::new(Mutex::new(None)),
             completion_cache: Arc::new(Mutex::new(CompletionCache::default())),
             revision: Arc::new(AtomicU64::new(0)),
+            token_types: Mutex::new(None),
+            advertised: Mutex::new(None),
         }
     }
 
@@ -94,76 +132,239 @@ impl Backend {
         self.analyzer.release();
     }
 
-    pub fn initialize(&self) -> InitializeResult {
-        InitializeResult {
-            capabilities: ServerCapabilities {
-                text_document_sync: Some(TextDocumentSyncCapability::Kind(
-                    TextDocumentSyncKind::FULL,
-                )),
-                completion_provider: Some(CompletionOptions {
-                    trigger_characters: Some(vec![
-                        "@".to_string(),
-                        "$".to_string(),
-                        ".".to_string(),
-                        ":".to_string(),
-                        " ".to_string(),
-                        "\"".to_string(),
-                    ]),
-                    // Deferred to `completionItem/resolve`, so the list stays lean on the wire.
-                    resolve_provider: Some(true),
-                    ..Default::default()
-                }),
-                signature_help_provider: Some(SignatureHelpOptions {
-                    trigger_characters: Some(vec!["(".to_string(), ",".to_string()]),
-                    retrigger_characters: None,
-                    work_done_progress_options: Default::default(),
-                }),
-                hover_provider: Some(HoverProviderCapability::Simple(true)),
-                definition_provider: Some(OneOf::Left(true)),
-                document_formatting_provider: Some(OneOf::Left(true)),
-                document_range_formatting_provider: Some(OneOf::Left(true)),
-                selection_range_provider: Some(SelectionRangeProviderCapability::Simple(true)),
-                color_provider: Some(ColorProviderCapability::Simple(true)),
-                document_symbol_provider: Some(OneOf::Left(true)),
-                folding_range_provider: Some(FoldingRangeProviderCapability::Simple(true)),
-                code_action_provider: Some(CodeActionProviderCapability::Simple(true)),
-                code_lens_provider: Some(CodeLensOptions {
-                    resolve_provider: Some(false),
-                }),
-                document_link_provider: Some(DocumentLinkOptions {
-                    resolve_provider: Some(false),
-                    work_done_progress_options: Default::default(),
-                }),
-                inlay_hint_provider: Some(OneOf::Left(true)),
-                document_highlight_provider: Some(OneOf::Left(true)),
-                references_provider: Some(OneOf::Left(true)),
-                rename_provider: Some(OneOf::Right(RenameOptions {
-                    prepare_provider: Some(true),
-                    work_done_progress_options: Default::default(),
-                })),
-                workspace_symbol_provider: Some(OneOf::Left(true)),
-                semantic_tokens_provider: Some(
-                    SemanticTokensServerCapabilities::SemanticTokensOptions(
-                        SemanticTokensOptions {
-                            legend: SemanticTokensLegend {
-                                token_types: crate::analysis::semantic_tokens::token_types(),
-                                token_modifiers: vec![],
-                            },
-                            full: Some(SemanticTokensFullOptions::Bool(true)),
-                            range: Some(false),
-                            work_done_progress_options: Default::default(),
-                        },
-                    ),
-                ),
+    /// What the `.rsx` side alone can do. Merged with rust-analyzer's before it reaches the editor, which only ever sees one set for both languages.
+    fn own_capabilities(&self) -> ServerCapabilities {
+        ServerCapabilities {
+            text_document_sync: Some(TextDocumentSyncCapability::Kind(TextDocumentSyncKind::FULL)),
+            completion_provider: Some(CompletionOptions {
+                trigger_characters: Some(vec![
+                    "@".to_string(),
+                    "$".to_string(),
+                    ".".to_string(),
+                    ":".to_string(),
+                    " ".to_string(),
+                    "\"".to_string(),
+                ]),
+                // Deferred to `completionItem/resolve`, so the list stays lean on the wire.
+                resolve_provider: Some(true),
                 ..Default::default()
-            },
+            }),
+            signature_help_provider: Some(SignatureHelpOptions {
+                trigger_characters: Some(vec!["(".to_string(), ",".to_string()]),
+                retrigger_characters: None,
+                work_done_progress_options: Default::default(),
+            }),
+            hover_provider: Some(HoverProviderCapability::Simple(true)),
+            definition_provider: Some(OneOf::Left(true)),
+            document_formatting_provider: Some(OneOf::Left(true)),
+            document_range_formatting_provider: Some(OneOf::Left(true)),
+            selection_range_provider: Some(SelectionRangeProviderCapability::Simple(true)),
+            color_provider: Some(ColorProviderCapability::Simple(true)),
+            document_symbol_provider: Some(OneOf::Left(true)),
+            folding_range_provider: Some(FoldingRangeProviderCapability::Simple(true)),
+            code_action_provider: Some(CodeActionProviderCapability::Simple(true)),
+            code_lens_provider: Some(CodeLensOptions {
+                resolve_provider: Some(false),
+            }),
+            document_link_provider: Some(DocumentLinkOptions {
+                resolve_provider: Some(false),
+                work_done_progress_options: Default::default(),
+            }),
+            inlay_hint_provider: Some(OneOf::Left(true)),
+            document_highlight_provider: Some(OneOf::Left(true)),
+            references_provider: Some(OneOf::Left(true)),
+            rename_provider: Some(OneOf::Right(RenameOptions {
+                prepare_provider: Some(true),
+                work_done_progress_options: Default::default(),
+            })),
+            workspace_symbol_provider: Some(OneOf::Left(true)),
+            semantic_tokens_provider: Some(
+                SemanticTokensServerCapabilities::SemanticTokensOptions(SemanticTokensOptions {
+                    legend: SemanticTokensLegend {
+                        token_types: crate::analysis::semantic_tokens::token_types(),
+                        token_modifiers: vec![],
+                    },
+                    full: Some(SemanticTokensFullOptions::Bool(true)),
+                    range: Some(false),
+                    work_done_progress_options: Default::default(),
+                }),
+            ),
             ..Default::default()
         }
     }
 
+    /// The editor's `initialize`. rust-analyzer is booted here rather than on the first `.rsx` query, because the reply has to advertise what it can do for `.rs` alongside what we do for `.rsx` — the editor gets one capability set for both. A boot that fails is not fatal: `.rsx` keeps its native analysis, and the editor is told what it lost.
+    pub async fn initialize(&self, params: Value) -> Value {
+        self.analyzer.set_options(
+            params
+                .get("initializationOptions")
+                .cloned()
+                .unwrap_or(Value::Null),
+        );
+        let ours = serde_json::to_value(self.own_capabilities()).unwrap_or_else(|_| json!({}));
+        let analyzer = match workspace_root(&params) {
+            Some(root) => self.analyzer.get(root).await,
+            None => None,
+        };
+        let Some(analyzer) = analyzer else {
+            self.outgoing.show_message(
+                MessageType::WARNING,
+                "telar-analyzer: rust-analyzer did not start. .rsx files still work; Rust files have no analysis until it does. Clearing rust-analyzer.server.path restores the bundled server.",
+            );
+            return json!({ "capabilities": ours });
+        };
+        let mut merged = merge_capabilities(analyzer.capabilities(), ours);
+        self.adopt_token_legend(&mut merged);
+        if let Ok(mut slot) = self.advertised.lock() {
+            *slot = Some(merged.clone());
+        }
+        json!({ "capabilities": merged })
+    }
+
+    /// Rewrites our semantic token types as indices into the legend actually advertised. The editor decodes every token against that one legend, so ours have to speak rust-analyzer's numbering; a type it does not carry is appended rather than guessed at.
+    fn adopt_token_legend(&self, merged: &mut Value) {
+        let Some(names) = merged
+            .pointer_mut("/semanticTokensProvider/legend/tokenTypes")
+            .and_then(Value::as_array_mut)
+        else {
+            return;
+        };
+        let mut map = Vec::new();
+        for kind in crate::analysis::semantic_tokens::token_types() {
+            let name = kind.as_str();
+            let at = names
+                .iter()
+                .position(|known| known.as_str() == Some(name))
+                .unwrap_or_else(|| {
+                    names.push(json!(name));
+                    names.len() - 1
+                });
+            map.push(at as u32);
+        }
+        if let Ok(mut slot) = self.token_types.lock() {
+            *slot = Some(map);
+        }
+    }
+
+    /// Hands an editor request to rust-analyzer. Reports whether there was one to hand it to; the reply travels back through the read loop under the editor's own id.
+    pub fn pass_request(&self, id: Value, method: &str, params: Value) -> bool {
+        match self.analyzer.ready() {
+            Some(analyzer) => {
+                analyzer.pass_request(id, method, params);
+                true
+            }
+            None => false,
+        }
+    }
+
+    pub fn pass_notification(&self, method: &str, params: Value) {
+        if let Some(analyzer) = self.analyzer.ready() {
+            analyzer.pass_notification(method, params);
+        }
+    }
+
+    pub fn relay_reply(&self, id: i32, result: Option<Value>, error: Option<Value>) {
+        if let Some(analyzer) = self.analyzer.ready() {
+            analyzer.relay_reply(id, result, error);
+        }
+    }
     pub fn initialized(&self) {
         self.outgoing
             .log_message(MessageType::INFO, "telar-analyzer initialized");
+        self.register_rsx();
+    }
+
+    /// Extends the editor's rust-analyzer client to `.rsx`. Its document selector is fixed at `rust` in the extension's own source, so registering for these documents at runtime is the only way one server — and one index — can serve both languages.
+    fn register_rsx(&self) {
+        let selector = json!([{ "scheme": "file", "language": "rsx" }]);
+        let plain = |method: &str| {
+            json!({
+                "id": format!("telar-{method}"),
+                "method": method,
+                "registerOptions": { "documentSelector": selector },
+            })
+        };
+        let mut registrations = vec![
+            json!({
+                "id": "telar-didChange",
+                "method": "textDocument/didChange",
+                // Full text, matching what we advertise statically: the transpiler re-reads the whole buffer on every edit.
+                "registerOptions": { "documentSelector": selector, "syncKind": 1 },
+            }),
+            json!({
+                "id": "telar-completion",
+                "method": "textDocument/completion",
+                "registerOptions": {
+                    "documentSelector": selector,
+                    "triggerCharacters": ["@", "$", ".", ":", " ", "\""],
+                    "resolveProvider": true,
+                },
+            }),
+            json!({
+                "id": "telar-signatureHelp",
+                "method": "textDocument/signatureHelp",
+                "registerOptions": { "documentSelector": selector, "triggerCharacters": ["(", ","] },
+            }),
+            json!({
+                "id": "telar-rename",
+                "method": "textDocument/rename",
+                "registerOptions": { "documentSelector": selector, "prepareProvider": true },
+            }),
+        ];
+        registrations.extend(
+            [
+                "textDocument/didOpen",
+                "textDocument/didClose",
+                "textDocument/hover",
+                "textDocument/definition",
+                "textDocument/references",
+                "textDocument/documentHighlight",
+                "textDocument/documentSymbol",
+                "textDocument/documentColor",
+                "textDocument/foldingRange",
+                "textDocument/selectionRange",
+                "textDocument/codeAction",
+                "textDocument/codeLens",
+                "textDocument/documentLink",
+                "textDocument/inlayHint",
+                "textDocument/formatting",
+                "textDocument/rangeFormatting",
+            ]
+            .into_iter()
+            .map(plain),
+        );
+        // Reuses the negotiated legend rather than our own, since the editor decodes every token against the one advertised.
+        if let Ok(advertised) = self.advertised.lock()
+            && let Some(mut options) = advertised
+                .as_ref()
+                .and_then(|caps| caps.get("semanticTokensProvider"))
+                .cloned()
+            && let Some(options_obj) = options.as_object_mut()
+        {
+            options_obj.insert("documentSelector".to_owned(), selector.clone());
+            // Only the legend is rust-analyzer's; the rest of the shape is ours, and we answer `full` alone. Advertising its `range` support would have the client ask us for something we do not serve.
+            options_obj.insert("full".to_owned(), json!(true));
+            options_obj.insert("range".to_owned(), json!(false));
+            registrations.push(json!({
+                "id": "telar-semanticTokens",
+                "method": "textDocument/semanticTokens",
+                "registerOptions": options,
+            }));
+        }
+        // One request per capability rather than one batch, so a client that refuses one registration takes down only that one. String ids, so the editor's replies cannot be mistaken for the numeric ones the passthrough hands out.
+        for registration in registrations {
+            let what = registration
+                .get("method")
+                .and_then(Value::as_str)
+                .unwrap_or("?")
+                .to_owned();
+            self.outgoing.send(json!({
+                "jsonrpc": "2.0",
+                "id": format!("telar-register-{what}"),
+                "method": "client/registerCapability",
+                "params": { "registrations": [registration] },
+            }));
+        }
     }
 
     pub async fn did_open(&self, params: DidOpenTextDocumentParams) {
@@ -828,10 +1029,11 @@ impl Backend {
             }
             // A partial rename would leave the code uncompilable, so a reference that could not be precisely located refuses the whole rename rather than half-applying it.
             if unmapped > 0 {
-                self.outgoing.log_message(
-                    MessageType::INFO,
+                // In front of the user, not only in the log: the editor renders a refused rename as a bare "No results", which reads like the symbol was not found rather than like a deliberate stop.
+                self.outgoing.show_message(
+                    MessageType::WARNING,
                     format!(
-                        "telar-analyzer: rename skipped — {unmapped} reference(s) couldn't be precisely located (non-verbatim [view] usage or cross-component). Rename left unchanged."
+                        "Rename cancelled: {unmapped} use of this symbol in [view] cannot be located exactly (a `$name` read, or one the generated code re-binds inside a `for`/closure). Renaming the rest would leave the file uncompilable, so nothing was changed."
                     ),
                 );
                 return None;
@@ -860,15 +1062,24 @@ impl Backend {
         params: WorkspaceSymbolParams,
     ) -> Option<Vec<SymbolInformation>> {
         let query = params.query;
-        let root = {
+        // Asked before our own index, so the Rust half still answers when no `.rsx` is open to root the scan.
+        let rust = match self.analyzer.ready() {
+            Some(analyzer) => analyzer.workspace_symbols(&query).await,
+            None => Vec::new(),
+        };
+        let ours = async {
             let store = self.store.read().await;
             let uri = store.any_uri()?;
             let path = crate::uri::to_path(uri)?;
             // The Cargo workspace root, so `workspace/symbol` answers for the whole workspace rather than whichever crate happened to have a file open.
-            telar_project::find_workspace_root(&path)
-                .or_else(|| telar_project::find_telar_root(&path))?
+            let root = telar_project::find_workspace_root(&path)
+                .or_else(|| telar_project::find_telar_root(&path))?;
+            drop(store);
+            self.with_index(root, move |idx| idx.symbols(&query)).await
         };
-        self.with_index(root, move |idx| idx.symbols(&query)).await
+        let mut merged = ours.await.unwrap_or_default();
+        merged.extend(rust);
+        Some(merged)
     }
 
     /// `textDocument/semanticTokens/full`: parse-aware highlighting over the live buffer.
@@ -881,7 +1092,17 @@ impl Backend {
             let store = self.store.read().await;
             store.latest_source(uri).cloned()
         }?;
-        let data = crate::analysis::semantic_tokens::semantic_tokens(&source);
+        let mut data = crate::analysis::semantic_tokens::semantic_tokens(&source);
+        // Our four types were mapped onto the advertised legend at `initialize`; the editor decodes against that one, not ours.
+        if let Ok(map) = self.token_types.lock()
+            && let Some(map) = map.as_ref()
+        {
+            for token in &mut data {
+                if let Some(&at) = map.get(token.token_type as usize) {
+                    token.token_type = at;
+                }
+            }
+        }
         Some(SemanticTokensResult::Tokens(SemanticTokens {
             result_id: None,
             data,

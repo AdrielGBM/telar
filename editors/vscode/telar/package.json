@@ -47,11 +47,6 @@
         "command": "telar.preview",
         "title": "Preview component",
         "category": "Telar"
-      },
-      {
-        "command": "telar.showServerLog",
-        "title": "Show server log",
-        "category": "Telar"
       }
     ],
     "configuration": {
@@ -80,9 +75,6 @@
     "package": "pnpm run compile && pnpx @vscode/vsce@3.9.2 package --no-dependencies",
     "package:platform": "pnpm run compile && pnpx @vscode/vsce@3.9.2 package --no-dependencies --target <target>"
   },
-  "dependencies": {
-    "vscode-languageclient": "^10.0.0"
-  },
   "devDependencies": {
     "@types/node": "^26.0.0",
     "@types/vscode": "^1.80.0",
@@ -105,5 +97,11 @@
     "lsp",
     "language-server",
     "ide"
+  ],
+  "activationEvents": [
+    "workspaceContains:**/*.rsx"
+  ],
+  "extensionDependencies": [
+    "rust-lang.rust-analyzer"
   ]
 }

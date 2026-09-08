@@ -38,7 +38,14 @@ pub async fn run() {
         };
 
         let Some(method) = message.get("method").and_then(Value::as_str) else {
-            // No `method`: this is a response to a server-initiated request — ignore it.
+            // No `method`: the editor answering a request rust-analyzer sent it through us.
+            if let Some(id) = message.get("id").and_then(Value::as_i64) {
+                backend.relay_reply(
+                    id as i32,
+                    message.get("result").cloned(),
+                    message.get("error").cloned(),
+                );
+            }
             continue;
         };
         if method == "exit" {
@@ -51,10 +58,17 @@ pub async fn run() {
             watch_client_process(&params, Arc::downgrade(&backend));
         }
 
+        let route = route(&method, &params);
         match id {
             Some(id) => {
                 let backend = backend.clone();
                 tokio::spawn(async move {
+                    // Handed over whole: rust-analyzer answers under the editor's own id, so there is nothing left to send from here.
+                    if route == Route::Passthrough
+                        && backend.pass_request(id.clone(), &method, params.clone())
+                    {
+                        return;
+                    }
                     let response = match dispatch_request(&backend, &method, params).await {
                         Ok(result) => json!({ "jsonrpc": "2.0", "id": id, "result": result }),
                         Err(error) => json!({ "jsonrpc": "2.0", "id": id, "error": error }),
@@ -62,7 +76,14 @@ pub async fn run() {
                     backend.outgoing().send(response);
                 });
             }
-            None => dispatch_notification(&backend, &method, params).await,
+            None => {
+                if route != Route::Ours {
+                    backend.pass_notification(&method, params.clone());
+                }
+                if route != Route::Passthrough {
+                    dispatch_notification(&backend, &method, params).await;
+                }
+            }
         }
     }
 
@@ -73,6 +94,31 @@ pub async fn run() {
 }
 
 const SHUTDOWN_GRACE: Duration = Duration::from_secs(3);
+
+#[derive(PartialEq, Clone, Copy)]
+enum Route {
+    Ours,
+    Passthrough,
+    Both,
+}
+
+/// `.rsx` is ours; real Rust, and everything rust-analyzer's own extension asks about, travels through to the session we own. Two notifications reach both, because each side keeps state the other cannot see: the `.rsx` symbol index here, the crate graph there.
+fn route(method: &str, params: &Value) -> Route {
+    match method {
+        // `workspace/symbol` looks like a passthrough but is not: the handler asks rust-analyzer itself and concatenates, since neither half answers for the whole workspace.
+        "initialize" | "shutdown" | "workspace/symbol" => Route::Ours,
+        "initialized" | "workspace/didChangeWatchedFiles" => Route::Both,
+        // Our completion items carry the resolve key `defer_completion_docs` wrote; anything else came from rust-analyzer and goes back to it.
+        "completionItem/resolve" => match params.pointer("/data/g").is_some() {
+            true => Route::Ours,
+            false => Route::Passthrough,
+        },
+        _ => match params.pointer("/textDocument/uri").and_then(Value::as_str) {
+            Some(uri) if uri.ends_with(".rsx") => Route::Ours,
+            _ => Route::Passthrough,
+        },
+    }
+}
 
 /// Long, because this only backstops the client deaths that stdin EOF already covers.
 #[cfg(unix)]
@@ -140,12 +186,12 @@ fn watch_client_process(_params: &Value, _backend: Weak<Backend>) {}
 
 async fn dispatch_request(backend: &Backend, method: &str, params: Value) -> Result<Value, Value> {
     let result = match method {
-        "initialize" => ok(backend.initialize()),
+        "initialize" => backend.initialize(params).await,
         "shutdown" => Value::Null,
         "textDocument/completion" => ok(backend.completion(parse(params)?).await),
         "completionItem/resolve" => ok(backend.completion_resolve(parse(params)?)),
         "textDocument/signatureHelp" => ok(backend.signature_help(parse(params)?).await),
-        "textDocument/hover" => ok(backend.hover(parse(params)?).await),
+        "textDocument/hover" => ok(backend.hover(parse(collapse_hover_range(params))?).await),
         "textDocument/definition" => ok(backend.goto_definition(parse(params)?).await),
         "textDocument/formatting" => ok(backend.formatting(parse(params)?).await),
         "textDocument/rangeFormatting" => ok(backend.range_formatting(parse(params)?).await),
@@ -198,6 +244,15 @@ async fn dispatch_notification(backend: &Backend, method: &str, params: Value) {
     }
 }
 
+/// Collapses a hover `position` that arrived as a range to its start. Advertising rust-analyzer's capabilities means inheriting its `hoverRange` extension, so its client sends a range whenever there is a selection — over `.rsx` too, where our handlers speak stock LSP.
+fn collapse_hover_range(mut params: Value) -> Value {
+    if let Some(position) = params.get_mut("position")
+        && let Some(start) = position.get("start").cloned()
+    {
+        *position = start;
+    }
+    params
+}
 fn parse<T: DeserializeOwned>(params: Value) -> Result<T, Value> {
     serde_json::from_value(params).map_err(|err| invalid_params(&err.to_string()))
 }

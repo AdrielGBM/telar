@@ -83,6 +83,14 @@ impl OutgoingSender {
         );
     }
 
+    /// A message the editor puts in front of the user rather than only in the log. Reserved for what they have to act on, such as a server that came up degraded.
+    pub fn show_message(&self, typ: MessageType, message: impl Into<String>) {
+        self.notify(
+            "window/showMessage",
+            json!({ "type": typ, "message": message.into() }),
+        );
+    }
+
     fn notify(&self, method: &str, params: Value) {
         self.send(json!({ "jsonrpc": "2.0", "method": method, "params": params }));
     }
