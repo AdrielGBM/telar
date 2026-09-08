@@ -1,40 +1,32 @@
-//! Embedded rust-analyzer (`ra_ap_*`): loads the real workspace into an in-process `RootDatabase` so `.rsx` `[logic]` completion can query the generated Rust synchronously, sidestepping the LSP→disk→rust-analyzer keystroke race.
+//! The `.rsx` side's view of rust-analyzer: every query is put to the in-process server in [`crate::inner`], and always against the generated Rust rather than the source the editor is showing.
 //!
-//! Position mapping (`.rsx` cursor ↔ generated `.rs`) stays our responsibility via the transpiler's line-based source map — rust-analyzer's span machinery only maps real macro expansions, and the generated file is an ordinary `#[path] mod`.
+//! Position mapping (`.rsx` cursor ↔ generated `.rs`) stays our responsibility via the transpiler's source map. rust-analyzer is told nothing about `.rsx`; the generated file reaches it as an ordinary `#[path] mod`, and a query is a `didChange` carrying the live transpile followed by a request at a position inside it.
 
 use std::path::{Path, PathBuf};
+use std::time::Duration;
 
 use lsp_types::{InlayHintKind, Range};
-use ra_ap_ide::{AnalysisHost, AssistResolveStrategy};
-use ra_ap_load_cargo::{LoadCargoConfig, ProcMacroServerChoice, load_workspace_at};
-use ra_ap_paths::Utf8PathBuf;
-use ra_ap_proc_macro_api::ProcMacroClient;
-use ra_ap_project_model::{CargoConfig, RustLibSource, TargetDirectoryConfig};
-use ra_ap_vfs::Vfs;
 
-use config::diagnostics_config;
+use crate::inner::Inner;
 
-mod config;
-mod diagnostics;
-mod mapping;
 mod queries;
-mod vfs;
 
-/// A go-to-definition target resolved against the embedded analyzer: the target file's path and the name range within it, in LSP (line, UTF-16 col) coordinates. The backend decides whether the path is a generated `.telar/build/*.rs` (reverse-mapped to the `.rsx`) or a real file (used verbatim).
+/// How long a query waits for rust-analyzer. Past this it is either still loading the workspace or wedged, and either way the backend answers with what the `.rsx` side worked out natively rather than holding the editor.
+const QUERY_TIMEOUT: Duration = Duration::from_secs(10);
+
+/// A go-to-definition target: the target file's path and the name range within it. The backend decides whether the path is a generated `.telar/build/*.rs` (reverse-mapped to the `.rsx`) or a real file (used verbatim).
 pub struct DefinitionTarget {
     pub path: PathBuf,
     pub range: Range,
 }
 
-/// One reference to the symbol under the cursor, found by the embedded analyzer (declaration site included). Carries both the byte span (so the backend can reverse-map `[view]` verbatim expressions through the byte-span source map) and the same span in LSP coordinates (used verbatim for real source files). The backend reverse-maps generated `.telar/build/*.rs` paths back onto their `.rsx`.
+/// One reference to the symbol under the cursor, declaration site included. The backend reverse-maps generated `.telar/build/*.rs` paths back onto their `.rsx` and uses real source paths verbatim.
 pub struct RefTarget {
     pub path: PathBuf,
-    pub byte_start: u32,
-    pub byte_end: u32,
     pub range: Range,
 }
 
-/// One inlay hint from the embedded analyzer, anchored in generated-file `(line, UTF-16 col)`. The backend reverse-maps it onto the `.rsx` and keeps only `[logic]`-origin hints.
+/// One inlay hint, anchored in generated-file coordinates. The backend reverse-maps it onto the `.rsx` and keeps only `[logic]`-origin hints.
 pub struct InlayHintRaw {
     pub line: u32,
     pub col: u32,
@@ -44,58 +36,16 @@ pub struct InlayHintRaw {
     pub label: String,
 }
 
-/// An in-process rust-analyzer over the workspace that owns the `.rsx`-generated Rust, fed live via the overlay in each query.
-pub struct EmbeddedAnalyzer {
-    host: AnalysisHost,
-    vfs: Vfs,
-    // Dropping the proc-macro client kills the proc-macro server; `app!` would then stop expanding, and rust-analyzer would lose the generated `#[path] mod` files.
-    _proc_macro: Option<ProcMacroClient>,
+/// The workspace's rust-analyzer, wrapped in the `.rsx`-shaped queries the backend asks.
+pub struct Analyzer {
+    inner: Inner,
 }
 
-/// A build directory of our own, never the workspace's `target/`. `load_out_dirs_from_check` runs `cargo check`, and rust-analyzer runs one of its own over the same crates: sharing a build directory serialises the two on cargo's lock — with each other, and with whatever the user is building in a terminal — exactly while both are loading and neither can answer anything yet. `UseSubdirectory` is no escape: it resolves to `target/rust-analyzer`, which is rust-analyzer's own.
-fn build_dir(workspace_root: &Path) -> TargetDirectoryConfig {
-    let root = telar_project::find_workspace_root(workspace_root)
-        .unwrap_or_else(|| workspace_root.to_path_buf());
-    Utf8PathBuf::from_path_buf(root.join("target").join("telar-analyzer"))
-        .map(TargetDirectoryConfig::Directory)
-        .unwrap_or_default()
-}
-
-impl EmbeddedAnalyzer {
-    /// Loads the cargo workspace at `workspace_root` into a fresh database. Synchronous and slow (runs `cargo metadata` + builds the crate graph), so callers run it off the LSP's runtime thread.
-    pub fn load(workspace_root: &Path) -> anyhow::Result<Self> {
-        let cargo_config = CargoConfig {
-            sysroot: Some(RustLibSource::Discover),
-            target_dir_config: build_dir(workspace_root),
-            ..CargoConfig::default()
-        };
-        // Proc-macro server is required, not optional: `app!` expansion is how the generated modules are discovered (see design doc, "Invariants & gotchas").
-        let load_config = LoadCargoConfig {
-            load_out_dirs_from_check: true,
-            with_proc_macro_server: ProcMacroServerChoice::Sysroot,
-            // Cache priming is done explicitly via `warm()` after load — the `prefill_caches` flag in this version doesn't prime enough (load stays ~2s and the first query still pays ~15s).
-            prefill_caches: false,
-            num_worker_threads: 0,
-            proc_macro_processes: 1,
-        };
-        let (db, vfs, proc_macro) =
-            load_workspace_at(workspace_root, &cargo_config, &load_config, &|_| {})?;
+impl Analyzer {
+    /// Boots rust-analyzer over the workspace at `root`. Blocking; callers run it off the runtime thread.
+    pub fn start(root: &Path) -> anyhow::Result<Self> {
         Ok(Self {
-            host: AnalysisHost::with_database(db),
-            vfs,
-            _proc_macro: proc_macro,
+            inner: Inner::start(root)?,
         })
-    }
-
-    /// Forces rust-analyzer to analyze `gen_path`'s crate once (resolving the dependency graph + the framework's HIR — the ~15s one-time cost), so the first interactive query is fast. salsa caches the result; a later overlay only re-analyzes the single changed file. Result discarded.
-    pub fn warm(&self, gen_path: &Path) {
-        let Some(file_id) = self.file_id(gen_path) else {
-            return;
-        };
-        let _ = self.host.analysis().full_diagnostics(
-            &diagnostics_config(),
-            AssistResolveStrategy::None,
-            file_id,
-        );
     }
 }

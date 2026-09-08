@@ -1,17 +1,60 @@
-//! Document lifecycle: reparsing on every edit, mirroring the generated Rust, and publishing diagnostics.
+//! Document lifecycle: reparsing on every edit, mirroring the generated Rust, and publishing diagnostics. Also the one place rust-analyzer is booted.
 
 use std::path::PathBuf;
+use std::sync::Arc;
 use std::sync::atomic::Ordering;
-use std::time::Instant;
 
 use lsp_types::*;
 use telar_diagnostics::semantic_diagnostics;
 
 use crate::index::WorkspaceIndex;
 use crate::project::ProjectInfo;
-use crate::ra::EmbeddedAnalyzer;
+use crate::ra::Analyzer;
 
-use super::{AnalyzerState, Backend, IDLE_TTL, RELOAD_DEBOUNCE, mark_reload};
+use super::{AnalyzerHandle, AnalyzerState, Backend};
+
+impl AnalyzerHandle {
+    /// The workspace's rust-analyzer, booting it on first use. `None` while a boot another query started is still in flight, or after one failed — rust-analyzer keeps its own workspace up to date once running, so there is nothing here to invalidate or reload.
+    pub(crate) async fn get(&self, root: PathBuf) -> Option<Arc<Analyzer>> {
+        {
+            let mut state = self.state.lock().ok()?;
+            match &*state {
+                AnalyzerState::Ready(analyzer) => return Some(analyzer.clone()),
+                AnalyzerState::Starting | AnalyzerState::Failed => return None,
+                AnalyzerState::Idle => *state = AnalyzerState::Starting,
+            }
+        }
+
+        // Off the runtime thread: the handshake waits on another thread's reply, and workspace discovery walks the filesystem.
+        let started = tokio::task::spawn_blocking(move || Analyzer::start(&root))
+            .await
+            .ok()?;
+
+        let mut state = self.state.lock().ok()?;
+        match started {
+            Ok(analyzer) => {
+                let analyzer = Arc::new(analyzer);
+                *state = AnalyzerState::Ready(analyzer.clone());
+                Some(analyzer)
+            }
+            Err(e) => {
+                *state = AnalyzerState::Failed;
+                self.outgoing.log_message(
+                    MessageType::ERROR,
+                    format!("telar-analyzer: rust-analyzer failed to start: {e:#}"),
+                );
+                None
+            }
+        }
+    }
+
+    /// Drops rust-analyzer, and with it the proc-macro server it owns, while the process is still alive. `server.rs` cannot rely on `drop(backend)` for this: spawned request handlers hold their own `Arc<Backend>` clones, so the `Drop` that closes the connection may not run before the process exits.
+    pub(crate) fn release(&self) {
+        if let Ok(mut state) = self.state.lock() {
+            *state = AnalyzerState::Idle;
+        }
+    }
+}
 
 impl Backend {
     pub(crate) async fn reparse_and_diagnose(&self, uri: Uri, text: String) -> Vec<Diagnostic> {
@@ -30,7 +73,7 @@ impl Backend {
             let project = file_path.as_deref().and_then(ProjectInfo::discover);
             let catalog_view = project.as_ref().and_then(ProjectInfo::catalog_view);
             let semantic = semantic_diagnostics(&parsed.document, catalog_view.as_ref());
-            // Mirrors the live buffer to its generated `.rs`, so rust-analyzer analyses the in-flight text and completion is live rather than one `cargo check` behind.
+            // A new `.rsx` needs something on disk for the crate graph to load; the live buffer itself travels as an overlay, never through the build directory.
             let theme = project.as_ref().and_then(|p| p.theme_type.clone());
             if let Some(rsx_path) = file_path.as_deref() {
                 crate::build_sync::sync_build_file(
@@ -49,14 +92,14 @@ impl Backend {
         }
 
         let native: Vec<Diagnostic> = semantic.into_iter().map(Into::into).collect();
-        // From a detached task, because `full_diagnostics` can be slow and notifications are awaited in order on the read loop. Native diagnostics publish immediately; the task republishes once the analyzer is ready, and skips while it is still loading.
+        // From a detached task, because the rust-analyzer round-trip can be slow and notifications are awaited in order on the read loop. Native diagnostics publish immediately; the task republishes once rust-analyzer answers.
         if let Some(rsx_path) = file_path {
             self.spawn_rust_diagnostics(uri, rsx_path, source, theme, native.clone(), revision);
         }
         native
     }
 
-    /// Off-loop overlay-and-merge of rust-analyzer diagnostics: maps each back onto the `.rsx` via the line map (dropping generated lines with no `.rsx` origin) and republishes native+rust. A staleness guard skips the publish if the buffer changed meanwhile, so out-of-order task completions never resurrect diagnostics for an older revision.
+    /// Off-loop merge of rust-analyzer's diagnostics: maps each back onto the `.rsx` via the line map (dropping generated lines with no `.rsx` origin) and republishes native+rust. A staleness guard skips the publish if the buffer changed meanwhile, so out-of-order task completions never resurrect diagnostics for an older revision.
     fn spawn_rust_diagnostics(
         &self,
         uri: Uri,
@@ -74,55 +117,23 @@ impl Backend {
         else {
             return;
         };
-        // Kept back for the reverse map: the analyzer query takes ownership of the generated text.
-        let gen_code = gen_text.clone();
         let Some(root) = crate::build_sync::crate_root(&rsx_path) else {
             return;
         };
-        self.ensure_loading(root, Some(gen_path.clone()));
 
         let analyzer = self.analyzer.clone();
         let outgoing = self.outgoing.clone();
-        let log = self.outgoing.clone();
         let store = self.store.clone();
         let revisions = self.revision.clone();
-        let reload_at = self.reload_at.clone();
         tokio::spawn(async move {
-            let raw = tokio::task::spawn_blocking(move || {
-                // A newer edit already superseded this one, so skip the expensive query without even contending for the lock.
-                if revisions.load(Ordering::Relaxed) != revision {
-                    return None;
-                }
-                let lock_at = std::time::Instant::now();
-                let mut state = analyzer.lock().ok()?;
-                let lock_ms = lock_at.elapsed().as_millis();
-                let AnalyzerState::Ready(a) = &mut *state else {
-                    return None;
-                };
-                if !a.knows_file(&gen_path) {
-                    mark_reload(&reload_at);
-                    return None;
-                }
-                let ra_at = std::time::Instant::now();
-                let result = a.diagnostics(&gen_path, gen_text);
-                let ra_ms = ra_at.elapsed().as_millis();
-                if lock_ms > 1000 || ra_ms > 1000 {
-                    log.log_message(
-                        MessageType::INFO,
-                        format!(
-                            "telar-analyzer: slow diagnostics — lock {lock_ms}ms, ra {ra_ms}ms"
-                        ),
-                    );
-                }
-                Some(result)
-            })
-            .await
-            .ok()
-            .flatten();
-            // Analyzer not ready, so leave the native-only diagnostics already published.
-            let Some(raw) = raw else {
+            // A newer edit already superseded this one, so skip the round-trip entirely.
+            if revisions.load(Ordering::Relaxed) != revision {
+                return;
+            }
+            let Some(analyzer) = analyzer.get(root).await else {
                 return;
             };
+            let raw = analyzer.diagnostics(&gen_path, &gen_text).await;
             // The buffer moved on while the query ran, so a newer revision's task will publish.
             if store.read().await.latest_source(&uri) != Some(&source) {
                 return;
@@ -131,7 +142,7 @@ impl Backend {
             let mut merged = native;
             merged.extend(raw.into_iter().filter_map(|mut diag| {
                 diag.range =
-                    super::mapping::diagnostic_range(diag.range, &gen_code, &map, &source)?;
+                    super::mapping::diagnostic_range(diag.range, &gen_text, &map, &source)?;
                 Some(diag)
             }));
             outgoing.publish_diagnostics(uri, merged);
@@ -169,117 +180,7 @@ impl Backend {
         });
     }
 
-    /// Whether a pending invalidation has waited out [`RELOAD_DEBOUNCE`], consuming it if so. Timed from the first invalidation of a burst rather than the last, so queries that keep re-marking an unknown file cannot postpone the reload indefinitely.
-    fn take_due_reload(&self) -> bool {
-        let Ok(mut mark) = self.reload_at.lock() else {
-            return false;
-        };
-        match *mark {
-            Some(at) if at.elapsed() >= RELOAD_DEBOUNCE => {
-                *mark = None;
-                true
-            }
-            _ => false,
-        }
-    }
-
-    /// Starts the (slow) workspace load on a blocking thread if it hasn't started yet. Returns immediately; queries that arrive while loading simply yield nothing.
-    pub(crate) fn ensure_loading(&self, root: PathBuf, warm: Option<PathBuf>) {
-        self.touch();
-        // `try_lock`, never `lock`: this runs on the single-threaded runtime and a blocking query can hold the mutex for the length of its call. Contention means the analyzer is already busy, so there is nothing to start, and a state that just reset to `Idle` is picked up by the next edit.
-        let Ok(mut state) = self.analyzer.try_lock() else {
-            return;
-        };
-        // The one place the `RootDatabase` is released, and only once its replacement is about to load, so the two never coexist. The mark is consumed only when it can be acted on.
-        if matches!(*state, AnalyzerState::Ready(_) | AnalyzerState::Failed)
-            && self.take_due_reload()
-        {
-            *state = AnalyzerState::Idle;
-        }
-        if matches!(*state, AnalyzerState::Idle) {
-            *state = AnalyzerState::Loading;
-            let analyzer = self.analyzer.clone();
-            let outgoing = self.outgoing.clone();
-            tokio::task::spawn_blocking(move || {
-                outgoing.log_message(
-                    MessageType::INFO,
-                    format!("telar-analyzer: loading workspace at {}…", root.display()),
-                );
-                let started = std::time::Instant::now();
-                let loaded = EmbeddedAnalyzer::load(&root);
-                let load_ms = started.elapsed().as_millis();
-                // Computed outside the state lock, so queries arriving mid-warm see `Loading` instead of blocking for fifteen seconds.
-                let new_state = match loaded {
-                    Ok(a) => {
-                        let warm_ms = if let Some(p) = &warm {
-                            let w = std::time::Instant::now();
-                            a.warm(p);
-                            w.elapsed().as_millis()
-                        } else {
-                            0
-                        };
-                        outgoing.log_message(
-                            MessageType::INFO,
-                            format!(
-                                "telar-analyzer: workspace ready in {load_ms}ms (+{warm_ms}ms warm)"
-                            ),
-                        );
-                        AnalyzerState::Ready(a)
-                    }
-                    Err(e) => {
-                        outgoing.log_message(
-                            MessageType::ERROR,
-                            format!("telar-analyzer: workspace load failed: {e:#}"),
-                        );
-                        AnalyzerState::Failed
-                    }
-                };
-                if let Ok(mut state) = analyzer.lock() {
-                    *state = new_state;
-                }
-            });
-        }
-    }
-
-    /// Records demand for the analyzer, pushing out its idle deadline. Called from [`Backend::ensure_loading`], which every query path runs first, so a load still in flight counts as demand exactly as a `Ready` one does.
-    pub(crate) fn touch(&self) {
-        if let Ok(mut at) = self.last_used.lock() {
-            *at = Instant::now();
-        }
-    }
-
-    /// Releases the workspace once it has gone [`IDLE_TTL`] without demand, reporting whether it did. The counterpart to [`Backend::ensure_loading`], and called off the runtime thread for the same reason: the assignment frees a multi-GB `RootDatabase`.
-    pub(crate) fn evict_if_idle(&self) -> bool {
-        // `try_lock`, never `lock`: a held mutex means a query is running, which is demand in itself.
-        let Ok(mut state) = self.analyzer.try_lock() else {
-            return false;
-        };
-        // Only `Ready` holds a database. Evicting `Loading` would strand the load that is about to overwrite this state anyway.
-        if !matches!(*state, AnalyzerState::Ready(_)) {
-            return false;
-        }
-        // Read while holding the analyzer, which `ensure_loading` touches *before* it contends for: a query that got that far cannot have its workspace evicted out from under it here.
-        let idle = self
-            .last_used
-            .lock()
-            .map(|at| at.elapsed())
-            .unwrap_or_default();
-        if idle < IDLE_TTL {
-            return false;
-        }
-        *state = AnalyzerState::Idle;
-        drop(state);
-        self.outgoing.log_message(
-            MessageType::INFO,
-            format!(
-                "telar-analyzer: workspace released after {}s idle",
-                idle.as_secs()
-            ),
-        );
-        true
+    pub(crate) async fn analyzer(&self, root: PathBuf) -> Option<Arc<Analyzer>> {
+        self.analyzer.get(root).await
     }
 }
-
-#[cfg(test)]
-#[path = "lifecycle_test.rs"]
-mod tests;

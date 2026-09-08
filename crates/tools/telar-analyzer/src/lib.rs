@@ -7,6 +7,7 @@ mod backend;
 mod build_sync;
 mod format;
 mod index;
+mod inner;
 mod position;
 mod project;
 mod ra;

@@ -1,24 +1,29 @@
-//! Asking the embedded analyzer about a position, with the `.rsx` cursor mapped into the generated Rust.
+//! Asking rust-analyzer about a position, with the `.rsx` cursor mapped into the generated Rust.
 
+use std::future::Future;
 use std::path::PathBuf;
+use std::sync::Arc;
+use std::time::Instant;
 
 use lsp_types::*;
-use ra_ap_ide::TextSize;
 use telar_transpiler::SourceMap;
 
 use crate::position::{Section, find_section_at};
-use crate::ra::{EmbeddedAnalyzer, RefTarget};
+use crate::ra::{Analyzer, RefTarget};
 use crate::text::byte_offset;
 
+use super::Backend;
 use super::mapping::reverse_map_rust_refs;
-use super::{AnalyzerState, Backend, mark_reload};
 
 /// `[logic]` lines are emitted verbatim under a fixed function-body indent, so an `.rsx` column maps to the generated column by adding this.
 const LOGIC_INDENT: u32 = 4;
 
+/// Past this, a query is slow enough to be worth a line in the output without spamming it.
+const SLOW_QUERY: u128 = 1000;
+
 impl Backend {
-    /// Maps an `.rsx` cursor into the generated module and runs `run` against the embedded analyzer on a blocking thread (the query is synchronous; the load may still be in flight, in which case this yields `None`). One entry point for both sections, since only the cursor resolution differs — see [`generated_offset`].
-    pub(crate) async fn rust_query<T, F>(
+    /// Maps an `.rsx` cursor into the generated module and runs `run` against rust-analyzer. One entry point for both sections, since only the cursor resolution differs — see [`generated_offset`].
+    pub(crate) async fn rust_query<T, F, Fut>(
         &self,
         rsx_path: PathBuf,
         source: String,
@@ -27,15 +32,15 @@ impl Backend {
         run: F,
     ) -> Option<T>
     where
-        F: FnOnce(&mut EmbeddedAnalyzer, PathBuf, String, TextSize) -> Option<T> + Send + 'static,
-        T: Send + 'static,
+        F: FnOnce(Arc<Analyzer>, PathBuf, String, usize) -> Fut,
+        Fut: Future<Output = Option<T>>,
     {
         self.rust_query_at(rsx_path, source, theme, pos, generated_offset, run)
             .await
     }
 
     /// The same, with the cursor resolved by `locate` instead of by section. One entry point, because only the resolution differs — an attribute *key* has no expression span of its own, so it maps to the props builder that carries its setter rather than to itself.
-    pub(crate) async fn rust_query_at<T, F, L>(
+    pub(crate) async fn rust_query_at<T, F, Fut, L>(
         &self,
         rsx_path: PathBuf,
         source: String,
@@ -45,9 +50,9 @@ impl Backend {
         run: F,
     ) -> Option<T>
     where
-        F: FnOnce(&mut EmbeddedAnalyzer, PathBuf, String, TextSize) -> Option<T> + Send + 'static,
-        L: FnOnce(Section, &str, &str, &SourceMap, Position) -> Option<TextSize>,
-        T: Send + 'static,
+        F: FnOnce(Arc<Analyzer>, PathBuf, String, usize) -> Fut,
+        Fut: Future<Output = Option<T>>,
+        L: FnOnce(Section, &str, &str, &SourceMap, Position) -> Option<usize>,
     {
         let section = find_section_at(&source, pos.line);
         let crate::build_sync::GeneratedTarget {
@@ -58,77 +63,35 @@ impl Backend {
         let offset = locate(section, &source, &gen_text, &map, pos)?;
 
         let root = crate::build_sync::crate_root(&rsx_path)?;
-        self.ensure_loading(root, Some(gen_path.clone()));
-        let reload_at = self.reload_at.clone();
+        let analyzer = self.analyzer(root).await?;
 
-        let analyzer = self.analyzer.clone();
-        let outgoing = self.outgoing.clone();
-        tokio::task::spawn_blocking(move || {
-            let lock_at = std::time::Instant::now();
-            let mut state = analyzer.lock().ok()?;
-            let lock_ms = lock_at.elapsed().as_millis();
-            let AnalyzerState::Ready(a) = &mut *state else {
-                return None;
+        let started = Instant::now();
+        let result = run(analyzer, gen_path, gen_text, offset).await;
+        let elapsed = started.elapsed().as_millis();
+        if elapsed > SLOW_QUERY {
+            let section = match section {
+                Section::Logic => "[logic]",
+                _ => "[view]",
             };
-            // A generated module the graph does not know yet, so drop to `Idle` and let the next query reload.
-            if !a.knows_file(&gen_path) {
-                mark_reload(&reload_at);
-                return None;
-            }
-            let ra_at = std::time::Instant::now();
-            let result = run(a, gen_path, gen_text, offset);
-            // A healthy query is sub-100ms, so anything past a second flags a regression without spamming the output.
-            let ra_ms = ra_at.elapsed().as_millis();
-            if lock_ms > 1000 || ra_ms > 1000 {
-                let section = match section {
-                    Section::Logic => "[logic]",
-                    _ => "[view]",
-                };
-                outgoing.log_message(
-                    MessageType::INFO,
-                    format!(
-                        "telar-analyzer: slow {section} query — lock {lock_ms}ms, ra {ra_ms}ms"
-                    ),
-                );
-            }
-            result
-        })
-        .await
-        .ok()
-        .flatten()
+            self.outgoing().log_message(
+                MessageType::INFO,
+                format!("telar-analyzer: slow {section} query — {elapsed}ms"),
+            );
+        }
+        result
     }
 
-    /// Runs `run` against the embedded analyzer on a blocking thread with no position mapping — for queries that target an offset computed directly in the generated file (component rename probes the generated `fn`/`Props` definitions). Yields `None` while the workspace load is still in flight or the generated module is unknown (a `.rsx` added since load → drop to Idle to reload).
-    pub(crate) async fn run_analyzer<T, F>(
-        &self,
-        gen_path: PathBuf,
-        root: PathBuf,
-        run: F,
-    ) -> Option<T>
+    /// Runs `run` against rust-analyzer with no position mapping — for queries that target an offset computed directly in the generated file (component rename probes the generated `fn`/`Props` definitions).
+    pub(crate) async fn run_analyzer<T, F, Fut>(&self, root: PathBuf, run: F) -> Option<T>
     where
-        F: FnOnce(&mut EmbeddedAnalyzer) -> Option<T> + Send + 'static,
-        T: Send + 'static,
+        F: FnOnce(Arc<Analyzer>) -> Fut,
+        Fut: Future<Output = Option<T>>,
     {
-        self.ensure_loading(root, Some(gen_path.clone()));
-        let reload_at = self.reload_at.clone();
-        let analyzer = self.analyzer.clone();
-        tokio::task::spawn_blocking(move || {
-            let mut state = analyzer.lock().ok()?;
-            let AnalyzerState::Ready(a) = &mut *state else {
-                return None;
-            };
-            if !a.knows_file(&gen_path) {
-                mark_reload(&reload_at);
-                return None;
-            }
-            run(a)
-        })
-        .await
-        .ok()
-        .flatten()
+        let analyzer = self.analyzer(root).await?;
+        run(analyzer).await
     }
 
-    /// Find-all-references for the Rust symbol under a `[logic]`/`[view]` cursor, via the embedded analyzer. Returns raw [`RefTarget`]s in generated-file coordinates; the caller reverse-maps them.
+    /// Find-all-references for the Rust symbol under a `[logic]`/`[view]` cursor. Returns raw [`RefTarget`]s in generated-file coordinates; the caller reverse-maps them.
     async fn rust_references(
         &self,
         rsx_path: PathBuf,
@@ -136,9 +99,13 @@ impl Backend {
         theme: Option<String>,
         pos: Position,
     ) -> Option<Vec<RefTarget>> {
-        self.rust_query(rsx_path, source, theme, pos, |a, path, text, offset| {
-            a.references_at_offset(&path, text, offset)
-        })
+        self.rust_query(
+            rsx_path,
+            source,
+            theme,
+            pos,
+            |a, path, text, offset| async move { a.references(&path, &text, offset).await },
+        )
         .await
     }
 
@@ -175,12 +142,12 @@ pub(crate) fn generated_offset(
     generated: &str,
     map: &SourceMap,
     pos: Position,
-) -> Option<TextSize> {
-    let byte = match section {
+) -> Option<usize> {
+    match section {
         Section::Logic => {
             // First generated line that originated from this `.rsx` line.
             let gen_line = map.lines.iter().position(|m| *m == Some(pos.line))? as u32;
-            byte_offset(generated, gen_line, pos.character + LOGIC_INDENT)?
+            byte_offset(generated, gen_line, pos.character + LOGIC_INDENT)
         }
         Section::View => {
             let rsx_byte = byte_offset(source, pos.line, pos.character)?;
@@ -188,11 +155,10 @@ pub(crate) fn generated_offset(
             let span = map.exprs.iter().find(|s| {
                 rsx_byte >= s.rsx_start as usize && rsx_byte <= (s.rsx_start + s.len) as usize
             })?;
-            span.gen_start as usize + (rsx_byte - span.rsx_start as usize)
+            Some(span.gen_start as usize + (rsx_byte - span.rsx_start as usize))
         }
-        _ => return None,
-    };
-    Some(TextSize::from(byte as u32))
+        _ => None,
+    }
 }
 
 /// The offset just inside a component call's props builder, so rust-analyzer answers an attribute key with the setter list — names, types and doc comments, read from the props struct itself.
@@ -204,14 +170,14 @@ pub(crate) fn props_builder_offset(
     generated: &str,
     map: &SourceMap,
     pos: Position,
-) -> Option<TextSize> {
+) -> Option<usize> {
     let mut line_start = 0usize;
     for (index, line) in generated.split_inclusive('\n').enumerate() {
         if map.lines.get(index).copied().flatten() == Some(pos.line)
             && let Some(call) = line.find("Props::props()")
         {
             let after = call + "Props::props().".len();
-            return Some(TextSize::from((line_start + after) as u32));
+            return Some(line_start + after);
         }
         line_start += line.len();
     }

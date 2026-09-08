@@ -122,7 +122,7 @@ fn reverse_map_current_file(
     map: &SourceMap,
     rsx_source: &str,
 ) -> Option<Range> {
-    match map.locate(gen_code, target.byte_start, target.byte_end, rsx_source)? {
+    match locate(map, target.range, gen_code, rsx_source)? {
         RsxSpan::Exact { start, end } => Some(Range {
             start: offset_to_position(rsx_source, start as usize),
             end: offset_to_position(rsx_source, end as usize),

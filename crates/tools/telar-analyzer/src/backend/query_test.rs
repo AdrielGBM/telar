@@ -18,9 +18,8 @@ fn an_attribute_key_maps_to_the_props_builder_that_carries_its_setter() {
     )
     .expect("the element's generated line carries a props builder");
 
-    let at = usize::from(offset);
     assert_eq!(
-        &out.rust_code[at - "CardProps::props().".len()..at],
+        &out.rust_code[offset - "CardProps::props().".len()..offset],
         "CardProps::props().",
         "the cursor sits where a method completion answers with the setters"
     );

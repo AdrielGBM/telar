@@ -3,7 +3,6 @@
 use std::path::{Path, PathBuf};
 use std::sync::atomic::AtomicU64;
 use std::sync::{Arc, Mutex};
-use std::time::{Duration, Instant};
 
 use lsp_types::*;
 use serde_json::json;
@@ -18,7 +17,7 @@ use crate::analysis::hover::hover_info;
 use crate::index::WorkspaceIndex;
 use crate::position::{Section, find_section_at};
 use crate::project::ProjectInfo;
-use crate::ra::EmbeddedAnalyzer;
+use crate::ra::Analyzer;
 use crate::rpc::OutgoingSender;
 use crate::store::Store;
 use crate::text::{ident_at, name_range};
@@ -32,33 +31,21 @@ mod mapping;
 mod query;
 mod rename;
 
-/// Lifecycle of the embedded rust-analyzer: loaded lazily on the first `[logic]` query because `load()` is slow (cargo metadata + crate graph).
-// Always lives behind `Arc<Mutex<…>>` and is only written in place, so the large `Ready` variant is never moved by value and the size disparity clippy flags is irrelevant.
-#[allow(clippy::large_enum_variant)]
+/// Lifecycle of the workspace's rust-analyzer, booted lazily on the first `[logic]` query. It keeps its own workspace current once running, so there is nothing here to invalidate or reload.
 enum AnalyzerState {
     Idle,
-    Loading,
-    Ready(EmbeddedAnalyzer),
+    Starting,
+    Ready(Arc<Analyzer>),
     Failed,
 }
 
-/// How long invalidations are coalesced before the workspace is actually torn down and reloaded. Measured from the *first* pending invalidation, never extended, so a steady stream of queries against an unknown file cannot starve the reload. Amortizes a ~15s load, so the exact value matters little.
-const RELOAD_DEBOUNCE: Duration = Duration::from_millis(500);
-
-/// How long the workspace may go unqueried before its `RootDatabase` is released. A `.rsx` left open in a background tab otherwise pins the whole index for the editor session, next to the one rust-analyzer holds over the same crates. The reload it costs is the ~15s the first load already paid, and only after an idle stretch long enough that the editor has moved on.
-const IDLE_TTL: Duration = Duration::from_secs(300);
-
-/// How often [`Backend::evict_if_idle`] looks. Coarse deliberately: the deadline it enforces is minutes, and every tick contends for the analyzer mutex.
-pub(crate) const IDLE_POLL: Duration = Duration::from_secs(30);
-
-/// Records that the crate graph is out of date without dropping the `RootDatabase`. A single `cargo add` touches `Cargo.toml` *and* `Cargo.lock`, and a branch switch touches dozens of files; tearing down per event would pay the full reload for each. Only [`Backend::ensure_loading`] acts on the mark, which keeps teardown to one place.
-fn mark_reload(reload_at: &Mutex<Option<Instant>>) {
-    if let Ok(mut mark) = reload_at.lock() {
-        mark.get_or_insert_with(Instant::now);
-    }
+/// Owns that lifecycle behind an `Arc`, so a detached diagnostics task can reach rust-analyzer without holding the whole [`Backend`].
+pub(crate) struct AnalyzerHandle {
+    state: Mutex<AnalyzerState>,
+    outgoing: OutgoingSender,
 }
 
-/// Whether `path` sits inside a cargo build directory. `ra::load` sets `load_out_dirs_from_check`, so every workspace load runs `cargo check` and writes generated `.rs` under `target/`; treating those as source changes would reload the workspace in an endless loop. The client cannot be trusted to exclude them — a non-VS Code editor registers its own watchers.
+/// Whether `path` sits inside a cargo build directory. rust-analyzer runs `cargo check` to discover build scripts, which writes generated `.rs` under `target/`; treating those as `.rsx` neighbours would churn the symbol index for files nobody wrote. The client cannot be trusted to exclude them — a non-VS Code editor registers its own watchers.
 fn is_under_target_dir(path: &Path) -> bool {
     path.components().any(|c| c.as_os_str() == "target")
 }
@@ -70,33 +57,32 @@ struct CompletionCache {
     docs: Vec<Option<Documentation>>,
 }
 
-/// The server's state: the open documents, the workspace index, and the embedded analyzer behind them.
+/// The server's state: the open documents, the workspace index, and the rust-analyzer behind them.
 pub struct Backend {
     outgoing: OutgoingSender,
     store: Arc<RwLock<Store>>,
-    analyzer: Arc<Mutex<AnalyzerState>>,
+    analyzer: Arc<AnalyzerHandle>,
     // Backs `workspace/symbol` and cross-file component references. Built lazily on the first query and refreshed per file on edits; `None` until then.
     index: Arc<Mutex<Option<WorkspaceIndex>>>,
     // Deferred documentation for the last rust-analyzer completion batch (see [`CompletionCache`]).
     completion_cache: Arc<Mutex<CompletionCache>>,
-    // A spawned diagnostics task captures the value it was queued for and bails before the expensive query if a newer edit superseded it, so keystroke-rate edits do not pile up behind the lock.
+    // A spawned diagnostics task captures the value it was queued for and bails before the round-trip if a newer edit superseded it, so keystroke-rate edits do not pile up.
     revision: Arc<AtomicU64>,
-    reload_at: Arc<Mutex<Option<Instant>>>,
-    // A separate mutex from `analyzer`, so recording demand never waits on a running query.
-    last_used: Arc<Mutex<Instant>>,
 }
 
 impl Backend {
     pub fn new(outgoing: OutgoingSender) -> Self {
         Self {
+            // Built before `outgoing` is moved into place; the handle needs its own sender to report a failed start.
+            analyzer: Arc::new(AnalyzerHandle {
+                state: Mutex::new(AnalyzerState::Idle),
+                outgoing: outgoing.clone(),
+            }),
             outgoing,
             store: Arc::new(RwLock::new(Store::new())),
-            analyzer: Arc::new(Mutex::new(AnalyzerState::Idle)),
             index: Arc::new(Mutex::new(None)),
             completion_cache: Arc::new(Mutex::new(CompletionCache::default())),
             revision: Arc::new(AtomicU64::new(0)),
-            reload_at: Arc::new(Mutex::new(None)),
-            last_used: Arc::new(Mutex::new(Instant::now())),
         }
     }
 
@@ -104,11 +90,8 @@ impl Backend {
         &self.outgoing
     }
 
-    /// Drops the embedded analyzer, and with it the proc-macro server child, while the process is still alive. `server.rs` cannot rely on `drop(backend)` for this: spawned request handlers hold their own `Arc<Backend>` clones, so the `Drop` that kills the child may not run before the process exits, leaving it reparented to init holding its share of a multi-GB database.
     pub fn release_analyzer(&self) {
-        if let Ok(mut state) = self.analyzer.lock() {
-            *state = AnalyzerState::Idle;
-        }
+        self.analyzer.release();
     }
 
     pub fn initialize(&self) -> InitializeResult {
@@ -188,11 +171,14 @@ impl Backend {
         let text = params.text_document.text.clone();
         let diagnostics = self.reparse_and_diagnose(uri.clone(), text).await;
         self.outgoing.publish_diagnostics(uri.clone(), diagnostics);
-        // As soon as a `.rsx` opens, so the slow workspace load overlaps with reading the file rather than stalling the first completion.
+        // Booted as soon as a `.rsx` opens, so rust-analyzer's workspace load overlaps with reading the file rather than stalling the first completion.
         if let Some(rsx_path) = crate::uri::to_path(&uri)
             && let Some(root) = crate::build_sync::crate_root(&rsx_path)
         {
-            self.ensure_loading(root, crate::build_sync::generated_path(&rsx_path));
+            let analyzer = self.analyzer.clone();
+            tokio::spawn(async move {
+                analyzer.get(root).await;
+            });
         }
     }
 
@@ -209,11 +195,9 @@ impl Backend {
         self.store.write().await.close(&uri);
     }
 
-    /// `workspace/didChangeWatchedFiles`: the LSP only receives `didChange` for `.rsx`, so edits to hand-written `.rs` files (and `Cargo.toml`/`Cargo.lock`) would otherwise leave the embedded analyzer frozen at load time — breaking go-to-def / diagnostics / repeated renames that cross into real Rust. Refresh each changed `.rs` from disk; a manifest/lockfile change or a created/deleted file invalidates the crate graph, so drop to Idle for a full reload on the next query. A watched `.rsx` event (a sibling file edited/created/deleted outside the editor) also refreshes the workspace symbol index.
+    /// `workspace/didChangeWatchedFiles`: keeps the workspace symbol index current when a sibling `.rsx` is edited, created or deleted outside the editor. Rust files and the manifests are not our business — rust-analyzer watches the filesystem itself and reloads its own crate graph.
     pub async fn did_change_watched_files(&self, params: DidChangeWatchedFilesParams) {
-        let mut to_refresh: Vec<PathBuf> = Vec::new();
         let mut rsx_changes: Vec<(PathBuf, bool)> = Vec::new();
-        let mut needs_reload = false;
         for change in params.changes {
             let Some(path) = crate::uri::to_path(&change.uri) else {
                 continue;
@@ -222,63 +206,24 @@ impl Backend {
             if crate::build_sync::is_generated_build_file(&path) || is_under_target_dir(&path) {
                 continue;
             }
-            let name = path.file_name().and_then(|n| n.to_str()).unwrap_or("");
-            let ext = path.extension().and_then(|e| e.to_str());
-            if ext == Some("rsx") {
-                // Index maintenance only: `.rsx` modules are overlaid live and never read by the crate graph.
+            if path.extension().and_then(|e| e.to_str()) == Some("rsx") {
                 rsx_changes.push((path, change.typ == FileChangeType::DELETED));
-                continue;
-            }
-            if name == "Cargo.toml" || name == "Cargo.lock" || change.typ != FileChangeType::CHANGED
-            {
-                // A manifest edit, or a created or deleted file, changes the crate graph.
-                needs_reload = true;
-            } else if ext == Some("rs") {
-                to_refresh.push(path);
             }
         }
-
-        if !rsx_changes.is_empty() {
-            let index = self.index.clone();
-            tokio::task::spawn_blocking(move || {
-                if let Ok(mut guard) = index.lock()
-                    && let Some(idx) = guard.as_mut()
-                {
-                    for (path, deleted) in rsx_changes {
-                        if deleted {
-                            idx.remove(&path);
-                        } else {
-                            idx.refresh_from_disk(&path);
-                        }
-                    }
-                }
-            });
-        }
-
-        if needs_reload {
-            mark_reload(&self.reload_at);
-            self.outgoing.log_message(
-                MessageType::INFO,
-                "telar-analyzer: manifest/file change — workspace reload queued".to_string(),
-            );
+        if rsx_changes.is_empty() {
             return;
         }
-        if to_refresh.is_empty() {
-            return;
-        }
-        let analyzer = self.analyzer.clone();
-        let reload_at = self.reload_at.clone();
-        // Off the read loop: locking the analyzer can contend with an in-flight query.
+
+        let index = self.index.clone();
         tokio::task::spawn_blocking(move || {
-            let Ok(mut state) = analyzer.lock() else {
-                return;
-            };
-            if let AnalyzerState::Ready(a) = &mut *state {
-                for path in &to_refresh {
-                    if !a.refresh_from_disk(path) {
-                        // A `.rs` the loaded graph does not know, so reload to pick it up.
-                        mark_reload(&reload_at);
-                        break;
+            if let Ok(mut guard) = index.lock()
+                && let Some(idx) = guard.as_mut()
+            {
+                for (path, deleted) in rsx_changes {
+                    if deleted {
+                        idx.remove(&path);
+                    } else {
+                        idx.refresh_from_disk(&path);
                     }
                 }
             }
@@ -331,7 +276,7 @@ impl Backend {
                 theme,
                 pos,
                 locate,
-                |a, path, text, offset| Some(a.completions_at_offset(&path, text, offset)),
+                |a, path, text, offset| async move { Some(a.completions(&path, &text, offset).await) },
             )
             .await?;
         let items = match component_props {
@@ -435,9 +380,13 @@ impl Backend {
         };
 
         let rsx_path = file_path?;
-        self.rust_query(rsx_path, source, theme, pos, |a, path, text, offset| {
-            a.signature_help_at_offset(&path, text, offset)
-        })
+        self.rust_query(
+            rsx_path,
+            source,
+            theme,
+            pos,
+            |a, path, text, offset| async move { a.signature_help(&path, &text, offset).await },
+        )
         .await
     }
 
@@ -472,9 +421,13 @@ impl Backend {
         // Outside a native `.rsx` zone: resolve Rust definitions via the embedded rust-analyzer, then reverse-map any generated-`.rs` targets back onto their `.rsx` (see `map_definition_targets`).
         let rsx_path = file_path?;
         let targets = self
-            .rust_query(rsx_path, source, theme, pos, |a, path, text, offset| {
-                a.definition_at_offset(&path, text, offset)
-            })
+            .rust_query(
+                rsx_path,
+                source,
+                theme,
+                pos,
+                |a, path, text, offset| async move { a.definition(&path, &text, offset).await },
+            )
             .await?;
         let locations = map_definition_targets(targets);
         if locations.is_empty() {
@@ -502,9 +455,13 @@ impl Backend {
         }
         // Native `.rsx` hover (tags / colors) didn't match: delegate to the embedded rust-analyzer over the generated module — line-mapped for `[logic]`, expression-span-mapped for `[view]`.
         let rsx_path = file_path?;
-        self.rust_query(rsx_path, source, theme, pos, |a, path, text, offset| {
-            a.hover_at_offset(&path, text, offset)
-        })
+        self.rust_query(
+            rsx_path,
+            source,
+            theme,
+            pos,
+            |a, path, text, offset| async move { a.hover(&path, &text, offset).await },
+        )
         .await
     }
 
@@ -623,8 +580,8 @@ impl Backend {
         let gen_path = target.path.clone();
         let gen_code = target.code.clone();
         let raws = self
-            .run_analyzer(gen_path.clone(), root, move |a| {
-                Some(a.inlay_hints(&gen_path, gen_code))
+            .run_analyzer(root, move |a| async move {
+                Some(a.inlay_hints(&gen_path, &gen_code).await)
             })
             .await?;
 

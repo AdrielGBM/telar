@@ -3,7 +3,7 @@ name = "telar-analyzer"
 version = { workspace = true }
 edition = { workspace = true }
 rust-version = { workspace = true }
-# Not on crates.io: the VS Code extension ships a prebuilt binary, and the exact `ra_ap_*` pins would rot for anyone running `cargo install`.
+# Not on crates.io: the VS Code extension ships a prebuilt binary, and a git-pinned rust-analyzer would rot for anyone running `cargo install`.
 publish = false
 description = "Language server for Telar's .rsx files: diagnostics, completion and component preview."
 keywords = ["telar", "rsx", "lsp", "language-server", "ide"]
@@ -23,14 +23,6 @@ telar-transpiler = { workspace = true, features = ["transpile"] }
 
 anyhow = "1.0.103"
 lsp-types = { workspace = true }
-ra_ap_hir = "=0.0.349"
-ra_ap_ide = "=0.0.349"
-ra_ap_ide_db = "=0.0.349"
-ra_ap_load-cargo = "=0.0.349"
-ra_ap_paths = "=0.0.349"
-ra_ap_proc_macro_api = "=0.0.349"
-ra_ap_project_model = "=0.0.349"
-ra_ap_vfs = "=0.0.349"
 serde = { workspace = true }
 serde_json = { workspace = true }
 tokio = { version = "1", features = [
@@ -44,6 +36,10 @@ tokio = { version = "1", features = [
 ] }
 toml = { workspace = true }
 url = "2.5.8"
+rust-analyzer = { git = "https://github.com/rust-lang/rust-analyzer", rev = "5c156cdfb047ea171ba255dcdcd86236d98a389e", version = "0.0.0" }
+paths = { git = "https://github.com/rust-lang/rust-analyzer", rev = "5c156cdfb047ea171ba255dcdcd86236d98a389e", version = "0.0.0" }
+lsp-server = "0.7"
+crossbeam-channel = "0.5.17"
 
 [target."cfg(unix)".dependencies]
 libc = { workspace = true }

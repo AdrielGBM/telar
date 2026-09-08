@@ -3,7 +3,6 @@
 use std::path::PathBuf;
 
 use lsp_types::*;
-use ra_ap_ide::TextSize;
 
 use crate::project::ProjectInfo;
 use telar_project::naming::{to_pascal_case, to_snake_case};
@@ -140,24 +139,18 @@ impl Backend {
         let gen_path = target.path.clone();
         let gen_code = target.code.clone();
         let result = self
-            .run_analyzer(gen_path.clone(), root, move |a| {
+            .run_analyzer(root, move |a| async move {
                 let fn_refs = a
-                    .references_at_offset(
-                        &gen_path,
-                        gen_code.clone(),
-                        TextSize::from(fn_offset as u32),
-                    )
+                    .references(&gen_path, &gen_code, fn_offset)
+                    .await
                     .unwrap_or_default();
-                let props_refs = props_offset
-                    .map(|o| {
-                        a.references_at_offset(
-                            &gen_path,
-                            gen_code.clone(),
-                            TextSize::from(o as u32),
-                        )
-                        .unwrap_or_default()
-                    })
-                    .unwrap_or_default();
+                let props_refs = match props_offset {
+                    Some(offset) => a
+                        .references(&gen_path, &gen_code, offset)
+                        .await
+                        .unwrap_or_default(),
+                    None => Vec::new(),
+                };
                 Some((fn_refs, props_refs))
             })
             .await;

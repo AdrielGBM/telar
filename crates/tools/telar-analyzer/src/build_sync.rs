@@ -16,14 +16,6 @@ pub fn crate_root(rsx_path: &Path) -> Option<PathBuf> {
     find_ancestor_dir(rsx_path, |dir| dir.join("Cargo.toml").exists())
 }
 
-/// The generated `.rs` path for an `.rsx`, without transpiling (the content is written separately by [`sync_build_file`]). Used to warm the analyzer for a file the moment it opens.
-pub fn generated_path(rsx_path: &Path) -> Option<PathBuf> {
-    let root = crate_root(rsx_path)?;
-    let src_dir = root.join("src");
-    let rel = telar_project::relative_output_path(rsx_path, &src_dir)?;
-    Some(telar_project::generated_dir(&root, BuildFlavour::Plain).join(rel))
-}
-
 /// The transpiler output for one `.rsx`, computed in-memory (no disk). Shared by [`sync_build_file`] and the embedded-analyzer query paths so both see byte-identical generated text.
 pub struct GeneratedTarget {
     /// Path of the generated `<crate>/.telar/build/<rel>.rs`.

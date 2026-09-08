@@ -1,201 +1,202 @@
-//! The analyzer queries the backend delegates to: completion, hover, definition, references and rename.
+//! The queries the backend delegates to rust-analyzer: completion, signature help, hover, definition, references, diagnostics and inlay hints.
+//!
+//! Every one of them syncs the live transpile first, so the answer is against the buffer the editor holds rather than whatever was last built. Offsets come in as bytes because that is what the transpiler's source map speaks; they are converted at this boundary, since LSP counts UTF-16 units from a line.
 
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use lsp_types::{
-    CompletionItem, Hover, HoverContents, MarkupContent, MarkupKind, ParameterInformation,
-    ParameterLabel, Range, SignatureHelp, SignatureInformation,
+    CompletionItem, Diagnostic, Hover, InlayHint, InlayHintLabel, Location, Position, Range,
+    SignatureHelp,
 };
-use ra_ap_ide::{Analysis, FilePosition, FileRange, TextRange, TextSize};
-use ra_ap_vfs::FileId;
+use serde_json::{Value, json};
 
-use super::config::{
-    completion_config, find_all_refs_config, goto_definition_config, hover_config,
-};
-use super::mapping::{lsp_position, map_completion_kind, map_documentation};
-use super::{DefinitionTarget, EmbeddedAnalyzer, RefTarget};
+use super::{Analyzer, DefinitionTarget, InlayHintRaw, QUERY_TIMEOUT, RefTarget};
 
-impl EmbeddedAnalyzer {
-    /// Completion at an exact byte `offset` in the generated file: overlays the freshly transpiled Rust for `gen_path`, then queries rust-analyzer there. The backend resolves the `.rsx` cursor to that offset. `offset` must land on a UTF-8 char boundary or rust-analyzer panics.
-    pub fn completions_at_offset(
-        &mut self,
+impl Analyzer {
+    pub async fn completions(
+        &self,
         gen_path: &Path,
-        generated: String,
-        offset: TextSize,
+        generated: &str,
+        offset: usize,
     ) -> Vec<CompletionItem> {
-        let Some(file_id) = self.file_id(gen_path) else {
+        let Some(result) = self
+            .at_offset("textDocument/completion", gen_path, generated, offset, None)
+            .await
+        else {
             return Vec::new();
         };
-        self.overlay(file_id, generated);
-        let analysis = self.host.analysis();
-        let config = completion_config();
-        let pos = FilePosition { file_id, offset };
-        let items = analysis
-            .completions(&config, pos, None)
-            .ok()
-            .flatten()
-            .unwrap_or_default();
-        items
+        // A `CompletionList` when rust-analyzer flags incompleteness, a bare array otherwise.
+        let items = result.get("items").cloned().unwrap_or(result);
+        serde_json::from_value(items).unwrap_or_default()
+    }
+
+    pub async fn signature_help(
+        &self,
+        gen_path: &Path,
+        generated: &str,
+        offset: usize,
+    ) -> Option<SignatureHelp> {
+        let result = self
+            .at_offset(
+                "textDocument/signatureHelp",
+                gen_path,
+                generated,
+                offset,
+                None,
+            )
+            .await?;
+        serde_json::from_value(result).ok()
+    }
+
+    /// The range is dropped so the client highlights the hovered `.rsx` word itself — reverse-mapping a generated-file range is pointless for a tooltip.
+    pub async fn hover(&self, gen_path: &Path, generated: &str, offset: usize) -> Option<Hover> {
+        let result = self
+            .at_offset("textDocument/hover", gen_path, generated, offset, None)
+            .await?;
+        let mut hover: Hover = serde_json::from_value(result).ok()?;
+        hover.range = None;
+        Some(hover)
+    }
+
+    pub async fn definition(
+        &self,
+        gen_path: &Path,
+        generated: &str,
+        offset: usize,
+    ) -> Option<Vec<DefinitionTarget>> {
+        let result = self
+            .at_offset("textDocument/definition", gen_path, generated, offset, None)
+            .await?;
+        Some(
+            locations(result)
+                .into_iter()
+                .map(|(path, range)| DefinitionTarget { path, range })
+                .collect(),
+        )
+    }
+
+    /// Find-all-references, declaration included: a component rename needs the definition site as much as the uses.
+    pub async fn references(
+        &self,
+        gen_path: &Path,
+        generated: &str,
+        offset: usize,
+    ) -> Option<Vec<RefTarget>> {
+        let result = self
+            .at_offset(
+                "textDocument/references",
+                gen_path,
+                generated,
+                offset,
+                Some(json!({ "context": { "includeDeclaration": true } })),
+            )
+            .await?;
+        Some(
+            locations(result)
+                .into_iter()
+                .map(|(path, range)| RefTarget { path, range })
+                .collect(),
+        )
+    }
+
+    /// Diagnostics for the generated file, in generated-file coordinates. Pulled rather than taken from the `publishDiagnostics` rust-analyzer also emits, so a stale push cannot be mistaken for the current buffer's answer.
+    pub async fn diagnostics(&self, gen_path: &Path, generated: &str) -> Vec<Diagnostic> {
+        self.inner.sync(gen_path, generated);
+        let result = self
+            .inner
+            .request(
+                "textDocument/diagnostic",
+                json!({ "textDocument": { "uri": crate::inner::uri_for(gen_path) } }),
+                QUERY_TIMEOUT,
+            )
+            .await;
+        let Some(result) = result else {
+            return Vec::new();
+        };
+        serde_json::from_value(result.get("items").cloned().unwrap_or_default()).unwrap_or_default()
+    }
+
+    /// Type and parameter hints over the whole generated file. The backend keeps only those whose line maps back to `[logic]`.
+    pub async fn inlay_hints(&self, gen_path: &Path, generated: &str) -> Vec<InlayHintRaw> {
+        self.inner.sync(gen_path, generated);
+        let result = self
+            .inner
+            .request(
+                "textDocument/inlayHint",
+                json!({
+                    "textDocument": { "uri": crate::inner::uri_for(gen_path) },
+                    "range": whole_of(generated),
+                }),
+                QUERY_TIMEOUT,
+            )
+            .await;
+        let Some(result) = result else {
+            return Vec::new();
+        };
+        let hints: Vec<InlayHint> = serde_json::from_value(result).unwrap_or_default();
+        hints
             .into_iter()
-            .map(|item| CompletionItem {
-                label: item.lookup().to_string(),
-                kind: map_completion_kind(item.kind),
-                detail: item.detail.clone(),
-                // Eager from rust-analyzer (the completion config resolves nothing lazily). The backend moves this into its resolve cache and re-attaches it on `completionItem/resolve`, so the completion list itself stays lean on the wire.
-                documentation: map_documentation(&item),
-                ..Default::default()
+            .filter_map(|hint| {
+                let label = match hint.label {
+                    InlayHintLabel::String(label) => label,
+                    InlayHintLabel::LabelParts(parts) => {
+                        parts.into_iter().map(|p| p.value).collect()
+                    }
+                };
+                if label.is_empty() {
+                    return None;
+                }
+                Some(InlayHintRaw {
+                    line: hint.position.line,
+                    col: hint.position.character,
+                    pad_left: hint.padding_left.unwrap_or(false),
+                    pad_right: hint.padding_right.unwrap_or(false),
+                    kind: hint.kind,
+                    label,
+                })
             })
             .collect()
     }
 
-    /// Signature help at an exact byte `offset` in the generated file, mapped to LSP. Same overlay→query path as completion.
-    pub fn signature_help_at_offset(
-        &mut self,
-        gen_path: &Path,
-        generated: String,
-        offset: TextSize,
-    ) -> Option<SignatureHelp> {
-        let file_id = self.file_id(gen_path)?;
-        self.overlay(file_id, generated);
-        let analysis = self.host.analysis();
-        let pos = FilePosition { file_id, offset };
-        let help = analysis.signature_help(pos).ok().flatten()?;
-        let active = help.active_parameter.map(|n| n as u32);
-        let parameters = help
-            .parameter_labels()
-            .map(|p| ParameterInformation {
-                label: ParameterLabel::Simple(p.to_string()),
-                documentation: None,
-            })
-            .collect();
-        Some(SignatureHelp {
-            signatures: vec![SignatureInformation {
-                label: help.signature.clone(),
-                documentation: None,
-                parameters: Some(parameters),
-                active_parameter: active,
-            }],
-            active_signature: Some(0),
-            active_parameter: active,
-        })
-    }
-
-    /// Hover at an exact byte `offset` in the generated file, mapped to LSP. The range is omitted so the client highlights the hovered `.rsx` word itself — mapping the generated-file range back is unnecessary for a tooltip.
-    pub fn hover_at_offset(
-        &mut self,
-        gen_path: &Path,
-        generated: String,
-        offset: TextSize,
-    ) -> Option<Hover> {
-        let file_id = self.file_id(gen_path)?;
-        self.overlay(file_id, generated);
-        let analysis = self.host.analysis();
-        let range = FileRange {
-            file_id,
-            range: TextRange::empty(offset),
-        };
-        let info = analysis.hover(&hover_config(), range).ok().flatten()?;
-        let value = info.info.markup.as_str().to_string();
-        if value.is_empty() {
-            return None;
-        }
-        Some(Hover {
-            contents: HoverContents::Markup(MarkupContent {
-                kind: MarkupKind::Markdown,
-                value,
-            }),
-            range: None,
-        })
-    }
-
-    /// Go-to-definition at an exact byte `offset` in the generated file. Each navigation target is resolved to its file path (via the `Vfs`) and name range (in that file's coordinates); the backend reverse-maps the generated `.telar/build/*.rs` ones back to the `.rsx`. `None` means rust-analyzer found nothing.
-    pub fn definition_at_offset(
-        &mut self,
-        gen_path: &Path,
-        generated: String,
-        offset: TextSize,
-    ) -> Option<Vec<DefinitionTarget>> {
-        let file_id = self.file_id(gen_path)?;
-        self.overlay(file_id, generated);
-        let analysis = self.host.analysis();
-        let pos = FilePosition { file_id, offset };
-        let nav = analysis
-            .goto_definition(pos, &goto_definition_config())
-            .ok()
-            .flatten()?;
-        let mut targets = Vec::new();
-        for target in nav.info {
-            let Some(path) = self.file_path(target.file_id) else {
-                continue;
-            };
-            let Ok(line_index) = analysis.file_line_index(target.file_id) else {
-                continue;
-            };
-            // Prefer the identifier range (`focus_range`); fall back to the whole item.
-            let span = target.focus_range.unwrap_or(target.full_range);
-            targets.push(DefinitionTarget {
-                path,
-                range: Range {
-                    start: lsp_position(&line_index, span.start()),
-                    end: lsp_position(&line_index, span.end()),
-                },
-            });
-        }
-        Some(targets)
-    }
-
-    /// Find-all-references at an exact byte `offset` in the generated file (component rename queries the generated `fn`/`Props` definition directly). Returns the declaration plus every use across the workspace; `None` when rust-analyzer resolves no symbol.
-    pub fn references_at_offset(
-        &mut self,
-        gen_path: &Path,
-        generated: String,
-        offset: TextSize,
-    ) -> Option<Vec<RefTarget>> {
-        let file_id = self.file_id(gen_path)?;
-        self.overlay(file_id, generated);
-        let analysis = self.host.analysis();
-        let pos = FilePosition { file_id, offset };
-        let results = analysis
-            .find_all_refs(pos, &find_all_refs_config())
-            .ok()
-            .flatten()?;
-        let mut out = Vec::new();
-        for result in &results {
-            if let Some(decl) = &result.declaration {
-                let nav = &decl.nav;
-                let span = nav.focus_range.unwrap_or(nav.full_range);
-                if let Some(target) = self.ref_target(&analysis, nav.file_id, span) {
-                    out.push(target);
-                }
-            }
-            for (file_id, ranges) in &result.references {
-                for (range, _category) in ranges {
-                    if let Some(target) = self.ref_target(&analysis, *file_id, *range) {
-                        out.push(target);
-                    }
-                }
-            }
-        }
-        Some(out)
-    }
-
-    /// Builds a [`RefTarget`] for `span` in `file_id`: its filesystem path (via the `Vfs`) plus the span in both byte and LSP coordinates. `None` if the file has no path or no line index.
-    fn ref_target(
+    async fn at_offset(
         &self,
-        analysis: &Analysis,
-        file_id: FileId,
-        span: TextRange,
-    ) -> Option<RefTarget> {
-        let path = self.file_path(file_id)?;
-        let line_index = analysis.file_line_index(file_id).ok()?;
-        Some(RefTarget {
-            path,
-            byte_start: span.start().into(),
-            byte_end: span.end().into(),
-            range: Range {
-                start: lsp_position(&line_index, span.start()),
-                end: lsp_position(&line_index, span.end()),
-            },
-        })
+        method: &str,
+        gen_path: &Path,
+        generated: &str,
+        offset: usize,
+        extra: Option<Value>,
+    ) -> Option<Value> {
+        self.inner.sync(gen_path, generated);
+        let mut params = json!({
+            "textDocument": { "uri": crate::inner::uri_for(gen_path) },
+            "position": crate::text::offset_to_position(generated, offset),
+        });
+        if let (Some(Value::Object(extra)), Some(params)) = (extra, params.as_object_mut()) {
+            params.extend(extra);
+        }
+        let result = self.inner.request(method, params, QUERY_TIMEOUT).await?;
+        (!result.is_null()).then_some(result)
+    }
+}
+
+/// LSP's `Location | Location[]` as `(path, range)` pairs. Anything whose URI is not a local file is dropped, since the backend has nothing to map it onto.
+fn locations(result: Value) -> Vec<(PathBuf, Range)> {
+    let list = match result {
+        Value::Array(list) => list,
+        other => vec![other],
+    };
+    list.into_iter()
+        .filter_map(|value| serde_json::from_value::<Location>(value).ok())
+        .filter_map(|location| Some((crate::uri::to_path(&location.uri)?, location.range)))
+        .collect()
+}
+
+fn whole_of(text: &str) -> Range {
+    Range {
+        start: Position {
+            line: 0,
+            character: 0,
+        },
+        end: crate::text::offset_to_position(text, text.len()),
     }
 }

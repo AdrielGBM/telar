@@ -10,11 +10,9 @@ fn abs(unix: &str) -> PathBuf {
     }
 }
 
-fn target(gen_line: u32, gen_char_start: u32, gen_char_end: u32, bytes: (u32, u32)) -> RefTarget {
+fn target(gen_line: u32, gen_char_start: u32, gen_char_end: u32) -> RefTarget {
     RefTarget {
         path: PathBuf::from("/x/.telar/build/c.rs"),
-        byte_start: bytes.0,
-        byte_end: bytes.1,
         range: Range {
             start: Position {
                 line: gen_line,
@@ -35,8 +33,7 @@ fn logic_ref_maps_back_subtracting_the_indent() {
     let rsx = "[logic]\nlet total = x;\n";
     let map = SourceMap::new(vec![None, Some(1)], vec![]);
     // `total` sits at gen col 8 (`    let `); expect rsx col 4 (`let `).
-    let at = gen_src.find("total").unwrap() as u32;
-    let t = target(1, 8, 13, (at, at + 5));
+    let t = target(1, 8, 13);
     let range = reverse_map_current_file(&t, gen_src, &map, rsx).unwrap();
     assert_eq!(range.start.line, 1);
     assert_eq!(range.start.character, 4);
@@ -58,7 +55,9 @@ fn view_ref_maps_through_the_expr_span() {
             gen_start: gen_name_byte,
         }],
     );
-    let t = target(1, 0, 0, (gen_name_byte, gen_name_byte + 4));
+    // The span rust-analyzer reports for that reference, on generated line 1.
+    let gen_col = gen_src.lines().nth(1).unwrap().find("name").unwrap() as u32;
+    let t = target(1, gen_col, gen_col + 4);
     let range = reverse_map_current_file(&t, gen_src, &map, rsx).unwrap();
     // `name` is on .rsx line 2 (`    text "{name}"`), at the `{`+1 column.
     assert_eq!(range.start.line, 2);
@@ -71,7 +70,7 @@ fn view_ref_maps_through_the_expr_span() {
 fn boilerplate_lines_have_no_origin() {
     let gen_src = "boilerplate\n";
     let map = SourceMap::new(vec![None], vec![]);
-    let t = target(0, 0, 3, (0, 0));
+    let t = target(0, 0, 3);
     assert!(
         reverse_map_current_file(&t, gen_src, &map, "x\n").is_none(),
         "a boilerplate line maps back to no .rsx text"
@@ -83,8 +82,6 @@ fn real_files_pass_through_generated_files_reverse_map() {
     let uri: Uri = "file:///x/src/c.rsx".parse().unwrap();
     let real = RefTarget {
         path: abs("/x/src/lib.rs"),
-        byte_start: 0,
-        byte_end: 4,
         range: Range {
             start: Position {
                 line: 5,
@@ -125,8 +122,6 @@ fn view_ref_without_a_span_is_dropped_not_corrupted() {
     let map = SourceMap::new(vec![None, Some(2), None], vec![]);
     let t = RefTarget {
         path: gen_path.to_path_buf(),
-        byte_start: 0,
-        byte_end: 0,
         range: Range {
             start: Position {
                 line: 1,
