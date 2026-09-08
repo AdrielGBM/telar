@@ -375,10 +375,10 @@ pub struct PluginVTable {
     pub on_frame: unsafe extern "Rust" fn(*mut PluginInstance, &mut AppCtx),
 }
 
-/// Exports a plugin cdylib's one FFI symbol, the `_rsx_plugin_vtable`. `$factory` is any `Fn(&[String]) -> Box<dyn telar::EmbeddedApp>` — invoked once per instance with the launch args.
+/// Exports a plugin cdylib's one FFI symbol, the `_rsx_plugin_vtable`. `$factory` is any `Fn(&[String]) -> Box<dyn EmbeddedApp>` — invoked once per instance with the launch args.
 ///
 /// ```ignore
-/// telar::plugin!(|args: &[String]| -> Box<dyn telar::EmbeddedApp> { Box::new(MyApp::new(args)) });
+/// telar_plugin::plugin!(|args: &[String]| -> Box<dyn telar_plugin::EmbeddedApp> { Box::new(MyApp::new(args)) });
 /// ```
 ///
 /// One symbol rather than one per method, so adding a guest method is a field here and a wrapper on the host instead of four edits across two macros — and so a stale `.so` fails the [`TELAR_PLUGIN_ABI`] check with a version mismatch rather than a missing-symbol error that names whichever method happened to be added last.
