@@ -381,6 +381,43 @@ fn on_key_fires_on_key_press() {
     assert_eq!(count.get(), 1, "a key press fires on_key");
 }
 
+/// The other half of that: a table that binds a key the runtime also uses.
+///
+/// A handler answering `()` never ends an event, so `Tab` did the application's action **and** entered the focus order — and the `Enter` that followed pressed whatever it had landed on. Answering `true` is what stops it there.
+#[test]
+fn a_key_handler_that_took_the_key_leaves_nothing_behind() {
+    reset_layout_runtime();
+    focus::clear();
+    let taken = Rc::new(Cell::new(0u32));
+    let sink = taken.clone();
+    let mut card = StyledContainer::new(
+        LayoutStyle::new().flex_column(),
+        |_r| RectStyle::default(),
+        vec![],
+    )
+    .unwrap()
+    .on_key(move |key| {
+        sink.set(sink.get() + 1);
+        matches!(key, Key::Named(NamedKey::Tab))
+    });
+    let press = |key| Event::KeyPressed {
+        key,
+        modifiers: platform_core::ModifiersState::default(),
+    };
+
+    assert_eq!(
+        card.on_event(&press(Key::Named(NamedKey::Tab))),
+        EventResult::Handled,
+        "the key the table claimed goes no further"
+    );
+    assert_eq!(
+        card.on_event(&press(Key::Char('a'))),
+        EventResult::Ignored,
+        "and one it did not claim is still everybody else's"
+    );
+    assert_eq!(taken.get(), 2, "either way the handler saw both");
+}
+
 /// The bug this closes: an app-level shortcut table sharing letters with what the user types. `3` selects a mode until a field has the caret, and `⌘S` saves either way because no editor here wants it.
 #[test]
 fn a_global_key_handler_stands_aside_while_a_field_has_the_caret() {

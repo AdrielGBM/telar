@@ -18,6 +18,31 @@ use crate::layout_item::{LayoutItem, TrackedChildren, register_container};
 use crate::pointer::dispatch_container_event;
 use crate::press::PressGesture;
 
+/// The bool is [`KeyAnswer::took`], resolved at the builder so dispatch has one shape to call.
+type KeyTable = Box<dyn Fn(&Key) -> bool>;
+
+/// What a key handler answers, which is either nothing at all or whether it took the key.
+///
+/// Two shapes for one hook because a shortcut table and a key binding are different things. A table — «these are the application's keys» — answers `()`: it acts on the ones it knows and lets every key through, which is what a broadcast handler wants. A binding on a key the runtime *also* uses has to be able to end it, and `Tab` is that key: with nothing focused it enters the focus order, so a table that answered only `()` got its own action **and** the focus move, on every press.
+///
+/// `()` is the answer a closure written before this existed already gives, so nothing had to be rewritten to keep working.
+pub trait KeyAnswer {
+    /// Whether the handler took the key, leaving nothing for anyone else.
+    fn took(self) -> bool;
+}
+
+impl KeyAnswer for () {
+    fn took(self) -> bool {
+        false
+    }
+}
+
+impl KeyAnswer for bool {
+    fn took(self) -> bool {
+        self
+    }
+}
+
 /// Re-resolves `node`'s layout style whenever the reactive state `style` reads changes, and once now.
 ///
 /// The general form of [`StyledContainer::styled_by`], for a widget that is not a container — a text leaf sized off the theme's `font_size`, a slider thumb sized off its `spacing`. The returned [`Effect`] must be held for as long as the node lives, which for a leaf means its owning container `keeping` it.
@@ -132,7 +157,7 @@ pub struct StyledContainer {
     drag: DragGesture,
     pointer: PointerHooks,
     // A GLOBAL shortcut handler, not focused text input: key events carry no pointer position, so they are broadcast to every widget.
-    on_key: Option<Box<dyn Fn(&Key)>>,
+    on_key: Option<KeyTable>,
     focusable: Focusable,
     // Whether the box declines to shadow what it is drawn over (`pointer-events: none`).
     click_through: bool,
@@ -736,14 +761,16 @@ impl StyledContainer {
     /// Fire `f(&key)` on every key press. This is a GLOBAL handler (key events reach every widget; there is no per-widget focus), so it suits app-level shortcuts, not focused text entry.
     ///
     /// It stands aside while a text entry holds focus and the press is text it would take ([`focus::text_entry_takes_key`]) — so a shortcut on `3` does not also fire when the user types `3` into a field, while `⌘S` still reaches it. Read the modifiers with [`crate::modifiers`]: key events carry them, but pointer events do not, so the state registry is the one answer that works everywhere.
-    pub fn on_key(self, f: impl Fn(&Key) + 'static) -> Self {
+    ///
+    /// Return `bool` from `f` rather than `()` to say whether the shortcut took the key — see [`KeyAnswer`]. That is what a table binding a key the runtime also uses needs: `Tab` enters the focus order when nothing claims it, so a handler that answers `()` gets both its own action and the focus move.
+    pub fn on_key<A: KeyAnswer>(self, f: impl Fn(&Key) -> A + 'static) -> Self {
         self.maybe_on_key(Some(f))
     }
 
     /// [`on_key`](Self::on_key) for a handler the caller may not have supplied.
-    pub fn maybe_on_key(mut self, f: Option<impl Fn(&Key) + 'static>) -> Self {
+    pub fn maybe_on_key<A: KeyAnswer>(mut self, f: Option<impl Fn(&Key) -> A + 'static>) -> Self {
         let Some(f) = f else { return self };
-        self.on_key = Some(Box::new(f));
+        self.on_key = Some(Box::new(move |key| f(key).took()));
         self
     }
 
@@ -915,8 +942,9 @@ impl Component for StyledContainer {
                 // Not while a field has the caret: this is the app's shortcut table, which would otherwise fire on every letter typed.
                 if let Some(cb) = &self.on_key
                     && !focus::text_entry_takes_key(key, *modifiers)
+                    && cb(key)
                 {
-                    cb(key);
+                    return EventResult::Handled;
                 }
                 self.dispatch_children(event)
             }
