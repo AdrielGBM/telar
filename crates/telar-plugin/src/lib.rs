@@ -68,6 +68,8 @@ pub fn composite(rect: Rect, image_salt: u64, mut commands: DrawList) -> RenderN
 /// Lifecycle the driver enforces: [`build`](Self::build) runs once, inside the plugin's freshly-entered [`Surface`], so the content's layout nodes land in *this* surface's world; afterwards [`layout_root`](Self::layout_root) is the node the driver sizes to the host's sub-rect.
 pub trait EmbeddedApp: 'static {
     /// Build the content's layout tree. Called once by the driver with the plugin's surface active, so nodes are allocated in this surface's layout world. [`layout_root`](Self::layout_root) must be valid after it.
+    ///
+    /// **Also where a guest installs what only a runner would have installed for it.** A plugin is a `cdylib`: it links its own copy of every crate behind the facade, so the statics and thread-locals those keep are its own and start empty. The theme is one; `TextMetrics` is the one that bites, because nothing sets a default and the first text laid out here panics without it — call `telar::install_default_text_metrics()` (or `renderer_core::set_text_metrics` with whatever suits the surface) before building the tree. The driver cannot do it: it does not know whether the guest draws to pixels or to cells, and a trait object cannot cross the boundary to be handed over.
     fn build(&mut self);
 
     /// The content's top layout node — the one the driver `compute_layout`s to the host-assigned rect size.
