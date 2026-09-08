@@ -6,7 +6,9 @@ use telar_project::naming::is_ident;
 
 use super::ViewGen;
 use super::expr_marker;
-use super::signals::{Segment, parse_interpolation, rust_str, substitute_reads};
+use super::signals::{
+    Segment, parse_interpolation, rust_str, substitute_reads, substitute_reads_spanned,
+};
 
 impl ViewGen<'_> {
     /// Builds the `content_fn` closure for a text node, handling `{...}` interpolation. `content_start` is the source byte offset of `content`, used to tag each interpolated expression with its source span.
@@ -49,9 +51,13 @@ impl ViewGen<'_> {
         if trimmed.is_empty() {
             return format!("{{ {expr} }}");
         }
-        // Substitution rewrites the text, so a `$` expression gets no verbatim span; a `$`-free one is copied byte-for-byte and keeps its source span for LSP mapping.
+        // The expression around a `$` is rewritten, so it carries no span of its own — but each identifier inside it is copied byte for byte and keeps one, which is what a cursor on `$name` resolves through.
         if trimmed.contains('$') {
-            return format!("{{ {} }}", substitute_reads(trimmed));
+            let lead = expr.len() - expr.trim_start().len();
+            return format!(
+                "{{ {} }}",
+                substitute_reads_spanned(trimmed, raw_start + lead)
+            );
         }
         // Nor an expression carrying a string literal: the parser hands content back unescaped, so a `"` here was `\"` in the `.rsx` and every offset after it is off by one. The span is dropped rather than made to lie.
         if trimmed.contains('"') {

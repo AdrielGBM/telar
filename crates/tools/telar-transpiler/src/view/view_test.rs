@@ -19,7 +19,7 @@ fn signal_interpolation() {
     let g = make_gen();
     assert_eq!(
         g.interpolate_content("Count: {$count}", 0),
-        "move || format!(\"Count: {}\", { count.get() })"
+        "move || format!(\"Count: {}\", { /*@RSX@EXPR:9:5@*/count.get() })"
     );
 }
 

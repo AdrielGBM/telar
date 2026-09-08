@@ -347,3 +347,7 @@
 346	.
 
 # verbatim expression spans: rsx[start..end] -> gen[start] `source text`
+1363..1369	5915	`clicks`
+2048..2054	9645	`clicks`
+3380..3388	18390	`hovering`
+3509..3513	19477	`keys`

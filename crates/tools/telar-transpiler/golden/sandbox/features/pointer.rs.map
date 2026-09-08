@@ -482,3 +482,8 @@
 481	.
 
 # verbatim expression spans: rsx[start..end] -> gen[start] `source text`
+3520..3524	19191	`at_x`
+3541..3545	19215	`at_y`
+4040..4047	22914	`settled`
+5157..5162	30132	`wheel`
+5231..5234	30715	`alt`

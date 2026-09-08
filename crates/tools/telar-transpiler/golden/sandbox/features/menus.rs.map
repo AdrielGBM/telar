@@ -253,3 +253,5 @@
 252	.
 
 # verbatim expression spans: rsx[start..end] -> gen[start] `source text`
+1229..1235	4419	`picked`
+1634..1640	8186	`action`

@@ -198,6 +198,9 @@
 197	.
 
 # verbatim expression spans: rsx[start..end] -> gen[start] `source text`
+1049..1054	3097	`agree`
+1354..1360	5805	`notify`
 1626..1630	8140	`0u32`
 1686..1690	8368	`1u32`
 1747..1751	8597	`2u32`
+1796..1802	8961	`choice`

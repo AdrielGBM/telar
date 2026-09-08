@@ -209,6 +209,22 @@ fn substitute_dollar(s: &str, read: bool) -> String {
     out
 }
 
+/// [`substitute_reads`] that also records where each identifier came from. The expression around it is rewritten — the `$` goes, a `.get()` arrives — but the identifier itself is copied byte for byte, and that is the part a cursor lands on. `base` is the source byte offset of `s`.
+pub(super) fn substitute_reads_spanned(s: &str, base: usize) -> String {
+    let mut out = String::with_capacity(s.len());
+    let mut copied = 0;
+    for (marker, end) in dollar_spans(s) {
+        let ident = &s[marker + 1..end];
+        out.push_str(&s[copied..marker]);
+        out.push_str(&expr_marker(base + marker + 1, ident.len()));
+        out.push_str(ident);
+        out.push_str(".get()");
+        copied = end;
+    }
+    out.push_str(&s[copied..]);
+    out
+}
+
 /// Collects the identifier of every `$ident` signal reference in `s`, used to clone signals captured by a closure.
 pub(super) fn signal_idents(s: &str) -> Vec<String> {
     dollar_spans(s)

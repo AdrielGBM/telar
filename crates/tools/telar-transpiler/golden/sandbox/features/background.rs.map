@@ -295,4 +295,6 @@
 294	.
 
 # verbatim expression spans: rsx[start..end] -> gen[start] `source text`
+3189..3194	5821	`total`
+4612..4617	14795	`found`
 4857..4861	16302	`name`

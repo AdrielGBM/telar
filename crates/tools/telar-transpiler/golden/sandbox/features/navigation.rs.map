@@ -227,3 +227,4 @@
 
 # verbatim expression spans: rsx[start..end] -> gen[start] `source text`
 785..818	2517	`vec!["Overview","Pricing","Team"]`
+1516..1520	10991	`open`

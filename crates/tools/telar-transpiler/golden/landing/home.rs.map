@@ -552,9 +552,12 @@
 1411..1418	4970	`PRIMARY`
 1987..1994	6830	`PRIMARY`
 2099..2106	7072	`PRIMARY`
+2135..2145	7506	`spots_left`
 2281..2293	8100	`gradient_img`
 4754..4766	18867	`gradient_img`
 4940..4951	19966	`checker_img`
 5122..5132	21061	`radial_img`
 5389..5400	22698	`checker_img`
+5986..5996	25897	`spots_left`
+6232..6239	26692	`signups`
 5842..5849	27370	`PRIMARY`

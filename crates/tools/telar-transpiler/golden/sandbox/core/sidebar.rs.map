@@ -70,3 +70,4 @@
 512..533	2196	`|| set_mode("modern")`
 603..624	2441	`|| set_mode("pastel")`
 696..719	2688	`|| set_mode("midnight")`
+751..761	3079	`theme_name`

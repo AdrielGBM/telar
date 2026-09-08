@@ -146,3 +146,4 @@
 145	.
 
 # verbatim expression spans: rsx[start..end] -> gen[start] `source text`
+1281..1285	6295	`tags`
