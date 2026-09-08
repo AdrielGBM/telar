@@ -120,7 +120,7 @@ impl ViewGen<'_> {
 
         let mut chain = String::new();
         if let Some(fill) = find("fill") {
-            let _ = write!(chain, ".with_fill({})", self.color_expr(fill));
+            let _ = write!(chain, ".with_fill({})", self.color_expr(fill, None));
         }
         if let Some(stroke) = find("stroke") {
             let width = find("stroke_width")
@@ -129,7 +129,7 @@ impl ViewGen<'_> {
             let _ = write!(
                 chain,
                 ".with_stroke(Stroke::new({}, {}))",
-                self.color_expr(stroke),
+                self.color_expr(stroke, None),
                 format_f32(width)
             );
         }

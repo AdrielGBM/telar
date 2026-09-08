@@ -114,7 +114,7 @@ impl ViewGen<'_> {
         if v.is_empty() {
             return "|| None".to_string();
         }
-        let expr = self.color_expr(v);
+        let expr = self.color_expr(a.value.text(), Some(a.value_start));
         wrap_signal_clones(&[v], format!("move || Some({expr})"))
     }
 

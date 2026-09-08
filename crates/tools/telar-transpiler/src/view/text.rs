@@ -230,7 +230,7 @@ impl ViewGen<'_> {
         }
         let color_attr = attrs.iter().find(|a| a.key == "color");
         if let Some(a) = color_attr {
-            let mut color = self.color_expr(a.value.text());
+            let mut color = self.color_expr(a.value.text(), Some(a.value_start));
             if let Some(curve) = transitions.get("color") {
                 color = self.wrap_transition(curve, &color, hoists);
             }

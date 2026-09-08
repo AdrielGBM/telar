@@ -58,7 +58,7 @@ impl ViewGen<'_> {
         let color = attrs
             .iter()
             .find(|a| a.key == "shadow_color")
-            .map(|a| self.color_expr(a.value.text()))
+            .map(|a| self.color_expr(a.value.text(), Some(a.value_start)))
             .unwrap_or_else(|| "Color::rgba(0.0, 0.0, 0.0, 0.25)".to_string());
         Some(format!(
             "Some(Shadow::new({}, {}, {}, {}))",
@@ -81,11 +81,11 @@ impl ViewGen<'_> {
             .iter()
             .find(|a| a.key == "fill")
             .filter(|_| gradient.is_none())
-            .map(|a| self.color_expr_marked(a));
+            .map(|a| self.color_expr(a.value.text(), Some(a.value_start)));
         let mut stroke = pattrs
             .iter()
             .find(|a| a.key == "stroke")
-            .map(|a| self.color_expr_marked(a));
+            .map(|a| self.color_expr(a.value.text(), Some(a.value_start)));
         if let Some(curve) = transitions.get("fill")
             && let Some(fill) = solid_fill.take()
         {

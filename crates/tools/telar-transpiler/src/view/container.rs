@@ -387,7 +387,7 @@ impl ViewGen<'_> {
         let stops: Vec<String> = parts
             .stops
             .iter()
-            .map(|(pos, color)| format!("({}, {})", format_f32(*pos), self.color_expr(color)))
+            .map(|(pos, color)| format!("({}, {})", format_f32(*pos), self.color_expr(color, None)))
             .collect();
         let stops = format!("&[{}]", stops.join(", "));
         Some(match parts.shape {

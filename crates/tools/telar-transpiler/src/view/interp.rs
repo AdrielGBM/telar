@@ -1,7 +1,6 @@
 //! Text interpolation and color resolution for the view emitters.
 
 use crate::style::hex_to_color_expr;
-use telar_parser::Attr;
 use telar_project::naming::is_ident;
 
 use super::ViewGen;
@@ -82,9 +81,23 @@ impl ViewGen<'_> {
     /// 5. A `[logic]` binding of that name → the binding itself, so a local shadows a same-named token the way it would in Rust.
     /// 6. `theme_type` set → `use_theme::<T>().field` (reactive) for every named color, including `[style]`-declared ones, so runtime theme switching takes effect; use inline hex for a true non-theme one-off.
     /// 7. No `theme_type` → file-local `COLOR_*` constant (declared in `[style]`, or rustc catches the missing symbol if undeclared).
-    pub(super) fn color_expr(&self, value: &str) -> String {
-        let v = value.trim();
-        let v = super::redundant_parens(v).unwrap_or(v);
+    ///
+    /// `at` is where `value` begins in the `.rsx`, or `None` for a value that is not an attribute of its own — a gradient stop, or a prop a component already parsed — and so has no position to record. Given one, a value that reaches the output byte for byte carries a source marker, which is what puts `color:(row_ink(state, index))` within reach of a rename. Cases 1, 2, 4 and the keywords are rewritten on the way, so there is no span to record and the cursor falls back to its line. The position is asked for rather than inferred because a caller holding only the text cannot be told apart from one that forgot to pass it, and forgetting costs a rename that refuses with no way to see why.
+    pub(super) fn color_expr(&self, value: &str, at: Option<usize>) -> String {
+        let trimmed = value.trim();
+        let (inner, delimiters) = match super::redundant_parens(trimmed) {
+            Some(inner) => (inner, 1),
+            None => (trimmed, 0),
+        };
+        let emitted = self.color_value(inner);
+        let Some(at) = at.filter(|_| emitted == inner) else {
+            return emitted;
+        };
+        let lead = value.len() - value.trim_start().len() + delimiters;
+        format!("{}{emitted}", expr_marker(at + lead, inner.len()))
+    }
+
+    fn color_value(&self, v: &str) -> String {
         if v.starts_with('#') {
             return hex_to_color_expr(v);
         }
@@ -107,24 +120,6 @@ impl ViewGen<'_> {
             return v.to_string();
         }
         v.to_string()
-    }
-
-    /// [`Self::color_expr`] with a source marker when the value reaches the output byte for byte — a plain Rust call such as `fill:(row_fill(state, index))`. A `$` read, a hex literal or a colour keyword is rewritten on the way, so there is no span to record and the cursor falls back to its line.
-    pub(super) fn color_expr_marked(&self, attr: &Attr) -> String {
-        let emitted = self.color_expr(attr.value.text());
-        let text = attr.value.text();
-        let (inner, delimiters) = match super::redundant_parens(text.trim()) {
-            Some(inner) => (inner, 1),
-            None => (text.trim(), 0),
-        };
-        if emitted != inner {
-            return emitted;
-        }
-        let lead = text.len() - text.trim_start().len() + delimiters;
-        format!(
-            "{}{emitted}",
-            expr_marker(attr.value_start + lead, inner.len())
-        )
     }
 
     /// Whether codegen resolves any color through `use_theme`, requiring the import.

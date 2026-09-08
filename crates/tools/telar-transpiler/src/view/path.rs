@@ -74,11 +74,16 @@ impl ViewGen<'_> {
             .attributes
             .iter()
             .find(|a| a.key == "fill")
-            .map(|a| format!("Some(Paint::Solid({}))", self.color_expr(a.value.text())))
+            .map(|a| {
+                format!(
+                    "Some(Paint::Solid({}))",
+                    self.color_expr(a.value.text(), Some(a.value_start))
+                )
+            })
             .unwrap_or_else(|| "None".to_string());
         let stroke = match el.attributes.iter().find(|a| a.key == "stroke") {
             Some(a) => {
-                let color = self.color_expr(a.value.text());
+                let color = self.color_expr(a.value.text(), Some(a.value_start));
                 let width = el
                     .attributes
                     .iter()

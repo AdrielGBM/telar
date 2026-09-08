@@ -2251,7 +2251,7 @@ fn a_reactive_for_is_not_flagged() {
 /// The expression map is what makes a *column* mean something in `[view]`: go-to-definition and rename resolve a cursor through it, and a value with no span — or one shifted by the delimiting paren — answers nothing at all rather than answering wrongly.
 #[test]
 fn every_verbatim_view_value_maps_back_to_its_exact_source_bytes() {
-    let src = "[logic]\nlet label = props.label;\n\n[view]\ncol\n    text \"{$label}\"\n    row fill:(row_fill(state, 0, false)) on_press:(|| state.press(0))\n        my_comp bytes:(icon(&e)) color:(ink(state, 0))\n";
+    let src = "[logic]\nlet label = props.label;\n\n[view]\ncol\n    text \"{$label}\"\n    row fill:(row_fill(state, 0, false)) on_press:(|| state.press(0)) shadow_color:(glow(state, 0))\n        my_comp bytes:(icon(&e)) color:(ink(state, 0))\n        text \"hi\" color:(text_ink(state, 0))\n";
     let out = transpile_source(src, "demo", None, None).unwrap();
     let spans: Vec<&str> = out
         .expr_spans
@@ -2262,6 +2262,9 @@ fn every_verbatim_view_value_maps_back_to_its_exact_source_bytes() {
         "row_fill(state, 0, false)",
         "icon(&e)",
         "ink(state, 0)",
+        // A builtin element's own colour, which reaches the output through a different emitter than a component's — the one this test did not cover, and the one that refused a rename of `state`.
+        "text_ink(state, 0)",
+        "glow(state, 0)",
         "|| state.press(0)",
         "label",
     ] {
