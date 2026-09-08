@@ -160,13 +160,7 @@ impl Value {
 
     /// Whether the author wrote a closure out in place, in either spelling Rust accepts, as opposed to forwarding a handler expression the caller was given. The transpiler wires the two to different builder methods (`.on_press` against `.maybe_on_press`), and used to ask it from two near-identical predicates of its own before the question had a value to sit on.
     pub fn is_closure(&self) -> bool {
-        // The markup's delimiting parens are not part of the closure: `on_press:(|| f())` and `on_press:|| f()` say the same.
-        let text = undelimited(self.text().trim());
-        !self.is_quoted()
-            && (text.starts_with('|')
-                || text
-                    .strip_prefix("move")
-                    .is_some_and(|rest| rest.trim_start().starts_with('|')))
+        !self.is_quoted() && starts_closure(self.text().trim())
     }
 }
 
@@ -229,4 +223,18 @@ fn undelimited(expr: &str) -> &str {
         }
     }
     inner.trim()
+}
+
+/// Whether `text` opens a closure written out in place, in either spelling Rust accepts.
+///
+/// Public because the transpiler asks it of a bare string it is about to wrap: a predicate that recognised
+/// only `|…|` there wrapped a `move |…|` a second time, and `move || { move || f() }` builds a closure that
+/// returns a closure and never calls `f`. Nothing rejects that — it is what the handler is now — so the
+/// button simply stopped answering. One predicate, so the two cannot drift again.
+pub fn starts_closure(text: &str) -> bool {
+    let text = undelimited(text.trim());
+    text.starts_with('|')
+        || text
+            .strip_prefix("move")
+            .is_some_and(|rest| rest.trim_start().starts_with('|'))
 }

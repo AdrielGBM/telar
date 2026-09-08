@@ -127,8 +127,11 @@ pub(super) fn normalize_closure(value: &str) -> String {
     // The markup's delimiting parens are not part of the closure: `on_press:(|| f())` and `|| f()` are the same.
     let v = value.trim();
     let v = super::redundant_parens(v).unwrap_or(v);
-    let closure = if v.starts_with('|') {
-        v.to_string()
+    let closure = if telar_parser::starts_closure(v) {
+        // The emitter prefixes `move` itself, so the two spellings `is_closure` accepts have to arrive here as one: keeping the author's `move` produced `move move ||`, and wrapping it as a body produced `move || { move || … }` — a closure returning a closure, which compiles and never runs.
+        v.strip_prefix("move")
+            .map_or(v, str::trim_start)
+            .to_string()
     } else {
         format!("|| {{ {v} }}")
     };
