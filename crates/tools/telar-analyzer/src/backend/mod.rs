@@ -1042,9 +1042,11 @@ impl Backend {
                 return None;
             }
             // A partial rename would leave the code uncompilable, so a reference that could not be precisely located refuses the whole rename rather than half-applying it.
-            if unmapped > 0 {
+            if !unmapped.is_empty() {
                 self.rename_refused(&format!(
-                    "{unmapped} use of this symbol in [view] cannot be located exactly. Renaming the rest would leave the file uncompilable, so nothing was changed."
+                    "{} use of this symbol has no place in the .rsx to rename — {}. Renaming the rest would leave the file uncompilable, so nothing was changed.",
+                    unmapped.len(),
+                    unmapped.join("; ")
                 ));
                 return None;
             }

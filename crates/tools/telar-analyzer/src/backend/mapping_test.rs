@@ -108,7 +108,10 @@ fn real_files_pass_through_generated_files_reverse_map() {
         locs[0].uri.as_str()
     );
     assert_eq!(locs[0].range.start.line, 5);
-    assert_eq!(unmapped, 0);
+    assert!(
+        unmapped.is_empty(),
+        "nothing should have gone unplaced: {unmapped:?}"
+    );
 }
 
 #[test]
@@ -138,7 +141,11 @@ fn view_ref_without_a_span_is_dropped_not_corrupted() {
         locs.is_empty(),
         "a view ref with no span is dropped rather than pointing somewhere wrong"
     );
-    assert_eq!(unmapped, 1);
+    assert_eq!(
+        unmapped.len(),
+        1,
+        "expected one unplaced reference: {unmapped:?}"
+    );
 }
 
 /// A diagnostic in `[logic]` lands on the columns rustc named, shifted by the indent the transpiler adds. Before this, every diagnostic underlined its whole line however precise rustc had been — the exact mapping existed, but only go-to-definition and rename ever used it.

@@ -109,7 +109,7 @@ impl Backend {
         .await
     }
 
-    /// Find-all-references for the Rust symbol under the cursor, reverse-mapped to `.rsx` `Location`s: refs in this file's generated module map back through the line / expr-span maps; refs in real source files pass through verbatim; refs in *other* generated modules are dropped (a file-scoped `[logic]` symbol has none, and a component's cross-component Rust calls are renamed via the dedicated component-rename path instead). Returns `(locations, unmapped)`: the reverse-mapped reference `Location`s plus the count of generated-file references that couldn't be placed (see [`reverse_map_rust_refs`]). Read-only callers ignore `unmapped`; rename refuses when it is non-zero.
+    /// Find-all-references for the Rust symbol under the cursor, reverse-mapped to `.rsx` `Location`s: refs in this file's generated module map back through the line / expr-span maps; refs in real source files pass through verbatim; refs in *other* generated modules are dropped (a file-scoped `[logic]` symbol has none, and a component's cross-component Rust calls are renamed via the dedicated component-rename path instead). Returns `(locations, unmapped)`: the reverse-mapped reference `Location`s plus a line of generated Rust for each reference that could not be placed (see [`reverse_map_rust_refs`]). Read-only callers ignore `unmapped`; rename refuses when it is non-empty, and says what those lines were.
     pub(crate) async fn rust_reference_locations(
         &self,
         uri: &Uri,
@@ -117,7 +117,7 @@ impl Backend {
         source: String,
         theme: Option<String>,
         pos: Position,
-    ) -> Option<(Vec<Location>, usize)> {
+    ) -> Option<(Vec<Location>, Vec<String>)> {
         let mut refs = self
             .rust_references(rsx_path.clone(), source.clone(), theme.clone(), pos)
             .await?;

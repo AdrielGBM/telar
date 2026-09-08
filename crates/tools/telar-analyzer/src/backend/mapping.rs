@@ -68,10 +68,10 @@ pub(crate) fn reverse_map_rust_refs(
     map: &SourceMap,
     rsx_source: &str,
     rsx_uri: &Uri,
-) -> (Vec<Location>, usize) {
+) -> (Vec<Location>, Vec<String>) {
     let mut seen = std::collections::HashSet::new();
     let mut out = Vec::new();
-    let mut unmapped = 0usize;
+    let mut unmapped: Vec<String> = Vec::new();
     for target in targets {
         let is_generated = crate::build_sync::is_generated_build_file(&target.path);
         let location = if !is_generated {
@@ -103,8 +103,14 @@ pub(crate) fn reverse_map_rust_refs(
                     out.push(location);
                 }
             }
-            // A generated-file reference we couldn't place (non-verbatim `[view]` fragment, or another component's module) → the reverse-map is lossy here; flag it for the rename guard.
-            None if is_generated => unmapped += 1,
+            // A generated-file reference we couldn't place (non-verbatim `[view]` fragment, or another component's module). Reported as the generated line itself rather than a count: what the line says is what tells anyone reading the refusal which construction defeated the map.
+            None if is_generated => {
+                let at = target.range.start.line;
+                let text = telar_transpiler::nth_line(gen_code, at as usize)
+                    .unwrap_or("")
+                    .trim();
+                unmapped.push(format!("generated line {at}: {text}"));
+            }
             None => {}
         }
     }
