@@ -5498,6 +5498,7 @@ dependencies = [
  "telar-renderer-assets",
  "telar-renderer-cache",
  "telar-renderer-core",
+ "telar-renderer-text",
  "telar-ui-core",
  "tracing",
  "ureq",

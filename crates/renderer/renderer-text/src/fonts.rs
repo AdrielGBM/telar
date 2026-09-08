@@ -229,3 +229,25 @@ impl FaceSources {
 #[cfg(test)]
 #[path = "fonts_test.rs"]
 mod tests;
+
+/// Loads one face from bytes and reports the families it declares, or `None` when the bytes are not a font.
+///
+/// The seam a face that *arrives* needs: a downloaded or user-supplied file has no path to name in a [`FontConfig`], and the caller cannot ask for it by family until it knows what family it turned out to be. Loading is additive like every other path here, so a shaper already built keeps everything it had.
+///
+/// The families are the face's own, read out of its name table — not a name the caller chose. A file carrying several faces reports each.
+pub fn install_face(data: Vec<u8>) -> Option<Vec<String>> {
+    let mut probe = fontdb::Database::new();
+    probe.load_font_data(data.clone());
+    let families: Vec<String> = probe
+        .faces()
+        .flat_map(|face| face.families.iter().map(|(name, _)| name.clone()))
+        .collect();
+    if families.is_empty() {
+        return None;
+    }
+    install(FontConfig {
+        font_data: vec![data],
+        ..FontConfig::default()
+    });
+    Some(families)
+}

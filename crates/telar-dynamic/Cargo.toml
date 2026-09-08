@@ -44,6 +44,11 @@ svg-text = ["svg", "renderer-assets/svg-text"]
 ## Bitmaps decoded at runtime. PNG and JPEG come with it; every other format is one knob of its own below.
 image = ["dep:image"]
 
+## A typeface loaded at run time, through `FontDecoder`: a downloaded face, one the user picked, or one that came
+## with a language pack. Costs the glyph shaper, which is why it is a knob and not a given — a build that draws
+## as a document has none, and lets the browser load its fonts through CSS.
+font = ["dep:renderer-text"]
+
 ## A translation catalog parsed from TOML at runtime, so a downloaded locale resolves through the same
 ## transport/cache/decoder path an icon does — validated before it is cached, which a plain download is not.
 ##
@@ -71,7 +76,7 @@ http = [
 #! ## Everything
 
 ## Every decoder and every transport, for a build that would rather not enumerate.
-all = ["svg", "svg-text", "image", "image-formats", "catalog", "dir", "http"]
+all = ["svg", "svg-text", "image", "image-formats", "catalog", "font", "dir", "http"]
 
 #! ## Image formats
 #!
@@ -109,6 +114,7 @@ renderer-assets = { workspace = true }
 # The weight-budgeted LRU every renderer cache is already an instance of. `MemoryCache` is one more, so an asset cache reads its eviction rules from where the renderer's are written down instead of rewriting them.
 renderer-cache = { workspace = true }
 renderer-core = { workspace = true }
+renderer-text = { workspace = true, optional = true }
 ui-core = { workspace = true, features = ["async-assets"] }
 
 document-features = { workspace = true, optional = true }

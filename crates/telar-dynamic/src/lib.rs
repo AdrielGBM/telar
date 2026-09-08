@@ -41,6 +41,8 @@ mod dir;
 // A cache that writes to a directory has no target in a browser: `std::fs` compiles there and fails every call, so a build that reached for this one resolved every id over the network on every run and reported nothing. `MemoryCache` is the one that works on every target.
 #[cfg(not(target_arch = "wasm32"))]
 mod disk_cache;
+#[cfg(feature = "font")]
+mod font;
 #[cfg(feature = "http")]
 mod http;
 #[cfg(feature = "image")]
@@ -55,6 +57,8 @@ pub use catalog::CatalogDecoder;
 pub use dir::DirTransport;
 #[cfg(not(target_arch = "wasm32"))]
 pub use disk_cache::DiskCache;
+#[cfg(feature = "font")]
+pub use font::FontDecoder;
 #[cfg(feature = "http")]
 pub use http::HttpTransport;
 #[cfg(feature = "image")]
