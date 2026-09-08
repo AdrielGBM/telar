@@ -961,6 +961,15 @@ impl Backend {
         Some(PrepareRenameResponse::Range(range))
     }
 
+    /// A rename that will not happen, said in both places it has to be said. The editor renders a refused rename as a bare "No results", so the reason has to reach the user — and a toast is easy to miss, while the server log is where anyone debugging one will look.
+    fn rename_refused(&self, why: &str) {
+        self.outgoing
+            .show_message(MessageType::WARNING, format!("Rename cancelled: {why}"));
+        self.outgoing.log_message(
+            MessageType::WARNING,
+            format!("telar-analyzer: rename cancelled — {why}"),
+        );
+    }
     /// `textDocument/rename`: rewrite every occurrence of the symbol under the cursor. `@class`/`$signal` are single-file text rewrites; a component tag renames its `.rsx` file + markup usages + Rust references (cross-file); a Rust identifier in `[logic]`/`[view]` is renamed via the analyzer's find-all-references, reverse-mapped onto the `.rsx` (and any real `.rs` files).
     pub async fn rename(&self, params: RenameParams) -> Option<WorkspaceEdit> {
         let uri = &params.text_document_position.text_document.uri;
@@ -1021,21 +1030,22 @@ impl Backend {
             Section::Logic | Section::View
         ) {
             let rsx_path = file_path?;
-            let (locations, unmapped) = self
+            let Some((locations, unmapped)) = self
                 .rust_reference_locations(uri, rsx_path, source, theme, pos)
-                .await?;
+                .await
+            else {
+                self.rename_refused("rust-analyzer did not answer for this file. It may still be loading the workspace, or the query outran its deadline.");
+                return None;
+            };
             if locations.is_empty() {
+                self.rename_refused("rust-analyzer answered, but found no reference to the symbol under the cursor.");
                 return None;
             }
             // A partial rename would leave the code uncompilable, so a reference that could not be precisely located refuses the whole rename rather than half-applying it.
             if unmapped > 0 {
-                // In front of the user, not only in the log: the editor renders a refused rename as a bare "No results", which reads like the symbol was not found rather than like a deliberate stop.
-                self.outgoing.show_message(
-                    MessageType::WARNING,
-                    format!(
-                        "Rename cancelled: {unmapped} use of this symbol in [view] cannot be located exactly (a `$name` read, or one the generated code re-binds inside a `for`/closure). Renaming the rest would leave the file uncompilable, so nothing was changed."
-                    ),
-                );
+                self.rename_refused(&format!(
+                    "{unmapped} use of this symbol in [view] cannot be located exactly. Renaming the rest would leave the file uncompilable, so nothing was changed."
+                ));
                 return None;
             }
             let mut changes: std::collections::HashMap<Uri, Vec<TextEdit>> =
