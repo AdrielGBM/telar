@@ -83,6 +83,9 @@ pub(crate) struct Runtime {
     pub(crate) disposing: usize,
     pub(crate) flushing: bool,
     flush_epoch: u64,
+    /// The (effect, signal) pairs already reported as waking themselves, so the warning is said once rather than on every pass of a loop that has no other end.
+    #[cfg(debug_assertions)]
+    pub(crate) self_waking: FxHashSet<(EffectId, SignalId)>,
 }
 
 impl Runtime {
@@ -104,6 +107,8 @@ impl Runtime {
             disposing: 0,
             flushing: false,
             flush_epoch: 0,
+            #[cfg(debug_assertions)]
+            self_waking: FxHashSet::default(),
         }
     }
 }

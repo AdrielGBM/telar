@@ -128,6 +128,20 @@ pub(crate) fn track_signal(id: SignalId) {
     });
 }
 
+/// Says so when the effect doing the writing is one this signal wakes, which is a loop with no end: a write bumps the version whether or not the value changed, so the effect schedules itself and arrives here again.
+///
+/// The read is what has to change, not the write — [`crate::RwSignal::peek`] is the one that does not subscribe. Debug builds only, and once per pair: this fires from inside the loop it is reporting.
+#[cfg(debug_assertions)]
+fn self_waking(rt: &mut super::Runtime, id: SignalId) -> bool {
+    let Some(&observer) = rt.observer_stack.last() else {
+        return false;
+    };
+    if !rt.signals[id].subscribers.contains(&observer) {
+        return false;
+    }
+    rt.self_waking.insert((observer, id))
+}
+
 pub(crate) fn notify_signal(id: SignalId) {
     let should_flush = RUNTIME.with(|rt| {
         let mut rt = rt.borrow_mut();
@@ -135,6 +149,12 @@ pub(crate) fn notify_signal(id: SignalId) {
             return false;
         }
         rt.signals[id].version += 1;
+        #[cfg(debug_assertions)]
+        if self_waking(&mut rt, id) {
+            tracing::warn!(
+                "an effect is writing a signal it subscribed to, so this write wakes it and it writes again — read it with `peek` where the effect doing the writing is the one reading"
+            );
+        }
         // Copied into a reused scratch buffer rather than cloning a fresh Vec per write. Deliberately copied, not `mem::take`n, so the dead-subscriber cleanup below can still `swap_remove` in place.
         let mut subs = std::mem::take(&mut rt.subscriber_scratch);
         subs.clear();

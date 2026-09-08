@@ -85,3 +85,31 @@ fn a_handle_can_ask_whether_its_storage_is_there() {
     assert_eq!(doomed.try_get(), None);
     assert_eq!(doomed.try_with(|v| *v), None);
 }
+
+/// The loop that four separate call sites in one downstream project had a paragraph warning about: a signal read inside an effect that later writes it. The version moves on every write, so the effect is scheduled by its own write and arrives back here for ever.
+#[cfg(debug_assertions)]
+#[test]
+fn an_effect_writing_what_it_tracked_is_reported_once() {
+    let scope = crate::owner_scope();
+    let signal = crate::signal(0i32);
+    let seen = std::rc::Rc::new(std::cell::Cell::new(0u32));
+
+    let counted = seen.clone();
+    crate::effect(move || {
+        // Tracked on purpose, which is the mistake being reported.
+        let held = signal.get();
+        if counted.get() < 3 {
+            counted.set(counted.get() + 1);
+            signal.set(held + 1);
+        }
+    });
+    flush();
+
+    assert!(
+        seen.get() > 1,
+        "the effect did wake itself, which is the loop"
+    );
+    let reported = RUNTIME.with(|rt| rt.borrow().self_waking.len());
+    assert_eq!(reported, 1, "and it is reported once, not once per pass");
+    drop(scope);
+}

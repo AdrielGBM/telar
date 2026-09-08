@@ -40,6 +40,11 @@ impl<T: Clone + 'static> ReadSignal<T> {
         read_with::<T, T>(self.id, |v| v.clone())
     }
 
+    /// The value as it stands, **without subscribing the caller to the next one**.
+    ///
+    /// The read to reach for inside an effect that goes on to write this signal, or anything feeding it. A write bumps the version whether or not the value changed, so an effect that tracked it here schedules itself the moment it writes, and again on every pass after — not a slow loop but an endless one. A debug build says so the first time it happens.
+    ///
+    /// Also the read for an event handler, where tracking would attach the value to whichever effect happens to be running.
     pub fn peek(&self) -> T {
         peek_with::<T, T>(self.id, |v| v.clone())
     }
@@ -97,7 +102,7 @@ impl<T: 'static> RwSignal<T> {
         read_with::<T, R>(self.id, f)
     }
 
-    /// As [`with`](Self::with), but does not subscribe the caller — for reads from an event handler, where tracking would attach the value to whatever effect happens to be running.
+    /// [`with`](Self::with) without subscribing the caller — see [`peek`](RwSignal::peek) for the read it is, and the loop it is there to keep you out of.
     pub fn peek_with<R>(&self, f: impl FnOnce(&T) -> R) -> R {
         peek_with::<T, R>(self.id, f)
     }
@@ -127,6 +132,11 @@ impl<T: Clone + 'static> RwSignal<T> {
         read_with::<T, T>(self.id, |v| v.clone())
     }
 
+    /// The value as it stands, **without subscribing the caller to the next one**.
+    ///
+    /// The read to reach for inside an effect that goes on to write this signal, or anything feeding it. A write bumps the version whether or not the value changed, so an effect that tracked it here schedules itself the moment it writes, and again on every pass after — not a slow loop but an endless one. A debug build says so the first time it happens.
+    ///
+    /// Also the read for an event handler, where tracking would attach the value to whichever effect happens to be running.
     pub fn peek(&self) -> T {
         peek_with::<T, T>(self.id, |v| v.clone())
     }

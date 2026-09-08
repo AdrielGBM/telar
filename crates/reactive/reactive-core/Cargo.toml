@@ -16,6 +16,7 @@ reactive-local = { workspace = true }
 rustc-hash = { workspace = true }
 slotmap = "1.1.1"
 smallvec = { workspace = true }
+tracing.workspace = true
 web-time = { workspace = true }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
