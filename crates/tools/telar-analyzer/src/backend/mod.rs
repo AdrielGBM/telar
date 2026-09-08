@@ -46,6 +46,8 @@ pub(crate) struct AnalyzerHandle {
     outgoing: OutgoingSender,
     /// The editor's `initializationOptions`, kept so the user's `rust-analyzer.*` settings reach the session we boot rather than its defaults.
     options: Mutex<serde_json::Value>,
+    /// The editor's own capabilities, kept for the same reason: what the session is told its client can do is what it offers for `.rs`.
+    editor_caps: Mutex<serde_json::Value>,
 }
 
 /// Whether `path` sits inside a cargo build directory. rust-analyzer runs `cargo check` to discover build scripts, which writes generated `.rs` under `target/`; treating those as `.rsx` neighbours would churn the symbol index for files nobody wrote. The client cannot be trusted to exclude them — a non-VS Code editor registers its own watchers.
@@ -113,6 +115,7 @@ impl Backend {
                 state: Mutex::new(AnalyzerState::Idle),
                 outgoing: outgoing.clone(),
                 options: Mutex::new(serde_json::Value::Null),
+                editor_caps: Mutex::new(serde_json::Value::Null),
             }),
             outgoing,
             store: Arc::new(RwLock::new(Store::new())),
@@ -195,11 +198,12 @@ impl Backend {
 
     /// The editor's `initialize`. rust-analyzer is booted here rather than on the first `.rsx` query, because the reply has to advertise what it can do for `.rs` alongside what we do for `.rsx` — the editor gets one capability set for both. A boot that fails is not fatal: `.rsx` keeps its native analysis, and the editor is told what it lost.
     pub async fn initialize(&self, params: Value) -> Value {
-        self.analyzer.set_options(
+        self.analyzer.set_client(
             params
                 .get("initializationOptions")
                 .cloned()
                 .unwrap_or(Value::Null),
+            params.get("capabilities").cloned().unwrap_or(Value::Null),
         );
         let ours = serde_json::to_value(self.own_capabilities()).unwrap_or_else(|_| json!({}));
         let analyzer = match workspace_root(&params) {

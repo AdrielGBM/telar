@@ -50,8 +50,13 @@ pub struct Inner {
 }
 
 impl Inner {
-    /// Boots rust-analyzer against the cargo workspace at `root` and completes the LSP handshake, passing the editor's own `initializationOptions` through so the user's `rust-analyzer.*` settings are the ones that apply. Blocking and slow enough to keep off the runtime thread; the workspace load it kicks off continues in the background.
-    pub fn start(root: &Path, options: Value, outgoing: OutgoingSender) -> anyhow::Result<Self> {
+    /// Boots rust-analyzer against the cargo workspace at `root` and completes the LSP handshake, passing the editor's own `initializationOptions` and capabilities through so the user's `rust-analyzer.*` settings and their client's real abilities are the ones that apply. Blocking and slow enough to keep off the runtime thread; the workspace load it kicks off continues in the background.
+    pub fn start(
+        root: &Path,
+        options: Value,
+        editor_caps: Value,
+        outgoing: OutgoingSender,
+    ) -> anyhow::Result<Self> {
         let (ra_side, our_side) = Connection::memory();
         let abs = AbsPathBuf::assert_utf8(root.to_path_buf());
         std::thread::Builder::new()
@@ -59,7 +64,7 @@ impl Inner {
             .spawn(move || run_server(ra_side, abs))?;
 
         let Connection { sender, receiver } = our_side;
-        let capabilities = handshake(&sender, &receiver, root, options)?;
+        let capabilities = handshake(&sender, &receiver, root, options, &editor_caps)?;
 
         let pending: Pending = Arc::default();
         let relayed: Relayed = Arc::default();
@@ -206,8 +211,14 @@ fn digest(text: &str) -> u64 {
 fn run_server(connection: Connection, root: AbsPathBuf) {
     let session = (|| -> anyhow::Result<()> {
         let (id, params) = connection.initialize_start()?;
+        // Loudly, because the fallback is a client that claims nothing, and rust-analyzer withholds from such a client exactly the features whose absence looks like a bug in us.
         let caps = serde_json::from_value(params.get("capabilities").cloned().unwrap_or(json!({})))
-            .unwrap_or_default();
+            .unwrap_or_else(|e| {
+                eprintln!(
+                    "telar-analyzer: rust-analyzer could not read the client capabilities, so it is being told the client can do nothing: {e}"
+                );
+                Default::default()
+            });
         let mut config = Config::new(root.clone(), caps, vec![root], None);
         if let Some(options) = params.get("initializationOptions").filter(|o| !o.is_null()) {
             config = apply_client_options(config, options.clone());
@@ -235,6 +246,7 @@ fn handshake(
     receiver: &Receiver<Message>,
     root: &Path,
     options: Value,
+    editor_caps: &Value,
 ) -> anyhow::Result<Value> {
     let id = RequestId::from(0);
     sender.send(Message::Request(Request {
@@ -243,7 +255,7 @@ fn handshake(
         params: json!({
             "processId": std::process::id(),
             "rootUri": uri_for(root),
-            "capabilities": client_capabilities(),
+            "capabilities": client_capabilities(editor_caps),
             "initializationOptions": options,
         }),
     }))?;
@@ -272,44 +284,50 @@ fn handshake(
     Ok(capabilities)
 }
 
-/// What we tell rust-analyzer the client can do. It is the union of what the `.rsx` side maps back onto the source and what we pass straight through, so `.rs` files keep the features the editor would have had talking to rust-analyzer directly.
-fn client_capabilities() -> Value {
+/// What we tell rust-analyzer the client can do: the editor's own capabilities, with the ones the `.rsx` side depends on filled in where the editor named none.
+///
+/// The editor's own, verbatim, because every `.rs` request is answered by this session and handed straight back — a set of our own would cap `.rs` at whatever we thought to list, and rust-analyzer withholds exactly what the client did not claim (progress, the refresh notifications that follow a workspace load, resolvable completion edits). Ours only fill gaps rather than override, so nothing the editor negotiated for itself is overwritten by a guess of ours.
+fn client_capabilities(editor: &Value) -> Value {
+    let mut caps = match editor.is_object() {
+        true => editor.clone(),
+        false => json!({}),
+    };
+    fill_defaults(&mut caps, ours_regardless());
+    caps
+}
+
+/// What the `.rsx` queries ask rust-analyzer for whatever the editor negotiated: it never sees these requests, so it has no reason to have claimed them.
+fn ours_regardless() -> Value {
     json!({
-        "workspace": {
-            "configuration": true,
-            "didChangeWatchedFiles": { "dynamicRegistration": true },
-            "workspaceFolders": true,
-            "applyEdit": true,
-            "workspaceEdit": { "documentChanges": true },
-            "symbol": {},
-        },
+        "workspace": { "configuration": true, "workspaceFolders": true },
         "textDocument": {
             "synchronization": { "didSave": true },
-            "completion": { "completionItem": { "snippetSupport": false, "documentationFormat": ["markdown", "plaintext"] } },
+            "completion": { "completionItem": { "documentationFormat": ["markdown", "plaintext"] } },
             "hover": { "contentFormat": ["markdown", "plaintext"] },
             "signatureHelp": {},
             "definition": {},
-            "typeDefinition": {},
-            "implementation": {},
-            "declaration": {},
             "references": {},
-            "documentHighlight": {},
             "documentSymbol": {},
-            "codeAction": { "codeActionLiteralSupport": { "codeActionKind": { "valueSet": [] } } },
-            "codeLens": {},
-            "formatting": {},
-            "rangeFormatting": {},
-            "rename": { "prepareSupport": true },
-            "foldingRange": {},
-            "selectionRange": {},
-            "semanticTokens": {},
             "inlayHint": {},
-            "callHierarchy": {},
             "diagnostic": {},
         },
         "window": { "workDoneProgress": true },
-        "experimental": {},
     })
+}
+
+/// Merges `defaults` into `target` without replacing anything the target already says, descending into objects present in both.
+fn fill_defaults(target: &mut Value, defaults: Value) {
+    let (Some(target), Value::Object(defaults)) = (target.as_object_mut(), defaults) else {
+        return;
+    };
+    for (key, value) in defaults {
+        match target.get_mut(&key) {
+            Some(existing) => fill_defaults(existing, value),
+            None => {
+                target.insert(key, value);
+            }
+        }
+    }
 }
 
 fn read_loop(

@@ -44,10 +44,15 @@ pub struct Analyzer {
 }
 
 impl Analyzer {
-    /// Boots rust-analyzer over the workspace at `root`, handing it the editor's own `initializationOptions`. Blocking; callers run it off the runtime thread.
-    pub fn start(root: &Path, options: Value, outgoing: OutgoingSender) -> anyhow::Result<Self> {
+    /// Boots rust-analyzer over the workspace at `root`, handing it the editor's own `initializationOptions` and capabilities. Blocking; callers run it off the runtime thread.
+    pub fn start(
+        root: &Path,
+        options: Value,
+        editor_caps: Value,
+        outgoing: OutgoingSender,
+    ) -> anyhow::Result<Self> {
         Ok(Self {
-            inner: Inner::start(root, options, outgoing)?,
+            inner: Inner::start(root, options, editor_caps, outgoing)?,
         })
     }
 

@@ -31,12 +31,18 @@ impl AnalyzerHandle {
             .lock()
             .map(|options| options.clone())
             .unwrap_or(Value::Null);
+        let editor_caps = self
+            .editor_caps
+            .lock()
+            .map(|caps| caps.clone())
+            .unwrap_or(Value::Null);
         let outgoing = self.outgoing.clone();
         // Off the runtime thread: the handshake waits on another thread's reply, and workspace discovery walks the filesystem.
-        let started =
-            tokio::task::spawn_blocking(move || Analyzer::start(&root, options, outgoing))
-                .await
-                .ok()?;
+        let started = tokio::task::spawn_blocking(move || {
+            Analyzer::start(&root, options, editor_caps, outgoing)
+        })
+        .await
+        .ok()?;
 
         let mut state = self.state.lock().ok()?;
         match started {
@@ -63,10 +69,13 @@ impl AnalyzerHandle {
             _ => None,
         }
     }
-    /// Records the editor's `initializationOptions` for the session we boot. Written once from `initialize`, before any query can ask for the analyzer.
-    pub(crate) fn set_options(&self, options: Value) {
+    /// Records what the editor said about itself, for the session we boot. Written once from `initialize`, before any query can ask for the analyzer.
+    pub(crate) fn set_client(&self, options: Value, caps: Value) {
         if let Ok(mut slot) = self.options.lock() {
             *slot = options;
+        }
+        if let Ok(mut slot) = self.editor_caps.lock() {
+            *slot = caps;
         }
     }
 
