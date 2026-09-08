@@ -5,26 +5,52 @@
 use std::io::BufReader;
 use std::process::{Command, Stdio};
 
-use super::cli::CheckArgs;
+use super::cli::{CheckArgs, Target};
 use super::diagnostics;
+use super::frontend_args;
+use super::package::WASM_TARGET;
 
 pub(crate) fn run_check_cmd(args: CheckArgs) {
-    let mut cmd = Command::new("cargo");
-    cmd.arg("check")
-        .arg("--message-format=json")
-        .arg("--color=always");
-    if let Some(package) = &args.common.package {
-        cmd.arg("-p").arg(package);
+    let CheckArgs {
+        common,
+        all_targets,
+    } = args;
+    let mut cargo_args = vec![
+        "check".to_string(),
+        "--message-format=json".to_string(),
+        "--color=always".to_string(),
+    ];
+    if let Some(package) = &common.package {
+        cargo_args.push("-p".to_string());
+        cargo_args.push(package.clone());
     }
-    if let Some(features) = &args.common.features {
-        cmd.arg("--features").arg(features);
+    if let Some(features) = &common.features {
+        cargo_args.push("--features".to_string());
+        cargo_args.push(features.clone());
+    }
+    // `--target` used to reach nothing here, so a check answered for the package's `default` whatever it was asked about: `--target tui` on a machine that cannot build a desktop stack failed before it read a line of the project, and one that could reported on a frontend the author was not working on.
+    if let Some(target) = common.target {
+        let selected = frontend_args(target, common.renderer, &cargo_args);
+        cargo_args.extend(selected);
+        // The browser frontends are target-gated, so naming one for a host check checks nothing at all. `--lib` because a browser loads a module, and the binary beside it need not compile for wasm.
+        if target == Target::Web {
+            cargo_args.push("--target".to_string());
+            cargo_args.push(WASM_TARGET.to_string());
+            if !all_targets {
+                cargo_args.push("--lib".to_string());
+            }
+        }
     }
     // A `[preview]` is markup the author wrote, so a check that skipped it would report nothing about the one block most likely to be half-finished. It is the only command that asks for previews without going on to render them.
-    cmd.arg("--features").arg("telar/previews");
-    if args.all_targets {
-        cmd.arg("--all-targets");
+    cargo_args.push("--features".to_string());
+    cargo_args.push("telar/previews".to_string());
+    if all_targets {
+        cargo_args.push("--all-targets".to_string());
     }
-    cmd.args(&args.common.cargo_args);
+    cargo_args.extend(common.cargo_args);
+
+    let mut cmd = Command::new("cargo");
+    cmd.args(&cargo_args);
     // cargo writes its JSON stream to stdout and its human progress to stderr; letting stderr through keeps the familiar "Checking foo v0.1.0" output while the machine-readable half is consumed here.
     cmd.stdout(Stdio::piped()).stderr(Stdio::inherit());
 

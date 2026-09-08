@@ -82,9 +82,9 @@ pub(crate) struct CommonArgs {
     /// Additional Cargo features
     #[arg(short = 'F', long, value_name = "FEATURES")]
     pub(crate) features: Option<String>,
-    /// Target platform
-    #[arg(long, value_enum, default_value = "desktop")]
-    pub(crate) target: Target,
+    /// Target platform; defaults to the one the package's own `default` feature names
+    #[arg(long, value_enum)]
+    pub(crate) target: Option<Target>,
     /// Renderer backend
     #[arg(long, value_enum)]
     pub(crate) backend: Option<BackendArg>,
@@ -171,6 +171,23 @@ pub(crate) enum Target {
     Tui,
     /// A browser, through WebAssembly.
     Web,
+}
+
+impl Target {
+    /// The feature name that stands for this target, in both spellings a project can reach it by: its own `[features]` entry and `telar`'s.
+    ///
+    /// A browser has two of them, told apart by `--renderer`: `--renderer dom` is a build saying it will never draw pixels, and that is worth saying — the canvas renderer brings wgpu and a glyph shaper with it, and neither is reachable from a frame that becomes elements. Anything else keeps both, because `auto` has to be able to choose between them at load time.
+    pub(crate) fn feature(self, renderer: Option<WebRenderer>) -> &'static str {
+        match self {
+            Self::Desktop => "desktop",
+            Self::Android => "android",
+            Self::Tui => "tui",
+            Self::Web => match renderer {
+                Some(WebRenderer::Dom) => "web-dom",
+                _ => "web",
+            },
+        }
+    }
 }
 
 /// How a browser build draws. Not a fallback order: a document is the other way of drawing an interface, and this is the build saying which one it wants. The page can still say otherwise at load time with `?telar-renderer=`.

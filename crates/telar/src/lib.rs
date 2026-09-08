@@ -306,6 +306,7 @@ pub use runner::build_surface_handler;
 #[cfg(all(feature = "android-bare", target_os = "android"))]
 pub use runner::run_android_app_with_name;
 #[cfg(all(
+    feature = "desktop-bare",
     feature = "dev",
     not(target_os = "android"),
     not(target_arch = "wasm32")

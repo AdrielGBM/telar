@@ -26,7 +26,7 @@ use cli::{
     BuildArgs, BuildFormat, Cli, CommonArgs, DevArgs, DevtoolsArg, HotArgs, PreviewArgs, Target,
     TelarCommand, TestArgs, WebRenderer,
 };
-use config::{TelarSection, load_config};
+use config::{TelarSection, load_config, resolve_package};
 use doctor::run_doctor_cmd;
 use fmt::run_fmt_cmd;
 use migrate::run_migrate_cmd;
@@ -78,7 +78,7 @@ fn default_dev_command() -> TelarCommand {
             common: CommonArgs {
                 package: None,
                 features: None,
-                target: Target::Desktop,
+                target: None,
                 backend: None,
                 renderer: None,
                 cargo_args: vec![],
@@ -103,7 +103,7 @@ struct BuildPlan {
 }
 
 impl BuildPlan {
-    /// `select_frontend` is what names the `telar/` feature the target needs and points the binary at it, so it runs for every command rather than the two that remembered.
+    /// `select_frontend` is what names the feature the target needs and points the binary at it, so it runs for every command rather than the two that remembered.
     fn new(common: CommonArgs, release: bool) -> Self {
         let CommonArgs {
             package,
@@ -115,10 +115,10 @@ impl BuildPlan {
         } = common;
         let mut cargo_args = build_cargo_args(&package, release, &features);
         cargo_args.extend(extra);
-        if matches!(target, Target::Android) {
+        if matches!(target, Some(Target::Android)) {
             cargo_args.push("--android".to_string());
         }
-        let terminal = select_frontend(target, &mut cargo_args);
+        let terminal = select_frontend(target, renderer, &mut cargo_args);
         let mut config = load_config(&cargo_args);
         if let Some(backend) = backend {
             config.backend = Some(backend.into());
@@ -126,7 +126,7 @@ impl BuildPlan {
         Self {
             cargo_args,
             config,
-            target,
+            target: target.unwrap_or(Target::Desktop),
             renderer,
             terminal,
         }
@@ -216,6 +216,11 @@ fn run_preview_once(
     let mut cargo_args = vec!["run".to_string()];
     cargo_args.extend(build_cargo_args(&common.package, release, &common.features));
     cargo_args.extend(common.cargo_args.clone());
+    // A host binary either way, so a browser target names nothing here; the rest keep the terminal listing and the PNG render off the frontend the project does not build.
+    if let Some(target) = common.target.filter(|target| *target != Target::Web) {
+        let selected = frontend_args(target, common.renderer, &cargo_args);
+        cargo_args.extend(selected);
+    }
     cargo_args.push("--features".to_string());
     cargo_args.push(format!("telar/{feature}"));
     let status = Command::new("cargo")
@@ -236,9 +241,13 @@ fn run_test_cmd(args: TestArgs) -> ! {
         renderer,
         cargo_args: extra,
     } = common;
-    if matches!(target, Target::Android) {
+    if let Some(target @ (Target::Android | Target::Web)) = target {
+        let name = match target {
+            Target::Android => "android",
+            _ => "web",
+        };
         eprintln!(
-            "[cargo-telar] `cargo telar test` renders on the host; --target android is not supported."
+            "[cargo-telar] `cargo telar test` renders on the host; --target {name} is not supported."
         );
         std::process::exit(2);
     }
@@ -246,6 +255,11 @@ fn run_test_cmd(args: TestArgs) -> ! {
     let mut cargo_args = vec!["run".to_string()];
     cargo_args.extend(build_cargo_args(&package, release, &features));
     cargo_args.extend(extra);
+    // The frontend the target named, so a terminal project's tests are not a desktop build — and so `--target tui` reaches this command too, rather than every command but this one.
+    if let Some(target) = target {
+        let selected = frontend_args(target, None, &cargo_args);
+        cargo_args.extend(selected);
+    }
     // What emits the `[preview]` blocks and the entry point that runs them. Without it the binary has neither, and `TELAR_TEST` below reaches nothing — which is the point: it reaches nothing in a shipped build either.
     cargo_args.push("--features".to_string());
     cargo_args.push("telar/previews".to_string());
@@ -278,15 +292,15 @@ fn run_build_cmd(args: BuildArgs) -> ! {
     match &format {
         Some(
             fmt @ (BuildFormat::Deb | BuildFormat::Appimage | BuildFormat::Dmg | BuildFormat::Nsis),
-        ) if common.target == Target::Android => {
+        ) if common.target == Some(Target::Android) => {
             eprintln!(
                 "[cargo-telar] `--format {}` is desktop-only; drop `--target android` (use `--format apk` for Android).",
                 build_format_name(fmt)
             );
             std::process::exit(2);
         }
-        Some(BuildFormat::Apk) => common.target = Target::Android,
-        Some(BuildFormat::Dir) if common.target == Target::Android => {
+        Some(BuildFormat::Apk) => common.target = Some(Target::Android),
+        Some(BuildFormat::Dir) if common.target == Some(Target::Android) => {
             eprintln!(
                 "[cargo-telar] `--format dir` is desktop-only; use `--target android` (or `--format apk`) for Android."
             );
@@ -294,7 +308,7 @@ fn run_build_cmd(args: BuildArgs) -> ! {
         }
         _ => {}
     }
-    if common.target == Target::Web && format.is_some() {
+    if common.target == Some(Target::Web) && format.is_some() {
         eprintln!(
             "[cargo-telar] `--format` is for native installers; a web build is a directory of files."
         );
@@ -339,24 +353,52 @@ fn build_cargo_args(
     args
 }
 
-/// Turns on the frontend `target` names and tells the app to start on it, returning whether the app will run in this terminal.
+/// The flags that build exactly the frontend `target` names, for the invocation `cargo_args` is becoming.
 ///
-/// The feature goes through `telar/` rather than a feature of the app's own, so any project reaches a frontend without first declaring one; the environment variable is what picks between the frontends a build ends up with, since a default build still has the windowed one compiled in.
-fn select_frontend(target: Target, cargo_args: &mut Vec<String>) -> bool {
-    if target == Target::Android {
-        cargo_args.push("--features".to_string());
-        cargo_args.push("telar/android".to_string());
-        return false;
+/// A package that declares a feature for the target gets it named on its own, with `--no-default-features` and the rest of its defaults re-named alongside: `default` is where a project says which frontend it builds, so asking for another one has to turn that one off. Adding it on top instead is what made `--target tui` compile a desktop stack beside the terminal one — build time nobody asked for on a desktop, and the whole of the failure under Termux, where `platform-desktop` is `cfg`'d out of the graph and the window it pays for cannot exist.
+///
+/// A package that declares no such feature reaches the frontend through `telar/` and keeps its defaults, so any project builds for a target without first declaring one.
+fn frontend_args(
+    target: Target,
+    renderer: Option<WebRenderer>,
+    cargo_args: &[String],
+) -> Vec<String> {
+    let mut args = Vec::new();
+    resolve_package(cargo_args)
+        .frontend_feature(target.feature(renderer))
+        .push_to(&mut args);
+    args
+}
+
+/// Turns on the frontend a `--target` named and tells the app to start on it, returning whether the app will run in this terminal.
+///
+/// No target is a project left to say it in its manifest, which is where it says everything else about the build: nothing is named here, and the terminal is still answered for, because a package whose `default` is the terminal and no window runs in one whether or not anybody passed a flag.
+///
+/// The environment variable is what picks between the frontends a build ends up with, which is only still a question in the case where the package declared no feature for the target: there it kept a windowed default and the terminal rides along beside it.
+fn select_frontend(
+    target: Option<Target>,
+    renderer: Option<WebRenderer>,
+    cargo_args: &mut Vec<String>,
+) -> bool {
+    // A browser build names its own frontend in `build_web_bundle`, which is also where the wasm target and the profile that go with it are decided.
+    if let Some(target) = target.filter(|target| *target != Target::Web) {
+        let selected = frontend_args(target, renderer, cargo_args);
+        cargo_args.extend(selected);
     }
-    if target != Target::Tui {
-        return false;
+    let terminal = match target {
+        Some(target) => target == Target::Tui,
+        None => resolve_package(cargo_args).defaults_to_terminal(),
+    };
+    if terminal {
+        // SAFETY: single-threaded at this point — set before any child is spawned or any thread started.
+        unsafe { std::env::set_var("TELAR_TARGET", "tui") };
     }
-    cargo_args.push("--features".to_string());
-    cargo_args.push("telar/tui".to_string());
-    // SAFETY: single-threaded at this point — set before any child is spawned or any thread started.
-    unsafe { std::env::set_var("TELAR_TARGET", "tui") };
-    true
+    terminal
 }
 
 /// Where `cargo telar dev --target web` serves from. Fixed rather than chosen: a page reloaded by hand, a bookmark and a second terminal all have to name the same address.
 const WEB_DEV_PORT: u16 = 8080;
+
+#[cfg(test)]
+#[path = "mod_test.rs"]
+mod tests;

@@ -217,11 +217,12 @@ system-theme = ["platform-desktop?/system-theme"]
 #! `cargo telar` passes these on the command line for the command you ran. An application does not name
 #! them, and nothing in a shipping binary should reach for them.
 
-## Hot reload and the in-app devtools overlay. Injected by `cargo telar dev`. Takes the bare window rather
-## than `desktop`, so `--target tui` does not acquire a GPU renderer on the way to a terminal.
+## Hot reload and the in-app devtools overlay. Injected by `cargo telar dev`. Carries no frontend of its own:
+## it used to take `desktop-bare` so a project that declared none still got a window, and that window then
+## rode along into `--target tui` — a terminal session linking winit for a frame it never draws. `cargo telar`
+## names the frontend the target asked for instead, and this is the plumbing behind it.
 dev = [
     "runtime",
-    "desktop-bare",
     "platform-core/dylib",
     "dep:telar-devtools",
     "dep:libloading",
@@ -233,7 +234,10 @@ dev = [
 ## symbols the host swaps through, and `[telar.dev.window]` reaches the window. It was a `--cfg` pushed
 ## through `RUSTFLAGS`, which cargo hashes into every unit in the graph — so turning it on and off
 ## recompiled every dependency rather than the three crates that read it.
-hot-reload = ["dev", "telar-macros/hot-reload"]
+##
+## Takes `desktop-bare` because the host it builds *is* a window: `run_hot_reload_host` opens one and swaps the
+## application inside it, and a terminal run has no such loop — it restarts the process instead.
+hot-reload = ["dev", "desktop-bare", "telar-macros/hot-reload"]
 
 ## Emitting the `[preview]` blocks at all, and the entry point that runs them. Injected by `cargo telar test`.
 ##

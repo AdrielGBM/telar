@@ -27,6 +27,7 @@ mod generic;
 mod handler;
 mod host;
 #[cfg(all(
+    feature = "desktop-bare",
     feature = "dev",
     not(target_os = "android"),
     not(target_arch = "wasm32")
@@ -71,6 +72,7 @@ pub use entry::{run_app_with_devtools, run_app_with_name};
 pub use generic::{run_with_platform, run_with_platform_and_renderer};
 pub use host::SurfaceWindow;
 #[cfg(all(
+    feature = "desktop-bare",
     feature = "dev",
     not(target_os = "android"),
     not(target_arch = "wasm32")

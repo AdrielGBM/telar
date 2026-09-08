@@ -22,7 +22,10 @@ so every platform's dependencies are in the figure at once. The spread is the po
 mostly wgpu and its shader toolchain, and a terminal build links neither.
 
 `cargo telar new --target <name>` writes the manifest for you. Switching later is one word in `Cargo.toml`,
-or `--target` on the command line for a one-off.
+or `--target` on the command line for a one-off — which builds *that* target and no other: when the package
+declares a feature by that name, the command turns its `default` off and names this one instead, so
+`--target tui` on a project whose default is a window compiles the terminal graph alone. Everything else in
+`default` comes back with it; only the other frontends are left behind.
 
 ## Desktop
 
@@ -123,9 +126,8 @@ PNG from a test, a server, or a build script. `cargo telar test` is this target 
 
 ## More than one target from one codebase
 
-Naming several is allowed, and `apps/sandbox` in this repository does exactly that: it compiles the desktop,
-terminal, Android and browser frontends from one set of `.rsx` files and picks between the ones a given
-build contains with `TELAR_TARGET`.
+Naming several is allowed, and `apps/sandbox` in this repository does exactly that: one set of `.rsx` files
+behind a feature per frontend, any of which `--target` builds on its own.
 
 ```toml
 [features]
@@ -135,6 +137,10 @@ tui = ["telar/tui"]
 ```
 
 The cost is additive, so this is worth doing when you ship both and not worth doing to keep options open.
+
+A build carrying two of them picks with `TELAR_TARGET` — `TELAR_TARGET=tui ./app` runs the terminal
+frontend of a binary that also has a window. That is a build you asked for by naming both features
+yourself: `cargo telar dev --target tui` compiles one frontend, and there is nothing left to pick between.
 
 ## The rest of the features
 

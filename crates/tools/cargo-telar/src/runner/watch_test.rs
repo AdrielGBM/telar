@@ -103,3 +103,45 @@ fn an_asset_extension_is_a_rebuild_event() {
         "an edited asset has to rebuild, or the baked artifact goes stale"
     );
 }
+
+/// `telar/dev` used to carry `desktop-bare`, so every dev session linked a window — including the ones told to run in the terminal, where the host it belongs to is switched off before the build even starts. The frontend is the target's business now.
+#[test]
+fn the_dev_loop_names_no_frontend_of_its_own() {
+    assert_eq!(HotMode::Dev.features(), &["telar/dev"]);
+    assert!(
+        !HotMode::Dev.hot_features().contains(&"telar/desktop-bare"),
+        "the window the hot host opens comes with `telar/hot-reload`, which names it in the manifest"
+    );
+    assert!(
+        HotMode::Preview.features().contains(&"telar/preview"),
+        "the preview host is reached through its own feature whatever the target draws on"
+    );
+}
+
+/// The two halves are swapped into one process, so a dylib built from another feature set is an application the host cannot drive. Only `-p` and `--release` used to come across.
+#[test]
+fn the_dylib_is_built_with_the_binarys_features() {
+    let args = [
+        "-p",
+        "sandbox",
+        "--no-default-features",
+        "--features",
+        "sandbox/tui",
+    ]
+    .map(str::to_string);
+
+    let lib_args = make_lib_build_args(&args, &["telar/dev"]);
+
+    assert!(
+        lib_args.contains(&"--no-default-features".to_string()),
+        "{lib_args:?}"
+    );
+    let features = lib_args
+        .iter()
+        .position(|arg| arg == "--features")
+        .and_then(|pos| lib_args.get(pos + 1))
+        .cloned()
+        .unwrap_or_default();
+    assert!(features.contains("sandbox/tui"), "{lib_args:?}");
+    assert!(features.contains("telar/dev"), "{lib_args:?}");
+}

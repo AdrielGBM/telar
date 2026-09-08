@@ -51,16 +51,21 @@ fn with_json_messages(args: &mut Vec<String>) {
     }
 }
 
+/// The dylib build, from the binary's own invocation.
+///
+/// Every flag that decides a feature has to come along: the two halves are swapped into one process, and a dylib built from another feature set is an application the host cannot drive. It used to copy `-p` and `--release` alone, so `--target tui` or a `-F` on the command line reached the binary and not the library beside it.
 fn make_lib_build_args(args: &[String], features: &[&str]) -> Vec<String> {
     let mut lib_build_args = vec!["build".to_string(), "--lib".to_string()];
     for pair in args.windows(2) {
-        if pair[0] == "-p" || pair[0] == "--package" {
+        if ["-p", "--package", "--features", "-F"].contains(&pair[0].as_str()) {
             lib_build_args.push(pair[0].clone());
             lib_build_args.push(pair[1].clone());
         }
     }
-    if args.contains(&"--release".to_string()) {
-        lib_build_args.push("--release".to_string());
+    for flag in ["--release", "--no-default-features"] {
+        if args.iter().any(|arg| arg == flag) {
+            lib_build_args.push(flag.to_string());
+        }
     }
     for feature in features {
         inject_feature(&mut lib_build_args, feature);
@@ -390,9 +395,13 @@ impl HotMode {
         matches!(self, HotMode::Preview)
     }
 
+    /// What the loop builds with, on top of the frontend `select_frontend` already named.
+    ///
+    /// No window among them: `telar/dev` used to carry `desktop-bare` so that a project which declared no frontend still got one, and that window then rode along into `--target tui` — a terminal session linking winit for a frame it never draws. The frontend is the target's business now, and a build that names none reaches the same "no frontend to run on" panic `cargo telar build` has always produced.
     fn features(&self) -> &'static [&'static str] {
         match self {
             HotMode::Dev => &["telar/dev"],
+            // `telar/preview` names `desktop-bare` itself: the preview host is a window by definition, and a `--target tui` preview still goes through it to reach the entry point that renders the blocks.
             HotMode::Preview => &["telar/preview", "telar/dev"],
         }
     }

@@ -4,24 +4,17 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 
 use super::{dist_dir, tool_missing};
-use crate::runner::cli::WebRenderer;
+use crate::runner::cli::{Target, WebRenderer};
 use crate::runner::config::{TelarSection, resolve_package, split_android_flag};
 
 /// The name `wasm-bindgen` gives its output, and what the generated page imports.
 const BUNDLE: &str = "app";
 
+/// The target a browser module is built for, and what `wasm-bindgen` reads its output from.
+pub(crate) const WASM_TARGET: &str = "wasm32-unknown-unknown";
+
 /// The cargo profile a release web build uses, and the directory cargo then writes it to.
 const WEB_PROFILE: &str = "web";
-
-/// The `telar/` feature a build with this renderer needs.
-///
-/// `--renderer dom` is a build saying it will never draw pixels, and that is worth saying: the canvas renderer brings wgpu and a glyph shaper with it, and neither is reachable from a frame that becomes elements. Anything else keeps both renderers, because `auto` has to be able to choose between them at load time.
-fn telar_feature(renderer: Option<WebRenderer>) -> &'static str {
-    match renderer {
-        Some(WebRenderer::Dom) => "web-dom",
-        _ => "web",
-    }
-}
 
 /// Builds the app for the browser: a wasm module, the JavaScript that instantiates it, and a page that starts it.
 ///
@@ -56,7 +49,7 @@ pub(crate) fn build_web_bundle(
     let mut build_args = vec![
         "build".to_string(),
         "--target".to_string(),
-        "wasm32-unknown-unknown".to_string(),
+        WASM_TARGET.to_string(),
         // The browser loads a module, not an executable: the `[lib]` target is what carries the app.
         "--lib".to_string(),
     ];
@@ -66,17 +59,10 @@ pub(crate) fn build_web_bundle(
         build_args.push("--profile".to_string());
         build_args.push(WEB_PROFILE.to_string());
     }
-    let wanted = telar_feature(renderer);
-    build_args.push("--features".to_string());
-    match resolved.features.contains_key(wanted) {
-        // A package that named this frontend itself is one whose `default` stands for another: the renderers a window needs are not target-gated, so a default left on brings wgpu and a glyph shaper into a page that calls neither.
-        true => {
-            build_args.push(format!("{}/{wanted}", resolved.name()));
-            build_args.push("--no-default-features".to_string());
-        }
-        // Reached through `telar/` rather than a feature of the app's own, so any project builds for the web without first declaring one — and keeps its defaults, which are the only thing it has said.
-        false => build_args.push(format!("telar/{wanted}")),
-    }
+    // The renderers a window needs are not target-gated, so a default left on brings wgpu and a glyph shaper into a page that calls neither.
+    resolved
+        .frontend_feature(Target::Web.feature(renderer))
+        .push_to(&mut build_args);
 
     eprintln!("[cargo-telar] Building the wasm module...");
     let status = Command::new("cargo")
@@ -90,7 +76,7 @@ pub(crate) fn build_web_bundle(
     let profile = if release { WEB_PROFILE } else { "debug" };
     let module = resolved
         .workspace_root
-        .join("target/wasm32-unknown-unknown")
+        .join(format!("target/{WASM_TARGET}"))
         .join(profile)
         .join(format!("{}.wasm", resolved.name().replace('-', "_")));
     if !module.exists() {

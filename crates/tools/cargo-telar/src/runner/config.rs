@@ -1,5 +1,6 @@
 //! Reading a project's configuration: `telar.toml`, `[package.metadata.telar]` and the manifest fields the bundlers need.
 
+use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 
 use clap::ValueEnum;
@@ -51,7 +52,7 @@ pub(crate) struct CargoManifest {
     pub(crate) lib: Option<CargoLib>,
     // Only the names are read: what a feature turns on is cargo's business, and all this has to know is whether the package named one.
     #[serde(default)]
-    pub(crate) features: std::collections::BTreeMap<String, toml::Value>,
+    pub(crate) features: BTreeMap<String, toml::Value>,
 }
 #[derive(Deserialize, Default)]
 pub(crate) struct CargoLib {
@@ -200,8 +201,8 @@ pub(crate) struct ResolvedPackage {
     pub(crate) workspace_package: Option<CargoWorkspacePackage>,
     // Hot reload dlopens the package's own cdylib, and without `crate-type = ["cdylib", ..]` cargo never emits one, so the dylib build is dead weight and the runner falls back to process restart.
     pub(crate) produces_cdylib: bool,
-    // What the web build checks before deciding it may turn the package's defaults off.
-    pub(crate) features: std::collections::BTreeMap<String, toml::Value>,
+    // What the frontend selection reads before deciding it may turn the package's defaults off.
+    pub(crate) features: BTreeMap<String, toml::Value>,
 }
 
 impl ResolvedPackage {
@@ -241,6 +242,110 @@ impl ResolvedPackage {
                 .resolve(|| self.workspace_package.as_ref()?.description.clone())
         })
     }
+
+    /// Whether the package's `default` turns `wanted` on, in either spelling and through however many of its own features it takes to get there.
+    fn default_names(&self, wanted: &str) -> bool {
+        let enabled = closure(&self.features, feature_list(self.features.get(DEFAULT)));
+        enabled.contains(wanted) || enabled.contains(&format!("telar/{wanted}"))
+    }
+
+    /// Whether this package runs in the terminal without being told to: its `default` names the terminal frontend and nothing that opens a window.
+    ///
+    /// What `--target tui` says outright, for a project that already said it in its manifest — and what a `cargo telar dev` there needs to know, or it goes looking for a window to hot-reload behind.
+    pub(crate) fn defaults_to_terminal(&self) -> bool {
+        self.default_names("tui")
+            && !["desktop", "web", "web-dom", "android"]
+                .iter()
+                .any(|frontend| self.default_names(frontend))
+    }
+
+    /// How this package reaches `wanted`, which is the frontend feature a `--target` asked for.
+    pub(crate) fn frontend_feature(&self, wanted: &str) -> FrontendFeature {
+        if self.default_names(wanted) {
+            return FrontendFeature::AlreadyDefault;
+        }
+        if !self.features.contains_key(wanted) {
+            return FrontendFeature::Telar(format!("telar/{wanted}"));
+        }
+        let name = self.name();
+        let mut named = vec![format!("{name}/{wanted}")];
+        named.extend(
+            feature_list(self.features.get(DEFAULT))
+                .into_iter()
+                .filter(|feature| !enables_frontend(&self.features, feature))
+                .map(|feature| match feature.contains('/') {
+                    true => feature,
+                    false => format!("{name}/{feature}"),
+                }),
+        );
+        FrontendFeature::Package(named)
+    }
+}
+
+/// How a build reaches the frontend a `--target` named.
+///
+/// A project says which frontend it builds in its `default` — that is what `cargo telar new` writes into it — so naming another one means turning that default off. Adding it on top instead is what made `--target tui` compile a desktop stack beside the terminal one: harmless on a machine that can build both, and the whole of the failure on one that cannot.
+pub(crate) enum FrontendFeature {
+    /// The package's `default` already turns it on, so the build says nothing and keeps every default it has.
+    AlreadyDefault,
+    /// The package declares a feature for it. The rest of its `default` is re-named alongside, because `--no-default-features` is the only lever cargo has and it takes the whole list — only the *other* frontends in there are dropped.
+    Package(Vec<String>),
+    /// The package names no such feature, so the dependency's is what turns the frontend on and the defaults stay as they are. What lets any project build for a target without first declaring one.
+    Telar(String),
+}
+
+impl FrontendFeature {
+    /// Appends what cargo needs to build exactly this frontend.
+    pub(crate) fn push_to(&self, args: &mut Vec<String>) {
+        match self {
+            Self::AlreadyDefault => {}
+            Self::Package(features) => {
+                args.push("--no-default-features".to_string());
+                args.push("--features".to_string());
+                args.push(features.join(","));
+            }
+            Self::Telar(feature) => {
+                args.push("--features".to_string());
+                args.push(feature.clone());
+            }
+        }
+    }
+}
+
+const DEFAULT: &str = "default";
+
+/// Every frontend a package can name a feature for, in the spelling `telar` gives it. What a retained default is filtered against, so `--target tui` drops the other targets out of `default` and keeps everything else in it.
+const FRONTENDS: [&str; 6] = ["desktop", "tui", "web", "web-dom", "android", "headless"];
+
+fn feature_list(value: Option<&toml::Value>) -> Vec<String> {
+    value
+        .and_then(toml::Value::as_array)
+        .map(|entries| {
+            entries
+                .iter()
+                .filter_map(|entry| entry.as_str().map(str::to_string))
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+/// Every feature `roots` turn on, including the ones reached through another of the package's own — a `default` that names one feature which names a frontend is still a project that chose that frontend.
+fn closure(features: &BTreeMap<String, toml::Value>, roots: Vec<String>) -> BTreeSet<String> {
+    let mut seen = BTreeSet::new();
+    let mut queue = roots;
+    while let Some(feature) = queue.pop() {
+        if !seen.insert(feature.clone()) {
+            continue;
+        }
+        queue.extend(feature_list(features.get(&feature)));
+    }
+    seen
+}
+
+fn enables_frontend(features: &BTreeMap<String, toml::Value>, feature: &str) -> bool {
+    closure(features, vec![feature.to_string()])
+        .iter()
+        .any(|enabled| FRONTENDS.contains(&enabled.trim_start_matches("telar/")))
 }
 
 // dpkg reads the maintainer from `DEBFULLNAME`/`DEBEMAIL`, so honour the same pair: cargo stopped emitting `authors` years ago, and refusing every manifest without it would rule out most projects.
