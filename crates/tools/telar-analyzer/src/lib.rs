@@ -21,6 +21,7 @@ mod uri;
 ///
 /// An LSP server is IO-bound (stdio over a single connection), so a single-threaded runtime is enough and keeps `rt-multi-thread` out of the tree.
 pub fn run() {
+    inner::install_tracing();
     let runtime = tokio::runtime::Builder::new_current_thread()
         .enable_all()
         .build()

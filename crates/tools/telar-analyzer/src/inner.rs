@@ -19,6 +19,27 @@ use tokio::sync::oneshot;
 
 use crate::rpc::OutgoingSender;
 
+/// Turns on rust-analyzer's own tracing, so the timing of every request it handles reaches stderr, where the editor shows the server's output. Off unless `RA_LOG` or `RA_PROFILE` is set: the subscriber is process-global, and what it writes is not LSP.
+///
+/// The variables are rust-analyzer's own, and mean there what they mean when it runs standalone — `RA_LOG=rust_analyzer=info` for one line per request, `RA_PROFILE=*@3>50` for a tree of what a slow one spent its time on.
+pub fn install_tracing() {
+    let filter = std::env::var("RA_LOG").ok();
+    let profile_filter = std::env::var("RA_PROFILE").ok();
+    if filter.is_none() && profile_filter.is_none() {
+        return;
+    }
+    let config = rust_analyzer::tracing::Config {
+        writer: std::io::stderr,
+        filter: filter.unwrap_or_else(|| "error".to_owned()),
+        solver_filter: std::env::var("SOLVER_DEBUG").ok(),
+        profile_filter,
+        json_profile_filter: std::env::var("RA_PROFILE_JSON").ok(),
+    };
+    if let Err(e) = config.init() {
+        eprintln!("telar-analyzer: rust-analyzer tracing could not be installed: {e:#}");
+    }
+}
+
 /// How long the handshake may take before startup is called a failure. Generous: it only covers rust-analyzer answering `initialize`, which precedes any workspace loading.
 const HANDSHAKE_TIMEOUT: Duration = Duration::from_secs(30);
 
