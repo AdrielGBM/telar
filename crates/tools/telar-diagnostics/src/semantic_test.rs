@@ -44,3 +44,12 @@ fn a_binding_that_might_be_copy_is_left_alone() {
     );
     assert!(found.is_empty(), "{found:?}");
 }
+
+/// The check reads code, not prose. A translation key that happens to spell the binding is not a second closure taking it — the shape every settings form has, and one real project drew 42 warnings from it.
+#[test]
+fn a_binding_named_inside_a_string_is_not_a_capture() {
+    let found = warnings(
+        "[logic]\nlet save = Rc::new(|| {});\n\n[view]\ncol\n    label text:(Reactive::of(|| t!(\"settings.save.network\")))\n    button label:\"a\" on_press:save\n",
+    );
+    assert!(found.is_empty(), "{found:?}");
+}

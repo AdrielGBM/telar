@@ -201,14 +201,39 @@ fn unsigiled_captures(doc: &RsxDocument) -> Vec<Diagnostic> {
         .collect()
 }
 
-/// Whether `body` names `binding` as a whole word, so `held` does not match `withheld`.
+/// Whether `body` names `binding` as a whole word and as code, so `held` does not match `withheld` and a translation key does not match the binding it happens to spell — `t!("settings.save.network")` is not a capture of `save`.
 fn mentions(body: &str, binding: &str) -> bool {
+    let quoted = string_spans(body);
     body.match_indices(binding).any(|(at, _)| {
         let before = body[..at].chars().next_back();
         let after = body[at + binding.len()..].chars().next();
         let boundary = |c: Option<char>| !c.is_some_and(|c| c.is_ascii_alphanumeric() || c == '_');
-        boundary(before) && boundary(after)
+        boundary(before) && boundary(after) && !quoted.iter().any(|span| span.contains(&at))
     })
+}
+
+/// The byte ranges the double-quoted string literals in `body` occupy. Escapes are honoured; a raw string's `r#"…"#` hashes are not, which can only end a span early and cost a warning nobody was owed.
+fn string_spans(body: &str) -> Vec<std::ops::Range<usize>> {
+    let mut spans = Vec::new();
+    let mut chars = body.char_indices();
+    while let Some((at, ch)) = chars.next() {
+        if ch != '"' {
+            continue;
+        }
+        let start = at + 1;
+        let mut escaped = false;
+        for (end, ch) in chars.by_ref() {
+            if escaped {
+                escaped = false;
+            } else if ch == '\\' {
+                escaped = true;
+            } else if ch == '"' {
+                spans.push(start..end);
+                break;
+            }
+        }
+    }
+    spans
 }
 
 #[cfg(test)]
