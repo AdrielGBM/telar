@@ -7,8 +7,9 @@ use std::path::{Path, PathBuf};
 use lsp_types::{InlayHintKind, Range};
 use ra_ap_ide::{AnalysisHost, AssistResolveStrategy};
 use ra_ap_load_cargo::{LoadCargoConfig, ProcMacroServerChoice, load_workspace_at};
+use ra_ap_paths::Utf8PathBuf;
 use ra_ap_proc_macro_api::ProcMacroClient;
-use ra_ap_project_model::{CargoConfig, RustLibSource};
+use ra_ap_project_model::{CargoConfig, RustLibSource, TargetDirectoryConfig};
 use ra_ap_vfs::Vfs;
 
 use config::diagnostics_config;
@@ -51,11 +52,21 @@ pub struct EmbeddedAnalyzer {
     _proc_macro: Option<ProcMacroClient>,
 }
 
+/// A build directory of our own, never the workspace's `target/`. `load_out_dirs_from_check` runs `cargo check`, and rust-analyzer runs one of its own over the same crates: sharing a build directory serialises the two on cargo's lock — with each other, and with whatever the user is building in a terminal — exactly while both are loading and neither can answer anything yet. `UseSubdirectory` is no escape: it resolves to `target/rust-analyzer`, which is rust-analyzer's own.
+fn build_dir(workspace_root: &Path) -> TargetDirectoryConfig {
+    let root = telar_project::find_workspace_root(workspace_root)
+        .unwrap_or_else(|| workspace_root.to_path_buf());
+    Utf8PathBuf::from_path_buf(root.join("target").join("telar-analyzer"))
+        .map(TargetDirectoryConfig::Directory)
+        .unwrap_or_default()
+}
+
 impl EmbeddedAnalyzer {
     /// Loads the cargo workspace at `workspace_root` into a fresh database. Synchronous and slow (runs `cargo metadata` + builds the crate graph), so callers run it off the LSP's runtime thread.
     pub fn load(workspace_root: &Path) -> anyhow::Result<Self> {
         let cargo_config = CargoConfig {
             sysroot: Some(RustLibSource::Discover),
+            target_dir_config: build_dir(workspace_root),
             ..CargoConfig::default()
         };
         // Proc-macro server is required, not optional: `app!` expansion is how the generated modules are discovered (see design doc, "Invariants & gotchas").
