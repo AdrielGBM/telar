@@ -4,7 +4,7 @@
 use crate::{LayoutError, LayoutItem};
 
 #[cfg(all(feature = "previews", not(target_os = "android")))]
-use crate::{AppConfig, AvailableSpace, ComponentList, compute_layout};
+use crate::{AppConfig, AvailableSpace, ComponentList, compute_layout, dispose_owner, owner_scope};
 
 #[cfg(feature = "previews")]
 #[derive(Clone)]
@@ -115,6 +115,10 @@ pub fn try_run_test(entries: Vec<PreviewEntry>, config: AppConfig) -> ! {
     for entry in &entries {
         let label = format!("{}::{}", entry.component_name, entry.preview_name);
         // Do not reset the runtime between components: the app's setup installed the theme once, and resetting would make previews that read theme tokens panic spuriously.
+        //
+        // Each component does get an owner of its own, disposed below. `reset_layout_runtime` recycles node ids, so an effect the previous component left behind would reconcile onto whatever now holds its old container id — `set_children` then attaches a node under its own descendant, and the next layout pass walks that cycle until the allocator gives up.
+        let scope = owner_scope();
+        let owner = scope.id();
         let outcome = catch_unwind(AssertUnwindSafe(|| -> Result<usize, LayoutError> {
             crate::reset_layout_runtime();
             let item = (entry.build)()?;
@@ -127,6 +131,9 @@ pub fn try_run_test(entries: Vec<PreviewEntry>, config: AppConfig) -> ! {
             let tree = ComponentList::new(item);
             Ok(tree.commands().len())
         }));
+        // Before the next `reset_layout_runtime`, so a withdrawing child still detaches from a tree that exists.
+        drop(scope);
+        dispose_owner(owner);
         match outcome {
             Ok(Ok(count)) => {
                 passed += 1;
