@@ -165,7 +165,9 @@ telar-macros = { path = "crates/tools/telar-macros", version = "0.1.8" }
 telar-parser = { path = "crates/tools/telar-parser", version = "0.1.8" }
 telar-transpiler = { path = "crates/tools/telar-transpiler", version = "0.1.8", default-features = false }
 theme-core = { package = "telar-theme-core", path = "crates/ui/theme-core", version = "0.1.8" }
-ui-components = { package = "telar-ui-components", path = "crates/ui/ui-components", version = "0.1.8" }
+# `default-features = false` so `telar` says which groups of the catalogue it wants: with the defaults left on,
+# `telar/components-base` would carry the overlays and the window frame anyway and the groups would decide nothing.
+ui-components = { package = "telar-ui-components", path = "crates/ui/ui-components", version = "0.1.8", default-features = false }
 ui-core = { package = "telar-ui-core", path = "crates/ui/ui-core", version = "0.1.8" }
 ui-tree = { package = "telar-ui-tree", path = "crates/ui/ui-tree", version = "0.1.8" }
 

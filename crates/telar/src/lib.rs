@@ -245,18 +245,26 @@ pub use navigate_core::{
     NavHost, NavPage, NavTransition, Navigator, PagePolicy, SimplePage, TabHost, TabStacks,
 };
 
-#[cfg(feature = "components")]
+#[cfg(feature = "components-advanced")]
 pub use ui_components::{
-    AccordionProps, BadgeProps, ButtonProps, CheckboxProps, ChipProps, ContextMenuProps,
-    DrawerProps, GroupProps, HeadingProps, ItemProps, MIN_FRAME_SIZE, MenuCustomProps, MenuEntry,
-    MenuProps, MenuRowProps, MenuSeparatorProps, MenuStyle, MenuSubProps, ModalProps,
-    ProgressProps, RadioProps, ReorderableProps, SectionProps, SelectProps, SeparatorProps,
-    SliderProps, SpinnerProps, StepperProps, SurfaceFrameStyle, TabsProps, TextFieldProps,
-    ToggleProps, TooltipProps, WindowControls, accordion, badge, button, checkbox, chip,
-    context_menu, drawer, group, heading, item, menu, menu_custom, menu_row, menu_separator,
-    menu_sub, modal, progress, radio, reorderable, section, select, separator, slider, spinner,
-    stepper, tabs, text_field, toggle, tooltip, window_frame,
+    AccordionProps, ReorderableProps, StepperProps, accordion, reorderable, stepper,
 };
+#[cfg(feature = "components-base")]
+pub use ui_components::{
+    BadgeProps, ButtonProps, CheckboxProps, ChipProps, GroupProps, HeadingProps, ItemProps,
+    ProgressProps, RadioProps, SectionProps, SelectProps, SeparatorProps, SliderProps,
+    SpinnerProps, TabsProps, TextFieldProps, ToggleProps, badge, button, checkbox, chip, group,
+    heading, item, progress, radio, section, select, separator, slider, spinner, tabs, text_field,
+    toggle,
+};
+#[cfg(feature = "components-overlays")]
+pub use ui_components::{
+    ContextMenuProps, DrawerProps, MenuCustomProps, MenuEntry, MenuProps, MenuRowProps,
+    MenuSeparatorProps, MenuStyle, MenuSubProps, ModalProps, TooltipProps, context_menu, drawer,
+    menu, menu_custom, menu_row, menu_separator, menu_sub, modal, tooltip,
+};
+#[cfg(feature = "components-chrome")]
+pub use ui_components::{MIN_FRAME_SIZE, SurfaceFrameStyle, WindowControls, window_frame};
 
 #[cfg(feature = "runtime")]
 /// Offers an event to the overlay registry first, returning whether an overlay consumed it.

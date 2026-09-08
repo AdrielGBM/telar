@@ -28,11 +28,11 @@ pub(crate) fn panel_pad() -> f32 {
 
 /// What the trigger says, which is the one place a `menu` and a `select` genuinely differ. A menu commits actions, so its trigger is a name the caller fixes; a select holds a choice, so its trigger *is* that choice — and has to say it before the panel has ever been opened.
 pub(crate) enum TriggerLabel {
+    /// Only a menu fixes its label, so without the overlays nothing constructs this — the arm stays because it is part of what a trigger *is*, and threading a `cfg` through the match and the imports would make a shared primitive feature-aware to silence one warning.
+    #[cfg_attr(not(feature = "overlays"), allow(dead_code))]
     Fixed(Reactive<String>),
     /// Whatever the chosen row says it is, falling back to `placeholder` for an index naming no row.
-    Selected {
-        placeholder: &'static str,
-    },
+    Selected { placeholder: &'static str },
 }
 
 /// The trigger + anchored-panel scaffold shared by `menu` and `select`: a bordered trigger button opens a blocking overlay whose transparent backdrop dismisses on click-away, and whose anchored panel lists `rows`; picking a row optionally writes into `selected`, fires `on_pick`, and closes.

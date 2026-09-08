@@ -10,6 +10,25 @@ readme = "README.md"
 license = { workspace = true }
 repository = { workspace = true }
 
+[features]
+#! Three groups rather than one knob per widget: they share `shared.rs` and `scrim.rs`, and the graph between
+#! them is what decides where a line can be drawn at all. `dropdown` stays in every build because `select` and
+#! `list` read its row styles; `scrim` travels with the two overlays that draw one.
+#!
+#! `telar/components` turns all three on, so an application that names the catalogue gets what it always got.
+
+default = []
+
+## Anything that draws over the tree: menus, context menus, modals, drawers, tooltips and the scrim behind them.
+overlays = []
+
+## The window frame a desktop application draws itself — title bar, controls, resize edges. Inert anywhere
+## else, which is the whole reason it is nameable: a terminal or a document has no chrome to draw.
+chrome = []
+
+## Reorderable lists, accordions and steppers.
+advanced = []
+
 [dependencies]
 geometry-core = { workspace = true }
 layout-core = { workspace = true }

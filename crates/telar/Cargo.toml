@@ -136,8 +136,26 @@ headless = ["runtime", "software", "dep:platform-headless"]
 #! Optional runtime pieces, each off unless named. Every one of them is a dependency an application that
 #! does not use it should not have to link.
 
-## The widget catalogue: buttons, fields, menus, modals, tabs, sliders and the rest.
-components = ["runtime", "dep:ui-components"]
+## The widget catalogue: buttons, fields, menus, modals, tabs, sliders and the rest — all of it.
+components = [
+    "components-base",
+    "components-overlays",
+    "components-chrome",
+    "components-advanced",
+]
+
+## The half of the catalogue every interface uses: buttons, fields, selects, tabs, sliders, indicators.
+components-base = ["runtime", "dep:ui-components"]
+
+## Anything that draws over the tree: menus, context menus, modals, drawers, tooltips.
+components-overlays = ["components-base", "ui-components/overlays"]
+
+## The window frame a desktop application draws itself. Inert on a terminal or a page, which is why it is
+## nameable: neither has chrome to draw.
+components-chrome = ["components-base", "ui-components/chrome"]
+
+## Reorderable lists, accordions and steppers.
+components-advanced = ["components-base", "ui-components/advanced"]
 
 ## A reactive page stack with animated transitions.
 navigate = ["runtime", "dep:navigate-core"]
