@@ -2272,6 +2272,22 @@ fn every_verbatim_view_value_maps_back_to_its_exact_source_bytes() {
     }
 }
 
+/// A directive's props are re-parsed out of the group's own text, so each one has to be told where that text sits in the file. Standing in a `0` made them all read as attributes at byte zero: the span landed in whatever the file opens with, and a rename inside `hover_style(…)` edited those bytes instead — silently, since a wrong span is not a missing one.
+#[test]
+fn a_directive_prop_maps_back_to_its_place_in_the_file() {
+    let src = "[logic]\nlet label = props.label;\n\n[view]\ncol\n    row hover_style(fill:(hot_fill(state, 0)))\n";
+    let out = transpile_source(src, "demo", None, None).unwrap();
+    let spans: Vec<&str> = out
+        .expr_spans
+        .iter()
+        .map(|s| &src[s.rsx_start as usize..(s.rsx_start + s.len) as usize])
+        .collect();
+    assert!(
+        spans.contains(&"hot_fill(state, 0)"),
+        "no span covers exactly the directive's own value; got {spans:?}"
+    );
+}
+
 /// The clone pass rebinds a captured name so a `move` closure can take it without consuming the original. rust-analyzer reads those as separate symbols and is right to, so a rename that stopped at the source binding would leave every use inside the closure behind — this is what lets it reach them.
 #[test]
 fn every_shadow_the_clone_pass_writes_names_the_binding_it_stands_for() {

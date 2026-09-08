@@ -235,7 +235,7 @@ impl ViewGen<'_> {
         let Some(attr) = el.attributes.iter().find(|a| a.key == key) else {
             return String::new();
         };
-        let mut merged = parse_inline_paint_attrs(attr.value.text());
+        let mut merged = parse_inline_paint_attrs(attr.value.text(), attr.value_start);
         merged.extend(base.iter().cloned());
         let mut hoists: Vec<String> = Vec::new();
         let (closure, _opacity) = self.rect_style_pieces(&merged, &HashMap::new(), &mut hoists);
@@ -401,28 +401,31 @@ impl ViewGen<'_> {
     }
 }
 
-/// Parses a `hover(...)` inner value — a whitespace-separated list of `key:value` paint props — into `Attr`s. Paint values carry no spaces (color tokens, `#hex`, numbers), so a simple split suffices. A token without a `:` (a bare flag) is ignored: hover overrides are always keyed paint props.
-fn parse_inline_paint_attrs(value: &str) -> Vec<Attr> {
+/// Parses a `hover(...)` inner value — a whitespace-separated list of `key:value` paint props — into `Attr`s. A token without a `:` (a bare flag) is ignored: hover overrides are always keyed paint props.
+///
+/// `base` is where `value` begins in the `.rsx`, so each prop carries its real position. Standing in a `0` here made every one of these read as an attribute at the start of the file: a rename inside `hover_style(…)` then edited whatever bytes sat there, which in a file with a `[logic]` header meant corrupting an unrelated line.
+fn parse_inline_paint_attrs(value: &str, base: usize) -> Vec<Attr> {
     split_outside_delimiters(value)
         .into_iter()
-        .filter_map(|tok| {
+        .filter_map(|(at, tok)| {
             let (key, val) = tok.split_once(':')?;
             Some(Attr {
                 key: key.to_string(),
                 value: Value::Expr(val.to_string()),
-                value_start: 0,
+                value_start: base + at + key.len() + 1,
             })
         })
         .collect()
 }
 
 /// Splits a directive's mini attribute list on whitespace **at delimiter depth 0** — the rule the view parser
-/// already applies to a top-level `key:value`, so `fill:(f(a, b))` reads whole in both places.
+/// already applies to a top-level `key:value`, so `fill:(f(a, b))` reads whole in both places. Each token comes
+/// with its byte offset within `value`.
 ///
 /// A flat `split_whitespace` cut that value at the space after the comma and dropped every piece without a
 /// colon, so the emitted Rust carried an unclosed paren. It reached the author as a delimiter error inside
 /// generated code, naming neither the attribute nor the `.rsx` line that wrote it.
-fn split_outside_delimiters(value: &str) -> Vec<&str> {
+fn split_outside_delimiters(value: &str) -> Vec<(usize, &str)> {
     let mut tokens = Vec::new();
     let mut depth = 0i32;
     let mut start = 0usize;
@@ -432,7 +435,7 @@ fn split_outside_delimiters(value: &str) -> Vec<&str> {
             ')' | ']' | '}' => depth -= 1,
             _ if c.is_whitespace() && depth == 0 => {
                 if start < i {
-                    tokens.push(&value[start..i]);
+                    tokens.push((start, &value[start..i]));
                 }
                 start = i + c.len_utf8();
             }
@@ -440,7 +443,7 @@ fn split_outside_delimiters(value: &str) -> Vec<&str> {
         }
     }
     if start < value.len() {
-        tokens.push(&value[start..]);
+        tokens.push((start, &value[start..]));
     }
     tokens
 }
