@@ -131,13 +131,6 @@ impl BuildPlan {
             terminal,
         }
     }
-
-    /// The same, with a `telar/` feature this command needs on top.
-    fn with_feature(mut self, feature: &str) -> Self {
-        self.cargo_args.push("--features".to_string());
-        self.cargo_args.push(format!("telar/{feature}"));
-        self
-    }
 }
 
 fn run_dev_cmd(args: DevArgs) {
