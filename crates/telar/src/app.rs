@@ -23,6 +23,11 @@ pub trait App: 'static {
 
     /// Called once per frame before rendering. Use `ctx` to request a redraw, or to take a [`RedrawWaker`](crate::RedrawWaker) for a background thread.
     fn on_frame(&mut self, _ctx: &mut AppCtx) {}
+
+    /// The OS light/dark preference changed. The theme runtime `follow_system` reads is already updated when this runs; override it to carry the change somewhere that runtime does not reach.
+    ///
+    /// Which in practice means across a process or an FFI boundary: a host that draws other applications' trees out of dylibs has one theme runtime per loaded library, and only the host's own is updated for it. `Event::ColorSchemeChanged` is consumed by the runner and never reaches the tree, so this is the only place an application hears about it.
+    fn on_color_scheme(&self, _dark: bool) {}
 }
 
 /// Lets a caller hold applications of different types as one — [`crate::run_multi_with_platform`] driving a surface per monitor, each with its own root.
@@ -38,5 +43,8 @@ impl<A: App + ?Sized> App for Box<A> {
     }
     fn on_frame(&mut self, ctx: &mut AppCtx) {
         (**self).on_frame(ctx)
+    }
+    fn on_color_scheme(&self, dark: bool) {
+        (**self).on_color_scheme(dark)
     }
 }

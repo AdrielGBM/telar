@@ -98,7 +98,7 @@ pub trait AppRuntime: 'static {
 
 /// An [`App`] whose tree lives in this process — every application that is not a hot-reloaded dylib.
 ///
-/// Holds nothing but the app: each of the runtime methods above is already correct for a tree on this side, so this overrides only the four an application actually answers.
+/// Holds nothing but the app: each of the runtime methods above is already correct for a tree on this side, so this overrides only what an application actually answers — the four of [`App`], plus the colour-scheme hook, which is the default's own work followed by the application's.
 pub struct LocalApp<A: App>(pub A);
 
 impl<A: App> AppRuntime for LocalApp<A> {
@@ -116,5 +116,11 @@ impl<A: App> AppRuntime for LocalApp<A> {
 
     fn on_frame(&mut self, ctx: &mut AppCtx) {
         self.0.on_frame(ctx)
+    }
+
+    // The theme runtime this side reads is the default's job; the application is told after it, so an override sees a state that already agrees with the host it is fanning out from.
+    fn set_system_dark(&self, dark: bool) {
+        theme_core::set_system_dark(dark);
+        self.0.on_color_scheme(dark);
     }
 }

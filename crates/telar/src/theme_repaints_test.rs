@@ -135,3 +135,48 @@ fn a_tree_mounted_before_the_flush_still_takes_the_theme_the_flush_installs() {
         "and the flush that installs the real one repaints it"
     );
 }
+
+/// And whether the *application* is told, which a host that draws other applications' trees is the whole reason for: it has one theme runtime per loaded dylib, and `set_system_dark` reaches only its own. `Event::ColorSchemeChanged` is consumed by the runner and never reaches the tree, so this hook is the only place such a host can hear the change and carry it across the boundary.
+#[test]
+fn an_application_hosting_other_trees_is_told_the_scheme_changed() {
+    use std::cell::Cell;
+    use std::rc::Rc;
+
+    use telar::{App, AppRuntime, LocalApp};
+
+    struct Host(Rc<Cell<Option<bool>>>);
+    impl App for Host {
+        fn root(&self) -> Box<dyn Component> {
+            Box::new(Root(box_item(
+                Rectangle::new(LayoutStyle::new().width(1.0).height(1.0), || {
+                    RectStyle::default().with_fill(use_theme_tokens().surface_alt())
+                })
+                .unwrap(),
+            )))
+        }
+        fn on_color_scheme(&self, dark: bool) {
+            self.0.set(Some(dark));
+        }
+    }
+
+    reset_layout_runtime();
+    set_system_dark(false);
+    following_the_system();
+
+    let told = Rc::new(Cell::new(None));
+    let app = LocalApp(Host(Rc::clone(&told)));
+    app.set_system_dark(true);
+
+    let repainted = drawn_fill(&a_themed_box());
+    set_system_dark(false);
+    assert_eq!(
+        told.get(),
+        Some(true),
+        "the application was never told, so a host could not fan the change out to its plugins"
+    );
+    assert_eq!(
+        repainted,
+        Night.surface_alt(),
+        "and the default's own work still ran, so the host's tree follows too"
+    );
+}
