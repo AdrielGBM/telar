@@ -468,7 +468,8 @@ fn wire_sources(
     if telar_project::find_rsx_files(src_dir).is_empty() {
         return Ok(Vec::new());
     }
-    if let Some(index) = telar_project::read_build_index(package_dir, flavour)
+    let artifact = telar_project::read_build_index(package_dir, flavour);
+    if let Some(index) = &artifact
         && index.answers_for(
             src_dir,
             generated_dir,
@@ -493,11 +494,20 @@ fn wire_sources(
             .collect());
     }
 
-    // Nothing here can produce the Rust: this crate carries no transpiler, on purpose. Reached whenever the artifact cannot answer — never transpiled, a `.rsx` edited or added since, a generated file rewritten, another theme, another `telar` — and the command that fixes it is the same one in every case, so the message does not try to say which.
-    let msg = format!(
-        "rsx: no transpiled `.rsx` for this package, or its sources have changed since the last one. `.rsx` is compiled by the CLI, not by the compiler. Run: cargo telar transpile (or build through cargo telar check/dev/build/test, which transpile first). Install it with: cargo install cargo-telar --version {v}",
-        v = env!("CARGO_PKG_VERSION")
-    );
+    // Nothing here can produce the Rust: this crate carries no transpiler, on purpose. Which of the two messages is not a guess — an artifact that is absent and one that no longer answers are different facts, and only the first can mean the CLI was never installed. What made an artifact stop answering (an edited `.rsx`, a rewritten output, another theme) it does not try to say: the command is the same for all of them.
+    let msg = match artifact.is_some() {
+        true => {
+            "rsx: the transpiled `.rsx` for this package no longer answers for its sources.\n\
+             Re-run `cargo telar transpile`, or build through `cargo telar dev`/`check`/`build`/`test`."
+                .to_string()
+        }
+        false => format!(
+            "rsx: this package has no transpiled `.rsx` — it is compiled by the CLI, not by rustc.\n\
+             Run `cargo telar transpile`, or build through `cargo telar dev`/`check`/`build`/`test`.\n\
+             No CLI? `cargo install cargo-telar --version {v}`",
+            v = env!("CARGO_PKG_VERSION")
+        ),
+    };
     Err(quote! { compile_error!(#msg); })
 }
 
