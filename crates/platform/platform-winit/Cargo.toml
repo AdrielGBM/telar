@@ -15,3 +15,7 @@ platform-core = { workspace = true }
 
 raw-window-handle = { workspace = true }
 winit = { workspace = true }
+
+# winit is a `compile_error!` with no backend feature on, and this crate cannot lean on a dependent to turn one on: `cargo publish` verifies the package alone, where `platform-desktop`'s features never reach it. Windows, macOS and Android answer through backends winit always builds; only the free-unix pair sits behind features.
+[target.'cfg(all(unix, not(target_os = "android"), not(target_vendor = "apple")))'.dependencies]
+winit = { workspace = true, features = ["x11", "wayland"] }
