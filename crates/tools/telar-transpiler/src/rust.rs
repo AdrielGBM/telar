@@ -42,6 +42,32 @@ impl Drop for Fallback {
     }
 }
 
+/// Every name a pattern introduces. `syn` gives a `PatIdent` for each one, including inside tuples, slices and struct patterns, so the walk is the whole of it.
+fn pattern_bindings(pat: &syn::Pat) -> Vec<String> {
+    struct Binder(Vec<String>);
+    impl<'ast> Visit<'ast> for Binder {
+        fn visit_pat_ident(&mut self, pat: &'ast syn::PatIdent) {
+            self.0.push(pat.ident.to_string());
+            syn::visit::visit_pat_ident(self, pat);
+        }
+    }
+    let mut binder = Binder(Vec::new());
+    binder.visit_pat(pat);
+    binder.0
+}
+
+/// The names a `[view]` `let` binds, or `None` when the text is not a `let` statement.
+///
+/// A view `let` declares *inside* the closure the clone pass wraps around it, so a `$rect` written under `let rect = …` names that binding — and a prelude that clones `rect` above the closure names something which is not there yet.
+pub(crate) fn let_bindings(source: &str) -> Option<Vec<String>> {
+    let source = source.trim().trim_end_matches(';');
+    let stmt: syn::Stmt = Fallback::forced(|| syn::parse_str(&format!("{source};"))).ok()?;
+    match stmt {
+        syn::Stmt::Local(local) => Some(pattern_bindings(&local.pat)),
+        _ => None,
+    }
+}
+
 struct FreeIdents {
     /// One frame per binding scope, innermost last: a closure's parameters, a block's `let`s.
     bound: Vec<HashSet<String>>,
@@ -65,16 +91,10 @@ impl FreeIdents {
         self.bound.pop();
     }
 
-    /// Every name a pattern introduces. `syn` gives `PatIdent` for each one, including inside tuples, slices and struct patterns, so the walk is the whole of it.
     fn bind_pattern(&mut self, pat: &syn::Pat) {
-        struct Binder<'a>(&'a mut FreeIdents);
-        impl<'ast> Visit<'ast> for Binder<'_> {
-            fn visit_pat_ident(&mut self, pat: &'ast syn::PatIdent) {
-                self.0.bind(pat.ident.to_string());
-                syn::visit::visit_pat_ident(self, pat);
-            }
+        for name in pattern_bindings(pat) {
+            self.bind(name);
         }
-        Binder(self).visit_pat(pat);
     }
 }
 

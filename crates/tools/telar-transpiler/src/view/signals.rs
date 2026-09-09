@@ -271,24 +271,49 @@ pub(super) fn captured_idents_with(
     loop_variables: &[String],
     locals: &[String],
 ) -> Vec<String> {
+    let flat: Vec<(&str, &[String])> = snippets.iter().map(|s| (*s, &[][..])).collect();
+    captured_from(&flat, loop_variables, locals)
+}
+
+/// The same for a subtree walked by [`scoped_snippets`], where each snippet carries the names bound between it and the closure being wrapped.
+pub(super) fn captured_in_scope(
+    snippets: &[ScopedSnippet],
+    loop_variables: &[String],
+    locals: &[String],
+) -> Vec<String> {
+    let borrowed: Vec<(&str, &[String])> = snippets
+        .iter()
+        .map(|s| (s.text.as_str(), s.shadowed.as_slice()))
+        .collect();
+    captured_from(&borrowed, loop_variables, locals)
+}
+
+fn captured_from(
+    snippets: &[(&str, &[String])],
+    loop_variables: &[String],
+    locals: &[String],
+) -> Vec<String> {
     let mut idents: Vec<String> = Vec::new();
-    for s in snippets {
+    for (s, shadowed) in snippets {
         for id in signal_idents(s) {
-            if !idents.contains(&id) {
+            if !shadowed.contains(&id) && !idents.contains(&id) {
                 idents.push(id);
             }
         }
     }
     let named: Vec<Option<Vec<String>>> = snippets
         .iter()
-        .map(|s| crate::rust::free_idents(&substitute_reads(s)))
+        .map(|(s, _)| crate::rust::free_idents(&substitute_reads(s)))
         .collect();
     for var in loop_variables.iter().chain(locals) {
-        let used = snippets.iter().zip(&named).any(|(s, free)| match free {
-            // The expression parsed, so `seat(&desk, id).x` is known not to use a binding called `x` — cloning one would be a compile error in generated code.
-            Some(free) => free.contains(var),
-            // It did not parse (macro tokens, a half-written value). A missed capture is a move out of an `Fn`, which is worse than a clone nobody needed.
-            None => contains_ident(s, var),
+        let used = snippets.iter().zip(&named).any(|((s, shadowed), free)| {
+            !shadowed.contains(var)
+                && match free {
+                    // The expression parsed, so `seat(&desk, id).x` is known not to use a binding called `x` — cloning one would be a compile error in generated code.
+                    Some(free) => free.contains(var),
+                    // It did not parse (macro tokens, a half-written value). A missed capture is a move out of an `Fn`, which is worse than a clone nobody needed.
+                    None => contains_ident(s, var),
+                }
         });
         if used && !idents.contains(var) {
             idents.push(var.clone());
@@ -325,65 +350,120 @@ fn clone_block(idents: &[String], closure_expr: String) -> String {
     format!("{{ {prefix}{closure_expr} }}")
 }
 
+/// One raw source snippet of a subtree, with the names bound between it and the top of that subtree — a view `let` above it, an enclosing loop or arm pattern, the wrapping closure's own parameters.
+///
+/// Those names belong to the closure being wrapped, so an identifier a snippet shares with one of them is a reference to what the closure itself declares and not a capture to clone in from outside.
+pub(super) struct ScopedSnippet {
+    text: String,
+    shadowed: Vec<String>,
+}
+
+impl ScopedSnippet {
+    fn new(text: String, scope: &[String]) -> Self {
+        Self {
+            text,
+            shadowed: scope.to_vec(),
+        }
+    }
+}
+
 /// Every raw source snippet a subtree contains, still carrying its `$` sigils — attribute values, text content, control-flow conditions and verbatim `let`s.
 ///
 /// Collected so a `move` closure wrapping that subtree ([`clone_block_multiline`]) can clone the signals it will reference instead of moving them out of the surrounding view. Every emitter that puts view markup inside a `move` closure needs this: a reactive `if`/`for` branch and a `lazy` block alike.
 pub(super) fn subtree_snippets(nodes: &[ViewNode]) -> Vec<String> {
+    scoped_snippets(nodes, &[])
+        .into_iter()
+        .map(|s| s.text)
+        .collect()
+}
+
+/// The same walk, keeping what each snippet is read against. `bound` seeds the scope with the names the wrapping closure's parameters introduce — a `for`'s pattern, a `match` arm's — which sit inside it exactly as a view `let` does.
+pub(super) fn scoped_snippets(nodes: &[ViewNode], bound: &[String]) -> Vec<ScopedSnippet> {
     let mut out = Vec::new();
-    collect_snippets(nodes, &mut out);
+    collect_snippets(nodes, &mut bound.to_vec(), &mut out);
     out
 }
 
-fn collect_snippets(nodes: &[ViewNode], out: &mut Vec<String>) {
+fn collect_snippets(nodes: &[ViewNode], scope: &mut Vec<String>, out: &mut Vec<ScopedSnippet>) {
     for node in nodes {
+        let depth = scope.len();
         match node {
             ViewNode::Element(el) => {
                 // Only the `{…}` holes are source. Pushing the whole string made `syn` lex prose, where an `I"` or a stray exponent is a hard lexer error inside a proc macro rather than a `Result`.
                 if let Some(content) = &el.content {
                     for segment in parse_interpolation(content) {
                         if let Segment::Expr { text, .. } = segment {
-                            out.push(text);
+                            out.push(ScopedSnippet::new(text, scope));
                         }
                     }
                 }
                 for attr in &el.attributes {
                     // A quoted value is data, handed through as a string literal with no `$` substitution. Scanning it made a doc string mentioning `$x` clone a binding called `x` that the file never had.
                     if !attr.value.is_quoted() {
-                        out.push(attr.value.text().to_string());
+                        out.push(ScopedSnippet::new(attr.value.text().to_string(), scope));
                     }
                 }
-                collect_snippets(&el.children, out);
+                collect_snippets(&el.children, scope, out);
             }
             ViewNode::IfBlock(block) => {
-                out.push(block.condition.clone());
-                collect_snippets(&block.then_branch, out);
+                out.push(ScopedSnippet::new(block.condition.clone(), scope));
+                collect_snippets(&block.then_branch, scope, out);
+                // The branches are separate blocks: a `let` in one is not in scope in the other.
+                scope.truncate(depth);
                 if let Some(else_branch) = &block.else_branch {
-                    collect_snippets(else_branch, out);
+                    collect_snippets(else_branch, scope, out);
                 }
             }
             ViewNode::ForBlock(block) => {
-                out.push(block.iterable.clone());
+                out.push(ScopedSnippet::new(block.iterable.clone(), scope));
+                let pattern = pattern_idents(&block.pattern);
                 if let Some(key) = &block.key_expr {
-                    out.push(key.clone());
+                    let keyed: Vec<String> = scope.iter().chain(&pattern).cloned().collect();
+                    out.push(ScopedSnippet::new(key.clone(), &keyed));
                 }
+                // The gap is emitted as an argument to the list constructor, outside the item closure the pattern belongs to.
                 if let Some(gap) = &block.gap_expr {
-                    out.push(gap.clone());
+                    out.push(ScopedSnippet::new(gap.clone(), scope));
                 }
-                collect_snippets(&block.body, out);
+                scope.extend(pattern);
+                collect_snippets(&block.body, scope, out);
             }
             ViewNode::MatchBlock(block) => {
-                out.push(block.scrutinee.clone());
+                out.push(ScopedSnippet::new(block.scrutinee.clone(), scope));
                 if let Some(key) = &block.key_expr {
-                    out.push(key.clone());
+                    let mut keyed = scope.clone();
+                    keyed.extend(block.binding.clone());
+                    out.push(ScopedSnippet::new(key.clone(), &keyed));
                 }
                 for arm in &block.arms {
-                    collect_snippets(&arm.body, out);
+                    scope.extend(pattern_idents(&arm.pattern));
+                    collect_snippets(&arm.body, scope, out);
+                    scope.truncate(depth);
                 }
             }
-            ViewNode::LetStmt(stmt) => out.push(stmt.source.clone()),
+            ViewNode::LetStmt(stmt) => {
+                out.push(ScopedSnippet::new(stmt.source.clone(), scope));
+                scope.extend(let_bound_names(&stmt.source));
+            }
             ViewNode::Comment(_) => {}
         }
+        // A view `let` stays in scope for the siblings after it; every other node closes the block it opened.
+        if !matches!(node, ViewNode::LetStmt(_)) {
+            scope.truncate(depth);
+        }
     }
+}
+
+/// The names a view `let` binds, falling back to a scan of its pattern text when the statement does not parse — half-written mid-keystroke, or holding macro tokens.
+fn let_bound_names(source: &str) -> Vec<String> {
+    crate::rust::let_bindings(source).unwrap_or_else(|| {
+        source
+            .trim()
+            .strip_prefix("let ")
+            .and_then(|rest| rest.split('=').next())
+            .map(pattern_idents)
+            .unwrap_or_default()
+    })
 }
 
 /// [`wrap_signal_clones`] for a closure whose body spans lines: the clones go on their own line above it, so the generated code stays readable and the source map keeps pointing at the right `.rsx` lines. A no-op when `idents` is empty, which keeps the common signal-free closure unwrapped.

@@ -36,3 +36,17 @@ fn text_that_is_not_an_expression_says_so_instead_of_guessing() {
     assert_eq!(free_idents("col gap:8"), None);
     assert_eq!(idents("12px"), Vec::<String>::new());
 }
+
+/// What the clone prelude has to leave alone: a view `let` declares inside the closure being wrapped, so its names are the closure's own rather than captures from around it.
+#[test]
+fn a_let_reports_the_names_it_binds() {
+    assert_eq!(
+        let_bindings("let rect = chip_rect(&rects, m)").unwrap(),
+        ["rect"]
+    );
+    assert_eq!(
+        let_bindings("let (a, mut b): (u8, u8) = pair;").unwrap(),
+        ["a", "b"]
+    );
+    assert_eq!(let_bindings("chip_rect(&rects, m)"), None);
+}

@@ -5,19 +5,22 @@ use std::fmt::Write;
 use telar_parser::{ForBlock, IfBlock, MatchBlock, ViewNode};
 
 use super::signals::{
-    captured_idents_with, clone_block_multiline, pattern_idents, rust_str, substitute_reads,
-    subtree_snippets, wrap_signal_clones,
+    ScopedSnippet, captured_in_scope, clone_block_multiline, pattern_idents, rust_str,
+    scoped_snippets, substitute_reads, wrap_signal_clones,
 };
 use super::{ChildEmit, ChildMode, ViewGen, expr_marker};
 
 impl ViewGen<'_> {
-    /// The clone prelude a `move` closure holding `body` needs: one `let x = x.clone();` per `$signal` (and per in-scope loop variable) the subtree reads.
+    /// The clone prelude a `move` closure reading `snippets` needs: one `let x = x.clone();` per `$signal` (and per in-scope loop variable) it names.
     ///
-    /// Without it the closure *moves* those bindings, so a signal read inside a reactive branch stops being available to the rest of the view — a trap the author never wrote and cannot see in their `.rsx`. Computed before this block's own pattern idents enter `loop_variables`, since those are the closure's parameters and exist only inside it.
-    fn wrap_branch_closure(&self, body: &[ViewNode], closure: String, pad: &str) -> String {
-        let raw = subtree_snippets(body);
-        let raw_refs: Vec<&str> = raw.iter().map(String::as_str).collect();
-        let idents = captured_idents_with(&raw_refs, &self.loop_variables, &self.locals);
+    /// Without it the closure *moves* those bindings, so a signal read inside a reactive branch stops being available to the rest of the view — a trap the author never wrote and cannot see in their `.rsx`. What the closure itself declares is left out, which is why the snippets arrive scoped: the prelude runs above the closure, where a loop variable, an arm binding and a view `let` all name nothing yet.
+    fn wrap_branch_closure(
+        &self,
+        snippets: &[ScopedSnippet],
+        closure: String,
+        pad: &str,
+    ) -> String {
+        let idents = captured_in_scope(snippets, &self.loop_variables, &self.locals);
         clone_block_multiline(&idents, closure, pad)
     }
 
@@ -92,12 +95,12 @@ impl ViewGen<'_> {
         self.indent -= 2;
         let _ = write!(body, "{pad}    }}");
 
-        let arm_nodes: Vec<ViewNode> = block
+        let arm_snippets: Vec<ScopedSnippet> = block
             .arms
             .iter()
-            .flat_map(|arm| arm.body.iter().cloned())
+            .flat_map(|arm| scoped_snippets(&arm.body, &pattern_idents(&arm.pattern)))
             .collect();
-        let branches = self.wrap_branch_closure(&arm_nodes, body, &format!("{pad}    "));
+        let branches = self.wrap_branch_closure(&arm_snippets, body, &format!("{pad}    "));
 
         let mut code = String::new();
         let opener = if boxed {
@@ -162,7 +165,7 @@ impl ViewGen<'_> {
         self.indent -= 2;
         let _ = write!(body, "{pad}    }}");
         let branches =
-            self.wrap_branch_closure(&Self::branch_nodes(block), body, &format!("{pad}    "));
+            self.wrap_branch_closure(&Self::branch_snippets(block), body, &format!("{pad}    "));
 
         let opener = if boxed {
             "ReactiveList::new("
@@ -184,13 +187,13 @@ impl ViewGen<'_> {
         }
     }
 
-    /// Both branches of an `if` as one node list — what the branch closure actually contains, and so what its clone prelude has to be computed from. The condition is deliberately excluded: it lives in the source closure, which clones it separately.
-    fn branch_nodes(block: &IfBlock) -> Vec<ViewNode> {
-        let mut nodes = block.then_branch.clone();
+    /// Both branches of an `if` as the snippets the branch closure will read, and so what its clone prelude has to be computed from — each branch walked on its own, since the two are separate blocks. The condition is deliberately excluded: it lives in the source closure, which clones it separately.
+    fn branch_snippets(block: &IfBlock) -> Vec<ScopedSnippet> {
+        let mut snippets = scoped_snippets(&block.then_branch, &[]);
         if let Some(else_branch) = &block.else_branch {
-            nodes.extend(else_branch.iter().cloned());
+            snippets.extend(scoped_snippets(else_branch, &[]));
         }
-        nodes
+        snippets
     }
 
     /// Emits a reactive `if`'s branches as per-branch returns, each collapsed by [`Self::emit_content_cell`]. A missing `else` yields an empty column.
@@ -339,7 +342,7 @@ impl ViewGen<'_> {
 
     /// The `move |params| -> Result<…>` row closure a reactive `for` hands its list constructor, with the clone prelude its body reads.
     ///
-    /// The prelude is computed before this loop's own pattern idents go into scope: those are the closure's parameters, so cloning them above it would name bindings that do not exist there.
+    /// The body is walked with this loop's own pattern idents already bound: those are the closure's parameters, so a `$rect` under `for (m, rect) in $chips` names one of them and cloning it above the closure would name a binding that does not exist there.
     fn emit_item_closure(&mut self, block: &ForBlock, params: &str, pad: &str) -> String {
         let mut body = String::new();
         let _ = writeln!(
@@ -348,6 +351,7 @@ impl ViewGen<'_> {
         );
         self.indent += 2;
         let idents = pattern_idents(block.pattern.trim());
+        let snippets = scoped_snippets(&block.body, &idents);
         let added = idents.len();
         self.loop_variables.extend(idents);
         let cell = self.in_reactive(|g| g.emit_content_cell(&block.body, &mut body));
@@ -357,7 +361,7 @@ impl ViewGen<'_> {
         let _ = writeln!(body, "{ipad}Ok(box_item({cell}))");
         self.indent -= 2;
         let _ = write!(body, "{pad}    }}");
-        self.wrap_branch_closure(&block.body, body, &format!("{pad}    "))
+        self.wrap_branch_closure(&snippets, body, &format!("{pad}    "))
     }
 
     /// A `virtual` loop: only the rows the enclosing scroll shows get built, instead of every row up front.

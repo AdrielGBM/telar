@@ -53,11 +53,8 @@ impl ViewGen<'_> {
         self.indent -= 2;
 
         let closure = format!("{body}{inner_pad}Ok({slots_expr})");
-        let idents = super::signals::captured_idents_with(
-            &super::signals::subtree_snippets(children)
-                .iter()
-                .map(String::as_str)
-                .collect::<Vec<_>>(),
+        let idents = super::signals::captured_in_scope(
+            &super::signals::scoped_snippets(children, &[]),
             &self.loop_variables,
             &self.locals,
         );

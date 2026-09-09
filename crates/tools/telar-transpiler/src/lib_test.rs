@@ -1161,6 +1161,36 @@ fn a_reactive_for_never_clones_its_own_loop_variable() {
     );
 }
 
+/// A `$name` is a capture only where `name` comes from outside the closure. A view `let` at the top of a loop body declares *inside* it, so `track_rect:$rect` under `let rect = …` names that binding — and the prelude that cloned it emitted `let rect = rect.clone();` above the closure, against a name nothing had bound yet.
+#[test]
+fn a_view_let_inside_a_loop_is_not_cloned_above_it() {
+    let src = "[logic]\nlet chips = signal(vec![1i32, 2]);\nlet rects = 3i32;\n[view]\ncol\n    for m in $chips key m\n        let rect = chip_rect(&rects, m)\n        row track_rect:$rect\n";
+    let code = transpile_source(src, "demo", None, None).unwrap().rust_code;
+    let builder = code.find("move |m| ->").expect("item builder closure");
+    assert!(
+        !code[..builder].contains("let rect = rect.clone();"),
+        "the loop's own `let` must not be cloned above the closure that makes it:\n{code}"
+    );
+    assert!(
+        code[..builder].contains("let rects = rects.clone();"),
+        "while the `[logic]` binding the `let` reads still is:\n{code}"
+    );
+}
+
+/// The same for a name the loop's own pattern binds: `for (m, rect) in $chips` makes `rect` a closure parameter, and a prelude above the closure reaches nothing.
+#[test]
+fn a_loop_pattern_binding_read_as_a_signal_is_not_cloned_above_it() {
+    let src = "[logic]\nlet chips = signal(vec![(1i32, 2i32)]);\n[view]\ncol\n    for (m, rect) in $chips key m\n        row track_rect:$rect\n";
+    let code = transpile_source(src, "demo", None, None).unwrap().rust_code;
+    let builder = code
+        .find("move |(m, rect)| ->")
+        .expect("item builder closure");
+    assert!(
+        !code[..builder].contains("let rect = rect.clone();"),
+        "a pattern binding must not be cloned above its own closure:\n{code}"
+    );
+}
+
 #[test]
 fn a_signal_free_reactive_branch_gets_no_clone_prelude() {
     let src =
