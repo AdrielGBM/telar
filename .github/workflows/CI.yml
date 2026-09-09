@@ -60,6 +60,17 @@ jobs:
       - run: cargo clippy -p telar-analyzer -p telar-diagnostics --all-targets
       - run: cargo test -p telar-analyzer -p telar-diagnostics
 
+  # Every other job builds the workspace as one unit, where feature unification hands a crate flags its own manifest never asked for. `cargo publish` verifies each package alone, so a crate that only ever compiled with a sibling's features is unbuildable the moment it leaves the tree — and nothing said so until a release had put 36 of 42 crates on a registry that cannot take them back.
+  #
+  # Never `--no-verify`: skipping the build skips the whole of what this job is for. And deliberately a bare runner, matching the one that publishes — a crate that links a system library at build time has to fail here rather than there.
+  publishable:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo publish --workspace --dry-run
+
   check-android:
     runs-on: ubuntu-latest
     steps:
