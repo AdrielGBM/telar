@@ -9,7 +9,7 @@ A modular Rust UI framework with its own template language, reactive signals and
 
 Telar draws every pixel itself — there is no webview and no native widget toolkit underneath. Components are written in `.rsx`, an indentation-based template language that compiles to plain Rust at build time, so what ships is a single binary with no runtime interpreter.
 
-> **Early days.** Telar is at `0.1.8`. The APIs work and are exercised by the apps in this repo, but they will keep moving before `1.0`.
+> **Early days.** Telar is at `0.2.0`. The APIs work and are exercised by the apps in this repo, but they will keep moving before `1.0`.
 
 ## A component
 
@@ -195,7 +195,7 @@ You depend on one:
 
 ```toml
 [dependencies]
-telar = "0.1.8"
+telar = "0.2.0"
 ```
 
 Everything behind it — the reactive graph, the layout engine, the renderers, the platform backends, the `.rsx` pipeline — is a separate `telar-*` crate. They are published because Cargo requires every dependency of a published crate to be published too, not because an application names them; the split is what lets a terminal build skip a GPU renderer. Reach for one directly only if you are writing a frontend or a tool against Telar's internals.

@@ -809,7 +809,7 @@ dependencies = [
 
 [[package]]
 name = "cargo-telar"
-version = "0.1.8"
+version = "0.2.0"
 dependencies = [
  "brotli",
  "clap",
@@ -2677,7 +2677,7 @@ checksum = "3752f229dcc5a481d60f385fa479ff46818033d881d2d801aa27dffcfb5e8306"
 
 [[package]]
 name = "landing"
-version = "0.1.8"
+version = "0.2.0"
 dependencies = [
  "telar",
  "tracing-subscriber",
@@ -4904,7 +4904,7 @@ dependencies = [
 
 [[package]]
 name = "sandbox"
-version = "0.1.8"
+version = "0.2.0"
 dependencies = [
  "criterion",
  "pollster",
@@ -5424,7 +5424,7 @@ dependencies = [
 
 [[package]]
 name = "telar"
-version = "0.1.8"
+version = "0.2.0"
 dependencies = [
  "document-features",
  "libc",
@@ -5471,7 +5471,7 @@ dependencies = [
 
 [[package]]
 name = "telar-analyzer"
-version = "0.1.8"
+version = "0.2.0"
 dependencies = [
  "anyhow",
  "crossbeam-channel",
@@ -5494,7 +5494,7 @@ dependencies = [
 
 [[package]]
 name = "telar-baker"
-version = "0.1.8"
+version = "0.2.0"
 dependencies = [
  "image",
  "serde",
@@ -5509,7 +5509,7 @@ dependencies = [
 
 [[package]]
 name = "telar-devtools"
-version = "0.1.8"
+version = "0.2.0"
 dependencies = [
  "telar-geometry-core",
  "telar-platform-core",
@@ -5520,7 +5520,7 @@ dependencies = [
 
 [[package]]
 name = "telar-diagnostics"
-version = "0.1.8"
+version = "0.2.0"
 dependencies = [
  "lsp-types",
  "telar-parser",
@@ -5528,7 +5528,7 @@ dependencies = [
 
 [[package]]
 name = "telar-dynamic"
-version = "0.1.8"
+version = "0.2.0"
 dependencies = [
  "document-features",
  "image",
@@ -5551,11 +5551,11 @@ dependencies = [
 
 [[package]]
 name = "telar-geometry-core"
-version = "0.1.8"
+version = "0.2.0"
 
 [[package]]
 name = "telar-i18n-core"
-version = "0.1.8"
+version = "0.2.0"
 dependencies = [
  "telar-reactive-core",
  "toml",
@@ -5563,14 +5563,14 @@ dependencies = [
 
 [[package]]
 name = "telar-i18n-fixture"
-version = "0.1.8"
+version = "0.2.0"
 dependencies = [
  "telar",
 ]
 
 [[package]]
 name = "telar-layout-core"
-version = "0.1.8"
+version = "0.2.0"
 dependencies = [
  "rustc-hash 2.1.3",
  "taffy",
@@ -5580,7 +5580,7 @@ dependencies = [
 
 [[package]]
 name = "telar-layout-reactive"
-version = "0.1.8"
+version = "0.2.0"
 dependencies = [
  "rustc-hash 2.1.3",
  "telar-geometry-core",
@@ -5590,7 +5590,7 @@ dependencies = [
 
 [[package]]
 name = "telar-macros"
-version = "0.1.8"
+version = "0.2.0"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -5600,7 +5600,7 @@ dependencies = [
 
 [[package]]
 name = "telar-motion-core"
-version = "0.1.8"
+version = "0.2.0"
 dependencies = [
  "telar-geometry-core",
  "telar-reactive-core",
@@ -5609,7 +5609,7 @@ dependencies = [
 
 [[package]]
 name = "telar-navigate-core"
-version = "0.1.8"
+version = "0.2.0"
 dependencies = [
  "telar-layout-core",
  "telar-motion-core",
@@ -5620,14 +5620,14 @@ dependencies = [
 
 [[package]]
 name = "telar-parser"
-version = "0.1.8"
+version = "0.2.0"
 dependencies = [
  "thiserror 2.0.20",
 ]
 
 [[package]]
 name = "telar-platform-android"
-version = "0.1.8"
+version = "0.2.0"
 dependencies = [
  "android-activity",
  "libc",
@@ -5643,7 +5643,7 @@ dependencies = [
 
 [[package]]
 name = "telar-platform-core"
-version = "0.1.8"
+version = "0.2.0"
 dependencies = [
  "libc",
  "libloading",
@@ -5656,7 +5656,7 @@ dependencies = [
 
 [[package]]
 name = "telar-platform-desktop"
-version = "0.1.8"
+version = "0.2.0"
 dependencies = [
  "accesskit",
  "accesskit_winit",
@@ -5674,7 +5674,7 @@ dependencies = [
 
 [[package]]
 name = "telar-platform-headless"
-version = "0.1.8"
+version = "0.2.0"
 dependencies = [
  "raw-window-handle",
  "telar-platform-core",
@@ -5682,7 +5682,7 @@ dependencies = [
 
 [[package]]
 name = "telar-platform-tui"
-version = "0.1.8"
+version = "0.2.0"
 dependencies = [
  "crossterm",
  "telar-geometry-core",
@@ -5693,7 +5693,7 @@ dependencies = [
 
 [[package]]
 name = "telar-platform-web"
-version = "0.1.8"
+version = "0.2.0"
 dependencies = [
  "console_error_panic_hook",
  "js-sys",
@@ -5709,7 +5709,7 @@ dependencies = [
 
 [[package]]
 name = "telar-platform-winit"
-version = "0.1.8"
+version = "0.2.0"
 dependencies = [
  "raw-window-handle",
  "telar-platform-core",
@@ -5718,7 +5718,7 @@ dependencies = [
 
 [[package]]
 name = "telar-plugin"
-version = "0.1.8"
+version = "0.2.0"
 dependencies = [
  "document-features",
  "libloading",
@@ -5736,7 +5736,7 @@ dependencies = [
 
 [[package]]
 name = "telar-project"
-version = "0.1.8"
+version = "0.2.0"
 dependencies = [
  "serde",
  "serde_json",
@@ -5745,7 +5745,7 @@ dependencies = [
 
 [[package]]
 name = "telar-reactive-core"
-version = "0.1.8"
+version = "0.2.0"
 dependencies = [
  "rustc-hash 2.1.3",
  "slotmap",
@@ -5758,11 +5758,11 @@ dependencies = [
 
 [[package]]
 name = "telar-reactive-local"
-version = "0.1.8"
+version = "0.2.0"
 
 [[package]]
 name = "telar-renderer-assets"
-version = "0.1.8"
+version = "0.2.0"
 dependencies = [
  "image",
  "resvg",
@@ -5775,7 +5775,7 @@ dependencies = [
 
 [[package]]
 name = "telar-renderer-cache"
-version = "0.1.8"
+version = "0.2.0"
 dependencies = [
  "clru",
  "rustc-hash 2.1.3",
@@ -5784,7 +5784,7 @@ dependencies = [
 
 [[package]]
 name = "telar-renderer-core"
-version = "0.1.8"
+version = "0.2.0"
 dependencies = [
  "bytemuck",
  "rustc-hash 2.1.3",
@@ -5800,7 +5800,7 @@ dependencies = [
 
 [[package]]
 name = "telar-renderer-dom"
-version = "0.1.8"
+version = "0.2.0"
 dependencies = [
  "rustc-hash 2.1.3",
  "telar-geometry-core",
@@ -5815,7 +5815,7 @@ dependencies = [
 
 [[package]]
 name = "telar-renderer-hardware"
-version = "0.1.8"
+version = "0.2.0"
 dependencies = [
  "bytemuck",
  "criterion",
@@ -5839,14 +5839,14 @@ dependencies = [
 
 [[package]]
 name = "telar-renderer-record"
-version = "0.1.8"
+version = "0.2.0"
 dependencies = [
  "telar-renderer-core",
 ]
 
 [[package]]
 name = "telar-renderer-software"
-version = "0.1.8"
+version = "0.2.0"
 dependencies = [
  "criterion",
  "image",
@@ -5877,7 +5877,7 @@ dependencies = [
 
 [[package]]
 name = "telar-renderer-text"
-version = "0.1.8"
+version = "0.2.0"
 dependencies = [
  "cosmic-text",
  "criterion",
@@ -5893,7 +5893,7 @@ dependencies = [
 
 [[package]]
 name = "telar-renderer-tui"
-version = "0.1.8"
+version = "0.2.0"
 dependencies = [
  "rustc-hash 2.1.3",
  "telar-geometry-core",
@@ -5904,7 +5904,7 @@ dependencies = [
 
 [[package]]
 name = "telar-renderer-web"
-version = "0.1.8"
+version = "0.2.0"
 dependencies = [
  "js-sys",
  "raw-window-handle",
@@ -5920,11 +5920,11 @@ dependencies = [
 
 [[package]]
 name = "telar-semantics-core"
-version = "0.1.8"
+version = "0.2.0"
 
 [[package]]
 name = "telar-services-core"
-version = "0.1.8"
+version = "0.2.0"
 dependencies = [
  "dirs 7.0.0",
  "rustc-hash 2.1.3",
@@ -5936,7 +5936,7 @@ dependencies = [
 
 [[package]]
 name = "telar-theme-core"
-version = "0.1.8"
+version = "0.2.0"
 dependencies = [
  "telar-geometry-core",
  "telar-reactive-core",
@@ -5945,7 +5945,7 @@ dependencies = [
 
 [[package]]
 name = "telar-transpiler"
-version = "0.1.8"
+version = "0.2.0"
 dependencies = [
  "proc-macro2",
  "serde",
@@ -5960,7 +5960,7 @@ dependencies = [
 
 [[package]]
 name = "telar-ui-components"
-version = "0.1.8"
+version = "0.2.0"
 dependencies = [
  "telar-geometry-core",
  "telar-layout-core",
@@ -5977,7 +5977,7 @@ dependencies = [
 
 [[package]]
 name = "telar-ui-core"
-version = "0.1.8"
+version = "0.2.0"
 dependencies = [
  "rustc-hash 2.1.3",
  "telar-geometry-core",
@@ -5997,7 +5997,7 @@ dependencies = [
 
 [[package]]
 name = "telar-ui-tree"
-version = "0.1.8"
+version = "0.2.0"
 dependencies = [
  "criterion",
  "telar-geometry-core",
