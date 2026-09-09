@@ -165,11 +165,19 @@ jobs:
         working-directory: editors/vscode/telar
         run: pnpx @vscode/vsce@3.9.2 package --target ${{ matrix.vsce-target }} --no-dependencies -o telar-analyzer-${{ matrix.vsce-target }}.vsix
 
+      # Wrapped so a variant already published at this version does not fail the job — see the script for which
+      # failures it still lets through, and why that line is where it is.
       - name: Publish to the VS Code Marketplace
         working-directory: editors/vscode/telar
-        run: pnpx @vscode/vsce@3.9.2 publish --packagePath telar-analyzer-${{ matrix.vsce-target }}.vsix
+        run: >-
+          "$GITHUB_WORKSPACE/.github/scripts/publish-vsix.sh"
+          pnpx @vscode/vsce@3.9.2 publish
+          --packagePath telar-analyzer-${{ matrix.vsce-target }}.vsix
 
       - name: Publish to Open VSX
         if: env.OVSX_PAT != ''
         working-directory: editors/vscode/telar
-        run: pnpx ovsx@1.1.1 publish telar-analyzer-${{ matrix.vsce-target }}.vsix
+        run: >-
+          "$GITHUB_WORKSPACE/.github/scripts/publish-vsix.sh"
+          pnpx ovsx@1.1.1 publish
+          telar-analyzer-${{ matrix.vsce-target }}.vsix
