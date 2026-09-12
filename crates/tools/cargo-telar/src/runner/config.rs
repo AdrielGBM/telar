@@ -348,6 +348,66 @@ fn enables_frontend(features: &BTreeMap<String, toml::Value>, feature: &str) -> 
         .any(|enabled| FRONTENDS.contains(&enabled.trim_start_matches("telar/")))
 }
 
+// Cargo.lock only pins what some workspace feature reaches, so a feature named only on the command line resolves against whatever copy of the crates.io index this machine last fetched.
+pub(crate) const TOOLING_FEATURES: [&str; 5] = [
+    "telar/dev",
+    "telar/hot-reload",
+    "telar/previews",
+    "telar/preview",
+    "telar/preview-headless",
+];
+
+pub(crate) fn tooling_feature_entry() -> String {
+    let features = TOOLING_FEATURES
+        .map(|feature| format!("\"{feature}\""))
+        .join(", ");
+    format!("tooling = [{features}]")
+}
+
+fn names_feature(features: &BTreeMap<String, toml::Value>, wanted: &str) -> bool {
+    let weak = wanted.replacen('/', "?/", 1);
+    features
+        .values()
+        .flat_map(|value| feature_list(Some(value)))
+        .any(|feature| feature == wanted || feature == weak)
+}
+
+pub(crate) fn unlocked_tooling_note(
+    declared: &[BTreeMap<String, toml::Value>],
+    injected: &[&str],
+) -> Option<String> {
+    let unlocked: Vec<String> = injected
+        .iter()
+        .filter(|feature| {
+            !declared
+                .iter()
+                .any(|features| names_feature(features, feature))
+        })
+        .map(|feature| format!("`{feature}`"))
+        .collect();
+    if unlocked.is_empty() {
+        return None;
+    }
+    Some(format!(
+        "[cargo-telar] warning: no `[features]` entry in this workspace names {}, so Cargo.lock does not pin what it brings in and a telar upgrade can fail to resolve it. Add this under the app's `[features]`:\n    {}",
+        unlocked.join(", "),
+        tooling_feature_entry()
+    ))
+}
+
+pub(crate) fn warn_if_tooling_unlocked(args: &[String], injected: &[&str]) {
+    let dir = find_package_dir(args);
+    let root = telar_project::find_workspace_root(&dir).unwrap_or(dir);
+    let declared: Vec<_> = super::bake::member_dirs(&root)
+        .iter()
+        .filter_map(|member| read_manifest_in(member))
+        .map(|manifest| manifest.features)
+        .collect();
+    if let Some(note) = unlocked_tooling_note(&declared, injected) {
+        eprintln!("{note}");
+    }
+}
+
 // dpkg reads the maintainer from `DEBFULLNAME`/`DEBEMAIL`, so honour the same pair: cargo stopped emitting `authors` years ago, and refusing every manifest without it would rule out most projects.
 fn maintainer_from_env() -> Option<String> {
     maintainer_from(

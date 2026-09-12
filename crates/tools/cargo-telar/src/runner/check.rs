@@ -41,6 +41,7 @@ pub(crate) fn run_check_cmd(args: CheckArgs) {
             }
         }
     }
+    super::config::warn_if_tooling_unlocked(&cargo_args, &["telar/previews"]);
     // A `[preview]` is markup the author wrote, so a check that skipped it would report nothing about the one block most likely to be half-finished. It is the only command that asks for previews without going on to render them.
     cargo_args.push("--features".to_string());
     cargo_args.push("telar/previews".to_string());

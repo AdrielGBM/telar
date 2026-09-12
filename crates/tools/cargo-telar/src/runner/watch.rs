@@ -12,6 +12,7 @@ use telar_project::ASSET_KINDS;
 use super::android::{android_install_and_launch, make_android_cmd};
 use super::config::{
     TelarSection, WindowSection, backend_as_str, resolve_package, split_android_flag,
+    warn_if_tooling_unlocked,
 };
 use super::diagnostics;
 use super::package::{package_bin_path, package_lib_path, profile_of};
@@ -434,6 +435,7 @@ pub(crate) fn run_hot_loop(mode: HotMode, opts: HotLoopOpts) -> ! {
     let is_preview = mode.is_preview();
 
     if android {
+        warn_if_tooling_unlocked(&rest, features);
         // `cargo apk run --lib` crashes on UID parsing when launching; work around by doing build → adb install → adb shell am start manually.
         let mut build_args = vec!["apk".to_string(), "build".to_string(), "--lib".to_string()];
         build_args.extend(rest.iter().cloned());
@@ -484,6 +486,14 @@ pub(crate) fn run_hot_loop(mode: HotMode, opts: HotLoopOpts) -> ! {
             resolved.name()
         );
     }
+    warn_if_tooling_unlocked(
+        &rest,
+        if hot_reload {
+            mode.hot_features()
+        } else {
+            features
+        },
+    );
 
     if hot_reload {
         let hot_features = mode.hot_features();

@@ -112,6 +112,7 @@ fn target_name(target: Target) -> &'static str {
 
 fn manifest(name: &str, target: Target) -> String {
     let target = target_name(target);
+    let tooling = super::config::tooling_feature_entry();
     format!(
         r#"[package]
 name = "{name}"
@@ -142,6 +143,8 @@ desktop = ["telar/desktop"]
 tui = ["telar/tui"]
 web = ["telar/web"]
 android = ["telar/android"]
+# Never turned on by a build: `cargo telar` names these on the command line for its own commands, and this entry is what lets Cargo.lock pin what they bring in.
+{tooling}
 
 [profile.dev]
 opt-level = 1

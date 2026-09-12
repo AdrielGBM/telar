@@ -70,3 +70,26 @@ fn a_name_that_would_not_compile_is_refused() {
     assert!(validate_name("my app").is_err(), "a space is not allowed");
     assert!(validate_name("my.app").is_err(), "nor is a dot");
 }
+
+#[test]
+fn every_tooling_feature_is_named_where_the_lockfile_sees_it() {
+    for target in [Target::Desktop, Target::Tui, Target::Web, Target::Android] {
+        let manifest = generated_manifest(target);
+        let features = manifest["features"].as_table().expect("features table");
+        let tooling: Vec<_> = features["tooling"]
+            .as_array()
+            .expect("tooling array")
+            .iter()
+            .filter_map(|f| f.as_str())
+            .collect();
+        assert_eq!(tooling, crate::runner::config::TOOLING_FEATURES);
+        assert!(
+            !features["default"]
+                .as_array()
+                .expect("default array")
+                .iter()
+                .any(|f| f.as_str() == Some("tooling")),
+            "`tooling` exists for the lockfile, never for a build"
+        );
+    }
+}

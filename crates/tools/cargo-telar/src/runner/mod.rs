@@ -221,8 +221,10 @@ fn run_preview_once(
         let selected = frontend_args(target, common.renderer, &cargo_args);
         cargo_args.extend(selected);
     }
+    let tooling = format!("telar/{feature}");
+    config::warn_if_tooling_unlocked(&cargo_args, &[&tooling]);
     cargo_args.push("--features".to_string());
-    cargo_args.push(format!("telar/{feature}"));
+    cargo_args.push(tooling);
     let status = Command::new("cargo")
         .args(&cargo_args)
         .env(var, value)
@@ -260,6 +262,7 @@ fn run_test_cmd(args: TestArgs) -> ! {
         let selected = frontend_args(target, None, &cargo_args);
         cargo_args.extend(selected);
     }
+    config::warn_if_tooling_unlocked(&cargo_args, &["telar/previews"]);
     // What emits the `[preview]` blocks and the entry point that runs them. Without it the binary has neither, and `TELAR_TEST` below reaches nothing — which is the point: it reaches nothing in a shipped build either.
     cargo_args.push("--features".to_string());
     cargo_args.push("telar/previews".to_string());

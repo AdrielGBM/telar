@@ -145,3 +145,15 @@ fn the_dylib_is_built_with_the_binarys_features() {
     assert!(features.contains("sandbox/tui"), "{lib_args:?}");
     assert!(features.contains("telar/dev"), "{lib_args:?}");
 }
+
+#[test]
+fn every_feature_the_loop_injects_is_one_a_project_can_lock() {
+    for mode in [HotMode::Dev, HotMode::Preview] {
+        for feature in mode.features().iter().chain(mode.hot_features()) {
+            assert!(
+                crate::runner::config::TOOLING_FEATURES.contains(feature),
+                "`{feature}` is injected but missing from TOOLING_FEATURES"
+            );
+        }
+    }
+}

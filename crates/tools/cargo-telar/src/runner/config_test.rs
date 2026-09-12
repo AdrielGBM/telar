@@ -172,3 +172,53 @@ tui = ["telar/tui"]
         "a package that named nothing keeps telar's own default, which is a window"
     );
 }
+
+fn declared_features(manifest: &str) -> BTreeMap<String, toml::Value> {
+    toml::from_str::<CargoManifest>(manifest).unwrap().features
+}
+
+#[test]
+fn a_tooling_feature_no_member_names_is_reported_with_the_entry_that_locks_it() {
+    let note = unlocked_tooling_note(
+        &[declared_features("[package]\nname = \"app\"\n")],
+        &["telar/dev"],
+    )
+    .expect("nothing in the workspace names `telar/dev`");
+    assert!(note.contains("`telar/dev`"), "{note}");
+    assert!(note.contains(&tooling_feature_entry()), "{note}");
+}
+
+#[test]
+fn any_member_naming_it_in_either_spelling_locks_it() {
+    let app = declared_features("[package]\nname = \"app\"\n");
+    for spelling in ["telar/dev", "telar?/dev"] {
+        let tools = declared_features(&format!(
+            "[package]\nname = \"tools\"\n[features]\nlocked = [\"{spelling}\"]\n"
+        ));
+        assert_eq!(
+            unlocked_tooling_note(&[app.clone(), tools], &["telar/dev"]),
+            None,
+            "`{spelling}`"
+        );
+    }
+}
+
+#[test]
+fn only_the_features_left_unlocked_are_named() {
+    let app = declared_features("[package]\nname = \"app\"\n[features]\ndev = [\"telar/dev\"]\n");
+    let note = unlocked_tooling_note(&[app], &["telar/dev", "telar/hot-reload"])
+        .expect("`telar/hot-reload` is named nowhere");
+    assert!(note.contains("names `telar/hot-reload`, so"), "{note}");
+}
+
+#[test]
+fn the_entry_cargo_telar_new_writes_locks_every_tooling_feature() {
+    let manifest = format!(
+        "[package]\nname = \"app\"\n[features]\n{}\n",
+        tooling_feature_entry()
+    );
+    assert_eq!(
+        unlocked_tooling_note(&[declared_features(&manifest)], &TOOLING_FEATURES),
+        None
+    );
+}
