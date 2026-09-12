@@ -6,7 +6,7 @@
 
 use std::path::{Path, PathBuf};
 use std::sync::mpsc;
-use std::time::Duration;
+use std::time::{Duration, SystemTime};
 
 use notify::{Event, EventKind, RecommendedWatcher, RecursiveMode, Watcher};
 use reactive_core::{Emitter, Task, spawn_stream};
@@ -31,18 +31,44 @@ pub fn watch_path(path: impl Into<PathBuf>, mut on_change: impl FnMut() + 'stati
     spawn_stream(move |out| run(&path, out), move |()| on_change(), || {})
 }
 
-/// Whether an event is the tree changing rather than somebody looking at it.
+/// Whether an event is worth looking at the tree for. `Access` is the class inotify opens and reads under, so dropping it keeps a caller that re-reads on every change from waking itself forever.
 ///
-/// **Reads are not changes, and the platform reports them.** `notify` asks inotify for `IN_OPEN` alongside the writes, so a watcher that forwards every event it is handed tells a caller that re-reads the tree to re-read the tree — and one reading on a frame loop never stops. Every content change arrives as a create, a modify or a remove, a rename into place among them; what is dropped here is `Access`, which is the class the platform opens and reads under.
-fn changed(event: &Event) -> bool {
+/// A filter, not the answer: only inotify classifies that finely. FSEvents coalesces and re-labels, so what a read looks like there is decided by [`fingerprint`] instead.
+fn worth_checking(event: &Event) -> bool {
     !matches!(event.kind, EventKind::Access(_))
+}
+
+/// What a change moves and a look does not: every path under `path`, with its length and its modification time. Reading a file leaves all three alone, so two equal fingerprints mean nothing happened however the platform labelled its event.
+///
+/// Cheap because it stats rather than reads, and only reached after a burst of events — which is already the moment the caller re-reads the tree anyway.
+fn fingerprint(path: &Path) -> Vec<(PathBuf, u64, Option<SystemTime>)> {
+    fn walk(path: &Path, out: &mut Vec<(PathBuf, u64, Option<SystemTime>)>) {
+        let Ok(meta) = std::fs::symlink_metadata(path) else {
+            return;
+        };
+        if meta.is_dir() {
+            let Ok(entries) = std::fs::read_dir(path) else {
+                return;
+            };
+            for entry in entries.flatten() {
+                walk(&entry.path(), out);
+            }
+            return;
+        }
+        out.push((path.to_path_buf(), meta.len(), meta.modified().ok()));
+    }
+    let mut out = Vec::new();
+    walk(path, &mut out);
+    // `read_dir` answers in whatever order the filesystem holds, which is not stable across calls.
+    out.sort();
+    out
 }
 
 fn run(path: &Path, out: Emitter<()>) {
     let (tx, rx) = mpsc::channel();
     let mut watcher: RecommendedWatcher =
         match notify::recommended_watcher(move |result: notify::Result<Event>| {
-            if result.is_ok_and(|event| changed(&event)) {
+            if result.is_ok_and(|event| worth_checking(&event)) {
                 let _ = tx.send(());
             }
         }) {
@@ -58,6 +84,7 @@ fn run(path: &Path, out: Emitter<()>) {
         return;
     }
 
+    let mut seen = fingerprint(path);
     loop {
         match rx.recv_timeout(CANCEL_POLL) {
             Ok(()) => {}
@@ -75,6 +102,15 @@ fn run(path: &Path, out: Emitter<()>) {
         if out.is_cancelled() {
             return;
         }
+        let now = fingerprint(path);
+        if now == seen {
+            continue;
+        }
+        seen = now;
         out.emit(());
     }
 }
+
+#[cfg(test)]
+#[path = "watch_test.rs"]
+mod tests;
