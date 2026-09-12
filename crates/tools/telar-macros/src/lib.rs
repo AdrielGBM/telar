@@ -418,22 +418,21 @@ fn stale_cli_message(hot_requested_by_env: bool) -> Option<String> {
     ))
 }
 
-/// Refuses a `telar.toml` whose `[telar] theme` is not what the invocation names.
+/// Refuses an invocation that contradicts `[telar] theme`. Naming nothing is not a contradiction: the key is the declaration, and repeating it at every invocation is what the key exists to spare.
 ///
 /// Nothing else in the build reads that key — the macro is handed the type directly — but everything that transpiles the same file *without* a macro to read does: the editor's live mirror and the golden harness both resolve the theme through `telar_transpiler::resolve_theme_type`, which answers with this key when it is set. Two answers means two different files generated from one source, and the last writer wins.
 fn check_theme_agrees(package_dir: &Path, given: Option<&str>) -> Result<(), TokenStream2> {
     let Some(declared) = telar_project::theme_type_in_config(package_dir) else {
         return Ok(());
     };
-    if given == Some(declared.as_str()) {
+    let Some(given) = given else {
+        return Ok(());
+    };
+    if given == declared {
         return Ok(());
     }
-    let named = match given {
-        Some(given) => format!("names `{given}`"),
-        None => "names none".to_string(),
-    };
     let msg = format!(
-        "rsx: telar.toml declares `theme = \"{declared}\"`, but this invocation {named}. The editor and the golden snapshots resolve the theme from telar.toml, so a difference here generates two different files from one source: pass `{declared}` here, or drop the key."
+        "rsx: telar.toml declares `theme = \"{declared}\"`, but this invocation names `{given}`. The editor and the golden snapshots resolve the theme from telar.toml, so a difference here generates two different files from one source: drop the argument, or make the two agree."
     );
     Err(quote! { compile_error!(#msg); })
 }
@@ -538,6 +537,9 @@ fn transpile_project(theme_type_str: Option<&str>) -> Result<TranspileOutput, To
     }
 
     check_theme_agrees(&manifest_dir, theme_type_str)?;
+    // The same order `telar_transpiler::resolve_theme_type` answers in, because the editor's mirror and the golden harness read the key and this is the only other thing that decides what a `use_theme` resolves against. Dropping the argument in favour of the key has to mean the key, not no theme at all.
+    let declared_theme = telar_project::theme_type_in_config(&manifest_dir);
+    let theme_type_str = declared_theme.as_deref().or(theme_type_str);
 
     let wired = wire_sources(
         &manifest_dir,
