@@ -93,6 +93,11 @@ pub fn discover_rust_modules(
         .map(|c| c.as_os_str().to_string_lossy())
         .collect::<Vec<_>>()
         .join("__");
+    let mut reserved = hand_written_modules(from_dir);
+    if from_dir == src_dir {
+        // `src/bin/` is cargo's: every file in it is a crate root of its own. Declared as a module here, each binary's `fn main` would be compiled into the library that declared it.
+        reserved.insert("bin".to_owned());
+    }
     let mut out = String::new();
     let mut written = Vec::new();
     emit_children(
@@ -100,7 +105,7 @@ pub fn discover_rust_modules(
         &prefix,
         modtree_dir,
         generated_dir,
-        &hand_written_modules(from_dir),
+        &reserved,
         &mut out,
         &mut written,
     )?;

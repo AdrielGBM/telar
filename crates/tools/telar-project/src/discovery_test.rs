@@ -353,3 +353,25 @@ fn a_comment_naming_the_macro_is_not_an_invocation() {
     assert_eq!(placement_sites(&root), vec![root.clone()]);
     let _ = std::fs::remove_dir_all(&root);
 }
+
+/// `src/bin/` belongs to cargo, and only there: every file in it is a crate root of its own, so declaring it as a module would compile each binary's `fn main` into the library. A `bin/` further down is an ordinary directory.
+#[test]
+fn the_crate_roots_bin_directory_is_left_to_cargo() {
+    let root = std::env::temp_dir().join(format!("rsx_bin_dir_{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&root);
+    std::fs::create_dir_all(root.join("bin")).unwrap();
+    std::fs::create_dir_all(root.join("app/bin")).unwrap();
+    std::fs::write(root.join("lib.rs"), "telar::rsx_modules!();\n").unwrap();
+    std::fs::write(root.join("bin/extra.rs"), "fn main() {}\n").unwrap();
+    std::fs::write(root.join("app/bin/helper.rs"), "").unwrap();
+
+    let modtree = root.join("__modules");
+    std::fs::create_dir_all(&modtree).unwrap();
+    let generated = root.join("build");
+    let (out, _) = discover_rust_modules(&root, &root, &modtree, &generated).unwrap();
+    assert!(!out.contains("pub mod bin;"), "{out}");
+
+    let nested = std::fs::read_to_string(modtree.join("app.rs")).unwrap();
+    assert!(nested.contains("pub mod bin;"), "{nested}");
+    let _ = std::fs::remove_dir_all(&root);
+}
