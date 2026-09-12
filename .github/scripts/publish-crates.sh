@@ -7,14 +7,19 @@
 # if anything is still absent at the end.
 #
 #   PUBLISH_ARGS=--allow-dirty   extra flags for cargo publish (a local tree with untracked files needs this)
-#   ROUNDS=10                    how many sweeps that actually attempted an upload this run may spend
+#   ROUNDS=64                    how many sweeps that actually attempted an upload this run may spend
 #   COOLDOWN=70                  seconds to wait after a fruitless sweep that named no deadline
 #   MAX_WAIT=3600                total seconds this run may spend parked on rate-limit deadlines
+#
+# `ROUNDS` has to exceed the number of crates, not bound it: the registry refills its allowance a crate
+# at a time, so a throttled sweep can move exactly one and still spend a round. Ten of them gave up four
+# minutes into the 0.2.1 release with 40 crates still absent. What is meant to end a run that cannot
+# finish is `MAX_WAIT`, which counts the waiting rather than the trying.
 set -uo pipefail
 
 cd "$(dirname "${BASH_SOURCE[0]}")/../.." || exit 1
 
-ROUNDS=${ROUNDS:-10}
+ROUNDS=${ROUNDS:-64}
 COOLDOWN=${COOLDOWN:-70}
 MAX_WAIT=${MAX_WAIT:-3600}
 PUBLISH_ARGS=${PUBLISH_ARGS:-}
