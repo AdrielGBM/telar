@@ -510,7 +510,7 @@ fn wire_sources(
     Err(quote! { compile_error!(#msg); })
 }
 
-// Transpiles every `.rsx` under `src/` into the build directory, wiring each as a `#[path] mod` and aliasing nested components to their basenames; also emits `include_str!` rerun triggers and, under `auto_modules`, declares the hand-written `.rs` module tree. Shared by `app!`, which then adds the runner, and `rsx_modules!`, which transpiles only. `Err` carries a `compile_error!` stream to emit.
+// Transpiles every `.rsx` under `src/` into the build directory and wires each as a `#[path] mod` where its file sits, declares the hand-written `.rs` module tree alongside it, and emits the `include_str!` triggers that re-run this on an edit. Nothing is re-exported: a component is reached by the path its file spells. Shared by `app!`, which then adds the runner, and `rsx_modules!`, which transpiles only. `Err` carries a `compile_error!` stream to emit.
 fn transpile_project(theme_type_str: Option<&str>) -> Result<TranspileOutput, TokenStream2> {
     check_cli_is_current()?;
 
@@ -549,7 +549,7 @@ fn transpile_project(theme_type_str: Option<&str>) -> Result<TranspileOutput, To
         flavour,
         &assets,
     )?;
-    // Every path this run is answerable for under `generated_dir`, so a stale file left behind by a renamed or deleted `.rsx` (or a toggled-off `auto_modules`/i18n catalog) can be told apart from live output and pruned. The CLI writes output but never sweeps: it does not know about the module tree written below, and a sweep that knows half the directory deletes the other half.
+    // Every path this run is answerable for under `generated_dir`, so a stale file left behind by a renamed or deleted `.rsx` (or a dropped i18n catalog) can be told apart from live output and pruned. The CLI writes output but never sweeps: it does not know about the module tree written below, and a sweep that knows half the directory deletes the other half.
     let mut written_files: std::collections::HashSet<PathBuf> =
         wired.iter().map(|file| file.out_path.clone()).collect();
 
@@ -558,7 +558,6 @@ fn transpile_project(theme_type_str: Option<&str>) -> Result<TranspileOutput, To
     let mut preview_const_idents: Vec<TokenStream2> = Vec::new();
 
     for file in &wired {
-        // A real `#[path] mod`, not `include!`, so rust-analyzer treats it as a first-class module and offers completion inside it. `pub use` keeps the component fns, preview consts and `Props` types reachable by bare name, exactly as `include!` did.
         let rsx_path_str = file.rsx_path.to_string_lossy().to_string();
         rerun_stmts.extend(quote! { const _: &str = include_str!(#rsx_path_str); });
 
@@ -575,19 +574,12 @@ fn transpile_project(theme_type_str: Option<&str>) -> Result<TranspileOutput, To
         }
     }
 
-    // Opt-in via `[telar] auto_modules = true`: declares the hand-written `.rs` modules by walking the source tree, so an app needs no `mod` statements for them, mirroring how `.rsx` files are wired.
-    //
-    // Nothing tracks a borrowed component any more. Its signature used to be baked into this crate's call sites, so editing its `Props` elsewhere had to rebuild this crate or the call kept the old arity.
-    let auto_modules = telar_project::auto_modules_enabled(&manifest_dir);
-
     let telar_toml = manifest_dir.join(telar_project::MANIFEST_FILENAME);
     if telar_toml.exists() {
-        // Re-run the macro when telar.toml changes (e.g. toggling auto_modules), like the `.rsx` sources.
+        // Re-run the macro when telar.toml changes (e.g. the theme it declares), like the `.rsx` sources.
         let telar_toml_str = telar_toml.to_string_lossy().to_string();
         rerun_stmts.extend(quote! { const _: &str = include_str!(#telar_toml_str); });
     }
-    // Always, not opt-in: a `.rsx` is a module where its file sits, so the tree placing it has to exist whatever `auto_modules` says. What the setting decides is whether hand-written `.rs` siblings are declared for you.
-    //
     // Every site is written, and every invocation emits the same relative `include!`: the compiler resolves it against the file holding the call, which is the one thing here that knows where the macro was written. See `site_include_path` for what asking the macro instead cost.
     {
         let strays = telar_project::stray_placement_files(&src_dir);
@@ -612,7 +604,6 @@ fn transpile_project(theme_type_str: Option<&str>) -> Result<TranspileOutput, To
             &src_dir,
             &modtree_dir,
             &generated_dir,
-            auto_modules,
             flavour.site_file_name(),
         ) {
             Ok(written) => written_files.extend(written),

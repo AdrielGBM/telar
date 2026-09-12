@@ -180,8 +180,6 @@ height = 700
         r#"[telar]
 # "auto" draws with the GPU where there is one and the CPU where there is not.
 backend = "auto"
-# `src/` is walked for modules and `.rsx` files, so the crate declares no `mod` statements of its own.
-auto_modules = true
 {window}"#
     )
 }

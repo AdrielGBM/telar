@@ -1,6 +1,6 @@
 //! Telar's documentation app: one section per feature, each rendered from its own `.rsx`.
 
-// Module tree (core/, shared/) is auto-declared by `telar::app!` — see `auto_modules` in telar.toml.
+// Module tree (core/, shared/) is declared by `telar::app!`.
 telar::app!(
     core::theme::SandboxTheme,
     {

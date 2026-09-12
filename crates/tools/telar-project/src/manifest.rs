@@ -1,6 +1,6 @@
 //! `telar.toml`, as one schema.
 //!
-//! It was read in six places with six partial shapes: a raw `toml::Table` for `auto_modules` and `assets`, an ad-hoc lookup for `theme`, a third for `[telar.i18n]` and its two back-compat spellings, and a serde struct in the CLI that knew only `backend` and `dev`. Every one of them treated a key it did not recognise as absent, so nothing in the project could tell a setting that was off from a setting that was misspelled.
+//! It was read in six places with six partial shapes: a raw `toml::Table` for `assets`, an ad-hoc lookup for `theme`, a third for `[telar.i18n]` and its two back-compat spellings, and a serde struct in the CLI that knew only `backend` and `dev`. Every one of them treated a key it did not recognise as absent, so nothing in the project could tell a setting that was off from a setting that was misspelled.
 //!
 //! That is not hypothetical. `cargo-telar`'s struct carries a comment recording the time it happened: the table was renamed `rsx` → `telar`, its reader kept looking for the old name, and because the field was `#[serde(default)]` a file writing `[telar]` parsed clean with every key in it ignored.
 //!
@@ -80,9 +80,6 @@ pub struct I18nSection {
 #[serde(deny_unknown_fields)]
 pub struct TelarSection {
     pub backend: Option<RendererBackend>,
-    /// Declare the hand-written `.rs` module tree by walking `src/`, so an application needs no `mod` statements for it.
-    #[serde(default)]
-    pub auto_modules: bool,
     /// The directory a baked `src:"…"` resolves against, joined onto the package root. Default `"assets"`.
     pub assets: Option<String>,
     /// The theme type this package's components resolve `use_theme` against.

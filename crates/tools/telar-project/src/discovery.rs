@@ -66,13 +66,6 @@ pub fn find_rsx_files_in_tree(root: &Path) -> Vec<PathBuf> {
     })
 }
 
-/// Reads `[telar] auto_modules`. A missing file or key yields `false`, so filesystem module discovery is strictly opt-in.
-pub fn auto_modules_enabled(package_root: &Path) -> bool {
-    crate::TelarManifest::load_or_default(package_root)
-        .telar
-        .auto_modules
-}
-
 /// The directory that baked `src:"..."` asset paths resolve against: `[telar] assets` in `telar.toml` (default `"assets"`), joined onto the package root — so assets live in one place (e.g. `./assets`) regardless of which `.rsx` references them, instead of being tied to each `.rsx`'s own directory.
 pub fn assets_root(package_root: &Path) -> PathBuf {
     crate::TelarManifest::load_or_default(package_root)
@@ -80,7 +73,7 @@ pub fn assets_root(package_root: &Path) -> PathBuf {
         .assets_root(package_root)
 }
 
-/// Declares `pub mod` for every hand-written `.rs` module mirroring the `src_dir` tree, so an app can rely on filesystem module discovery instead of hand-written `mod.rs`/`mod` statements. Returns the top-level declarations and, for each discovered subdirectory, writes a generated file under `modtree_dir` holding that directory's children. Skips the crate roots (`lib.rs`, `main.rs`) and directories with no `.rs` under them (asset- or markup-only dirs). A directory that has its own `mod.rs` is declared but not descended into, so it stays hand-managed — the escape hatch for opting a subtree out of discovery.
+/// Declares `pub mod` for every `.rsx` and every hand-written `.rs` module mirroring the `src_dir` tree, so a package needs no `mod` statements of its own. Returns the top-level declarations and, for each discovered subdirectory, writes a generated file under `modtree_dir` holding that directory's children. Skips the crate roots (`lib.rs`, `main.rs`), directories with no `.rs` under them (asset- or markup-only dirs), and any name the site declares itself. A directory that has its own `mod.rs` is declared but not descended into, so it stays hand-managed — the escape hatch for opting a subtree out of discovery.
 ///
 /// Every module — top-level file, subdirectory, and the children inside each generated file — is a *file-based* `#[path] pub mod` (the exact shape the `.rsx` build files use). It deliberately never emits an inline `mod dir { … }` block: rust-analyzer mis-resolves a `#[path]` attribute on a module nested inside an inline block produced by a proc macro, string-joining the inline module's name onto the child's already-absolute path (`core//abs/core/app.rs`) and failing to find it (E0583). rustc joins those pieces with real path semantics, so the absolute child path wins and it compiles — which is why the two disagreed. Routing every directory through a real generated file (`#[path = "…/core.rs"] pub mod core;`, its children flat inside that file) keeps the analyzer and the compiler in step.
 ///
@@ -92,7 +85,6 @@ pub fn discover_rust_modules(
     from_dir: &Path,
     modtree_dir: &Path,
     generated_dir: &Path,
-    auto_modules: bool,
 ) -> std::io::Result<(String, Vec<PathBuf>)> {
     let prefix = from_dir
         .strip_prefix(src_dir)
@@ -101,8 +93,6 @@ pub fn discover_rust_modules(
         .map(|c| c.as_os_str().to_string_lossy())
         .collect::<Vec<_>>()
         .join("__");
-    // A nested invocation is already inside a `mod.rs` that wrote its own `mod` statements, so re-declaring them here would redefine each.
-    let discover = auto_modules && from_dir == src_dir;
     let mut out = String::new();
     let mut written = Vec::new();
     emit_children(
@@ -110,11 +100,41 @@ pub fn discover_rust_modules(
         &prefix,
         modtree_dir,
         generated_dir,
-        discover,
+        &hand_written_modules(from_dir),
         &mut out,
         &mut written,
     )?;
     Ok((out, written))
+}
+
+/// The module names the site's own file already declares, which the discovered tree leaves alone. Redeclaring one is `E0428`, and `mod menu;` written by hand next to a `pub mod menu;` written here would also be a visibility the author did not ask for.
+///
+/// Only the site's own file is read, and only the names at its top level: everything below is written into generated files, where nothing of the author's can collide. Reached by stripping line comments and taking the identifier after each `mod`, which also catches an inline `mod tests { … }`.
+fn hand_written_modules(site_dir: &Path) -> HashSet<String> {
+    ["lib.rs", "main.rs", "mod.rs"]
+        .iter()
+        .filter_map(|name| std::fs::read_to_string(site_dir.join(name)).ok())
+        .flat_map(|source| declared_module_names(&source))
+        .collect()
+}
+
+fn declared_module_names(source: &str) -> Vec<String> {
+    let mut names = Vec::new();
+    for line in source.lines() {
+        let code = line.split("//").next().unwrap_or("");
+        let mut words = code.split_whitespace();
+        while let Some(word) = words.next() {
+            if word != "mod" {
+                continue;
+            }
+            let Some(next) = words.next() else { continue };
+            let name = next.trim_end_matches([';', '{']);
+            if crate::naming::is_ident(name) {
+                names.push(name.to_owned());
+            }
+        }
+    }
+    names
 }
 
 /// Appends the `#[path] pub mod` declarations for the direct children of `dir` to `out`. A subdirectory's own children are written to a generated file under `modtree_dir` (named by the flattened module path, e.g. `core__widgets.rs`, so sibling directories never collide) that the emitted `pub mod` then points at.
@@ -123,7 +143,7 @@ fn emit_children(
     flat_prefix: &str,
     modtree_dir: &Path,
     generated_dir: &Path,
-    auto_modules: bool,
+    hand_written: &HashSet<String>,
     out: &mut String,
     written: &mut Vec<PathBuf>,
 ) -> std::io::Result<()> {
@@ -143,21 +163,23 @@ fn emit_children(
         if !crate::naming::is_ident(name) {
             continue;
         }
+        // A name the site declares itself keeps the author's declaration, visibility included; the diagnostics below still run, because a `mod.rs` sitting on unplaced `.rsx` is a problem whoever declared the module.
+        let declared_here = !hand_written.contains(name);
         if path.is_dir() {
             let mod_rs = path.join("mod.rs");
             if mod_rs.exists() {
                 // A `mod.rs` places its own `.rsx` children by invoking `rsx_modules!()`, the only place they can be declared from — an outside module cannot add items to one. Saying so beats a "cannot find" about a file that is plainly there.
                 if dir_has_rsx(&path) && !mod_rs_places_its_own(&mod_rs) {
-                    let _ = write!(
+                    let _ = writeln!(
                         out,
-                        "compile_error!(\"{} holds `.rsx` files and a `mod.rs`, so only that file can place them: add `telar::rsx_modules!();` to it\");\n",
+                        "compile_error!(\"{} holds `.rsx` files and a `mod.rs`, so only that file can place them: add `telar::rsx_modules!();` to it, or give the directory a `mod.rsx` and let telar own the module\");",
                         path.display()
                     );
                 }
-                if auto_modules {
+                if declared_here {
                     out.push_str(&mod_decl(name, &mod_rs));
                 }
-            } else if dir_has_rust_module(&path) && (auto_modules || dir_has_rsx(&path)) {
+            } else if declared_here && dir_has_rust_module(&path) {
                 let flat = if flat_prefix.is_empty() {
                     name.to_string()
                 } else {
@@ -169,7 +191,7 @@ fn emit_children(
                     &flat,
                     modtree_dir,
                     generated_dir,
-                    auto_modules,
+                    &HashSet::new(),
                     &mut body,
                     written,
                 )?;
@@ -179,10 +201,10 @@ fn emit_children(
                 out.push_str(&mod_decl(name, &gen_file));
             }
         } else if is_rust_module_file(&path) {
-            if auto_modules {
+            if declared_here {
                 out.push_str(&mod_decl(name, &path));
             }
-        } else if path.extension().and_then(|e| e.to_str()) == Some("rsx") {
+        } else if declared_here && path.extension().and_then(|e| e.to_str()) == Some("rsx") {
             // A `.rsx` is a module where the file sits, so `shared/components/card.rsx` is `crate::shared::components::card`. Flattening to the crate root meant two files could not share a basename.
             out.push_str(&mod_decl(
                 name,
@@ -193,7 +215,7 @@ fn emit_children(
     Ok(())
 }
 
-/// Deletes every `.rs` file under `output_dir` that `written` does not list — the leftovers of a renamed or deleted `.rsx`, an `auto_modules` directory that lost its last hand-written `.rs`, or a dropped i18n catalog. Only ever recurses through real subdirectories reached from `output_dir` itself (a symlink is skipped, not followed), so every path it can act on is provably inside the generated tree; it never removes a directory or a non-`.rs` file. Best-effort: a removal failure just leaves that orphan for next time.
+/// Deletes every `.rs` file under `output_dir` that `written` does not list — the leftovers of a renamed or deleted `.rsx`, a directory that lost its last hand-written `.rs`, or a dropped i18n catalog. Only ever recurses through real subdirectories reached from `output_dir` itself (a symlink is skipped, not followed), so every path it can act on is provably inside the generated tree; it never removes a directory or a non-`.rs` file. Best-effort: a removal failure just leaves that orphan for next time.
 pub fn prune_stale_generated(output_dir: &Path, written: &HashSet<PathBuf>) {
     let Ok(entries) = std::fs::read_dir(output_dir) else {
         return;
@@ -392,13 +414,12 @@ pub fn write_placement_sites(
     src_dir: &Path,
     modtree_dir: &Path,
     generated_dir: &Path,
-    auto_modules: bool,
     file_name: &str,
 ) -> std::io::Result<Vec<PathBuf>> {
     let mut written = Vec::new();
     for site in placement_sites(src_dir) {
         let (declarations, modtree) =
-            discover_rust_modules(src_dir, &site, modtree_dir, generated_dir, auto_modules)?;
+            discover_rust_modules(src_dir, &site, modtree_dir, generated_dir)?;
         written.extend(modtree);
         let dir = site.join(SITE_DIR);
         std::fs::create_dir_all(&dir)?;

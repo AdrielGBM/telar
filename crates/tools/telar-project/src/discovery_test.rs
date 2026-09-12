@@ -52,46 +52,45 @@ fn assets_root_default_and_configured() {
     .unwrap();
     assert_eq!(assets_root(&root), root.join("src/shared/assets"));
 
-    std::fs::write(root.join("telar.toml"), "[telar]\nauto_modules = true\n").unwrap();
+    std::fs::write(root.join("telar.toml"), "[telar]\nbackend = \"software\"\n").unwrap();
     assert_eq!(assets_root(&root), root.join("assets"));
-    assert!(
-        auto_modules_enabled(&root),
-        "auto_modules is set in this fixture's telar.toml"
-    );
 
     let _ = std::fs::remove_dir_all(&root);
 }
 
-/// With `auto_modules` off the crate declares its own `.rs` modules, so the tree must place the `.rsx` files and nothing else — declaring a hand-written one is a redefinition, and declaring a directory whose `mod.rs` the crate already names is one too.
+/// A name the site declares itself is left alone. Declaring it again is `E0428`, and a `mod menu;` written by hand redeclared as `pub mod menu;` would publish a module its author kept private.
 #[test]
-fn without_auto_modules_only_the_rsx_files_are_placed() {
-    let root = std::env::temp_dir().join(format!("rsx_opt_in_modules_{}", std::process::id()));
+fn a_name_the_site_declares_itself_is_left_alone() {
+    let root = std::env::temp_dir().join(format!("rsx_hand_written_{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&root);
     for d in ["editor", "loose"] {
         std::fs::create_dir_all(root.join(d)).unwrap();
     }
+    std::fs::write(
+        root.join("lib.rs"),
+        "mod helper;\npub mod editor;\n#[cfg(test)]\nmod tests { }\n",
+    )
+    .unwrap();
     std::fs::write(root.join("editor/mod.rs"), "").unwrap();
     std::fs::write(root.join("editor/act.rs"), "").unwrap();
-    std::fs::write(root.join("editor/top_bar.rsx"), "[view]\ncol\n").unwrap();
     std::fs::write(root.join("loose/panel.rsx"), "[view]\ncol\n").unwrap();
     std::fs::write(root.join("helper.rs"), "").unwrap();
+    std::fs::write(root.join("tests.rs"), "").unwrap();
 
     let modtree = root.join("__modules");
     std::fs::create_dir_all(&modtree).unwrap();
     let generated = root.join("build");
-    let (out, _) = discover_rust_modules(&root, &root, &modtree, &generated, false).unwrap();
+    let (out, _) = discover_rust_modules(&root, &root, &modtree, &generated).unwrap();
 
+    assert!(!out.contains("mod helper;"), "declared by hand: {out}");
+    assert!(!out.contains("mod editor;"), "declared by hand: {out}");
     assert!(
-        !out.contains("pub mod helper;"),
-        "a hand-written module: {out}"
-    );
-    assert!(
-        !out.contains("pub mod editor;"),
-        "a directory the crate declares, and whose own file places its `.rsx`: {out}"
+        !out.contains("mod tests;"),
+        "an inline `mod tests {{ }}` is a declaration too: {out}"
     );
     assert!(
         out.contains("pub mod loose;"),
-        "a directory with no `mod.rs` still has to be created to hold a `.rsx`: {out}"
+        "what the site does not declare is still placed: {out}"
     );
     let _ = std::fs::remove_dir_all(&root);
 }
@@ -108,12 +107,12 @@ fn a_module_that_must_place_its_own_rsx_is_told_to() {
     let modtree = root.join("__modules");
     std::fs::create_dir_all(&modtree).unwrap();
     let generated = root.join("build");
-    let (out, _) = discover_rust_modules(&root, &root, &modtree, &generated, true).unwrap();
+    let (out, _) = discover_rust_modules(&root, &root, &modtree, &generated).unwrap();
     assert!(out.contains("compile_error!"), "{out}");
     assert!(out.contains("telar::rsx_modules!();"), "{out}");
 
     std::fs::write(root.join("drawer/mod.rs"), "telar::rsx_modules!();\n").unwrap();
-    let (quiet, _) = discover_rust_modules(&root, &root, &modtree, &generated, true).unwrap();
+    let (quiet, _) = discover_rust_modules(&root, &root, &modtree, &generated).unwrap();
     assert!(!quiet.contains("compile_error!"), "{quiet}");
     let _ = std::fs::remove_dir_all(&root);
 }
@@ -133,8 +132,7 @@ fn a_nested_invocation_places_its_own_directory() {
     std::fs::create_dir_all(&modtree).unwrap();
     let generated = root.join("build");
     let (out, _) =
-        discover_rust_modules(&root, &root.join("app/editor"), &modtree, &generated, false)
-            .unwrap();
+        discover_rust_modules(&root, &root.join("app/editor"), &modtree, &generated).unwrap();
 
     assert!(
         !out.contains("pub mod app;"),
@@ -183,7 +181,7 @@ fn discover_rust_modules_mirrors_tree() {
     let modtree = root.join("__modules");
     std::fs::create_dir_all(&modtree).unwrap();
     let generated = root.join("__generated");
-    let (out, written) = discover_rust_modules(&root, &root, &modtree, &generated, true).unwrap();
+    let (out, written) = discover_rust_modules(&root, &root, &modtree, &generated).unwrap();
     let core_rs = std::fs::read_to_string(modtree.join("core.rs")).unwrap_or_default();
     let shared_rs = std::fs::read_to_string(modtree.join("shared.rs")).unwrap_or_default();
     let features_rs = std::fs::read_to_string(modtree.join("features.rs")).unwrap_or_default();
@@ -292,7 +290,7 @@ fn no_site_declares_the_file_that_includes_it() {
     let modtree = root.join("__modules");
     std::fs::create_dir_all(&modtree).unwrap();
     let generated = root.join("build");
-    let written = write_placement_sites(&root, &modtree, &generated, true, "modules.rs").unwrap();
+    let written = write_placement_sites(&root, &modtree, &generated, "modules.rs").unwrap();
 
     let sites = placement_sites(&root);
     assert_eq!(sites, vec![root.clone(), root.join("media")]);

@@ -75,7 +75,6 @@ and `telar.toml` sits next to `Cargo.toml`:
 ```toml
 [telar]
 backend = "auto"
-auto_modules = true
 
 [telar.dev.window]
 title = "my-app"

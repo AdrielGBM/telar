@@ -15,7 +15,6 @@ fn a_package_with_no_manifest_gets_the_defaults() {
     let root = package("absent", None);
     let manifest = TelarManifest::load(&root).expect("no file is not an error");
     assert_eq!(manifest, TelarManifest::default());
-    assert!(!manifest.telar.auto_modules);
     assert_eq!(manifest.telar.assets_root(&root), root.join("assets"));
 }
 
@@ -27,7 +26,6 @@ fn every_key_the_schema_names_round_trips() {
             r#"
 [telar]
 backend = "software"
-auto_modules = true
 assets = "art"
 theme = "app::Theme"
 
@@ -49,7 +47,6 @@ default = "es"
         .expect("a full manifest parses")
         .telar;
     assert_eq!(telar.backend, Some(RendererBackend::Software));
-    assert!(telar.auto_modules);
     assert_eq!(telar.assets_root(&root), root.join("art"));
     assert_eq!(telar.theme.as_deref(), Some("app::Theme"));
     assert_eq!(telar.dev.devtools, Some(false));
@@ -63,11 +60,11 @@ default = "es"
 #[test]
 fn a_misspelled_key_is_an_error_that_names_it() {
     for (label, manifest) in [
-        ("top level", "[telar]\nauto_module = true\n"),
+        ("top level", "[telar]\nbackends = \"software\"\n"),
         ("dev", "[telar.dev]\ndevtool = true\n"),
         ("window", "[telar.dev.window]\nwith = 800\n"),
         ("i18n", "[telar.i18n]\nscann = \"lang\"\n"),
-        ("table", "[telarr]\nauto_modules = true\n"),
+        ("table", "[telarr]\nbackend = \"software\"\n"),
     ] {
         let root = package(&format!("typo_{}", label.replace(' ', "_")), Some(manifest));
         let error = TelarManifest::load(&root)

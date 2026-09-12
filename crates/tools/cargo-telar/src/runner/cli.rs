@@ -64,7 +64,7 @@ pub(crate) struct MigrateArgs {
     pub(crate) paths: Vec<std::path::PathBuf>,
 }
 
-/// `cargo fmt` cannot do this job: it never sees a `.rsx` file, and the `.rs` modules an `auto_modules` crate declares come out of a macro it does not expand, so it walks into `lib.rs` and stops there — reporting a clean tree it never looked at.
+/// `cargo fmt` cannot do this job: it never sees a `.rsx` file, and the `.rs` modules a telar crate declares come out of a macro it does not expand, so it walks into `lib.rs` and stops there — reporting a clean tree it never looked at.
 #[derive(clap::Args)]
 pub(crate) struct FmtArgs {
     /// Report which files would change and exit non-zero, without writing

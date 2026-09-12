@@ -1,6 +1,6 @@
 //! `cargo telar fmt` — formats a project's `.rsx` and `.rs` files.
 //!
-//! Two formatters behind one command, because a Telar project is two languages. `.rsx` goes through [`telar_parser::format`], the same function the language server serves `textDocument/formatting` from, so a file formatted from a terminal and one formatted on save come out identical. `.rs` goes to `rustfmt`, one file at a time — which is the whole reason this command exists, since `cargo fmt` walks the module tree from the crate root and an `auto_modules` crate declares that tree from a macro `cargo fmt` cannot expand.
+//! Two formatters behind one command, because a Telar project is two languages. `.rsx` goes through [`telar_parser::format`], the same function the language server serves `textDocument/formatting` from, so a file formatted from a terminal and one formatted on save come out identical. `.rs` goes to `rustfmt`, one file at a time — which is the whole reason this command exists, since `cargo fmt` walks the module tree from the crate root and a telar crate declares that tree from a macro `cargo fmt` cannot expand.
 
 use std::path::{Path, PathBuf};
 use std::process::Command;
