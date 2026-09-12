@@ -51,7 +51,7 @@ That is the whole of the setup. `cargo telar new` writes the manifest, the build
 ```
 my-app/
   Cargo.toml      # one target under [features], and the build profiles
-  telar.toml      # renderer backend, module discovery, the dev window
+  telar.toml      # renderer backend, theme, catalogs, the dev window
   src/main.rs     # fn main() { my_app::run(); }
   src/lib.rs      # telar::app!(…) — theme, startup hook, config, root
   src/theme.rs    # the design tokens every component reads
@@ -154,6 +154,18 @@ use crate::ui::card::{card, CardProps};
 card pad:20
     text "inside" font_size:14
 ```
+
+A directory is a module too, and `mod.rsx` is that module's file — `mod.rs` in the other language. Its `[logic]` is Rust at module level, which is where a `//!` and a `#![…]` belong; it takes no `[view]`, because a module is not callable. Give a directory one and telar declares it and everything under it, so nothing in it has to be placed by hand:
+
+```
+src/media/
+  mod.rsx         # the module: docs, attributes, and Rust items
+  mod.rs          # optional, and kept as it is: included into the same module
+  media.rsx       # crate::media::media
+  state.rs        # crate::media::state
+```
+
+Without a `mod.rsx`, a directory that holds both `.rsx` files and a hand-written `mod.rs` places them from that file with a `telar::rsx_modules!();` of its own — only a module's own file can add items to it.
 
 `apps/sandbox` in this repo is the reference app and covers most of the surface.
 
