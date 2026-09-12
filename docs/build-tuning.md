@@ -36,6 +36,22 @@ app: the rebuild drops ~14 % and the `cdylib` goes from 154 MB to 15 MB, with pa
 unchanged. Setting `debug = false` on `[profile.dev]` as well takes it to 0.7 MB and saves another 15 ms,
 which is inside the noise and not worth the panic locations.
 
+## Lock what `cargo telar` turns on
+
+`dev`, `preview`, `check` and `test` turn some of `telar`'s features on from the command line — `telar/dev`
+brings in `telar-devtools`, for one. Cargo.lock only pins what a feature of the workspace reaches, so name
+them once under `[features]` in your app's `Cargo.toml`:
+
+```toml
+[features]
+tooling = ["telar/dev", "telar/hot-reload", "telar/previews", "telar/preview", "telar/preview-headless"]
+```
+
+No build turns `tooling` on; it is there for the lockfile. Without it those dependencies are resolved against
+whatever copy of the crates.io index the machine last fetched, so after a `telar` upgrade `cargo telar dev`
+can fail with `failed to select a version for the requirement telar-devtools` until something refreshes that
+copy. `cargo telar` warns when no member of the workspace names them.
+
 ## Do not set `panic = "abort"`
 
 Telar recovers from two kinds of panic and both need unwinding: a widget handler, effect or render that

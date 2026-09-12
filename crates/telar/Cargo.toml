@@ -214,8 +214,9 @@ system-theme = ["platform-desktop?/system-theme"]
 
 #! ## Set by the tooling
 #!
-#! `cargo telar` passes these on the command line for the command you ran. An application does not name
-#! them, and nothing in a shipping binary should reach for them.
+#! `cargo telar` passes these on the command line for the command you ran. An application never turns them on, and nothing in a shipping binary should reach for them.
+#!
+#! It still names them, in a `tooling = [...]` feature no build enables: Cargo.lock only pins what some feature of the workspace reaches, so without that entry what these bring in — `telar-devtools` among it — is resolved against whatever copy of the crates.io index the machine last fetched, and an upgrade can fail to find the version it needs. `cargo telar new` writes the entry, and `cargo telar` warns when a project has none.
 
 ## Hot reload and the in-app devtools overlay. Injected by `cargo telar dev`. Carries no frontend of its own:
 ## it used to take `desktop-bare` so a project that declared none still got a window, and that window then
