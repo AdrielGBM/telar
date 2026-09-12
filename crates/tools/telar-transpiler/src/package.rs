@@ -107,15 +107,18 @@ fn transpile_one(
     })?;
     let source_hash = telar_project::content_hash(source.as_bytes());
     let component_name = telar_project::component_name(&rsx_path);
-    let source = transpile(TranspileInput {
-        document: &document,
-        component_name: &component_name,
-        theme_type: options.theme_type,
-        assets: options.assets,
-        hot_reload: options.flavour.is_hot(),
-        previews: options.flavour.has_previews(),
-    })
-    .map_err(|source| PackageError::Codegen {
+    let generated = match telar_project::is_module_root(&rsx_path) {
+        true => crate::codegen::module_root(&document, telar_project::MODULE_CHILDREN_FILENAME),
+        false => transpile(TranspileInput {
+            document: &document,
+            component_name: &component_name,
+            theme_type: options.theme_type,
+            assets: options.assets,
+            hot_reload: options.flavour.is_hot(),
+            previews: options.flavour.has_previews(),
+        }),
+    };
+    let source = generated.map_err(|source| PackageError::Codegen {
         path: rsx_path.clone(),
         source,
     })?;

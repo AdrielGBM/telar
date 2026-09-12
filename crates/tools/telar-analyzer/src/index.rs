@@ -138,6 +138,10 @@ impl WorkspaceIndex {
 }
 
 fn index_source(path: &Path, source: &str) -> Option<IndexedFile> {
+    // A `mod.rsx` is its directory's module, so it declares no component: indexed as one it would offer `mod` as a tag and answer a rename with a keyword.
+    if telar_project::is_module_root(path) {
+        return None;
+    }
     let uri = crate::uri::from_path(path)?;
     let stem = path.file_stem().and_then(|s| s.to_str())?.to_string();
     let container = path

@@ -172,7 +172,15 @@ fn emit_children(
         let declared_here = !hand_written.contains(name);
         if path.is_dir() {
             let mod_rs = path.join("mod.rs");
-            if mod_rs.exists() {
+            let flat = match flat_prefix.is_empty() {
+                true => name.to_string(),
+                false => format!("{flat_prefix}__{name}"),
+            };
+            if path.join(MODULE_ROOT_FILENAME).is_file() {
+                if declared_here {
+                    write_module_root(&path, &flat, modtree_dir, generated_dir, out, written)?;
+                }
+            } else if mod_rs.exists() {
                 // A `mod.rs` places its own `.rsx` children by invoking `rsx_modules!()`, the only place they can be declared from — an outside module cannot add items to one. Saying so beats a "cannot find" about a file that is plainly there.
                 if dir_has_rsx(&path) && !mod_rs_places_its_own(&mod_rs) {
                     let _ = writeln!(
@@ -185,11 +193,6 @@ fn emit_children(
                     out.push_str(&mod_decl(name, &mod_rs));
                 }
             } else if declared_here && dir_has_rust_module(&path) {
-                let flat = if flat_prefix.is_empty() {
-                    name.to_string()
-                } else {
-                    format!("{flat_prefix}__{name}")
-                };
                 let mut body = String::new();
                 emit_children(
                     &path,
@@ -209,6 +212,8 @@ fn emit_children(
             if declared_here {
                 out.push_str(&mod_decl(name, &path));
             }
+        } else if is_module_root(&path) {
+            // Its own directory's module, declared by the parent and generated with the children included; as a sibling here it would be `pub mod mod;`.
         } else if declared_here && path.extension().and_then(|e| e.to_str()) == Some("rsx") {
             // A `.rsx` is a module where the file sits, so `shared/components/card.rsx` is `crate::shared::components::card`. Flattening to the crate root meant two files could not share a basename.
             out.push_str(&mod_decl(
@@ -392,7 +397,11 @@ fn collect_placement_sites(dir: &Path, out: &mut Vec<PathBuf>) {
             continue;
         }
         let mod_rs = path.join("mod.rs");
-        if mod_rs.is_file() && mod_rs_places_its_own(&mod_rs) {
+        // A `mod.rsx` makes the directory telar's, placed from the generated module: an invocation here would be a second placer, which is what `write_module_root` refuses.
+        if mod_rs.is_file()
+            && mod_rs_places_its_own(&mod_rs)
+            && !path.join(MODULE_ROOT_FILENAME).is_file()
+        {
             out.push(path.clone());
         }
         collect_placement_sites(&path, out);
@@ -466,3 +475,84 @@ pub fn prune_stale_sites(src_dir: &Path, sites: &HashSet<PathBuf>) {
 #[cfg(test)]
 #[path = "discovery_test.rs"]
 mod tests;
+
+/// The `.rsx` that is a directory's module rather than a component in it.
+pub const MODULE_ROOT_FILENAME: &str = "mod.rsx";
+
+/// The file a module root's `include!` pulls its children from, written beside the generated module by whoever knows the directory — which the transpiler deliberately does not.
+pub const MODULE_CHILDREN_FILENAME: &str = "__children.rs";
+
+/// Whether `path` is a directory's `mod.rsx`. Its stem is `mod`, which [`crate::naming::is_ident`] accepts and rustc does not, so every caller that turns a `.rsx` into a module name has to ask this first.
+pub fn is_module_root(path: &Path) -> bool {
+    path.file_name()
+        .is_some_and(|name| name == MODULE_ROOT_FILENAME)
+}
+
+/// Declares a directory whose `mod.rsx` makes it telar's, and writes the file that module's `include!` reads: its children, plus the hand-written `mod.rs` when the directory keeps one.
+///
+/// The children cannot come from the transpiler — a `.rsx` is transpiled knowing nothing but itself — and they cannot be added from outside either, since a module takes items only from its own file. The generated module leaves an `include!` and this fills it.
+fn write_module_root(
+    dir: &Path,
+    flat: &str,
+    modtree_dir: &Path,
+    generated_dir: &Path,
+    out: &mut String,
+    written: &mut Vec<PathBuf>,
+) -> std::io::Result<()> {
+    let Some(name) = dir.file_name().and_then(|n| n.to_str()) else {
+        return Ok(());
+    };
+    let mut body = String::new();
+    emit_children(
+        dir,
+        flat,
+        modtree_dir,
+        generated_dir,
+        &hand_written_modules(dir),
+        &mut body,
+        written,
+    )?;
+    let mod_rs = dir.join("mod.rs");
+    if mod_rs.is_file() {
+        if mod_rs_places_its_own(&mod_rs) {
+            let _ = writeln!(
+                body,
+                "compile_error!(\"{} has a `mod.rsx`, so telar places this directory: remove the `telar::rsx_modules!()` from its `mod.rs`\");",
+                dir.display()
+            );
+        }
+        match leading_inner_attribute(&mod_rs) {
+            Some(attr) => {
+                let _ = writeln!(
+                    body,
+                    "compile_error!(\"{} starts with `{}`, and an included file cannot carry an inner attribute: move it to the `[logic]` of this directory's `mod.rsx`\");",
+                    mod_rs.display(),
+                    attr.escape_debug()
+                );
+            }
+            // `include!` rather than a `#[path] mod`, because the two files are one module: the `mod.rsx` holds what only a module's own file can hold, and this holds the Rust the author kept in `mod.rs`.
+            None => {
+                let _ = writeln!(body, "include!({:?});", mod_rs.to_string_lossy());
+            }
+        }
+    }
+    let module_file = rsx_output(generated_dir, flat, "mod");
+    let children_file = module_file.with_file_name(MODULE_CHILDREN_FILENAME);
+    if let Some(parent) = children_file.parent() {
+        std::fs::create_dir_all(parent)?;
+    }
+    write_if_changed(&children_file, &body)?;
+    written.push(children_file);
+    out.push_str(&mod_decl(name, &module_file));
+    Ok(())
+}
+
+/// The first `//!` or `#![…]` of a file that is about to be `include!`d, which rustc refuses there (`E0753`, and "an inner attribute is not permitted in this context"). Reported before the include is written, so the message names the file and the move instead of landing on generated code.
+fn leading_inner_attribute(path: &Path) -> Option<String> {
+    let source = std::fs::read_to_string(path).ok()?;
+    source
+        .lines()
+        .map(str::trim_start)
+        .find(|line| line.starts_with("//!") || line.starts_with("#!["))
+        .map(str::to_owned)
+}

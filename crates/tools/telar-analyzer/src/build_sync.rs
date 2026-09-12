@@ -39,8 +39,13 @@ pub fn generated_target(
     // The same artifact the macro reads, so the mirror shows the same `src:"…"` errors the build will. Loaded, never baked: this runs on the completion and hover paths too, and neither should be spawning cargo.
     let assets = AssetContext::load(&root, &project_telar_version(&root));
     // No cross-file pre-pass: the editor mirrors the build exactly, because neither needs to know what any other file declares. A component call spells names, and the callee's own type answers for them.
-    let result =
-        telar_transpiler::transpile_source(source, &stem, theme_type, Some(&assets)).ok()?;
+    let result = match telar_project::is_module_root(rsx_path) {
+        true => {
+            telar_transpiler::transpile_module_root(source, telar_project::MODULE_CHILDREN_FILENAME)
+        }
+        false => telar_transpiler::transpile_source(source, &stem, theme_type, Some(&assets)),
+    }
+    .ok()?;
     let out_path = telar_project::generated_dir(&root, BuildFlavour::Plain).join(&rel);
     Some(GeneratedTarget {
         path: out_path,

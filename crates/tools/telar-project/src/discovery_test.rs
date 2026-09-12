@@ -354,6 +354,79 @@ fn a_comment_naming_the_macro_is_not_an_invocation() {
     let _ = std::fs::remove_dir_all(&root);
 }
 
+/// A `mod.rsx` makes the directory telar's: the parent declares it at the transpiled module, and the children the module cannot know about reach it through the file its `include!` names.
+#[test]
+fn a_mod_rsx_owns_its_directory() {
+    let root = std::env::temp_dir().join(format!("rsx_module_root_{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&root);
+    std::fs::create_dir_all(root.join("media")).unwrap();
+    std::fs::write(root.join("lib.rs"), "telar::rsx_modules!();\n").unwrap();
+    std::fs::write(root.join("media/mod.rsx"), "[logic]\npub fn helper() {}\n").unwrap();
+    std::fs::write(root.join("media/panel.rsx"), "[view]\ncol\n").unwrap();
+    std::fs::write(root.join("media/state.rs"), "").unwrap();
+
+    let modtree = root.join("__modules");
+    std::fs::create_dir_all(&modtree).unwrap();
+    let generated = root.join("build");
+    let (out, written) = discover_rust_modules(&root, &root, &modtree, &generated).unwrap();
+
+    let module_file = generated.join("media").join("mod.rs");
+    assert!(
+        out.contains(&format!(
+            "{:?}] pub mod media;",
+            module_file.to_string_lossy()
+        )),
+        "the parent declares the directory at its transpiled module: {out}"
+    );
+    assert!(
+        placement_sites(&root) == vec![root.clone()],
+        "a directory telar owns is not a site that has to invoke anything"
+    );
+    let children = std::fs::read_to_string(generated.join("media").join(MODULE_CHILDREN_FILENAME))
+        .expect("the file the module's `include!` names");
+    assert!(children.contains("pub mod panel;"), "{children}");
+    assert!(children.contains("pub mod state;"), "{children}");
+    assert!(!children.contains("mod mod;"), "{children}");
+    assert!(
+        written
+            .iter()
+            .any(|p| p.ends_with(MODULE_CHILDREN_FILENAME)),
+        "written, so the stale sweep knows it is live"
+    );
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+/// Combining keeps the Rust where its author put it. What cannot come along is an inner attribute: rustc refuses one in an included file, so it is named here rather than reported against generated code.
+#[test]
+fn a_mod_rs_beside_a_mod_rsx_is_included_unless_it_opens_with_an_inner_attribute() {
+    let root = std::env::temp_dir().join(format!("rsx_module_combine_{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&root);
+    std::fs::create_dir_all(root.join("media")).unwrap();
+    std::fs::write(root.join("media/mod.rsx"), "[logic]\n").unwrap();
+    std::fs::write(root.join("media/mod.rs"), "pub fn helper() {}\n").unwrap();
+
+    let modtree = root.join("__modules");
+    std::fs::create_dir_all(&modtree).unwrap();
+    let generated = root.join("build");
+    let children_file = generated.join("media").join(MODULE_CHILDREN_FILENAME);
+
+    discover_rust_modules(&root, &root, &modtree, &generated).unwrap();
+    let combined = std::fs::read_to_string(&children_file).unwrap();
+    assert!(combined.contains("include!("), "{combined}");
+    assert!(combined.contains("mod.rs"), "{combined}");
+
+    std::fs::write(
+        root.join("media/mod.rs"),
+        "//! The bar.\npub fn helper() {}\n",
+    )
+    .unwrap();
+    discover_rust_modules(&root, &root, &modtree, &generated).unwrap();
+    let refused = std::fs::read_to_string(&children_file).unwrap();
+    assert!(refused.contains("compile_error!"), "{refused}");
+    assert!(!refused.contains("include!("), "{refused}");
+    let _ = std::fs::remove_dir_all(&root);
+}
+
 /// `src/bin/` belongs to cargo, and only there: every file in it is a crate root of its own, so declaring it as a module would compile each binary's `fn main` into the library. A `bin/` further down is an ordinary directory.
 #[test]
 fn the_crate_roots_bin_directory_is_left_to_cargo() {

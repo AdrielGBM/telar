@@ -31,10 +31,11 @@ pub use catalog::{
     read_catalog_index,
 };
 pub use discovery::{
-    SITE_DIR, assets_root, collect_files_by_ext, component_name, discover_rust_modules,
-    find_rsx_files, find_rsx_files_in_tree, is_generated_output, placement_sites,
-    prune_stale_generated, prune_stale_sites, relative_output_path, site_include_path,
-    source_for_generated, stray_placement_files, write_placement_sites,
+    MODULE_CHILDREN_FILENAME, MODULE_ROOT_FILENAME, SITE_DIR, assets_root, collect_files_by_ext,
+    component_name, discover_rust_modules, find_rsx_files, find_rsx_files_in_tree,
+    is_generated_output, is_module_root, placement_sites, prune_stale_generated, prune_stale_sites,
+    relative_output_path, site_include_path, source_for_generated, stray_placement_files,
+    write_placement_sites,
 };
 pub use manifest::{
     DevSection, I18nSection, MANIFEST_FILENAME, ManifestError, RendererBackend, TelarManifest,

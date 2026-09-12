@@ -33,7 +33,7 @@ mod transition;
 mod view;
 
 #[cfg(feature = "transpile")]
-pub use codegen::{TranspiledSource, transpile_source};
+pub use codegen::{TranspiledSource, transpile_module_root, transpile_source};
 #[cfg(feature = "transpile")]
 pub use error::TranspileError;
 #[cfg(feature = "transpile")]
