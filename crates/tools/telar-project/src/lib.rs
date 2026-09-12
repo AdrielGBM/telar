@@ -42,7 +42,7 @@ pub use manifest::{
     TelarSection, WindowSection,
 };
 pub use paths::{
-    find_ancestor_dir, find_telar_root, find_workspace_root, resolve_telar_version,
-    write_if_changed_atomic,
+    find_ancestor_dir, find_package_root, find_telar_root, find_workspace_root,
+    resolve_telar_version, write_if_changed_atomic,
 };
 pub use theme::{normalize_theme_path, theme_type_in_config};

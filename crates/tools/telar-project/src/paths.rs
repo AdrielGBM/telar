@@ -19,6 +19,13 @@ pub fn find_ancestor_dir(start: &Path, matches: impl Fn(&Path) -> bool) -> Optio
     }
 }
 
+/// Nearest ancestor directory containing a `Cargo.toml`: the package a file belongs to, which is what a theme, an asset root and an i18n catalog each belong to.
+///
+/// What the build itself uses (`CARGO_MANIFEST_DIR`), and the reason a tool must not ask [`find_telar_root`] for it: a package that leaves its settings to the workspace has no `telar.toml` of its own, and the nearest one is then several directories too high.
+pub fn find_package_root(start: &Path) -> Option<PathBuf> {
+    find_ancestor_dir(start, |dir| dir.join("Cargo.toml").exists())
+}
+
 /// Nearest ancestor directory containing a `telar.toml`.
 pub fn find_telar_root(start: &Path) -> Option<PathBuf> {
     find_ancestor_dir(start, |dir| dir.join("telar.toml").exists())

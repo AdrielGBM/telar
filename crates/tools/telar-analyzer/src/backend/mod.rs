@@ -757,8 +757,8 @@ impl Backend {
     pub async fn document_link(&self, params: DocumentLinkParams) -> Option<Vec<DocumentLink>> {
         let uri = &params.text_document.uri;
         let path = crate::uri::to_path(uri)?;
-        // Against the project asset root, matching the baker, falling back to the file's dir with no telar.toml.
-        let assets_dir = telar_project::find_telar_root(&path)
+        // Against the package's asset root, matching the baker, falling back to the file's dir outside a package.
+        let assets_dir = telar_project::find_package_root(&path)
             .map(|root| telar_project::assets_root(&root))
             .or_else(|| path.parent().map(|p| p.to_path_buf()))?;
         let store = self.store.read().await;

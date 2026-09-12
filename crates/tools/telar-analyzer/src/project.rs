@@ -45,7 +45,9 @@ impl ProjectInfo {
     }
 
     pub fn discover(file_path: &Path) -> Option<Self> {
-        let root = telar_project::find_telar_root(file_path)?;
+        // The package, not the nearest `telar.toml`: a theme, a catalog and an asset root each belong to one, and a package that leaves its settings to the workspace has no manifest of its own to find.
+        let root = telar_project::find_package_root(file_path)
+            .or_else(|| telar_project::find_telar_root(file_path))?;
         // The same resolution the build uses, which is the whole point: reading `[telar] theme` alone answered `None` for every project that names its theme in `app!` and never set the key, so the mirror wrote `Theme::<>` over the correct output the build had written on each keystroke.
         let theme_type = telar_transpiler::resolve_theme_type(&root);
         let theme_fields = if let Some(ref type_name) = theme_type {

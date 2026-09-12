@@ -8,12 +8,12 @@ use std::sync::{Mutex, OnceLock};
 use std::time::SystemTime;
 
 use telar_parser::RsxDocument;
-use telar_project::{AssetContext, BuildFlavour, find_ancestor_dir};
+use telar_project::{AssetContext, BuildFlavour};
 use telar_transpiler::SourceMap;
 
 /// Nearest ancestor holding a `Cargo.toml` — the crate root, i.e. the macro's `CARGO_MANIFEST_DIR`. Anchored on `Cargo.toml` (not `telar.toml`) so this works in crates without an rsx config too.
 pub fn crate_root(rsx_path: &Path) -> Option<PathBuf> {
-    find_ancestor_dir(rsx_path, |dir| dir.join("Cargo.toml").exists())
+    telar_project::find_package_root(rsx_path)
 }
 
 /// The transpiler output for one `.rsx`, computed in-memory (no disk). Shared by [`sync_build_file`] and the embedded-analyzer query paths so both see byte-identical generated text.
