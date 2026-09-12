@@ -120,18 +120,37 @@ impl std::fmt::Display for ManifestError {
 impl std::error::Error for ManifestError {}
 
 impl TelarManifest {
-    /// Reads `<package_root>/telar.toml`.
+    /// Reads `<package_root>/telar.toml`, over the workspace root's if there is one.
     ///
     /// A package with no manifest gets the defaults — every setting here has one, and a project that configures nothing is the common case. A manifest that *exists* and cannot be understood is an error, which is the whole point: the alternative is what this replaces, where an unreadable file and a misspelled key both read as "not configured".
+    ///
+    /// Settings are inherited key by key, so a workspace declares its theme, backend and catalogs once and a package overrides only what differs from its siblings. Every package of a workspace answering the same way is the common case, and saying it eight times is how the eight drift apart.
     pub fn load(package_root: &Path) -> Result<Self, ManifestError> {
-        let path = package_root.join(MANIFEST_FILENAME);
-        let Ok(content) = std::fs::read_to_string(&path) else {
-            return Ok(Self::default());
-        };
-        toml::from_str(&content).map_err(|e| ManifestError::Invalid {
-            path,
-            message: e.to_string(),
+        let own = Self::read(package_root)?;
+        let inherited = crate::find_workspace_root(package_root)
+            .filter(|root| root != package_root)
+            .map(|root| Self::read(&root))
+            .transpose()?
+            .flatten();
+        Ok(match (own, inherited) {
+            (Some(own), Some(base)) => Self {
+                telar: own.telar.over(base.telar),
+            },
+            (own, base) => own.or(base).unwrap_or_default(),
         })
+    }
+
+    fn read(dir: &Path) -> Result<Option<Self>, ManifestError> {
+        let path = dir.join(MANIFEST_FILENAME);
+        let Ok(content) = std::fs::read_to_string(&path) else {
+            return Ok(None);
+        };
+        toml::from_str(&content)
+            .map(Some)
+            .map_err(|e| ManifestError::Invalid {
+                path,
+                message: e.to_string(),
+            })
     }
 
     /// The same, for a caller with nowhere to report: an unreadable manifest yields the defaults.
@@ -143,6 +162,26 @@ impl TelarManifest {
 }
 
 impl TelarSection {
+    /// This table's own keys, falling back to `base` key by key.
+    fn over(self, base: Self) -> Self {
+        Self {
+            backend: self.backend.or(base.backend),
+            assets: self.assets.or(base.assets),
+            theme: self.theme.or(base.theme),
+            dev: DevSection {
+                window: self.dev.window.or(base.dev.window),
+                devtools: self.dev.devtools.or(base.dev.devtools),
+            },
+            i18n: I18nSection {
+                root: self.i18n.root.or(base.i18n.root),
+                scan: self.i18n.scan.or(base.i18n.scan),
+                default: self.i18n.default.or(base.i18n.default),
+            },
+            locales: self.locales.or(base.locales),
+            default_locale: self.default_locale.or(base.default_locale),
+        }
+    }
+
     /// The directory a baked `src:"…"` resolves against, joined onto `package_root`.
     pub fn assets_root(&self, package_root: &Path) -> PathBuf {
         package_root.join(self.assets.as_deref().unwrap_or("assets"))

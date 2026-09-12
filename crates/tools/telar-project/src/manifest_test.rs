@@ -112,3 +112,36 @@ fn an_empty_locales_root_disables_it() {
     let telar = TelarManifest::load(&root).unwrap().telar;
     assert_eq!(telar.locales_root(&root), None);
 }
+
+/// A workspace declares once what its packages share. Every package answering the same way is the common case, and saying it in eight files is how the eight drift apart.
+#[test]
+fn a_package_inherits_the_workspace_manifest_key_by_key() {
+    let root = std::env::temp_dir().join(format!("telar_inherit_{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&root);
+    let package_root = root.join("crates/ui");
+    std::fs::create_dir_all(&package_root).unwrap();
+    std::fs::write(root.join("Cargo.toml"), "[workspace]\nmembers = []\n").unwrap();
+    std::fs::write(
+        root.join(MANIFEST_FILENAME),
+        "[telar]\nbackend = \"software\"\ntheme = \"config::Nord\"\n",
+    )
+    .unwrap();
+    std::fs::write(
+        package_root.join(MANIFEST_FILENAME),
+        "[telar]\ntheme = \"ui::Own\"\n",
+    )
+    .unwrap();
+
+    let telar = TelarManifest::load(&package_root)
+        .expect("both manifests parse")
+        .telar;
+    assert_eq!(telar.backend, Some(RendererBackend::Software), "inherited");
+    assert_eq!(telar.theme.as_deref(), Some("ui::Own"), "overridden");
+
+    std::fs::remove_file(package_root.join(MANIFEST_FILENAME)).unwrap();
+    let telar = TelarManifest::load(&package_root)
+        .expect("a package with no manifest of its own")
+        .telar;
+    assert_eq!(telar.theme.as_deref(), Some("config::Nord"));
+    let _ = std::fs::remove_dir_all(&root);
+}
