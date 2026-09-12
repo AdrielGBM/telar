@@ -278,3 +278,80 @@ fn a_hand_written_file_is_not_generated_output() {
         assert_eq!(source_for_generated(Path::new(path)), None, "{path}");
     }
 }
+
+/// The cycle this scheme exists to make impossible: a site's declarations must never name the file that includes them. The macro cannot see which module it was expanded in, so a site that guessed the crate root wrote `pub mod media;` into `media/mod.rs` itself, and rust-analyzer walked that until it exhausted the machine's memory.
+#[test]
+fn no_site_declares_the_file_that_includes_it() {
+    let root = std::env::temp_dir().join(format!("rsx_sites_{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&root);
+    std::fs::create_dir_all(root.join("media")).unwrap();
+    std::fs::write(root.join("lib.rs"), "telar::rsx_modules!();\n").unwrap();
+    std::fs::write(root.join("media/mod.rs"), "telar::rsx_modules!();\n").unwrap();
+    std::fs::write(root.join("media/player.rsx"), "[view]\ncol\n").unwrap();
+
+    let modtree = root.join("__modules");
+    std::fs::create_dir_all(&modtree).unwrap();
+    let generated = root.join("build");
+    let written = write_placement_sites(&root, &modtree, &generated, true, "modules.rs").unwrap();
+
+    let sites = placement_sites(&root);
+    assert_eq!(sites, vec![root.clone(), root.join("media")]);
+    for site in &sites {
+        let file = site.join(SITE_DIR).join("modules.rs");
+        assert!(
+            written.contains(&file),
+            "every site is written: {written:?}"
+        );
+        let declarations = std::fs::read_to_string(&file).unwrap();
+        assert!(
+            !declarations.contains(&format!("{:?}", file.to_string_lossy())),
+            "a site declaring its own file is the circular module: {declarations}"
+        );
+    }
+    let nested =
+        std::fs::read_to_string(root.join("media").join(SITE_DIR).join("modules.rs")).unwrap();
+    assert!(nested.contains("pub mod player;"), "{nested}");
+    assert!(!nested.contains("pub mod media;"), "{nested}");
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+/// An `include!` resolves against the file holding the call, and a module declares its children under the directory named after that file. Only a crate root and a `mod.rs` make those the same directory, so anywhere else the invocation would pull in its parent's declarations.
+#[test]
+fn an_invocation_that_cannot_place_is_named() {
+    let root = std::env::temp_dir().join(format!("rsx_strays_{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&root);
+    std::fs::create_dir_all(root.join("media")).unwrap();
+    std::fs::write(root.join("lib.rs"), "telar::rsx_modules!();\n").unwrap();
+    std::fs::write(root.join("media/mod.rs"), "telar::rsx_modules!();\n").unwrap();
+    assert!(stray_placement_files(&root).is_empty());
+
+    std::fs::write(root.join("media/player.rs"), "telar::rsx_modules!();\n").unwrap();
+    assert_eq!(
+        stray_placement_files(&root),
+        vec![root.join("media/player.rs")]
+    );
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+/// Naming the macro in prose is not invoking it. telar's own sandbox has two files whose comments mention `app!`, and reading them as placement sites failed the build of a crate that was correct.
+#[test]
+fn a_comment_naming_the_macro_is_not_an_invocation() {
+    let root = std::env::temp_dir().join(format!("rsx_prose_{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&root);
+    std::fs::create_dir_all(root.join("core")).unwrap();
+    std::fs::write(root.join("lib.rs"), "telar::app!(Theme);\n").unwrap();
+    std::fs::write(
+        root.join("core/theme.rs"),
+        "/// Called from the `app!` setup closure (and any test that switches themes).\nfn register() {}\n",
+    )
+    .unwrap();
+    std::fs::write(
+        root.join("core/mod.rs"),
+        "// placed by `rsx_modules!` upstairs\n",
+    )
+    .unwrap();
+
+    assert!(stray_placement_files(&root).is_empty());
+    assert_eq!(placement_sites(&root), vec![root.clone()]);
+    let _ = std::fs::remove_dir_all(&root);
+}

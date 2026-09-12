@@ -53,6 +53,16 @@ impl BuildFlavour {
         }
     }
 
+    /// The file this flavour writes in each placement site's `.telar/`, named per flavour so a `cargo telar dev` and a plain build do not overwrite each other's module tree.
+    pub fn site_file_name(self) -> &'static str {
+        match self {
+            Self::Plain => "modules.rs",
+            Self::Hot => "modules-hot.rs",
+            Self::Preview => "modules-preview.rs",
+            Self::HotPreview => "modules-hot-preview.rs",
+        }
+    }
+
     /// The index this flavour writes beside its directory, naming the flavour so no two read each other's.
     pub fn index_filename(self) -> &'static str {
         match self {

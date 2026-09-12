@@ -511,23 +511,6 @@ fn wire_sources(
     Err(quote! { compile_error!(#msg); })
 }
 
-/// The `src`-relative directory the macro was written in.
-///
-/// `Span::local_file` gives the path the compiler knows, which is relative to the *working* directory — the workspace root under cargo, not the package. So the path is re-rooted by its own `src` component rather than trusted whole: rooting it at the wrong `src` silently placed nothing, which reads as a crate that simply has no `.rsx` in it.
-fn invocation_dir(file: &Path, src_dir: &Path) -> Option<PathBuf> {
-    let dir = file.parent()?;
-    if dir.starts_with(src_dir) {
-        return Some(dir.to_path_buf());
-    }
-    let segments: Vec<_> = dir.components().collect();
-    let at = segments
-        .iter()
-        .rposition(|c| c.as_os_str() == std::ffi::OsStr::new("src"))?;
-    let below: PathBuf = segments[at + 1..].iter().collect();
-    let resolved = src_dir.join(below);
-    resolved.is_dir().then_some(resolved)
-}
-
 // Transpiles every `.rsx` under `src/` into the build directory, wiring each as a `#[path] mod` and aliasing nested components to their basenames; also emits `include_str!` rerun triggers and, under `auto_modules`, declares the hand-written `.rs` module tree. Shared by `app!`, which then adds the runner, and `rsx_modules!`, which transpiles only. `Err` carries a `compile_error!` stream to emit.
 fn transpile_project(theme_type_str: Option<&str>) -> Result<TranspileOutput, TokenStream2> {
     check_cli_is_current()?;
@@ -594,12 +577,6 @@ fn transpile_project(theme_type_str: Option<&str>) -> Result<TranspileOutput, To
     //
     // Nothing tracks a borrowed component any more. Its signature used to be baked into this crate's call sites, so editing its `Props` elsewhere had to rebuild this crate or the call kept the old arity.
     let auto_modules = telar_project::auto_modules_enabled(&manifest_dir);
-    // The compiler's own span, not proc-macro2's shim: only the real one carries a file. A crate may invoke the macro once per module owning `.rsx` files, and what differs is where the module tree is rooted and whether this run may sweep the generated directory.
-    let invoked_in = proc_macro::Span::call_site()
-        .local_file()
-        .and_then(|file| invocation_dir(&file, &src_dir))
-        .unwrap_or_else(|| src_dir.clone());
-    let invoked_at_root = invoked_in == src_dir;
 
     let telar_toml = manifest_dir.join(telar_project::MANIFEST_FILENAME);
     if telar_toml.exists() {
@@ -609,35 +586,41 @@ fn transpile_project(theme_type_str: Option<&str>) -> Result<TranspileOutput, To
     }
     // Always, not opt-in: a `.rsx` is a module where its file sits, so the tree placing it has to exist whatever `auto_modules` says. What the setting decides is whether hand-written `.rs` siblings are declared for you.
     //
-    // Rooted where the macro was written, not at `src/`. A module declares its own children, so a `rsx_modules!()` in `app/editor/mod.rs` places that directory's files; declaring `pub mod app;` there would name an ancestor of the file doing the declaring, which rustc reads as a cycle.
+    // Every site is written, and every invocation emits the same relative `include!`: the compiler resolves it against the file holding the call, which is the one thing here that knows where the macro was written. See `site_include_path` for what asking the macro instead cost.
     {
+        let strays = telar_project::stray_placement_files(&src_dir);
+        if !strays.is_empty() {
+            let listed = strays
+                .iter()
+                .map(|path| path.display().to_string())
+                .collect::<Vec<_>>()
+                .join(", ");
+            let msg = format!(
+                "rsx: a module places its `.rsx` children from its own file, so this macro belongs in a crate root or a `mod.rs`, not in: {listed}"
+            );
+            return Err(quote! { compile_error!(#msg); });
+        }
         // The discovered tree is split across real generated files (one per directory) so every module is a file-based `#[path] mod`; see `discover_rust_modules` for why inline `mod` blocks break rust-analyzer.
         let modtree_dir = generated_dir.join("__modules");
         if let Err(e) = std::fs::create_dir_all(&modtree_dir) {
             let msg = format!("Failed to create {}: {e}", modtree_dir.display());
             return Err(quote! { compile_error!(#msg); });
         }
-        let (modules_src, modtree_written) = match telar_project::discover_rust_modules(
+        match telar_project::write_placement_sites(
             &src_dir,
-            &invoked_in,
             &modtree_dir,
             &generated_dir,
             auto_modules,
+            flavour.site_file_name(),
         ) {
-            Ok(s) => s,
+            Ok(written) => written_files.extend(written),
             Err(e) => {
                 let msg = format!("Failed to write the auto-discovered module tree: {e}");
                 return Err(quote! { compile_error!(#msg); });
             }
-        };
-        written_files.extend(modtree_written);
-        match modules_src.parse::<TokenStream2>() {
-            Ok(tokens) => include_stmts.extend(tokens),
-            Err(e) => {
-                let msg = format!("Failed to emit auto-discovered modules: {e}");
-                return Err(quote! { compile_error!(#msg); });
-            }
         }
+        let include_path = telar_project::site_include_path(flavour);
+        include_stmts.extend(quote! { include!(#include_path); });
     }
 
     // The catalog the CLI baked, wired exactly like the asset module. The macro neither discovers locale files nor parses one: an empty artifact is a project with no translations, and a missing one is a build that has not run the baker, which is `t!`'s error to report and not this pass's.
@@ -691,10 +674,14 @@ fn transpile_project(theme_type_str: Option<&str>) -> Result<TranspileOutput, To
 
     // Only reached once the whole project transpiled without error, so `written_files` is complete: anything else under the generated directory is what an earlier run wrote for a `.rsx` that is gone now.
     //
-    // The root invocation only. A crate may have several, one per module owning `.rsx` files, and each knows only its own module tree, so a nested one sweeping the directory deletes what the root wrote.
-    if invoked_at_root {
-        telar_project::prune_stale_generated(&generated_dir, &written_files);
-    }
+    // Any invocation may sweep: each one writes the whole crate's module tree, not just its own module's corner of it.
+    telar_project::prune_stale_generated(&generated_dir, &written_files);
+    telar_project::prune_stale_sites(
+        &src_dir,
+        &telar_project::placement_sites(&src_dir)
+            .into_iter()
+            .collect(),
+    );
 
     Ok(TranspileOutput {
         include_stmts,

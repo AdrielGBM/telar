@@ -256,9 +256,15 @@ fn dir_has_rust_module(dir: &Path) -> bool {
 
 /// Whether the `mod.rs` invokes the macro that places its own `.rsx` siblings.
 fn mod_rs_places_its_own(mod_rs: &Path) -> bool {
-    std::fs::read_to_string(mod_rs)
-        .map(|src| src.contains("rsx_modules!") || src.contains("app!"))
-        .unwrap_or(false)
+    std::fs::read_to_string(mod_rs).is_ok_and(|src| places_its_own_rsx(&src))
+}
+
+/// Whether `source` invokes the placement macro, rather than naming it in prose. The call has to open its delimiter and survive having line comments stripped: a bare substring was harmless while it only decided whether to suppress a diagnostic, and stopped being so once the same answer decides which directories are placement sites — telar's own sandbox has two files whose comments mention `app!`.
+fn places_its_own_rsx(source: &str) -> bool {
+    source
+        .lines()
+        .filter_map(|line| line.split("//").next())
+        .any(|code| code.contains("rsx_modules!(") || code.contains("app!("))
 }
 
 /// Whether any `.rsx` sits under `dir`, which is what makes a directory with no `mod.rs` worth declaring even when hand-written modules are the crate's own business.
@@ -327,6 +333,110 @@ fn split_at_generated_dir(path: &Path) -> Option<(PathBuf, PathBuf)> {
     Some((parts[..at].iter().collect(), rel))
 }
 
+/// The directory a placement site's generated declarations live in, inside the source directory that holds the invocation. Named like the package-level one, and already covered by the `.telar/` line every telar project has in its `.gitignore`.
+pub const SITE_DIR: &str = ".telar";
+
+/// What an invocation of the placement macro expands to, whichever module it was written in.
+///
+/// This is what tells the sites apart, and it has to be the compiler's job rather than the macro's: a proc macro cannot see where it was invoked. `Span::local_file()` answers under rustc and returns `None` under rust-analyzer — whose proc-macro bridge only carries that callback over a protocol no released toolchain speaks — so a macro that guesses the crate root there makes a `mod.rs` declare a module whose file is itself, and the analyzer walks that until the machine is out of memory. A relative `include!` is resolved against the file holding the call by both, without either being asked to know anything.
+pub fn site_include_path(flavour: crate::BuildFlavour) -> String {
+    format!("{SITE_DIR}/{}", flavour.site_file_name())
+}
+
+/// Every directory a crate places `.rsx` from: `src_dir`, plus each directory whose `mod.rs` invokes the placement macro — the only file that can declare that directory's children.
+pub fn placement_sites(src_dir: &Path) -> Vec<PathBuf> {
+    let mut sites = vec![src_dir.to_path_buf()];
+    collect_placement_sites(src_dir, &mut sites);
+    sites
+}
+
+fn collect_placement_sites(dir: &Path, out: &mut Vec<PathBuf>) {
+    let Ok(entries) = std::fs::read_dir(dir) else {
+        return;
+    };
+    let mut paths: Vec<PathBuf> = entries.flatten().map(|e| e.path()).collect();
+    paths.sort();
+    for path in paths {
+        if !path.is_dir()
+            || path
+                .file_name()
+                .is_some_and(|n| n.to_string_lossy().starts_with('.'))
+        {
+            continue;
+        }
+        let mod_rs = path.join("mod.rs");
+        if mod_rs.is_file() && mod_rs_places_its_own(&mod_rs) {
+            out.push(path.clone());
+        }
+        collect_placement_sites(&path, out);
+    }
+}
+
+/// Files that invoke the placement macro from where it cannot place. A module declares its children relative to the directory named after its own file, and an `include!` resolves relative to the file itself; the two agree only for a crate root and a `mod.rs`, so anywhere else the invocation would pull in its parent's declarations.
+pub fn stray_placement_files(src_dir: &Path) -> Vec<PathBuf> {
+    collect_files_by_ext(src_dir, &["rs"], &|name| !name.starts_with('.'))
+        .into_iter()
+        .filter(|path| {
+            !matches!(
+                path.file_name().and_then(|n| n.to_str()),
+                Some("lib.rs" | "main.rs" | "mod.rs")
+            ) && std::fs::read_to_string(path).is_ok_and(|src| places_its_own_rsx(&src))
+        })
+        .collect()
+}
+
+/// Writes what every placement site's `include!` resolves to, and returns every path written — the site files and the module-tree files they point at — for the caller's stale-output sweep.
+///
+/// Every invocation writes every site, because none of them knows which one it is. The writes are idempotent and the content is derived from the source tree, so the sites agree however the expansions are ordered or cached.
+pub fn write_placement_sites(
+    src_dir: &Path,
+    modtree_dir: &Path,
+    generated_dir: &Path,
+    auto_modules: bool,
+    file_name: &str,
+) -> std::io::Result<Vec<PathBuf>> {
+    let mut written = Vec::new();
+    for site in placement_sites(src_dir) {
+        let (declarations, modtree) =
+            discover_rust_modules(src_dir, &site, modtree_dir, generated_dir, auto_modules)?;
+        written.extend(modtree);
+        let dir = site.join(SITE_DIR);
+        std::fs::create_dir_all(&dir)?;
+        let file = dir.join(file_name);
+        write_if_changed(&file, &declarations)?;
+        written.push(file);
+    }
+    Ok(written)
+}
+
+/// Deletes the site files of directories that no longer place their own `.rsx` — a `mod.rs` that dropped its invocation, or a directory that lost its last `.rsx`. Only ever removes a `.rs` inside a `.telar/` directory that no live site owns, and only under `src_dir`.
+pub fn prune_stale_sites(src_dir: &Path, sites: &HashSet<PathBuf>) {
+    let Ok(entries) = std::fs::read_dir(src_dir) else {
+        return;
+    };
+    if !sites.contains(src_dir) {
+        let site_dir = src_dir.join(SITE_DIR);
+        if let Ok(files) = std::fs::read_dir(&site_dir) {
+            for file in files.flatten() {
+                let path = file.path();
+                if path.extension().and_then(|e| e.to_str()) == Some("rs") {
+                    let _ = std::fs::remove_file(path);
+                }
+            }
+            let _ = std::fs::remove_dir(&site_dir);
+        }
+    }
+    for entry in entries.flatten() {
+        let path = entry.path();
+        if path.is_dir()
+            && !path
+                .file_name()
+                .is_some_and(|n| n.to_string_lossy().starts_with('.'))
+        {
+            prune_stale_sites(&path, sites);
+        }
+    }
+}
 #[cfg(test)]
 #[path = "discovery_test.rs"]
 mod tests;
