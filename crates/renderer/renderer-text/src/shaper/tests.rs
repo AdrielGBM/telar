@@ -88,6 +88,52 @@ fn max_lines_cuts_the_shaped_lines_and_ellipsis_marks_the_cut() {
     );
 }
 
+// cosmic-text reports a glyph's byte offset within its own logical line, so a clamp that cuts a later paragraph has to translate it before slicing the whole text. Read as a whole-text offset, it cut inside the first paragraph, and panicked when that landed inside a multi-byte character.
+#[test]
+fn a_clamp_that_cuts_a_later_paragraph_keeps_every_earlier_paragraph_whole() {
+    let mut sh = TextShaper::new();
+    let first = "Configuración guardada é";
+    let second = "alpha beta gamma delta epsilon zeta eta theta iota kappa lambda mu nu xi";
+    let text = format!("{first}\n{second}");
+    let rect = Rect {
+        x: 0.0,
+        y: 0.0,
+        width: 90.0,
+        height: 10_000.0,
+    };
+    let base = TextStyle::new(16.0, Color::BLACK);
+
+    let unclamped = make_buffer(&mut sh.font_system, &text, None, rect, &base);
+    let first_runs = unclamped
+        .layout_runs()
+        .filter(|run| run.line_i == 0)
+        .count();
+    if unclamped.layout_runs().count() <= first_runs + 2 {
+        return;
+    }
+
+    let max = u16::try_from(first_runs + 2).expect("a label wraps to a handful of lines");
+    for ellipsis in [false, true] {
+        let clamped = make_buffer(
+            &mut sh.font_system,
+            &text,
+            None,
+            rect,
+            &base.clone().with_clamp(max, ellipsis),
+        );
+        let kept: Vec<&str> = clamped.lines.iter().map(|line| line.text()).collect();
+        assert_eq!(
+            kept.first().copied(),
+            Some(first),
+            "the paragraph before the cut must survive whole (ellipsis={ellipsis}): {kept:?}"
+        );
+        assert!(
+            kept.len() == 2 && second.starts_with(kept[1].trim_end_matches('\u{2026}')),
+            "the cut paragraph must keep a prefix of itself (ellipsis={ellipsis}): {kept:?}"
+        );
+    }
+}
+
 #[test]
 fn max_lines_clamps_the_measured_height() {
     let mut sh = TextShaper::new();

@@ -234,7 +234,27 @@ fn clip_spans(spans: Option<&[Span]>, len: usize) -> Option<Vec<Span>> {
     )
 }
 
-/// Shapes `text` into `rect`, then applies `max_lines`/`ellipsis` clamping: cosmic-text has no public ellipsis, so a clamped overflow is truncated at the start of the first dropped visual line, and (with ellipsis) `…` is appended and characters are dropped until it fits. Single logical line per call is assumed for the cut offset (UI labels), which is the common clamp case.
+/// cosmic-text reports glyph offsets within each logical line, so every visual line's start is shifted past the lines and line endings before it.
+fn visual_line_starts(buffer: &Buffer) -> Vec<usize> {
+    let line_offsets: Vec<usize> = buffer
+        .lines
+        .iter()
+        .scan(0, |offset, line| {
+            let start = *offset;
+            *offset += line.text().len() + line.ending().as_str().len();
+            Some(start)
+        })
+        .collect();
+    buffer
+        .layout_runs()
+        .map(|run| {
+            let within_line = run.glyphs.iter().map(|glyph| glyph.start).min();
+            line_offsets[run.line_i] + within_line.unwrap_or(0)
+        })
+        .collect()
+}
+
+/// Shapes `text` into `rect`, then applies `max_lines`/`ellipsis` clamping: cosmic-text has no public ellipsis, so a clamped overflow is truncated at the start of the first dropped visual line, and (with ellipsis) `…` is appended and characters are dropped until it fits.
 fn make_buffer(
     font_system: &mut FontSystem,
     text: &str,
@@ -246,11 +266,7 @@ fn make_buffer(
     let Some(max) = style.clamp.max_lines() else {
         return buffer;
     };
-    // Byte offset, within the single buffer line, where each visual line begins.
-    let line_starts: Vec<usize> = buffer
-        .layout_runs()
-        .map(|run| run.glyphs.first().map(|g| g.start).unwrap_or(0))
-        .collect();
+    let line_starts = visual_line_starts(&buffer);
     if line_starts.len() <= max {
         return buffer;
     }
