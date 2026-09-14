@@ -23,6 +23,7 @@ pub(super) struct FramePacer {
     pub(super) last_tick: web_time::Instant,
     /// Content or keepalive; paces the keepalive blit.
     pub(super) last_submit: web_time::Instant,
+    pub(super) frame_owed: bool,
 }
 
 impl Default for FramePacer {
@@ -37,6 +38,7 @@ impl Default for FramePacer {
             // Backdated so the first `on_redraw` after resume composes immediately, and the first keepalive blit is already due. `checked_sub` because an `Instant` this early in the process may have nothing to subtract from.
             last_tick: now.checked_sub(FRAME_BUDGET).unwrap_or(now),
             last_submit: now.checked_sub(HW_KEEPALIVE_INTERVAL).unwrap_or(now),
+            frame_owed: false,
         }
     }
 }

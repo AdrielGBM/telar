@@ -292,14 +292,8 @@ where
         }
     }
 
-    /// Installs the renderer a background build finished, or asks for another frame while it is still going.
-    ///
-    /// The re-ask is not belt-and-braces: a window with no renderer requests no frames, so the wake the builder sends is the only thing pacing this loop — and it can land a hair before the thread has actually exited.
     fn poll_pending_renderer(&mut self, window: &W) {
         let Some(outcome) = self.renderer_host.poll() else {
-            if self.renderer_host.is_building() {
-                window.request_redraw();
-            }
             return;
         };
         match outcome {
@@ -430,12 +424,14 @@ where
         }
     }
 
-    /// This frame's start instant, or `None` while the previous one is still inside [`FRAME_BUDGET`].
+    /// This frame's start instant, or `None` while the previous one is still inside [`FRAME_BUDGET`] — which leaves the frame owed, for `about_to_wait` to schedule once the budget allows it.
     ///
     /// Ahead of every other phase because everything below it composes a frame: a platform may call `on_redraw` every loop turn, and the tick's own writes notify it to redraw again, so an ungated pass would free-run instead of sleeping.
     fn claim_frame_budget(&mut self) -> Option<web_time::Instant> {
         let now = web_time::Instant::now();
-        if now.duration_since(self.pacer.last_tick) < FRAME_BUDGET {
+        let inside_budget = now.duration_since(self.pacer.last_tick) < FRAME_BUDGET;
+        self.pacer.frame_owed = inside_budget;
+        if inside_budget {
             return None;
         }
         self.pacer.last_tick = now;
@@ -797,6 +793,8 @@ where
         let _surface = self.enter_surface();
         // Let the host keep whatever makes the next resume cheap: for hardware, a device to rebind rather than rebuild.
         self.renderer_host.suspend();
+        // Owed to a surface that is gone: kept, it would wake a suspended loop every frame, and the resume asks for its own first frame.
+        self.pacer.frame_owed = false;
     }
 
     fn new_events(&mut self) {
@@ -811,7 +809,11 @@ where
         end_batch();
         let tree_dirty = self.tree.as_ref().map(|t| t.is_dirty()).unwrap_or(false);
         // An unsettled animation must keep the loop scheduling frames even while the tree is momentarily clean.
-        if tree_dirty || self.app.motion_has_active() || self.app.motion_has_continuous() {
+        if self.pacer.frame_owed
+            || tree_dirty
+            || self.app.motion_has_active()
+            || self.app.motion_has_continuous()
+        {
             // Against `last_tick`, the clock `on_redraw` gates on: reporting a deadline the pass would decline wakes the loop early and it spins re-asking.
             Some(FRAME_BUDGET.saturating_sub(self.pacer.last_tick.elapsed()))
         } else {

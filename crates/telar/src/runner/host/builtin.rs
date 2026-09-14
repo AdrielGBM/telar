@@ -2,10 +2,12 @@
 //!
 //! Everything wgpu-specific about the lifecycle is here: the build kept off the UI thread because creating a device takes long enough to see, the device kept warm across a suspend so a resume rebinds a surface instead of rebuilding a pipeline cache, and `Auto` degrading to the rasteriser when there is no adapter — or when wgpu was not compiled in at all.
 
-use renderer_core::{RenderBackend, RendererError};
+use renderer_core::RenderBackend;
 
 use crate::config::RendererBackend;
 
+#[cfg(feature = "hardware")]
+use super::background_build::BackgroundBuild;
 use super::{RenderChannels, RendererHost, RendererRequest, RendererStart, SurfaceWindow};
 #[cfg(any(feature = "hardware", feature = "software"))]
 use crate::runner::font_config::SystemFonts;
@@ -29,9 +31,7 @@ pub(crate) struct BuiltinHost<W: SurfaceWindow> {
     #[cfg(feature = "software")]
     sw_join: Option<std::thread::JoinHandle<renderer_software::SoftwareRenderer<W, W>>>,
     #[cfg(feature = "hardware")]
-    pending: Option<
-        std::thread::JoinHandle<Result<renderer_hardware::HardwareRenderer<W>, RendererError>>,
-    >,
+    pending: Option<BackgroundBuild<renderer_hardware::HardwareRenderer<W>>>,
     #[cfg(feature = "hardware")]
     warm: Option<renderer_hardware::HardwareRenderer<W>>,
     _window: std::marker::PhantomData<W>,
@@ -62,6 +62,11 @@ impl<W: SurfaceWindow> BuiltinHost<W> {
     fn join_thread(&mut self, keep_warm: bool) {
         // First, and load-bearing: the thread parks on the frame channel, so it only exits once the sender is gone.
         self.channels = None;
+        // A build still in flight was asked for by the surface being let go, and whatever starts next builds its own.
+        #[cfg(feature = "hardware")]
+        {
+            self.pending = None;
+        }
         #[cfg(feature = "hardware")]
         if let Some(join) = self.hw_join.take() {
             match join.join() {
@@ -102,7 +107,9 @@ impl<W: SurfaceWindow> BuiltinHost<W> {
         if matches!(req.backend, RendererBackend::Auto) {
             return self.start_software(window, req);
         }
-        RendererStart::Failed(RendererError::Backend(NO_HARDWARE.to_string()))
+        RendererStart::Failed(renderer_core::RendererError::Backend(
+            NO_HARDWARE.to_string(),
+        ))
     }
 
     #[cfg(feature = "hardware")]
@@ -121,7 +128,6 @@ impl<W: SurfaceWindow> BuiltinHost<W> {
     /// One strategy for all three paths that build one: first resume, a dev backend toggle and a restart.
     #[cfg(feature = "hardware")]
     fn spawn_hardware_build(&mut self, window: &W, req: &RendererRequest<'_>) {
-        // A second handle for the wake below: with no renderer yet nothing this thread asks for would draw, so the building thread is the only one that can end the wait.
         let wake = window.clone();
         let window = window.clone();
         let cache_path = crate::runner::font_config::hardware_cache_path(req.app_name, req.paths);
@@ -129,33 +135,31 @@ impl<W: SurfaceWindow> BuiltinHost<W> {
         let system_fonts = SystemFonts::from_provider(req.paths);
         let android = cfg!(target_os = "android");
         let transparent = req.transparent;
-        self.pending = Some(std::thread::spawn(move || {
-            let font_config =
-                crate::runner::font_config::build_hardware_font_config(fonts, &system_fonts);
-            let built = renderer_hardware::HardwareRenderer::new(
-                window,
-                cache_path.as_deref(),
-                android,
-                font_config,
-                renderer_hardware::HardwareRendererConfig { transparent },
-            );
-            wake.request_redraw();
-            built
-        }));
+        self.pending = Some(BackgroundBuild::spawn(
+            move || {
+                let font_config =
+                    crate::runner::font_config::build_hardware_font_config(fonts, &system_fonts);
+                renderer_hardware::HardwareRenderer::new(
+                    window,
+                    cache_path.as_deref(),
+                    android,
+                    font_config,
+                    renderer_hardware::HardwareRendererConfig { transparent },
+                )
+            },
+            move || wake.request_redraw(),
+        ));
     }
 
     #[cfg(feature = "hardware")]
     fn poll_hardware_build(&mut self) -> Option<RendererStart> {
-        let handle = self.pending.take()?;
-        if !handle.is_finished() {
-            self.pending = Some(handle);
-            return None;
-        }
-        let built = handle.join().unwrap_or_else(|_| {
-            Err(RendererError::Backend(
-                "renderer build thread panicked".to_string(),
-            ))
-        });
+        let built = match self.pending.take()?.try_take() {
+            Ok(built) => built,
+            Err(still_building) => {
+                self.pending = Some(still_building);
+                return None;
+            }
+        };
         // Retire whichever backend was driving before the new one takes the surface.
         self.join_thread(false);
         Some(match built {
@@ -193,7 +197,9 @@ impl<W: SurfaceWindow> BuiltinHost<W> {
 
     #[cfg(not(feature = "software"))]
     fn start_software(&mut self, _window: &W, _req: &RendererRequest<'_>) -> RendererStart {
-        RendererStart::Failed(RendererError::Backend(NO_SOFTWARE.to_string()))
+        RendererStart::Failed(renderer_core::RendererError::Backend(
+            NO_SOFTWARE.to_string(),
+        ))
     }
 
     #[cfg(feature = "software")]
@@ -237,13 +243,6 @@ impl<W: SurfaceWindow> RendererHost<W> for BuiltinHost<W> {
 
     fn poll(&mut self) -> Option<RendererStart> {
         self.poll_hardware_build()
-    }
-
-    fn is_building(&self) -> bool {
-        #[cfg(feature = "hardware")]
-        return self.pending.is_some();
-        #[cfg(not(feature = "hardware"))]
-        false
     }
 
     fn channels(&self) -> Option<&RenderChannels> {

@@ -1,6 +1,10 @@
+use std::cell::Cell;
+use std::rc::Rc;
+
 use super::*;
 use crate::app::App;
 use crate::app_runtime::LocalApp;
+use crate::runner::host::RenderChannels;
 use platform_headless::HeadlessWindow;
 
 /// An app whose content never changes — a shell's frame ring, a wallpaper, a static diagram. Its tree's own generation is fixed for the life of the tree, which is what makes the collision below reachable.
@@ -220,6 +224,142 @@ fn a_clean_tree_with_a_continuous_region_is_still_worth_a_frame() {
     assert!(
         handler.pacer.last_submit > first,
         "the region says the picture changed even though the tree cannot, so this frame had to go out"
+    );
+}
+
+fn run_a_pass(handler: &mut AppHandler<HeadlessWindow, ()>, window: &HeadlessWindow) {
+    handler.new_events();
+    handler.pacer.last_tick = web_time::Instant::now() - FRAME_BUDGET * 2;
+    handler.on_redraw(window);
+}
+
+fn redraw_inside_the_budget(handler: &mut AppHandler<HeadlessWindow, ()>, window: &HeadlessWindow) {
+    handler.new_events();
+    let ticked = web_time::Instant::now();
+    handler.pacer.last_tick = ticked;
+    handler.on_redraw(window);
+    assert_eq!(
+        handler.pacer.last_tick, ticked,
+        "precondition: the redraw landed inside the frame budget, so no pass ran"
+    );
+}
+
+fn resumed_and_settled() -> (AppHandler<HeadlessWindow, ()>, HeadlessWindow) {
+    let mut handler = handler();
+    let window = HeadlessWindow::new(120, 80);
+    handler.new_events();
+    assert!(handler.on_resume(&window), "a headless resume builds one");
+    handler.about_to_wait();
+    run_a_pass(&mut handler, &window);
+    assert_eq!(
+        handler.about_to_wait(),
+        None,
+        "precondition: a settled tree with no renderer to keep warm has nothing to wake for"
+    );
+    (handler, window)
+}
+
+#[test]
+fn a_redraw_declined_by_the_frame_budget_leaves_a_deadline_within_it() {
+    let (mut handler, window) = resumed_and_settled();
+
+    redraw_inside_the_budget(&mut handler, &window);
+    let remaining = FRAME_BUDGET.saturating_sub(handler.pacer.last_tick.elapsed());
+    let deadline = handler.about_to_wait();
+
+    assert!(
+        deadline.is_some_and(|d| d <= remaining),
+        "a declined redraw must be scheduled no later than the {remaining:?} left of the budget, got {deadline:?}"
+    );
+}
+
+#[test]
+fn a_pass_that_runs_with_nothing_due_lets_the_loop_sleep_again() {
+    let (mut handler, window) = resumed_and_settled();
+    redraw_inside_the_budget(&mut handler, &window);
+    assert!(
+        handler.about_to_wait().is_some(),
+        "precondition: a frame is owed"
+    );
+
+    run_a_pass(&mut handler, &window);
+
+    assert_eq!(
+        handler.about_to_wait(),
+        None,
+        "the pass paid off the owed frame, so reporting another deadline would spin the loop"
+    );
+}
+
+struct BackgroundHost {
+    landed: Rc<Cell<bool>>,
+    collected: Rc<Cell<bool>>,
+}
+
+impl RendererHost<HeadlessWindow> for BackgroundHost {
+    fn start(&mut self, _window: &HeadlessWindow, _req: &RendererRequest<'_>) -> RendererStart {
+        RendererStart::Building
+    }
+
+    fn poll(&mut self) -> Option<RendererStart> {
+        if !self.landed.get() || self.collected.get() {
+            return None;
+        }
+        self.collected.set(true);
+        Some(RendererStart::Started {
+            keepalive: false,
+            label: "landed",
+        })
+    }
+
+    fn channels(&self) -> Option<&RenderChannels> {
+        None
+    }
+
+    fn suspend(&mut self) {}
+
+    fn retire(&mut self) {}
+}
+
+#[test]
+fn a_pending_build_sleeps_until_its_wake_is_owed_and_the_next_pass_collects_it() {
+    let landed = Rc::new(Cell::new(false));
+    let collected = Rc::new(Cell::new(false));
+    let mut handler = handler();
+    handler.renderer_host = Box::new(BackgroundHost {
+        landed: Rc::clone(&landed),
+        collected: Rc::clone(&collected),
+    });
+    let window = HeadlessWindow::new(120, 80);
+    handler.tree = Some(handler.app.mount());
+
+    run_a_pass(&mut handler, &window);
+    assert_eq!(
+        handler.about_to_wait(),
+        None,
+        "a pending build with nothing owed must let the loop sleep; its own wake is what ends the wait"
+    );
+
+    landed.set(true);
+    redraw_inside_the_budget(&mut handler, &window);
+    assert!(
+        handler.pacer.frame_owed,
+        "the builder's wake landed inside the budget, so its frame is owed"
+    );
+    assert!(
+        handler.about_to_wait().is_some(),
+        "an owed frame must leave a deadline, or the renderer is never collected"
+    );
+
+    run_a_pass(&mut handler, &window);
+    assert!(
+        collected.get(),
+        "the pass after the budget takes the renderer"
+    );
+    assert_eq!(
+        handler.about_to_wait(),
+        None,
+        "installed, with nothing due, the loop sleeps"
     );
 }
 

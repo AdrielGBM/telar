@@ -4,6 +4,8 @@
 //!
 //! The whole renderer lifecycle lives here too: the background build, the device kept warm across a suspend and the render thread are all answers a *particular* renderer gives.
 
+#[cfg(feature = "hardware")]
+mod background_build;
 mod builtin;
 
 use std::sync::mpsc::{Receiver, SyncSender};
@@ -105,13 +107,9 @@ pub(super) trait RendererHost<W>: 'static {
     /// Brings a renderer up for `window` and puts it on its own thread.
     fn start(&mut self, window: &W, req: &RendererRequest<'_>) -> RendererStart;
 
-    /// Collects a build left running in the background. `None` while there is none or it is still going — [`is_building`](Self::is_building) tells those apart, because the second has to keep frames coming.
+    /// Collects a build left running in the background. `None` while there is none or it is still going.
     fn poll(&mut self) -> Option<RendererStart> {
         None
-    }
-
-    fn is_building(&self) -> bool {
-        false
     }
 
     /// Whether this host's renderer shapes text from font files. See [`RendererFactory::shapes_text`].
