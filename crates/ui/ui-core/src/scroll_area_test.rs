@@ -258,7 +258,7 @@ fn a_scroll_built_on_kept_offsets_opens_where_the_last_one_left_off() {
     );
 }
 
-// The end-to-end anchored-overlay case: a trigger deep inside a real scroll area, scrolled away from where it was laid out. Covers what the unit tests cannot — that the area registers its content rather than its viewport leaf, and that the subtree test reaches the separately-computed content root.
+// The end-to-end anchored-overlay case: a trigger deep inside a real scroll area, scrolled away from where it was laid out, and a dropped area leaving no offset behind.
 #[test]
 fn a_trigger_scrolled_inside_a_scroll_area_anchors_where_it_is_drawn() {
     reset_layout_runtime();
@@ -291,13 +291,13 @@ fn a_trigger_scrolled_inside_a_scroll_area_anchors_where_it_is_drawn() {
     let laid_out = crate::context::absolute_rect(trigger_node).unwrap();
     assert!(laid_out.y > 200.0, "the trigger starts below the fold");
     assert_eq!(
-        crate::scroll_region::visible_rect(trigger_node),
+        crate::input_region::visible_rect(trigger_node),
         Some(laid_out),
         "unscrolled, drawn position and laid-out position agree"
     );
 
     scroll.core.scroll_y.set(150.0);
-    let drawn = crate::scroll_region::visible_rect(trigger_node).unwrap();
+    let drawn = crate::input_region::visible_rect(trigger_node).unwrap();
     assert_eq!(
         drawn.y,
         laid_out.y - 150.0,
@@ -307,7 +307,7 @@ fn a_trigger_scrolled_inside_a_scroll_area_anchors_where_it_is_drawn() {
     // Dropping the area withdraws its registration, so a later query is not shifted by a dead viewport.
     drop(scroll);
     assert_eq!(
-        crate::scroll_region::visible_rect(trigger_node),
+        crate::input_region::visible_rect(trigger_node),
         Some(laid_out)
     );
 }

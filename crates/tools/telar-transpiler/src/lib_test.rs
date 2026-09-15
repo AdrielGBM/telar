@@ -2129,12 +2129,59 @@ fn a_reactive_disabled_flag_is_re_read_rather_than_sampled() {
     );
 }
 
-/// The HTML spelling: an attribute with no value is the assertion itself, as `absolute` and `click_through` already are.
+/// The HTML spelling: an attribute with no value is the assertion itself, as `absolute` and `inert` already are.
 #[test]
 fn a_bare_disabled_flag_means_always() {
     let src = "[view]\nbox width:20 disabled on_press:(|| ())\n";
     let code = transpile_source(src, "demo", None, None).unwrap().rust_code;
     assert!(code.contains(".disabled(|| true)"), "{code}");
+}
+
+/// A painted row claims the pointer with a flag rather than an empty `on_press`, and each input flag upgrades a `col` the way any other box-only attribute does.
+#[test]
+fn an_rsx_container_declares_how_it_takes_input() {
+    for (attr, call) in [
+        ("input_opaque", ".input_opaque()"),
+        ("input_transparent", ".input_transparent()"),
+        ("inert", ".inert(|| true)"),
+    ] {
+        let src = format!("[view]\ncol width:20 {attr}\n");
+        let code = transpile_source(&src, "demo", None, None)
+            .unwrap()
+            .rust_code;
+        assert!(code.contains(call), "{attr}:\n{code}");
+        assert!(
+            code.contains("StyledContainer::"),
+            "{attr} upgrades the col:\n{code}"
+        );
+        assert!(!code.contains("compile_error!"), "{attr}:\n{code}");
+    }
+}
+
+/// `inert:$signal` is re-read the way `disabled:$signal` is, so a pane goes inert and comes back without being rebuilt.
+#[test]
+fn a_reactive_inert_flag_is_re_read_rather_than_sampled() {
+    let src = "[logic]\nlet locked = signal(false);\n\n[view]\ncol width:20 inert:$locked\n";
+    let code = transpile_source(src, "demo", None, None).unwrap().rust_code;
+    assert!(
+        code.contains(".inert(") && code.contains("locked.get()"),
+        "{code}"
+    );
+}
+
+/// Declarations one box cannot hold together are refused at the element instead of the last one silently winning.
+#[test]
+fn contradictory_input_declarations_are_refused() {
+    for src in [
+        "[view]\nbox width:20 input_opaque input_transparent\n",
+        "[view]\nbox width:20 input_transparent on_press:(|| ())\n",
+    ] {
+        let code = transpile_source(src, "demo", None, None).unwrap().rust_code;
+        assert!(
+            code.contains("compile_error!") && code.contains("input_transparent"),
+            "{code}"
+        );
+    }
 }
 
 /// `on_alt_press` was reachable from hand-written Rust but had no attribute key, so a `.rsx` author could not arm a right- or middle-click at all. The library was ahead of the grammar; the grammar caught up.

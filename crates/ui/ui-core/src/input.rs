@@ -12,6 +12,7 @@ use ui_tree::{Component, EventResult, RenderNode};
 use crate::caret::{Blink, align_origin};
 use crate::focus::{self, FocusId};
 use crate::impl_leaf_widget;
+use crate::input_region::InputHandle;
 use crate::layout_leaf::LayoutLeaf;
 
 /// Width of the caret, in logical px.
@@ -36,6 +37,7 @@ pub struct Input {
     blink: Blink,
     // Keeps the blink running while the field holds the keyboard, and stops it when it does not.
     _blinking: Effect,
+    _input: InputHandle,
 }
 
 impl Input {
@@ -81,6 +83,8 @@ impl Input {
         focus::register_at(id, focus::FocusKind::TextEntry, leaf.node);
         let blink = Blink::new();
         let watching = blink.clone();
+        let mut input = InputHandle::new();
+        input.answer(leaf.node, leaf.rect.read_only());
         Ok(Self {
             value,
             caret: signal(caret),
@@ -94,6 +98,7 @@ impl Input {
             mask: None,
             blink,
             _blinking: effect(move || watching.follow(focus::is_focused(id))),
+            _input: input,
         })
     }
 

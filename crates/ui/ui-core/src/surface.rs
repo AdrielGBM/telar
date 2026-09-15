@@ -14,6 +14,7 @@ use renderer_core::{Color, RectStyle};
 use ui_tree::{Component, EventResult, RenderNode};
 
 use crate::context::{compute_layout, mark_dirty, new_container, track_layout};
+use crate::input_region::{InputHandle, Placement};
 use crate::layout_item::LayoutItem;
 
 /// The default scrim wash: ~35 % black over the content behind a drawer/modal. Rendered as a fill (not an opacity layer) so the panel above it stays fully opaque. Kept as the value a caller reaches for rather than being folded into the scaffold, because [`SurfaceScaffold`] now takes the colour itself.
@@ -120,6 +121,7 @@ pub struct SurfaceScaffold {
     dismiss: Option<Rc<dyn Fn()>>,
     edge: Edge,
     transition: Option<SurfaceTransition>,
+    input: InputHandle,
 }
 
 impl SurfaceScaffold {
@@ -166,6 +168,10 @@ impl SurfaceScaffold {
         let root = new_container(style, &[panel_node])?;
         let panel_rect = track_layout(panel_node);
         let root_rect = track_layout(root);
+        let mut input = InputHandle::new();
+        if let (Some(_), Some(rect)) = (&dismiss, root_rect) {
+            input.answer(root, rect.read_only());
+        }
         Ok(Self {
             root,
             panel_rect,
@@ -175,6 +181,7 @@ impl SurfaceScaffold {
             dismiss,
             edge,
             transition: None,
+            input,
         })
     }
 
@@ -184,8 +191,22 @@ impl SurfaceScaffold {
 
     /// Drives the scaffold from a transition the *caller* owns, so it can also send the surface back out — see [`SurfaceTransition::leave`].
     pub fn animate(mut self, transition: SurfaceTransition) -> Self {
+        let (edge, moving) = (self.edge, transition.clone());
+        self.input.place(
+            self.content.layout_node(),
+            Placement::Transform(Rc::new(move || {
+                Some(enter_transform(EnterMotion::Slide(edge), moving.get()).0)
+                    .filter(|matrix| *matrix != IDENTITY)
+            })),
+        );
         self.transition = Some(transition);
         self
+    }
+
+    fn panel_matrix(&self) -> [f32; 6] {
+        self.transition.as_ref().map_or(IDENTITY, |transition| {
+            enter_transform(EnterMotion::Slide(self.edge), transition.get()).0
+        })
     }
 }
 
@@ -217,6 +238,11 @@ impl Component for SurfaceScaffold {
     }
 
     fn on_event(&mut self, event: &Event) -> EventResult {
+        let matrix = self.panel_matrix();
+        let moved = (matrix != IDENTITY)
+            .then(|| crate::pointer::transform_pointer(event, matrix))
+            .flatten();
+        let event = moved.as_ref().unwrap_or(event);
         match event {
             Event::WindowResized { width, height } => {
                 mark_dirty(self.root).ok();

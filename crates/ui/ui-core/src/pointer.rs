@@ -6,6 +6,9 @@ use geometry_core::Rect;
 use platform_core::{Event, PointerButton};
 use ui_tree::EventResult;
 
+use crate::input_region;
+use crate::layout_item::{Child, TrackedChildren};
+
 /// Which pointer buttons are held right now.
 ///
 /// The pointer's half of [`crate::modifiers`], and there for the same reason: a gesture that behaves one way per button has to ask, and the callbacks it is written against report *where* the pointer is, not *what* started it. A modeller is the case — drag to orbit, right-drag to pan — and widening `on_drag` to carry a button would make the whole catalogue pay for a question two widgets ask.
@@ -181,7 +184,7 @@ pub(crate) fn clip_pointer_event<'a>(event: &'a Event, rect: Rect) -> Option<&'a
 }
 
 pub(crate) fn dispatch_container_event(
-    children: &mut crate::layout_item::TrackedChildren,
+    children: &mut TrackedChildren,
     event: &Event,
 ) -> EventResult {
     let _dispatching = crate::disposal::dispatching();
@@ -190,18 +193,14 @@ pub(crate) fn dispatch_container_event(
         event,
         Event::PointerMoved { .. } | Event::PointerReleased { .. }
     ) {
-        // The topmost child containing the point is the one the pointer is over; the others get the same move for gestures still running, but under the occlusion mark.
+        // The others still get the move too, for gestures already running, but under the occlusion mark.
         let over = pointer_coords(event).and_then(|(x, y)| {
-            children.iter().rposition(|c| {
-                c.rect
-                    .as_ref()
-                    .is_some_and(|sig| sig.get().contains(x as f32, y as f32))
-                    && c.item.borrow().pointer_opaque()
-            })
+            children
+                .iter()
+                .rposition(|child| covers(child, x as f32, y as f32))
         });
         let mut any_handled = false;
         for (i, child) in children.iter().enumerate() {
-            // Covered means drawn over, so only a later sibling occludes an earlier one. Comparing for inequality also marked the children on top as covered — invisible while every sibling is opaque, and wrong the moment one is not: a `click_through` bar was told the pane beneath was shadowing it.
             let _covered = (over.is_some_and(|top| top > i)).then(occlude);
             if child.owning(|| child.item.borrow_mut().on_event(event)) == EventResult::Handled {
                 any_handled = true;
@@ -216,27 +215,30 @@ pub(crate) fn dispatch_container_event(
     let Some((x, y)) = pointer_coords(event).map(|(x, y)| (x as f32, y as f32)) else {
         return dispatch_to_children(children, event);
     };
-    // Back to front, the order they are painted in: where two children overlap, the one on top takes the event whether or not it wants it. Falling sideways to a covered sibling is what made a wheel over a floating panel zoom the pane underneath. Only `absolute` makes this observable.
+    // Back to front, the order they are painted in: where two children overlap, the one on top takes the event whether or not it wants it. Falling sideways to a covered sibling is what made a wheel over a floating panel zoom the pane underneath.
     for child in children.iter_mut().rev() {
-        // A child with no laid-out rect cannot be hit-tested, so it is offered the event but never blocks.
-        let rect = child.rect.as_ref().map(|sig| sig.get());
-        // A box that misses the point may still hold one that does: an absolutely laid-out child is painted where the layout put it rather than inside its parent, so a parent of no size was painted through and hit-tested around. The miss still costs the child the right to block — only a box the point is really in covers what is behind it — and every press, drag and clip refuses a pointer outside its own rect.
-        let inside = rect.is_none_or(|r| r.contains(x, y));
+        // Offered even when its box misses the point: an absolutely placed descendant is painted, and pressed, outside it.
         let result = child.owning(|| child.item.borrow_mut().on_event(event));
-        // A widget that is not there for hit-testing (an overlay, routed by its own registry) lets the search carry on to whatever it was drawn over.
-        if result == EventResult::Handled
-            || (inside && rect.is_some() && child.item.borrow().pointer_opaque())
-        {
+        if result == EventResult::Handled || covers(child, x, y) {
             return result;
         }
     }
     EventResult::Ignored
 }
 
-fn dispatch_to_children(
-    children: &mut crate::layout_item::TrackedChildren,
-    event: &Event,
-) -> EventResult {
+fn covers(child: &Child, x: f32, y: f32) -> bool {
+    child.rect.as_ref().is_some_and(|rect| {
+        input_region::covers(
+            child.node(),
+            rect.get(),
+            || child.item.borrow().occludes(),
+            x,
+            y,
+        )
+    })
+}
+
+fn dispatch_to_children(children: &mut TrackedChildren, event: &Event) -> EventResult {
     for child in children.iter_mut() {
         if child.owning(|| child.item.borrow_mut().on_event(event)) == EventResult::Handled {
             return EventResult::Handled;

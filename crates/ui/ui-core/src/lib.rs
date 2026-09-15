@@ -38,7 +38,6 @@ mod rect;
 mod reorder;
 mod scroll_area;
 mod scroll_page;
-pub mod scroll_region;
 mod slots;
 mod styled_container;
 mod surface;
@@ -70,7 +69,7 @@ pub use drag::{DragAxis, DragStart, drag_start, drag_travel};
 pub use image::Image;
 pub use inherit::{Inherited, context, declare, inherited_text_style, undeclare};
 pub use input::Input;
-pub use input_region::interactive_rects;
+pub use input_region::{interactive_rects, visible_rect};
 pub use kept::kept;
 pub use keyboard::{
     end_frame as end_keyboard_frame, key_held, key_pressed, modifiers, observe as observe_keyboard,
@@ -91,7 +90,6 @@ pub use rect::Rectangle;
 pub use reorder::{Axis, apply_move, insertion_index};
 pub use scroll_area::{LayoutScrollArea, ScrollViewport, ScrollbarStyle};
 pub use scroll_page::ScrollPage;
-pub use scroll_region::visible_rect;
 pub use slots::{Children, Slots, use_context};
 pub use styled_container::{KeyAnswer, StyledContainer, box_transform, style_follows};
 pub use surface::{DEFAULT_SCRIM, Edge, SurfaceScaffold, SurfaceTransition};

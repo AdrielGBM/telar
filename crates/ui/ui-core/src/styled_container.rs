@@ -1,5 +1,7 @@
 //! [`StyledContainer`]: the painted box every interactive widget is built on — state styles, gestures, focus and transforms.
 
+use std::rc::Rc;
+
 use geometry_core::{Rect, Transform};
 use layout_core::{LayoutError, LayoutStyle, NodeId};
 use platform_core::{
@@ -14,12 +16,15 @@ use crate::child_host::{ChildSlot, DynHost};
 use crate::context::{new_container, track_layout};
 use crate::drag::DragGesture;
 use crate::focus::{self, FocusId};
+use crate::input_region::{self, InputHandle, InputMode, Placement};
 use crate::layout_item::{LayoutItem, TrackedChildren, register_container};
-use crate::pointer::dispatch_container_event;
+use crate::pointer::{dispatch_container_event, transform_pointer};
 use crate::press::PressGesture;
 
 /// The bool is [`KeyAnswer::took`], resolved at the builder so dispatch has one shape to call.
 type KeyTable = Box<dyn Fn(&Key) -> bool>;
+
+type TransformFn = dyn Fn(Rect) -> Option<[f32; 6]>;
 
 /// What a key handler answers, which is either nothing at all or whether it took the key.
 ///
@@ -147,9 +152,11 @@ pub struct StyledContainer {
     // A closure, so `view()` and the pointer path both re-read it. `None` skips the call on pointer moves.
     disabled_source: Option<Box<dyn Fn() -> bool>>,
     // A closure, so `view()` re-reads it and a `transition:opacity` resolves per render. `None` is opaque.
-    opacity: Option<Box<dyn Fn() -> f32>>,
+    opacity: Option<Rc<dyn Fn() -> f32>>,
     // Takes the laid-out `Rect` so rotate/scale can pivot on the box centre; `None` means identity.
-    transform: Option<Box<dyn Fn(Rect) -> Option<[f32; 6]>>>,
+    transform: Option<Rc<TransformFn>>,
+    // The transform a stroke was pressed under, so a box whose transform follows its own drag is still measured in the frame the drag started in.
+    stroke_frame: Option<Option<[f32; 6]>>,
     children: TrackedChildren,
     // Set when the box holds a reactive fragment: static and dynamic children route through the host so they interleave in this node. `children` is empty in that case.
     dyn_host: Option<DynHost>,
@@ -159,8 +166,9 @@ pub struct StyledContainer {
     // A GLOBAL shortcut handler, not focused text input: key events carry no pointer position, so they are broadcast to every widget.
     on_key: Option<KeyTable>,
     focusable: Focusable,
-    // Whether the box declines to shadow what it is drawn over (`pointer-events: none`).
-    click_through: bool,
+    input: InputMode,
+    inert: Option<Rc<dyn Fn() -> bool>>,
+    registration: InputHandle,
     // Whether a stroke that starts here is this box's and goes no further out.
     holds_stroke: bool,
     // What the box is, where it is more than a box. `None` reads it from what the box does.
@@ -193,6 +201,7 @@ impl StyledContainer {
             disabled_source: None,
             opacity: None,
             transform: None,
+            stroke_frame: None,
             children,
             dyn_host,
             press: PressGesture::default(),
@@ -200,7 +209,9 @@ impl StyledContainer {
             pointer: PointerHooks::default(),
             on_key: None,
             focusable: Focusable::default(),
-            click_through: false,
+            input: InputMode::Auto,
+            inert: None,
+            registration: InputHandle::new(),
             holds_stroke: false,
             role: None,
         }
@@ -230,7 +241,7 @@ impl StyledContainer {
     fn element(&self) -> std::sync::Arc<renderer_core::Element> {
         let mut semantics =
             renderer_core::Semantics::of(crate::element::role_of(self.role, self.press.is_set()));
-        semantics.click_through = self.click_through;
+        semantics.click_through = !self.occludes();
         // Read inside `view()`, so what a reader is told and what is drawn are the same frame.
         if let Some(id) = self.focusable.id {
             semantics.focused = focus::is_focused(id);
@@ -243,6 +254,37 @@ impl StyledContainer {
     /// Whether the box is currently refusing input. `None` — the common case — answers without a dyn call on the pointer-move broadcast path, which every box in the tree pays.
     fn is_disabled(&self) -> bool {
         self.disabled_source.as_ref().is_some_and(|f| f())
+    }
+
+    /// The matrix `event` is mapped through: the transform as drawn now, except for the rest of a stroke, which stays in the frame its press landed in.
+    fn stroke_matrix(&mut self, event: &Event) -> Option<[f32; 6]> {
+        let transform = self.transform.as_ref()?;
+        let current = transform(self.rect.get());
+        match event {
+            Event::PointerPressed { .. } => {
+                self.stroke_frame = Some(current);
+                current
+            }
+            Event::PointerMoved { .. } => self.stroke_frame.unwrap_or(current),
+            Event::PointerReleased { .. } => self.stroke_frame.take().unwrap_or(current),
+            Event::FocusChanged { is_focused: false } => {
+                self.stroke_frame = None;
+                current
+            }
+            _ => current,
+        }
+    }
+
+    fn receives_input(&self) -> bool {
+        !self.inert.as_ref().is_some_and(|inert| inert())
+            && self.opacity.as_ref().is_none_or(|opacity| opacity() > 0.0)
+    }
+
+    /// Whether an `input_opaque` box keeps a press at `(x, y)` from everything beneath it, which it does unless a transparent box inside it is what the point lands on.
+    fn swallows(&self, rect: Rect, x: f64, y: f64) -> bool {
+        self.input == InputMode::Opaque
+            && rect.contains(x as f32, y as f32)
+            && !input_region::pierced(self.node, x as f32, y as f32)
     }
 
     /// The paint `state` swaps in, or `None` when the box has no style for it or is not in it.
@@ -319,12 +361,18 @@ impl StyledContainer {
         // Pressed state and focus are primary-only. Other buttons route to the press or drag gesture of a box that asked for them, and fall through untouched otherwise.
         let primary = *button == PointerButton::Primary;
         if !primary && !self.press.wants_alt() && !self.drag.arms(button) {
-            return self.dispatch_children(event);
+            let below = self.dispatch_children(event);
+            if self.swallows(rect, x, y) {
+                crate::drag::claim();
+                return EventResult::Handled;
+            }
+            return below;
         }
         // A child takes the tap; the innermost drag takes the stroke. Standing this drag down because a child took the press made a strip draggable only where nothing pressable sat in it; arming it regardless moved the band and reordered the tab on one press. So the children are asked who claimed the stroke.
         let (below, claimed) = crate::drag::claimed(|| self.dispatch_children(event));
+        let swallows = self.swallows(rect, x, y);
         // Said after the children have had the press and before this returns, so it reaches whatever contains this box.
-        if self.holds_stroke && rect.contains(x as f32, y as f32) {
+        if swallows || (self.holds_stroke && rect.contains(x as f32, y as f32)) {
             crate::drag::claim();
         }
         if below == EventResult::Handled {
@@ -347,7 +395,7 @@ impl StyledContainer {
         let tapped = self.press.is_set() && self.press.arm(event, rect) == EventResult::Handled;
         let dragged =
             !claimed && self.drag.is_set() && self.drag.press(event, rect) == EventResult::Handled;
-        if tapped || dragged || focused {
+        if tapped || dragged || focused || swallows {
             EventResult::Handled
         } else {
             EventResult::Ignored
@@ -388,17 +436,16 @@ impl StyledContainer {
     }
 
     /// Whether the box wants nothing from an event and can route it straight to its children, exactly as a plain container would.
-    ///
-    /// One question per group rather than one term per field: this predicate was a ten-term disjunction amended in ten commits, two of them fixing the omission the shape invites — a box whose only claim was a cursor, and one whose only claim was `on_key`, each silently lost its events.
-    fn is_inert(&self) -> bool {
+    fn is_passive(&self) -> bool {
         !self.press.is_set()
             && !self.drag.is_set()
             && !self.state.repaints_on_pointer()
             && !self.pointer.is_set()
             && self.on_key.is_none()
             && self.focusable.id.is_none()
-            // Holding the stroke is something a box does with a press, though it answers none.
+            // Both act on a press the box has no handler for.
             && !self.holds_stroke
+            && self.input != InputMode::Opaque
     }
 
     fn dispatch_children(&mut self, event: &Event) -> EventResult {
@@ -409,28 +456,37 @@ impl StyledContainer {
     }
 
     pub fn with_opacity(mut self, opacity: impl Fn() -> f32 + 'static) -> Self {
-        self.opacity = Some(Box::new(opacity));
+        self.opacity = Some(Rc::new(opacity));
+        self.publish_gate();
         self
     }
 
-    /// Apply an affine transform (rotate/scale/translate) to the whole box each `view()`. The closure takes the laid-out rect and returns the 2×3 matrix, or `None` for identity.
+    /// Apply an affine transform (rotate/scale/translate) to the whole box each `view()`, and hit-test the box where the transform draws it. The closure takes the laid-out rect and returns the 2×3 matrix, or `None` for identity.
     pub fn with_transform(
         mut self,
         transform: impl Fn(Rect) -> Option<[f32; 6]> + 'static,
     ) -> Self {
-        self.transform = Some(Box::new(transform));
+        let transform: Rc<TransformFn> = Rc::new(transform);
+        let (rect, placed) = (self.rect, Rc::clone(&transform));
+        self.registration.place(
+            self.node,
+            Placement::Transform(Rc::new(move || placed(rect.peek()))),
+        );
+        self.transform = Some(transform);
         self
     }
 
     /// Paint the box with `f` while the mouse hovers it (a declarative style swap, like `Button`). Hover is mouse-only; touch never sets it, so a tap leaves no stuck hover state.
     pub fn hover_style(mut self, f: impl Fn(Rect) -> RectStyle + 'static) -> Self {
         self.state.hover = Some(Box::new(f));
+        self.mark_interactive();
         self
     }
 
     /// Paint the box with `f` while a primary pointer is held down inside it — the pressed / CSS `:active` state, which takes precedence over `hover_style`. Unlike hover it tracks touch as well as mouse, and it clears on release, on leaving the box, or once the press drags off, so it never sticks.
     pub fn active_style(mut self, f: impl Fn(Rect) -> RectStyle + 'static) -> Self {
         self.state.active = Some(Box::new(f));
+        self.mark_interactive();
         self
     }
 
@@ -513,10 +569,11 @@ impl StyledContainer {
         let id = *self.focusable.id.get_or_insert_with(focus::next_id);
         focus::register_at(id, focus::FocusKind::Widget, self.node);
         self.state.focus = Some(Box::new(f));
+        self.mark_interactive();
         self
     }
 
-    /// Whether the box is currently pressed (a primary pointer is held down inside it). Set only when an `active_style` is present; drives its paint swap and clears on release/leave/drag-off.
+    /// Sets the pressed state (a primary pointer held down inside the box), which only a box with an `active_style` tracks; it drives the paint swap and clears on release, leave or drag-off.
     fn set_active(&self, active: bool) {
         if self.state.active.is_some() && self.state.is_active.get() != active {
             self.state.is_active.set(active);
@@ -559,17 +616,52 @@ impl StyledContainer {
             });
         }
         self.pointer.cursor = Some(cursor);
+        self.mark_interactive();
         self
     }
 
-    /// Declares that this box does not stand between the pointer and whatever it is drawn over — CSS's `pointer-events: none`, and the second consumer of the hook [`Overlay`](crate::Overlay) opened.
-    ///
-    /// A box covers what is behind it: since the hit-test walks in paint order, the topmost child under the pointer takes the event whether or not it wants it. That is right for a panel and wrong for a *label* — a readout floating over a canvas, a badge over a photo, a drag ghost — which is drawn on top precisely so it can be read, and whose whole contract is that the thing underneath still works. A modeller's transform readout sits across the top of the viewport it reports on; without this, moving the pointer under it stops the operation it is describing.
-    ///
-    /// It is a property of *this* box only. Children still hit-test normally, so a click-through bar can hold a real button — the same split CSS makes with `pointer-events: auto` on a child.
-    pub fn click_through(mut self, through: bool) -> Self {
-        self.click_through = through;
+    /// Claims the pointer over this box without answering it: its rect joins the input region, and a press on it reaches nothing beneath, neither a sibling under it nor an ancestor's press or drag. The wheel still reaches ancestors, so a scroll area of opaque cards scrolls.
+    pub fn input_opaque(self) -> Self {
+        self.input_mode(InputMode::Opaque)
+    }
+
+    /// Lets the pointer through this box to whatever is drawn beneath it, and cuts the box out of the input region an `input_opaque` ancestor claims. A descendant that answers the pointer, or is `input_opaque` itself, still claims its own rect.
+    pub fn input_transparent(self) -> Self {
+        self.input_mode(InputMode::Transparent)
+    }
+
+    /// Takes this box and everything inside it out of input while `f` reads true: no pointer or key events, no focus, no occlusion, and nothing in the input region. Read on every event and every region query, so a pane goes inert and comes back without being rebuilt.
+    pub fn inert(mut self, f: impl Fn() -> bool + 'static) -> Self {
+        self.inert = Some(Rc::new(f));
+        self.publish_gate();
         self
+    }
+
+    fn input_mode(mut self, mode: InputMode) -> Self {
+        debug_assert!(
+            mode != InputMode::Transparent || !self.answers_pointer(),
+            "an input_transparent box cannot answer the pointer: its handlers claim its rect"
+        );
+        self.input = mode;
+        self.registration
+            .declare(self.node, self.rect.read_only(), mode);
+        self
+    }
+
+    fn publish_gate(&mut self) {
+        let shown = self
+            .opacity
+            .clone()
+            .map(|opacity| -> Rc<dyn Fn() -> bool> { Rc::new(move || opacity() > 0.0) });
+        self.registration.gate(self.node, self.inert.clone(), shown);
+    }
+
+    fn answers_pointer(&self) -> bool {
+        self.press.is_set()
+            || self.drag.is_set()
+            || self.state.repaints_on_pointer()
+            || self.pointer.is_set()
+            || self.focusable.id.is_some()
     }
 
     /// A stroke that starts on this box is this box's, and goes no further out.
@@ -708,9 +800,13 @@ impl StyledContainer {
         self
     }
 
-    /// Records this box as a pointer target in the per-surface interactive registry, so a surface that carves its input region from its content (a click-through overlay) receives input over it. See [`crate::interactive_rects`].
-    fn mark_interactive(&self) {
-        crate::input_region::register_interactive(self.node, self.rect.read_only());
+    fn mark_interactive(&mut self) {
+        debug_assert_ne!(
+            self.input,
+            InputMode::Transparent,
+            "an input_transparent box cannot answer the pointer: its handlers claim its rect"
+        );
+        self.registration.answer(self.node, self.rect.read_only());
     }
 
     /// Fire `f(true)` when the mouse enters the box and `f(false)` when it leaves (mouse only). Independent of `hover_style`: a box can observe hover without swapping its paint.
@@ -793,6 +889,7 @@ impl StyledContainer {
                 f(now);
             }
         }));
+        self.mark_interactive();
         self
     }
 }
@@ -802,8 +899,8 @@ impl LayoutItem for StyledContainer {
         self.node
     }
 
-    fn pointer_opaque(&self) -> bool {
-        !self.click_through
+    fn occludes(&self) -> bool {
+        self.input != InputMode::Transparent && self.receives_input()
     }
 }
 
@@ -865,6 +962,15 @@ impl Component for StyledContainer {
     }
 
     fn on_event(&mut self, event: &Event) -> EventResult {
+        let transformed = self
+            .stroke_matrix(event)
+            .and_then(|matrix| transform_pointer(event, matrix));
+        let event = transformed.as_ref().unwrap_or(event);
+        if !self.receives_input() {
+            self.end_containment();
+            self.drag.end(None);
+            return input_region::withhold(event, |event| self.dispatch_children(event));
+        }
         // Ahead of the pure-routing bail below, which a wrapper with no handlers would otherwise take. The state it was showing goes with it, or a box disabled mid-hover keeps a highlight it can no longer honour.
         if self.is_disabled() {
             return match event {
@@ -879,7 +985,7 @@ impl Component for StyledContainer {
                 _ => self.dispatch_children(event),
             };
         }
-        if self.is_inert() {
+        if self.is_passive() {
             return self.dispatch_children(event);
         }
         let rect = self.rect.get();
@@ -967,7 +1073,6 @@ impl Drop for StyledContainer {
         if let Some(scope) = self.focusable.scope {
             focus::unregister_scope(scope);
         }
-        crate::input_region::unregister_interactive(self.node);
     }
 }
 

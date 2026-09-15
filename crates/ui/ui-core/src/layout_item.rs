@@ -11,6 +11,7 @@ use ui_tree::{Component, EventResult, RenderNode, Segment};
 
 use crate::context::{new_container, track_layout};
 use crate::disposal::retire;
+use crate::input_region::{InputHandle, Placement};
 use crate::layout_leaf::LayoutLeaf;
 
 /// A container child. The boxed widget is shared (`Rc<RefCell<…>>`) between event dispatch (which borrows it mutably) and its render `segment` (which borrows it immutably to flatten its `view()`) — they never overlap because dispatch is batched. `rect` is the child's layout signal for hit-testing. `Clone` is a cheap handle copy (all fields are `Rc`/signal): a reactive list clones a `Child` to move a reused item to its new position without rebuilding it.
@@ -94,21 +95,19 @@ pub(crate) trait LeafWidget {
 pub trait LayoutItem: Component {
     fn layout_node(&self) -> NodeId;
 
-    /// Whether this widget stands in front of whatever its siblings drew underneath it, for a pointer event its parent is hit-testing.
-    ///
-    /// True for anything that occupies its box, which is everything that draws: the topmost child under the pointer takes the event whether or not it wants it, exactly as a browser hit-tests — otherwise a floating panel lets the wheel through to the pane it covers. The one thing that is not there for this purpose is an [`Overlay`](crate::Overlay): the registry routes positioned events to it *before* the tree walk, so its in-tree node must not shadow the siblings it was portaled away from.
-    fn pointer_opaque(&self) -> bool {
+    fn occludes(&self) -> bool {
         true
     }
 }
 
 /// Wraps a child so its rendered output is clipped to the child's own layout rect. When the child collapses to a zero rect (e.g. a section hidden via `display:none`), the clip is empty, so nothing inside draws — even a widget left with a stale rect or one that paints at fixed coordinates. Layout is unchanged: `layout_node` passes through to the wrapped child.
 ///
-/// The pointer stops at the same edge. A press or a move landing outside the clip never reaches the subtree, so a widget cut off by the clip cannot take the click that visually belongs to whatever is drawn over it — clipped away is *gone*, not merely invisible. Everything else passes through: a release or a `CursorLeft` is how a widget that was pressed or hovered inside the clip settles again, and swallowing those would leave it stuck in a state the pointer has already left.
+/// The pointer stops at the same edge. A press, a move or the wheel landing outside the clip never reaches the subtree, so a widget cut off by the clip cannot take the click that visually belongs to whatever is drawn over it — clipped away is *gone*, not merely invisible. Everything else passes through: a release or a `CursorLeft` is how a widget that was pressed or hovered inside the clip settles again, and swallowing those would leave it stuck in a state the pointer has already left.
 pub struct ClippedItem {
     inner: Box<dyn LayoutItem>,
     rect: RwSignal<Rect>,
     clip: Clip,
+    _input: InputHandle,
 }
 
 /// The shape a [`ClippedItem`] cuts to: which edges do the cutting, how round the corners are, and how far in from the edge the cut sits.
@@ -195,14 +194,26 @@ impl ClippedItem {
     ///
     /// A one-way clip is what a strip of items wants when it has to stop at its ends but not across its thickness: a tab bar or a toolbar cut where the room runs out, whose items still carry a focus ring, a badge or a shadow past the strip's own edge. CSS cannot express this — one axis set to `hidden` forces the other out of `visible` — so a row that only wanted its ends cut has to clip the overflow it meant to keep.
     pub fn new(inner: Box<dyn LayoutItem>, clip: Clip) -> Self {
-        let rect = track_layout(inner.layout_node()).expect("clipped item's node not registered");
-        Self { inner, rect, clip }
+        let node = inner.layout_node();
+        let rect = track_layout(node).expect("clipped item's node not registered");
+        let mut input = InputHandle::new();
+        if clip.pointer == ClipPointer::Stop {
+            input.place(
+                node,
+                Placement::Clip(Rc::new(move || Self::cut(rect.peek(), clip))),
+            );
+        }
+        Self {
+            inner,
+            rect,
+            clip,
+            _input: input,
+        }
     }
 
-    fn cut(&self) -> Rect {
-        let rect = self.rect.get();
-        let inset = self.clip.inset;
-        match self.clip.axis {
+    fn cut(rect: Rect, clip: Clip) -> Rect {
+        let inset = clip.inset;
+        match clip.axis {
             ClipAxis::Both => Rect::new(
                 rect.x + inset,
                 rect.y + inset,
@@ -230,23 +241,30 @@ impl LayoutItem for ClippedItem {
         self.inner.layout_node()
     }
 
-    fn pointer_opaque(&self) -> bool {
-        self.inner.pointer_opaque()
+    fn occludes(&self) -> bool {
+        self.inner.occludes()
     }
 }
 
 impl Component for ClippedItem {
     fn view(&self) -> RenderNode {
-        RenderNode::clip(self.cut(), self.clip.radius, [self.inner.view()])
+        RenderNode::clip(
+            Self::cut(self.rect.get(), self.clip),
+            self.clip.radius,
+            [self.inner.view()],
+        )
     }
 
     fn on_event(&mut self, event: &Event) -> EventResult {
         if self.clip.pointer == ClipPointer::Through {
             return self.inner.on_event(event);
         }
-        let outside = |x: f64, y: f64| !self.cut().contains(x as f32, y as f32);
+        let outside =
+            |x: f64, y: f64| !Self::cut(self.rect.get(), self.clip).contains(x as f32, y as f32);
         match event {
-            Event::PointerPressed { x, y, .. } | Event::PointerMoved { x, y, .. }
+            Event::PointerPressed { x, y, .. }
+            | Event::PointerMoved { x, y, .. }
+            | Event::Scrolled { x, y, .. }
                 if outside(*x, *y) =>
             {
                 EventResult::Ignored
@@ -292,8 +310,8 @@ impl LayoutItem for Box<dyn LayoutItem> {
         (**self).layout_node()
     }
 
-    fn pointer_opaque(&self) -> bool {
-        (**self).pointer_opaque()
+    fn occludes(&self) -> bool {
+        (**self).occludes()
     }
 }
 

@@ -166,9 +166,8 @@ fn a_covered_pane_is_not_hovered_by_a_move_over_the_panel() {
     assert_eq!(at.get(), None, "the panel is in front of it there");
 }
 
-/// A readout drawn over a pane is there to be *read*, not to be pointed at: `click_through` is the box saying so. Both halves of the rule have to let go of it — the wheel must reach the pane under it, and a move over it must still count as a move over the pane, or the operation the readout is describing stops the moment the pointer passes beneath it.
 #[test]
-fn a_click_through_label_does_not_stand_between_the_pointer_and_the_pane() {
+fn a_transparent_readout_does_not_stand_between_the_pointer_and_the_pane() {
     use platform_core::PointerSource;
     reset_layout_runtime();
     let wheels = Rc::new(Cell::new(0u32));
@@ -193,7 +192,7 @@ fn a_click_through_label_does_not_stand_between_the_pointer_and_the_pane() {
         vec![],
     )
     .unwrap()
-    .click_through(true);
+    .input_transparent();
     let mut root = Container::new(
         LayoutStyle::new().flex_row().width(400.0).height(400.0),
         vec![Box::new(pane), Box::new(readout)],
@@ -224,9 +223,8 @@ fn a_click_through_label_does_not_stand_between_the_pointer_and_the_pane() {
     );
 }
 
-/// The other half of `click_through`, and the half that made it useless on its own: a control *inside* a click-through bar still hovers. The bar declining to shadow the pane is not the pane shadowing the bar — the bar is the one drawn on top. A floating toolbar over a canvas is exactly this shape, and without it none of its buttons could be pointed at.
 #[test]
-fn a_control_inside_a_click_through_bar_is_still_hovered() {
+fn a_control_inside_a_transparent_bar_is_still_hovered() {
     use platform_core::PointerSource;
     reset_layout_runtime();
     let pane_at: Rc<Cell<Option<(f32, f32)>>> = Rc::new(Cell::new(None));
@@ -256,7 +254,7 @@ fn a_control_inside_a_click_through_bar_is_still_hovered() {
         vec![Box::new(button)],
     )
     .unwrap()
-    .click_through(true);
+    .input_transparent();
     let mut root = Container::new(
         LayoutStyle::new().flex_row().width(400.0).height(400.0),
         vec![Box::new(pane), Box::new(bar)],

@@ -13,11 +13,11 @@ use ui_tree::{Component, EventResult, RenderNode, Segment};
 
 use crate::context::track_layout;
 use crate::impl_leaf_widget;
+use crate::input_region::{InputHandle, Placement};
 use crate::kept::kept;
 use crate::layout_item::{LayoutItem, mount_item_segment};
 use crate::layout_leaf::LayoutLeaf;
 use crate::pointer::{clip_pointer_event, offset_pointer};
-use crate::scroll_region::{ScrollRegionId, register_scroll_region, unregister_scroll_region};
 
 /// How a scroll area's bars are painted, and how wide they are.
 pub struct ScrollbarStyle {
@@ -169,6 +169,18 @@ fn glide_axis(
     *slot = crate::fling::Glide::start(offset, offset.peek() + delta, bounds);
 }
 
+/// The offset a scrolled subtree is actually displaced by: the signal's value put on the surface's grid. A surface that quantises would otherwise draw the content at one offset and click it at another.
+fn snapped_offset(x: f32, y: f32) -> (f32, f32) {
+    let grid = geometry_core::layout_grid();
+    (grid.snap_pos_x(x), grid.snap_pos_y(y))
+}
+
+/// Where the content's origin is drawn inside `viewport` at a scroll of `(x, y)`, read by the drawing, the pointer mapping and the input region alike.
+fn content_origin(viewport: Rect, scroll_x: f32, scroll_y: f32) -> (f32, f32) {
+    let (sx, sy) = snapped_offset(scroll_x, scroll_y);
+    (viewport.x - sx, viewport.y - sy)
+}
+
 fn handle_scroll_event(
     event: &Event,
     viewport: Rect,
@@ -188,13 +200,8 @@ fn handle_scroll_event(
             return EventResult::Ignored;
         }
         // Offered to the content first, in content space, so an inner scroll area under the pointer consumes it first.
-        let (inner_x, inner_y) =
-            crate::scroll_region::snapped_offset(scroll_x.get(), scroll_y.get());
-        let inner = offset_pointer(
-            event,
-            viewport.x as f64 - inner_x as f64,
-            viewport.y as f64 - inner_y as f64,
-        );
+        let (origin_x, origin_y) = content_origin(viewport, scroll_x.get(), scroll_y.get());
+        let inner = offset_pointer(event, origin_x as f64, origin_y as f64);
         if content
             .borrow_mut()
             .on_event(inner.as_ref().unwrap_or(event))
@@ -223,15 +230,8 @@ fn handle_scroll_event(
         return EventResult::Ignored;
     };
 
-    let (snapped_x, snapped_y) =
-        crate::scroll_region::snapped_offset(scroll_x.get(), scroll_y.get());
-    let scroll_offset_x = snapped_x as f64;
-    let scroll_offset_y = snapped_y as f64;
-    let adjusted = offset_pointer(
-        event,
-        viewport.x as f64 - scroll_offset_x,
-        viewport.y as f64 - scroll_offset_y,
-    );
+    let (origin_x, origin_y) = content_origin(viewport, scroll_x.get(), scroll_y.get());
+    let adjusted = offset_pointer(event, origin_x as f64, origin_y as f64);
     let effective = adjusted.as_ref().unwrap_or(event);
     content.borrow_mut().on_event(effective)
 }
@@ -459,8 +459,7 @@ impl ScrollCore {
         let (dx, dy) = if owns_scroll {
             (0.0, 0.0)
         } else {
-            let (sx, sy) = crate::scroll_region::snapped_offset(scroll_x, scroll_y);
-            (viewport.x - sx, viewport.y - sy)
+            content_origin(viewport, scroll_x, scroll_y)
         };
         let scrollable = RenderNode::clip(
             viewport,
@@ -646,8 +645,8 @@ impl ScrollViewport {
 pub struct LayoutScrollArea {
     leaf: LayoutLeaf,
     core: ScrollCore,
-    // Publishes the offset so anything positioning against a node inside it can ask where that node is drawn rather than where it was laid out.
-    scroll_region: ScrollRegionId,
+    // Claims the viewport, and says where the content is drawn and what it belongs to, since the content is laid out as a root of its own.
+    _input: InputHandle,
     // The content is not a taffy child of the viewport leaf, so nothing else would lay it out; this re-lays the detached subtree whenever the viewport is resized.
     _layout_effect: Effect,
     // Keeps the offset inside the range the content and viewport currently allow.
@@ -746,13 +745,24 @@ impl LayoutScrollArea {
             })
         };
 
-        // On the content node, not the viewport leaf: the content is laid out as its own root, so the leaf is never its ancestor and a subtree test would miss.
-        let scroll_region = register_scroll_region(content_node, scroll_x, scroll_y);
+        let mut input = InputHandle::new();
+        input.answer(leaf.node, leaf.rect.read_only());
+        input.link(content_node, leaf.node, false);
+        input.place(
+            content_node,
+            Placement::Offset(Rc::new(move || {
+                content_origin(viewport.peek(), scroll_x.peek(), scroll_y.peek())
+            })),
+        );
+        input.place(
+            content_node,
+            Placement::Clip(Rc::new(move || viewport.peek())),
+        );
 
         Ok(Self {
             leaf,
             core: ScrollCore::with_offsets(content_rect_signal, content, scroll_x, scroll_y),
-            scroll_region,
+            _input: input,
             _layout_effect: layout_effect,
             _clamp_effect: clamp_effect,
         })
@@ -769,12 +779,6 @@ impl LayoutScrollArea {
 
     pub fn viewport_rect(&self) -> Rect {
         self.leaf.rect.get()
-    }
-}
-
-impl Drop for LayoutScrollArea {
-    fn drop(&mut self) {
-        unregister_scroll_region(self.scroll_region);
     }
 }
 

@@ -14,6 +14,7 @@ use crate::caret::Blink;
 use crate::context::{mark_dirty, new_measured_leaf};
 use crate::focus::{self, FocusId};
 use crate::impl_leaf_widget;
+use crate::input_region::InputHandle;
 use crate::layout_leaf::LayoutLeaf;
 
 /// Width of the caret, in logical px.
@@ -39,6 +40,7 @@ pub struct TextArea {
     blink: Blink,
     // Keeps the blink running while the area holds the keyboard, and stops it when it does not.
     _blinking: Effect,
+    _input: InputHandle,
 }
 
 impl TextArea {
@@ -85,6 +87,8 @@ impl TextArea {
         };
         let blink = Blink::new();
         let watching = blink.clone();
+        let mut input = InputHandle::new();
+        input.answer(node, rect.read_only());
         Ok(Self {
             value,
             caret: signal(caret),
@@ -96,6 +100,7 @@ impl TextArea {
             _remeasure: remeasure,
             blink,
             _blinking: effect(move || watching.follow(focus::is_focused(id))),
+            _input: input,
         })
     }
 

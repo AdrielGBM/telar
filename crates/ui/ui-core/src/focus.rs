@@ -6,7 +6,7 @@ use std::rc::Rc;
 
 use layout_core::NodeId;
 use platform_core::{Key, ModifiersState, NamedKey, NumericValue};
-use reactive_core::{RwSignal, signal};
+use reactive_core::{Effect, RwSignal, effect, signal};
 use rustc_hash::FxHashSet;
 
 /// An opaque focus identity, one per focusable widget. Allocate with [`next_id`].
@@ -105,6 +105,9 @@ struct FocusState {
     scopes: Vec<Scope>,
     // A set rather than a field on each entry, because it is the minority and the only kind anyone asks about.
     text_entries: FxHashSet<FocusId>,
+    // Bumped when a gate or an ownership link is registered, so the guard re-reads an ancestry it could not have subscribed to yet.
+    reach: RwSignal<u64>,
+    guard: Option<Effect>,
 }
 
 impl FocusState {
@@ -117,6 +120,8 @@ impl FocusState {
             order: Vec::new(),
             scopes: Vec::new(),
             text_entries: FxHashSet::default(),
+            reach: signal(0),
+            guard: None,
         }
     }
 }
@@ -154,24 +159,32 @@ pub fn is_focused(id: FocusId) -> bool {
 
 // The three commands below `peek` the signal they write: an effect may well issue one ("focus the selected row's field"), and a reactive read would subscribe it to the focus it sets, taking focus straight back on the next change anywhere. Same rule as `ScrollViewport::reveal`.
 
-/// Gives focus to `id` (a no-op if it already holds it).
+/// Gives focus to `id`: a no-op if it already holds it, or if it sits in a subtree that takes no input.
 pub fn request(id: FocusId) {
-    set_pointer_focus(false);
-    let focused = focused_signal();
-    if focused.peek() != Some(id) {
-        focused.set(Some(id));
-    }
+    take(id, false);
 }
 
 /// [`request`] for focus a *tap* is giving, which is the one case that should not draw a focus ring.
 ///
 /// The distinction CSS spent years arriving at as `:focus-visible`. A ring on every click is noise — the user already knows where they clicked — and the ring drawn anyway is why so many stylesheets used to turn outlines off altogether, taking the keyboard's only cue with them. Focus taken any other way (Tab, or an application focusing something itself) shows it.
 pub fn request_from_pointer(id: FocusId) {
-    set_pointer_focus(true);
+    take(id, true);
+}
+
+fn take(id: FocusId, from_pointer: bool) {
+    if node_of(id).is_some_and(|node| !crate::input_region::receives_input(node)) {
+        return;
+    }
+    guard_focus();
+    set_pointer_focus(from_pointer);
     let focused = focused_signal();
     if focused.peek() != Some(id) {
         focused.set(Some(id));
     }
+}
+
+fn node_of(id: FocusId) -> Option<NodeId> {
+    with_focus_ref(|s| s.order.iter().find(|e| e.id == id).and_then(|e| e.node))
 }
 
 /// Whether `id` holds focus *and* should show it. Reactive, like [`current`].
@@ -198,6 +211,38 @@ pub fn release(id: FocusId) {
     }
 }
 
+fn guard_focus() {
+    if with_focus_ref(|s| s.guard.is_some()) {
+        return;
+    }
+    let guard = reactive_core::detached(|| {
+        effect(|| {
+            with_focus_ref(|s| s.reach).get();
+            let Some(id) = focused_signal().get() else {
+                return;
+            };
+            let Some(node) = node_of(id) else {
+                return;
+            };
+            if let Some(rect) = layout_reactive::track_layout(node) {
+                rect.get();
+            }
+            if !crate::input_region::receives_input(node) {
+                release(id);
+            }
+        })
+    });
+    with_focus(|s| s.guard = Some(guard));
+}
+
+pub(crate) fn reach_changed() {
+    if focused_signal().peek().is_none() {
+        return;
+    }
+    let reach = with_focus_ref(|s| s.reach);
+    reach.set(reach.peek().wrapping_add(1));
+}
+
 /// Takes the keyboard away when a press lands on nothing that wants it.
 ///
 /// **The rule every platform has, and the one a toolkit cannot leave to its applications.** Focus was only ever *taken* here — by a tap on a focusable, by Tab — so a field kept the caret until something else asked for it, and clicking away from a form left it sitting there looking editable, eating the keys, and telling an application asking [`text_entry_focused`] that somebody was still typing.
@@ -211,7 +256,7 @@ pub fn blur_from_pointer(x: f32, y: f32) {
     let nodes: Vec<NodeId> =
         with_focus_ref(|s| s.order.iter().filter_map(|entry| entry.node).collect());
     let on_a_focusable = nodes.into_iter().any(|node| {
-        crate::scroll_region::visible_rect(node).is_some_and(|rect| rect.contains(x, y))
+        crate::input_region::pointable_rect(node).is_some_and(|rect| rect.contains(x, y))
     });
     if !on_a_focusable {
         clear();
@@ -381,18 +426,18 @@ type ScopeView = (NodeId, Rc<dyn Fn() -> bool>, bool);
 /// Whether Tab should be able to land on a focusable at `node`, given the scopes registered right now.
 ///
 /// Three ways to be out of reach, and they are genuinely different mechanisms rather than one seen from three angles — which is why a rule aimed at any single one of them leaves the others open:
-/// - out of layout flow, by its own `display:none` or an ancestor's, which leaves the rect it last had;
+/// - taking no input, by being out of layout flow, fully transparent or inert, itself or through an ancestor;
 /// - inside a region kept mounted while not showing, which leaves the rect *and* the layout intact;
 /// - outside the modal that is currently up, which is about nothing on the node itself.
 fn reachable(node: Option<NodeId>, scopes: &[ScopeView]) -> bool {
     // A focus id standing for no widget has no way to be off screen.
     let Some(node) = node else { return true };
-    if layout_reactive::is_hidden(node) {
+    if !crate::input_region::receives_input(node) {
         return false;
     }
     if scopes
         .iter()
-        .any(|(scope, showing, _)| !showing() && layout_reactive::is_descendant_of(node, *scope))
+        .any(|(scope, showing, _)| !showing() && crate::input_region::is_inside(node, *scope))
     {
         return false;
     }
@@ -402,7 +447,7 @@ fn reachable(node: Option<NodeId>, scopes: &[ScopeView]) -> bool {
         .rev()
         .find(|(_, showing, traps)| *traps && showing())
     {
-        Some((scope, _, _)) => layout_reactive::is_descendant_of(node, *scope),
+        Some((scope, _, _)) => crate::input_region::is_inside(node, *scope),
         None => true,
     }
 }
@@ -502,7 +547,7 @@ pub fn exposed() -> Vec<Exposed> {
                 enabled: !scopes.iter().any(|(scope, showing, _, reason)| {
                     *reason == ScopeReason::Disabled
                         && !showing()
-                        && layout_reactive::is_descendant_of(node, *scope)
+                        && crate::input_region::is_inside(node, *scope)
                 }),
                 toggled: toggled.as_ref().map(|read| read()),
                 value: value.as_ref().map(|read| read()),
@@ -517,7 +562,7 @@ pub fn exposed() -> Vec<Exposed> {
 pub fn focus_first_in(node: NodeId) -> bool {
     let (order, scopes) = snapshot();
     let found = order.into_iter().find(|(_, widget)| {
-        widget.is_some_and(|widget| layout_reactive::is_descendant_of(widget, node))
+        widget.is_some_and(|widget| crate::input_region::is_inside(widget, node))
             && reachable(*widget, &scopes)
     });
     match found {

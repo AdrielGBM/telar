@@ -12,9 +12,9 @@ use ui_tree::{
 };
 
 use crate::context::{attach_overlay, detach_overlay, remove_node};
+use crate::input_region::{InputHandle, receives_input, visible_rect, withhold};
 use crate::layout_item::{LayoutItem, TrackedChildren, register_container};
 use crate::pointer::{dispatch_container_event, offset_pointer};
-use crate::scroll_region::visible_rect;
 
 /// Where an anchored overlay's content sits relative to its trigger widget. Maps to the `.rsx` `placement` attribute. Only vertical placements are provided today; horizontal ones would follow the same pattern.
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -144,14 +144,12 @@ struct OverlaySinkImpl {
     blocking: bool,
     // When set, the barrier and dispatch coordinates track the trigger instead of the fill container.
     anchor: Option<Anchor>,
-    // A kept-mounted overlay reading false is inert: an empty barrier that blocks nothing.
-    visible: Rc<dyn Fn() -> bool>,
+    content: NodeId,
 }
 
 impl OverlaySink for OverlaySinkImpl {
     fn content_rect(&self) -> Rect {
-        // Kept mounted for a modal that toggles visibility: an empty barrier, so nothing routes to it and nothing behind it is blocked.
-        if !(self.visible)() {
+        if !receives_input(self.content) {
             return Rect::default();
         }
         // `peek`, not `get`: routing runs during batched event dispatch, not inside a tracking effect.
@@ -162,6 +160,11 @@ impl OverlaySink for OverlaySinkImpl {
     }
 
     fn dispatch(&self, event: &Event) -> EventResult {
+        if !receives_input(self.content) {
+            return withhold(event, |event| {
+                dispatch_container_event(&mut self.children.borrow_mut(), event)
+            });
+        }
         // Anchored content is laid out at its intrinsic origin but hit at the anchored spot, so map the world event back into the children's local space first.
         let offset = self
             .anchor
@@ -206,6 +209,7 @@ pub struct Overlay {
     anchor: Option<Anchor>,
     // Kept mounted while false, so a modal's slotted body survives a close and reopen instead of being rebuilt from a consumed slot.
     visible: Rc<dyn Fn() -> bool>,
+    _input: InputHandle,
 }
 
 impl Overlay {
@@ -259,7 +263,7 @@ impl Overlay {
             children: RefCell::new(children.clone()),
             blocking,
             anchor: anchor.clone(),
-            visible: visible.clone(),
+            content,
         });
         let overlay_id = register_overlay(sink);
         // Named by node rather than by the ids inside it: the children were built before this overlay existed, so ancestry has to answer at the moment Tab is pressed.
@@ -271,11 +275,26 @@ impl Overlay {
             },
             blocking,
         );
+        let mut input = InputHandle::new();
+        input.gate(content, None, Some(visible.clone()));
+        if blocking {
+            input.answer(content, content_rect.read_only());
+        }
+        if let Some(anchor) = &anchor {
+            let (children, anchor) = (children.clone(), anchor.clone());
+            input.place(
+                content,
+                crate::input_region::Placement::Offset(Rc::new(move || {
+                    anchored_placement(&children, &anchor, |s| s.peek()).1
+                })),
+            );
+        }
 
         if attach_overlay(content) {
             // The DOM parent gets a 0×0 placeholder so the portal takes no space in the flow.
             let (placeholder, _r) =
                 crate::context::new_leaf(LayoutStyle::new().width(0.0).height(0.0))?;
+            input.link(content, placeholder, true);
             Ok(Overlay {
                 layout_node: placeholder,
                 portaled_content: Some(content),
@@ -284,6 +303,7 @@ impl Overlay {
                 focus_scope,
                 anchor,
                 visible,
+                _input: input,
             })
         } else {
             // No host yet, so the content covers its parent rather than the viewport.
@@ -295,6 +315,7 @@ impl Overlay {
                 focus_scope,
                 anchor,
                 visible,
+                _input: input,
             })
         }
     }
@@ -312,8 +333,8 @@ impl LayoutItem for Overlay {
         self.layout_node
     }
 
-    /// An overlay is reached through the registry, before the tree walk, so its in-tree node must not hit-test at all. Normally it is a 0×0 placeholder and the question never comes up; on the first frame, before a host exists, the content is laid out in place and would otherwise cover its own siblings.
-    fn pointer_opaque(&self) -> bool {
+    /// Reached through the overlay registry ahead of the tree walk, so its in-tree node never covers its siblings, which matters on the first frame, when no host exists and the content is laid out in place.
+    fn occludes(&self) -> bool {
         false
     }
 }
@@ -355,9 +376,10 @@ impl Component for Overlay {
         ) {
             return EventResult::Ignored;
         }
-        // The one path that stayed open while hidden, so a shut dialog's field still received every key press. The settling events keep passing, or content hidden mid-gesture holds a hover nothing can clear.
-        if !(self.visible)() && !matches!(event, Event::CursorLeft | Event::FocusChanged { .. }) {
-            return EventResult::Ignored;
+        if !receives_input(self.content_node()) {
+            return withhold(event, |event| {
+                dispatch_container_event(&mut self.children, event)
+            });
         }
         dispatch_container_event(&mut self.children, event)
     }

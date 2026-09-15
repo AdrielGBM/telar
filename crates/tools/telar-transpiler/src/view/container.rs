@@ -14,6 +14,42 @@ use super::signals::{
 };
 use super::{ChildEmit, ChildMode, ViewGen, expr_marker, forces_child_vec};
 
+const POINTER_HANDLERS: &[&str] = &[
+    "on_press",
+    "on_alt_press",
+    "on_long_press",
+    "on_hover",
+    "on_pointer_move",
+    "on_drag",
+    "on_drag_end",
+    "on_scroll",
+    "on_focus",
+    "hover_style",
+    "active_style",
+    "focus_style",
+    "cursor",
+];
+
+/// The input declarations one box cannot hold together, as compile errors: two answers to whether it takes the pointer, or a transparent box that also answers the pointer and so claims its rect.
+fn input_contradictions(el: &Element) -> Vec<String> {
+    let has = |key: &str| el.attributes.iter().any(|a| a.key == key);
+    let mut errors = Vec::new();
+    if has("input_opaque") && has("input_transparent") {
+        errors.push(
+            "`input_opaque` and `input_transparent` contradict each other: a box either claims the pointer or lets it through"
+                .to_string(),
+        );
+    }
+    if has("input_transparent")
+        && let Some(handler) = POINTER_HANDLERS.iter().find(|key| has(key))
+    {
+        errors.push(format!(
+            "`input_transparent` cannot be combined with `{handler}`: a box that answers the pointer claims its rect"
+        ));
+    }
+    errors
+}
+
 impl ViewGen<'_> {
     pub(super) fn emit_container(&mut self, el: &Element) -> ChildEmit {
         self.emit_styled_container(el, false)
@@ -95,12 +131,12 @@ impl ViewGen<'_> {
             .and_then(|a| crate::registry::role_variant(a.value.text().trim()))
             .map(|variant| format!(".role(::telar::Role::{variant})"))
             .unwrap_or_default();
-        let click_through = el
-            .attributes
-            .iter()
-            .find(|a| a.key == "click_through")
-            .map(|_| ".click_through(true)".to_string())
-            .unwrap_or_default();
+        let input = ["input_opaque", "input_transparent"]
+            .into_iter()
+            .filter(|key| el.attributes.iter().any(|a| a.key == *key))
+            .map(|key| format!(".{key}()"))
+            .collect::<String>();
+        let inert = self.predicate_call(el, "inert");
         let holds_stroke = el
             .attributes
             .iter()
@@ -119,7 +155,7 @@ impl ViewGen<'_> {
         let hover_call = self.state_style_call(el, "hover_style", "hover_style", &attrs);
         let active_call = self.state_style_call(el, "active_style", "active_style", &attrs);
         let disabled_call = self.state_style_call(el, "disabled_style", "disabled_style", &attrs);
-        let disabled = self.disabled_call(el);
+        let disabled = self.predicate_call(el, "disabled");
         let focus_ring = self.state_style_call(el, "focus_style", "focus_style", &[]);
         let on_hover = self.closure_attr_call(el, "on_hover", "on_hover");
         let on_pointer_move = self.closure_attr_call(el, "on_pointer_move", "on_pointer_move");
@@ -130,7 +166,8 @@ impl ViewGen<'_> {
         let on_focus = self.closure_attr_call(el, "on_focus", "on_focus");
         let on_long_press = self.closure_attr_call(el, "on_long_press", "on_long_press");
         let on_alt_press = self.closure_attr_call(el, "on_alt_press", "on_alt_press");
-        let (specs, errors) = self.parse_transitions(el);
+        let (specs, mut errors) = self.parse_transitions(el);
+        errors.extend(input_contradictions(el));
         let transitions: HashMap<String, String> = specs.into_iter().collect();
         let mut hoists: Vec<String> = Vec::new();
         let transform_call = self.transform_call(el, &transitions, &mut hoists);
@@ -139,7 +176,7 @@ impl ViewGen<'_> {
 
         // Any of these forces the StyledContainer upgrade. `on_press` is excluded because its closure form wires on a plain Container; `on_press_forwarded` covers the other case.
         let styling = format!(
-            "{hover_call}{active_call}{disabled_call}{focus_ring}{disabled}{transform_call}{on_hover}{on_pointer_move}{on_key}{on_drag}{on_drag_end}{on_scroll}{on_focus}{on_long_press}{on_alt_press}{cursor}{drag_button}{drag_threshold}{click_through}"
+            "{hover_call}{active_call}{disabled_call}{focus_ring}{disabled}{transform_call}{on_hover}{on_pointer_move}{on_key}{on_drag}{on_drag_end}{on_scroll}{on_focus}{on_long_press}{on_alt_press}{cursor}{drag_button}{drag_threshold}{input}{inert}"
         );
         let pieces =
             if always_style || has_paint(&attrs) || !styling.is_empty() || on_press_forwarded {
@@ -184,7 +221,7 @@ impl ViewGen<'_> {
             Some((closure, opacity_call)) => {
                 let _ = writeln!(
                     code,
-                    "{inner_pad}{bind}StyledContainer::{ctor}({style}, {closure}, {children})?{opacity_call}{hover_call}{active_call}{disabled_call}{focus_ring}{disabled}{on_press}{transform_call}{on_hover}{on_pointer_move}{on_key}{on_drag}{on_drag_end}{on_scroll}{on_focus}{on_long_press}{on_alt_press}{cursor}{drag_button}{drag_threshold}{click_through}{holds_stroke}{role}{styled_by}{declaring}{terminator}"
+                    "{inner_pad}{bind}StyledContainer::{ctor}({style}, {closure}, {children})?{opacity_call}{hover_call}{active_call}{disabled_call}{focus_ring}{disabled}{on_press}{transform_call}{on_hover}{on_pointer_move}{on_key}{on_drag}{on_drag_end}{on_scroll}{on_focus}{on_long_press}{on_alt_press}{cursor}{drag_button}{drag_threshold}{input}{inert}{holds_stroke}{role}{styled_by}{declaring}{terminator}"
                 );
             }
             None => {
@@ -242,20 +279,19 @@ impl ViewGen<'_> {
         format!(".{method}({closure})")
     }
 
-    /// Builds the trailing `.disabled(...)` from a `disabled:` attribute.
     ///
-    /// A closure rather than a value, so a `$signal` is re-read instead of frozen at construction — the same treatment a reactive colour or string prop gets, and deliberately *not* the layout path: `width:$sig` re-runs the whole `LayoutStyle`, and whether a control is usable is not a layout property.
-    fn disabled_call(&self, el: &Element) -> String {
-        let Some(attr) = el.attributes.iter().find(|a| a.key == "disabled") else {
+    /// A closure rather than a value, so a `$signal` is re-read instead of frozen at construction — the same treatment a reactive colour or string prop gets, and deliberately *not* the layout path: `width:$sig` re-runs the whole `LayoutStyle`, and whether a box is usable is not a layout property.
+    fn predicate_call(&self, el: &Element, key: &str) -> String {
+        let Some(attr) = el.attributes.iter().find(|a| a.key == key) else {
             return String::new();
         };
         let value = attr.value.text().trim();
         if attr.value.is_flag() {
-            return ".disabled(|| true)".to_string();
+            return format!(".{key}(|| true)");
         }
         let read = substitute_reads(value);
         format!(
-            ".disabled({})",
+            ".{key}({})",
             wrap_signal_clones(&[value], format!("move || {read}"))
         )
     }

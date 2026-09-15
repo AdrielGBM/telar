@@ -9,6 +9,7 @@ use ui_tree::{Component, EventResult, RenderNode};
 
 use crate::child_host::{ChildSlot, DynHost};
 use crate::context::{new_container, track_layout};
+use crate::input_region::InputHandle;
 use crate::layout_item::{LayoutItem, TrackedChildren, register_container};
 use crate::pointer::dispatch_container_event;
 use crate::press::PressGesture;
@@ -24,6 +25,7 @@ pub struct Container {
     press: PressGesture,
     // What the box is, where it is more than a box. `None` reads it from what the box does.
     role: Option<renderer_core::Role>,
+    input: InputHandle,
 }
 
 impl Container {
@@ -39,6 +41,7 @@ impl Container {
             dyn_host: None,
             press: PressGesture::default(),
             role: None,
+            input: InputHandle::new(),
         })
     }
 
@@ -57,6 +60,7 @@ impl Container {
             dyn_host: Some(dyn_host),
             press: PressGesture::default(),
             role: None,
+            input: InputHandle::new(),
         })
     }
 
@@ -108,9 +112,8 @@ impl Container {
         self
     }
 
-    /// Registers this node in the interactive registry a click-through surface reads to carve its input region — see `StyledContainer::mark_interactive`.
-    fn mark_interactive(&self) {
-        crate::input_region::register_interactive(self.node, self.rect.read_only());
+    fn mark_interactive(&mut self) {
+        self.input.answer(self.node, self.rect.read_only());
     }
 
     pub fn column(children: Vec<Box<dyn LayoutItem>>) -> Result<Self, LayoutError> {
@@ -188,12 +191,6 @@ impl Component for Container {
 
     fn debug_name(&self) -> &'static str {
         "Container"
-    }
-}
-
-impl Drop for Container {
-    fn drop(&mut self) {
-        crate::input_region::unregister_interactive(self.node);
     }
 }
 

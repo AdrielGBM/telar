@@ -168,8 +168,13 @@ const CONTAINER_PAINT: &[AttrSpec] = &[
         .doc("How far a press must travel before it is a drag rather than a click."),
     AttrSpec::keywords("role", ROLE_VALUES)
         .doc("What the box is, beyond a box: a region, a list, a heading."),
-    AttrSpec::flag("click_through")
-        .doc("Drawn over something without standing between it and the pointer."),
+    AttrSpec::flag("input_opaque")
+        .doc("Claims the pointer over the box without a handler, so nothing beneath takes the press."),
+    AttrSpec::flag("input_transparent")
+        .doc("Lets the pointer through the box, cutting it out of an `input_opaque` ancestor's claim."),
+    AttrSpec::free("inert").doc(
+        "Takes the subtree out of input while it reads true: no pointer, keys, focus or input region.",
+    ),
     AttrSpec::flag("holds_stroke")
         .doc("A control inside something draggable, claiming the stroke that starts on it."),
     AttrSpec::free("hover_style"),
