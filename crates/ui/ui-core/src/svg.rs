@@ -182,7 +182,10 @@ mod tests {
         .unwrap();
 
         let view = svg.view();
-        let RenderNode::Transform { children, .. } = view else {
+        let RenderNode::Element { children, .. } = &view else {
+            panic!("expected the svg's element")
+        };
+        let RenderNode::Transform { children, .. } = &children[0] else {
             panic!("expected Transform")
         };
         assert_eq!(children.len(), 1);
@@ -328,7 +331,10 @@ mod tests {
     }
 
     fn count_paths(view: &RenderNode) -> usize {
-        let RenderNode::Transform { children, .. } = view else {
+        let RenderNode::Element { children, .. } = &view else {
+            panic!("expected the svg's element")
+        };
+        let RenderNode::Transform { children, .. } = &children[0] else {
             panic!("expected Transform")
         };
         let RenderNode::Group { children: inner } = &children[0] else {
@@ -341,7 +347,10 @@ mod tests {
     }
 
     fn path_fill(view: &RenderNode) -> Paint {
-        let RenderNode::Transform { children, .. } = view else {
+        let RenderNode::Element { children, .. } = &view else {
+            panic!("expected the svg's element")
+        };
+        let RenderNode::Transform { children, .. } = &children[0] else {
             panic!("expected Transform")
         };
         let RenderNode::Group { children: inner } = &children[0] else {

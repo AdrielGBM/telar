@@ -1,10 +1,9 @@
-//! Pixel-level work: the scroll blit, the clip mask, and the swizzle into the present buffer.
-
 use std::hash::{Hash, Hasher};
 use std::ops::Range;
 
 use geometry_core::Rect;
-use renderer_core::DrawCommand;
+use renderer_core::culling::{PaintBounds, command_visual_rect};
+use renderer_core::{DrawCommand, DrawState, FontMetrics, transform_clip_rect};
 use rustc_hash::FxHasher;
 use tiny_skia::Pixmap;
 
@@ -13,7 +12,12 @@ compile_error!(
     "the present-buffer pixel conversion reads tiny_skia's RGBA bytes as little-endian words; big-endian targets are not supported"
 );
 
-pub(super) fn clamp_to_pixels(rect: Rect, width: u32, height: u32) -> Option<(u32, u32, u32, u32)> {
+// `(x0, y0, x1, y1)`, the end exclusive.
+pub(super) type PixelBounds = (u32, u32, u32, u32);
+
+pub(super) type LayerBox = (i32, i32, u32, u32);
+
+pub(super) fn clamp_to_pixels(rect: Rect, width: u32, height: u32) -> Option<PixelBounds> {
     let x0 = rect.x.floor().max(0.0) as i64;
     let y0 = rect.y.floor().max(0.0) as i64;
     let x1 = (rect.x + rect.width).ceil().max(0.0) as i64;
@@ -33,12 +37,7 @@ pub(super) fn cull_bounds(vr: geometry_core::Rect, clip: Option<geometry_core::R
     !renderer_core::culling::overlaps(vr.x, vr.y, vr.width, vr.height, clip)
 }
 
-pub(super) fn fill_mask_region(
-    data: &mut [u8],
-    stride: usize,
-    region: (u32, u32, u32, u32),
-    value: u8,
-) {
+pub(super) fn fill_mask_region(data: &mut [u8], stride: usize, region: PixelBounds, value: u8) {
     let (x0, y0, x1, y1) = region;
     let row_len = (x1 - x0) as usize;
     for y in y0..y1 {
@@ -47,70 +46,76 @@ pub(super) fn fill_mask_region(
     }
 }
 
-fn union_opt_rect(acc: Option<Rect>, r: Rect) -> Option<Rect> {
-    Some(match acc {
-        None => r,
-        Some(a) => a.union(r),
-    })
+pub(super) fn fill_region(
+    pixmap: &mut Pixmap,
+    region: Rect,
+    color: tiny_skia::PremultipliedColorU8,
+) {
+    let Some((x0, y0, x1, y1)) = clamp_to_pixels(region, pixmap.width(), pixmap.height()) else {
+        return;
+    };
+    let stride = pixmap.width() as usize;
+    let pixels = pixmap.pixels_mut();
+    for y in y0 as usize..y1 as usize {
+        pixels[y * stride + x0 as usize..y * stride + x1 as usize].fill(color);
+    }
 }
 
+// `None` for a layer that paints nothing.
 pub(super) fn compute_layer_bounds(
     commands: &[DrawCommand],
     window_w: u32,
     window_h: u32,
-    font_metrics: &renderer_core::FontMetrics,
-) -> Vec<Option<(i32, i32, u32, u32)>> {
-    let mut result = vec![None; commands.len()];
-    let mut stack: Vec<(usize, Option<Rect>)> = Vec::new();
-
-    // `for_each_with_matrix` owns the matrix walk, so the callback keeps only the layer-stack accumulation. `idx` mirrors the command position, since the callback fires once per command in order.
-    let mut idx = 0usize;
-    renderer_core::for_each_with_matrix(commands, |cmd, matrix| {
+    font_metrics: &FontMetrics,
+) -> Vec<Option<LayerBox>> {
+    let mut boxes = vec![None; commands.len()];
+    let mut state = DrawState::new();
+    let mut layers = PaintBounds::new();
+    let surface = Rect::new(0.0, 0.0, window_w as f32, window_h as f32);
+    for (index, cmd) in commands.iter().enumerate() {
         match cmd {
-            DrawCommand::PushLayer { .. } => {
-                stack.push((idx, None));
+            DrawCommand::PushMatrix { matrix } => state.push_matrix(*matrix),
+            DrawCommand::PopMatrix => state.pop_matrix(),
+            DrawCommand::PushClip { rect, .. } => {
+                state.push_clip(transform_clip_rect(state.cumulative_matrix, *rect));
+            }
+            DrawCommand::PopClip => {
+                state.pop_clip();
+            }
+            DrawCommand::PushLayer { backdrop_blur, .. } => {
+                layers.open((index, *backdrop_blur > 0.0));
             }
             DrawCommand::PopLayer => {
-                if let Some((push_idx, accumulated)) = stack.pop() {
-                    let (ox, oy, bw, bh) = if let Some(bbox) = accumulated {
-                        let x0 = bbox.x.floor().max(0.0).min(window_w as f32) as i32;
-                        let y0 = bbox.y.floor().max(0.0).min(window_h as f32) as i32;
-                        let x1 = (bbox.x + bbox.width).ceil().max(0.0).min(window_w as f32) as i32;
-                        let y1 = (bbox.y + bbox.height).ceil().max(0.0).min(window_h as f32) as i32;
-                        let w = (x1 - x0).max(1) as u32;
-                        let h = (y1 - y0).max(1) as u32;
-                        (x0, y0, w, h)
-                    } else {
-                        (0, 0, window_w, window_h)
-                    };
-                    result[push_idx] = Some((ox, oy, bw, bh));
-                    // So the parent layer is sized to contain the composited result of all nested layers.
-                    if let Some(parent) = stack.last_mut() {
-                        let footprint = Rect {
-                            x: ox as f32,
-                            y: oy as f32,
-                            width: bw as f32,
-                            height: bh as f32,
-                        };
-                        parent.1 = union_opt_rect(parent.1, footprint);
-                    }
+                let Some(((opened, blurs_backdrop), painted)) = layers.close() else {
+                    continue;
+                };
+                let footprint = match painted {
+                    Some(bounds) => clamp_to_pixels(bounds, window_w, window_h),
+                    None if blurs_backdrop => clamp_to_pixels(surface, window_w, window_h),
+                    None => None,
+                };
+                if let Some((x0, y0, x1, y1)) = footprint {
+                    boxes[opened] = Some((x0 as i32, y0 as i32, x1 - x0, y1 - y0));
+                    layers.include(Rect::new(
+                        x0 as f32,
+                        y0 as f32,
+                        (x1 - x0) as f32,
+                        (y1 - y0) as f32,
+                    ));
                 }
             }
             _ => {
-                // `command_visual_rect` returns `None` for the state commands, so those pass through untouched.
-                if let Some(vr) =
-                    renderer_core::culling::command_visual_rect(cmd, matrix, font_metrics)
+                let clip = state.current_clip();
+                if let Some(painted) =
+                    command_visual_rect(cmd, state.cumulative_matrix, font_metrics)
+                        .and_then(|rect| clip.map_or(Some(rect), |clip| clip.intersect(rect)))
                 {
-                    if let Some(last) = stack.last_mut() {
-                        last.1 = union_opt_rect(last.1, vr);
-                    }
+                    layers.include(painted);
                 }
             }
         }
-        idx += 1;
-    });
-
-    result
+    }
+    boxes
 }
 
 // The two are mutually exclusive. The newly exposed strip is left stale for the caller to re-render.
@@ -180,44 +185,6 @@ pub(super) fn apply_scroll_blit(pixmap: &mut Pixmap, clip: Rect, delta_tx: f32, 
                 }
             }
         }
-    }
-}
-
-// Only touches rows and columns within the union of the previous and new clip rects, avoiding a full-buffer zero of about 2MB at 1080p on every push and pop. Writes `0xFF` directly, since clip rects are axis-aligned and the mask is binary.
-pub(super) fn repaint_mask(
-    mask: &mut tiny_skia::Mask,
-    new_rect: Rect,
-    prev_rect: Option<Rect>,
-    width: u32,
-    height: u32,
-) {
-    if prev_rect == Some(new_rect) {
-        return;
-    }
-    let stride = width as usize;
-    let data = mask.data_mut();
-    if let Some(prev) = prev_rect {
-        if let Some(region) = clamp_to_pixels(prev, width, height) {
-            fill_mask_region(data, stride, region, 0);
-        }
-    }
-    if let Some(region) = clamp_to_pixels(new_rect, width, height) {
-        fill_mask_region(data, stride, region, 0xFF);
-    }
-}
-
-pub(super) fn fill_rounded_mask(
-    mask: &mut tiny_skia::Mask,
-    rect: geometry_core::Rect,
-    radius: renderer_core::BorderRadius,
-) {
-    if let Some(path) = crate::primitives::rect::build_rect_path(rect, radius) {
-        mask.fill_path(
-            &path,
-            tiny_skia::FillRule::Winding,
-            true,
-            tiny_skia::Transform::identity(),
-        );
     }
 }
 

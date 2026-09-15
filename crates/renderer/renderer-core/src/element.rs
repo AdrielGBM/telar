@@ -1,6 +1,6 @@
-//! What a drawn box *is*, for a backend that reconciles elements rather than rasterising pixels.
+//! What a drawn box *is*: which box it is across frames, and, for a backend that reconciles elements rather than rasterising pixels, what it means.
 //!
-//! A raster backend needs none of this: it is handed rects that are already where they belong. A backend whose output is a document needs to know which box is which between frames, so it can move an element rather than rebuild it — and needs to know what a box *means*, so a button is a `<button>` and not a `<div>` that happens to be clickable.
+//! A raster backend needs only the id: it is handed rects that are already where they belong, and uses the id to tell which box is which when it diffs a frame against the last. A backend whose output is a document needs that too, so it can move an element rather than rebuild it — and needs to know what a box *means*, so a button is a `<button>` and not a `<div>` that happens to be clickable.
 
 use geometry_core::Rect;
 

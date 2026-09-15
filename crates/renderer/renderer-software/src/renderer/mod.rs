@@ -1,5 +1,6 @@
 //! The renderer: its pixmap, its surface, and the per-frame state the phases thread between them.
 
+mod clip;
 mod frame;
 mod pixels;
 mod present;
@@ -11,15 +12,17 @@ mod wayland_alpha;
 use std::num::NonZeroU32;
 use std::sync::mpsc;
 
-use geometry_core::Rect;
 use raw_window_handle::{HasDisplayHandle, HasWindowHandle};
+use renderer_core::dirty::FrameDiff;
 use renderer_core::perf::{self, Phase};
-use renderer_core::{Color, DrawCommand, RendererError};
+use renderer_core::{BorderRadius, Color, DrawCommand, RendererError};
 use smallvec::SmallVec;
 use softbuffer::{Context, Surface};
 use tiny_skia::Pixmap;
 
-use pixels::PixelFormat;
+use clip::ClipMask;
+use frame::Layer;
+use pixels::{LayerBox, PixelFormat};
 use present::{FrameOp, PresentLog, SurfaceDamage, declared_damage, note_damage};
 #[cfg(target_os = "android")]
 use present::{extract_native_window, present_to_native_window};
@@ -40,11 +43,14 @@ pub struct SoftwareRenderer<D: HasDisplayHandle, W: HasWindowHandle> {
     font_metrics: renderer_core::FontMetrics,
     blur_scratch: Vec<u8>,
     pixmap_pool: Vec<tiny_skia::Pixmap>,
-    clip_mask_buffer: Option<tiny_skia::Mask>,
-    // Tracked across frames, so the next `PushClip` can zero stale bits without re-zeroing the whole mask.
-    clip_mask_dirty: Option<Rect>,
+    mask_pool: Vec<ClipMask>,
+    clip_mask: Option<ClipMask>,
+    // Masks every unclipped draw on the surface too: tiny-skia blends an unmasked draw through a pipeline that rounds differently, and a repaint has to match the frame it patches pixel for pixel.
+    damage_mask: Option<ClipMask>,
     draw_state: renderer_core::DrawState,
-    layer_stack: Vec<(tiny_skia::Pixmap, f32, i32, i32)>,
+    clip_radii: Vec<BorderRadius>,
+    layer_stack: Vec<Layer>,
+    frame_diff: FrameDiff,
     // Previous frame state for skip-if-identical and dirty-rect optimizations.
     prev_commands: Vec<DrawCommand>,
     prev_commands_hash: u64,
@@ -52,7 +58,7 @@ pub struct SoftwareRenderer<D: HasDisplayHandle, W: HasWindowHandle> {
     // Cache for expand_fill_layers: avoids re-expanding on idle frames where commands didn't change.
     expanded_commands_cache: Option<(u64, Vec<DrawCommand>)>,
     // Cache for compute_layer_bounds: avoids re-traversing commands when input and dimensions are unchanged.
-    layer_bounds_cache: Option<(u64, Vec<Option<(i32, i32, u32, u32)>>)>,
+    layer_bounds_cache: Option<(u64, Vec<Option<LayerBox>>)>,
     present_log: PresentLog,
     // Used to present without softbuffer's swizzle and copy. softbuffer still owns surface creation and buffer geometry; this is a second acquired reference used only at present time.
     #[cfg(target_os = "android")]
@@ -143,10 +149,13 @@ where
             pixmap: None,
             blur_scratch: Vec::new(),
             pixmap_pool: Vec::new(),
-            clip_mask_buffer: None,
-            clip_mask_dirty: None,
+            mask_pool: Vec::new(),
+            clip_mask: None,
+            damage_mask: None,
             draw_state: renderer_core::DrawState::new(),
+            clip_radii: Vec::new(),
             layer_stack: Vec::new(),
+            frame_diff: FrameDiff::default(),
             prev_commands: Vec::with_capacity(256),
             prev_commands_hash: 0,
             prev_clear_color: None,
@@ -188,10 +197,13 @@ where
             pixmap: Pixmap::new(width, height),
             blur_scratch: Vec::new(),
             pixmap_pool: Vec::new(),
-            clip_mask_buffer: tiny_skia::Mask::new(width, height),
-            clip_mask_dirty: None,
+            mask_pool: Vec::new(),
+            clip_mask: ClipMask::new(width, height),
+            damage_mask: ClipMask::new(width, height),
             draw_state: renderer_core::DrawState::new(),
+            clip_radii: Vec::new(),
             layer_stack: Vec::new(),
+            frame_diff: FrameDiff::default(),
             prev_commands: Vec::with_capacity(256),
             prev_commands_hash: 0,
             prev_clear_color: None,

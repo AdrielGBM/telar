@@ -256,7 +256,6 @@ impl StyledContainer {
         self.disabled_source.as_ref().is_some_and(|f| f())
     }
 
-    /// The matrix `event` is mapped through: the transform as drawn now, except for the rest of a stroke, which stays in the frame its press landed in.
     fn stroke_matrix(&mut self, event: &Event) -> Option<[f32; 6]> {
         let transform = self.transform.as_ref()?;
         let current = transform(self.rect.get());
@@ -280,7 +279,6 @@ impl StyledContainer {
             && self.opacity.as_ref().is_none_or(|opacity| opacity() > 0.0)
     }
 
-    /// Whether an `input_opaque` box keeps a press at `(x, y)` from everything beneath it, which it does unless a transparent box inside it is what the point lands on.
     fn swallows(&self, rect: Rect, x: f64, y: f64) -> bool {
         self.input == InputMode::Opaque
             && rect.contains(x as f32, y as f32)
@@ -461,7 +459,6 @@ impl StyledContainer {
         self
     }
 
-    /// Apply an affine transform (rotate/scale/translate) to the whole box each `view()`, and hit-test the box where the transform draws it. The closure takes the laid-out rect and returns the 2×3 matrix, or `None` for identity.
     pub fn with_transform(
         mut self,
         transform: impl Fn(Rect) -> Option<[f32; 6]> + 'static,
@@ -573,7 +570,6 @@ impl StyledContainer {
         self
     }
 
-    /// Sets the pressed state (a primary pointer held down inside the box), which only a box with an `active_style` tracks; it drives the paint swap and clears on release, leave or drag-off.
     fn set_active(&self, active: bool) {
         if self.state.active.is_some() && self.state.is_active.get() != active {
             self.state.is_active.set(active);
@@ -620,17 +616,17 @@ impl StyledContainer {
         self
     }
 
-    /// Claims the pointer over this box without answering it: its rect joins the input region, and a press on it reaches nothing beneath, neither a sibling under it nor an ancestor's press or drag. The wheel still reaches ancestors, so a scroll area of opaque cards scrolls.
+    /// The wheel still reaches ancestors even though a press does not, so a scroll area of opaque cards still scrolls.
     pub fn input_opaque(self) -> Self {
         self.input_mode(InputMode::Opaque)
     }
 
-    /// Lets the pointer through this box to whatever is drawn beneath it, and cuts the box out of the input region an `input_opaque` ancestor claims. A descendant that answers the pointer, or is `input_opaque` itself, still claims its own rect.
+    /// A descendant that answers the pointer, or is itself `input_opaque`, still claims its own rect despite this.
     pub fn input_transparent(self) -> Self {
         self.input_mode(InputMode::Transparent)
     }
 
-    /// Takes this box and everything inside it out of input while `f` reads true: no pointer or key events, no focus, no occlusion, and nothing in the input region. Read on every event and every region query, so a pane goes inert and comes back without being rebuilt.
+    /// Read on every event and every region query, so a pane goes inert and comes back without being rebuilt.
     pub fn inert(mut self, f: impl Fn() -> bool + 'static) -> Self {
         self.inert = Some(Rc::new(f));
         self.publish_gate();
@@ -954,11 +950,10 @@ impl Component for StyledContainer {
             None => composed,
         };
         // The element wraps everything, so a document backend folds the transform and the layer into the box's own style rather than inventing a wrapper for each.
-        if ui_tree::element_capture() {
-            RenderNode::element(self.element(), [placed])
-        } else {
-            placed
-        }
+        RenderNode::element(
+            crate::element::for_target(self.node, || self.element()),
+            [placed],
+        )
     }
 
     fn on_event(&mut self, event: &Event) -> EventResult {

@@ -1,15 +1,9 @@
-//! Naming a box for a backend whose output is a document.
-//!
-//! Every widget that owns a layout node has to appear as an element, and the reason is structural rather than cosmetic: on that target CSS does the layout, so a node with no element is a box the browser never creates — and its children are then laid out by the wrong parent, in the wrong flow, with the wrong gap. One missing element is not one missing box; it is every box under it in the wrong place.
+//! Every widget that owns a layout node has to appear as an element, and the reason is structural rather than cosmetic: on a document target CSS does the layout, so a node with no element is a box the browser never creates — and its children are then laid out by the wrong parent, in the wrong flow, with the wrong gap. One missing element is not one missing box; it is every box under it in the wrong place.
 
+use geometry_core::Rect;
 use layout_core::NodeId;
 use renderer_core::{Element, ElementId, Semantics};
 use std::sync::Arc;
-
-/// The element for a node that is only a box.
-pub(crate) fn of(node: NodeId) -> Arc<Element> {
-    with_semantics(node, Semantics::group())
-}
 
 /// What a box is: what it was told, or what it does.
 ///
@@ -23,6 +17,24 @@ pub(crate) fn role_of(
         (None, true) => renderer_core::Role::Button,
         (None, false) => renderer_core::Role::Group,
     }
+}
+
+/// Built lazily: calling `document` eagerly would subscribe this view to whatever it reads, even when nothing here needs more than the box's identity.
+pub(crate) fn for_target(node: NodeId, document: impl FnOnce() -> Arc<Element>) -> Arc<Element> {
+    if ui_tree::element_capture() {
+        document()
+    } else {
+        identity(node)
+    }
+}
+
+pub(crate) fn identity(node: NodeId) -> Arc<Element> {
+    Arc::new(Element::new(
+        ElementId(node.into()),
+        Semantics::group(),
+        "",
+        Rect::default(),
+    ))
 }
 
 /// The element for a node that means something more than a box, asking the backend to put its own scroll at `scroll_to`. See [`renderer_core::Element::scroll_to`]; every box but a scroll area that is being moved passes `None`.
@@ -50,13 +62,8 @@ fn element_of(node: NodeId, semantics: Semantics) -> Element {
     Element::new(ElementId(node.into()), semantics, layout, rect)
 }
 
-/// Wraps `content` as the box `node` names, when a document backend is listening.
-///
 /// The shape most widgets need: they own a node, they draw children into it, and they have nothing to say about what it means beyond being a box.
 pub(crate) fn wrap(node: NodeId, content: ui_tree::RenderNode) -> ui_tree::RenderNode {
-    if ui_tree::element_capture() {
-        ui_tree::RenderNode::element(of(node), [content])
-    } else {
-        content
-    }
+    let element = for_target(node, || with_semantics(node, Semantics::group()));
+    ui_tree::RenderNode::element(element, [content])
 }

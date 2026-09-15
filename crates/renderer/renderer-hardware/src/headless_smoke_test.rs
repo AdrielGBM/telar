@@ -850,3 +850,143 @@ fn the_clip_stack_intersects_nests_and_unwinds() {
         "the stack emptied: a draw after the last PopClip is unclipped"
     );
 }
+
+fn filled(x: f32, y: f32, width: f32, height: f32, color: Color) -> DrawCommand {
+    DrawCommand::Rect {
+        rect: Rect::new(x, y, width, height),
+        style: Arc::new(RectStyle::filled(color, 0.0)),
+    }
+}
+
+fn diverging_fraction(a: &[u8], b: &[u8]) -> f64 {
+    let diverging = a
+        .chunks_exact(4)
+        .zip(b.chunks_exact(4))
+        .filter(|(p, q)| (0..3).any(|k| (p[k] as i32 - q[k] as i32).abs() > 16))
+        .count();
+    diverging as f64 / (a.len() / 4) as f64
+}
+
+// `None` when the machine has no adapter.
+fn after_and_from_scratch(
+    first: (&[DrawCommand], Option<Color>),
+    second: (&[DrawCommand], Option<Color>),
+    what: &str,
+) -> Option<(Vec<u8>, Vec<u8>)> {
+    const W: u32 = 800;
+    const H: u32 = 600;
+    let make = || {
+        pollster::block_on(HardwareRenderer::<HeadlessWindow>::new_headless(
+            W,
+            H,
+            None,
+            false,
+            TextShaperConfig::default(),
+        ))
+    };
+    let mut incremental = match make() {
+        Ok(r) => r,
+        Err(e) => {
+            common::skip_without_gpu(what, e);
+            return None;
+        }
+    };
+    incremental.begin_frame(W, H, 1.0, 1).expect("begin first");
+    incremental
+        .render_frame(first.0, first.1)
+        .expect("render first");
+    incremental.begin_frame(W, H, 1.0, 2).expect("begin second");
+    incremental
+        .render_frame(second.0, second.1)
+        .expect("render second");
+    let mut fresh = make().expect("second renderer");
+    fresh.begin_frame(W, H, 1.0, 1).expect("begin fresh");
+    fresh
+        .render_frame(second.0, second.1)
+        .expect("render fresh");
+    Some((
+        incremental.read_rgba().expect("read incremental"),
+        fresh.read_rgba().expect("read fresh"),
+    ))
+}
+
+fn scrolling_window(offset: f32, tooltip: bool) -> Vec<DrawCommand> {
+    let mut commands = vec![
+        filled(0.0, 0.0, 150.0, 600.0, Color::from_rgb_u8(30, 30, 40)),
+        filled(150.0, 0.0, 650.0, 50.0, Color::from_rgb_u8(50, 50, 60)),
+        DrawCommand::PushClip {
+            rect: Rect::new(170.0, 70.0, 400.0, 400.0),
+            radius: Default::default(),
+        },
+        DrawCommand::PushMatrix {
+            matrix: [1.0, 0.0, 0.0, 1.0, 170.0, 70.0 - offset],
+        },
+    ];
+    for row in 0..20 {
+        let shade = if row % 2 == 0 { 90 } else { 200 };
+        commands.push(filled(
+            0.0,
+            row as f32 * 40.0,
+            400.0,
+            32.0,
+            Color::from_rgb_u8(shade, 120, 220),
+        ));
+    }
+    commands.extend([DrawCommand::PopMatrix, DrawCommand::PopClip]);
+    if tooltip {
+        commands.push(filled(
+            600.0,
+            100.0,
+            180.0,
+            120.0,
+            Color::from_rgb_u8(240, 200, 60),
+        ));
+    }
+    commands
+}
+
+/// A list scrolls while a tooltip beside it is dismissed. The prime moves only the list's pixels, so where the tooltip was is repainted like any other damage rather than left behind or shifted.
+#[test]
+fn a_scroll_prime_moves_only_the_pixels_inside_the_clip() {
+    let clear = Some(Color::from_rgb_u8(20, 20, 28));
+    let Some((incremental, fresh)) = after_and_from_scratch(
+        (&scrolling_window(0.0, true), clear),
+        (&scrolling_window(24.0, false), clear),
+        "scroll-prime test",
+    ) else {
+        return;
+    };
+    let frac = diverging_fraction(&incremental, &fresh);
+    assert!(
+        frac < 0.003,
+        "the scrolled frame diverged from a full repaint over {:.3}% of the surface",
+        frac * 100.0
+    );
+}
+
+/// A new clear colour is under every pixel the previous frame left, so a small change beside it cannot confine the repaint.
+#[test]
+fn a_clear_colour_change_repaints_the_whole_surface() {
+    let card = |x: f32| {
+        vec![filled(
+            x,
+            280.0,
+            80.0,
+            40.0,
+            Color::from_rgb_u8(240, 200, 60),
+        )]
+    };
+    let Some((incremental, fresh)) = after_and_from_scratch(
+        (&card(360.0), Some(Color::from_rgb_u8(20, 20, 28))),
+        (&card(364.0), Some(Color::from_rgb_u8(40, 90, 160))),
+        "clear-colour test",
+    ) else {
+        return;
+    };
+    let frac = diverging_fraction(&incremental, &fresh);
+    assert!(
+        frac < 0.003,
+        "the frame with a new clear colour diverged from a full repaint over {:.3}% of the surface",
+        frac * 100.0
+    );
+}

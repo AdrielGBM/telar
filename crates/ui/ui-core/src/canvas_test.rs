@@ -69,7 +69,10 @@ fn a_declaring_canvas_paints_with_the_ink_around_it() {
 }
 
 fn fill_of(view: &RenderNode) -> Paint {
-    let RenderNode::Transform { children, .. } = view else {
+    let RenderNode::Element { children, .. } = view else {
+        panic!("expected the canvas's element")
+    };
+    let RenderNode::Transform { children, .. } = &children[0] else {
         panic!("expected Transform")
     };
     let RenderNode::Primitive(DrawCommand::Rect { style, .. }) = &children[0] else {

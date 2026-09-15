@@ -52,7 +52,9 @@ fn a_radius_clips_the_picture_whatever_the_fit() {
         loop {
             match current {
                 RenderNode::Clip { radius, .. } => return Some(*radius),
-                RenderNode::Transform { children, .. } | RenderNode::Layer { children, .. } => {
+                RenderNode::Element { children, .. }
+                | RenderNode::Transform { children, .. }
+                | RenderNode::Layer { children, .. } => {
                     current = children.first()?;
                 }
                 _ => return None,

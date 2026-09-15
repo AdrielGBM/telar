@@ -4,9 +4,12 @@
 
 #![warn(rustdoc::broken_intra_doc_links)]
 
+mod align;
 mod command;
 pub mod culling;
 pub mod dirty;
+#[cfg(any(test, feature = "test-support"))]
+pub mod dirty_scenarios;
 mod draw_state;
 mod element;
 mod error;

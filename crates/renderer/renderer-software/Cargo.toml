@@ -51,6 +51,7 @@ ui-tree = { workspace = true }
 
 criterion = { workspace = true }
 image = { workspace = true, features = ["png"] }
+renderer-core = { workspace = true, features = ["test-support"] }
 
 [[test]]
 name = "border_sides"

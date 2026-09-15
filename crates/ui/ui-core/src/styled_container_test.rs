@@ -1466,7 +1466,10 @@ fn active_style_clears_when_press_drags_off() {
 }
 
 fn rect_style(view: &RenderNode) -> Option<RectStyle> {
-    let RenderNode::Group { children, .. } = view else {
+    let RenderNode::Element { children, .. } = view else {
+        return None;
+    };
+    let RenderNode::Group { children, .. } = &children[0] else {
         return None;
     };
     match children.first() {
@@ -1541,13 +1544,19 @@ fn a_captured_box_carries_the_css_it_asked_for() {
     }
 }
 
+// A rasteriser diffs one frame against the last by the boxes that drew them, so the box is named; what it asked layout for is read by nobody there, so it is not built.
 #[test]
-fn a_box_emits_no_element_while_capture_is_off() {
+fn a_box_only_names_itself_while_capture_is_off() {
     reset_layout_runtime();
-    let card = StyledContainer::new(LayoutStyle::new(), |_r| RectStyle::default(), vec![]).unwrap();
-    assert!(
-        elements(&card.view()).is_empty(),
-        "a desktop build pays for none of this"
+    let card = StyledContainer::new(
+        LayoutStyle::new().width(300.0),
+        |_r| RectStyle::default(),
+        vec![],
+    )
+    .unwrap();
+    assert_eq!(
+        elements(&card.view()),
+        vec![(u64::from(card.layout_node()), String::new())]
     );
 }
 
@@ -1580,7 +1589,10 @@ fn nested_boxes_nest_their_elements() {
 }
 
 fn fill_color(view: &RenderNode) -> Color {
-    let group = match view {
+    let RenderNode::Element { children, .. } = view else {
+        panic!("expected the box's element")
+    };
+    let group = match &children[0] {
         RenderNode::Group { children, .. } => children,
         _ => panic!("expected Group"),
     };

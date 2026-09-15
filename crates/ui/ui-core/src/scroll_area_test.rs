@@ -258,7 +258,6 @@ fn a_scroll_built_on_kept_offsets_opens_where_the_last_one_left_off() {
     );
 }
 
-// The end-to-end anchored-overlay case: a trigger deep inside a real scroll area, scrolled away from where it was laid out, and a dropped area leaving no offset behind.
 #[test]
 fn a_trigger_scrolled_inside_a_scroll_area_anchors_where_it_is_drawn() {
     reset_layout_runtime();
@@ -579,7 +578,14 @@ fn as_layout_item_emits_clip_and_vbar_on_overflow() {
         AvailableSpace::MaxContent,
     )
     .unwrap();
-    if let RenderNode::Group { children, .. } = sa.view() {
+    let view = sa.view();
+    let RenderNode::Element {
+        children: drawn, ..
+    } = &view
+    else {
+        panic!("expected the scroll area's element")
+    };
+    if let RenderNode::Group { children, .. } = &drawn[0] {
         assert_eq!(children.len(), 3);
         assert!(
             matches!(&children[0], RenderNode::Clip { .. }),

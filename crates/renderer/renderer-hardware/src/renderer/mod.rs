@@ -133,6 +133,8 @@ pub struct HardwareRenderer<W: HasWindowHandle + HasDisplayHandle + Send + Sync 
     // An app-owned target must not be replaced by `reconfigure`, and the frame is blended into it rather than copied over it, so Telar composes into whatever the application already drew.
     app_owned_target: bool,
     prev_commands: Vec<DrawCommand>,
+    prev_clear_color: Option<Color>,
+    frame_diff: renderer_core::dirty::FrameDiff,
     // Initialised to `u64::MAX`, so the first frame never matches and always renders.
     prev_generation: u64,
     // Used by `render_frame` to decide the idle-blit fast path.
@@ -308,7 +310,7 @@ async fn shared_gpu(backends: wgpu::Backends) -> Result<&'static SharedGpu, Rend
     Ok(SHARED_GPU.get().expect("shared GPU just set"))
 }
 
-// Seeds the offscreen with the previous frame shifted by the scroll delta, so a cleared scrolling frame redraws only the exposed band. `TELAR_HW_SCROLL_BLIT=0` falls back to a full re-render.
+// Seeds the offscreen with the previous frame, the pixels inside a scrolled clip moved by its delta, so a scrolling frame redraws only the exposed band and what else changed. `TELAR_HW_SCROLL_BLIT=0` repaints the scrolled content in place instead.
 fn hw_scroll_blit_enabled() -> bool {
     use std::sync::OnceLock;
     static V: OnceLock<bool> = OnceLock::new();
@@ -326,7 +328,6 @@ fn cull_bounds(
     bounds: geometry_core::Rect,
     scissor: Option<geometry_core::Rect>,
     dirty_scissor: Option<geometry_core::Rect>,
-    scroll_blit: Option<&renderer_core::ScrollBlit>,
 ) -> bool {
     if !renderer_core::culling::overlaps(bounds.x, bounds.y, bounds.width, bounds.height, scissor) {
         return true;
@@ -339,27 +340,6 @@ fn cull_bounds(
             bounds.height,
             Some(ds),
         ) {
-            return true;
-        }
-    }
-    if let Some(sb) = scroll_blit {
-        let in_exp = renderer_core::culling::overlaps(
-            bounds.x,
-            bounds.y,
-            bounds.width,
-            bounds.height,
-            Some(sb.exposed_band),
-        );
-        let in_extra = sb.extra_dirty.iter().any(|ed| {
-            renderer_core::culling::overlaps(
-                bounds.x,
-                bounds.y,
-                bounds.width,
-                bounds.height,
-                Some(*ed),
-            )
-        });
-        if !in_exp && !in_extra {
             return true;
         }
     }
@@ -767,6 +747,8 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
             offscreen_output: None,
             app_owned_target: false,
             prev_commands: Vec::new(),
+            prev_clear_color: None,
+            frame_diff: Default::default(),
             prev_generation: u64::MAX,
             incoming_generation: 0,
             retained_blit_pipeline,

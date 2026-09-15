@@ -1,5 +1,3 @@
-//! The per-surface input registry: what takes the pointer, where it is drawn, what lets it through, and which subtrees take no input at all. The input region, hit-testing and focus reachability all read it.
-
 use std::cell::Cell;
 use std::collections::HashMap;
 use std::rc::Rc;
@@ -10,7 +8,6 @@ use platform_core::Event;
 use reactive_core::ReadSignal;
 use ui_tree::EventResult;
 
-/// How a box's own rect takes part in hit-testing, apart from any handler it has.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub(crate) enum InputMode {
     #[default]
@@ -19,7 +16,6 @@ pub(crate) enum InputMode {
     Transparent,
 }
 
-/// One step between where a subtree is laid out and where it is drawn, in the order the drawing applies it.
 #[derive(Clone)]
 pub(crate) enum Placement {
     Offset(Rc<dyn Fn() -> (f32, f32)>),
@@ -46,7 +42,7 @@ struct Gate {
     shown: Option<Rc<dyn Fn() -> bool>>,
 }
 
-/// Where a subtree root belongs when its layout parent says otherwise: scroll content under its viewport, portaled overlay content under the placeholder it was declared at. A hoisted subtree is drawn in surface space, so its geometry stops there.
+/// A hoisted subtree is drawn in surface space, so its geometry stops there.
 struct Link {
     token: u64,
     owner: NodeId,
@@ -65,7 +61,7 @@ struct Registry {
 }
 
 reactive_core::surface_local! {
-    /// Per-surface input registry. The runner activates each surface's [`InputRegionContext`] around its build/event/frame.
+    /// The runner activates each surface's [`InputRegionContext`] around its build/event/frame.
     slot INPUT: Registry = Registry::default();
     access with_input, with_input_ref;
     context InputRegionContext, InputRegionGuard;
@@ -75,12 +71,12 @@ thread_local! {
     static NEXT_TOKEN: Cell<u64> = const { Cell::new(1) };
 }
 
-/// Forgets everything registered on the active surface, for a layout runtime that is about to hand the same node ids out again.
+/// Node ids can be recycled by the layout runtime, so stale registrations under a reused id must be cleared first.
 pub(crate) fn reset() {
     with_input(|r| *r = Registry::default());
 }
 
-/// One widget's registrations, withdrawn together when it drops. Entries carry the handle's token, so a widget outliving a reset cannot withdraw what a newer widget registered under a recycled node id.
+/// Entries carry the handle's token, so a widget outliving a reset cannot withdraw what a newer widget registered under a recycled node id.
 pub(crate) struct InputHandle {
     token: u64,
     nodes: Vec<NodeId>,
@@ -100,7 +96,6 @@ impl InputHandle {
         }
     }
 
-    /// `node` dispatches pointer input, so its drawn rect joins the input region.
     pub(crate) fn answer(&mut self, node: NodeId, rect: ReadSignal<Rect>) {
         self.touch(node);
         let token = self.token;
@@ -127,7 +122,6 @@ impl InputHandle {
         });
     }
 
-    /// `node`'s subtree takes no input while `inert` reads true or `shown` reads false.
     pub(crate) fn gate(
         &mut self,
         node: NodeId,
@@ -223,7 +217,6 @@ fn link_of(node: NodeId) -> Option<(NodeId, bool)> {
     with_input_ref(|r| r.links.get(&node).map(|l| (l.owner, l.hoisted)))
 }
 
-/// The node `node` belongs to: its owner across a portal or a scroll viewport, its layout parent otherwise.
 fn logical_parent(node: NodeId) -> Option<NodeId> {
     link_of(node)
         .map(|(owner, _)| owner)
@@ -249,7 +242,6 @@ fn gate_admits(node: NodeId) -> bool {
     !gate.inert.is_some_and(|inert| inert()) && gate.shown.is_none_or(|shown| shown())
 }
 
-/// Whether `node` takes input right now: in layout flow, with no gate shut on it or on anything it belongs to.
 pub(crate) fn receives_input(node: NodeId) -> bool {
     let mut at = Some(node);
     let mut starts_segment = true;
@@ -267,7 +259,6 @@ pub(crate) fn receives_input(node: NodeId) -> bool {
     true
 }
 
-/// Whether `node` is `ancestor` or belongs anywhere beneath it, across portals and scroll viewports.
 pub(crate) fn is_inside(node: NodeId, ancestor: NodeId) -> bool {
     std::iter::successors(Some(node), |&at| logical_parent(at)).any(|at| at == ancestor)
 }
@@ -300,7 +291,6 @@ fn bounds(matrix: [f32; 6], rect: Rect) -> Rect {
     Rect::new(left, top, right - left, bottom - top)
 }
 
-/// `rect`, in `node`'s layout space, moved and cut by `node`'s own placements into the space its parent draws it in. `None` once a clip leaves nothing.
 fn place(node: NodeId, rect: Rect, clipped: bool) -> Option<Rect> {
     let mut rect = rect;
     for index in 0.. {
@@ -320,7 +310,6 @@ fn place(node: NodeId, rect: Rect, clipped: bool) -> Option<Rect> {
     Some(rect)
 }
 
-/// A point in the space `node`'s parent draws it in, taken back into `node`'s layout space. `None` when a clip cuts the point away.
 fn unplace(node: NodeId, x: f32, y: f32) -> Option<(f32, f32)> {
     let count = with_input_ref(|r| r.placements.get(&node).map_or(0, Vec::len));
     let mut point = (x, y);
@@ -367,17 +356,14 @@ fn drawn(node: NodeId, rect: Rect) -> Option<Rect> {
     lift(node, rect, true).filter(|rect| rect.width > 0.0 && rect.height > 0.0)
 }
 
-/// The rect `node` is drawn at on its surface, through scroll offsets, anchoring and render transforms, but not cut by the clips around it — where something anchored to it should sit. Read without subscribing.
 pub fn visible_rect(node: NodeId) -> Option<Rect> {
     lift(node, layout_reactive::track_layout(node)?.peek(), false)
 }
 
-/// The part of `node` that can be pointed at on its surface: [`visible_rect`] cut by every clip and viewport around it.
 pub(crate) fn pointable_rect(node: NodeId) -> Option<Rect> {
     drawn(node, layout_reactive::track_layout(node)?.peek())
 }
 
-/// The rects a surface that carves its own input region should take the pointer over: every widget that dispatches pointer input and every `input_opaque` box, where they are drawn, less the `input_transparent` boxes that pierce an opaque one, leaving out whatever takes no input.
 pub fn interactive_rects() -> Vec<Rect> {
     let answers: Vec<(NodeId, ReadSignal<Rect>)> =
         with_input_ref(|r| r.answers.iter().map(|(n, a)| (*n, a.rect)).collect());
@@ -417,7 +403,6 @@ pub fn interactive_rects() -> Vec<Rect> {
     merge(region)
 }
 
-/// Whether a transparent `hole` reaches up to `ancestor` through nothing but declared boxes: the first box that occludes by default stops it.
 fn pierces(hole: NodeId, ancestor: NodeId) -> bool {
     let mut at = logical_parent(hole);
     while let Some(current) = at {
@@ -432,7 +417,6 @@ fn pierces(hole: NodeId, ancestor: NodeId) -> bool {
     false
 }
 
-/// What the declared boxes directly inside `parent` decide at `(x, y)`, in `parent`'s layout space: the deepest one under the point wins, and opaque wins between siblings. A box that occludes by default is not declared, so nothing beneath it is asked.
 fn decision_below(parent: NodeId, x: f32, y: f32) -> Option<InputMode> {
     let mut decision = None;
     for index in 0.. {
@@ -458,13 +442,11 @@ fn decision_below(parent: NodeId, x: f32, y: f32) -> Option<InputMode> {
     decision
 }
 
-/// Whether a transparent box inside `node` is what `(x, y)`, in `node`'s layout space, lands on.
 pub(crate) fn pierced(node: NodeId, x: f32, y: f32) -> bool {
     with_input_ref(|r| r.transparent > 0)
         && decision_below(node, x, y) == Some(InputMode::Transparent)
 }
 
-/// Whether `node`, laid out at `layout` and drawn through its own placements, stands between `(x, y)` and the siblings drawn beneath it. `occludes` is only asked for a box that declares nothing.
 pub(crate) fn covers(
     node: NodeId,
     layout: Rect,
@@ -545,7 +527,7 @@ fn merge(mut rects: Vec<Rect>) -> Vec<Rect> {
     }
 }
 
-/// Routes `event` into a subtree that takes no input: presses, the wheel and keys stop here, a move arrives as the pointer leaving so a hover held inside settles, and everything else passes.
+/// A move is routed as the pointer leaving, so a hover held inside the withheld subtree settles.
 pub(crate) fn withhold(event: &Event, route: impl FnOnce(&Event) -> EventResult) -> EventResult {
     match event {
         Event::PointerPressed { .. }

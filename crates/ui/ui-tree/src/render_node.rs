@@ -74,9 +74,7 @@ pub enum RenderNode {
         backdrop_blur: f32,
         children: NodeVec,
     },
-    /// A box, for a backend whose output is a document: its identity, what it means, and what it holds.
-    ///
-    /// Emitted only while [`element_capture`](crate::element_capture) is on. A rasteriser flattens straight through it — the commands inside are already positioned — so the only cost where nobody reads it is not building it at all.
+    /// A rasteriser draws straight through it, since the commands inside are already positioned, and pairs one frame with the last by its identity.
     Element {
         element: std::sync::Arc<renderer_core::Element>,
         children: NodeVec,
@@ -179,7 +177,6 @@ impl RenderNode {
         }
     }
 
-    /// Wraps `children` as one box a document backend can reconcile. See [`RenderNode::Element`].
     pub fn element(
         element: std::sync::Arc<renderer_core::Element>,
         children: impl IntoIterator<Item = RenderNode>,

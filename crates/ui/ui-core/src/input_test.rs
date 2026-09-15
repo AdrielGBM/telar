@@ -154,6 +154,7 @@ fn caret_of(input: &Input) -> (Rect, f32) {
                 *found = Some((*rect, lit));
             }
             RenderNode::Group { children }
+            | RenderNode::Element { children, .. }
             | RenderNode::Transform { children, .. }
             | RenderNode::Clip { children, .. }
             | RenderNode::Layer { children, .. } => {

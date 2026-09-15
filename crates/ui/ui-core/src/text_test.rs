@@ -67,9 +67,9 @@ fn two_labels_of_one_style_share_a_baseline_whatever_letters_they_have() {
                 RenderNode::Primitive(renderer_core::DrawCommand::Text { rect, .. }) => {
                     Some(rect.y)
                 }
-                RenderNode::Transform { children, .. } | RenderNode::Group { children } => {
-                    children.iter().find_map(text_y)
-                }
+                RenderNode::Transform { children, .. }
+                | RenderNode::Group { children }
+                | RenderNode::Element { children, .. } => children.iter().find_map(text_y),
                 _ => None,
             }
         }
@@ -91,9 +91,9 @@ fn text_lands_on_a_whole_pixel_row() {
     fn text_y(node: &RenderNode) -> Option<f32> {
         match node {
             RenderNode::Primitive(renderer_core::DrawCommand::Text { rect, .. }) => Some(rect.y),
-            RenderNode::Transform { children, .. } | RenderNode::Group { children } => {
-                children.iter().find_map(text_y)
-            }
+            RenderNode::Transform { children, .. }
+            | RenderNode::Group { children }
+            | RenderNode::Element { children, .. } => children.iter().find_map(text_y),
             _ => None,
         }
     }
@@ -130,9 +130,9 @@ fn text_stays_inside_a_box_that_is_exactly_one_line_tall() {
     fn text_rect(node: &RenderNode) -> Option<Rect> {
         match node {
             RenderNode::Primitive(renderer_core::DrawCommand::Text { rect, .. }) => Some(*rect),
-            RenderNode::Transform { children, .. } | RenderNode::Group { children } => {
-                children.iter().find_map(text_rect)
-            }
+            RenderNode::Transform { children, .. }
+            | RenderNode::Group { children }
+            | RenderNode::Element { children, .. } => children.iter().find_map(text_rect),
             _ => None,
         }
     }
@@ -204,9 +204,9 @@ fn a_wrapped_block_is_not_pushed_down_by_the_lines_it_gained() {
     fn text_y(node: &RenderNode) -> Option<f32> {
         match node {
             RenderNode::Primitive(renderer_core::DrawCommand::Text { rect, .. }) => Some(rect.y),
-            RenderNode::Transform { children, .. } | RenderNode::Group { children } => {
-                children.iter().find_map(text_y)
-            }
+            RenderNode::Transform { children, .. }
+            | RenderNode::Group { children }
+            | RenderNode::Element { children, .. } => children.iter().find_map(text_y),
             _ => None,
         }
     }

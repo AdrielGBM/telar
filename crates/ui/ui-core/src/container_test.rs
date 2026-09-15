@@ -126,7 +126,13 @@ fn container_column_creates_ok() {
 fn container_view_returns_group_with_children() {
     let container = make_container_with_labels();
     let view = container.view();
-    if let RenderNode::Group { children, .. } = view {
+    let RenderNode::Element {
+        children: drawn, ..
+    } = &view
+    else {
+        panic!("expected the container's element")
+    };
+    if let RenderNode::Group { children, .. } = &drawn[0] {
         assert_eq!(children.len(), 2);
     } else {
         panic!("expected Group");

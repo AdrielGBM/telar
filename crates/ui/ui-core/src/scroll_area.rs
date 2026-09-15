@@ -169,13 +169,13 @@ fn glide_axis(
     *slot = crate::fling::Glide::start(offset, offset.peek() + delta, bounds);
 }
 
-/// The offset a scrolled subtree is actually displaced by: the signal's value put on the surface's grid. A surface that quantises would otherwise draw the content at one offset and click it at another.
+/// A surface that quantises would otherwise draw the content at one offset and click it at another.
 fn snapped_offset(x: f32, y: f32) -> (f32, f32) {
     let grid = geometry_core::layout_grid();
     (grid.snap_pos_x(x), grid.snap_pos_y(y))
 }
 
-/// Where the content's origin is drawn inside `viewport` at a scroll of `(x, y)`, read by the drawing, the pointer mapping and the input region alike.
+/// Read by the drawing, the pointer mapping and the input region alike, so all three agree on where the content sits.
 fn content_origin(viewport: Rect, scroll_x: f32, scroll_y: f32) -> (f32, f32) {
     let (sx, sy) = snapped_offset(scroll_x, scroll_y);
     (viewport.x - sx, viewport.y - sy)
@@ -645,7 +645,7 @@ impl ScrollViewport {
 pub struct LayoutScrollArea {
     leaf: LayoutLeaf,
     core: ScrollCore,
-    // Claims the viewport, and says where the content is drawn and what it belongs to, since the content is laid out as a root of its own.
+    // Needed because the content is laid out as a root of its own, not a normal layout child.
     _input: InputHandle,
     // The content is not a taffy child of the viewport leaf, so nothing else would lay it out; this re-lays the detached subtree whenever the viewport is resized.
     _layout_effect: Effect,
@@ -788,17 +788,14 @@ impl Component for LayoutScrollArea {
     fn view(&self) -> RenderNode {
         // Its own box rather than `LayoutLeaf::at_layout_position`: the content is placed by the scroll offset, not by the leaf's placement, so the two must not both apply.
         let content = self.core.view(self.leaf.rect.get());
-        if ui_tree::element_capture() {
-            let semantics = renderer_core::Semantics::of(renderer_core::Role::ScrollArea);
-            let element = crate::element::with_semantics_scrolled(
+        let element = crate::element::for_target(self.leaf.node, || {
+            crate::element::with_semantics_scrolled(
                 self.leaf.node,
-                semantics,
+                renderer_core::Semantics::of(renderer_core::Role::ScrollArea),
                 self.core.take_command(),
-            );
-            RenderNode::element(element, [content])
-        } else {
-            content
-        }
+            )
+        });
+        RenderNode::element(element, [content])
     }
 
     fn on_event(&mut self, event: &Event) -> EventResult {

@@ -22,3 +22,6 @@ tracing = { workspace = true }
 web-time = { workspace = true }
 wide = { workspace = true }
 xxhash-rust = { version = "0.8.18", features = ["xxh3"] }
+
+[features]
+test-support = []

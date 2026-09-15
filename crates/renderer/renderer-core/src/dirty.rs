@@ -1,18 +1,13 @@
 //! Diffing two frames into the regions that actually changed, and recognising a scroll as a blit.
 
-use geometry_core::{Rect, Transform};
+use std::ops::ControlFlow;
+
+use geometry_core::Rect;
 use smallvec::{SmallVec, smallvec};
 
-use crate::{DrawCommand, culling, culling::FontMetrics, draw_state::DrawState};
-
-// Advances a DrawState's cumulative matrix by a single command, mirroring for_each_with_matrix: PushMatrix/PopMatrix update the matrix first and every command then reads state.cumulative_matrix.
-fn advance_matrix(state: &mut DrawState, cmd: &DrawCommand) {
-    match cmd {
-        DrawCommand::PushMatrix { matrix } => state.push_matrix(*matrix),
-        DrawCommand::PopMatrix => state.pop_matrix(),
-        _ => {}
-    }
-}
+use crate::align::{Aligner, Step};
+use crate::culling::PaintBounds;
+use crate::{DrawCommand, DrawState, blur_padding, blur_sigma, transform_clip_rect};
 
 /// Inline capacity for the dirty-rect list. Beyond this the rects are collapsed into a single union (see MAX_DIRTY_RECTS).
 pub type DirtyRects = SmallVec<[Rect; 8]>;
@@ -63,9 +58,7 @@ fn push_dirty_rect(rects: &mut DirtyRects, r: Rect) {
     }
 }
 
-/// When a pure axis-aligned scroll is detected, this describes what changed.
 pub struct ScrollBlit {
-    /// The clipping rect that encloses the scrollable content.
     pub scroll_clip: Rect,
     /// Horizontal pixel shift (negative = content moved left = scroll right). Zero for Y-only scrolls.
     pub delta_x: i32,
@@ -73,249 +66,538 @@ pub struct ScrollBlit {
     pub delta_y: i32,
     /// The strip of newly exposed pixels that must be re-rendered (horizontal band for Y scrolls, vertical band for X scrolls).
     pub exposed_band: Rect,
-    /// Regions outside the scrolled content that the blit displaced and must be repainted in place: changed overlays (e.g. the scrollbar) and any static element drawn before/after the scroll block (fixed headers/footers, dev overlays). Each entry already unions the element with the "ghost" position the blit shifted its pixels to.
-    pub extra_dirty: SmallVec<[Rect; 8]>,
+    /// Everything else to repaint once the clip's pixels have moved: what changed outside the scrolled content, where it was and where it is, and whatever else is drawn inside the clip, where it is and where its moved pixels landed.
+    pub extra_dirty: DirtyRects,
 }
 
-/// Beyond this many displaced regions the fixed UI is complex enough that a full re-render is simpler (and likely cheaper) than tracking them all; `detect_scroll_blit` bails to `None`.
-const MAX_SCROLL_EXTRA_DIRTY: usize = 8;
-
-fn matrix_as_translation(m: &[f32; 6]) -> Option<(f32, f32)> {
-    if m[0] == 1.0 && m[1] == 0.0 && m[2] == 0.0 && m[3] == 1.0 {
-        Some((m[4], m[5]))
-    } else {
-        None
+impl ScrollBlit {
+    /// Whether the shift is a whole number of device pixels at `scale`, which a backend scaling logical commands itself has to know before it blits.
+    pub fn is_whole_pixels_at(&self, scale: f32) -> bool {
+        is_whole(self.delta_x as f32 * scale) && is_whole(self.delta_y as f32 * scale)
     }
 }
 
-// The element's current position unioned with its ghost — the previous pixels shifted by the blit delta — so both the element at rest and the scrolled content the ghost overlaps are redrawn. `None` when it has no visual footprint in either frame.
-fn displaced_region(new_r: Option<Rect>, old_r: Option<Rect>, dx: f32, dy: f32) -> Option<Rect> {
-    let ghost = old_r.map(|r| Rect::new(r.x + dx, r.y + dy, r.width, r.height));
-    match (new_r, ghost) {
-        (Some(a), Some(b)) => Some(a.union(b)),
-        (Some(a), None) => Some(a),
-        (None, Some(b)) => Some(b),
-        (None, None) => None,
-    }
+// A shift snapped to whole pixels still carries float error once composed with fractional offsets or scaled.
+fn is_whole(value: f32) -> bool {
+    (value - value.round()).abs() <= 0.01
 }
 
-/// Compare two consecutive DrawCommand slices and return the list of disjoint regions that changed visually; returns None if a full re-render is required. A `Some(vec)` where vec is non-empty enumerates the changed regions so the caller can skip a command only when it overlaps none of them.
-pub fn compute_dirty_rect(
-    new_cmds: &[DrawCommand],
-    old_cmds: &[DrawCommand],
-    visual_rect: impl Fn(&DrawCommand, [f32; 6]) -> Option<Rect>,
-) -> Option<DirtyRects> {
-    if new_cmds.len() != old_cmds.len() {
-        return None;
-    }
+fn inflate(rect: Rect, by: f32) -> Rect {
+    Rect::new(
+        rect.x - by,
+        rect.y - by,
+        rect.width + by * 2.0,
+        rect.height + by * 2.0,
+    )
+}
 
-    let mut dirty: DirtyRects = SmallVec::new();
-    // Advance one cumulative matrix per slice inline instead of materializing two full Vecs: cumulative_matrix at command i is identical to the old matrices[i] by construction.
-    let mut new_state = DrawState::new();
-    let mut old_state = DrawState::new();
+fn within(clip: Option<Rect>, rect: Rect) -> Option<Rect> {
+    clip.map_or(Some(rect), |clip| clip.intersect(rect))
+}
 
-    for (new_cmd, old_cmd) in new_cmds.iter().zip(old_cmds.iter()) {
-        advance_matrix(&mut new_state, new_cmd);
-        advance_matrix(&mut old_state, old_cmd);
-        let new_matrix = new_state.cumulative_matrix;
-        let old_matrix = old_state.cumulative_matrix;
+struct ClipScope {
+    damaged: bool,
+}
 
-        if new_cmd != old_cmd {
-            // A changed clip boundary cannot be expressed as a bounded dirty rect: elements that just became visible or invisible need a full re-render. Same for a changed layer, whose opacity re-tints every command inside it — all of which compare equal, so an animating layer would otherwise never repaint.
-            if matches!(
-                new_cmd,
-                DrawCommand::PushClip { .. } | DrawCommand::PushLayer { .. }
-            ) {
-                return None;
-            }
-            if let Some(r) = visual_rect(new_cmd, new_matrix) {
-                push_dirty_rect(&mut dirty, r);
-            }
-            if let Some(r) = visual_rect(old_cmd, old_matrix) {
-                push_dirty_rect(&mut dirty, r);
-            }
-        } else {
-            // Content is identical but the on-screen position may have changed because a parent PushMatrix changed. Capture both rects so that old pixels are cleared and the element is re-drawn at the new position.
-            let new_r = visual_rect(new_cmd, new_matrix);
-            let old_r = visual_rect(old_cmd, old_matrix);
-            if new_r != old_r {
-                if let Some(r) = new_r {
-                    push_dirty_rect(&mut dirty, r);
-                }
-                if let Some(r) = old_r {
-                    push_dirty_rect(&mut dirty, r);
-                }
-            }
+struct LayerScope {
+    damaged: bool,
+    backdrop_blur: f32,
+    parent_clip: Option<Rect>,
+}
+
+enum Covered {
+    Nothing,
+    Region(Rect),
+    Backdrop(Rect),
+    // A backdrop blur with nothing drawn in it is sized to the whole surface by both backends.
+    Surface,
+}
+
+struct Closed {
+    covered: Covered,
+    damaged: bool,
+}
+
+impl Closed {
+    fn backdrop(&self) -> Option<Rect> {
+        match self.covered {
+            Covered::Backdrop(rect) => Some(rect),
+            _ => None,
         }
     }
 
-    // Nothing changed visually: report None (same as before) rather than an empty list, so the caller's "no dirty region" path is preserved.
-    if dirty.is_empty() { None } else { Some(dirty) }
+    fn samples_backdrop(&self) -> bool {
+        matches!(self.covered, Covered::Backdrop(_) | Covered::Surface)
+    }
 }
 
-/// Detect whether the only change between two command slices is a pure axis-aligned (X-only or Y-only) translation of scrollable content within a fixed clip.
-pub fn detect_scroll_blit(
-    new_cmds: &[DrawCommand],
-    old_cmds: &[DrawCommand],
-) -> Option<ScrollBlit> {
-    if new_cmds.len() != old_cmds.len() {
-        return None;
+struct Visit {
+    paint: Option<Rect>,
+    matrix: [f32; 6],
+    closed: Option<Closed>,
+}
+
+#[derive(Default)]
+struct Replay {
+    state: DrawState,
+    clips: PaintBounds<ClipScope>,
+    layers: PaintBounds<LayerScope>,
+    matrices: usize,
+}
+
+impl Replay {
+    fn reset(&mut self) {
+        self.state.reset();
+        self.clips.clear();
+        self.layers.clear();
+        self.matrices = 0;
     }
 
-    let n = new_cmds.len();
-
-    // Find the first position where commands differ; must be a PushMatrix encoding a pure axis-aligned translation.
-    let scroll_idx = new_cmds
-        .iter()
-        .zip(old_cmds.iter())
-        .position(|(nc, oc)| nc != oc)?;
-
-    let (delta_x_f, delta_y_f) = match (&new_cmds[scroll_idx], &old_cmds[scroll_idx]) {
-        (DrawCommand::PushMatrix { matrix: nm }, DrawCommand::PushMatrix { matrix: om }) => {
-            match (matrix_as_translation(nm), matrix_as_translation(om)) {
-                (Some((ntx, nty)), Some((otx, oty))) if ntx == otx => (0.0f32, nty - oty),
-                (Some((ntx, nty)), Some((otx, oty))) if nty == oty => (ntx - otx, 0.0f32),
-                _ => return None,
-            }
-        }
-        _ => return None,
-    };
-
-    // Reconstruct clip stack at scroll_idx to determine the scroll viewport.
-    let mut clip_stack: Vec<Rect> = Vec::new();
-    for cmd in &new_cmds[..scroll_idx] {
+    fn visit(
+        &mut self,
+        cmd: &DrawCommand,
+        visual_rect: &impl Fn(&DrawCommand, [f32; 6]) -> Option<Rect>,
+    ) -> Visit {
+        let mut closed = None;
         match cmd {
+            DrawCommand::PushMatrix { matrix } => {
+                self.state.push_matrix(*matrix);
+                self.matrices += 1;
+            }
+            DrawCommand::PopMatrix => {
+                self.state.pop_matrix();
+                self.matrices = self.matrices.saturating_sub(1);
+            }
             DrawCommand::PushClip { rect, .. } => {
-                let effective = clip_stack
-                    .last()
-                    .and_then(|&c| c.intersect(*rect))
-                    .unwrap_or(*rect);
-                clip_stack.push(effective);
+                self.state
+                    .push_clip(transform_clip_rect(self.state.cumulative_matrix, *rect));
+                self.clips.open(ClipScope { damaged: false });
             }
             DrawCommand::PopClip => {
-                clip_stack.pop();
+                closed = self.close_clip();
+                self.state.pop_clip();
             }
+            DrawCommand::PushLayer { backdrop_blur, .. } => self.layers.open(LayerScope {
+                damaged: false,
+                backdrop_blur: *backdrop_blur,
+                parent_clip: self.state.current_clip(),
+            }),
+            DrawCommand::PopLayer => closed = self.close_layer(),
             _ => {}
         }
-    }
-
-    let scroll_clip = *clip_stack.last()?;
-
-    let delta_x = delta_x_f as i32;
-    let delta_y = delta_y_f as i32;
-
-    // No savings from blitting if the entire clip would need repaint.
-    if delta_x != 0 && (delta_x.abs() as f32) >= scroll_clip.width {
-        return None;
-    }
-    if delta_y != 0 && (delta_y.abs() as f32) >= scroll_clip.height {
-        return None;
-    }
-
-    let (dx_f, dy_f) = (delta_x as f32, delta_y as f32);
-    // Regions the blit displaced that must be repainted in place (see ScrollBlit::extra_dirty).
-    let mut extra_dirty: SmallVec<[Rect; 8]> = SmallVec::new();
-
-    // Static visuals drawn before the scroll transform sit inside its clip, so the blit shifts their pixels. They are unchanged, so repaint each in place plus its ghost rather than bailing.
-    for c in &new_cmds[..scroll_idx] {
-        let r = culling::command_visual_rect(
-            c,
-            Transform::IDENTITY.to_array(),
-            &FontMetrics::default(),
-        );
-        if let Some(region) = displaced_region(r, r, dx_f, dy_f) {
-            extra_dirty.push(region);
-            if extra_dirty.len() > MAX_SCROLL_EXTRA_DIRTY {
-                return None;
-            }
+        let matrix = self.state.cumulative_matrix;
+        let paint =
+            visual_rect(cmd, matrix).and_then(|rect| within(self.state.current_clip(), rect));
+        if let Some(rect) = paint {
+            self.include(rect);
+        }
+        Visit {
+            paint,
+            matrix,
+            closed,
         }
     }
 
-    // Find the PopMatrix that closes the scroll PushTransform; PushMatrix nesting also counts.
-    let mut depth = 1i32;
-    let mut pop_idx = None;
-    let mut i = scroll_idx + 1;
-    while i < n {
-        match &new_cmds[i] {
-            DrawCommand::PushMatrix { .. } => depth += 1,
-            DrawCommand::PopMatrix => {
-                depth -= 1;
-                if depth == 0 {
-                    pop_idx = Some(i);
-                    break;
+    fn include(&mut self, rect: Rect) {
+        self.clips.include(rect);
+        self.layers.include(rect);
+    }
+
+    // Marking a scope here means closing it later damages everything it covers.
+    fn damage_opened(&mut self, cmd: &DrawCommand) {
+        match cmd {
+            DrawCommand::PushClip { .. } => {
+                if let Some(scope) = self.clips.innermost() {
+                    scope.damaged = true;
+                }
+            }
+            DrawCommand::PushLayer { .. } => {
+                if let Some(scope) = self.layers.innermost() {
+                    scope.damaged = true;
                 }
             }
             _ => {}
         }
-        i += 1;
     }
 
-    let pop_idx = pop_idx?;
+    fn close_clip(&mut self) -> Option<Closed> {
+        let (scope, bounds) = self.clips.close()?;
+        if let Some(rect) = bounds {
+            self.include(rect);
+        }
+        Some(Closed {
+            covered: bounds.map_or(Covered::Nothing, Covered::Region),
+            damaged: scope.damaged,
+        })
+    }
 
-    // All commands inside the scroll region must be structurally identical; only the top-level translate may differ, so the blit is a valid optimisation.
-    for j in (scroll_idx + 1)..pop_idx {
-        if new_cmds[j] != old_cmds[j] {
+    fn close_layer(&mut self) -> Option<Closed> {
+        let (scope, bounds) = self.layers.close()?;
+        let covered = match bounds {
+            Some(content) if scope.backdrop_blur > 0.0 => {
+                let margin = blur_padding(blur_sigma(scope.backdrop_blur)) as f32;
+                within(scope.parent_clip, inflate(content, margin))
+                    .map_or(Covered::Nothing, Covered::Backdrop)
+            }
+            Some(content) => Covered::Region(content),
+            None if scope.backdrop_blur > 0.0 => Covered::Surface,
+            None => Covered::Nothing,
+        };
+        if let Covered::Region(rect) | Covered::Backdrop(rect) = covered {
+            self.include(rect);
+        }
+        Some(Closed {
+            covered,
+            damaged: scope.damaged,
+        })
+    }
+
+    // A list may end with clips or layers still open; they close at its end.
+    fn close_open_scopes<B>(
+        &mut self,
+        mut visit: impl FnMut(Visit) -> ControlFlow<B>,
+    ) -> ControlFlow<B> {
+        while let Some(closed) = self.close_clip() {
+            visit(self.closing(closed))?;
+        }
+        while let Some(closed) = self.close_layer() {
+            visit(self.closing(closed))?;
+        }
+        ControlFlow::Continue(())
+    }
+
+    fn closing(&self, closed: Closed) -> Visit {
+        Visit {
+            paint: None,
+            matrix: self.state.cumulative_matrix,
+            closed: Some(closed),
+        }
+    }
+}
+
+#[derive(Default)]
+struct Damage {
+    rects: DirtyRects,
+    // An unchanged backdrop repaints only once something beneath or inside it does.
+    backdrops: SmallVec<[Rect; 4]>,
+    samples_surface: bool,
+}
+
+impl Damage {
+    fn add(&mut self, rect: Option<Rect>) {
+        if let Some(rect) = rect {
+            push_dirty_rect(&mut self.rects, rect);
+        }
+    }
+
+    fn settle(&mut self, closed: &Option<Closed>) -> ControlFlow<()> {
+        let Some(closed) = closed else {
+            return ControlFlow::Continue(());
+        };
+        match closed.covered {
+            Covered::Surface if closed.damaged => return ControlFlow::Break(()),
+            Covered::Surface => self.samples_surface = true,
+            Covered::Region(rect) | Covered::Backdrop(rect) if closed.damaged => {
+                push_dirty_rect(&mut self.rects, rect)
+            }
+            Covered::Backdrop(rect) => self.backdrops.push(rect),
+            Covered::Region(_) | Covered::Nothing => {}
+        }
+        ControlFlow::Continue(())
+    }
+
+    // A backdrop blur samples `repainted` too, so it can turn a pending backdrop into damage.
+    fn finish(mut self, repainted: &[Rect]) -> Option<DirtyRects> {
+        loop {
+            let before = self.backdrops.len();
+            let rects = &mut self.rects;
+            self.backdrops.retain(|backdrop| {
+                let reached = rects
+                    .iter()
+                    .chain(repainted)
+                    .any(|rect| rect.overlaps(*backdrop));
+                if reached {
+                    push_dirty_rect(rects, *backdrop);
+                }
+                !reached
+            });
+            if self.backdrops.len() == before {
+                break;
+            }
+        }
+        let untouched = self.rects.is_empty() && repainted.is_empty();
+        (!self.samples_surface || untouched).then_some(self.rects)
+    }
+}
+
+#[derive(Clone, Copy)]
+struct Scroll {
+    clip: Rect,
+    delta_x: i32,
+    delta_y: i32,
+    depth: usize,
+}
+
+impl Scroll {
+    fn between(
+        new_cmd: &DrawCommand,
+        old_cmd: &DrawCommand,
+        new: &Replay,
+        old: &Replay,
+    ) -> Option<Self> {
+        let (DrawCommand::PushMatrix { .. }, DrawCommand::PushMatrix { .. }) = (new_cmd, old_cmd)
+        else {
+            return None;
+        };
+        if new.layers.depth() > 0 || old.layers.depth() > 0 {
             return None;
         }
-    }
-
-    let exposed_band = if delta_x != 0 {
-        if delta_x < 0 {
-            // Content moved left (scrolled right): the right strip is newly exposed.
-            let band_w = (-delta_x) as f32;
-            Rect::new(
-                scroll_clip.x + scroll_clip.width - band_w,
-                scroll_clip.y,
-                band_w,
-                scroll_clip.height,
-            )
-        } else {
-            // Content moved right (scrolled left): the left strip is newly exposed.
-            let band_w = delta_x as f32;
-            Rect::new(scroll_clip.x, scroll_clip.y, band_w, scroll_clip.height)
+        let clip = new.state.current_clip()?;
+        if old.state.current_clip() != Some(clip) {
+            return None;
         }
-    } else if delta_y < 0 {
-        // Content moved up (scrolled down): the bottom band is newly exposed.
-        let band_h = (-delta_y) as f32;
-        Rect::new(
-            scroll_clip.x,
-            scroll_clip.y + scroll_clip.height - band_h,
-            scroll_clip.width,
-            band_h,
-        )
-    } else {
-        // Content moved down (scrolled up): the top band is newly exposed.
-        let band_h = delta_y as f32;
-        Rect::new(scroll_clip.x, scroll_clip.y, scroll_clip.width, band_h)
-    };
-
-    // Walk a single DrawState through the scroll block (0..=pop_idx) to inherit the outer matrix context, then keep advancing it inline over the suffix — no Vec of matrices for the whole slice.
-    let mut state = DrawState::new();
-    for cmd in &new_cmds[..=pop_idx] {
-        advance_matrix(&mut state, cmd);
+        let (n, o) = (new.state.cumulative_matrix, old.state.cumulative_matrix);
+        if n[..4] != o[..4] {
+            return None;
+        }
+        let (dx, dy) = (n[4] - o[4], n[5] - o[5]);
+        if !is_whole(dx) || !is_whole(dy) {
+            return None;
+        }
+        let (delta_x, delta_y) = (dx.round() as i32, dy.round() as i32);
+        let one_axis = (delta_x == 0) != (delta_y == 0);
+        let saves_something = (delta_x.unsigned_abs() as f32) < clip.width
+            && (delta_y.unsigned_abs() as f32) < clip.height;
+        (one_axis && saves_something).then_some(Self {
+            clip,
+            delta_x,
+            delta_y,
+            depth: new.matrices,
+        })
     }
 
-    // Overlays and static elements after the scroll block: redraw each at its current position and repaint the scrolled content under the ghost the blit shifted its previous pixels to.
-    for j in (pop_idx + 1)..n {
-        advance_matrix(&mut state, &new_cmds[j]);
-        let cmd_matrix = state.cumulative_matrix;
-        let new_r = culling::command_visual_rect(&new_cmds[j], cmd_matrix, &FontMetrics::default());
-        let old_r = culling::command_visual_rect(&old_cmds[j], cmd_matrix, &FontMetrics::default());
-        if let Some(region) = displaced_region(new_r, old_r, dx_f, dy_f) {
-            extra_dirty.push(region);
-            if extra_dirty.len() > MAX_SCROLL_EXTRA_DIRTY {
-                return None;
+    fn exposed_band(&self) -> Rect {
+        let clip = self.clip;
+        if self.delta_x < 0 {
+            let band = (-self.delta_x) as f32;
+            Rect::new(clip.x + clip.width - band, clip.y, band, clip.height)
+        } else if self.delta_x > 0 {
+            Rect::new(clip.x, clip.y, self.delta_x as f32, clip.height)
+        } else if self.delta_y < 0 {
+            let band = (-self.delta_y) as f32;
+            Rect::new(clip.x, clip.y + clip.height - band, clip.width, band)
+        } else {
+            Rect::new(clip.x, clip.y, clip.width, self.delta_y as f32)
+        }
+    }
+
+    fn displaced(&self, new: Option<Rect>, old: Option<Rect>) -> Option<Rect> {
+        let (dx, dy) = (self.delta_x as f32, self.delta_y as f32);
+        let now = new.and_then(|rect| self.clip.intersect(rect));
+        let ghost = old
+            .and_then(|rect| self.clip.intersect(rect))
+            .and_then(|rect| {
+                self.clip
+                    .intersect(Rect::new(rect.x + dx, rect.y + dy, rect.width, rect.height))
+            });
+        match (now, ghost) {
+            (Some(now), Some(ghost)) => Some(now.union(ghost)),
+            (now, ghost) => now.or(ghost),
+        }
+    }
+}
+
+#[derive(Clone, Copy)]
+enum Search {
+    Looking,
+    Inside(Scroll),
+    Found(Scroll),
+    Refused,
+}
+
+// Both plans at once: `damage` repaints every change over the previous frame left in place; `outside` is what a blit of the first scroll found still has to repaint.
+struct Walk<'a> {
+    damage: Damage,
+    outside: Damage,
+    search: Search,
+    before_scroll: &'a mut Vec<(Option<Rect>, Option<Rect>)>,
+}
+
+impl Walk<'_> {
+    fn step(
+        &mut self,
+        new: Option<Visit>,
+        old: Option<Visit>,
+        same: bool,
+        new_matrices: usize,
+    ) -> ControlFlow<()> {
+        let new_paint = new.as_ref().and_then(|visit| visit.paint);
+        let old_paint = old.as_ref().and_then(|visit| visit.paint);
+        let moved = !same
+            || new_paint != old_paint
+            || new.as_ref().map(|visit| visit.matrix) != old.as_ref().map(|visit| visit.matrix);
+        let new_closed = new.and_then(|visit| visit.closed);
+        let old_closed = old.and_then(|visit| visit.closed);
+        if moved {
+            self.damage.add(new_paint);
+            self.damage.add(old_paint);
+        }
+        self.damage.settle(&new_closed)?;
+        self.damage.settle(&old_closed)?;
+
+        match self.search {
+            Search::Inside(scroll) => {
+                let samples = [&new_closed, &old_closed]
+                    .into_iter()
+                    .flatten()
+                    .any(|closed| closed.samples_backdrop());
+                if !same || samples {
+                    self.search = Search::Refused;
+                } else if new_matrices < scroll.depth {
+                    for (new, old) in self.before_scroll.drain(..) {
+                        self.outside.add(scroll.displaced(new, old));
+                    }
+                    self.search = Search::Found(scroll);
+                }
+                ControlFlow::Continue(())
+            }
+            Search::Refused => ControlFlow::Continue(()),
+            Search::Looking | Search::Found(_) => {
+                if moved {
+                    self.outside.add(new_paint);
+                    self.outside.add(old_paint);
+                }
+                self.outside.settle(&new_closed)?;
+                self.outside.settle(&old_closed)?;
+                self.displace(new_paint, old_paint);
+                self.displace(
+                    new_closed.as_ref().and_then(Closed::backdrop),
+                    old_closed.as_ref().and_then(Closed::backdrop),
+                );
+                ControlFlow::Continue(())
             }
         }
     }
 
-    Some(ScrollBlit {
-        scroll_clip,
-        delta_x,
-        delta_y,
-        exposed_band,
-        extra_dirty,
-    })
+    fn displace(&mut self, new: Option<Rect>, old: Option<Rect>) {
+        match self.search {
+            Search::Looking if new.is_some() || old.is_some() => {
+                self.before_scroll.push((new, old))
+            }
+            Search::Found(scroll) => self.outside.add(scroll.displaced(new, old)),
+            _ => {}
+        }
+    }
+
+    fn finish(self) -> FrameChange {
+        let scroll = match self.search {
+            Search::Found(scroll) => {
+                let exposed_band = scroll.exposed_band();
+                self.outside
+                    .finish(&[exposed_band])
+                    .map(|extra_dirty| ScrollBlit {
+                        scroll_clip: scroll.clip,
+                        delta_x: scroll.delta_x,
+                        delta_y: scroll.delta_y,
+                        exposed_band,
+                        extra_dirty,
+                    })
+            }
+            _ => None,
+        };
+        FrameChange {
+            damage: self.damage.finish(&[]),
+            scroll,
+        }
+    }
+}
+
+pub struct FrameChange {
+    /// The regions to repaint over the previous frame left where it is: empty when nothing visible changed, and `None` only when the change reaches the whole surface, which is a backdrop blur with nothing drawn in it.
+    pub damage: Option<DirtyRects>,
+    /// The same change as a blit, when the content inside a clip only scrolled.
+    pub scroll: Option<ScrollBlit>,
+}
+
+/// Commands are paired by the element that drew them rather than by position, so a box that appears or disappears damages only itself and whatever moved to make room; a clear-colour change or a resize isn't in the command lists, so each backend compares those itself.
+#[derive(Default)]
+pub struct FrameDiff {
+    aligner: Aligner,
+    new: Replay,
+    old: Replay,
+    before_scroll: Vec<(Option<Rect>, Option<Rect>)>,
+}
+
+impl FrameDiff {
+    pub fn compare(
+        &mut self,
+        new_cmds: &[DrawCommand],
+        old_cmds: &[DrawCommand],
+        visual_rect: impl Fn(&DrawCommand, [f32; 6]) -> Option<Rect>,
+    ) -> FrameChange {
+        let Self {
+            aligner,
+            new,
+            old,
+            before_scroll,
+        } = self;
+        new.reset();
+        old.reset();
+        before_scroll.clear();
+        let mut walk = Walk {
+            damage: Damage::default(),
+            outside: Damage::default(),
+            search: Search::Looking,
+            before_scroll,
+        };
+
+        let flow = aligner.align(new_cmds, old_cmds, |step| match step {
+            Step::Both(i, j) => {
+                let (new_cmd, old_cmd) = (&new_cmds[i], &old_cmds[j]);
+                let (n, o) = (
+                    new.visit(new_cmd, &visual_rect),
+                    old.visit(old_cmd, &visual_rect),
+                );
+                let same = new_cmd == old_cmd;
+                if !same {
+                    if matches!(walk.search, Search::Looking)
+                        && let Some(scroll) = Scroll::between(new_cmd, old_cmd, new, old)
+                    {
+                        walk.search = Search::Inside(scroll);
+                        return ControlFlow::Continue(());
+                    }
+                    new.damage_opened(new_cmd);
+                    old.damage_opened(old_cmd);
+                }
+                walk.step(Some(n), Some(o), same, new.matrices)
+            }
+            Step::New(i) => {
+                let n = new.visit(&new_cmds[i], &visual_rect);
+                new.damage_opened(&new_cmds[i]);
+                walk.step(Some(n), None, false, new.matrices)
+            }
+            Step::Old(j) => {
+                let o = old.visit(&old_cmds[j], &visual_rect);
+                old.damage_opened(&old_cmds[j]);
+                walk.step(None, Some(o), false, new.matrices)
+            }
+        });
+        let unbounded = FrameChange {
+            damage: None,
+            scroll: None,
+        };
+        if flow.is_break()
+            || new
+                .close_open_scopes(|visit| walk.step(Some(visit), None, false, usize::MAX))
+                .is_break()
+            || old
+                .close_open_scopes(|visit| walk.step(None, Some(visit), false, usize::MAX))
+                .is_break()
+        {
+            return unbounded;
+        }
+        walk.finish()
+    }
 }
 
 #[cfg(test)]

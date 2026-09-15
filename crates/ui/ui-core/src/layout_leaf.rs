@@ -34,7 +34,10 @@ impl LayoutLeaf {
             return RenderNode::element(element, [content]);
         }
         let r = self.rect.get();
-        RenderNode::translate(r.x, r.y, [content])
+        RenderNode::element(
+            crate::element::identity(self.node),
+            [RenderNode::translate(r.x, r.y, [content])],
+        )
     }
 }
 

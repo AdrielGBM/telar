@@ -142,6 +142,49 @@ pub fn extend_bounds(current: Option<Rect>, new_rect: Rect) -> Option<Rect> {
     Some(current.map_or(new_rect, |b| b.union(new_rect)))
 }
 
+/// Scopes stack innermost last; closing one does not fold its bounds into its parent — that is the caller's to [`include`](Self::include).
+pub struct PaintBounds<T> {
+    open: Vec<(T, Option<Rect>)>,
+}
+
+impl<T> PaintBounds<T> {
+    pub fn new() -> Self {
+        Self { open: Vec::new() }
+    }
+
+    pub fn open(&mut self, scope: T) {
+        self.open.push((scope, None));
+    }
+
+    pub fn include(&mut self, rect: Rect) {
+        if let Some((_, bounds)) = self.open.last_mut() {
+            *bounds = extend_bounds(*bounds, rect);
+        }
+    }
+
+    pub fn innermost(&mut self) -> Option<&mut T> {
+        self.open.last_mut().map(|(scope, _)| scope)
+    }
+
+    pub fn close(&mut self) -> Option<(T, Option<Rect>)> {
+        self.open.pop()
+    }
+
+    pub fn depth(&self) -> usize {
+        self.open.len()
+    }
+
+    pub fn clear(&mut self) {
+        self.open.clear();
+    }
+}
+
+impl<T> Default for PaintBounds<T> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 #[cfg(test)]
 #[path = "culling_test.rs"]
 mod tests;

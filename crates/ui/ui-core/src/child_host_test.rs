@@ -17,6 +17,7 @@ fn leaf10_node() -> (NodeId, Box<dyn LayoutItem>) {
 
 fn group_len(node: &RenderNode) -> usize {
     match node {
+        RenderNode::Element { children, .. } => group_len(&children[0]),
         RenderNode::Group { children, .. } => children.len(),
         _ => panic!("expected Group"),
     }

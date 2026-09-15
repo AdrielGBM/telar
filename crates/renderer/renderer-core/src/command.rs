@@ -54,9 +54,7 @@ pub enum DrawCommand {
         backdrop_blur: f32,
     },
     PopLayer,
-    /// Opens the box `id` names, for a backend whose output is a document rather than pixels.
-    ///
-    /// A marker, like [`PushClip`](Self::PushClip): everything until the matching [`PopElement`](Self::PopElement) belongs to this box. A rasteriser skips both and draws exactly what it drew before — the commands between them are already positioned. What a document backend gets is the structure the flattening would otherwise have thrown away, and the identity that lets it move an element instead of rebuilding it.
+    /// A marker, like [`PushClip`](Self::PushClip): everything until the matching [`PopElement`](Self::PopElement) belongs to this box. A rasteriser draws nothing for either — the commands between them are already positioned — and pairs one frame's commands with the last's by the box that drew them, so a box that appears shifts nothing drawn after it. What a document backend gets is the structure the flattening would otherwise have thrown away, and the identity that lets it move an element instead of rebuilding it.
     PushElement {
         element: Arc<Element>,
     },

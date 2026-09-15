@@ -29,6 +29,7 @@ wgpu = "30"
 platform-headless = { workspace = true }
 
 criterion = { workspace = true }
+renderer-core = { workspace = true, features = ["test-support"] }
 
 [[test]]
 name = "app_owned_texture"

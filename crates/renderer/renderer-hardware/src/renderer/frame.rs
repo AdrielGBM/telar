@@ -54,11 +54,10 @@ pub(super) struct FrameTargets {
 // Owned values only, never borrows of `self`, so it survives across the `&mut self` phase calls.
 pub(super) struct FrameCtx {
     direct_to_surface: bool,
-    // Seeds the offscreen with the retained previous frame shifted by `prime_delta` before the main pass Loads it: scroll-blit-with-clear, or damage priming with a zero delta.
-    prime: bool,
-    prime_delta: (f32, f32),
+    prime: Prime,
     dirty_scissor: Option<Rect>,
     load_op: wgpu::LoadOp<wgpu::Color>,
+    clear_color: Option<Color>,
     output: Option<wgpu::SurfaceTexture>,
     targets: Option<FrameTargets>,
     frame_scratch_textures: Vec<(
@@ -151,18 +150,41 @@ fn confine_to_dirty(scissor: Option<Rect>, dirty: Option<Rect>) -> Option<Rect> 
     }
 }
 
-/// What a frame may reuse of the one before it, decided once by [`HardwareRenderer::analyze_frame`] before anything is drawn.
-struct FramePlan {
-    /// The previous frame's content shifted by a scroll delta, when the content only scrolled.
-    scroll_blit: Option<renderer_core::ScrollBlit>,
-    /// Whether the offscreen is seeded with the previous frame before the main pass Loads it.
+#[derive(Clone, Copy, Debug, PartialEq)]
+enum Prime {
+    None,
+    InPlace,
+    /// In place everywhere but inside the scrolled clip, whose pixels move by its delta.
+    Scrolled {
+        clip: Rect,
+        delta: (f32, f32),
+    },
+}
+
+#[derive(Clone, Copy)]
+struct Reuse {
     prime: bool,
-    /// How far that seed is shifted: a scroll's delta, or zero for plain damage.
-    prime_delta: (f32, f32),
+    scroll: bool,
+    damage_with_clear: bool,
+    damage_transparent: bool,
+}
+
+/// Decided once by [`HardwareRenderer::analyze_frame`] before anything is drawn.
+#[derive(Debug, PartialEq)]
+struct FramePlan {
+    prime: Prime,
     /// The one rect this frame is confined to, or `None` for a full repaint.
     dirty_scissor: Option<Rect>,
     /// Whether the frame is damage-tracked: the previous frame preserved outside [`Self::dirty_scissor`], the clear colour repainted only inside it.
     damage: bool,
+}
+
+impl FramePlan {
+    const FULL: Self = Self {
+        prime: Prime::None,
+        dirty_scissor: None,
+        damage: false,
+    };
 }
 
 impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBackend
@@ -232,7 +254,6 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
             commands.len(),
             clear_color.is_some()
         );
-        renderer_core::perf::tick();
         let _frame_span = renderer_core::perf::span(renderer_core::perf::Phase::Frame);
         // Direct-to-swapchain: when the frame clears and nothing samples the top-level target, render straight into the swapchain and drop the offscreen plus its full-screen copy. MSAA needs the offscreen to resolve, and a backdrop-blur layer needs a sampleable parent, so both fall back.
         let frame_has_backdrop_blur = commands.iter().any(
@@ -245,7 +266,7 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
             && !hw_damage_with_clear_enabled()
             && !self.app_owned_target;
 
-        if self.try_idle_blit(direct_to_surface)? {
+        if self.try_idle_blit(direct_to_surface, clear_color)? {
             return Ok(());
         }
 
@@ -260,21 +281,16 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
             (true, Some(ds), Some(c)) => Some((ds, c)),
             _ => None,
         };
-        self.interpret_commands(
-            commands,
-            plan.dirty_scissor,
-            plan.scroll_blit.as_ref(),
-            damage_bg,
-        );
+        self.interpret_commands(commands, plan.dirty_scissor, damage_bg);
         renderer_core::perf::record_since(renderer_core::perf::Phase::Interpret, interpret_start);
 
         let gpu_start = renderer_core::perf::now_if_enabled();
         let mut ctx = FrameCtx {
             direct_to_surface,
             prime: plan.prime,
-            prime_delta: plan.prime_delta,
             dirty_scissor: plan.dirty_scissor,
             load_op: frame_load_op(clear_color),
+            clear_color,
             output: None,
             targets: None,
             frame_scratch_textures: Vec::new(),
@@ -309,11 +325,16 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
 }
 
 impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRenderer<W> {
-    fn try_idle_blit(&mut self, direct_to_surface: bool) -> Result<bool, RendererError> {
-        // Blit the retained texture when the content generation and viewport are unchanged. Disabled under direct-to-surface, where nothing retains the last frame, and headless, where `read_rgba` needs each call to leave a freshly composited frame in `offscreen_output`.
+    fn try_idle_blit(
+        &mut self,
+        direct_to_surface: bool,
+        clear_color: Option<Color>,
+    ) -> Result<bool, RendererError> {
+        // Blit the retained texture when the content generation, clear colour and viewport are unchanged. Disabled under direct-to-surface, where nothing retains the last frame, and headless, where `read_rgba` needs each call to leave a freshly composited frame in `offscreen_output`.
         if !direct_to_surface
             && self.surface.is_some()
             && self.incoming_generation == self.prev_generation
+            && clear_color == self.prev_clear_color
             && self.retained_view.is_some()
             && !self.viewport_dirty
             && self.config.is_some()
@@ -397,22 +418,7 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
         (self.msaa_samples > 1 && self.retained_view.is_some()) || self.msaa_samples == 1
     }
 
-    /// Whether a frame that clears may still take the scroll blit.
-    ///
-    /// `scroll_blit` normally requires `LoadOp::Load`, which a clear colour forces off. Priming the offscreen with the previous frame shifted by the scroll delta keeps the optimisation for a cleared frame, leaving only the exposed band to redraw. Multisample only, because the prime quad is what serves that target.
-    fn allows_scroll_with_clear(
-        &self,
-        clear_color: Option<Color>,
-        frame_has_backdrop_blur: bool,
-    ) -> bool {
-        hw_scroll_blit_enabled()
-            && clear_color.is_some()
-            && self.retained_view.is_some()
-            && Self::no_layer_samples_the_backdrop(frame_has_backdrop_blur)
-            && self.msaa_samples > 1
-    }
-
-    /// Whether a frame that clears may be damage-tracked: an arbitrary dirty rect with a zero delta, gated like scroll-with-clear and needing an opaque clear on top of it.
+    /// Whether a frame that clears may be damage-tracked: its clear colour is repainted over the preserved previous frame inside the dirty scissor, so it has to be opaque.
     fn allows_damage_with_clear(
         &self,
         clear_color: Option<Color>,
@@ -433,54 +439,42 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
 
     /// What this frame may reuse of the one before it.
     fn analyze_frame(
-        &self,
+        &mut self,
         commands: &[DrawCommand],
         clear_color: Option<Color>,
         frame_has_backdrop_blur: bool,
     ) -> FramePlan {
-        let scroll_with_clear = self.allows_scroll_with_clear(clear_color, frame_has_backdrop_blur);
-        let scroll_blit = if clear_color.is_none() || scroll_with_clear {
-            renderer_core::dirty::detect_scroll_blit(commands, &self.prev_commands)
-        } else {
-            None
-        };
-        // The offscreen is seeded with the shifted previous frame instead of a plain clear, so only the exposed band is redrawn.
-        let scroll_prime = scroll_with_clear && scroll_blit.is_some();
-        let prime_delta = scroll_blit
-            .as_ref()
-            .map(|sb| (sb.delta_x as f32, sb.delta_y as f32))
-            .unwrap_or((0.0, 0.0));
-        let damage_with_clear = self.allows_damage_with_clear(clear_color, frame_has_backdrop_blur);
-        let may_damage = self.allows_damage_transparent(clear_color) || damage_with_clear;
-        // GPUs support a single scissor rect per pass, unlike the software backend, which can clip per rect.
-        let dirty_scissor: Option<Rect> =
-            if scroll_blit.is_none() && !self.prev_commands.is_empty() && may_damage {
-                renderer_core::dirty::compute_dirty_rect(commands, &self.prev_commands, |cmd, m| {
-                    renderer_core::culling::command_visual_rect(cmd, m, &self.font_metrics)
-                })
-                .and_then(|rects| rects.into_iter().reduce(Rect::union))
-                .filter(|ds| self.damage_worth_priming(*ds))
-            } else {
-                None
-            };
-        let damage = damage_with_clear && dirty_scissor.is_some();
-        FramePlan {
-            scroll_blit,
-            // The prime quad only serves the multisample target; the single-sample path Loads its persistent `msaa_texture` and primes without a quad.
-            prime: scroll_prime || (damage && self.msaa_samples > 1),
-            prime_delta,
-            dirty_scissor,
-            damage,
+        // A new clear colour lies under every pixel the previous frame left, so none of them can be kept.
+        let clear_kept = clear_color == self.prev_clear_color;
+        let damage_with_clear =
+            clear_kept && self.allows_damage_with_clear(clear_color, frame_has_backdrop_blur);
+        let damage_transparent = clear_kept && self.allows_damage_transparent(clear_color);
+        if self.prev_commands.is_empty() || !(damage_with_clear || damage_transparent) {
+            return FramePlan::FULL;
         }
-    }
-
-    // A near-full-surface dirty rect costs more to prime than a plain full clear and repaint.
-    fn damage_worth_priming(&self, ds: Rect) -> bool {
-        let logical_w = self.width as f32 / self.scale_factor;
-        let logical_h = self.height as f32 / self.scale_factor;
-        let surface_area = (logical_w * logical_h).max(1.0);
-        let dirty_area = ds.width.max(0.0) * ds.height.max(0.0);
-        dirty_area <= surface_area * 0.6
+        // The prime quad only serves the multisample target; the single-sample path Loads its persistent `msaa_texture`, which cannot be read while it is shifted into itself.
+        let multisample = self.msaa_samples > 1;
+        let reuse = Reuse {
+            prime: multisample,
+            scroll: multisample && hw_scroll_blit_enabled(),
+            damage_with_clear,
+            damage_transparent,
+        };
+        let font_metrics = &self.font_metrics;
+        let change = self
+            .frame_diff
+            .compare(commands, &self.prev_commands, |cmd, matrix| {
+                renderer_core::culling::command_visual_rect(cmd, matrix, font_metrics)
+            });
+        plan_frame(
+            &change,
+            reuse,
+            self.scale_factor,
+            (
+                self.width as f32 / self.scale_factor,
+                self.height as f32 / self.scale_factor,
+            ),
+        )
     }
 
     /// This frame's swapchain texture, or [`Acquired::SkipFrame`] when the surface has none to give.
@@ -900,7 +894,6 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
         &mut self,
         commands: &[DrawCommand],
         dirty_scissor: Option<Rect>,
-        scroll_blit: Option<&renderer_core::ScrollBlit>,
         damage_bg: Option<(Rect, Color)>,
     ) {
         let mut current_scissor: Option<Rect> = None;
@@ -952,7 +945,7 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
                 self.draw_state.cumulative_matrix,
                 &self.font_metrics,
             ) {
-                if cull_bounds(bounds, current_scissor, dirty_scissor, scroll_blit) {
+                if cull_bounds(bounds, current_scissor, dirty_scissor) {
                     continue;
                 }
                 if let Some(accum) = layer_accum_stack.last_mut() {
@@ -2123,23 +2116,29 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
         let load_op = ctx.load_op;
         let dirty_scissor = ctx.dirty_scissor;
         let prime = ctx.prime;
-        let prime_delta = ctx.prime_delta;
 
-        // The top-level target needs `load_op` applied once before anything Loads it. A dedicated no-draw init pass costs a full-screen tile store and load every frame on tiled mobile GPUs, so when the first segment is a top-level Draw the clear folds into that pass instead. Gated to the single-sample path, and falling back to the standalone init pass when the frame opens with a layer. Priming translates the retained previous frame by `prime_delta` before the main pass Loads it. The clear is fully covered by the full-screen quad, so its value is irrelevant on primed frames.
-        let prime_bind_group = if prime {
-            let logical_w = self.width as f32 / self.scale_factor;
-            let logical_h = self.height as f32 / self.scale_factor;
-            Some(self.composite_pipeline.create_bind_group(
+        // The top-level target needs `load_op` applied once before anything Loads it. A dedicated no-draw init pass costs a full-screen tile store and load every frame on tiled mobile GPUs, so when the first segment is a top-level Draw the clear folds into that pass instead. Gated to the single-sample path, and falling back to the standalone init pass when the frame opens with a layer. Priming draws the retained previous frame over it before the main pass Loads it. The clear is fully covered by the quads, so its value is irrelevant on primed frames.
+        let (logical_w, logical_h) = (
+            self.width as f32 / self.scale_factor,
+            self.height as f32 / self.scale_factor,
+        );
+        let mut retained_at = |(dx, dy): (f32, f32)| {
+            self.composite_pipeline.create_bind_group(
                 &self.device,
                 &self.queue,
                 &retained_view,
-                [prime_delta.0, prime_delta.1, logical_w, logical_h],
+                [dx, dy, logical_w, logical_h],
                 1.0,
                 0.0,
                 [1.0, 1.0],
-            ))
-        } else {
-            None
+            )
+        };
+        let prime_bind_groups = match prime {
+            Prime::None => None,
+            Prime::InPlace => Some((retained_at((0.0, 0.0)), None)),
+            Prime::Scrolled { clip, delta } => {
+                Some((retained_at((0.0, 0.0)), Some((clip, retained_at(delta)))))
+            }
         };
 
         let fold_init_clear =
@@ -2155,11 +2154,33 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
                     store: wgpu::StoreOp::Store,
                 },
             );
-            if let Some(ref bg) = prime_bind_group {
+            if let Some((in_place, scrolled)) = &prime_bind_groups {
                 init.set_pipeline(&self.composite_pipeline.pipeline);
                 init.set_bind_group(0, &self.viewport_bind_group, &[]);
-                init.set_bind_group(1, bg, &[]);
-                init.draw(0..6, 0..1);
+                init.set_bind_group(1, in_place, &[]);
+                match scrolled {
+                    None => init.draw(0..6, 0..1),
+                    Some((clip, shifted)) => {
+                        let (x, y, w, h) =
+                            physical_scissor(*clip, self.width, self.height, self.scale_factor);
+                        // Around the clip rather than beneath it: the composite blends, and a shifted copy drawn over an unshifted one would mix the two frames.
+                        let around = [
+                            (0, 0, self.width, y),
+                            (0, y + h, self.width, self.height.saturating_sub(y + h)),
+                            (0, y, x, h),
+                            (x + w, y, self.width.saturating_sub(x + w), h),
+                        ];
+                        for (sx, sy, sw, sh) in around {
+                            if sw > 0 && sh > 0 {
+                                init.set_scissor_rect(sx, sy, sw, sh);
+                                init.draw(0..6, 0..1);
+                            }
+                        }
+                        init.set_scissor_rect(x, y, w, h);
+                        init.set_bind_group(1, shifted, &[]);
+                        init.draw(0..6, 0..1);
+                    }
+                }
             }
         }
 
@@ -2515,6 +2536,7 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
             direct_to_surface,
             targets,
             output,
+            clear_color,
             mut frame_scratch_textures,
             ..
         } = ctx;
@@ -2639,7 +2661,61 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
             self.prev_commands.extend_from_slice(orig_commands);
         }
         self.prev_generation = self.incoming_generation;
+        self.prev_clear_color = clear_color;
         self.clear_pending();
         Ok(())
     }
 }
+
+// GPUs support a single scissor rect per pass, unlike the software backend, which can clip per rect; a near-full-surface one costs more to prime than a plain full clear and repaint.
+fn plan_frame(
+    change: &renderer_core::dirty::FrameChange,
+    reuse: Reuse,
+    scale_factor: f32,
+    (logical_w, logical_h): (f32, f32),
+) -> FramePlan {
+    let worth_priming = |scissor: &Rect| {
+        scissor.width.max(0.0) * scissor.height.max(0.0) <= (logical_w * logical_h).max(1.0) * 0.6
+    };
+    let blit = change.scroll.as_ref().filter(|blit| {
+        reuse.scroll && reuse.damage_with_clear && blit.is_whole_pixels_at(scale_factor)
+    });
+    if let Some(blit) = blit {
+        let scissor = blit
+            .extra_dirty
+            .iter()
+            .copied()
+            .fold(blit.exposed_band, Rect::union);
+        if worth_priming(&scissor) {
+            return FramePlan {
+                prime: Prime::Scrolled {
+                    clip: blit.scroll_clip,
+                    delta: (blit.delta_x as f32, blit.delta_y as f32),
+                },
+                dirty_scissor: Some(scissor),
+                damage: true,
+            };
+        }
+    }
+    let dirty_scissor = change
+        .damage
+        .as_ref()
+        .and_then(|rects| rects.iter().copied().reduce(Rect::union))
+        .filter(|scissor| {
+            (reuse.damage_with_clear || reuse.damage_transparent) && worth_priming(scissor)
+        });
+    let damage = reuse.damage_with_clear && dirty_scissor.is_some();
+    FramePlan {
+        prime: if damage && reuse.prime {
+            Prime::InPlace
+        } else {
+            Prime::None
+        },
+        dirty_scissor,
+        damage,
+    }
+}
+
+#[cfg(test)]
+#[path = "frame_test.rs"]
+mod tests;
