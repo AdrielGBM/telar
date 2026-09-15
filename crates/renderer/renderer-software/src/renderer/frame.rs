@@ -4,6 +4,7 @@ use std::num::NonZeroU32;
 
 use geometry_core::Rect;
 use raw_window_handle::{HasDisplayHandle, HasWindowHandle};
+use renderer_core::perf::{self, Phase};
 use renderer_core::{Color, DrawCommand, RenderBackend, RendererError, expand_fill_layers};
 use smallvec::SmallVec;
 use tiny_skia::Pixmap;
@@ -633,8 +634,8 @@ where
             self.prev_clear_color = None;
             self.expanded_commands_cache = None;
             self.layer_bounds_cache = None;
-            // Surface buffers are recreated on resize and their age resets, so the change log would replay onto a fresh buffer.
-            self.present_history.clear();
+            // The logged regions were measured at the old size, so the next present refreshes and declares everything.
+            self.present_log.reset();
             // Headless has no surface to resize; the pixmap above is the only target.
             if let (Some(w), Some(h), Some(surface)) = (
                 NonZeroU32::new(width),
@@ -660,15 +661,20 @@ where
         commands: &[DrawCommand],
         clear_color: Option<Color>,
     ) -> Result<(), RendererError> {
+        let _frame_span = perf::span(Phase::Frame);
+        let plan_start = perf::now_if_enabled();
+        let action = self.plan_frame(commands, clear_color)?;
+        perf::record_since(Phase::Plan, plan_start);
         let FramePlan {
             frame_op,
             skip_rect,
             input_hash,
-        } = match self.plan_frame(commands, clear_color)? {
+        } = match action {
             FrameAction::Present(op) => return self.present_pixmap(op),
             FrameAction::Render(plan) => plan,
         };
 
+        let interpret_start = perf::now_if_enabled();
         self.clear_pixmap(clear_color, &skip_rect);
 
         self.draw_state.reset();
@@ -701,6 +707,7 @@ where
         let taken = std::mem::take(&mut self.expanded_commands_cache);
         self.run_commands(&taken.as_ref().unwrap().1, &skip_rect, &layer_bboxes);
         self.expanded_commands_cache = taken;
+        perf::record_since(Phase::Interpret, interpret_start);
 
         self.present_pixmap(frame_op)
     }

@@ -45,7 +45,7 @@ layout-core = { workspace = true }
 platform-core = { workspace = true }
 platform-headless = { workspace = true }
 reactive-core = { workspace = true }
-ui-components = { workspace = true }
+ui-components = { workspace = true, features = ["overlays"] }
 ui-core = { workspace = true }
 ui-tree = { workspace = true }
 

@@ -1,18 +1,24 @@
 //! Presenting a frame, and refreshing an aged buffer from only the regions that have changed since.
 
+use std::collections::VecDeque;
+
 use geometry_core::Rect;
 #[cfg(target_os = "android")]
 use raw_window_handle::HasWindowHandle;
 #[cfg(target_os = "android")]
 use renderer_core::RendererError;
-use smallvec::SmallVec;
+use smallvec::{SmallVec, smallvec};
 #[cfg(target_os = "android")]
 use tiny_skia::Pixmap;
 
-// Recorded per frame so the damage-aware present path can refresh a buffer of age N by re-swizzling only the union of the last N frames' changed regions. A scroll is recorded as regions covering the whole scrolled clip plus the displaced overlays: re-swizzling from the already-shifted pixmap is cheaper than shifting the shared-memory present buffer in place.
-#[derive(Clone)]
+use super::pixels::{PixelFormat, clamp_to_pixels, convert_rgba, convert_rgba_region};
+
+// Deeper than any buffer age a surface reports in practice; an older buffer is refreshed in full.
+const HISTORY: usize = 6;
+
+// A scroll is recorded as regions covering the whole scrolled clip plus the displaced overlays: re-converting from the already-shifted pixmap is cheaper than shifting the shared-memory present buffer in place.
+#[derive(Clone, Debug, PartialEq)]
 pub(super) enum FrameOp {
-    // Nothing changed, so this contributes no damage.
     NoChange,
     // First frame, resize, clear-colour change, or a non-incremental redraw.
     Full,
@@ -20,30 +26,172 @@ pub(super) enum FrameOp {
     Regions(SmallVec<[Rect; 8]>),
 }
 
-// How to refresh a softbuffer buffer of the given age from the current pixmap.
-pub(super) enum PresentPlan {
-    // Re-swizzle the whole pixmap, the safe fallback.
-    Full,
-    // Re-swizzle just these regions; the rest of the aged buffer is already current.
-    Regions(SmallVec<[Rect; 8]>),
-}
-
-// `history` must already include the current frame's op as its last entry. Any ambiguity — age 0, too little history, or a `Full` anywhere in the window — falls back to a full re-swizzle, always correct.
-pub(super) fn plan_present(history: &std::collections::VecDeque<FrameOp>, age: u8) -> PresentPlan {
-    let k = age as usize;
-    if k == 0 || k > history.len() {
-        return PresentPlan::Full;
-    }
-    // The last k ops are exactly the frames missing from this aged buffer.
-    let mut regions: SmallVec<[Rect; 8]> = SmallVec::new();
-    for op in history.iter().rev().take(k) {
-        match op {
-            FrameOp::Full => return PresentPlan::Full,
-            FrameOp::NoChange => {}
-            FrameOp::Regions(rs) => regions.extend(rs.iter().copied()),
+impl FrameOp {
+    pub(super) fn merge(self, other: FrameOp) -> FrameOp {
+        match (self, other) {
+            (FrameOp::Full, _) | (_, FrameOp::Full) => FrameOp::Full,
+            (FrameOp::NoChange, op) | (op, FrameOp::NoChange) => op,
+            (FrameOp::Regions(mut regions), FrameOp::Regions(more)) => {
+                regions.extend(more);
+                // Collapsed past the inline capacity, so frames that never reach a present cannot grow the list without bound.
+                if regions.spilled()
+                    && let Some(bounds) = regions.iter().copied().reduce(Rect::union)
+                {
+                    regions = smallvec![bounds];
+                }
+                FrameOp::Regions(regions)
+            }
         }
     }
-    PresentPlan::Regions(regions)
+
+    pub(super) fn regions(&self) -> &[Rect] {
+        match self {
+            FrameOp::Regions(regions) => regions,
+            FrameOp::NoChange | FrameOp::Full => &[],
+        }
+    }
+
+    // The whole-pixel rects this covers on a `width` x `height` surface, `None` meaning all of it.
+    pub(super) fn pixel_rects(&self, width: u32, height: u32) -> Option<SmallVec<[PixelRect; 8]>> {
+        match self {
+            FrameOp::Full => None,
+            FrameOp::NoChange => Some(SmallVec::new()),
+            FrameOp::Regions(regions) => Some(
+                regions
+                    .iter()
+                    .filter_map(|r| clamp_to_pixels(*r, width, height))
+                    .map(|(x0, y0, x1, y1)| PixelRect {
+                        x: x0,
+                        y: y0,
+                        width: x1 - x0,
+                        height: y1 - y0,
+                    })
+                    .collect(),
+            ),
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub(super) struct PixelRect {
+    pub(super) x: u32,
+    pub(super) y: u32,
+    pub(super) width: u32,
+    pub(super) height: u32,
+}
+
+#[derive(Clone, Copy)]
+pub(super) enum SurfaceDamage {
+    // The surface may lose what was presented, so every present declares all of it.
+    Whole,
+    // Contents are kept but damage has no per-rect form: `wl_surface` below version 4.
+    #[cfg(target_os = "linux")]
+    AllOrNothing,
+    Rects,
+}
+
+// `None` declares the whole surface.
+pub(super) fn declared_damage(
+    changed: &FrameOp,
+    surface: SurfaceDamage,
+    width: u32,
+    height: u32,
+) -> Option<SmallVec<[PixelRect; 8]>> {
+    match surface {
+        SurfaceDamage::Whole => None,
+        #[cfg(target_os = "linux")]
+        SurfaceDamage::AllOrNothing => changed
+            .pixel_rects(width, height)
+            .filter(|rects| rects.is_empty()),
+        SurfaceDamage::Rects => changed.pixel_rects(width, height),
+    }
+}
+
+pub(super) fn note_damage(rects: Option<&[PixelRect]>, width: u32, height: u32) {
+    let surface = u64::from(width) * u64::from(height);
+    let damaged = rects.map_or(surface, |rects| {
+        rects
+            .iter()
+            .map(|r| u64::from(r.width) * u64::from(r.height))
+            .sum::<u64>()
+            .min(surface)
+    });
+    renderer_core::perf::note_damage(rects.is_some());
+    renderer_core::perf::note_damage_area(damaged, surface);
+}
+
+// Only frames that reach a present are logged, so a buffer's age indexes it exactly.
+pub(super) struct PresentLog {
+    presented: VecDeque<FrameOp>,
+    pending: FrameOp,
+}
+
+pub(super) struct PresentPlan {
+    pub(super) stale: FrameOp,
+    pub(super) changed: FrameOp,
+}
+
+impl PresentLog {
+    pub(super) fn new() -> Self {
+        Self {
+            presented: VecDeque::with_capacity(HISTORY),
+            pending: FrameOp::Full,
+        }
+    }
+
+    pub(super) fn record(&mut self, op: FrameOp) {
+        self.pending = std::mem::replace(&mut self.pending, FrameOp::NoChange).merge(op);
+    }
+
+    // `age` counts the presents since a buffer was last filled, 0 meaning its contents are unknown. Too little history falls back to a full refresh, which is always correct.
+    pub(super) fn plan(&self, age: u8) -> PresentPlan {
+        let stale = match usize::from(age).checked_sub(1) {
+            Some(missed) if missed <= self.presented.len() => self
+                .presented
+                .iter()
+                .rev()
+                .take(missed)
+                .cloned()
+                .fold(FrameOp::NoChange, FrameOp::merge),
+            _ => FrameOp::Full,
+        };
+        PresentPlan {
+            stale,
+            changed: self.pending.clone(),
+        }
+    }
+
+    pub(super) fn presented(&mut self) {
+        let op = std::mem::replace(&mut self.pending, FrameOp::NoChange);
+        self.presented.push_back(op);
+        if self.presented.len() > HISTORY {
+            self.presented.pop_front();
+        }
+    }
+
+    pub(super) fn reset(&mut self) {
+        self.presented.clear();
+        self.pending = FrameOp::Full;
+    }
+}
+
+impl PresentPlan {
+    pub(super) fn refresh(
+        &self,
+        rgba: &[u8],
+        buffer: &mut [u32],
+        width: usize,
+        height: usize,
+        format: PixelFormat,
+    ) {
+        if matches!(self.stale, FrameOp::Full) || matches!(self.changed, FrameOp::Full) {
+            convert_rgba(rgba, buffer, format);
+            return;
+        }
+        for r in self.stale.regions().iter().chain(self.changed.regions()) {
+            convert_rgba_region(rgba, buffer, width, height, *r, format);
+        }
+    }
 }
 
 // Bypasses softbuffer's intermediate buffer. `None` off Android or for any non-AndroidNdk handle.
@@ -103,3 +251,7 @@ pub(super) fn present_to_native_window(
     }
     Ok(())
 }
+
+#[cfg(test)]
+#[path = "present_test.rs"]
+mod tests;

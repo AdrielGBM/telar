@@ -180,6 +180,7 @@ impl<W: SurfaceWindow> BuiltinHost<W> {
             req.fonts.clone(),
             &SystemFonts::from_provider(req.paths),
             req.transparent,
+            window.retains_presented_contents(),
         );
         match renderer_software::SoftwareRenderer::new(window.clone(), window.clone(), config) {
             Ok(renderer) => {
@@ -212,6 +213,7 @@ impl<W: SurfaceWindow> BuiltinHost<W> {
             req.fonts.clone(),
             &SystemFonts::from_provider(req.paths),
             req.transparent,
+            window.retains_presented_contents(),
         );
         Some(Box::new(
             renderer_software::SoftwareRenderer::<W, W>::new_headless(

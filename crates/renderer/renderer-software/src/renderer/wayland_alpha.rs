@@ -3,7 +3,8 @@
 //! softbuffer only offers opaque `Xrgb8888`, so this bypasses it and manages its own alpha-preserving shm buffers — mirroring softbuffer's own Wayland backend (from which the shm/pool/release plumbing is adapted) and the Android `ANativeWindow` bypass, so all three present paths honor transparency consistently. The connection is built from the *foreign* display pointer, so it shares the app's existing Wayland display; present runs on the same thread as the surface's event loop, exactly like the softbuffer path it replaces.
 
 use std::fs::File;
-use std::os::fd::{AsFd, AsRawFd};
+use std::io;
+use std::os::fd::{AsFd, BorrowedFd};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 
@@ -13,6 +14,9 @@ use wayland_client::backend::{Backend, ObjectId};
 use wayland_client::globals::{GlobalListContents, registry_queue_init};
 use wayland_client::protocol::{wl_buffer, wl_registry, wl_shm, wl_shm_pool, wl_surface};
 use wayland_client::{Connection, Dispatch, EventQueue, Proxy, QueueHandle};
+
+use super::pixels::{PixelFormat, convert_rgba, convert_rgba_region, copy_region};
+use super::present::{FrameOp, PresentLog, SurfaceDamage, declared_damage, note_damage};
 
 /// The event-dispatch sink. Only `wl_buffer.release` carries state (flips the buffer's `released` flag); the rest are inert because we drive everything with explicit requests.
 struct State;
@@ -68,7 +72,7 @@ impl Dispatch<wl_buffer::WlBuffer, Arc<AtomicBool>> for State {
     }
 }
 
-fn create_memfile() -> std::io::Result<File> {
+fn create_memfile() -> io::Result<File> {
     use rustix::fs::{MemfdFlags, SealFlags};
     let fd = rustix::fs::memfd_create(
         c"telar-alpha-shm",
@@ -79,16 +83,108 @@ fn create_memfile() -> std::io::Result<File> {
     Ok(File::from(fd))
 }
 
-fn pool_size(width: i32, height: i32) -> i32 {
-    ((width.max(1) * height.max(1) * 4) as u32).next_power_of_two() as i32
+fn frame_bytes(width: i32, height: i32) -> io::Result<i32> {
+    width
+        .checked_mul(height)
+        .and_then(|pixels| pixels.checked_mul(4))
+        .ok_or_else(|| {
+            io::Error::new(
+                io::ErrorKind::InvalidInput,
+                "frame exceeds a wl_shm pool's i32 size",
+            )
+        })
 }
 
-/// One `wl_shm` `Argb8888` buffer plus its mmap'd backing store. Double-buffered by the presenter so the compositor can hold one while the next is filled.
-struct Buf {
-    tempfile: File,
+#[derive(Debug, PartialEq)]
+enum PoolResize {
+    Keep,
+    Grow(i32),
+    Recreate(i32),
+}
+
+// `wl_shm_pool.resize` can only grow a pool, and the memfd is sealed against shrinking, so memory is reclaimed by a new pool — worth it only once a frame needs less than half of the old one.
+fn pool_resize(pool_size: i32, needed: i32) -> PoolResize {
+    if needed > pool_size {
+        PoolResize::Grow(needed)
+    } else if needed < pool_size / 2 {
+        PoolResize::Recreate(needed)
+    } else {
+        PoolResize::Keep
+    }
+}
+
+struct ShmFile {
+    file: File,
     map: MmapMut,
+}
+
+impl ShmFile {
+    fn new(size: i32) -> io::Result<Self> {
+        let file = create_memfile()?;
+        file.set_len(size as u64)?;
+        // SAFETY: the memfd is shared only with the compositor, which never truncates it; the shrink seal forbids it.
+        let map = unsafe { MmapMut::map_mut(&file)? };
+        Ok(Self { file, map })
+    }
+
+    fn size(&self) -> i32 {
+        self.map.len() as i32
+    }
+
+    fn fd(&self) -> BorrowedFd<'_> {
+        self.file.as_fd()
+    }
+
+    fn fit(&mut self, needed: i32) -> io::Result<PoolResize> {
+        let change = pool_resize(self.size(), needed);
+        match change {
+            PoolResize::Keep => {}
+            PoolResize::Grow(size) => {
+                self.file.set_len(size as u64)?;
+                // SAFETY: as in `new`.
+                self.map = unsafe { MmapMut::map_mut(&self.file)? };
+            }
+            PoolResize::Recreate(size) => *self = ShmFile::new(size)?,
+        }
+        Ok(change)
+    }
+
+    fn pixels(&self, count: usize) -> &[u32] {
+        // SAFETY: any byte pattern is a valid u32.
+        let (prefix, pixels, _) = unsafe { self.map[..count * 4].align_to::<u32>() };
+        assert!(prefix.is_empty(), "an mmap starts on a page boundary");
+        pixels
+    }
+
+    fn pixels_mut(&mut self, count: usize) -> &mut [u32] {
+        // SAFETY: any byte pattern is a valid u32.
+        let (prefix, pixels, _) = unsafe { self.map[..count * 4].align_to_mut::<u32>() };
+        assert!(prefix.is_empty(), "an mmap starts on a page boundary");
+        pixels
+    }
+}
+
+fn create_buffer(
+    pool: &wl_shm_pool::WlShmPool,
+    width: i32,
+    height: i32,
+    qh: &QueueHandle<State>,
+    released: &Arc<AtomicBool>,
+) -> wl_buffer::WlBuffer {
+    pool.create_buffer(
+        0,
+        width,
+        height,
+        width * 4,
+        wl_shm::Format::Argb8888,
+        qh,
+        released.clone(),
+    )
+}
+
+struct Buf {
+    file: ShmFile,
     pool: wl_shm_pool::WlShmPool,
-    pool_size: i32,
     buffer: wl_buffer::WlBuffer,
     width: i32,
     height: i32,
@@ -101,27 +197,15 @@ impl Buf {
         width: i32,
         height: i32,
         qh: &QueueHandle<State>,
-    ) -> std::io::Result<Self> {
-        let size = pool_size(width, height);
-        let tempfile = create_memfile()?;
-        tempfile.set_len(size as u64)?;
-        let map = unsafe { MmapMut::map_mut(tempfile.as_raw_fd())? };
-        let pool = shm.create_pool(tempfile.as_fd(), size, qh, ());
+    ) -> io::Result<Self> {
+        let size = frame_bytes(width, height)?;
+        let file = ShmFile::new(size)?;
+        let pool = shm.create_pool(file.fd(), size, qh, ());
         let released = Arc::new(AtomicBool::new(true));
-        let buffer = pool.create_buffer(
-            0,
-            width,
-            height,
-            width * 4,
-            wl_shm::Format::Argb8888,
-            qh,
-            released.clone(),
-        );
+        let buffer = create_buffer(&pool, width, height, qh, &released);
         Ok(Self {
-            tempfile,
-            map,
+            file,
             pool,
-            pool_size: size,
             buffer,
             width,
             height,
@@ -129,27 +213,26 @@ impl Buf {
         })
     }
 
-    fn resize(&mut self, width: i32, height: i32, qh: &QueueHandle<State>) -> std::io::Result<()> {
+    fn resize(
+        &mut self,
+        shm: &wl_shm::WlShm,
+        width: i32,
+        height: i32,
+        qh: &QueueHandle<State>,
+    ) -> io::Result<()> {
         if self.width == width && self.height == height {
             return Ok(());
         }
-        self.buffer.destroy();
-        let size = pool_size(width, height);
-        if size > self.pool_size {
-            self.tempfile.set_len(size as u64)?;
-            self.pool.resize(size);
-            self.pool_size = size;
-            self.map = unsafe { MmapMut::map_mut(self.tempfile.as_raw_fd())? };
+        match self.file.fit(frame_bytes(width, height)?)? {
+            PoolResize::Keep => {}
+            PoolResize::Grow(size) => self.pool.resize(size),
+            PoolResize::Recreate(size) => {
+                let pool = shm.create_pool(self.file.fd(), size, qh, ());
+                std::mem::replace(&mut self.pool, pool).destroy();
+            }
         }
-        self.buffer = self.pool.create_buffer(
-            0,
-            width,
-            height,
-            width * 4,
-            wl_shm::Format::Argb8888,
-            qh,
-            self.released.clone(),
-        );
+        let buffer = create_buffer(&self.pool, width, height, qh, &self.released);
+        std::mem::replace(&mut self.buffer, buffer).destroy();
         self.width = width;
         self.height = height;
         Ok(())
@@ -160,9 +243,21 @@ impl Buf {
         surface.attach(Some(&self.buffer), 0, 0);
     }
 
-    fn pixels_mut(&mut self) -> &mut [u32] {
-        let len = self.width.max(0) as usize * self.height.max(0) as usize;
-        unsafe { std::slice::from_raw_parts_mut(self.map.as_mut_ptr() as *mut u32, len) }
+    fn pixel_count(&self) -> usize {
+        self.width as usize * self.height as usize
+    }
+}
+
+impl AsRef<[u32]> for Buf {
+    fn as_ref(&self) -> &[u32] {
+        self.file.pixels(self.pixel_count())
+    }
+}
+
+impl AsMut<[u32]> for Buf {
+    fn as_mut(&mut self) -> &mut [u32] {
+        let count = self.pixel_count();
+        self.file.pixels_mut(count)
     }
 }
 
@@ -173,13 +268,88 @@ impl Drop for Buf {
     }
 }
 
+struct Slot<B> {
+    buffer: B,
+    // Presents since the buffer was last filled: 1 for the one on screen, 0 when its contents are unknown.
+    age: u8,
+    size: (usize, usize),
+}
+
+// Two buffers presented in turn, so the compositor can hold one while the other is filled.
+struct Swapchain<B> {
+    front: Slot<B>,
+    back: Slot<B>,
+}
+
+impl<B: AsRef<[u32]> + AsMut<[u32]>> Swapchain<B> {
+    fn new(front: B, back: B) -> Self {
+        let slot = |buffer| Slot {
+            buffer,
+            age: 0,
+            size: (0, 0),
+        };
+        Self {
+            front: slot(front),
+            back: slot(back),
+        }
+    }
+
+    fn front(&self) -> &B {
+        &self.front.buffer
+    }
+
+    fn back(&self) -> &B {
+        &self.back.buffer
+    }
+
+    fn back_mut(&mut self) -> &mut B {
+        &mut self.back.buffer
+    }
+
+    // The back catches up on earlier presents by copying from the front, so only this present's changes are converted.
+    fn swap_in(&mut self, log: &PresentLog, rgba: &[u8], width: usize, height: usize) -> FrameOp {
+        let size = (width, height);
+        let back_age = if self.back.size == size {
+            self.back.age
+        } else {
+            0
+        };
+        let plan = log.plan(back_age);
+        let front_current = self.front.age != 0 && self.front.size == size;
+        let back = self.back.buffer.as_mut();
+        let damage = if !front_current || matches!(plan.changed, FrameOp::Full) {
+            convert_rgba(rgba, back, PixelFormat::Argb8888);
+            FrameOp::Full
+        } else {
+            let front = self.front.buffer.as_ref();
+            if matches!(plan.stale, FrameOp::Full) {
+                back.copy_from_slice(front);
+            }
+            for r in plan.stale.regions() {
+                copy_region(front, back, width, height, *r);
+            }
+            for r in plan.changed.regions() {
+                convert_rgba_region(rgba, back, width, height, *r, PixelFormat::Argb8888);
+            }
+            plan.changed
+        };
+        self.back.age = 1;
+        self.back.size = size;
+        std::mem::swap(&mut self.front, &mut self.back);
+        if self.back.age != 0 {
+            self.back.age += 1;
+        }
+        damage
+    }
+}
+
 pub(crate) struct WaylandAlphaPresenter {
     _conn: Connection,
     event_queue: EventQueue<State>,
     qh: QueueHandle<State>,
     shm: wl_shm::WlShm,
     surface: wl_surface::WlSurface,
-    buffers: Option<(Buf, Buf)>,
+    chain: Option<Swapchain<Buf>>,
 }
 
 impl WaylandAlphaPresenter {
@@ -215,60 +385,77 @@ impl WaylandAlphaPresenter {
             qh,
             shm,
             surface,
-            buffers: None,
+            chain: None,
         })
     }
 
-    /// Presents a premultiplied-RGBA frame (tiny_skia's pixmap byte order) as premultiplied `Argb8888`, preserving alpha so the compositor blends the surface.
-    pub(crate) fn present(&mut self, rgba: &[u8], width: u32, height: u32) {
-        let (w, h) = (width as i32, height as i32);
-        if w <= 0 || h <= 0 {
+    /// Presents a premultiplied-RGBA frame (tiny_skia's pixmap byte order) as premultiplied `Argb8888`, preserving alpha so the compositor blends the surface. `log` must already hold this frame's change, and is advanced only when the frame reaches the compositor.
+    pub(crate) fn present(&mut self, rgba: &[u8], width: u32, height: u32, log: &mut PresentLog) {
+        let (Ok(w), Ok(h)) = (i32::try_from(width), i32::try_from(height)) else {
+            return;
+        };
+        if w == 0 || h == 0 {
             return;
         }
         let _ = self.event_queue.dispatch_pending(&mut State);
 
-        if self.buffers.is_none() {
+        if self.chain.is_none() {
             let (Ok(front), Ok(back)) = (
                 Buf::new(&self.shm, w, h, &self.qh),
                 Buf::new(&self.shm, w, h, &self.qh),
             ) else {
                 return;
             };
-            self.buffers = Some((front, back));
+            self.chain = Some(Swapchain::new(front, back));
         }
+        let Some(chain) = &mut self.chain else {
+            return;
+        };
 
-        // Block until the back buffer the compositor last held is released, then size it to the frame.
-        let released = self.buffers.as_ref().unwrap().1.released.clone();
-        while !released.load(Ordering::SeqCst) {
+        // Block until the compositor releases the back buffer it last held, then size it to the frame.
+        while !chain.back().released.load(Ordering::SeqCst) {
             if self.event_queue.blocking_dispatch(&mut State).is_err() {
                 return;
             }
         }
-        let back = &mut self.buffers.as_mut().unwrap().1;
-        if back.resize(w, h, &self.qh).is_err() {
+        if chain.back_mut().resize(&self.shm, w, h, &self.qh).is_err() {
             return;
         }
 
-        // tiny_skia gives premultiplied RGBA bytes, and little-endian ARGB8888 shm wants the u32 `0xAARRGGBB`.
-        let dst = back.pixels_mut();
-        let n = dst.len().min(rgba.len() / 4);
-        for (i, px) in dst[..n].iter_mut().enumerate() {
-            let r = rgba[i * 4] as u32;
-            let g = rgba[i * 4 + 1] as u32;
-            let b = rgba[i * 4 + 2] as u32;
-            let a = rgba[i * 4 + 3] as u32;
-            *px = (a << 24) | (r << 16) | (g << 8) | b;
-        }
+        let damage = {
+            let _convert = renderer_core::perf::span(renderer_core::perf::Phase::Convert);
+            chain.swap_in(log, rgba, width as usize, height as usize)
+        };
 
-        let (front, back) = self.buffers.as_mut().unwrap();
-        std::mem::swap(front, back);
-        front.attach(&self.surface);
-        if self.surface.version() >= 4 {
-            self.surface.damage_buffer(0, 0, w, h);
+        chain.front().attach(&self.surface);
+        let damage_buffer = self.surface.version() >= 4;
+        let surface_damage = if damage_buffer {
+            SurfaceDamage::Rects
         } else {
-            self.surface.damage(0, 0, i32::MAX, i32::MAX);
+            SurfaceDamage::AllOrNothing
+        };
+        let rects = declared_damage(&damage, surface_damage, width, height);
+        note_damage(rects.as_deref(), width, height);
+        match rects {
+            Some(rects) => {
+                for r in rects {
+                    self.surface.damage_buffer(
+                        r.x as i32,
+                        r.y as i32,
+                        r.width as i32,
+                        r.height as i32,
+                    );
+                }
+            }
+            None if damage_buffer => self.surface.damage_buffer(0, 0, w, h),
+            None => self.surface.damage(0, 0, i32::MAX, i32::MAX),
         }
         self.surface.commit();
         let _ = self.event_queue.flush();
+        log.presented();
     }
 }
+
+#[cfg(test)]
+#[path = "wayland_alpha_test.rs"]
+mod tests;

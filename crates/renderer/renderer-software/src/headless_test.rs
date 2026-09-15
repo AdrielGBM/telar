@@ -4,11 +4,51 @@ use std::sync::Arc;
 
 use geometry_core::{Point, Rect};
 use platform_headless::HeadlessWindow;
+use renderer_core::perf::{self, Phase};
 use renderer_core::{
     Border, BorderRadius, Color, DrawCommand, PathData, PathStyle, RectStyle, RenderBackend,
     Shadow, ShapeStyle, Stroke, TextStyle,
 };
 use telar_renderer_software::{SoftwareRenderer, SoftwareRendererConfig};
+
+// Captured on this thread alone, so the frames other tests render in parallel never reach the counts.
+#[test]
+fn a_headless_frame_records_each_software_phase_once() {
+    let mut renderer = SoftwareRenderer::<HeadlessWindow, HeadlessWindow>::new_headless(
+        32,
+        32,
+        SoftwareRendererConfig::default(),
+    );
+    let cmds = vec![DrawCommand::Rect {
+        rect: Rect::new(4.0, 4.0, 16.0, 16.0),
+        style: Arc::new(RectStyle::default().with_fill(Color::BLUE)),
+    }];
+    renderer.begin_frame(32, 32, 1.0, 0).unwrap();
+
+    let ((), drawn) = perf::capture(|| renderer.render_frame(&cmds, Some(Color::BLACK)).unwrap());
+    for (phase, name) in [
+        (Phase::Plan, "plan"),
+        (Phase::Interpret, "interpret"),
+        (Phase::Frame, "frame"),
+    ] {
+        assert_eq!(drawn.count(phase), 1, "{name}");
+    }
+    assert_eq!(
+        drawn.count(Phase::Present) + drawn.count(Phase::Convert),
+        0,
+        "a headless renderer has no surface to present to"
+    );
+
+    let ((), unchanged) =
+        perf::capture(|| renderer.render_frame(&cmds, Some(Color::BLACK)).unwrap());
+    assert_eq!(unchanged.count(Phase::Plan), 1);
+    assert_eq!(
+        unchanged.count(Phase::Interpret),
+        0,
+        "an unchanged frame rasterizes nothing"
+    );
+    assert_eq!(unchanged.count(Phase::Frame), 1);
+}
 
 #[test]
 fn headless_renders_visible_pixels() {

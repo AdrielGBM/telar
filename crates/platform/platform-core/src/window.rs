@@ -119,6 +119,11 @@ pub trait Window {
     fn is_offscreen(&self) -> bool {
         false
     }
+
+    /// Defaults to `false` — the safe answer unless the window system guarantees retained contents; X11 without a compositor and Win32 without DWM leave a region another window uncovers for the app to repaint.
+    fn retains_presented_contents(&self) -> bool {
+        false
+    }
 }
 
 /// The obvious [`Window::redraw_waker`] for a window that can be cloned and shared: one that keeps the window alive and asks it for a frame.

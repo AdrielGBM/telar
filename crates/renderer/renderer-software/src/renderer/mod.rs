@@ -3,22 +3,24 @@
 mod frame;
 mod pixels;
 mod present;
+#[cfg(test)]
+mod test_frames;
 #[cfg(target_os = "linux")]
 mod wayland_alpha;
 
+use std::num::NonZeroU32;
 use std::sync::mpsc;
 
 use geometry_core::Rect;
 use raw_window_handle::{HasDisplayHandle, HasWindowHandle};
+use renderer_core::perf::{self, Phase};
 use renderer_core::{Color, DrawCommand, RendererError};
+use smallvec::SmallVec;
 use softbuffer::{Context, Surface};
 use tiny_skia::Pixmap;
 
-#[cfg(target_endian = "little")]
-use pixels::{convert_rgba_to_xrgb, convert_rgba_to_xrgb_region};
-#[cfg(target_endian = "little")]
-use present::PresentPlan;
-use present::{FrameOp, plan_present};
+use pixels::PixelFormat;
+use present::{FrameOp, PresentLog, SurfaceDamage, declared_damage, note_damage};
 #[cfg(target_os = "android")]
 use present::{extract_native_window, present_to_native_window};
 
@@ -51,8 +53,7 @@ pub struct SoftwareRenderer<D: HasDisplayHandle, W: HasWindowHandle> {
     expanded_commands_cache: Option<(u64, Vec<DrawCommand>)>,
     // Cache for compute_layer_bounds: avoids re-traversing commands when input and dimensions are unchanged.
     layer_bounds_cache: Option<(u64, Vec<Option<(i32, i32, u32, u32)>>)>,
-    // An aged softbuffer buffer is brought current by replaying the last `age` entries instead of re-swizzling the whole framebuffer. Bounded to the last few frames.
-    present_history: std::collections::VecDeque<FrameOp>,
+    present_log: PresentLog,
     // Used to present without softbuffer's swizzle and copy. softbuffer still owns surface creation and buffer geometry; this is a second acquired reference used only at present time.
     #[cfg(target_os = "android")]
     native_window: Option<ndk::native_window::NativeWindow>,
@@ -151,7 +152,7 @@ where
             prev_clear_color: None,
             expanded_commands_cache: None,
             layer_bounds_cache: None,
-            present_history: std::collections::VecDeque::with_capacity(8),
+            present_log: PresentLog::new(),
             #[cfg(target_os = "android")]
             native_window,
             #[cfg(target_os = "linux")]
@@ -196,7 +197,7 @@ where
             prev_clear_color: None,
             expanded_commands_cache: None,
             layer_bounds_cache: None,
-            present_history: std::collections::VecDeque::with_capacity(8),
+            present_log: PresentLog::new(),
             #[cfg(target_os = "android")]
             native_window: None,
             #[cfg(target_os = "linux")]
@@ -261,7 +262,7 @@ where
         arrived
     }
 
-    // `op` describes how this frame's pixmap differs from the previous one, used to refresh only the changed part of an aged softbuffer buffer. Pass `FrameOp::Full` when unsure.
+    // `op` describes how this frame's pixmap differs from the previous one, so a surface buffer is refreshed and damaged only where it changed. Pass `FrameOp::Full` when unsure.
     fn present_pixmap(&mut self, op: FrameOp) -> Result<(), RendererError> {
         let Some(pixmap) = &self.pixmap else {
             return Ok(());
@@ -278,7 +279,14 @@ where
         // Presents the premultiplied-RGBA frame as ARGB8888, keeping the alpha softbuffer cannot.
         #[cfg(target_os = "linux")]
         if let Some(alpha) = &mut self.alpha {
-            alpha.present(pixmap.data(), self.width, self.height);
+            let _present = perf::span(Phase::Present);
+            self.present_log.record(op);
+            alpha.present(
+                pixmap.data(),
+                self.width,
+                self.height,
+                &mut self.present_log,
+            );
             return Ok(());
         }
 
@@ -286,42 +294,49 @@ where
         let Some(surface) = &mut self.surface else {
             return Ok(());
         };
-
-        // An aged buffer is reconstructed by replaying the last `age` entries.
-        self.present_history.push_back(op);
-        while self.present_history.len() > 6 {
-            self.present_history.pop_front();
+        let _present = perf::span(Phase::Present);
+        self.present_log.record(op);
+        let Ok(mut buffer) = surface.buffer_mut() else {
+            return Ok(());
+        };
+        let plan = self.present_log.plan(buffer.age());
+        {
+            let _convert = perf::span(Phase::Convert);
+            plan.refresh(
+                pixmap.data(),
+                &mut buffer,
+                self.width as usize,
+                self.height as usize,
+                PixelFormat::Xrgb8888,
+            );
         }
 
-        let width = self.width as usize;
-        let height = self.height as usize;
-        if let Ok(mut buffer) = surface.buffer_mut() {
-            let age = buffer.age();
-            let plan = plan_present(&self.present_history, age);
-            // tiny_skia RGBA bytes to softbuffer's LE u32 `0x00RRGGBB`. The damage-aware plan re-swizzles only what changed; a full swizzle is the fallback.
-            #[cfg(target_endian = "little")]
-            {
-                let buf: &mut [u32] = &mut buffer;
-                match plan {
-                    PresentPlan::Full => convert_rgba_to_xrgb(pixmap.data(), buf),
-                    PresentPlan::Regions(regions) => {
-                        for r in &regions {
-                            convert_rgba_to_xrgb_region(pixmap.data(), buf, width, height, *r);
-                        }
-                    }
-                }
+        let surface_damage = if self.config.retains_presented_contents {
+            SurfaceDamage::Rects
+        } else {
+            SurfaceDamage::Whole
+        };
+        let rects = declared_damage(&plan.changed, surface_damage, self.width, self.height);
+        note_damage(rects.as_deref(), self.width, self.height);
+        match rects {
+            Some(rects) => {
+                let damage: SmallVec<[softbuffer::Rect; 8]> = rects
+                    .iter()
+                    .filter_map(|r| {
+                        Some(softbuffer::Rect {
+                            x: r.x,
+                            y: r.y,
+                            width: NonZeroU32::new(r.width)?,
+                            height: NonZeroU32::new(r.height)?,
+                        })
+                    })
+                    .collect();
+                buffer.present_with_damage(&damage)
             }
-            #[cfg(target_endian = "big")]
-            {
-                compile_error!(
-                    "softbuffer pixel format conversion not implemented for big-endian platforms. \
-                              Please file an issue or implement proper endian-aware conversion."
-                );
-            }
-            buffer
-                .present()
-                .map_err(|e| RendererError::Present(e.to_string()))?;
+            None => buffer.present(),
         }
+        .map_err(|e| RendererError::Present(e.to_string()))?;
+        self.present_log.presented();
         Ok(())
     }
 }

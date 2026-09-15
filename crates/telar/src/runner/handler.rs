@@ -407,7 +407,6 @@ where
             tracing::error!("begin_frame failed: {e}");
             return;
         }
-        let gpu_start = renderer_core::perf::now_if_enabled();
         let commands: &[renderer_core::DrawCommand] =
             if renderer.applies_scale_factor() || msg.scale_factor == 1.0 {
                 &msg.commands
@@ -418,7 +417,6 @@ where
         if let Err(e) = renderer.as_mut().render_frame(commands, msg.clear) {
             tracing::error!("render_frame failed: {e}");
         }
-        renderer_core::perf::record_since(renderer_core::perf::Phase::Gpu, gpu_start);
         if self.command_buf_pool.len() < COMMAND_BUF_POOL_CAP {
             self.command_buf_pool.push(msg.commands);
         }

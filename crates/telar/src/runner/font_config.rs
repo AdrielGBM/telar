@@ -88,10 +88,11 @@ pub(super) fn build_software_renderer_config(
     fonts: FontSetup,
     system: &SystemFonts,
     transparent: bool,
+    retains_presented_contents: bool,
 ) -> renderer_software::SoftwareRendererConfig {
     renderer_software::SoftwareRendererConfig {
         font: build_font_config(fonts, system),
         transparent,
-        ..renderer_software::SoftwareRendererConfig::default()
+        retains_presented_contents,
     }
 }

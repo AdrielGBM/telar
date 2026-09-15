@@ -4,7 +4,7 @@ use std::sync::Arc;
 
 use platform_core::Window as PlatformWindow;
 use raw_window_handle::{
-    DisplayHandle, HandleError, HasDisplayHandle, HasWindowHandle, WindowHandle,
+    DisplayHandle, HandleError, HasDisplayHandle, HasWindowHandle, RawDisplayHandle, WindowHandle,
 };
 use winit::window::Window as WinitInnerWindow;
 
@@ -43,6 +43,14 @@ impl PlatformWindow for WinitWindow {
 
     fn scale_factor(&self) -> f64 {
         self.0.scale_factor()
+    }
+
+    // A `wl_surface` shows its committed buffer until another is committed. winit's other window systems promise no such thing.
+    fn retains_presented_contents(&self) -> bool {
+        matches!(
+            self.display_handle().map(|handle| handle.as_raw()),
+            Ok(RawDisplayHandle::Wayland(_))
+        )
     }
 
     fn prefers_dark(&self) -> Option<bool> {

@@ -1,11 +1,17 @@
 //! Pixel-level work: the scroll blit, the clip mask, and the swizzle into the present buffer.
 
 use std::hash::{Hash, Hasher};
+use std::ops::Range;
 
 use geometry_core::Rect;
 use renderer_core::DrawCommand;
 use rustc_hash::FxHasher;
 use tiny_skia::Pixmap;
+
+#[cfg(target_endian = "big")]
+compile_error!(
+    "the present-buffer pixel conversion reads tiny_skia's RGBA bytes as little-endian words; big-endian targets are not supported"
+);
 
 pub(super) fn clamp_to_pixels(rect: Rect, width: u32, height: u32) -> Option<(u32, u32, u32, u32)> {
     let x0 = rect.x.floor().max(0.0) as i64;
@@ -228,77 +234,99 @@ pub(super) fn hash_commands_with_dimensions(
     h.finish()
 }
 
-// tiny_skia RGBA byte order, read as LE u32 `0xAABBGGRR`, to softbuffer's `0x00RRGGBB`.
-#[cfg(target_endian = "little")]
+#[derive(Clone, Copy)]
+pub(super) enum PixelFormat {
+    Xrgb8888,
+    #[cfg(target_os = "linux")]
+    Argb8888,
+}
+
+impl PixelFormat {
+    // tiny_skia's RGBA bytes read as a u32 are `0xAABBGGRR`: red and blue trade places, green stays, and alpha stays only in a format that carries it.
+    fn kept_bits(self) -> u32 {
+        match self {
+            PixelFormat::Xrgb8888 => 0x0000_FF00,
+            #[cfg(target_os = "linux")]
+            PixelFormat::Argb8888 => 0xFF00_FF00,
+        }
+    }
+}
+
 #[inline(always)]
-fn xrgb_from_rgba_word(s: u32) -> u32 {
-    ((s >> 16) & 0xFF) | (s & 0xFF00) | ((s & 0xFF) << 16)
+fn swizzle_word(s: u32, kept: u32) -> u32 {
+    ((s >> 16) & 0xFF) | (s & kept) | ((s & 0xFF) << 16)
 }
 
 // Both slices hold the same pixel count.
-#[cfg(target_endian = "little")]
-fn swizzle_words(src: &[u32], dst: &mut [u32]) {
+fn swizzle_words(src: &[u32], dst: &mut [u32], kept: u32) {
     use wide::u32x8;
     let mask_lo = u32x8::splat(0xFF);
-    let mask_g = u32x8::splat(0x0000_FF00);
+    let mask_kept = u32x8::splat(kept);
     let shift16 = u32x8::splat(16);
-    let n_simd = dst.len() / 8;
-    for i in 0..n_simd {
-        let b = i * 8;
-        let v = u32x8::from(<[u32; 8]>::try_from(&src[b..b + 8]).unwrap());
-        let out = ((v >> shift16) & mask_lo) | (v & mask_g) | ((v & mask_lo) << shift16);
-        let out_arr: [u32; 8] = out.into();
-        dst[b..b + 8].copy_from_slice(&out_arr);
+    let mut src_chunks = src.chunks_exact(8);
+    let mut dst_chunks = dst.chunks_exact_mut(8);
+    for (s, d) in (&mut src_chunks).zip(&mut dst_chunks) {
+        let v = u32x8::from(<[u32; 8]>::try_from(s).unwrap());
+        let out = ((v >> shift16) & mask_lo) | (v & mask_kept) | ((v & mask_lo) << shift16);
+        d.copy_from_slice(&<[u32; 8]>::from(out));
     }
-    for i in (n_simd * 8)..dst.len() {
-        dst[i] = xrgb_from_rgba_word(src[i]);
+    for (s, d) in src_chunks
+        .remainder()
+        .iter()
+        .zip(dst_chunks.into_remainder())
+    {
+        *d = swizzle_word(*s, kept);
     }
 }
 
 // `dst.len()` pixels are written; `src` must hold four times that in bytes. Reads the RGBA bytes as packed u32 words to avoid a per-pixel byte gather, falling back to a scalar gather when unaligned.
-#[cfg(target_endian = "little")]
-pub(super) fn convert_rgba_to_xrgb(src: &[u8], dst: &mut [u32]) {
+pub(super) fn convert_rgba(src: &[u8], dst: &mut [u32], format: PixelFormat) {
+    let kept = format.kept_bits();
     let pixels = dst.len();
     let bytes = &src[..pixels * 4];
     // SAFETY: any byte pattern is a valid u32, and only the aligned middle is read.
     let (pre, words, _post) = unsafe { bytes.align_to::<u32>() };
     if pre.is_empty() && words.len() >= pixels {
-        swizzle_words(words, dst);
+        swizzle_words(&words[..pixels], dst, kept);
         return;
     }
-    // Unaligned fallback, which is rare.
-    for i in 0..pixels {
-        let p = i * 4;
-        let s = u32::from_le_bytes(src[p..p + 4].try_into().unwrap());
-        dst[i] = xrgb_from_rgba_word(s);
+    for (px, d) in bytes.chunks_exact(4).zip(dst.iter_mut()) {
+        *d = swizzle_word(u32::from_le_bytes(px.try_into().unwrap()), kept);
     }
 }
 
-// A full-width rect is swizzled as one contiguous block, the common case for a horizontal scroll band; narrower rects go row by row.
-#[cfg(target_endian = "little")]
-pub(super) fn convert_rgba_to_xrgb_region(
-    src: &[u8],
-    dst: &mut [u32],
-    width: usize,
-    height: usize,
-    rect: Rect,
-) {
+// A full-width rect is one contiguous span, the common case for a horizontal scroll band; a narrower rect is a span per row.
+fn region_spans(width: usize, height: usize, rect: Rect, mut f: impl FnMut(Range<usize>)) {
     let Some((x0, y0, x1, y1)) = clamp_to_pixels(rect, width as u32, height as u32) else {
         return;
     };
     let (x0, y0, x1, y1) = (x0 as usize, y0 as usize, x1 as usize, y1 as usize);
     if x0 == 0 && x1 == width {
-        // Rows are contiguous in memory, so one SIMD pass covers the whole span.
-        let a = y0 * width;
-        let b = y1 * width;
-        convert_rgba_to_xrgb(&src[a * 4..b * 4], &mut dst[a..b]);
+        f(y0 * width..y1 * width);
         return;
     }
     for y in y0..y1 {
         let row = y * width;
-        convert_rgba_to_xrgb(
-            &src[(row + x0) * 4..(row + x1) * 4],
-            &mut dst[row + x0..row + x1],
-        );
+        f(row + x0..row + x1);
     }
+}
+
+pub(super) fn convert_rgba_region(
+    src: &[u8],
+    dst: &mut [u32],
+    width: usize,
+    height: usize,
+    rect: Rect,
+    format: PixelFormat,
+) {
+    region_spans(width, height, rect, |span| {
+        convert_rgba(&src[span.start * 4..span.end * 4], &mut dst[span], format)
+    });
+}
+
+#[cfg(target_os = "linux")]
+pub(super) fn copy_region(src: &[u32], dst: &mut [u32], width: usize, height: usize, rect: Rect) {
+    region_spans(width, height, rect, |span| {
+        dst[span.clone()].copy_from_slice(&src[span])
+    });
 }
