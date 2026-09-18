@@ -2,10 +2,10 @@ use super::*;
 use crate::culling;
 use crate::dirty_scenarios::{self, Plan, Scenario};
 use crate::{
-    BorderRadius, Color, Element, ElementId, FontMetrics, RectStyle, Semantics, ShapeStyle,
-    TextStyle,
+    Border, BorderRadius, Color, Element, ElementId, FontMetrics, Gradient, ImageData, Paint,
+    Raster, RectStyle, Semantics, Shadow, ShapeStyle, TextStyle,
 };
-use geometry_core::Rect;
+use geometry_core::{Point, Rect};
 use std::sync::Arc;
 
 fn rect_cmd(x: f32, y: f32, w: f32, h: f32) -> DrawCommand {
@@ -840,6 +840,213 @@ fn an_unchanged_scroll_is_no_blit() {
         blit(&cmds, &cmds).is_none(),
         "an unchanged list scrolled by nothing"
     );
+}
+
+fn styled(x: f32, y: f32, w: f32, h: f32, style: RectStyle) -> DrawCommand {
+    DrawCommand::Rect {
+        rect: Rect::new(x, y, w, h),
+        style: Arc::new(style),
+    }
+}
+
+fn solid() -> RectStyle {
+    RectStyle::default().with_fill(Color::from_rgb_u8(24, 24, 32))
+}
+
+fn ramp(start: Point, end: Point) -> RectStyle {
+    let stops = [(0.0, Color::BLACK), (1.0, Color::WHITE)];
+    RectStyle::default().with_fill(Paint::Gradient(Gradient::linear(start, end, &stops)))
+}
+
+const VIEWPORT: Rect = Rect {
+    x: 100.0,
+    y: 100.0,
+    width: 200.0,
+    height: 200.0,
+};
+
+// A panel background under a scrolling viewport: it reaches past the clip on every side, so what it is painted with is all that decides whether the blit survives.
+fn beneath_a_scroll(background: DrawCommand, offset: f32) -> Vec<DrawCommand> {
+    vec![
+        open(1),
+        background,
+        clip(100.0, 100.0, 200.0, 200.0, 0.0),
+        translate(100.0, 100.0 - offset),
+        open(2),
+        rect_cmd(0.0, 0.0, 200.0, 800.0),
+        close(),
+        DrawCommand::PopMatrix,
+        DrawCommand::PopClip,
+        close(),
+    ]
+}
+
+fn scrolled_over(background: DrawCommand) -> ScrollBlit {
+    blit(
+        &beneath_a_scroll(background.clone(), 20.0),
+        &beneath_a_scroll(background, 0.0),
+    )
+    .expect("a blit")
+}
+
+#[test]
+fn a_background_that_covers_the_clip_evenly_keeps_the_blit() {
+    for (background, what) in [
+        (styled(50.0, 50.0, 300.0, 300.0, solid()), "a solid fill"),
+        (
+            styled(
+                50.0,
+                50.0,
+                300.0,
+                300.0,
+                solid().with_radius(BorderRadius::all(40.0)),
+            ),
+            "a solid fill whose corners stay clear of the clip",
+        ),
+        (
+            styled(
+                50.0,
+                50.0,
+                300.0,
+                300.0,
+                solid().with_border(Border::uniform(Color::WHITE, 20.0)),
+            ),
+            "a framed fill whose frame stays clear of the clip",
+        ),
+        (
+            styled(
+                50.0,
+                50.0,
+                300.0,
+                300.0,
+                ramp(Point::new(50.0, 0.0), Point::new(350.0, 0.0)),
+            ),
+            "a gradient that ramps across the scroll",
+        ),
+    ] {
+        let blit = scrolled_over(background);
+        assert_eq!(
+            blit.exposed_band,
+            Rect::new(100.0, 280.0, 200.0, 20.0),
+            "{what}"
+        );
+        assert!(
+            blit.extra_dirty.is_empty(),
+            "{what} lands looking the same wherever the blit puts it: {:?}",
+            blit.extra_dirty
+        );
+    }
+}
+
+#[test]
+fn a_background_whose_pixels_depend_on_where_they_land_repaints_the_clip_whole() {
+    let radial = Gradient::radial(
+        Point::new(200.0, 200.0),
+        150.0,
+        &[(0.0, Color::BLACK), (1.0, Color::WHITE)],
+    );
+    for (background, what) in [
+        (
+            styled(
+                50.0,
+                50.0,
+                300.0,
+                300.0,
+                ramp(Point::new(0.0, 50.0), Point::new(0.0, 350.0)),
+            ),
+            "a gradient ramping along the scroll",
+        ),
+        (
+            styled(
+                50.0,
+                50.0,
+                300.0,
+                300.0,
+                ramp(Point::new(50.0, 50.0), Point::new(350.0, 350.0)),
+            ),
+            "a gradient ramping both ways",
+        ),
+        (
+            styled(
+                50.0,
+                50.0,
+                300.0,
+                300.0,
+                RectStyle::default().with_fill(Paint::Gradient(radial)),
+            ),
+            "a radial gradient",
+        ),
+        (
+            DrawCommand::Image {
+                data: Arc::new(ImageData::new(vec![0u8; 4 * 4 * 4], 4, 4)),
+                rect: Rect::new(50.0, 50.0, 300.0, 300.0),
+                raster: Raster::Smooth,
+            },
+            "a picture",
+        ),
+        (
+            styled(
+                50.0,
+                50.0,
+                300.0,
+                300.0,
+                solid().with_shadow(Shadow::new(0.0, 0.0, 12.0, Color::BLACK)),
+            ),
+            "a fill with a shadow ramping around it",
+        ),
+    ] {
+        let blit = scrolled_over(background);
+        assert!(
+            contains(union(&blit.extra_dirty), VIEWPORT),
+            "{what} does move: {:?}",
+            blit.extra_dirty
+        );
+    }
+}
+
+#[test]
+fn a_background_with_an_edge_inside_the_clip_repaints_where_the_edge_lands() {
+    for (background, landed, what) in [
+        (
+            styled(50.0, 50.0, 300.0, 150.0, solid()),
+            Rect::new(100.0, 180.0, 200.0, 20.0),
+            "a fill that stops half way down",
+        ),
+        (
+            styled(
+                50.0,
+                50.0,
+                300.0,
+                300.0,
+                solid().with_radius(BorderRadius::all(80.0)),
+            ),
+            VIEWPORT,
+            "a corner arc reaching in",
+        ),
+        (
+            styled(
+                50.0,
+                50.0,
+                300.0,
+                300.0,
+                solid().with_border(Border::uniform(Color::WHITE, 80.0)),
+            ),
+            VIEWPORT,
+            "a frame reaching in",
+        ),
+    ] {
+        let blit = scrolled_over(background);
+        assert!(
+            contains(union(&blit.extra_dirty), landed),
+            "{what} is an edge, and an edge moves: {:?}",
+            blit.extra_dirty
+        );
+    }
+}
+
+#[test]
+fn a_notification_list_blits_over_the_panel_background_beneath_it() {
+    assert_scenario("a notification list scrolling over its panel's background");
 }
 
 #[test]

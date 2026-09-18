@@ -7,7 +7,9 @@ use smallvec::{SmallVec, smallvec};
 
 use crate::align::{Aligner, Step};
 use crate::culling::PaintBounds;
-use crate::{DrawCommand, DrawState, blur_padding, blur_sigma, transform_clip_rect};
+use crate::{
+    DrawCommand, DrawState, GradientKind, Paint, blur_padding, blur_sigma, transform_clip_rect,
+};
 
 /// Inline capacity for the dirty-rect list. Beyond this the rects are collapsed into a single union (see MAX_DIRTY_RECTS).
 pub type DirtyRects = SmallVec<[Rect; 8]>;
@@ -95,6 +97,88 @@ fn within(clip: Option<Rect>, rect: Rect) -> Option<Rect> {
     clip.map_or(Some(rect), |clip| clip.intersect(rect))
 }
 
+fn covers(outer: Rect, inner: Rect) -> bool {
+    outer.x <= inner.x
+        && outer.y <= inner.y
+        && outer.x + outer.width >= inner.x + inner.width
+        && outer.y + outer.height >= inner.y + inner.height
+}
+
+/// A paint whose pixels do not depend on where they land, so a blit that moves them around inside `region` moves nothing anybody can see.
+#[derive(Clone, Copy)]
+struct Invariance {
+    /// The part of the paint that is covered evenly. Past it the paint has an edge, and an edge does move.
+    region: Rect,
+    /// Whether a horizontal shift leaves it looking the same.
+    horizontal: bool,
+    /// Whether a vertical shift does.
+    vertical: bool,
+}
+
+impl Invariance {
+    fn clipped(self, clip: Option<Rect>) -> Option<Self> {
+        Some(Self {
+            region: within(clip, self.region)?,
+            ..self
+        })
+    }
+
+    /// Whether blitting `scroll` leaves this paint's pixels where they belong: it covers the clip whole, and the shift is along an axis it does not vary on.
+    fn absorbs(&self, scroll: &Scroll) -> bool {
+        (scroll.delta_x == 0 || self.horizontal)
+            && (scroll.delta_y == 0 || self.vertical)
+            && covers(self.region, scroll.clip)
+    }
+}
+
+/// What a command leaves unchanged under a shift, for the paints where that is provable.
+///
+/// Deliberately narrow: only a box, only a fill that is a solid colour or a linear gradient along one axis, and only the part of the box that fill covers evenly — a corner radius and a border each put an edge inside the bounds. Text, pictures, paths, shadows and a gradient with two directions are all left out, because a paint admitted here that does vary leaves stale pixels inside the clip that nothing will ever repaint.
+fn invariance(cmd: &DrawCommand, matrix: [f32; 6]) -> Option<Invariance> {
+    let DrawCommand::Rect { rect, style } = cmd else {
+        return None;
+    };
+    // A rotation or a skew would carry a gradient's axis onto the other one, and a shadow ramps across ground the fill does not cover.
+    if matrix[1] != 0.0 || matrix[2] != 0.0 || style.shadow.is_some() {
+        return None;
+    }
+    let (horizontal, vertical) = match style.fill? {
+        Paint::Solid(_) => (true, true),
+        Paint::Gradient(gradient) => match gradient.kind {
+            GradientKind::Linear { start, end } => (
+                start.x == end.x && start.y != end.y,
+                start.y == end.y && start.x != end.x,
+            ),
+            GradientKind::Radial { .. } => return None,
+        },
+    };
+    if !(horizontal || vertical) {
+        return None;
+    }
+    let radius = style.radius;
+    let corners = [
+        radius.top_left,
+        radius.top_right,
+        radius.bottom_right,
+        radius.bottom_left,
+    ];
+    let border = style
+        .painted_border()
+        .map_or([0.0; 4], |(_, widths)| widths);
+    let inset = corners.into_iter().chain(border).fold(0.0, f32::max);
+    let even = Rect::new(
+        rect.x + inset,
+        rect.y + inset,
+        rect.width - inset * 2.0,
+        rect.height - inset * 2.0,
+    );
+    (even.width > 0.0 && even.height > 0.0).then(|| Invariance {
+        region: transform_clip_rect(matrix, even),
+        horizontal,
+        vertical,
+    })
+}
+
 struct ClipScope {
     damaged: bool,
 }
@@ -133,6 +217,8 @@ impl Closed {
 
 struct Visit {
     paint: Option<Rect>,
+    /// Set when the paint would survive a blit moving it; see [`Invariance`].
+    invariance: Option<Invariance>,
     matrix: [f32; 6],
     closed: Option<Closed>,
 }
@@ -193,6 +279,8 @@ impl Replay {
         }
         Visit {
             paint,
+            invariance: invariance(cmd, matrix)
+                .and_then(|it| it.clipped(self.state.current_clip())),
             matrix,
             closed,
         }
@@ -269,6 +357,7 @@ impl Replay {
     fn closing(&self, closed: Closed) -> Visit {
         Visit {
             paint: None,
+            invariance: None,
             matrix: self.state.cumulative_matrix,
             closed: Some(closed),
         }
@@ -327,6 +416,38 @@ impl Damage {
         }
         let untouched = self.rects.is_empty() && repainted.is_empty();
         (!self.samples_surface || untouched).then_some(self.rects)
+    }
+}
+
+/// One frame's side of something drawn outside the scrolled content: the pixels a blit of the clip would carry along with it, and whether carrying them would show.
+#[derive(Clone, Copy)]
+struct Painted {
+    rect: Option<Rect>,
+    invariance: Option<Invariance>,
+}
+
+impl Painted {
+    fn of(visit: Option<&Visit>) -> Self {
+        Self {
+            rect: visit.and_then(|visit| visit.paint),
+            invariance: visit.and_then(|visit| visit.invariance),
+        }
+    }
+
+    /// Pixels no blit can be trusted with: a backdrop blur resamples whatever ends up beneath it.
+    fn resampled(rect: Option<Rect>) -> Self {
+        Self {
+            rect,
+            invariance: None,
+        }
+    }
+
+    fn absorbed(&self, scroll: &Scroll) -> bool {
+        match (self.rect, self.invariance) {
+            (None, _) => true,
+            (Some(_), Some(invariance)) => invariance.absorbs(scroll),
+            (Some(_), None) => false,
+        }
     }
 }
 
@@ -391,10 +512,15 @@ impl Scroll {
         }
     }
 
-    fn displaced(&self, new: Option<Rect>, old: Option<Rect>) -> Option<Rect> {
+    fn displaced(&self, new: Painted, old: Painted) -> Option<Rect> {
+        // A panel background under a scrolling list is the whole clip's worth of repaint this saves: its pixels are carried along like everything else inside the clip, and land looking exactly as they did.
+        if new.absorbed(self) && old.absorbed(self) {
+            return None;
+        }
         let (dx, dy) = (self.delta_x as f32, self.delta_y as f32);
-        let now = new.and_then(|rect| self.clip.intersect(rect));
+        let now = new.rect.and_then(|rect| self.clip.intersect(rect));
         let ghost = old
+            .rect
             .and_then(|rect| self.clip.intersect(rect))
             .and_then(|rect| {
                 self.clip
@@ -420,7 +546,7 @@ struct Walk<'a> {
     damage: Damage,
     outside: Damage,
     search: Search,
-    before_scroll: &'a mut Vec<(Option<Rect>, Option<Rect>)>,
+    before_scroll: &'a mut Vec<(Painted, Painted)>,
 }
 
 impl Walk<'_> {
@@ -431,8 +557,8 @@ impl Walk<'_> {
         same: bool,
         new_matrices: usize,
     ) -> ControlFlow<()> {
-        let new_paint = new.as_ref().and_then(|visit| visit.paint);
-        let old_paint = old.as_ref().and_then(|visit| visit.paint);
+        let (new_side, old_side) = (Painted::of(new.as_ref()), Painted::of(old.as_ref()));
+        let (new_paint, old_paint) = (new_side.rect, old_side.rect);
         let moved = !same
             || new_paint != old_paint
             || new.as_ref().map(|visit| visit.matrix) != old.as_ref().map(|visit| visit.matrix);
@@ -469,19 +595,19 @@ impl Walk<'_> {
                 }
                 self.outside.settle(&new_closed)?;
                 self.outside.settle(&old_closed)?;
-                self.displace(new_paint, old_paint);
+                self.displace(new_side, old_side);
                 self.displace(
-                    new_closed.as_ref().and_then(Closed::backdrop),
-                    old_closed.as_ref().and_then(Closed::backdrop),
+                    Painted::resampled(new_closed.as_ref().and_then(Closed::backdrop)),
+                    Painted::resampled(old_closed.as_ref().and_then(Closed::backdrop)),
                 );
                 ControlFlow::Continue(())
             }
         }
     }
 
-    fn displace(&mut self, new: Option<Rect>, old: Option<Rect>) {
+    fn displace(&mut self, new: Painted, old: Painted) {
         match self.search {
-            Search::Looking if new.is_some() || old.is_some() => {
+            Search::Looking if new.rect.is_some() || old.rect.is_some() => {
                 self.before_scroll.push((new, old))
             }
             Search::Found(scroll) => self.outside.add(scroll.displaced(new, old)),
@@ -525,7 +651,7 @@ pub struct FrameDiff {
     aligner: Aligner,
     new: Replay,
     old: Replay,
-    before_scroll: Vec<(Option<Rect>, Option<Rect>)>,
+    before_scroll: Vec<(Painted, Painted)>,
 }
 
 impl FrameDiff {

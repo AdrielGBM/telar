@@ -202,6 +202,41 @@ fn window(offset: f32, tooltip_y: Option<f32>) -> Vec<DrawCommand> {
     commands
 }
 
+/// A shell's notification list: the panel's rounded background is drawn under the viewport and reaches past it on every side, so scrolling the list leaves not a pixel of it different.
+fn notifications(offset: f32) -> Vec<DrawCommand> {
+    let mut commands = vec![
+        open(1),
+        DrawCommand::Rect {
+            rect: Rect::new(2800.0, 100.0, 900.0, 1200.0),
+            style: Arc::new(RectStyle::filled(Color::from_rgb_u8(24, 24, 32), 24.0)),
+        },
+        open(2),
+        clip(2840.0, 200.0, 820.0, 1000.0, 0.0),
+        DrawCommand::PushMatrix {
+            matrix: [1.0, 0.0, 0.0, 1.0, 2840.0, 200.0 - offset],
+        },
+        open(3),
+    ];
+    for row in 0..40 {
+        let shade = if row % 2 == 0 { 70 } else { 120 };
+        commands.push(painted(
+            0.0,
+            row as f32 * 60.0,
+            820.0,
+            50.0,
+            Color::from_rgb_u8(shade, 100, 170),
+        ));
+    }
+    commands.extend([
+        DrawCommand::PopElement,
+        DrawCommand::PopMatrix,
+        DrawCommand::PopClip,
+        DrawCommand::PopElement,
+        DrawCommand::PopElement,
+    ]);
+    commands
+}
+
 pub fn all() -> Vec<Scenario> {
     let moved_cards = vec![
         Rect::new(300.0, 148.0, 200.0, 40.0),
@@ -300,6 +335,18 @@ pub fn all() -> Vec<Scenario> {
                     Rect::new(1600.0, 300.0, 200.0, 60.0),
                     Rect::new(1600.0, 400.0, 200.0, 60.0),
                 ],
+            },
+        },
+        Scenario {
+            name: "a notification list scrolling over its panel's background",
+            size: SURFACE,
+            old: notifications(0.0),
+            new: notifications(40.0),
+            plan: Plan::Scroll {
+                clip: Rect::new(2840.0, 200.0, 820.0, 1000.0),
+                delta: (0, -40),
+                exposed: Rect::new(2840.0, 1160.0, 820.0, 40.0),
+                extra: vec![],
             },
         },
     ]
