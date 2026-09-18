@@ -16,7 +16,7 @@ use wgpu::util::DeviceExt;
 use wgpu::{Device, Queue, Surface, SurfaceConfiguration};
 
 use crate::blur::{BlurParams, BlurPipeline};
-use crate::composite::CompositePipeline;
+use crate::composite::{CompositeParams, CompositePipeline};
 use crate::config::HardwareRendererConfig;
 use crate::primitives::image::{ImageInstance, ImagePipeline};
 use crate::primitives::layer::LayerPipeline;
@@ -907,10 +907,11 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
         }
         self.config = Some(config);
         self.viewport_dirty = true;
-        // At one sample the resolve is a texture copy and the idle-blit samples this texture directly. A multisample texture cannot be sampled, so TEXTURE_BINDING is added only on the single-sample branch.
+        // At one sample the resolve is a texture copy, the idle-blit samples this texture directly, and a scroll copies its moved pixels back in. A multisample texture can be none of those, so the extra usages are added only on the single-sample branch.
         let msaa_usage = if self.msaa_samples == 1 {
             wgpu::TextureUsages::RENDER_ATTACHMENT
                 | wgpu::TextureUsages::COPY_SRC
+                | wgpu::TextureUsages::COPY_DST
                 | wgpu::TextureUsages::TEXTURE_BINDING
         } else {
             wgpu::TextureUsages::RENDER_ATTACHMENT
@@ -929,11 +930,12 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
             usage: msaa_usage,
             view_formats: &[],
         }));
-        // At one sample the retained texture is the copy destination, so COPY_DST is required.
+        // At one sample the frame is never resolved out to this texture, which serves instead as the staging point a scroll bounces its moved pixels through — both ends of that, so both copy usages.
         let retained_usage = if self.msaa_samples == 1 {
             wgpu::TextureUsages::RENDER_ATTACHMENT
                 | wgpu::TextureUsages::TEXTURE_BINDING
                 | wgpu::TextureUsages::COPY_DST
+                | wgpu::TextureUsages::COPY_SRC
         } else {
             wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::TEXTURE_BINDING
         };

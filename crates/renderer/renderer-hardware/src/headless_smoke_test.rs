@@ -851,6 +851,98 @@ fn the_clip_stack_intersects_nests_and_unwinds() {
     );
 }
 
+/// A rounded clip has to cut a composite's corners, not merely scissor it to the clip's box.
+///
+/// A layer composites in a pass of its own, where the viewport uniform carrying the clip's SDF to every ordinary draw is no longer bound — so until the clip travelled with the composite itself, the layer filled the square corners of the scissor that the rounded clip should have cut away.
+#[test]
+fn a_rounded_clip_cuts_the_corners_of_a_layer_composited_inside_it() {
+    const W: u32 = 64;
+    const H: u32 = 64;
+    let Some(mut renderer) = headless(W, H) else {
+        return;
+    };
+
+    let clip = Rect::new(8.0, 8.0, 48.0, 48.0);
+    let cmds = vec![
+        DrawCommand::PushClip {
+            rect: clip,
+            radius: renderer_core::BorderRadius::all(16.0),
+        },
+        DrawCommand::PushLayer {
+            opacity: 1.0,
+            backdrop_blur: 0.0,
+        },
+        filled(
+            clip.x,
+            clip.y,
+            clip.width,
+            clip.height,
+            Color::from_rgb_u8(240, 200, 60),
+        ),
+        DrawCommand::PopLayer,
+        DrawCommand::PopClip,
+    ];
+
+    renderer.begin_frame(W, H, 1.0, 1).expect("begin_frame");
+    renderer
+        .render_frame(&cmds, Some(Color::from_rgb_u8(20, 20, 28)))
+        .expect("render_frame");
+    let pixels = renderer.read_rgba().expect("read_rgba");
+    let red_at = |x: u32, y: u32| pixels[((y * W + x) * 4) as usize];
+
+    assert!(
+        red_at(32, 32) > 200,
+        "the layer covers the middle of the clip, got {}",
+        red_at(32, 32)
+    );
+    // 20 logical pixels out from the corner arc's centre, whose radius is 16: outside the rounded corner, inside the scissor box.
+    assert!(
+        red_at(10, 10) < 80,
+        "the clip's rounded corner cut the composite, got {}",
+        red_at(10, 10)
+    );
+}
+
+/// `PushLayer::backdrop_blur` is a CSS blur radius and the blur pass takes a sigma, so the backdrop path has to convert between them — as the shadow path already does inside `ShadowLayout::compute`, and as the damage padding around a backdrop layer does in `renderer-core`. Painting the raw radius as a sigma spread the blur twice as far as the region repainted for it.
+///
+/// An empty backdrop layer blurs the whole framebuffer and composites it back at full opacity, so the frame becomes its own blur and a hard white/black edge turns into the blur's step response. The thresholds bracket a sigma of 12 — radius 24 converted — against the 24 a raw radius would give: a Gaussian step edge reads `0.5 * erfc(d / (sigma * sqrt(2)))` at distance `d`, which is ~94/255 four pixels in either way, and ~0/255 thirty-six pixels in at sigma 12 against ~17/255 at sigma 24.
+#[test]
+fn a_backdrop_blur_spreads_by_its_radius_converted_to_a_sigma() {
+    const W: u32 = 160;
+    const H: u32 = 64;
+    const EDGE: u32 = 80;
+    let Some(mut renderer) = headless(W, H) else {
+        return;
+    };
+
+    let cmds = vec![
+        filled(0.0, 0.0, EDGE as f32, H as f32, Color::WHITE),
+        DrawCommand::PushLayer {
+            opacity: 1.0,
+            backdrop_blur: 24.0,
+        },
+        DrawCommand::PopLayer,
+    ];
+
+    renderer.begin_frame(W, H, 1.0, 1).expect("begin_frame");
+    renderer
+        .render_frame(&cmds, Some(Color::BLACK))
+        .expect("render_frame");
+    let pixels = renderer.read_rgba().expect("read_rgba");
+    let white_at = |x: u32| pixels[((H / 2 * W) + x) as usize * 4];
+
+    assert!(
+        white_at(EDGE + 4) > 30,
+        "the edge is blurred at all, got {}",
+        white_at(EDGE + 4)
+    );
+    assert!(
+        white_at(EDGE + 36) < 8,
+        "and spreads by the converted sigma, not the raw radius, got {}",
+        white_at(EDGE + 36)
+    );
+}
+
 fn filled(x: f32, y: f32, width: f32, height: f32, color: Color) -> DrawCommand {
     DrawCommand::Rect {
         rect: Rect::new(x, y, width, height),

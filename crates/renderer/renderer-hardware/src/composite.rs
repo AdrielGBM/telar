@@ -1,6 +1,36 @@
 //! Compositing a rendered layer back onto its parent, with its opacity and rounded-clip mask.
 
+use geometry_core::Rect;
 use wgpu::util::DeviceExt;
+
+/// Where one composite lands and what masks it on the way.
+#[derive(Clone, Copy)]
+pub(crate) struct CompositeParams {
+    /// Destination rect, in the logical space the bound viewport maps onto NDC.
+    pub(crate) rect: [f32; 4],
+    pub(crate) alpha: f32,
+    /// Rounds the composite's own corners, as a radius on [`Self::rect`]; zero leaves them square.
+    pub(crate) clip_radius: f32,
+    /// Scales the sampled UVs, for a bucketed texture wider than the content it holds.
+    pub(crate) content_uv_scale: [f32; 2],
+    /// The rounded clip enclosing the composite, in the same logical space as [`Self::rect`].
+    ///
+    /// Travels with the composite rather than through the viewport uniform every other draw reads its clip from, because a layer blit runs in a pass of its own, where the viewport the clip was pushed onto is no longer bound.
+    pub(crate) outer_clip: Option<(Rect, f32)>,
+}
+
+impl CompositeParams {
+    /// A whole texture blitted opaquely into `rect`, unmasked.
+    pub(crate) fn blit(rect: [f32; 4]) -> Self {
+        Self {
+            rect,
+            alpha: 1.0,
+            clip_radius: 0.0,
+            content_uv_scale: [1.0, 1.0],
+            outer_clip: None,
+        }
+    }
+}
 
 #[repr(C)]
 #[derive(bytemuck::Pod, bytemuck::Zeroable, Clone, Copy)]
@@ -9,6 +39,33 @@ struct CompositeParamsRaw {
     alpha: f32,
     clip_radius: f32,
     content_uv_scale: [f32; 2],
+    outer_clip_rect: [f32; 4],
+    outer_clip_radius: f32,
+    _pad: [f32; 3],
+}
+
+// Locks the GPU/CPU contract: the WGSL `CompositeParams` places `outer_clip_rect` at offset 32 and is 64 bytes.
+const _: () = {
+    assert!(std::mem::size_of::<CompositeParamsRaw>() == 64);
+    assert!(std::mem::offset_of!(CompositeParamsRaw, outer_clip_rect) == 32);
+};
+
+impl From<CompositeParams> for CompositeParamsRaw {
+    fn from(params: CompositeParams) -> Self {
+        let (outer_clip_rect, outer_clip_radius) = match params.outer_clip {
+            Some((rect, radius)) => ([rect.x, rect.y, rect.width, rect.height], radius),
+            None => ([0.0; 4], 0.0),
+        };
+        Self {
+            rect: params.rect,
+            alpha: params.alpha,
+            clip_radius: params.clip_radius,
+            content_uv_scale: params.content_uv_scale,
+            outer_clip_rect,
+            outer_clip_radius,
+            _pad: [0.0; 3],
+        }
+    }
 }
 
 pub(crate) struct CompositePipeline {
@@ -137,17 +194,9 @@ impl CompositePipeline {
         device: &wgpu::Device,
         queue: &wgpu::Queue,
         view: &wgpu::TextureView,
-        rect: [f32; 4],
-        alpha: f32,
-        clip_radius: f32,
-        content_uv_scale: [f32; 2],
+        params: CompositeParams,
     ) -> wgpu::BindGroup {
-        let params = CompositeParamsRaw {
-            rect,
-            alpha,
-            clip_radius,
-            content_uv_scale,
-        };
+        let params = CompositeParamsRaw::from(params);
         // Reuses a pooled buffer, writing params in place, or creates one on a miss. COPY_DST is required for `queue.write_buffer`.
         let params_buf = match self.params_buffer_pool.pop() {
             Some(buf) => {

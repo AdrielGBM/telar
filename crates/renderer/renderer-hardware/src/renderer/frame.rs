@@ -33,8 +33,10 @@ enum Acquired {
 enum ClipEntry {
     // A plain scissor rect: only the draw-state clip stack unwinds.
     Scissor,
-    // A rounded clip masked in-shader by the viewport SDF, carrying the scissor it displaced.
+    // A rounded clip masked in-shader by the viewport SDF, carrying the rect and radius it masks with and the scissor it displaced.
     Shader {
+        rect: Rect,
+        radius: f32,
         outer_scissor: Option<Rect>,
     },
     // A rounded clip nested inside another: drawn into a mini-layer, composited by this bind group.
@@ -42,6 +44,20 @@ enum ClipEntry {
         composite: wgpu::BindGroup,
         outer_scissor: Option<Rect>,
     },
+}
+
+/// The rounded clip a composite has to mask itself against, having left the viewport uniform that carries it to ordinary draws.
+///
+/// `None` past the innermost mini-layer clip: everything drawn into one is masked once, when that layer composites, so a composite inside it must not apply the same corner twice.
+fn enclosing_shader_clip(clip_stack: &[ClipEntry]) -> Option<(Rect, f32)> {
+    for entry in clip_stack.iter().rev() {
+        match entry {
+            ClipEntry::Shader { rect, radius, .. } => return Some((*rect, *radius)),
+            ClipEntry::Layer { .. } => return None,
+            ClipEntry::Scissor => {}
+        }
+    }
+    None
 }
 
 // Created together and read together. As three `Option` fields, every later phase re-stated the invariant with its own `.expect`.
@@ -142,6 +158,15 @@ fn frame_load_op(clear_color: Option<Color>) -> wgpu::LoadOp<wgpu::Color> {
     }
 }
 
+fn texel_copy(texture: &wgpu::Texture, origin: wgpu::Origin3d) -> wgpu::TexelCopyTextureInfo<'_> {
+    wgpu::TexelCopyTextureInfo {
+        texture,
+        mip_level: 0,
+        origin,
+        aspect: wgpu::TextureAspect::All,
+    }
+}
+
 // A layer's mini-layer can be larger than the dirty region and composites at opacity over the parent, so without confinement it re-blends over the preserved previous frame and accumulates opacity every frame. A `None` dirty scissor means no damage, so the composite keeps its own clip.
 fn confine_to_dirty(scissor: Option<Rect>, dirty: Option<Rect>) -> Option<Rect> {
     match dirty {
@@ -155,6 +180,8 @@ enum Prime {
     None,
     InPlace,
     /// In place everywhere but inside the scrolled clip, whose pixels move by its delta.
+    ///
+    /// The multisample target draws both halves from the retained previous frame; the single-sample one is already that frame and only moves the clip's pixels, by texture copy.
     Scrolled {
         clip: Rect,
         delta: (f32, f32),
@@ -163,10 +190,78 @@ enum Prime {
 
 #[derive(Clone, Copy)]
 struct Reuse {
+    /// Whether the previous frame has to be drawn into this frame's target before anything Loads it — true of the multisample target, which keeps the previous frame in a separate retained texture, and false of the single-sample one, which renders into the texture already holding it.
     prime: bool,
+    /// Whether a scrolled region's pixels can be moved rather than repainted.
     scroll: bool,
     damage_with_clear: bool,
     damage_transparent: bool,
+}
+
+/// This frame and the target it lands on, as plain values, so [`Reuse::decide`] is a pure function of them rather than of a live renderer.
+#[derive(Clone, Copy)]
+struct Conditions {
+    /// Sample count of the target this frame renders into.
+    msaa_samples: u32,
+    /// Whether the retained texture holds the previous frame, which is only ever resolved out to it on the multisample path.
+    holds_retained: bool,
+    clear_color: Option<Color>,
+    /// Whether this frame clears to the colour the previous one was drawn under. A new one lies beneath every pixel that frame left, so none of them can be kept.
+    clear_kept: bool,
+    frame_has_backdrop_blur: bool,
+    /// `TELAR_HW_DAMAGE`.
+    damage_enabled: bool,
+    /// `TELAR_HW_SCROLL_BLIT`.
+    scroll_enabled: bool,
+}
+
+impl Conditions {
+    /// Whether this frame's clear colour can be repainted as a rect inside the dirty scissor.
+    ///
+    /// The injected background rect draws through the premultiplied-alpha pipeline, so a translucent colour would blend over the primed previous frame and accumulate error every frame it survived.
+    fn clear_is_opaque(&self) -> bool {
+        self.clear_color.is_some_and(|c| c.a >= 1.0)
+    }
+
+    /// Whether a layer in this frame samples what is behind it, which no partial repaint can serve: it would read the primed previous frame outside the dirty rect and pull in stale content.
+    fn no_layer_samples_the_backdrop(&self) -> bool {
+        !self.frame_has_backdrop_blur
+    }
+
+    /// Whether some target still holds the previous frame for priming to read back.
+    ///
+    /// True on the single-sample path, whose `msaa_texture` stores and is never written by an idle frame. On the multisample path the frame resolves out to the retained texture and the multisample target keeps no dependable copy, so that retained texture has to exist.
+    fn holds_previous_frame(&self) -> bool {
+        (self.msaa_samples > 1 && self.holds_retained) || self.msaa_samples == 1
+    }
+
+    /// Whether a frame that clears may be damage-tracked: its clear colour is repainted over the preserved previous frame inside the dirty scissor, so it has to be opaque.
+    fn allows_damage_with_clear(&self) -> bool {
+        self.damage_enabled
+            && self.clear_is_opaque()
+            && self.no_layer_samples_the_backdrop()
+            && self.holds_previous_frame()
+    }
+
+    /// Whether a transparent frame may be damage-tracked.
+    ///
+    /// A transparent frame Loads rather than Clears, assuming the target still holds the previous frame. That holds on the single-sample path and not on the multisample one, where repainting only the dirty rect blinked out everything unchanged this frame. Priming it would need an erase-to-transparent inside the dirty rect, since primed pixels are not overwritten by a background fill, so this refuses instead.
+    fn allows_damage_transparent(&self) -> bool {
+        self.clear_color.is_none() && self.msaa_samples == 1
+    }
+}
+
+impl Reuse {
+    fn decide(conditions: Conditions) -> Self {
+        Self {
+            // The prime quad only serves the multisample target; the single-sample path Loads its persistent `msaa_texture`, which already holds the previous frame where it stands.
+            prime: conditions.msaa_samples > 1,
+            // Deliberately not also gated on the sample count: a transparent frame is always single-sample, so coupling the two would stop it scrolling at all. The single-sample path moves its pixels by texture copy instead — see `scroll_target_in_place`.
+            scroll: conditions.scroll_enabled,
+            damage_with_clear: conditions.clear_kept && conditions.allows_damage_with_clear(),
+            damage_transparent: conditions.clear_kept && conditions.allows_damage_transparent(),
+        }
+    }
 }
 
 /// Decided once by [`HardwareRenderer::analyze_frame`] before anything is drawn.
@@ -358,15 +453,12 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
                     &self.device,
                     &self.queue,
                     &idle_source_view,
-                    [
+                    CompositeParams::blit([
                         0.0,
                         0.0,
                         self.width as f32 / self.scale_factor,
                         self.height as f32 / self.scale_factor,
-                    ],
-                    1.0,
-                    0.0,
-                    [1.0, 1.0],
+                    ]),
                 );
                 let mut encoder =
                     self.device
@@ -399,44 +491,6 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
         Ok(false)
     }
 
-    /// Whether this frame's clear colour can be repainted as a rect inside the dirty scissor.
-    ///
-    /// The injected background rect draws through the premultiplied-alpha pipeline, so a translucent colour would blend over the primed previous frame and accumulate error every frame it survived.
-    fn clear_is_opaque(clear_color: Option<Color>) -> bool {
-        clear_color.is_some_and(|c| c.a >= 1.0)
-    }
-
-    /// Whether a layer in this frame samples what is behind it, which no partial repaint can serve: it would read the primed previous frame outside the dirty rect and pull in stale content.
-    fn no_layer_samples_the_backdrop(frame_has_backdrop_blur: bool) -> bool {
-        !frame_has_backdrop_blur
-    }
-
-    /// Whether some target still holds the previous frame for priming to read back.
-    ///
-    /// True on the single-sample path, whose `msaa_texture` stores and is never written by an idle frame. On the multisample path the frame resolves out to `retained_view` and the multisample target keeps no dependable copy, so that retained texture has to exist.
-    fn holds_previous_frame(&self) -> bool {
-        (self.msaa_samples > 1 && self.retained_view.is_some()) || self.msaa_samples == 1
-    }
-
-    /// Whether a frame that clears may be damage-tracked: its clear colour is repainted over the preserved previous frame inside the dirty scissor, so it has to be opaque.
-    fn allows_damage_with_clear(
-        &self,
-        clear_color: Option<Color>,
-        frame_has_backdrop_blur: bool,
-    ) -> bool {
-        hw_damage_with_clear_enabled()
-            && Self::clear_is_opaque(clear_color)
-            && Self::no_layer_samples_the_backdrop(frame_has_backdrop_blur)
-            && self.holds_previous_frame()
-    }
-
-    /// Whether a transparent frame may be damage-tracked.
-    ///
-    /// A transparent frame Loads rather than Clears, assuming the target still holds the previous frame. That holds on the single-sample path and not on the multisample one, where repainting only the dirty rect blinked out everything unchanged this frame. Priming it would need an erase-to-transparent inside the dirty rect, since primed pixels are not overwritten by a background fill, so this refuses instead.
-    fn allows_damage_transparent(&self, clear_color: Option<Color>) -> bool {
-        clear_color.is_none() && self.msaa_samples == 1
-    }
-
     /// What this frame may reuse of the one before it.
     fn analyze_frame(
         &mut self,
@@ -444,22 +498,18 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
         clear_color: Option<Color>,
         frame_has_backdrop_blur: bool,
     ) -> FramePlan {
-        // A new clear colour lies under every pixel the previous frame left, so none of them can be kept.
-        let clear_kept = clear_color == self.prev_clear_color;
-        let damage_with_clear =
-            clear_kept && self.allows_damage_with_clear(clear_color, frame_has_backdrop_blur);
-        let damage_transparent = clear_kept && self.allows_damage_transparent(clear_color);
-        if self.prev_commands.is_empty() || !(damage_with_clear || damage_transparent) {
+        let reuse = Reuse::decide(Conditions {
+            msaa_samples: self.msaa_samples,
+            holds_retained: self.retained_view.is_some(),
+            clear_color,
+            clear_kept: clear_color == self.prev_clear_color,
+            frame_has_backdrop_blur,
+            damage_enabled: hw_damage_with_clear_enabled(),
+            scroll_enabled: hw_scroll_blit_enabled(),
+        });
+        if self.prev_commands.is_empty() || !(reuse.damage_with_clear || reuse.damage_transparent) {
             return FramePlan::FULL;
         }
-        // The prime quad only serves the multisample target; the single-sample path Loads its persistent `msaa_texture`, which cannot be read while it is shifted into itself.
-        let multisample = self.msaa_samples > 1;
-        let reuse = Reuse {
-            prime: multisample,
-            scroll: multisample && hw_scroll_blit_enabled(),
-            damage_with_clear,
-            damage_transparent,
-        };
         let font_metrics = &self.font_metrics;
         let change = self
             .frame_diff
@@ -531,6 +581,7 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
         &mut self,
         scissor_layer_stack: &mut Vec<Option<Rect>>,
         layer_accum_stack: &mut Vec<LayerAccum>,
+        clip_stack: &[ClipEntry],
         commands: &[DrawCommand],
         cmd_idx: usize,
         dirty_scissor: Option<Rect>,
@@ -617,15 +668,18 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
                         &self.device,
                         &self.queue,
                         cached_view,
-                        [
-                            offset_x,
-                            offset_y,
-                            texture_width_logical as f32,
-                            texture_height_logical as f32,
-                        ],
-                        accum.opacity,
-                        0.0,
-                        uv_scale,
+                        CompositeParams {
+                            rect: [
+                                offset_x,
+                                offset_y,
+                                texture_width_logical as f32,
+                                texture_height_logical as f32,
+                            ],
+                            alpha: accum.opacity,
+                            clip_radius: 0.0,
+                            content_uv_scale: uv_scale,
+                            outer_clip: enclosing_shader_clip(clip_stack),
+                        },
                     )
                 };
                 // Refresh the LRU position so reused layers are not evicted first.
@@ -681,15 +735,18 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
                     &self.device,
                     &self.queue,
                     &resolve_view,
-                    [
-                        offset_x,
-                        offset_y,
-                        texture_width_logical as f32,
-                        texture_height_logical as f32,
-                    ],
-                    accum.opacity,
-                    0.0,
-                    uv_scale,
+                    CompositeParams {
+                        rect: [
+                            offset_x,
+                            offset_y,
+                            texture_width_logical as f32,
+                            texture_height_logical as f32,
+                        ],
+                        alpha: accum.opacity,
+                        clip_radius: 0.0,
+                        content_uv_scale: uv_scale,
+                        outer_clip: enclosing_shader_clip(clip_stack),
+                    },
                 );
                 self.pending_steps.insert(
                     accum.begin_step_index,
@@ -752,9 +809,11 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
             return Some(effective);
         }
         if !shader_clip_active {
-            // Non-nested rounded clip: mask corners in-shader via the viewport SDF, with a scissor still bounding the cheap pixels. A `PushLayer` nested inside renders without the SDF mask, so its corners are not rounded — such cases still need the mini-layer fallback.
+            // Non-nested rounded clip: mask corners in-shader via the viewport SDF, with a scissor still bounding the cheap pixels. A `PushLayer` nested inside composites in a pass of its own, where that viewport is no longer bound, so it carries the clip in its composite params instead — see `enclosing_shader_clip`.
             let effective = self.draw_state.push_clip(*rect);
             clip_stack.push(ClipEntry::Shader {
+                rect: *rect,
+                radius: radius.top_left,
                 outer_scissor: current_scissor,
             });
             let clip_vp_bg = self.take_shader_clip_viewport_bind_group(*rect, radius.top_left);
@@ -802,15 +861,18 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
             &self.device,
             &self.queue,
             &resolve_view,
-            [
-                ox,
-                oy,
-                texture_width_logical as f32,
-                texture_height_logical as f32,
-            ],
-            1.0,
-            radius.top_left,
-            uv_scale,
+            CompositeParams {
+                rect: [
+                    ox,
+                    oy,
+                    texture_width_logical as f32,
+                    texture_height_logical as f32,
+                ],
+                alpha: 1.0,
+                clip_radius: radius.top_left,
+                content_uv_scale: uv_scale,
+                outer_clip: enclosing_shader_clip(clip_stack),
+            },
         );
         self.pending_steps
             .push(DrawStep::Boundary(Boundary::BeginLayer {
@@ -861,7 +923,7 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
                 outer_scissor
             }
             // The matching `PopClip` for the in-shader rounded clip: restore the unclipped viewport and outer scissor.
-            Some(ClipEntry::Shader { outer_scissor }) => {
+            Some(ClipEntry::Shader { outer_scissor, .. }) => {
                 self.draw_state.pop_clip();
                 let base_vp_bg =
                     self.take_shader_clip_viewport_bind_group(Rect::new(0.0, 0.0, 0.0, 0.0), 0.0);
@@ -1297,6 +1359,7 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
                     current_scissor = self.close_layer(
                         &mut scissor_layer_stack,
                         &mut layer_accum_stack,
+                        &clip_stack,
                         commands,
                         cmd_idx,
                         dirty_scissor,
@@ -1578,13 +1641,13 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
                     &self.device,
                     &self.queue,
                     &cached_view,
-                    op.dest,
-                    1.0,
-                    0.0,
-                    [
-                        op.texture_width as f32 / cbw as f32,
-                        op.texture_height as f32 / cbh as f32,
-                    ],
+                    CompositeParams {
+                        content_uv_scale: [
+                            op.texture_width as f32 / cbw as f32,
+                            op.texture_height as f32 / cbh as f32,
+                        ],
+                        ..CompositeParams::blit(op.dest)
+                    },
                 );
                 results.push(Some(bg));
                 continue;
@@ -1691,10 +1754,10 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
                 &self.device,
                 &self.queue,
                 &blurred_view,
-                op.dest,
-                1.0,
-                0.0,
-                shadow_uv_scale,
+                CompositeParams {
+                    content_uv_scale: shadow_uv_scale,
+                    ..CompositeParams::blit(op.dest)
+                },
             );
             results.push(Some(bg));
             crate::caches::with_shared(|caches| {
@@ -2061,23 +2124,21 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
             );
         }
 
+        // `backdrop_blur` is a CSS blur radius, which the blur pass takes as a sigma; the damage padding around a backdrop layer is derived from the same conversion, so a raw radius here would paint a spread wider than the region that was repainted for it.
         let (_blurred_tex, blurred_view) = self.blur_pipeline.apply(
             &self.device,
             &mut *encoder,
             cropped_view,
             crop_w.max(1),
             crop_h.max(1),
-            backdrop_blur,
+            renderer_core::blur_sigma(backdrop_blur),
         );
 
         let backdrop_bg = self.composite_pipeline.create_bind_group(
             &self.device,
             &self.queue,
             &blurred_view,
-            [offset_x, offset_y, crop_w as f32, crop_h as f32],
-            1.0,
-            0.0,
-            [1.0, 1.0],
+            CompositeParams::blit([offset_x, offset_y, crop_w as f32, crop_h as f32]),
         );
         {
             let backdrop_target = if self.msaa_samples > 1 {
@@ -2102,6 +2163,58 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
         ctx.frame_scratch_textures.push(cropped_entry);
     }
 
+    /// Moves the scrolled pixels of the single-sample target, which is the very texture the previous frame is still in.
+    ///
+    /// A quad cannot do it there: a pass may not sample the attachment it draws into. So the region goes out to the otherwise idle retained texture and comes back at its new offset, as two exact texel copies — which replace the destination rather than blend over it, so a frame whose pixels are translucent moves as cleanly as an opaque one.
+    fn scroll_target_in_place(
+        &self,
+        encoder: &mut wgpu::CommandEncoder,
+        clip: Rect,
+        delta: (f32, f32),
+    ) {
+        let (Some(target), Some(scratch)) =
+            (self.msaa_texture.as_ref(), self.retained_texture.as_ref())
+        else {
+            return;
+        };
+        // The same rect the multisample prime scissors its shifted quad to, so both paths agree on which pixels count as inside the clip.
+        let (clip_x, clip_y, clip_w, clip_h) =
+            physical_scissor(clip, self.width, self.height, self.scale_factor);
+        let dx = (delta.0 * self.scale_factor).round() as i32;
+        let dy = (delta.1 * self.scale_factor).round() as i32;
+        // Only what is still inside the clip once shifted. A scroll is reported only when its delta is smaller than the clip it moves within, so this is empty only if that ever stops holding.
+        let width = clip_w.saturating_sub(dx.unsigned_abs());
+        let height = clip_h.saturating_sub(dy.unsigned_abs());
+        if width == 0 || height == 0 {
+            return;
+        }
+        let source = wgpu::Origin3d {
+            x: clip_x + (-dx).max(0) as u32,
+            y: clip_y + (-dy).max(0) as u32,
+            z: 0,
+        };
+        let destination = wgpu::Origin3d {
+            x: clip_x + dx.max(0) as u32,
+            y: clip_y + dy.max(0) as u32,
+            z: 0,
+        };
+        let extent = wgpu::Extent3d {
+            width,
+            height,
+            depth_or_array_layers: 1,
+        };
+        encoder.copy_texture_to_texture(
+            texel_copy(target, source),
+            texel_copy(scratch, source),
+            extent,
+        );
+        encoder.copy_texture_to_texture(
+            texel_copy(scratch, source),
+            texel_copy(target, destination),
+            extent,
+        );
+    }
+
     fn execute_segments(
         &mut self,
         encoder: &mut wgpu::CommandEncoder,
@@ -2117,6 +2230,12 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
         let dirty_scissor = ctx.dirty_scissor;
         let prime = ctx.prime;
 
+        // Recorded here, before anything in this encoder renders into the target the scrolled pixels move within.
+        let scrolled_by_copy = self.msaa_samples == 1;
+        if scrolled_by_copy && let Prime::Scrolled { clip, delta } = prime {
+            self.scroll_target_in_place(encoder, clip, delta);
+        }
+
         // The top-level target needs `load_op` applied once before anything Loads it. A dedicated no-draw init pass costs a full-screen tile store and load every frame on tiled mobile GPUs, so when the first segment is a top-level Draw the clear folds into that pass instead. Gated to the single-sample path, and falling back to the standalone init pass when the frame opens with a layer. Priming draws the retained previous frame over it before the main pass Loads it. The clear is fully covered by the quads, so its value is irrelevant on primed frames.
         let (logical_w, logical_h) = (
             self.width as f32 / self.scale_factor,
@@ -2127,14 +2246,13 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
                 &self.device,
                 &self.queue,
                 &retained_view,
-                [dx, dy, logical_w, logical_h],
-                1.0,
-                0.0,
-                [1.0, 1.0],
+                CompositeParams::blit([dx, dy, logical_w, logical_h]),
             )
         };
         let prime_bind_groups = match prime {
             Prime::None => None,
+            // Already moved, and the rest of the target still holds the previous frame the main pass Loads.
+            Prime::Scrolled { .. } if scrolled_by_copy => None,
             Prime::InPlace => Some((retained_at((0.0, 0.0)), None)),
             Prime::Scrolled { clip, delta } => {
                 Some((retained_at((0.0, 0.0)), Some((clip, retained_at(delta)))))
@@ -2566,15 +2684,12 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
                 &self.device,
                 &self.queue,
                 &retained_view,
-                [
+                CompositeParams::blit([
                     0.0,
                     0.0,
                     self.width as f32 / self.scale_factor,
                     self.height as f32 / self.scale_factor,
-                ],
-                1.0,
-                0.0,
-                [1.0, 1.0],
+                ]),
             );
             self.blit_to_target(&mut encoder, &surface_view, &retained_bg);
         } else if self.app_owned_target {
@@ -2588,15 +2703,12 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
                 &self.device,
                 &self.queue,
                 &msaa_source,
-                [
+                CompositeParams::blit([
                     0.0,
                     0.0,
                     self.width as f32 / self.scale_factor,
                     self.height as f32 / self.scale_factor,
-                ],
-                1.0,
-                0.0,
-                [1.0, 1.0],
+                ]),
             );
             self.blit_to_target(&mut encoder, &surface_view, &source_bg);
         } else {
@@ -2631,7 +2743,7 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
                     depth_or_array_layers: 1,
                 },
             );
-            // The idle-blit samples `msaa_texture` directly, so no second full-screen copy is needed here. `retained_texture` stays allocated but unused on this path, being shared with the MSAA branch.
+            // The idle-blit samples `msaa_texture` directly, so no second full-screen copy is needed here. `retained_texture` holds no frame on this path, serving only as a scroll's staging point.
         }
 
         self.queue.submit(std::iter::once(encoder.finish()));
@@ -2678,7 +2790,9 @@ fn plan_frame(
         scissor.width.max(0.0) * scissor.height.max(0.0) <= (logical_w * logical_h).max(1.0) * 0.6
     };
     let blit = change.scroll.as_ref().filter(|blit| {
-        reuse.scroll && reuse.damage_with_clear && blit.is_whole_pixels_at(scale_factor)
+        reuse.scroll
+            && (reuse.damage_with_clear || reuse.damage_transparent)
+            && blit.is_whole_pixels_at(scale_factor)
     });
     if let Some(blit) = blit {
         let scissor = blit
@@ -2693,7 +2807,8 @@ fn plan_frame(
                     delta: (blit.delta_x as f32, blit.delta_y as f32),
                 },
                 dirty_scissor: Some(scissor),
-                damage: true,
+                // A transparent frame has no clear colour to repaint inside the dirty rect, and confines its repaint through the scissor alone.
+                damage: reuse.damage_with_clear,
             };
         }
     }
