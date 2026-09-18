@@ -6,13 +6,13 @@
 
 use std::cell::RefCell;
 use std::collections::HashMap;
-use std::sync::mpsc;
 
 use renderer_cache::{Cache, CacheStat};
 use renderer_text::{TextShaper, TextShaperConfig};
 use tiny_skia::Pixmap;
 
 use crate::SoftwareRendererConfig;
+use crate::primitives::PendingShadow;
 use crate::primitives::image::ShadowCacheKey;
 use crate::primitives::path::PathShadowCacheKey;
 use crate::primitives::text::TextShadowCacheKey;
@@ -28,9 +28,9 @@ pub(crate) struct SharedCaches {
     pub(crate) text_shadow_cache: Cache<TextShadowCacheKey, Pixmap>,
     pub(crate) path_shadow_cache: Cache<PathShadowCacheKey, Pixmap>,
     // Kept beside the cache each one drains into: a worker spawned for a surface produces a pixmap keyed by geometry alone, so whichever surface asks next should get it.
-    pub(crate) pending_shadows: HashMap<ShadowCacheKey, mpsc::Receiver<Pixmap>>,
-    pub(crate) pending_text_shadows: HashMap<TextShadowCacheKey, mpsc::Receiver<Pixmap>>,
-    pub(crate) pending_path_shadows: HashMap<PathShadowCacheKey, mpsc::Receiver<Pixmap>>,
+    pub(crate) pending_shadows: HashMap<ShadowCacheKey, PendingShadow>,
+    pub(crate) pending_text_shadows: HashMap<TextShadowCacheKey, PendingShadow>,
+    pub(crate) pending_path_shadows: HashMap<PathShadowCacheKey, PendingShadow>,
     // The last shadow of each kind actually drawn, with its size, so a re-keyed one can stand in while its blur is in flight instead of leaving a hole.
     pub(crate) recent_shadow: Option<(ShadowCacheKey, u32, u32)>,
     pub(crate) recent_text_shadow: Option<(TextShadowCacheKey, u32, u32)>,

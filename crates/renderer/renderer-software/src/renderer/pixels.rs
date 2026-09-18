@@ -46,6 +46,18 @@ pub(super) fn fill_mask_region(data: &mut [u8], stride: usize, region: PixelBoun
     }
 }
 
+// The coverage product tiny_skia's own `Mask::intersect_path` takes, over one region rather than a whole mask.
+pub(super) fn multiply_mask_region(data: &mut [u8], by: &[u8], stride: usize, region: PixelBounds) {
+    let (x0, y0, x1, y1) = region;
+    for y in y0 as usize..y1 as usize {
+        let row = y * stride;
+        for at in row + x0 as usize..row + x1 as usize {
+            let product = u32::from(data[at]) * u32::from(by[at]) + 128;
+            data[at] = ((product + (product >> 8)) >> 8) as u8;
+        }
+    }
+}
+
 pub(super) fn fill_region(
     pixmap: &mut Pixmap,
     region: Rect,

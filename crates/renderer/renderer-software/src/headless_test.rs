@@ -29,6 +29,7 @@ fn a_headless_frame_records_each_software_phase_once() {
     for (phase, name) in [
         (Phase::Plan, "plan"),
         (Phase::Interpret, "interpret"),
+        (Phase::Mask, "mask"),
         (Phase::Frame, "frame"),
     ] {
         assert_eq!(drawn.count(phase), 1, "{name}");

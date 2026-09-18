@@ -51,6 +51,7 @@ pub enum DrawCommand {
     PopMatrix,
     PushLayer {
         opacity: f32,
+        /// How far what is drawn behind this layer is blurred before it shows through, as a radius in the same units as [`Shadow::blur_radius`](crate::Shadow::blur_radius): a backend turns it into a deviation with [`blur_sigma`](crate::blur_sigma), and the dirty margin around the layer is measured from that same conversion. Spelled out because nothing said so, and a number read as a radius in one place and as the deviation itself in another is two different blurs.
         backdrop_blur: f32,
     },
     PopLayer,

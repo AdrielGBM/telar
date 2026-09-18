@@ -50,7 +50,7 @@ const INSPECTOR_HEADER_HEIGHT: f32 = 32.0;
 
 const PANEL_BACKGROUND: Color = Color::rgba(0.05, 0.05, 0.05, 0.75);
 const BADGE_BACKGROUND: Color = Color::rgba(0.0, 0.0, 0.0, 0.70);
-const BACKDROP_BLUR_SIGMA: f32 = 12.0;
+const BACKDROP_BLUR_RADIUS: f32 = 12.0;
 const GREEN: Color = Color::rgba(0.0, 1.0, 0.4, 1.0);
 const WHITE: Color = Color::rgba(0.9, 0.9, 0.9, 1.0);
 const GRAY: Color = Color::rgba(0.5, 0.5, 0.5, 1.0);
@@ -201,7 +201,7 @@ impl DevPlugin for DevTools {
         });
         cmds.push(DrawCommand::PushLayer {
             opacity: 1.0,
-            backdrop_blur: BACKDROP_BLUR_SIGMA,
+            backdrop_blur: BACKDROP_BLUR_RADIUS,
         });
 
         cmds.push(rect_command(
@@ -236,7 +236,7 @@ impl DevPlugin for DevTools {
             });
             cmds.push(DrawCommand::PushLayer {
                 opacity: 1.0,
-                backdrop_blur: BACKDROP_BLUR_SIGMA,
+                backdrop_blur: BACKDROP_BLUR_RADIUS,
             });
 
             cmds.push(rect_command(

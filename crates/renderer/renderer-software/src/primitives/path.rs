@@ -92,6 +92,7 @@ fn build_skia_path(data: &PathData) -> Option<tiny_skia::Path> {
 pub(crate) fn draw_path(
     pixmap: &mut tiny_skia::Pixmap,
     data: &Arc<PathData>,
+    painted: Rect,
     style: &PathStyle,
     transform: tiny_skia::Transform,
     clip: Option<&tiny_skia::Mask>,
@@ -100,7 +101,7 @@ pub(crate) fn draw_path(
     path_shadow_cache: &mut PathShadowCache,
     pending_path_shadows: &mut std::collections::HashMap<
         PathShadowCacheKey,
-        std::sync::mpsc::Receiver<tiny_skia::Pixmap>,
+        crate::primitives::PendingShadow,
     >,
     recent_path_shadow: &mut Option<(PathShadowCacheKey, u32, u32)>,
 ) {
@@ -193,6 +194,7 @@ pub(crate) fn draw_path(
                 pending_path_shadows,
                 recent_path_shadow,
                 cache_key,
+                painted,
                 draw_x,
                 draw_y,
                 tmp_w,

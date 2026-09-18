@@ -110,6 +110,7 @@ pub(crate) fn draw_text(
     text: &str,
     spans: Option<&[renderer_core::Span]>,
     rect: Rect,
+    painted: Rect,
     style: &TextStyle,
     transform: tiny_skia::Transform,
     clip: Option<&tiny_skia::Mask>,
@@ -118,7 +119,7 @@ pub(crate) fn draw_text(
     text_shadow_cache: &mut TextShadowCache,
     pending_text_shadows: &mut std::collections::HashMap<
         TextShadowCacheKey,
-        std::sync::mpsc::Receiver<tiny_skia::Pixmap>,
+        crate::primitives::PendingShadow,
     >,
     recent_text_shadow: &mut Option<(TextShadowCacheKey, u32, u32)>,
 ) {
@@ -191,6 +192,7 @@ pub(crate) fn draw_text(
                     pending_text_shadows,
                     recent_text_shadow,
                     shadow_key,
+                    painted,
                     rect.x as i32 + shadow.offset_x as i32 - padding,
                     rect.y as i32 + shadow.offset_y as i32 - padding,
                     tmp_w,

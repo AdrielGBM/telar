@@ -20,7 +20,7 @@ use super::pixels::{
 };
 use super::present::FrameOp;
 
-type Regions = SmallVec<[Rect; 8]>;
+pub(super) type Regions = SmallVec<[Rect; 8]>;
 
 enum FrameAction {
     Present(FrameOp),
@@ -76,9 +76,9 @@ where
     W: HasWindowHandle,
 {
     fn plan_frame(&mut self, commands: &[DrawCommand], clear_color: Option<Color>) -> FrameAction {
-        let shadow_arrived = self.poll_pending_shadows();
+        let shadows = self.poll_pending_shadows();
         let clear_color_changed = clear_color != self.prev_clear_color;
-        if !shadow_arrived && !clear_color_changed && commands == self.prev_commands.as_slice() {
+        if shadows.is_empty() && !clear_color_changed && commands == self.prev_commands.as_slice() {
             return FrameAction::Present(FrameOp::NoChange);
         }
 
@@ -104,11 +104,13 @@ where
             damage: None,
             input_hash,
         });
-        // A shadow that finished blurring lands wherever its command is, and no diff of the commands can say where.
-        if shadow_arrived || clear_color_changed {
+        // Every pixel is cleared to it, so this is the one change no region can bound.
+        if clear_color_changed {
             return full;
         }
         let (width, height) = (self.width, self.height);
+        // A shadow that finished blurring changes the frame where its command paints, and the commands around it did not change, so its footprint is the only thing pointing at those pixels.
+        let arrived = || shadows.iter().copied();
         let (damage, changed) = match (maybe_scroll, damage) {
             (Some(scroll), _) => {
                 if let Some(pixmap) = &mut self.pixmap {
@@ -122,17 +124,24 @@ where
                 let extra = scroll.extra_dirty.iter().copied();
                 (
                     on_pixels(
-                        iter::once(scroll.exposed_band).chain(extra.clone()),
+                        iter::once(scroll.exposed_band)
+                            .chain(extra.clone())
+                            .chain(arrived()),
                         width,
                         height,
                     ),
-                    on_pixels(iter::once(scroll.scroll_clip).chain(extra), width, height),
+                    on_pixels(
+                        iter::once(scroll.scroll_clip).chain(extra).chain(arrived()),
+                        width,
+                        height,
+                    ),
                 )
             }
             (None, Some(rects)) => {
-                let damage = on_pixels(rects, width, height);
+                let damage = on_pixels(rects.into_iter().chain(arrived()), width, height);
                 (damage.clone(), damage)
             }
+            // A change the diff cannot bound, whatever else arrived inside it.
             (None, None) => return full,
         };
         if changed.is_empty() {
@@ -165,7 +174,7 @@ where
         let interpret_start = perf::now_if_enabled();
         self.clear(clear_color, damage.as_deref());
         self.draw_state.reset();
-        self.clip_radii.clear();
+        self.clip_shapes.clear();
         self.layer_stack.clear();
 
         match &self.expanded_commands_cache {
@@ -219,10 +228,11 @@ where
     fn canvas(&mut self, damage: Option<&[Rect]>) -> Option<Canvas<'_>> {
         let [a, b, c, d, e, f] = self.draw_state.cumulative_matrix;
         let clip = self.draw_state.current_clip();
+        // The innermost clip's rect comes from `draw_state`, already intersected with every clip around it; its radius is its own.
         let shape = clip
-            .zip(self.clip_radii.last().copied())
+            .zip(self.clip_shapes.last().map(|innermost| innermost.radius))
             .map(|(rect, radius)| ClipShape { rect, radius });
-        let open_clips = self.clip_radii.len();
+        let open_clips = self.clip_shapes.len();
         let (pixmap, mask, origin) = match self.layer_stack.last_mut() {
             Some(Layer {
                 pixmap,
@@ -236,7 +246,10 @@ where
                         if mask.is_none() {
                             *mask = take_mask(&mut self.mask_pool, pixmap.width(), pixmap.height());
                         }
-                        mask.as_mut().map(|mask| mask.show(shape, *origin, None))
+                        // The clips the layer was pushed under mask its composite instead, so they are the parent canvas's to apply.
+                        let ancestors = &self.clip_shapes[*clip_depth..open_clips - 1];
+                        mask.as_mut()
+                            .map(|mask| mask.show(shape, ancestors, *origin, None))
                     }
                     _ => None,
                 };
@@ -251,9 +264,10 @@ where
                     Some(_) => &mut self.clip_mask,
                     None => &mut self.damage_mask,
                 };
+                let ancestors = &self.clip_shapes[..open_clips.saturating_sub(1)];
                 let mask = target
                     .as_mut()
-                    .map(|mask| mask.show(shape.unwrap_or(surface), (0, 0), damage));
+                    .map(|mask| mask.show(shape.unwrap_or(surface), ancestors, (0, 0), damage));
                 (self.pixmap.as_mut()?, mask, (0, 0))
             }
         };
@@ -297,11 +311,12 @@ where
                 tiny_skia::Transform::identity(),
                 None,
             );
+            // A radius, as `Shadow::blur_radius` is and as the margin the dirty tracker reserves around this layer already assumes, both of them measured through this same conversion. Handed straight over as the deviation, one number meant two different blurs.
             crate::primitives::gaussian_blur(
                 pixmap.data_mut(),
                 width,
                 height,
-                backdrop_blur,
+                renderer_core::blur_sigma(backdrop_blur),
                 &mut self.blur_scratch,
             );
         }
@@ -309,7 +324,7 @@ where
             pixmap,
             opacity,
             origin: (x, y),
-            clip_depth: self.clip_radii.len(),
+            clip_depth: self.clip_shapes.len(),
             mask: None,
         })
     }
@@ -340,17 +355,20 @@ where
                 continue;
             }
 
-            if let Some(painted) = renderer_core::culling::command_visual_rect(
+            let painted = renderer_core::culling::command_visual_rect(
                 cmd,
                 self.draw_state.cumulative_matrix,
                 &self.font_metrics,
-            ) {
+            );
+            if let Some(painted) = painted {
                 // A layer's pixmap starts empty, so everything in it is drawn whenever any of it is.
                 let repainted = !self.layer_stack.is_empty() || repaints(damage, painted);
                 if !repainted || cull_bounds(painted, self.draw_state.current_clip()) {
                     continue;
                 }
             }
+            // Only the commands that paint nothing have no footprint, and none of those casts a shadow to remember one for.
+            let painted = painted.unwrap_or_default();
 
             match cmd {
                 DrawCommand::Rect { rect, style } => {
@@ -361,6 +379,7 @@ where
                         crate::primitives::rect::draw_rect(
                             canvas.pixmap,
                             *rect,
+                            painted,
                             style,
                             canvas.transform,
                             canvas.mask,
@@ -387,6 +406,7 @@ where
                             text,
                             spans.as_deref(),
                             *rect,
+                            painted,
                             style,
                             canvas.transform,
                             canvas.mask,
@@ -433,6 +453,7 @@ where
                         crate::primitives::path::draw_path(
                             canvas.pixmap,
                             data,
+                            painted,
                             style,
                             canvas.transform,
                             canvas.mask,
@@ -445,16 +466,20 @@ where
                     });
                 }
                 DrawCommand::PushClip { rect, radius } => {
-                    self.draw_state
-                        .push_clip(renderer_core::transform_clip_rect(
-                            self.draw_state.cumulative_matrix,
-                            *rect,
-                        ));
-                    self.clip_radii.push(*radius);
+                    let rect = renderer_core::transform_clip_rect(
+                        self.draw_state.cumulative_matrix,
+                        *rect,
+                    );
+                    self.draw_state.push_clip(rect);
+                    // Its own rect rather than the one its parents cut it down to: that is where its corners are, and corners moved inwards would cut what the clip covers.
+                    self.clip_shapes.push(ClipShape {
+                        rect,
+                        radius: *radius,
+                    });
                 }
                 DrawCommand::PopClip => {
                     self.draw_state.pop_clip();
-                    self.clip_radii.pop();
+                    self.clip_shapes.pop();
                 }
                 DrawCommand::PushMatrix { matrix } => self.draw_state.push_matrix(*matrix),
                 DrawCommand::PopMatrix => self.draw_state.pop_matrix(),

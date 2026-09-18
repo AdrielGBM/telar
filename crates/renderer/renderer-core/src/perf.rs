@@ -25,9 +25,11 @@ pub enum Phase {
     Plan = 6,
     /// Software: converting the pixmap into the surface buffer, a subset of `present`.
     Convert = 7,
+    /// Software: the clip and damage masks every draw is put through — allocating one, and repainting it whenever the clip stack or the damage set moves. A subset of `interpret`, except on a resize, which allocates outside every other span.
+    Mask = 8,
 }
 
-const N: usize = 8;
+const N: usize = 9;
 const NAMES: [&str; N] = [
     "build",
     "clone",
@@ -37,6 +39,7 @@ const NAMES: [&str; N] = [
     "present",
     "plan",
     "convert",
+    "mask",
 ];
 // Dump cadence in ticked frames; one line per ~second at 60 fps keeps logcat readable.
 const DUMP_EVERY: u64 = 60;

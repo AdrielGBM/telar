@@ -1,13 +1,12 @@
 //! Rounded, bordered and shadowed boxes.
 
 use std::collections::HashMap;
-use std::sync::mpsc;
 
 use geometry_core::Rect;
 use renderer_core::{BorderRadius, RectStyle, Shadow};
 
-use crate::primitives::fill_to_paint;
 use crate::primitives::image::{ShadowCache, ShadowCacheKey};
+use crate::primitives::{PendingShadow, fill_to_paint};
 
 pub(crate) fn build_rect_path(rect: Rect, radius: BorderRadius) -> Option<tiny_skia::Path> {
     let mut pb = tiny_skia::PathBuilder::new();
@@ -97,12 +96,13 @@ fn build_border_path(
 fn draw_rect_shadow(
     pixmap: &mut tiny_skia::Pixmap,
     rect: Rect,
+    painted: Rect,
     shadow: Shadow,
     radius: BorderRadius,
     transform: tiny_skia::Transform,
     clip: Option<&tiny_skia::Mask>,
     shadow_cache: &mut ShadowCache,
-    pending_shadows: &mut HashMap<ShadowCacheKey, mpsc::Receiver<tiny_skia::Pixmap>>,
+    pending_shadows: &mut HashMap<ShadowCacheKey, PendingShadow>,
     recent_shadow: &mut Option<(ShadowCacheKey, u32, u32)>,
     blur_scratch: &mut Vec<u8>,
 ) {
@@ -184,6 +184,7 @@ fn draw_rect_shadow(
         pending_shadows,
         recent_shadow,
         cache_key,
+        painted,
         tmp_x,
         tmp_y,
         tmp_w,
@@ -200,11 +201,12 @@ fn draw_rect_shadow(
 pub(crate) fn draw_rect(
     pixmap: &mut tiny_skia::Pixmap,
     rect: Rect,
+    painted: Rect,
     style: &RectStyle,
     transform: tiny_skia::Transform,
     clip: Option<&tiny_skia::Mask>,
     shadow_cache: &mut ShadowCache,
-    pending_shadows: &mut HashMap<ShadowCacheKey, mpsc::Receiver<tiny_skia::Pixmap>>,
+    pending_shadows: &mut HashMap<ShadowCacheKey, PendingShadow>,
     recent_shadow: &mut Option<(ShadowCacheKey, u32, u32)>,
     blur_scratch: &mut Vec<u8>,
 ) {
@@ -212,6 +214,7 @@ pub(crate) fn draw_rect(
         draw_rect_shadow(
             pixmap,
             rect,
+            painted,
             shadow,
             style.radius,
             transform,

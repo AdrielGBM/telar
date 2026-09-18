@@ -15,13 +15,13 @@ use std::sync::mpsc;
 use raw_window_handle::{HasDisplayHandle, HasWindowHandle};
 use renderer_core::dirty::FrameDiff;
 use renderer_core::perf::{self, Phase};
-use renderer_core::{BorderRadius, Color, DrawCommand, RendererError};
+use renderer_core::{Color, DrawCommand, RendererError};
 use smallvec::SmallVec;
 use softbuffer::{Context, Surface};
 use tiny_skia::Pixmap;
 
-use clip::ClipMask;
-use frame::Layer;
+use clip::{ClipMask, ClipShape};
+use frame::{Layer, Regions};
 use pixels::{LayerBox, PixelFormat};
 use present::{FrameOp, PresentLog, SurfaceDamage, declared_damage, note_damage};
 #[cfg(target_os = "android")]
@@ -48,7 +48,8 @@ pub struct SoftwareRenderer<D: HasDisplayHandle, W: HasWindowHandle> {
     // Masks every unclipped draw on the surface too: tiny-skia blends an unmasked draw through a pipeline that rounds differently, and a repaint has to match the frame it patches pixel for pixel.
     damage_mask: Option<ClipMask>,
     draw_state: renderer_core::DrawState,
-    clip_radii: Vec<BorderRadius>,
+    // Each open clip as it was pushed, since `draw_state` keeps only the rects and only intersected.
+    clip_shapes: Vec<ClipShape>,
     layer_stack: Vec<Layer>,
     frame_diff: FrameDiff,
     // Previous frame state for skip-if-identical and dirty-rect optimizations.
@@ -153,7 +154,7 @@ where
             clip_mask: None,
             damage_mask: None,
             draw_state: renderer_core::DrawState::new(),
-            clip_radii: Vec::new(),
+            clip_shapes: Vec::new(),
             layer_stack: Vec::new(),
             frame_diff: FrameDiff::default(),
             prev_commands: Vec::with_capacity(256),
@@ -201,7 +202,7 @@ where
             clip_mask: ClipMask::new(width, height),
             damage_mask: ClipMask::new(width, height),
             draw_state: renderer_core::DrawState::new(),
-            clip_radii: Vec::new(),
+            clip_shapes: Vec::new(),
             layer_stack: Vec::new(),
             frame_diff: FrameDiff::default(),
             prev_commands: Vec::with_capacity(256),
@@ -229,9 +230,9 @@ where
         self.pixmap.as_ref()
     }
 
-    // Returns true if at least one shadow became available this frame.
-    fn poll_pending_shadows(&mut self) -> bool {
-        let mut arrived = false;
+    // Where the shadows that finished blurring this frame paint, one region each and nothing for a worker that failed.
+    fn poll_pending_shadows(&mut self) -> Regions {
+        let mut arrived = Regions::new();
         // Destructured so each `retain` and the cache it drains into are disjoint borrows of the shared set.
         crate::caches::with_caches(|c| {
             let crate::caches::SharedCaches {
@@ -243,28 +244,28 @@ where
                 pending_path_shadows,
                 ..
             } = c;
-            pending_shadows.retain(|key, rx| match rx.try_recv() {
-                Ok(pixmap) => {
+            pending_shadows.retain(|key, waiting| match waiting.arrived() {
+                Ok((pixmap, footprint)) => {
                     shadow_cache.insert(*key, pixmap);
-                    arrived = true;
+                    arrived.push(footprint);
                     false
                 }
                 Err(mpsc::TryRecvError::Empty) => true,
                 Err(mpsc::TryRecvError::Disconnected) => false,
             });
-            pending_text_shadows.retain(|key, rx| match rx.try_recv() {
-                Ok(pixmap) => {
+            pending_text_shadows.retain(|key, waiting| match waiting.arrived() {
+                Ok((pixmap, footprint)) => {
                     text_shadow_cache.insert(key.clone(), pixmap);
-                    arrived = true;
+                    arrived.push(footprint);
                     false
                 }
                 Err(mpsc::TryRecvError::Empty) => true,
                 Err(mpsc::TryRecvError::Disconnected) => false,
             });
-            pending_path_shadows.retain(|key, rx| match rx.try_recv() {
-                Ok(pixmap) => {
+            pending_path_shadows.retain(|key, waiting| match waiting.arrived() {
+                Ok((pixmap, footprint)) => {
                     path_shadow_cache.insert(key.clone(), pixmap);
-                    arrived = true;
+                    arrived.push(footprint);
                     false
                 }
                 Err(mpsc::TryRecvError::Empty) => true,

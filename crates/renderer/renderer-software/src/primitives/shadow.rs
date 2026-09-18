@@ -1,5 +1,24 @@
 //! Blurring a shape into a cached pixmap, inline for small shadows and on a worker thread for large ones.
 
+use geometry_core::Rect;
+
+/// A blur still being computed on a worker, and where the shadows waiting for it paint.
+///
+/// The footprint travels with the receiver because a shadow's cache key says what it looks like and not where it is drawn: on the frame its blur lands, the commands have not changed, so nothing else in the frame points at the pixels that are about to differ.
+pub(crate) struct PendingShadow {
+    rx: std::sync::mpsc::Receiver<tiny_skia::Pixmap>,
+    footprint: Rect,
+}
+
+impl PendingShadow {
+    /// The blurred pixmap if the worker has finished, and where it lands.
+    pub(crate) fn arrived(
+        &self,
+    ) -> Result<(tiny_skia::Pixmap, Rect), std::sync::mpsc::TryRecvError> {
+        self.rx.try_recv().map(|pixmap| (pixmap, self.footprint))
+    }
+}
+
 /// Quantizes blur radius to half-pixel steps so near-identical blurs share one shadow-cache entry.
 pub(crate) fn quantize_blur(blur_radius: f32) -> f32 {
     (blur_radius * 2.0).round() / 2.0
@@ -54,13 +73,16 @@ pub(crate) fn spawn_shadow_async(
 /// While a blur is pending, the **previous shadow of the same size** is drawn in its place (`recent`). Without that stand-in the shadow blinks out for those frames: a desktop clock re-keys its shadow every minute (the text is part of the key) and its pixmap lands just past the threshold, so it took the async path and left a hole under the glyphs once a minute. A stand-in whose silhouette is one glyph stale for ~30 ms is not visible; its absence is.
 ///
 /// `make_draw` yields the shape-drawing closure and its `Send + 'static` twin for the worker, and is called only on the paths that actually need one — never on a cache hit, and never while a worker is already producing the same pixmap. Producing them lazily is what lets a caller put expensive work (rasterizing a string to an alpha mask) behind the cache lookup instead of ahead of it.
+///
+/// `painted` is what the whole command paints in window space, shadow included, and is kept with the receiver so the frame the blur lands on can repaint that much and no more.
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn blit_cached_shadow_async<K, D, A>(
     pixmap: &mut tiny_skia::Pixmap,
     cache: &mut renderer_cache::Cache<K, tiny_skia::Pixmap>,
-    pending: &mut std::collections::HashMap<K, std::sync::mpsc::Receiver<tiny_skia::Pixmap>>,
+    pending: &mut std::collections::HashMap<K, PendingShadow>,
     recent: &mut Option<(K, u32, u32)>,
     key: K,
+    painted: Rect,
     blit_x: i32,
     blit_y: i32,
     tmp_w: u32,
@@ -96,9 +118,11 @@ pub(crate) fn blit_cached_shadow_async<K, D, A>(
 
     if !cache.contains(&key) {
         // Either a worker is already computing it, or one needs spawning.
-        if let Some(rx) = pending.get(&key) {
-            match rx.try_recv() {
-                Ok(tmp) => {
+        if let Some(waiting) = pending.get_mut(&key) {
+            // Everywhere this blur is waited on, not just the last place: a key holds a shape and not a position, so a row of identical cards shares one, and a command can move while its blur is in flight. Whatever it covers is repainted on the frame the blur lands, and a card left out of it would keep its stand-in.
+            waiting.footprint = waiting.footprint.union(painted);
+            match waiting.arrived() {
+                Ok((tmp, _)) => {
                     cache.insert(key.clone(), tmp);
                     pending.remove(&key);
                 }
@@ -110,7 +134,13 @@ pub(crate) fn blit_cached_shadow_async<K, D, A>(
             }
         } else {
             let rx = spawn_shadow_async(tmp_w, tmp_h, blur_radius, make_draw().1);
-            pending.insert(key.clone(), rx);
+            pending.insert(
+                key.clone(),
+                PendingShadow {
+                    rx,
+                    footprint: painted,
+                },
+            );
         }
     }
 
@@ -187,7 +217,10 @@ pub(crate) fn gaussian_blur(
     if sigma < 0.5 || width == 0 || height == 0 {
         return;
     }
-    let r = ((sigma * 1.5).round() as u32).max(1);
+    // Three passes of a box of width `w = 2r + 1` carry variance `3(w² - 1)/12`, so between them they stand in for a deviation of `sqrt(w² - 1)/2`; this is that solved for the deviation asked for. Taken as `1.5 * sigma` the passes stood in for half again as much, and reached `4.5 * sigma` where `blur_padding` had cut the pixmap for `3 * sigma`, so every shadow was both too soft and clipped at the edge of its own padding.
+    let r = (((4.0 * sigma * sigma + 1.0).sqrt() - 1.0) / 2.0)
+        .round()
+        .max(1.0) as u32;
     scratch.resize(data.len(), 0);
     let w = width as usize;
     let h = height as usize;
@@ -274,3 +307,7 @@ fn box_blur_h(data: &mut [u8], width: u32, height: u32, r: u32, scratch: &mut [u
             row_data.copy_from_slice(row_scratch);
         });
 }
+
+#[cfg(test)]
+#[path = "shadow_test.rs"]
+mod tests;

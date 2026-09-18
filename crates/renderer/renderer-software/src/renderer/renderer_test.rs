@@ -6,8 +6,8 @@ use platform_headless::HeadlessWindow;
 use renderer_core::dirty::FrameDiff;
 use renderer_core::dirty_scenarios::{self, Plan, Scenario};
 use renderer_core::{
-    Color, DrawCommand, Element, ElementId, FontMetrics, PathData, PathStyle, RectStyle,
-    RenderBackend, Semantics, Shadow, ShapeStyle, Stroke,
+    BorderRadius, Color, DrawCommand, Element, ElementId, FontMetrics, PathData, PathStyle,
+    RectStyle, RenderBackend, Semantics, Shadow, ShapeStyle, Stroke,
 };
 
 use super::SoftwareRenderer;
@@ -430,4 +430,198 @@ fn many_small_changes_repaint_a_bounded_set_of_regions_exactly() {
         &new,
         diffed(&old, &new),
     );
+}
+
+// A blur off the frame thread lands a frame or two later, and the frames in between plan nothing at all.
+fn render_until_something_changes(
+    renderer: &mut SoftwareRenderer<HeadlessWindow, HeadlessWindow>,
+    (width, height): (u32, u32),
+    commands: &[DrawCommand],
+) -> FrameOp {
+    let [r, g, b, _] = BACKGROUND;
+    for _ in 0..200 {
+        renderer.begin_frame(width, height, 1.0, 0).unwrap();
+        match renderer.render(commands, Some(Color::from_rgb_u8(r, g, b))) {
+            FrameOp::NoChange => std::thread::sleep(std::time::Duration::from_millis(5)),
+            op => return op,
+        }
+    }
+    panic!("nothing changed in two hundred frames, so this case proves nothing");
+}
+
+// Where a box and the shadow it casts paint, which is what the dirty tracker measures everywhere else.
+fn shadow_footprint(rect: Rect, shadow: Shadow) -> Rect {
+    renderer_core::culling::expand_for_shadow(
+        rect,
+        shadow.blur_radius,
+        shadow.spread,
+        shadow.offset_x,
+        shadow.offset_y,
+    )
+}
+
+#[test]
+fn a_shadow_that_finished_blurring_repaints_its_own_footprint() {
+    let rect = Rect::new(100.0, 40.0, 300.0, 300.0);
+    // Its pixmap clears `ASYNC_SHADOW_THRESHOLD`, so the blur goes to a worker and its result lands on a frame carrying the very same commands as the one before it.
+    let shadow = Shadow::new(0.0, 0.0, 12.0, Color::from_rgba_u8(9, 4, 13, 210));
+    let commands = vec![boxed(
+        rect.x,
+        rect.y,
+        rect.width,
+        rect.height,
+        RectStyle::filled(Color::from_rgb_u8(230, 230, 235), 12.0).with_shadow(shadow),
+    )];
+    let mut renderer = SoftwareRenderer::<HeadlessWindow, HeadlessWindow>::new_headless(
+        SMALL.0,
+        SMALL.1,
+        SoftwareRendererConfig::default(),
+    );
+
+    let first = render_until_something_changes(&mut renderer, SMALL, &commands);
+    assert_eq!(
+        first,
+        FrameOp::Full,
+        "the first frame has no previous one to diff against"
+    );
+
+    let landed = render_until_something_changes(&mut renderer, SMALL, &commands);
+    let FrameOp::Regions(changed) = &landed else {
+        panic!("a shadow arriving is a bounded change, not {landed:?}");
+    };
+    assert_eq!(
+        on_pixels(changed, SMALL),
+        on_pixels(&[shadow_footprint(rect, shadow)], SMALL),
+        "the frame the blur lands on repaints where that shadow paints and nothing else"
+    );
+}
+
+#[test]
+fn one_blur_waited_on_twice_repaints_both_places_it_is_drawn() {
+    let size = (1024u32, 420u32);
+    let shadow = Shadow::new(0.0, 0.0, 12.0, Color::from_rgba_u8(11, 5, 17, 205));
+    let style = RectStyle::filled(Color::from_rgb_u8(235, 232, 228), 10.0).with_shadow(shadow);
+    // Identical boxes, so one cache key and one worker serve both of them: the key holds the shadow's shape and not its position.
+    let cards = [
+        Rect::new(40.0, 40.0, 300.0, 300.0),
+        Rect::new(500.0, 40.0, 300.0, 300.0),
+    ];
+    let commands: Vec<DrawCommand> = cards
+        .iter()
+        .map(|card| boxed(card.x, card.y, card.width, card.height, style))
+        .collect();
+    let mut renderer = SoftwareRenderer::<HeadlessWindow, HeadlessWindow>::new_headless(
+        size.0,
+        size.1,
+        SoftwareRendererConfig::default(),
+    );
+
+    let first = render_until_something_changes(&mut renderer, size, &commands);
+    assert_eq!(first, FrameOp::Full, "the first frame draws everything");
+
+    let landed = render_until_something_changes(&mut renderer, size, &commands);
+    let FrameOp::Regions(changed) = &landed else {
+        panic!("a shadow arriving is a bounded change, not {landed:?}");
+    };
+    let reached = shadow_footprint(cards[0], shadow).union(shadow_footprint(cards[1], shadow));
+    assert_eq!(
+        on_pixels(changed, size),
+        on_pixels(&[reached], size),
+        "neither box is left with the stand-in its shared blur replaced"
+    );
+}
+
+// The pixels of one box, laid out as the pixmap a layer over it would hold, so blurring them is the blur the renderer ran.
+fn cropped(pixels: &[u8], width: u32, (x, y, w, h): (u32, u32, u32, u32)) -> Vec<u8> {
+    let mut out = Vec::with_capacity((w * h * 4) as usize);
+    for row in y..y + h {
+        let start = ((row * width + x) * 4) as usize;
+        out.extend_from_slice(&pixels[start..start + (w * 4) as usize]);
+    }
+    out
+}
+
+#[test]
+fn a_backdrop_blur_spreads_by_the_sigma_its_radius_converts_to() {
+    const RADIUS: f32 = 12.0;
+    let size = (192u32, 128u32);
+    let layer_box = (48u32, 24u32, 96u32, 80u32);
+    let (x, y, w, h) = layer_box;
+    // Half the surface white against the clear colour, so the blur has one hard edge to spread.
+    let backdrop = vec![boxed(
+        0.0,
+        0.0,
+        96.0,
+        128.0,
+        RectStyle::filled(Color::WHITE, 0.0),
+    )];
+    let mut over = backdrop.clone();
+    over.extend([
+        DrawCommand::PushLayer {
+            opacity: 1.0,
+            backdrop_blur: RADIUS,
+        },
+        // Neither filled nor framed, so it draws nothing and only sizes the layer: what lands in the box is the blurred backdrop alone.
+        boxed(x as f32, y as f32, w as f32, h as f32, RectStyle::default()),
+        DrawCommand::PopLayer,
+    ]);
+
+    let plain = draw(size, &[&backdrop], false);
+    let blurred = draw(size, &[&over], false);
+
+    let mut scratch = Vec::new();
+    let mut by_radius = cropped(&plain.pixels, size.0, layer_box);
+    crate::primitives::gaussian_blur(
+        &mut by_radius,
+        w,
+        h,
+        renderer_core::blur_sigma(RADIUS),
+        &mut scratch,
+    );
+    let mut as_sigma = cropped(&plain.pixels, size.0, layer_box);
+    crate::primitives::gaussian_blur(&mut as_sigma, w, h, RADIUS, &mut scratch);
+
+    assert_ne!(
+        by_radius, as_sigma,
+        "a radius and a deviation blur by visibly different amounts, so this case can tell them apart"
+    );
+    assert_eq!(
+        cropped(&blurred.pixels, size.0, layer_box),
+        by_radius,
+        "a backdrop blurs by what the shared conversion makes of its radius, as shadows and the hardware backend do"
+    );
+}
+
+#[test]
+fn a_rounded_clip_cuts_the_corners_of_what_a_clip_inside_it_draws() {
+    let inner = Rect::new(100.0, 100.0, 60.0, 60.0);
+    let commands = vec![
+        DrawCommand::PushClip {
+            rect: Rect::new(100.0, 100.0, 200.0, 200.0),
+            radius: BorderRadius::all(40.0),
+        },
+        DrawCommand::PushClip {
+            rect: inner,
+            radius: BorderRadius::zero(),
+        },
+        boxed(
+            inner.x,
+            inner.y,
+            inner.width,
+            inner.height,
+            RectStyle::filled(Color::WHITE, 0.0),
+        ),
+        DrawCommand::PopClip,
+        DrawCommand::PopClip,
+    ];
+    let drawn = draw(SMALL, &[&commands], false);
+    let at = |x, y| pixel(&drawn, SMALL.0, x, y);
+
+    // 53 px from the corner's centre, where a radius of 40 covers nothing.
+    assert_eq!(
+        at(102, 102),
+        BACKGROUND,
+        "the corner of the clip above cuts the square clip inside it"
+    );
+    assert_ne!(at(150, 150), BACKGROUND, "well inside both clips it paints");
 }
