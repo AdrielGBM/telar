@@ -970,12 +970,21 @@ impl Component for StyledContainer {
         if self.is_disabled() {
             return match event {
                 Event::PointerMoved { .. }
-                | Event::PointerPressed { .. }
                 | Event::PointerReleased { .. }
                 | Event::Scrolled { .. } => {
                     self.end_containment();
                     self.drag.end(None);
                     EventResult::Ignored
+                }
+                // Consumed rather than declined, because a disabled box keeps its claim: on a surface whose input region is carved from those claims the press has already been taken from whatever sits behind the surface, so letting it through as unhandled is a click that happens nowhere at all.
+                Event::PointerPressed { x, y, .. } => {
+                    self.end_containment();
+                    self.drag.end(None);
+                    if self.rect.get().contains(*x as f32, *y as f32) {
+                        EventResult::Handled
+                    } else {
+                        EventResult::Ignored
+                    }
                 }
                 _ => self.dispatch_children(event),
             };
@@ -1040,9 +1049,10 @@ impl Component for StyledContainer {
                 {
                     return EventResult::Handled;
                 }
-                // Not while a field has the caret: this is the app's shortcut table, which would otherwise fire on every letter typed.
+                // Not while a field has the caret: this is the app's shortcut table, which would otherwise fire on every letter typed. Nor from a subtree that is out of the layout flow: a key carries no position to miss the box with, so the chain is the only thing that can keep the shortcuts of a table nobody can see from firing.
                 if let Some(cb) = &self.on_key
                     && !focus::text_entry_takes_key(key, *modifiers)
+                    && input_region::receives_input(self.node)
                     && cb(key)
                 {
                     return EventResult::Handled;

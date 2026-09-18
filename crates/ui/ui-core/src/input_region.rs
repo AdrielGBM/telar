@@ -272,15 +272,106 @@ fn placement_at(node: NodeId, index: usize) -> Option<Placement> {
     })
 }
 
-fn bounds(matrix: [f32; 6], rect: Rect) -> Rect {
-    let transform = Transform::from_array(matrix);
-    let corners = [
-        (rect.x, rect.y),
-        (rect.x + rect.width, rect.y),
-        (rect.x, rect.y + rect.height),
-        (rect.x + rect.width, rect.y + rect.height),
+/// What a claim is shaped like once the placements above it have been applied.
+///
+/// Two shapes, because a claim that stayed a rectangle answers for free: an offset, a clip and a translating or scaling transform all keep a box a box, so the pointer path pays nothing for the overwhelming majority that never turned. Rotation and skew are what needs the corners — and an affine transform of a convex shape is convex, as is a clip of one, so the corners stay a convex ring however long the chain above them gets. That is what lets one point test and one decomposition answer for every claim there is.
+#[derive(Clone)]
+enum Shape {
+    Box(Rect),
+    Turned(Vec<Point>),
+}
+
+impl Shape {
+    fn bounds(&self) -> Rect {
+        match self {
+            Shape::Box(rect) => *rect,
+            Shape::Turned(corners) => hull(corners),
+        }
+    }
+
+    /// Whether the shape has any area to be pointed at. A line is not drawn, however long it is.
+    fn is_drawn(&self) -> bool {
+        match self {
+            Shape::Box(rect) => rect.width > 0.0 && rect.height > 0.0,
+            Shape::Turned(corners) => sweep(corners) != 0.0,
+        }
+    }
+
+    fn contains(&self, x: f32, y: f32) -> bool {
+        match self {
+            Shape::Box(rect) => rect.contains(x, y),
+            Shape::Turned(corners) => encircles(corners, x, y),
+        }
+    }
+
+    fn offset(self, dx: f32, dy: f32) -> Shape {
+        match self {
+            Shape::Box(rect) => {
+                Shape::Box(Rect::new(rect.x + dx, rect.y + dy, rect.width, rect.height))
+            }
+            Shape::Turned(corners) => Shape::Turned(
+                corners
+                    .into_iter()
+                    .map(|corner| Point::new(corner.x + dx, corner.y + dy))
+                    .collect(),
+            ),
+        }
+    }
+
+    /// An axis-aligned matrix keeps a box a box; one that turns it hands back the corners it draws, since the bounds around those would claim four corners the box is not in.
+    fn transformed(self, matrix: [f32; 6]) -> Shape {
+        let transform = Transform::from_array(matrix);
+        let apply = |corner| transform.apply(corner);
+        match self {
+            Shape::Box(rect) if matrix[1] == 0.0 && matrix[2] == 0.0 => {
+                let start = apply(Point::new(rect.x, rect.y));
+                let end = apply(Point::new(rect.x + rect.width, rect.y + rect.height));
+                Shape::Box(Rect::new(
+                    start.x.min(end.x),
+                    start.y.min(end.y),
+                    (end.x - start.x).abs(),
+                    (end.y - start.y).abs(),
+                ))
+            }
+            Shape::Box(rect) => Shape::Turned(corners_of(rect).map(apply).to_vec()),
+            Shape::Turned(corners) => Shape::Turned(corners.into_iter().map(apply).collect()),
+        }
+    }
+
+    fn clipped(self, clip: Rect) -> Option<Shape> {
+        match self {
+            Shape::Box(rect) => rect.intersect(clip).map(Shape::Box),
+            Shape::Turned(corners) => cut(corners, clip).map(Shape::Turned),
+        }
+    }
+
+    /// The axis-aligned rects the claim is stated as, which is the only shape a region comes in.
+    fn rects(self) -> Vec<Rect> {
+        match self {
+            Shape::Box(rect) => vec![rect],
+            Shape::Turned(corners) => rows(&corners),
+        }
+    }
+}
+
+/// A rect's corners as a ring, clockwise from its top-left.
+fn corners_of(rect: Rect) -> [Point; 4] {
+    [
+        Point::new(rect.x, rect.y),
+        Point::new(rect.x + rect.width, rect.y),
+        Point::new(rect.x + rect.width, rect.y + rect.height),
+        Point::new(rect.x, rect.y + rect.height),
     ]
-    .map(|(x, y)| transform.apply(Point::new(x, y)));
+}
+
+fn edges(corners: &[Point]) -> impl Iterator<Item = (Point, Point)> + '_ {
+    corners
+        .iter()
+        .zip(corners.iter().cycle().skip(1))
+        .map(|(&from, &to)| (from, to))
+}
+
+fn hull(corners: &[Point]) -> Rect {
     let (mut left, mut top, mut right, mut bottom) = (f32::MAX, f32::MAX, f32::MIN, f32::MIN);
     for corner in corners {
         left = left.min(corner.x);
@@ -291,23 +382,125 @@ fn bounds(matrix: [f32; 6], rect: Rect) -> Rect {
     Rect::new(left, top, right - left, bottom - top)
 }
 
-fn place(node: NodeId, rect: Rect, clipped: bool) -> Option<Rect> {
-    let mut rect = rect;
+/// Twice the ring's signed area, whose sign is the winding it was built in.
+fn sweep(corners: &[Point]) -> f32 {
+    edges(corners)
+        .map(|(from, to)| from.x * to.y - to.x * from.y)
+        .sum()
+}
+
+/// Whether `(x, y)` is inside a convex ring, its boundary included.
+///
+/// Either winding answers: a transform with a negative determinant — a mirrored box — hands the same corners back in the opposite order.
+fn encircles(corners: &[Point], x: f32, y: f32) -> bool {
+    let (mut inside, mut outside) = (false, false);
+    for (from, to) in edges(corners) {
+        let side = (to.x - from.x) * (y - from.y) - (to.y - from.y) * (x - from.x);
+        inside |= side > 0.0;
+        outside |= side < 0.0;
+    }
+    !(inside && outside)
+}
+
+/// A convex ring cut down to the part of it inside `clip`, or `None` when no part is.
+///
+/// One pass per side of the clip, keeping the corners on the inside of that side and adding one wherever an edge crosses it. The ring is convex, so each side leaves it convex and the four together leave exactly the intersection.
+fn cut(corners: Vec<Point>, clip: Rect) -> Option<Vec<Point>> {
+    let sides = [
+        (1.0, 0.0, -clip.x),
+        (-1.0, 0.0, clip.x + clip.width),
+        (0.0, 1.0, -clip.y),
+        (0.0, -1.0, clip.y + clip.height),
+    ];
+    let mut ring = corners;
+    for (a, b, c) in sides {
+        let depth = |corner: Point| a * corner.x + b * corner.y + c;
+        let mut kept = Vec::with_capacity(ring.len() + 1);
+        for (from, to) in edges(&ring) {
+            let (here, there) = (depth(from), depth(to));
+            if here >= 0.0 {
+                kept.push(from);
+            }
+            if (here < 0.0) != (there < 0.0) {
+                let crossing = here / (here - there);
+                kept.push(Point::new(
+                    from.x + (to.x - from.x) * crossing,
+                    from.y + (to.y - from.y) * crossing,
+                ));
+            }
+        }
+        if kept.len() < 3 {
+            return None;
+        }
+        ring = kept;
+    }
+    Some(ring)
+}
+
+/// The pixel rows a turned claim is stated as.
+///
+/// A shape with diagonal edges has no exact decomposition into axis-aligned rects, and a row is the unit a compositor rasterises a region in anyway. Each row spans the widest the shape is anywhere inside it, so the claim covers what is drawn rather than sitting inside it: a claim that stopped short of the drawn edge is a click falling through to whatever the surface is over.
+fn rows(corners: &[Point]) -> Vec<Rect> {
+    let hull = hull(corners);
+    let base = hull.y + hull.height;
+    let mut rows = Vec::new();
+    let mut top = hull.y;
+    while top < base {
+        let bottom = (top.floor() + 1.0).min(base);
+        // Past 2^24 an f32 cannot hold `top + 1`, and a row that does not advance would never end.
+        if bottom <= top {
+            break;
+        }
+        if let Some((left, right)) = span(corners, top, bottom) {
+            rows.push(Rect::new(left, top, right - left, bottom - top));
+        }
+        top = bottom;
+    }
+    rows
+}
+
+/// How far left and right the shape reaches anywhere in the band between `top` and `bottom`.
+///
+/// Its edges are straight, so the extremes sit at a corner inside the band or where an edge crosses one of its two sides; nothing in between reaches further.
+fn span(corners: &[Point], top: f32, bottom: f32) -> Option<(f32, f32)> {
+    let (mut left, mut right) = (f32::MAX, f32::MIN);
+    for (from, to) in edges(corners) {
+        if (top..=bottom).contains(&from.y) {
+            left = left.min(from.x);
+            right = right.max(from.x);
+        }
+        for side in [top, bottom] {
+            if (from.y < side) != (to.y < side) {
+                let crossing = (side - from.y) / (to.y - from.y);
+                let x = from.x + (to.x - from.x) * crossing;
+                left = left.min(x);
+                right = right.max(x);
+            }
+        }
+    }
+    (right > left).then_some((left, right))
+}
+
+fn place(node: NodeId, shape: Shape, clipped: bool) -> Option<Shape> {
+    let mut shape = shape;
     for index in 0.. {
         let Some(placement) = placement_at(node, index) else {
             break;
         };
-        rect = match placement {
+        shape = match placement {
             Placement::Offset(offset) => {
                 let (dx, dy) = offset();
-                Rect::new(rect.x + dx, rect.y + dy, rect.width, rect.height)
+                shape.offset(dx, dy)
             }
-            Placement::Transform(matrix) => matrix().map_or(rect, |m| bounds(m, rect)),
-            Placement::Clip(clip) if clipped => rect.intersect(clip())?,
-            Placement::Clip(_) => rect,
+            Placement::Transform(matrix) => match matrix() {
+                Some(matrix) => shape.transformed(matrix),
+                None => shape,
+            },
+            Placement::Clip(clip) if clipped => shape.clipped(clip())?,
+            Placement::Clip(_) => shape,
         };
     }
-    Some(rect)
+    Some(shape)
 }
 
 fn unplace(node: NodeId, x: f32, y: f32) -> Option<(f32, f32)> {
@@ -322,15 +515,15 @@ fn unplace(node: NodeId, x: f32, y: f32) -> Option<(f32, f32)> {
                 let (dx, dy) = offset();
                 (point.0 - dx, point.1 - dy)
             }
-            Placement::Transform(matrix) => {
-                match matrix().and_then(|m| Transform::from_array(m).invert()) {
-                    Some(inverse) => {
-                        let local = inverse.apply(Point::new(point.0, point.1));
-                        (local.x, local.y)
-                    }
-                    None => point,
+            // A matrix that will not invert flattened the box onto a line, and no point is inside that.
+            Placement::Transform(matrix) => match matrix() {
+                Some(matrix) => {
+                    let inverse = Transform::from_array(matrix).invert()?;
+                    let local = inverse.apply(Point::new(point.0, point.1));
+                    (local.x, local.y)
                 }
-            }
+                None => point,
+            },
             Placement::Clip(clip) => {
                 if !clip().contains(point.0, point.1) {
                     return None;
@@ -342,26 +535,29 @@ fn unplace(node: NodeId, x: f32, y: f32) -> Option<(f32, f32)> {
     Some(point)
 }
 
-fn lift(node: NodeId, rect: Rect, clipped: bool) -> Option<Rect> {
-    let mut rect = rect;
+fn lift(node: NodeId, rect: Rect, clipped: bool) -> Option<Shape> {
+    let mut shape = Shape::Box(rect);
     let mut at = Some(node);
     while let Some(current) = at {
-        rect = place(current, rect, clipped)?;
+        shape = place(current, shape, clipped)?;
         at = geometric_parent(current);
     }
-    Some(rect)
+    Some(shape)
 }
 
-fn drawn(node: NodeId, rect: Rect) -> Option<Rect> {
-    lift(node, rect, true).filter(|rect| rect.width > 0.0 && rect.height > 0.0)
+fn drawn(node: NodeId, rect: Rect) -> Option<Shape> {
+    lift(node, rect, true).filter(Shape::is_drawn)
 }
 
 pub fn visible_rect(node: NodeId) -> Option<Rect> {
-    lift(node, layout_reactive::track_layout(node)?.peek(), false)
+    lift(node, layout_reactive::track_layout(node)?.peek(), false).map(|shape| shape.bounds())
 }
 
-pub(crate) fn pointable_rect(node: NodeId) -> Option<Rect> {
-    drawn(node, layout_reactive::track_layout(node)?.peek())
+/// Whether `(x, y)` lands on `node` where it is drawn, rather than merely inside the bounds around it.
+pub(crate) fn pointable(node: NodeId, x: f32, y: f32) -> bool {
+    layout_reactive::track_layout(node)
+        .and_then(|rect| drawn(node, rect.peek()))
+        .is_some_and(|shape| shape.contains(x, y))
 }
 
 pub fn interactive_rects() -> Vec<Rect> {
@@ -377,6 +573,7 @@ pub fn interactive_rects() -> Vec<Rect> {
         .into_iter()
         .filter(|(node, _)| receives_input(*node))
         .filter_map(|(node, rect)| drawn(node, rect.peek()))
+        .flat_map(Shape::rects)
         .collect();
     for &(node, rect, mode) in &declared {
         if mode != InputMode::Opaque || !receives_input(node) {
@@ -392,8 +589,9 @@ pub fn interactive_rects() -> Vec<Rect> {
                     && pierces(*hole, node)
                     && receives_input(*hole)
             })
-            .filter_map(|(hole, rect, _)| drawn(*hole, rect.peek()));
-        region.extend(holes.fold(vec![outer], |pieces, hole| {
+            .filter_map(|(hole, rect, _)| drawn(*hole, rect.peek()))
+            .flat_map(Shape::rects);
+        region.extend(holes.fold(outer.rects(), |pieces, hole| {
             pieces
                 .into_iter()
                 .flat_map(|piece| subtract(piece, hole))
@@ -428,7 +626,7 @@ fn decision_below(parent: NodeId, x: f32, y: f32) -> Option<InputMode> {
         if logical_parent(node) != Some(parent) || !gate_admits(node) {
             continue;
         }
-        if !place(node, rect.peek(), true).is_some_and(|drawn| drawn.contains(x, y)) {
+        if !place(node, Shape::Box(rect.peek()), true).is_some_and(|drawn| drawn.contains(x, y)) {
             continue;
         }
         let Some((inner_x, inner_y)) = unplace(node, x, y) else {
@@ -454,7 +652,7 @@ pub(crate) fn covers(
     x: f32,
     y: f32,
 ) -> bool {
-    if !place(node, layout, true).is_some_and(|drawn| drawn.contains(x, y)) {
+    if !place(node, Shape::Box(layout), true).is_some_and(|drawn| drawn.contains(x, y)) {
         return false;
     }
     let mode = mode_of(node);

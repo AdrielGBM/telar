@@ -19,7 +19,7 @@ use crate::input::Input;
 use crate::layout_item::LayoutItem;
 use crate::overlay::Overlay;
 use crate::scroll_area::LayoutScrollArea;
-use crate::styled_container::StyledContainer;
+use crate::styled_container::{StyledContainer, box_transform};
 use crate::surface_context::Surface;
 
 fn boxed(style: LayoutStyle, children: Vec<Box<dyn LayoutItem>>) -> StyledContainer {
@@ -98,6 +98,11 @@ fn moved(x: f64, y: f64) -> Event {
 
 fn claimed(x: f32, y: f32) -> bool {
     interactive_rects().iter().any(|rect| rect.contains(x, y))
+}
+
+/// Where a node can be pointed at, as the bounds around its drawn shape so a test can name one rect.
+fn pointable_rect(node: NodeId) -> Option<Rect> {
+    drawn(node, layout_reactive::track_layout(node)?.peek()).map(|shape| shape.bounds())
 }
 
 fn pane_style() -> LayoutStyle {
@@ -236,6 +241,44 @@ fn hiding_an_opaque_box_takes_it_out_of_the_region_and_the_hit_test() {
     );
     tap(&mut root, 50.0, 75.0);
     assert_eq!(taps.get(), 1, "and covers the pane again");
+}
+
+/// A disabled box keeps its claim, so it owes the press an ending.
+///
+/// The claim is right — the box is still drawn, and a click on it must not reach whatever the surface is over. What was wrong was declining the press afterwards: on a surface whose compositor input region is carved from these claims, nothing behind it is ever offered the click, so an unhandled press is a click that happened nowhere at all.
+#[test]
+fn a_disabled_box_consumes_the_press_it_claims() {
+    reset_layout_runtime();
+    let card_rect = Rect::new(0.0, 0.0, 100.0, 100.0);
+    let (pane_taps, pane_tap) = counter();
+    let (card_taps, card_tap) = counter();
+    let pane = boxed(pane_style(), vec![]).on_press(pane_tap);
+    let card = boxed(placed(0.0, 0.0, 100.0), vec![])
+        .on_press(card_tap)
+        .disabled(|| true);
+    let mut root = Container::new(full(), vec![Box::new(pane), Box::new(card)]).unwrap();
+    lay_out(&root);
+
+    assert!(
+        interactive_rects().contains(&card_rect),
+        "a disabled control still claims its rect"
+    );
+    assert_eq!(
+        tap(&mut root, 50.0, 75.0),
+        EventResult::Handled,
+        "so the press it claimed ends there"
+    );
+    assert_eq!(
+        (card_taps.get(), pane_taps.get()),
+        (0, 0),
+        "with neither it nor the pane it covers acting on it"
+    );
+    tap(&mut root, 50.0, 200.0);
+    assert_eq!(
+        pane_taps.get(),
+        1,
+        "past the card the pane still takes a tap"
+    );
 }
 
 #[test]
@@ -504,6 +547,86 @@ fn an_inert_subtree_takes_no_pointer_no_keys_and_no_focus() {
     );
 }
 
+/// The keyboard twin of an invisible box catching a click: a key carries no position to miss a hidden box with, so only the chain can keep an unseen shortcut table from firing.
+#[test]
+fn a_shortcut_table_in_a_hidden_subtree_hears_no_keys() {
+    reset_layout_runtime();
+    focus::clear();
+    let (hidden_keys, hidden_key) = counter();
+    let (live_keys, live_key) = counter();
+    let table = boxed(placed(0.0, 0.0, 100.0), vec![]).on_key(move |_key| hidden_key());
+    let pane = boxed(pane_style(), vec![Box::new(table)]);
+    let pane_node = pane.layout_node();
+    let live = boxed(placed(200.0, 0.0, 100.0), vec![]).on_key(move |_key| live_key());
+    let mut root = Container::new(full(), vec![Box::new(pane), Box::new(live)]).unwrap();
+    lay_out(&root);
+    let key = Event::KeyPressed {
+        key: Key::Char('a'),
+        modifiers: ModifiersState::default(),
+    };
+
+    root.on_event(&key);
+    assert_eq!(
+        (hidden_keys.get(), live_keys.get()),
+        (1, 1),
+        "both tables hear the key while both panes are shown"
+    );
+
+    set_display(pane_node, false);
+    mark_dirty(pane_node).unwrap();
+    lay_out(&root);
+    root.on_event(&key);
+    assert_eq!(
+        hidden_keys.get(),
+        1,
+        "a table under `display:none` hears nothing"
+    );
+    assert_eq!(
+        live_keys.get(),
+        2,
+        "while the pane still shown keeps its keys"
+    );
+}
+
+/// And the chain that has to be climbed is the registry's, not the layout tree's.
+///
+/// A scroll area lays its content out as a root of its own, with no layout link back to the viewport, so `display:none` above the scroll is invisible to anything walking parents. The registry keeps its own link across that gap, which is why the question is asked of it.
+#[test]
+fn a_shortcut_table_in_a_hidden_scroll_area_hears_no_keys() {
+    reset_layout_runtime();
+    focus::clear();
+    let (keys, on_key) = counter();
+    let mut table_node = None;
+    let scroll = LayoutScrollArea::new_with(LayoutStyle::new().width(300.0).height(200.0), |_| {
+        let table = boxed(LayoutStyle::new().width(300.0).height(100.0), vec![])
+            .on_key(move |_key| on_key());
+        table_node = Some(table.layout_node());
+        Ok(Box::new(table) as Box<dyn LayoutItem>)
+    })
+    .unwrap();
+    let pane = boxed(pane_style(), vec![Box::new(scroll)]);
+    let pane_node = pane.layout_node();
+    let mut root = Container::new(full(), vec![Box::new(pane)]).unwrap();
+    lay_out(&root);
+    let key = Event::KeyPressed {
+        key: Key::Char('a'),
+        modifiers: ModifiersState::default(),
+    };
+
+    root.on_event(&key);
+    assert_eq!(keys.get(), 1, "shown, the table hears the key");
+
+    set_display(pane_node, false);
+    mark_dirty(pane_node).unwrap();
+    lay_out(&root);
+    assert!(
+        !layout_reactive::is_hidden(table_node.unwrap()),
+        "the layout links stop at the scroll's own root, so they never reach the hidden pane"
+    );
+    root.on_event(&key);
+    assert_eq!(keys.get(), 1, "and the table hears nothing all the same");
+}
+
 #[test]
 fn toggling_inert_adds_and_removes_the_rect_and_the_dispatch_at_once() {
     reset_layout_runtime();
@@ -761,6 +884,52 @@ fn a_transformed_box_claims_and_takes_the_pointer_where_it_is_drawn() {
     assert_eq!(taps.get(), 0, "where it was laid out, nothing is there");
     tap(&mut root, 250.0, 50.0);
     assert_eq!(taps.get(), 1, "where it is drawn, it answers");
+}
+
+/// A box turned 45° draws a diamond, and the bounds around a diamond are half empty corner.
+///
+/// Claiming those corners is a click the surface takes and then does nothing with, at a place where nothing is drawn. The claim is the drawn shape instead, stated as the pixel rows a region comes in, and the hit test asks the same shape.
+#[test]
+fn a_rotated_box_claims_the_shape_it_draws_and_not_the_corners_around_it() {
+    reset_layout_runtime();
+    let (_, on_tap) = counter();
+    let turned = boxed(placed(100.0, 100.0, 100.0), vec![])
+        .with_transform(|r| box_transform(r, 45.0, 1.0, 1.0, 0.0, 0.0))
+        .on_press(on_tap);
+    let root = Container::new(full(), vec![Box::new(turned)]).unwrap();
+    lay_out(&root);
+
+    assert!(claimed(150.0, 150.0), "the diamond claims its middle");
+    assert!(claimed(150.0, 85.0), "out to the point of its top corner");
+    assert!(
+        !claimed(85.0, 85.0),
+        "and nothing of the corner the bounds around it leave empty: {:?}",
+        interactive_rects()
+    );
+    drop(root);
+
+    reset_layout_runtime();
+    let (pane_taps, pane_tap) = counter();
+    let (card_taps, card_tap) = counter();
+    let pane = boxed(full(), vec![]).on_press(pane_tap);
+    let turned = boxed(placed(100.0, 100.0, 100.0), vec![])
+        .with_transform(|r| box_transform(r, 45.0, 1.0, 1.0, 0.0, 0.0))
+        .on_press(card_tap);
+    let mut root = Container::new(full(), vec![Box::new(pane), Box::new(turned)]).unwrap();
+    lay_out(&root);
+
+    tap(&mut root, 150.0, 150.0);
+    assert_eq!(
+        (card_taps.get(), pane_taps.get()),
+        (1, 0),
+        "a press on the diamond is the diamond's"
+    );
+    tap(&mut root, 85.0, 85.0);
+    assert_eq!(
+        (card_taps.get(), pane_taps.get()),
+        (1, 1),
+        "one in the empty corner reaches the pane beneath it"
+    );
 }
 
 #[test]

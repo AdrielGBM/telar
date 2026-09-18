@@ -172,7 +172,9 @@ fn link_parent(child: NodeId, parent: NodeId) {
     with_parents(|p| p.insert(child, parent));
 }
 
-/// Whether `node` is `ancestor` or sits anywhere beneath it. Follows the parent links the runtime records, so it crosses into a separately-computed sub-root (a scroll's content) the way the layout tree does.
+/// Whether `node` is `ancestor` or sits anywhere beneath it.
+///
+/// Follows the parent links the runtime records, which is exactly as far as the layout tree reaches: a portaled overlay is linked to the host it attached to, so the climb crosses into one — but a scroll's content is a root of its own with no link to its viewport at all, so nothing inside one is a descendant of the scroll area that shows it. What bridges that gap is the input registry, which records its own link from the content to the viewport and climbs that instead.
 pub fn is_descendant_of(node: NodeId, ancestor: NodeId) -> bool {
     with_runtime(|rt| rt.is_in_subtree(node, ancestor))
 }
