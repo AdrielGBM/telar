@@ -1596,10 +1596,10 @@ fn fill_color(view: &RenderNode) -> Color {
         RenderNode::Group { children, .. } => children,
         _ => panic!("expected Group"),
     };
-    if let RenderNode::Primitive(renderer_core::DrawCommand::Rect { style, .. }) = &group[0] {
-        if let Some(renderer_core::Paint::Solid(c)) = style.fill {
-            return c;
-        }
+    if let RenderNode::Primitive(renderer_core::DrawCommand::Rect { style, .. }) = &group[0]
+        && let Some(renderer_core::Paint::Solid(c)) = style.fill
+    {
+        return c;
     }
     panic!("expected a solid-fill background rect");
 }

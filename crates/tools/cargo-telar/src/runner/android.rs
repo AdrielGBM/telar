@@ -10,10 +10,10 @@ use super::config::{
 use super::package::{dist_dir, profile_of};
 
 pub(crate) fn resolve_ndk_root() -> Option<String> {
-    if let Ok(v) = std::env::var("ANDROID_NDK_ROOT") {
-        if !v.is_empty() {
-            return Some(v);
-        }
+    if let Ok(v) = std::env::var("ANDROID_NDK_ROOT")
+        && !v.is_empty()
+    {
+        return Some(v);
     }
     let android_home = std::env::var("ANDROID_HOME").ok()?;
     let ndk_dir = Path::new(&android_home).join("ndk");

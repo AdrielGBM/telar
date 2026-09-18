@@ -80,7 +80,7 @@ fn headless_renders_visible_pixels() {
     let rgba = renderer.read_rgba().expect("pixmap exists after a frame");
     assert_eq!(rgba.len(), 64 * 48 * 4);
     assert!(
-        rgba.chunks_exact(4).any(|px| px[0] != 10),
+        rgba.as_chunks::<4>().0.iter().any(|px| px[0] != 10),
         "expected drawn content to differ from the clear color"
     );
     assert!(
@@ -124,7 +124,10 @@ fn headless_preserves_translucent_clear_alpha() {
         .unwrap();
     let rgba = renderer.read_rgba().expect("pixmap exists after a frame");
     assert!(
-        rgba.chunks_exact(4).all(|px| px == [0, 0, 0, 90]),
+        rgba.as_chunks::<4>()
+            .0
+            .iter()
+            .all(|px| *px == [0, 0, 0, 90]),
         "translucent clear must preserve alpha; got first px {:?}",
         &rgba[0..4]
     );
@@ -305,7 +308,7 @@ fn render_frame_pixel_golden() {
         .expect("headless pixmap should exist after a frame");
     assert_eq!(rgba.len(), (GOLDEN_WIDTH * GOLDEN_HEIGHT * 4) as usize);
     assert!(
-        rgba.chunks_exact(4).any(|px| px[0] != 15),
+        rgba.as_chunks::<4>().0.iter().any(|px| px[0] != 15),
         "expected the scene to draw content differing from the clear color"
     );
 
@@ -488,7 +491,11 @@ fn text_under_a_scaled_matrix_is_drawn_at_the_scaled_size_once() {
         renderer.begin_frame(256, 128, 1.0, 0).unwrap();
         renderer.render_frame(&cmds, Some(Color::BLACK)).unwrap();
         let rgba = renderer.read_rgba().expect("a frame was drawn");
-        rgba.chunks_exact(4).filter(|px| px[0] > 40).count()
+        rgba.as_chunks::<4>()
+            .0
+            .iter()
+            .filter(|px| px[0] > 40)
+            .count()
     };
 
     let plain = inked(None);

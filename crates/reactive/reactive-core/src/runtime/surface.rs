@@ -38,10 +38,11 @@ impl Default for SurfaceHandle {
     }
 }
 
+type EnterHook = Rc<dyn Fn(SurfaceHandle) -> SurfaceEnterGuard>;
+
 thread_local! {
     static CURRENT_SURFACE: Cell<SurfaceHandle> = const { Cell::new(SurfaceHandle::NONE) };
-    static ENTER_HOOK: RefCell<Option<Rc<dyn Fn(SurfaceHandle) -> SurfaceEnterGuard>>> =
-        const { RefCell::new(None) };
+    static ENTER_HOOK: RefCell<Option<EnterHook>> = const { RefCell::new(None) };
 }
 
 /// The surface an effect registered right now would be owned by.

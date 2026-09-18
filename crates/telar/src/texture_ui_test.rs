@@ -300,7 +300,9 @@ fn pixel_raster_reaches_the_application_texture_without_a_blended_edge() {
     // Neither the app's blue nor the text's white: an edge the rasterizer blended.
     let blended = |pixels: &[u8]| {
         pixels
-            .chunks_exact(4)
+            .as_chunks::<4>()
+            .0
+            .iter()
             .filter(|px| px[..3] != APP[..3] && px[..3] != [255, 255, 255])
             .count()
     };

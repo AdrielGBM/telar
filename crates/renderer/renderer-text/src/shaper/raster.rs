@@ -124,7 +124,7 @@ impl TextShaper {
         );
 
         if a < 255 {
-            for chunk in pixels.chunks_exact_mut(4) {
+            for chunk in pixels.as_chunks_mut::<4>().0 {
                 chunk[3] = ((chunk[3] as u32 * a as u32) / 255) as u8;
             }
         }

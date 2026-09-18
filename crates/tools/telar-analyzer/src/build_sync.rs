@@ -62,7 +62,8 @@ pub fn generated_target(
 ///
 /// Cached against the lockfile's mtime, because resolving it shells out to `cargo metadata` and this is reached on every keystroke. A dependency edit changes the lockfile and re-resolves; nothing else does.
 fn project_telar_version(package_dir: &Path) -> String {
-    static CACHE: OnceLock<Mutex<HashMap<PathBuf, (Option<SystemTime>, String)>>> = OnceLock::new();
+    type VersionCache = Mutex<HashMap<PathBuf, (Option<SystemTime>, String)>>;
+    static CACHE: OnceLock<VersionCache> = OnceLock::new();
 
     let workspace_root = telar_project::find_workspace_root(package_dir)
         .unwrap_or_else(|| package_dir.to_path_buf());

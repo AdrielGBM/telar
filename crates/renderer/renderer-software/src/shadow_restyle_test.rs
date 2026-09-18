@@ -32,7 +32,9 @@ fn clock_like(text: &str) -> Vec<DrawCommand> {
 
 /// How much red the frame carries. The shadow is the only red thing drawn, so this is "is the shadow there".
 fn shadow_presence(rgba: &[u8]) -> u64 {
-    rgba.chunks_exact(4)
+    rgba.as_chunks::<4>()
+        .0
+        .iter()
         .map(|px| u64::from(px[0].saturating_sub(px[2])))
         .sum()
 }
@@ -42,7 +44,7 @@ fn draw(renderer: &mut SoftwareRenderer<HeadlessWindow, HeadlessWindow>, text: &
     renderer
         .render_frame(&clock_like(text), Some(Color::BLACK))
         .unwrap();
-    shadow_presence(&renderer.read_rgba().expect("pixmap after a frame"))
+    shadow_presence(renderer.read_rgba().expect("pixmap after a frame"))
 }
 
 #[test]

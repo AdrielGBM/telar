@@ -18,7 +18,7 @@ thread_local! {
     static DEPTH: Cell<usize> = const { Cell::new(0) };
     // `ManuallyDrop` for the reason every other TLS slot here carries it: a destructor registered from the app dylib makes `dlclose` unsafe.
     static RETIRED: ManuallyDrop<RefCell<Vec<Retired>>> =
-        ManuallyDrop::new(RefCell::new(Vec::new()));
+        const { ManuallyDrop::new(RefCell::new(Vec::new())) };
 }
 
 struct Retired {

@@ -77,14 +77,11 @@ impl TextArea {
             node,
             focus::Role::MultilineTextInput,
         );
-        let remeasure = {
-            let value = value;
-            effect(move || {
-                // A tracked read that subscribes without cloning the value.
-                value.with(|_| {});
-                mark_dirty(node).ok();
-            })
-        };
+        let remeasure = effect(move || {
+            // A tracked read that subscribes without cloning the value.
+            value.with(|_| {});
+            mark_dirty(node).ok();
+        });
         let blink = Blink::new();
         let watching = blink.clone();
         let mut input = InputHandle::new();

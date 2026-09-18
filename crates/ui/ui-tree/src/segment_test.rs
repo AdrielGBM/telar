@@ -156,7 +156,7 @@ fn memo_dependent_segment_updates_with_runner_batching() {
     let count = signal(0i32);
     let count_mv = count;
     let double = memo(move || count_mv.get() * 2);
-    let root = SegmentRoot::mount(MemoLeaf { double: double });
+    let root = SegmentRoot::mount(MemoLeaf { double });
     assert_eq!(animated_rect_x(&root), 0.0);
 
     begin_batch();
@@ -205,10 +205,7 @@ fn dispatch_must_be_batched_or_segment_drops_subscriptions() {
     {
         let theme = signal(0.2f32);
         let sel = signal(0i32);
-        let widget = Rc::new(RefCell::new(ThemedButton {
-            theme: theme,
-            sel: sel,
-        }));
+        let widget = Rc::new(RefCell::new(ThemedButton { theme, sel }));
         let render = {
             let w = Rc::clone(&widget);
             move || w.try_borrow().ok().map(|c| c.view())
@@ -233,10 +230,7 @@ fn dispatch_must_be_batched_or_segment_drops_subscriptions() {
     {
         let theme = signal(0.2f32);
         let sel = signal(0i32);
-        let widget = Rc::new(RefCell::new(ThemedButton {
-            theme: theme,
-            sel: sel,
-        }));
+        let widget = Rc::new(RefCell::new(ThemedButton { theme, sel }));
         let render = {
             let w = Rc::clone(&widget);
             move || w.try_borrow().ok().map(|c| c.view())

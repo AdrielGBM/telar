@@ -78,7 +78,6 @@ pub fn stepper(
     // Shared across the − and + buttons' fill closures (a `Rc<dyn Fn>` is not `Clone`, an `Rc` handle is). Re-erased to `Rc` so both buttons' `on_press` closures can hold a copy (the field itself is a one-shot `Box`).
 
     let minus = stepper_button("−", color.clone(), {
-        let value = value;
         let on_change = on_change.clone();
         move || {
             let v = (value.get() - step).clamp(min, max);
@@ -90,7 +89,6 @@ pub fn stepper(
     })?;
 
     let plus = stepper_button("+", color.clone(), {
-        let value = value;
         let on_change = on_change.clone();
         move || {
             let v = (value.get() + step).clamp(min, max);

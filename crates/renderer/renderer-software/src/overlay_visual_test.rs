@@ -78,7 +78,7 @@ fn overlay_draws_on_top_and_captures_the_tap() {
         .render_frame(&tree.commands(), Some(Color::BLACK))
         .unwrap();
     let rgba = renderer.read_rgba().expect("pixmap exists after a frame");
-    common::save_png_if_requested("TELAR_VISUAL_OUT", w, h, &rgba);
+    common::save_png_if_requested("TELAR_VISUAL_OUT", w, h, rgba);
 
     let center = (((h / 2) * w + w / 2) * 4) as usize;
     let (r, _g, b) = (rgba[center], rgba[center + 1], rgba[center + 2]);

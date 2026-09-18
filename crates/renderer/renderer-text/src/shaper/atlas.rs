@@ -78,6 +78,8 @@ impl GlyphAtlas {
     /// Packs one rasterized glyph, reserving the atlas's 16 MiB on the first glyph to arrive.
     ///
     /// Lazily, because only the hardware backend ever packs a glyph — `layout_glyphs` is the sole path in, and only `renderer-hardware` calls it. The software backend composites text through `rasterize`, never touching the atlas, yet it builds a [`TextShaper`](super::TextShaper) like everyone else; reserving up front billed every software surface 16 MiB of zeroed RGBA it would never read, which was the largest single line in a heap profile of a shell that has no GPU backend at all.
+    // Only `emit_glyph` in `shaper::layout` calls this, with the glyph's key, pixels, size and placement as loose locals; a struct would exist just to carry them across this one call.
+    #[allow(clippy::too_many_arguments)]
     pub(super) fn insert(
         &mut self,
         key: CacheKey,

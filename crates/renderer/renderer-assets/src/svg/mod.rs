@@ -49,7 +49,7 @@ pub struct SvgData {
 
 enum SvgSource {
     #[cfg(feature = "dynamic-svg")]
-    Parsed(usvg::Tree),
+    Parsed(Box<usvg::Tree>),
     Baked(BakedSvg),
 }
 
@@ -122,7 +122,7 @@ impl SvgData {
         Ok(Self {
             id: hasher.finish(),
             size: (size.width(), size.height()),
-            source: SvgSource::Parsed(tree),
+            source: SvgSource::Parsed(Box::new(tree)),
             memo: Mutex::new(FxHashMap::default()),
         })
     }

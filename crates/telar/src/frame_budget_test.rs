@@ -53,10 +53,7 @@ fn chrome() -> (Box<dyn Component>, telar::RwSignal<i32>) {
     let ticks = signal(0);
 
     let counter = Text::new(
-        {
-            let ticks = ticks;
-            move || format!("{}", ticks.get())
-        },
+        move || format!("{}", ticks.get()),
         LayoutStyle::new(),
         || TextStyle::new(14.0, Color::rgb(0.9, 0.9, 0.9)),
     )

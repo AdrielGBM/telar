@@ -103,8 +103,8 @@ impl ImageData {
 #[inline]
 /// Premultiplies straight-alpha RGBA bytes in place.
 pub fn premultiply_rgba(pixels: &mut [u8]) {
-    let mut iter = pixels.chunks_exact_mut(16);
-    for chunk in iter.by_ref() {
+    let (chunks, rest) = pixels.as_chunks_mut::<16>();
+    for chunk in chunks {
         let r = u32x4::new([
             chunk[0] as u32,
             chunk[4] as u32,
@@ -150,7 +150,7 @@ pub fn premultiply_rgba(pixels: &mut [u8]) {
         chunk[10] = ba[2] as u8;
         chunk[14] = ba[3] as u8;
     }
-    for chunk in iter.into_remainder().chunks_exact_mut(4) {
+    for chunk in rest.as_chunks_mut::<4>().0 {
         let a = chunk[3] as u32;
         chunk[0] = ((chunk[0] as u32 * a + 128) >> 8) as u8;
         chunk[1] = ((chunk[1] as u32 * a + 128) >> 8) as u8;

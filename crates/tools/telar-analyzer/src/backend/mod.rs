@@ -1012,6 +1012,8 @@ impl Backend {
             if edits.is_empty() {
                 return None;
             }
+            // `lsp_types::Uri` hashes and compares by `as_str()` alone; the `Cell` inside fluent-uri's parse data is an authority offset that takes no part in either.
+            #[allow(clippy::mutable_key_type)]
             let mut changes = std::collections::HashMap::new();
             changes.insert(uri.clone(), edits);
             return Some(WorkspaceEdit {
@@ -1054,6 +1056,8 @@ impl Backend {
                 ));
                 return None;
             }
+            // `lsp_types::Uri` hashes and compares by `as_str()` alone; the `Cell` inside fluent-uri's parse data is an authority offset that takes no part in either.
+            #[allow(clippy::mutable_key_type)]
             let mut changes: std::collections::HashMap<Uri, Vec<TextEdit>> =
                 std::collections::HashMap::new();
             for loc in locations {

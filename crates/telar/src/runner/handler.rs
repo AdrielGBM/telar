@@ -735,11 +735,11 @@ where
                 }
                 DevAction::None => {}
             },
-            Event::PointerPressed { x, y, .. } => {
-                if self.dev.on_pointer_pressed(*x as f32, *y as f32) {
-                    window.request_redraw();
-                    return;
-                }
+            Event::PointerPressed { x, y, .. }
+                if self.dev.on_pointer_pressed(*x as f32, *y as f32) =>
+            {
+                window.request_redraw();
+                return;
             }
             _ => {}
         }

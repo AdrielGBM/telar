@@ -135,8 +135,10 @@ fn assert_exact_repaint(
     let fresh = draw(size, &[new], false);
     let stale = incremental
         .pixels
-        .chunks_exact(4)
-        .zip(fresh.pixels.chunks_exact(4))
+        .as_chunks::<4>()
+        .0
+        .iter()
+        .zip(fresh.pixels.as_chunks::<4>().0)
         .position(|(a, b)| a != b)
         .map(|i| (i as u32 % width, i as u32 / width));
     assert!(
@@ -148,14 +150,16 @@ fn assert_exact_repaint(
     let poisoned = draw(size, &[old, new], true);
     let disagreement = poisoned
         .pixels
-        .chunks_exact(4)
+        .as_chunks::<4>()
+        .0
+        .iter()
         .enumerate()
         .find_map(|(i, px)| {
             let (x, y) = (i as u32 % width, i as u32 / width);
             let planned = regions
                 .iter()
                 .any(|&(x0, y0, x1, y1)| (x0..x1).contains(&x) && (y0..y1).contains(&y));
-            let touched = px != UNTOUCHED;
+            let touched = *px != UNTOUCHED;
             (touched != planned).then_some((x, y, touched))
         });
     assert!(

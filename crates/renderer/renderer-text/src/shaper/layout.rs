@@ -190,7 +190,7 @@ impl TextShaper {
                         }
                         SwashContent::SubpixelMask => {
                             let mut out = vec![0u8; (w * h * 4) as usize];
-                            for (i, chunk) in img.data.chunks_exact(3).enumerate() {
+                            for (i, chunk) in img.data.as_chunks::<3>().0.iter().enumerate() {
                                 // Known limitation: subpixel AA needs per-channel alpha compositing in the renderer to preserve the per-colour masks. Averaging RGB to greyscale loses that, which reads worse on LCD screens.
                                 let mask = ((chunk[0] as u32 + chunk[1] as u32 + chunk[2] as u32)
                                     / 3) as u8;
@@ -231,17 +231,13 @@ impl TextShaper {
             e
         } else {
             let mut inserted = None;
-            loop {
-                if let Some(evicted_key) = self.atlas.evict_lru() {
-                    self.swash_cache.image_cache.remove(&evicted_key);
-                    if let Some(e) =
-                        self.atlas
-                            .insert(cache_key, &pixels, w, h, pl, pt, is_color_glyph)
-                    {
-                        inserted = Some(e);
-                        break;
-                    }
-                } else {
+            while let Some(evicted_key) = self.atlas.evict_lru() {
+                self.swash_cache.image_cache.remove(&evicted_key);
+                if let Some(e) = self
+                    .atlas
+                    .insert(cache_key, &pixels, w, h, pl, pt, is_color_glyph)
+                {
+                    inserted = Some(e);
                     break;
                 }
             }

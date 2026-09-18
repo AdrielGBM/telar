@@ -116,7 +116,7 @@ fn bench_single_signal_reflatten(c: &mut Criterion) {
     for &rows in &[20usize, 100, 400] {
         let tick = signal(0i32);
         let tree = ComponentList::new(CardList {
-            tick: tick,
+            tick,
             rows,
             cols: 8,
         });
@@ -169,10 +169,7 @@ fn bench_scroll_tick(c: &mut Criterion) {
     for &items in &[100usize, 1000] {
         // Current behaviour: a scroll-offset signal change re-runs `content.view()` and the flatten.
         let offset = signal(0.0f32);
-        let tree = ComponentList::new(ScrollContent {
-            offset: offset,
-            items,
-        });
+        let tree = ComponentList::new(ScrollContent { offset, items });
         let n = tree.commands().len();
         group.throughput(Throughput::Elements(n as u64));
         group.bench_with_input(BenchmarkId::new("full_reflatten", items), &items, |b, _| {

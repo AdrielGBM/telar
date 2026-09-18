@@ -40,7 +40,7 @@ pub fn view_token_at(source: &str, line: u32, character: u32) -> Option<ViewToke
     if let Some(class) = word.strip_prefix('@') {
         return Some(ViewToken::Class(class));
     }
-    if line_text[..word_start].chars().last() == Some(':') {
+    if line_text[..word_start].ends_with(':') {
         let key = attribute_key_before_colon(line_text, word_start)?;
         return color_attr_keys()
             .contains(&key)

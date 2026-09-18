@@ -56,6 +56,8 @@ pub struct VirtualList;
 
 impl VirtualList {
     /// `viewport` is the enclosing scroll area's live window (see [`crate::LayoutScrollArea::new_with`]). `build` constructs one row and receives its index alongside the item, since a virtualised row often wants to know where it sits.
+    // `VirtualList` is only a name for this constructor, which builds a `ReactiveList`; `VirtualList::new` is public API and what the transpiler emits for a `virtual` loop.
+    #[allow(clippy::new_ret_no_self)]
     pub fn new<Item, Key, S, K, B>(
         container_style: LayoutStyle,
         viewport: ScrollViewport,

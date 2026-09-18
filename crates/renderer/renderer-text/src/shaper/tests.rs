@@ -197,7 +197,9 @@ fn pixel_raster_leaves_no_partial_coverage() {
     let (smooth, _, _) = sh.rasterize("Hamburgefonstiv", None, rect, &base);
     let partial = |pixels: &[u8]| {
         pixels
-            .chunks_exact(4)
+            .as_chunks::<4>()
+            .0
+            .iter()
             .filter(|px| px[3] > 0 && px[3] < 255)
             .count()
     };

@@ -74,9 +74,7 @@ pub(crate) fn dropdown(props: Dropdown) -> Result<Box<dyn LayoutItem>, LayoutErr
     let highlighted: RwSignal<Option<u32>> = signal(None);
     // Built once, so Enter and a tap take the same path instead of two that drift.
     let pick: Rc<dyn Fn(u32)> = {
-        let selected = selected;
         let on_pick = on_pick.clone();
-        let open = open;
         Rc::new(move |idx: u32| {
             if let Some(sel) = &selected {
                 sel.set(idx);
@@ -96,7 +94,6 @@ pub(crate) fn dropdown(props: Dropdown) -> Result<Box<dyn LayoutItem>, LayoutErr
             // Ask the rows what they say without asking them to be rows: the panel is not open, so there are none, and the trigger has to name the choice from the first frame.
             list.declare(&rows)?;
             let list = list.clone();
-            let selected = selected;
             Reactive::of(move || {
                 selected
                     .as_ref()
@@ -118,19 +115,14 @@ pub(crate) fn dropdown(props: Dropdown) -> Result<Box<dyn LayoutItem>, LayoutErr
     };
     // Key events are broadcast, so without this a bare Enter would open every dropdown on the page.
     let trigger_focused = signal(false);
-    let toggle: Rc<dyn Fn()> = {
-        let open = open;
-        let highlighted = highlighted;
-        let selected = selected;
-        Rc::new(move || {
-            let opening = !open.peek();
-            if opening {
-                // The cursor starts on what is already chosen, so the first arrow moves from there.
-                highlighted.set(selected.as_ref().map(|s| s.peek()));
-            }
-            open.set(opening);
-        })
-    };
+    let toggle: Rc<dyn Fn()> = Rc::new(move || {
+        let opening = !open.peek();
+        if opening {
+            // The cursor starts on what is already chosen, so the first arrow moves from there.
+            highlighted.set(selected.as_ref().map(|s| s.peek()));
+        }
+        open.set(opening);
+    });
     let trigger_box = LayoutStyle::new()
         .flex_row()
         .align_items(AlignItems::CENTER)
@@ -150,11 +142,8 @@ pub(crate) fn dropdown(props: Dropdown) -> Result<Box<dyn LayoutItem>, LayoutErr
     }
     // One handler on the trigger, which lives for the widget's whole life. The panel is rebuilt on every open and would lose a handler hung on it.
     let on_key = {
-        let open = open;
-        let highlighted = highlighted;
         let pick = pick.clone();
         let toggle = toggle.clone();
-        let trigger_focused = trigger_focused;
         let list = list.clone();
         move |key: &Key| {
             let is_open = open.peek();
@@ -230,10 +219,7 @@ pub(crate) fn dropdown(props: Dropdown) -> Result<Box<dyn LayoutItem>, LayoutErr
 
     // Modelled exactly like a reactive `if $open`: a single-item list keyed on the boolean. Building the overlay lazily is what lets it portal correctly, since the page has been laid out by then.
     let overlay_holder = ReactiveList::new(
-        {
-            let open = open;
-            move || vec![open.get()]
-        },
+        move || vec![open.get()],
         |o: &bool| *o,
         move |is_open: bool| -> Result<Box<dyn LayoutItem>, LayoutError> {
             if !is_open {
@@ -290,10 +276,7 @@ pub(crate) fn dropdown(props: Dropdown) -> Result<Box<dyn LayoutItem>, LayoutErr
     // On the dismiss stack while up, so Escape and the platform Back gesture reach it in the order things were opened. The stack is keyed by open and close rather than build order for exactly that reason.
     {
         let open = dismiss_open;
-        let close: Rc<dyn Fn()> = {
-            let open = open;
-            Rc::new(move || open.set(false))
-        };
+        let close: Rc<dyn Fn()> = Rc::new(move || open.set(false));
         let registered: std::cell::Cell<Option<ui_core::dismiss::DismissId>> =
             std::cell::Cell::new(None);
         effect(move || {

@@ -99,22 +99,18 @@ pub(crate) fn scrim_overlay(
         return collapsed();
     };
 
-    let dismiss: DismissFn = {
-        let open = open;
-        Rc::new(move || {
-            open.set(false);
-            if let Some(cb) = &on_close {
-                cb();
-            }
-        })
-    };
+    let dismiss: DismissFn = Rc::new(move || {
+        open.set(false);
+        if let Some(cb) = &on_close {
+            cb();
+        }
+    });
 
     // `build_inner` consumes the pre-built slot body, so the take-once cell lets the reusable build closure invoke it on the single latch-true build and never again.
     let build_inner = RefCell::new(Some(build_inner));
 
     let built = Rc::new(Cell::new(false));
     let key = {
-        let open = open;
         let built = built.clone();
         move || {
             // Latch on first open; reading `open` subscribes the list so it re-runs to build the scrim then.
@@ -139,11 +135,11 @@ pub(crate) fn scrim_overlay(
             // Kept mounted; shown only while `open`. So the pre-built body survives a close/reopen (not rebuilt).
             let registration = track_dismissible(open, dismiss.clone());
             let open = open;
-            let overlay =
-                Overlay::toggleable(LayoutStyle::new().flex_column(), vec![box_item(inner)], {
-                    let open = open;
-                    move || open.get()
-                })?;
+            let overlay = Overlay::toggleable(
+                LayoutStyle::new().flex_column(),
+                vec![box_item(inner)],
+                move || open.get(),
+            )?;
             let focus_handover = track_focus_handover(open, overlay.content_node());
             Ok(box_item(Dismissible {
                 inner: box_item(overlay),

@@ -403,7 +403,7 @@ fn anchored_content_tracks_trigger() {
         vec![Box::new(panel)],
         true,
         Some(Anchor {
-            trigger: trigger,
+            trigger,
             placement: Placement::Below,
         }),
         Rc::new(|| true),

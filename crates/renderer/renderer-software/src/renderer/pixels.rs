@@ -242,18 +242,14 @@ fn swizzle_words(src: &[u32], dst: &mut [u32], kept: u32) {
     let mask_lo = u32x8::splat(0xFF);
     let mask_kept = u32x8::splat(kept);
     let shift16 = u32x8::splat(16);
-    let mut src_chunks = src.chunks_exact(8);
-    let mut dst_chunks = dst.chunks_exact_mut(8);
-    for (s, d) in (&mut src_chunks).zip(&mut dst_chunks) {
-        let v = u32x8::from(<[u32; 8]>::try_from(s).unwrap());
+    let (src_chunks, src_rest) = src.as_chunks::<8>();
+    let (dst_chunks, dst_rest) = dst.as_chunks_mut::<8>();
+    for (s, d) in src_chunks.iter().zip(dst_chunks) {
+        let v = u32x8::from(*s);
         let out = ((v >> shift16) & mask_lo) | (v & mask_kept) | ((v & mask_lo) << shift16);
         d.copy_from_slice(&<[u32; 8]>::from(out));
     }
-    for (s, d) in src_chunks
-        .remainder()
-        .iter()
-        .zip(dst_chunks.into_remainder())
-    {
+    for (s, d) in src_rest.iter().zip(dst_rest) {
         *d = swizzle_word(*s, kept);
     }
 }
@@ -269,8 +265,8 @@ pub(super) fn convert_rgba(src: &[u8], dst: &mut [u32], format: PixelFormat) {
         swizzle_words(&words[..pixels], dst, kept);
         return;
     }
-    for (px, d) in bytes.chunks_exact(4).zip(dst.iter_mut()) {
-        *d = swizzle_word(u32::from_le_bytes(px.try_into().unwrap()), kept);
+    for (px, d) in bytes.as_chunks::<4>().0.iter().zip(dst.iter_mut()) {
+        *d = swizzle_word(u32::from_le_bytes(*px), kept);
     }
 }
 

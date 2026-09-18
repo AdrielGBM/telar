@@ -2,7 +2,7 @@
 
 use platform_core::WindowConfig;
 
-#[derive(Clone)]
+#[derive(Clone, Default)]
 /// What an application starts with: its window, its fonts and its renderer backend.
 pub struct AppConfig {
     pub window: WindowConfig,
@@ -12,17 +12,6 @@ pub struct AppConfig {
     ///
     /// A property of *this* configuration, so a second surface built later renders in its own family rather than in whichever one was configured last. A single text overrides it with [`TextStyle::with_font_family`](crate::TextStyle::with_font_family).
     pub font_family: Option<String>,
-}
-
-impl Default for AppConfig {
-    fn default() -> Self {
-        Self {
-            window: WindowConfig::default(),
-            font_paths: Vec::new(),
-            font_data: Vec::new(),
-            font_family: None,
-        }
-    }
 }
 
 impl From<WindowConfig> for AppConfig {

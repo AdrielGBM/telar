@@ -18,11 +18,11 @@ use super::diagnostics;
 use super::package::{package_bin_path, package_lib_path, profile_of};
 
 fn inject_feature(args: &mut Vec<String>, feature: &str) {
-    if let Some(pos) = args.iter().position(|a| a == "--features" || a == "-F") {
-        if pos + 1 < args.len() {
-            args[pos + 1] = format!("{},{feature}", args[pos + 1]);
-            return;
-        }
+    if let Some(pos) = args.iter().position(|a| a == "--features" || a == "-F")
+        && pos + 1 < args.len()
+    {
+        args[pos + 1] = format!("{},{feature}", args[pos + 1]);
+        return;
     }
     args.push("--features".to_string());
     args.push(feature.to_string());
@@ -303,11 +303,11 @@ fn watch_and_hot_reload(
             }
         }
 
-        if let Ok(Ok(event)) = rx.recv_timeout(Duration::from_millis(50)) {
-            if note_event(&event) {
-                last_event = Instant::now();
-                pending_rebuild = true;
-            }
+        if let Ok(Ok(event)) = rx.recv_timeout(Duration::from_millis(50))
+            && note_event(&event)
+        {
+            last_event = Instant::now();
+            pending_rebuild = true;
         }
     }
 }
@@ -376,11 +376,11 @@ fn watch_and_run(
                 break 'watch;
             }
 
-            if let Ok(Ok(event)) = rx.recv_timeout(Duration::from_millis(50)) {
-                if note_event(&event) {
-                    last_event = Instant::now();
-                    pending_restart = true;
-                }
+            if let Ok(Ok(event)) = rx.recv_timeout(Duration::from_millis(50))
+                && note_event(&event)
+            {
+                last_event = Instant::now();
+                pending_restart = true;
             }
         }
     }

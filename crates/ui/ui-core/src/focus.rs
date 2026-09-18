@@ -523,7 +523,8 @@ pub fn exposed() -> Vec<Exposed> {
             .iter()
             .map(|e| (e.id, e.node, e.role, e.toggled.clone(), e.value.clone()))
             .collect();
-        let scopes: Vec<(NodeId, Rc<dyn Fn() -> bool>, bool, ScopeReason)> = s
+        type ScopeRow = (NodeId, Rc<dyn Fn() -> bool>, bool, ScopeReason);
+        let scopes: Vec<ScopeRow> = s
             .scopes
             .iter()
             .map(|sc| (sc.node, sc.showing.clone(), sc.traps, sc.reason))

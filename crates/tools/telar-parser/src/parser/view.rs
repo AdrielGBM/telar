@@ -672,12 +672,12 @@ fn read_balanced_parens(chars: &[char], open: usize) -> Option<(String, usize)> 
         let c = chars[i];
         if in_str {
             out.push(c);
-            if c == '\\' {
-                if let Some(&n) = chars.get(i + 1) {
-                    out.push(n);
-                    i += 2;
-                    continue;
-                }
+            if c == '\\'
+                && let Some(&n) = chars.get(i + 1)
+            {
+                out.push(n);
+                i += 2;
+                continue;
             }
             if c == '"' {
                 in_str = false;

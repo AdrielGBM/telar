@@ -127,10 +127,10 @@ fn form_widgets_render() {
     let rgba = renderer.read_rgba().expect("pixmap after a frame");
     assert_eq!(rgba.len(), (w * h * 4) as usize);
     assert!(
-        rgba.chunks_exact(4).any(|px| px[0] != 244),
+        rgba.as_chunks::<4>().0.iter().any(|px| px[0] != 244),
         "expected widgets to draw content over the clear color"
     );
-    common::save_png_if_requested("TELAR_WIDGETS_OUT", w, h, &rgba);
+    common::save_png_if_requested("TELAR_WIDGETS_OUT", w, h, rgba);
 }
 
 #[test]
@@ -188,10 +188,10 @@ fn modal_renders_over_a_page() {
         .unwrap();
     let rgba = renderer.read_rgba().expect("pixmap after a frame");
     assert!(
-        rgba.chunks_exact(4).any(|px| px[0] != 238),
+        rgba.as_chunks::<4>().0.iter().any(|px| px[0] != 238),
         "expected the modal to draw over the page"
     );
-    common::save_png_if_requested("TELAR_MODAL_OUT", w, h, &rgba);
+    common::save_png_if_requested("TELAR_MODAL_OUT", w, h, rgba);
 }
 
 #[test]
@@ -276,13 +276,15 @@ fn select_open_renders() {
     let rgba = renderer.read_rgba().expect("pixmap");
     // An open panel is an overlay composed from a different layer than the trigger, and its rows have to survive that trip to the pixels.
     let panel_rows = rgba
-        .chunks_exact(4)
-        .skip((w as usize) * 90 * 1)
+        .as_chunks::<4>()
+        .0
+        .iter()
+        .skip((w as usize) * 90)
         .filter(|px| px[0] != 244)
         .count();
     assert!(
         panel_rows > 0,
         "expected the open panel's rows to draw below the trigger"
     );
-    common::save_png_if_requested("TELAR_SELECT_OUT", w, h, &rgba);
+    common::save_png_if_requested("TELAR_SELECT_OUT", w, h, rgba);
 }

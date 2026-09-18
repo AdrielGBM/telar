@@ -10,7 +10,6 @@ mod runtime;
 mod signal;
 mod source;
 #[macro_use]
-
 mod task;
 
 pub use effect::{Effect, effect};

@@ -150,8 +150,6 @@ pub(crate) fn resolve_open(
     open.or_else(|| (!id.is_empty()).then(|| ui_core::overlay_state(id)))
 }
 
-/// A control (checkbox box / radio ring / toggle pill) plus an optional label, laid out as one gap-10 row that is itself the tap target: a tap runs `on_press`. Shared by checkbox, radio and toggle.
-
 /// The shared title text style, re-read every frame so it tracks the active theme. Three consumers: `heading`, `section` and `modal`'s title.
 ///
 /// A ratio of the text around it, where it used to be a flat 20px — so a theme that made its body text 11px left every title at the size a 14px body wanted.
@@ -199,6 +197,7 @@ pub(crate) fn captioned(
     Ok(box_item(col))
 }
 
+/// A control (checkbox box / radio ring / toggle pill) plus an optional label, laid out as one gap-10 row that is itself the tap target: a tap runs `on_press`. Shared by checkbox, radio and toggle.
 pub(crate) fn labelled_control(
     control: Box<dyn LayoutItem>,
     label: Reactive<String>,

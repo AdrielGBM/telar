@@ -39,6 +39,8 @@ impl Backend {
             .with_index(root.clone(), move |idx| idx.component_references(&old))
             .await?;
 
+        // `lsp_types::Uri` hashes and compares by `as_str()` alone; the `Cell` inside fluent-uri's parse data is an authority offset that takes no part in either.
+        #[allow(clippy::mutable_key_type)]
         let mut edits: std::collections::HashMap<Uri, Vec<TextEdit>> =
             std::collections::HashMap::new();
         let mut def_uri: Option<Uri> = None;
@@ -105,6 +107,8 @@ impl Backend {
         new_name: String,
         theme: Option<String>,
     ) -> std::collections::HashMap<Uri, Vec<TextEdit>> {
+        // `lsp_types::Uri` hashes and compares by `as_str()` alone; the `Cell` inside fluent-uri's parse data is an authority offset that takes no part in either.
+        #[allow(clippy::mutable_key_type)]
         let mut edits: std::collections::HashMap<Uri, Vec<TextEdit>> =
             std::collections::HashMap::new();
         let Some(root) = crate::build_sync::crate_root(&def_path) else {

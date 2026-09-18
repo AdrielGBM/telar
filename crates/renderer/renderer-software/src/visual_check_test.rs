@@ -72,5 +72,5 @@ fn visual_check_png() {
         .unwrap();
     let rgba = r.read_rgba().expect("pixmap exists after a frame");
 
-    common::save_png(&out, w, h, &rgba);
+    common::save_png(&out, w, h, rgba);
 }

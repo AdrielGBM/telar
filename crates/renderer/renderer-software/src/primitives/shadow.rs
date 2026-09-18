@@ -175,6 +175,8 @@ pub(crate) fn blit_cached_shadow_async<K, D, A>(
     }
 }
 
+// The synchronous half of `blit_cached_shadow_async`, which forwards its own arguments here unchanged, so the two lists move together.
+#[allow(clippy::too_many_arguments)]
 pub(crate) fn blit_cached_shadow<K, D>(
     pixmap: &mut tiny_skia::Pixmap,
     cache: &mut renderer_cache::Cache<K, tiny_skia::Pixmap>,
@@ -264,7 +266,7 @@ fn box_blur_h(data: &mut [u8], width: u32, height: u32, r: u32, scratch: &mut [u
         return;
     }
     let full_count = (2 * r + 1) as u32;
-    let recip: u32 = ((1u32 << 16) + full_count - 1) / full_count;
+    let recip: u32 = (1u32 << 16).div_ceil(full_count);
     let row_size = w * 4;
     use rayon::prelude::*;
     data.par_chunks_mut(row_size)

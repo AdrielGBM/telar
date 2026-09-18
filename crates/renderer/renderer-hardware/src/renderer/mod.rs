@@ -332,16 +332,16 @@ fn cull_bounds(
     if !renderer_core::culling::overlaps(bounds.x, bounds.y, bounds.width, bounds.height, scissor) {
         return true;
     }
-    if let Some(ds) = dirty_scissor {
-        if !renderer_core::culling::overlaps(
+    if let Some(ds) = dirty_scissor
+        && !renderer_core::culling::overlaps(
             bounds.x,
             bounds.y,
             bounds.width,
             bounds.height,
             Some(ds),
-        ) {
-            return true;
-        }
+        )
+    {
+        return true;
     }
     false
 }
@@ -476,6 +476,8 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
     }
 
     // Format, msaa, present and alpha are decided by the caller, since only the windowed path can query surface capabilities.
+    // The private join point of the windowed and offscreen constructors, which negotiate these parts differently; a struct would be built once only to be taken apart here.
+    #[allow(clippy::too_many_arguments)]
     async fn from_parts(
         instance: wgpu::Instance,
         adapter: wgpu::Adapter,
@@ -657,15 +659,15 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
         );
 
         // So subsequent startups skip shader compilation.
-        if let (Some(cache), Some(path)) = (pipeline_cache, cache_file_path) {
-            if let Some(data) = cache.get_data() {
-                if let Some(parent) = path.parent() {
-                    let _ = std::fs::create_dir_all(parent);
-                }
-                let tmp = path.with_extension("tmp");
-                if std::fs::write(&tmp, &data).is_ok() {
-                    let _ = std::fs::rename(&tmp, &path);
-                }
+        if let (Some(cache), Some(path)) = (pipeline_cache, cache_file_path)
+            && let Some(data) = cache.get_data()
+        {
+            if let Some(parent) = path.parent() {
+                let _ = std::fs::create_dir_all(parent);
+            }
+            let tmp = path.with_extension("tmp");
+            if std::fs::write(&tmp, &data).is_ok() {
+                let _ = std::fs::rename(&tmp, &path);
             }
         }
 

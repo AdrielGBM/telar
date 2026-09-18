@@ -127,10 +127,10 @@ pub(crate) fn clean_effect(id: EffectId) {
                 sig.observer_slots[slot] = moved_obs_slot;
                 sig.subscribers.pop();
                 sig.observer_slots.pop();
-                if let Some(entry) = rt.effects.get_mut(moved_id) {
-                    if moved_obs_slot < entry.source_slots.len() {
-                        entry.source_slots[moved_obs_slot] = slot;
-                    }
+                if let Some(entry) = rt.effects.get_mut(moved_id)
+                    && moved_obs_slot < entry.source_slots.len()
+                {
+                    entry.source_slots[moved_obs_slot] = slot;
                 }
             }
         });

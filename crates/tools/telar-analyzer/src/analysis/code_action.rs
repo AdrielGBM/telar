@@ -92,6 +92,8 @@ fn insert_into_style(source: &str, uri: &Uri, snippet: &str) -> Option<Workspace
         },
         new_text: text,
     };
+    // `lsp_types::Uri` hashes and compares by `as_str()` alone; the `Cell` inside fluent-uri's parse data is an authority offset that takes no part in either.
+    #[allow(clippy::mutable_key_type)]
     let mut changes = HashMap::new();
     changes.insert(uri.clone(), vec![edit]);
     Some(WorkspaceEdit {

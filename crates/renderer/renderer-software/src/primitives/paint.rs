@@ -29,8 +29,10 @@ pub(crate) fn to_skia_line_join(join: renderer_core::LineJoin) -> tiny_skia::Lin
 
 #[inline]
 pub(crate) fn fill_to_paint(fill: renderer_core::Paint) -> tiny_skia::Paint<'static> {
-    let mut paint = tiny_skia::Paint::default();
-    paint.anti_alias = true;
+    let mut paint = tiny_skia::Paint {
+        anti_alias: true,
+        ..Default::default()
+    };
     match fill {
         renderer_core::Paint::Solid(c) => {
             paint.set_color(to_skia_color(c));

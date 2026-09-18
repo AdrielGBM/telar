@@ -299,7 +299,7 @@ fn a_persistent_destination_and_a_pushed_detail_coexist() {
     // Even routes are rail destinations, odd routes are pushed details.
     let mut host = NavHost::new(nav.clone(), factory).unwrap();
     host.set_policy_for(|route: &u8| {
-        if route % 2 == 0 {
+        if route.is_multiple_of(2) {
             PagePolicy::KeepAlive
         } else {
             PagePolicy::Transient

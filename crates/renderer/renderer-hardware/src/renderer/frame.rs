@@ -7,6 +7,8 @@ use super::shadow::{ShadowCacheKind, ShadowKind};
 use super::steps::{Boundary, LayerAccum};
 
 // A run of draw steps, or the layer boundary that ended it. At module scope so it can appear in the phase-method signatures that build and execute segments.
+// Built from the steps every frame; boxing `Boundary` would put a heap allocation on every layer boundary in the hot path.
+#[allow(clippy::large_enum_variant)]
 pub(super) enum Segment {
     Draw { start: usize, end: usize },
     Boundary(Boundary),
@@ -1153,7 +1155,7 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
                         self.batch_image_bind_group = crate::caches::with_shared(|caches| {
                             caches
                                 .images
-                                .bind_group(&self.device, &self.queue, &data, *raster)
+                                .bind_group(&self.device, &self.queue, data, *raster)
                         })
                         .flatten();
                     }
@@ -1778,12 +1780,11 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
         // Recorded into the shared encoder and submitted with the main pass.
         let mut shadow_results = results;
         for step in &mut self.pending_steps {
-            if let DrawStep::ShadowPlaceholder { op_index } = step {
-                if let Some(entry) = shadow_results.get_mut(*op_index) {
-                    if let Some(bg) = entry.take() {
-                        *step = DrawStep::CompositeShadow { bind_group: bg };
-                    }
-                }
+            if let DrawStep::ShadowPlaceholder { op_index } = step
+                && let Some(entry) = shadow_results.get_mut(*op_index)
+                && let Some(bg) = entry.take()
+            {
+                *step = DrawStep::CompositeShadow { bind_group: bg };
             }
         }
     }
@@ -1880,8 +1881,8 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
         let mut segments: Vec<Segment> = Vec::new();
         // Layer-boundary steps are extracted in place via `mem::replace`, to avoid moving ownership-bearing variants.
         let mut current_start: usize = 0;
-        for i in 0..steps.len() {
-            if !matches!(steps[i], DrawStep::Boundary(_)) {
+        for (i, step) in steps.iter_mut().enumerate() {
+            if !matches!(step, DrawStep::Boundary(_)) {
                 continue;
             }
             if i > current_start {
@@ -1891,7 +1892,7 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
                 });
             }
             if let DrawStep::Boundary(boundary) =
-                std::mem::replace(&mut steps[i], DrawStep::SetScissor { rect: None })
+                std::mem::replace(step, DrawStep::SetScissor { rect: None })
             {
                 segments.push(Segment::Boundary(boundary));
             }
@@ -2144,7 +2145,7 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
             let backdrop_target = if self.msaa_samples > 1 {
                 layer_msaa_view
             } else {
-                &resolve_view
+                resolve_view
             };
             let mut backdrop_pass = crate::pass::color_pass(
                 encoder,

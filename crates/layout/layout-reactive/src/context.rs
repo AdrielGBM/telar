@@ -468,10 +468,10 @@ impl LayoutRuntime {
         let mut abs_updates: Vec<(NodeId, f32, f32)> = Vec::new();
         let registry = &self.registry;
         let walk_result = self.engine.walk(layout_root, &mut |node_id, rect| {
-            if let Some(sig) = registry.get(&node_id) {
-                if sig.peek() != rect {
-                    updates.push(Update::Rect(*sig, rect));
-                }
+            if let Some(sig) = registry.get(&node_id)
+                && sig.peek() != rect
+            {
+                updates.push(Update::Rect(*sig, rect));
             }
             if is_window_walk {
                 abs_updates.push((node_id, rect.x, rect.y));

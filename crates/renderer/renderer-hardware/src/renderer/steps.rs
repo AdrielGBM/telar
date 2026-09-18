@@ -6,6 +6,8 @@ use renderer_core::Raster;
 
 use super::HardwareRenderer;
 
+// Recorded every frame, once per layer boundary; boxing `Boundary` would put a heap allocation on each of them in the hot path.
+#[allow(clippy::large_enum_variant)]
 pub(super) enum DrawStep {
     RectBatch {
         start: u32,
@@ -47,6 +49,8 @@ pub(super) enum DrawStep {
 }
 
 // Everything the executor needs to open the new pass or composite the finished one.
+// Built for every layer of every frame; boxing the `BeginLayer` views to shrink it would add two heap allocations per layer in the hot path.
+#[allow(clippy::large_enum_variant)]
 pub(super) enum Boundary {
     BeginLayer {
         msaa_texture: wgpu::Texture,
@@ -96,6 +100,8 @@ impl LayerAccum {
 }
 
 // `Err((a, b))` hands both back when they cannot be merged.
+// Every adjacent pair that does not merge takes the `Err` path each frame, so boxing it would allocate on the common case.
+#[allow(clippy::result_large_err)]
 fn try_merge_steps(a: DrawStep, b: DrawStep) -> Result<DrawStep, (DrawStep, DrawStep)> {
     match (a, b) {
         (DrawStep::RectBatch { start: s, end: e1 }, DrawStep::RectBatch { start: s2, end: e2 })
@@ -124,10 +130,10 @@ pub(super) fn flush_batch(
     vec_len: u32,
     variant: impl Fn(u32, u32) -> DrawStep,
 ) {
-    if let Some(start) = batch_start.take() {
-        if vec_len > start {
-            pending_steps.push(variant(start, vec_len));
-        }
+    if let Some(start) = batch_start.take()
+        && vec_len > start
+    {
+        pending_steps.push(variant(start, vec_len));
     }
 }
 
@@ -143,15 +149,14 @@ pub(super) fn flush_image_batch(
         batch_image_start.take(),
         batch_image_bind_group.take(),
         *batch_image_key,
-    ) {
-        if pending_image_instances_len > start {
-            pending_steps.push(DrawStep::ImageBatch {
-                start,
-                end: pending_image_instances_len,
-                bind_group,
-                key,
-            });
-        }
+    ) && pending_image_instances_len > start
+    {
+        pending_steps.push(DrawStep::ImageBatch {
+            start,
+            end: pending_image_instances_len,
+            bind_group,
+            key,
+        });
     }
 }
 

@@ -95,7 +95,7 @@ impl diagnostics::Report {
         for member in super::bake::member_dirs(&root) {
             let keys = catalog_keys(&member);
             let catalog =
-                (!keys.is_empty()).then(|| telar_diagnostics::CatalogView { keys: &keys });
+                (!keys.is_empty()).then_some(telar_diagnostics::CatalogView { keys: &keys });
             for rsx in telar_project::find_rsx_files(&member.join("src")) {
                 let Ok(source) = std::fs::read_to_string(&rsx) else {
                     continue;

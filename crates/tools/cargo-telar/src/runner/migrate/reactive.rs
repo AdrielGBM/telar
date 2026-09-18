@@ -79,7 +79,7 @@ pub(super) fn shared_handlers(body: &str) -> String {
         return body.to_string();
     }
     // A prop that was a closure is read with `.get()` now, not called. Only the ones this pass just changed, by name, so a closure the author keeps for its own sake is left alone.
-    let mut rest = format!("{}{}", &declaration, &body[end..]);
+    let mut rest = format!("{}{}", declaration, &body[end..]);
     for name in &reactive {
         rest = rest.replace(&format!("(props.{name})()"), &format!("props.{name}.get()"));
     }

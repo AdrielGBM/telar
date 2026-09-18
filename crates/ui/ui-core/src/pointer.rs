@@ -176,7 +176,7 @@ pub(crate) fn offset_pointer(event: &Event, dx: f64, dy: f64) -> Option<Event> {
 }
 
 /// Returns `event` when the pointer is inside `rect`, or `None` when it is outside; non-pointer events always pass through. Callers use `None` to short-circuit to `Ignored`.
-pub(crate) fn clip_pointer_event<'a>(event: &'a Event, rect: Rect) -> Option<&'a Event> {
+pub(crate) fn clip_pointer_event(event: &Event, rect: Rect) -> Option<&Event> {
     match pointer_coords(event) {
         Some((x, y)) if !rect.contains(x as f32, y as f32) => None,
         _ => Some(event),

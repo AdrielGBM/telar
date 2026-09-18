@@ -20,7 +20,7 @@ fn tint_premultiplied(pixels: &mut [u8], color: Color) {
     let a_splat = u32x8::splat(a as u32);
     let bias = u32x8::splat(128);
 
-    for chunk in simd_pixels.chunks_exact_mut(32) {
+    for chunk in simd_pixels.as_chunks_mut::<32>().0 {
         let rv = u32x8::from([
             chunk[0] as u32,
             chunk[4] as u32,
@@ -75,7 +75,7 @@ fn tint_premultiplied(pixels: &mut [u8], color: Color) {
         }
     }
 
-    for chunk in rest.chunks_exact_mut(4) {
+    for chunk in rest.as_chunks_mut::<4>().0 {
         chunk[0] = ((chunk[0] as u32 * r as u32) / 255) as u8;
         chunk[1] = ((chunk[1] as u32 * g as u32) / 255) as u8;
         chunk[2] = ((chunk[2] as u32 * b as u32) / 255) as u8;
@@ -169,20 +169,20 @@ pub(crate) fn draw_text(
                 let draw_text_shadow = move |tmp_pmap: &mut tiny_skia::Pixmap, alpha: &[u8]| {
                     let mut shadow_pixels = alpha.to_vec();
                     tint_premultiplied(&mut shadow_pixels, shadow_color);
-                    if let Some(size) = tiny_skia::IntSize::from_wh(texture_width, texture_height) {
-                        if let Some(src) = tiny_skia::Pixmap::from_vec(shadow_pixels, size) {
-                            tmp_pmap.draw_pixmap(
-                                padding,
-                                padding,
-                                src.as_ref(),
-                                &tiny_skia::PixmapPaint {
-                                    blend_mode: tiny_skia::BlendMode::SourceOver,
-                                    ..Default::default()
-                                },
-                                tiny_skia::Transform::identity(),
-                                None,
-                            );
-                        }
+                    if let Some(size) = tiny_skia::IntSize::from_wh(texture_width, texture_height)
+                        && let Some(src) = tiny_skia::Pixmap::from_vec(shadow_pixels, size)
+                    {
+                        tmp_pmap.draw_pixmap(
+                            padding,
+                            padding,
+                            src.as_ref(),
+                            &tiny_skia::PixmapPaint {
+                                blend_mode: tiny_skia::BlendMode::SourceOver,
+                                ..Default::default()
+                            },
+                            tiny_skia::Transform::identity(),
+                            None,
+                        );
                     }
                 };
 

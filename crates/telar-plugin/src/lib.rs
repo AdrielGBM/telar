@@ -248,11 +248,11 @@ impl PluginInstance {
     pub fn on_frame(&mut self, ctx: &mut AppCtx) {
         let _g = self.surface.enter();
         // The plugin links its own reactive-core copy, so `spawn_task` inside it registers in a runtime the host cannot reach. Both halves of the bridge are wired here rather than through new FFI symbols.
-        if !self.task_waker_installed {
-            if let Some(waker) = ctx.redraw_waker() {
-                reactive_core::set_task_waker(move || waker.wake());
-                self.task_waker_installed = true;
-            }
+        if !self.task_waker_installed
+            && let Some(waker) = ctx.redraw_waker()
+        {
+            reactive_core::set_task_waker(move || waker.wake());
+            self.task_waker_installed = true;
         }
         reactive_core::drain_tasks();
         // So signals the hook writes flush after the `borrow_mut` releases, never re-entering `view()` mid-borrow.

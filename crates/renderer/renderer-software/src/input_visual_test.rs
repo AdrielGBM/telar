@@ -93,7 +93,7 @@ fn input_visual_png() {
     r.render_frame(cmds.as_slice(), Some(Color::from_rgb_u8(20, 22, 28)))
         .unwrap();
     let rgba = r.read_rgba().expect("pixmap exists after a frame");
-    common::save_png(&out, w, h, &rgba);
+    common::save_png(&out, w, h, rgba);
 }
 
 #[test]
@@ -153,7 +153,7 @@ fn slider_visual_png() {
     r.render_frame(cmds.as_slice(), Some(Color::from_rgb_u8(20, 22, 28)))
         .unwrap();
     let rgba = r.read_rgba().expect("pixmap exists after a frame");
-    common::save_png(&out, w, h, &rgba);
+    common::save_png(&out, w, h, rgba);
 }
 
 #[test]
@@ -235,7 +235,7 @@ fn overlay_visual_png() {
     r.render_frame(cmds.as_slice(), Some(Color::from_rgb_u8(20, 22, 28)))
         .unwrap();
     let rgba = r.read_rgba().expect("pixmap exists after a frame");
-    common::save_png(&out, w, h, &rgba);
+    common::save_png(&out, w, h, rgba);
 }
 
 // The overlay's content is laid out via the host, not this tree, so it is rendered here purely by referencing its view.

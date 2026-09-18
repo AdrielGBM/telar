@@ -58,10 +58,11 @@ pub fn spawn_watch(on_change: impl Fn(bool) + Send + 'static) {
                 else {
                     continue;
                 };
-                if namespace == "org.freedesktop.appearance" && key == "color-scheme" {
-                    if let Some(n) = scheme_u32(&value) {
-                        on_change(n == 1);
-                    }
+                if namespace == "org.freedesktop.appearance"
+                    && key == "color-scheme"
+                    && let Some(n) = scheme_u32(&value)
+                {
+                    on_change(n == 1);
                 }
             }
         })

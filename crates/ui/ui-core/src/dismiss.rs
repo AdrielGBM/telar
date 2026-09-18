@@ -19,8 +19,9 @@ struct Entry {
 
 // `ManuallyDrop` keeps these slots trivially destructible: a TLS destructor registered from a hot-reloaded dylib would make `dlclose` unsafe.
 thread_local! {
-    static STACK: ManuallyDrop<RefCell<Vec<Entry>>> = ManuallyDrop::new(RefCell::new(Vec::new()));
-    static NEXT_ID: ManuallyDrop<RefCell<u64>> = ManuallyDrop::new(RefCell::new(0));
+    static STACK: ManuallyDrop<RefCell<Vec<Entry>>> =
+        const { ManuallyDrop::new(RefCell::new(Vec::new())) };
+    static NEXT_ID: ManuallyDrop<RefCell<u64>> = const { ManuallyDrop::new(RefCell::new(0)) };
     // Mirrors the stack's length reactively, so a Back control can style itself on whether it would still close something.
     static DEPTH: RwSignal<usize> = detached(|| signal(0));
 }

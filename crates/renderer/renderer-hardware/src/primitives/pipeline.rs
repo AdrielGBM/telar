@@ -1,5 +1,7 @@
 //! Render-pipeline construction shared by every primitive.
 
+// Each of the five primitives passes its own shader and layouts beside the renderer's shared format, sample count and cache; a params struct would only restate wgpu's pipeline descriptor.
+#[allow(clippy::too_many_arguments)]
 pub(crate) fn create_render_pipeline(
     device: &wgpu::Device,
     label: &str,

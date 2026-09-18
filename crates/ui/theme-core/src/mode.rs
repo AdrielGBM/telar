@@ -47,7 +47,7 @@ pub fn active_mode() -> Option<String> {
 thread_local! {
     // The (light, dark) mode-id pair, so is_dark can tell which registered mode is the dark one without the app hardcoding it. ManuallyDrop for the same dlclose-safety reason as MODES/ACTIVE_MODE above. None until set_light_dark is called.
     static SCHEME_PAIR: ManuallyDrop<RefCell<Option<(String, String)>>> =
-        ManuallyDrop::new(RefCell::new(None));
+        const { ManuallyDrop::new(RefCell::new(None)) };
 }
 
 /// Designates which two registered modes form the light/dark pair, so [`is_dark`] can tell which one is currently active. Called by [`follow_system`]; both ids should also be registered via [`register_mode`]. Does not itself change the active mode.
@@ -70,7 +70,7 @@ thread_local! {
     static SYSTEM_DARK: RwSignal<bool> = detached(|| signal(false));
     // Keeps the follow_system effect alive for the app's lifetime; replaced (old dropped) on re-call, since a hot reload re-runs the app's setup.
     static FOLLOW: ManuallyDrop<RefCell<Option<reactive_core::Effect>>> =
-        ManuallyDrop::new(RefCell::new(None));
+        const { ManuallyDrop::new(RefCell::new(None)) };
 }
 
 /// Reports the OS light/dark preference into the reactive graph. Called by the runner at window creation and whenever the OS scheme changes; drives [`follow_system`].

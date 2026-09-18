@@ -34,15 +34,15 @@ impl Color {
         let lab_a = c * h_rad.cos();
         let lab_b = c * h_rad.sin();
         // Ottosson's OKLab -> linear sRGB constants (bottomless.com/oklab).
-        let l_ = l + 0.3963377774 * lab_a + 0.2158037573 * lab_b;
-        let m_ = l - 0.1055613458 * lab_a - 0.0638541728 * lab_b;
-        let s_ = l - 0.0894841775 * lab_a - 1.2914855480 * lab_b;
+        let l_ = l + 0.39633778 * lab_a + 0.21580376 * lab_b;
+        let m_ = l - 0.105561346 * lab_a - 0.06385417 * lab_b;
+        let s_ = l - 0.08948418 * lab_a - 1.2914855 * lab_b;
         let l3 = l_ * l_ * l_;
         let m3 = m_ * m_ * m_;
         let s3 = s_ * s_ * s_;
-        let r = 4.0767416621 * l3 - 3.3077115913 * m3 + 0.2309699292 * s3;
-        let g = -1.2684380046 * l3 + 2.6097574011 * m3 - 0.3413193965 * s3;
-        let b = -0.0041960863 * l3 - 0.7034186147 * m3 + 1.7076147010 * s3;
+        let r = 4.0767417 * l3 - 3.3077116 * m3 + 0.23096994 * s3;
+        let g = -1.268438 * l3 + 2.6097574 * m3 - 0.34131938 * s3;
+        let b = -0.0041960863 * l3 - 0.7034186 * m3 + 1.7076147 * s3;
         Self::rgba(
             Self::linear_to_srgb(r),
             Self::linear_to_srgb(g),
@@ -57,15 +57,15 @@ impl Color {
         let g = Self::srgb_to_linear(self.g);
         let b = Self::srgb_to_linear(self.b);
         // Ottosson's linear sRGB -> OKLab constants; the exact inverse of the matrices in from_oklcha.
-        let l = 0.4122214708 * r + 0.5363325363 * g + 0.0514459929 * b;
-        let m = 0.2119034982 * r + 0.6806995451 * g + 0.1073969566 * b;
-        let s = 0.0883024619 * r + 0.2817188376 * g + 0.6299787005 * b;
+        let l = 0.41222146 * r + 0.53633255 * g + 0.051445995 * b;
+        let m = 0.2119035 * r + 0.6806995 * g + 0.10739696 * b;
+        let s = 0.08830246 * r + 0.28171885 * g + 0.6299787 * b;
         let l_ = l.cbrt();
         let m_ = m.cbrt();
         let s_ = s.cbrt();
-        let lightness = 0.2104542553 * l_ + 0.7936177850 * m_ - 0.0040720468 * s_;
-        let lab_a = 1.9779984951 * l_ - 2.4285922050 * m_ + 0.4505937099 * s_;
-        let lab_b = 0.0259040371 * l_ + 0.7827717662 * m_ - 0.8086757660 * s_;
+        let lightness = 0.21045426 * l_ + 0.7936178 * m_ - 0.004072047 * s_;
+        let lab_a = 1.9779985 * l_ - 2.4285922 * m_ + 0.4505937 * s_;
+        let lab_b = 0.025904037 * l_ + 0.78277177 * m_ - 0.80867577 * s_;
         let c = (lab_a * lab_a + lab_b * lab_b).sqrt();
         let h = lab_b.atan2(lab_a).to_degrees().rem_euclid(360.0);
         (lightness, c, h, self.a)

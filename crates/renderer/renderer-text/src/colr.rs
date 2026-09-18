@@ -292,8 +292,10 @@ impl ColorPainter for TinySkiaPainter<'_> {
         // The clip restricts where the fill lands; without one the whole layer is painted.
         let clip = self.current_clip().cloned();
 
-        let mut paint = tiny_skia::Paint::default();
-        paint.anti_alias = true;
+        let mut paint = tiny_skia::Paint {
+            anti_alias: true,
+            ..Default::default()
+        };
 
         match brush {
             SkrifaBrush::Solid {

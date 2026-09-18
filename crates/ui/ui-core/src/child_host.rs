@@ -213,7 +213,7 @@ impl DynHost {
         let state = Rc::new(RefCell::new(HostState {
             node,
             slots: Vec::with_capacity(slots.len()),
-            version: version,
+            version,
         }));
 
         // Fixed by now, since the node's style was set when it was created, so a gap fragment can capture which margin edge to space its items on once.

@@ -952,8 +952,10 @@ fn filled(x: f32, y: f32, width: f32, height: f32, color: Color) -> DrawCommand 
 
 fn diverging_fraction(a: &[u8], b: &[u8]) -> f64 {
     let diverging = a
-        .chunks_exact(4)
-        .zip(b.chunks_exact(4))
+        .as_chunks::<4>()
+        .0
+        .iter()
+        .zip(b.as_chunks::<4>().0)
         .filter(|(p, q)| (0..3).any(|k| (p[k] as i32 - q[k] as i32).abs() > 16))
         .count();
     diverging as f64 / (a.len() / 4) as f64

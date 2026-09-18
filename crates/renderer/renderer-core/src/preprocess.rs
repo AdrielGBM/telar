@@ -32,23 +32,23 @@ pub fn expand_fill_layers(commands: &[DrawCommand]) -> Option<Vec<DrawCommand>> 
     }
     let mut result = Vec::with_capacity(commands.len() + 4);
     for cmd in commands {
-        if let DrawCommand::Rect { rect, style } = cmd {
-            if let Some(alpha) = fill_layer_alpha(style) {
-                let mut opaque = **style;
-                if let Some(Paint::Solid(c)) = opaque.fill {
-                    opaque.fill = Some(Paint::Solid(Color { a: 1.0, ..c }));
-                }
-                result.push(DrawCommand::PushLayer {
-                    opacity: alpha,
-                    backdrop_blur: 0.0,
-                });
-                result.push(DrawCommand::Rect {
-                    rect: *rect,
-                    style: Arc::new(opaque),
-                });
-                result.push(DrawCommand::PopLayer);
-                continue;
+        if let DrawCommand::Rect { rect, style } = cmd
+            && let Some(alpha) = fill_layer_alpha(style)
+        {
+            let mut opaque = **style;
+            if let Some(Paint::Solid(c)) = opaque.fill {
+                opaque.fill = Some(Paint::Solid(Color { a: 1.0, ..c }));
             }
+            result.push(DrawCommand::PushLayer {
+                opacity: alpha,
+                backdrop_blur: 0.0,
+            });
+            result.push(DrawCommand::Rect {
+                rect: *rect,
+                style: Arc::new(opaque),
+            });
+            result.push(DrawCommand::PopLayer);
+            continue;
         }
         result.push(cmd.clone());
     }

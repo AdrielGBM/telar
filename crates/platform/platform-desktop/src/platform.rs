@@ -130,10 +130,10 @@ impl<H: EventHandler<WinitWindow>> ApplicationHandler<UserEvent> for WinitRunner
     fn about_to_wait(&mut self, event_loop: &ActiveEventLoop) {
         if let Some(d) = self.handler.about_to_wait() {
             // Only on timer expiry, not every drain; reactive changes call it themselves via `flush_notify`.
-            if self.timer_has_fired {
-                if let Some(window) = &self.window {
-                    window.request_redraw();
-                }
+            if self.timer_has_fired
+                && let Some(window) = &self.window
+            {
+                window.request_redraw();
             }
             event_loop.set_control_flow(ControlFlow::WaitUntil(std::time::Instant::now() + d));
         } else {

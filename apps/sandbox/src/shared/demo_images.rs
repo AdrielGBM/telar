@@ -22,7 +22,7 @@ pub fn make_checker(width: u32, height: u32, cell: u32) -> ImageData {
     let mut pixels = Vec::with_capacity((width * height * 4) as usize);
     for y in 0..height {
         for x in 0..width {
-            let on = ((x / cell) + (y / cell)) % 2 == 0;
+            let on = ((x / cell) + (y / cell)).is_multiple_of(2);
             if on {
                 pixels.extend_from_slice(&[240, 240, 240, 255]);
             } else {

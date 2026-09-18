@@ -701,10 +701,10 @@ impl Component for ShellPage {
                     self.after_sidebar_press();
                     return EventResult::Handled;
                 }
-                if let Event::PointerPressed { x, .. } = event {
-                    if !(rail_x..rail_x + SIDEBAR_W).contains(&(*x as f32)) {
-                        self.menu_open.set(false);
-                    }
+                if let Event::PointerPressed { x, .. } = event
+                    && !(rail_x..rail_x + SIDEBAR_W).contains(&(*x as f32))
+                {
+                    self.menu_open.set(false);
                 }
                 return EventResult::Handled;
             }

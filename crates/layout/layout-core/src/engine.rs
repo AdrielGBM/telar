@@ -327,8 +327,8 @@ impl LayoutEngine {
             .compute_layout_with_measure(
                 root,
                 taffy::geometry::Size {
-                    width: available_width.into(),
-                    height: available_height.into(),
+                    width: available_width,
+                    height: available_height,
                 },
                 |inputs, _node, context, style| {
                     taffy::compute_leaf_layout(

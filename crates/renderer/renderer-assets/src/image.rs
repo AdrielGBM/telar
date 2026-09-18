@@ -10,7 +10,7 @@ pub struct ImageError(String);
 
 /// Multiplies a premultiplied-RGBA8 buffer by `tint` (srcIn): the buffer's alpha is the source coverage, and the tint's own alpha scales it.
 pub(crate) fn apply_tint_premultiplied(pixels: &mut [u8], tint: Color) {
-    for px in pixels.chunks_exact_mut(4) {
+    for px in pixels.as_chunks_mut::<4>().0 {
         // Buffer is premultiplied, so its alpha byte already equals the source coverage.
         let coverage = px[3] as f32 / 255.0;
         let out_a = coverage * tint.a;
