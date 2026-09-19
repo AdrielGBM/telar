@@ -6,8 +6,8 @@
 
 use geometry_core::{Point, Rect};
 use renderer_core::{
-    BorderRadius, Gradient, GradientKind, Paint, PathData, PathStyle, PathVerb, Raster, RectStyle,
-    Stroke, TextStyle,
+    BlendMode, BorderRadius, Gradient, GradientKind, ImageFill, Paint, PathData, PathStyle,
+    PathVerb, Raster, RectStyle, Stroke, TextStyle,
 };
 
 use crate::paint::{color, round};
@@ -148,20 +148,63 @@ impl Drawing {
         ));
     }
 
-    /// A bitmap already resolved to something the document can load — `object-fit` was applied when `rect` was computed, so the picture is stretched to exactly it.
-    pub fn image(&mut self, href: &str, rect: Rect, raster: Raster) {
-        let rendering = match raster {
-            Raster::Pixel => " style=\"image-rendering:pixelated\"",
-            Raster::Smooth => "",
-        };
-        self.body.push_str(&format!(
-            "<image x=\"{}\" y=\"{}\" width=\"{}\" height=\"{}\" preserveAspectRatio=\"none\"{rendering} href=\"{}\"/>",
-            round(rect.x),
-            round(rect.y),
-            round(rect.width.max(0.0)),
-            round(rect.height.max(0.0)),
-            escape(href),
-        ));
+    /// `rect` already has `object-fit` applied; `size` is the source's own pixel dimensions, needed separately because a tile repeats at it and a nine-slice cuts by it.
+    pub fn image(
+        &mut self,
+        href: &str,
+        size: (u32, u32),
+        rect: Rect,
+        raster: Raster,
+        fill: ImageFill,
+    ) {
+        let (width, height) = (size.0 as f32, size.1 as f32);
+        match fill {
+            ImageFill::Stretch => {
+                let tag = image_tag(href, rect, raster);
+                self.body.push_str(&tag);
+            }
+            ImageFill::Tile { scale } => {
+                if !(scale.is_finite() && scale > 0.0 && width > 0.0 && height > 0.0) {
+                    return;
+                }
+                let id = self.def_id();
+                let tile = Rect::new(0.0, 0.0, width * scale, height * scale);
+                self.defs.push_str(&format!(
+                    "<pattern id=\"{id}\" patternUnits=\"userSpaceOnUse\" x=\"{}\" y=\"{}\" width=\"{}\" height=\"{}\">{}</pattern>",
+                    round(rect.x),
+                    round(rect.y),
+                    round(tile.width),
+                    round(tile.height),
+                    image_tag(href, tile, raster),
+                ));
+                self.body.push_str(&format!(
+                    "<rect x=\"{}\" y=\"{}\" width=\"{}\" height=\"{}\" fill=\"url(#{id})\"/>",
+                    round(rect.x),
+                    round(rect.y),
+                    round(rect.width.max(0.0)),
+                    round(rect.height.max(0.0)),
+                ));
+            }
+            // Each piece is a viewport onto its cut of the picture, which an inner `<svg>` clips to without a clip path per piece.
+            ImageFill::Slice(slice) => {
+                let whole = Rect::new(0.0, 0.0, width, height);
+                for piece in slice.pieces(size, rect) {
+                    let (dest, source) = (piece.dest, piece.source);
+                    self.body.push_str(&format!(
+                        "<svg x=\"{}\" y=\"{}\" width=\"{}\" height=\"{}\" viewBox=\"{} {} {} {}\" preserveAspectRatio=\"none\">{}</svg>",
+                        round(dest.x),
+                        round(dest.y),
+                        round(dest.width),
+                        round(dest.height),
+                        round(source.x),
+                        round(source.y),
+                        round(source.width),
+                        round(source.height),
+                        image_tag(href, whole, raster),
+                    ));
+                }
+            }
+        }
     }
 
     pub fn open_clip(&mut self, rect: Rect, radius: BorderRadius) {
@@ -202,8 +245,13 @@ impl Drawing {
         ));
     }
 
-    pub fn open_layer(&mut self, opacity: f32) {
-        self.open(&format!("<g opacity=\"{}\">", round(opacity)));
+    /// A layer in an SVG blends with what the same drawing put beneath it: the `<svg>` isolates its content from the page behind.
+    pub fn open_layer(&mut self, opacity: f32, blend: BlendMode) {
+        let blending = match blend {
+            BlendMode::Normal => String::new(),
+            other => format!(" style=\"mix-blend-mode:{}\"", other.css_name()),
+        };
+        self.open(&format!("<g opacity=\"{}\"{blending}>", round(opacity)));
     }
 
     pub fn close_group(&mut self) {
@@ -443,6 +491,21 @@ fn attr(out: &mut String, name: &str, value: &str) {
 }
 
 /// Markup-safe text. Every string that reaches this file is one the application chose — a label, a font family, a path a picture was loaded from — so none of it can be assumed to be markup already.
+fn image_tag(href: &str, rect: Rect, raster: Raster) -> String {
+    let rendering = match raster {
+        Raster::Pixel => " style=\"image-rendering:pixelated\"",
+        Raster::Smooth => "",
+    };
+    format!(
+        "<image x=\"{}\" y=\"{}\" width=\"{}\" height=\"{}\" preserveAspectRatio=\"none\"{rendering} href=\"{}\"/>",
+        round(rect.x),
+        round(rect.y),
+        round(rect.width.max(0.0)),
+        round(rect.height.max(0.0)),
+        escape(href),
+    )
+}
+
 fn escape(value: &str) -> String {
     if !value.contains(['&', '<', '>', '"', '\'']) {
         return value.to_string();

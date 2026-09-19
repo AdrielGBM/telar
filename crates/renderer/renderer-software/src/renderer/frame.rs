@@ -7,7 +7,7 @@ use geometry_core::Rect;
 use raw_window_handle::{HasDisplayHandle, HasWindowHandle};
 use renderer_core::perf::{self, Phase};
 use renderer_core::{
-    BorderRadius, Color, DrawCommand, RenderBackend, RendererError, expand_fill_layers,
+    BlendMode, BorderRadius, Color, DrawCommand, RenderBackend, RendererError, expand_fill_layers,
 };
 use smallvec::SmallVec;
 use tiny_skia::{Mask, Pixmap, PixmapMut, PixmapRef};
@@ -59,10 +59,33 @@ struct ScrollBlit {
 pub(super) struct Layer {
     pixmap: Pixmap,
     opacity: f32,
+    blend: tiny_skia::BlendMode,
     origin: (i32, i32),
     // The clips already open when the layer was pushed mask its composite, so only those opened inside it mask its content.
     clip_depth: usize,
     mask: Option<ClipMask>,
+}
+
+fn skia_blend(blend: BlendMode) -> tiny_skia::BlendMode {
+    match blend {
+        BlendMode::Normal => tiny_skia::BlendMode::SourceOver,
+        BlendMode::Multiply => tiny_skia::BlendMode::Multiply,
+        BlendMode::Screen => tiny_skia::BlendMode::Screen,
+        BlendMode::Overlay => tiny_skia::BlendMode::Overlay,
+        BlendMode::Darken => tiny_skia::BlendMode::Darken,
+        BlendMode::Lighten => tiny_skia::BlendMode::Lighten,
+        BlendMode::ColorDodge => tiny_skia::BlendMode::ColorDodge,
+        BlendMode::ColorBurn => tiny_skia::BlendMode::ColorBurn,
+        BlendMode::HardLight => tiny_skia::BlendMode::HardLight,
+        BlendMode::SoftLight => tiny_skia::BlendMode::SoftLight,
+        BlendMode::Difference => tiny_skia::BlendMode::Difference,
+        BlendMode::Exclusion => tiny_skia::BlendMode::Exclusion,
+        BlendMode::Hue => tiny_skia::BlendMode::Hue,
+        BlendMode::Saturation => tiny_skia::BlendMode::Saturation,
+        BlendMode::Color => tiny_skia::BlendMode::Color,
+        BlendMode::Luminosity => tiny_skia::BlendMode::Luminosity,
+        BlendMode::Plus => tiny_skia::BlendMode::Plus,
+    }
 }
 
 struct Canvas<'a> {
@@ -351,6 +374,7 @@ where
         (x, y, width, height): LayerBox,
         opacity: f32,
         backdrop_blur: f32,
+        blend: BlendMode,
     ) -> Option<Layer> {
         let mut pixmap = self
             .pixmap_pool
@@ -391,6 +415,7 @@ where
         Some(Layer {
             pixmap,
             opacity,
+            blend: skia_blend(blend),
             origin: (x, y),
             clip_depth: self.clip_shapes.len(),
             mask: None,
@@ -488,7 +513,12 @@ where
                         );
                     });
                 }
-                DrawCommand::Image { data, rect, raster } => {
+                DrawCommand::Image {
+                    data,
+                    rect,
+                    raster,
+                    fill,
+                } => {
                     let Some(mut canvas) = self.canvas(damage) else {
                         break;
                     };
@@ -497,6 +527,7 @@ where
                         data,
                         *rect,
                         *raster,
+                        *fill,
                         canvas.transform,
                         canvas.mask,
                     );
@@ -556,6 +587,7 @@ where
                 DrawCommand::PushLayer {
                     opacity,
                     backdrop_blur,
+                    blend,
                 } => {
                     let opened = layer_boxes[index]
                         .filter(|&(x, y, width, height)| {
@@ -565,7 +597,9 @@ where
                                     Rect::new(x as f32, y as f32, width as f32, height as f32),
                                 )
                         })
-                        .and_then(|layer_box| self.open_layer(layer_box, *opacity, *backdrop_blur));
+                        .and_then(|layer_box| {
+                            self.open_layer(layer_box, *opacity, *backdrop_blur, *blend)
+                        });
                     match opened {
                         Some(layer) => self.layer_stack.push(layer),
                         None => skipped_layers = 1,
@@ -582,7 +616,7 @@ where
                             layer.pixmap.as_ref(),
                             &tiny_skia::PixmapPaint {
                                 opacity: layer.opacity,
-                                blend_mode: tiny_skia::BlendMode::SourceOver,
+                                blend_mode: layer.blend,
                                 quality: tiny_skia::FilterQuality::Nearest,
                             },
                             tiny_skia::Transform::identity(),

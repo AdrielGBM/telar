@@ -5,7 +5,8 @@ use std::sync::Arc;
 use geometry_core::Rect;
 
 use crate::{
-    BorderRadius, Color, DrawCommand, Element, ElementId, RectStyle, Semantics, ShapeStyle,
+    BlendMode, BorderRadius, Color, DrawCommand, Element, ElementId, ImageData, ImageFill,
+    ImageSlice, Insets, Raster, RectStyle, Semantics, ShapeStyle,
 };
 
 pub struct Scenario {
@@ -67,9 +68,50 @@ fn layer(opacity: f32) -> Vec<DrawCommand> {
         DrawCommand::PushLayer {
             opacity,
             backdrop_blur: 0.0,
+            blend: BlendMode::Normal,
         },
         filled(100.0, 100.0, 40.0, 40.0),
         DrawCommand::PopLayer,
+        DrawCommand::PopElement,
+    ]
+}
+
+fn blended_layer(blend: BlendMode) -> Vec<DrawCommand> {
+    vec![
+        backdrop(80.0, 80.0, 200.0, 200.0),
+        open(1),
+        DrawCommand::PushLayer {
+            opacity: 1.0,
+            backdrop_blur: 0.0,
+            blend,
+        },
+        filled(100.0, 100.0, 40.0, 40.0),
+        DrawCommand::PopLayer,
+        DrawCommand::PopElement,
+    ]
+}
+
+/// Four pixels of four colours, so a tile period or a slice line shows up in the pixels.
+fn quadrants() -> Arc<ImageData> {
+    let pixels = [
+        [220, 40, 40, 255],
+        [40, 200, 60, 255],
+        [40, 60, 220, 255],
+        [230, 200, 40, 255],
+    ];
+    Arc::new(ImageData::new(pixels.concat(), 2, 2))
+}
+
+fn picture(rect: Rect, fill: ImageFill) -> Vec<DrawCommand> {
+    vec![
+        backdrop(0.0, 0.0, 1600.0, 1000.0),
+        open(1),
+        DrawCommand::Image {
+            data: quadrants(),
+            rect,
+            raster: Raster::Pixel,
+            fill,
+        },
         DrawCommand::PopElement,
     ]
 }
@@ -134,6 +176,7 @@ fn spilling_layer(opacity: f32) -> Vec<DrawCommand> {
         DrawCommand::PushLayer {
             opacity,
             backdrop_blur: 0.0,
+            blend: BlendMode::Normal,
         },
         filled(650.0, 650.0, 300.0, 200.0),
         DrawCommand::PopLayer,
@@ -149,11 +192,13 @@ fn nested_layers(opacity: f32) -> Vec<DrawCommand> {
         DrawCommand::PushLayer {
             opacity,
             backdrop_blur: 0.0,
+            blend: BlendMode::Normal,
         },
         filled(880.0, 180.0, 240.0, 160.0),
         DrawCommand::PushLayer {
             opacity: 0.8,
             backdrop_blur: 0.0,
+            blend: BlendMode::Normal,
         },
         painted(860.0, 240.0, 120.0, 40.0, Color::from_rgb_u8(220, 200, 60)),
         DrawCommand::PopLayer,
@@ -253,6 +298,39 @@ pub fn all() -> Vec<Scenario> {
             old: layer(0.5),
             new: layer(0.6),
             plan: Plan::Damage(vec![Rect::new(100.0, 100.0, 40.0, 40.0)]),
+        },
+        Scenario {
+            name: "a layer changing its blend mode",
+            size: SURFACE,
+            old: blended_layer(BlendMode::Multiply),
+            new: blended_layer(BlendMode::Screen),
+            plan: Plan::Damage(vec![Rect::new(100.0, 100.0, 40.0, 40.0)]),
+        },
+        Scenario {
+            name: "a tiled picture changing its scale",
+            size: SURFACE,
+            old: picture(
+                Rect::new(500.0, 500.0, 64.0, 48.0),
+                ImageFill::Tile { scale: 4.0 },
+            ),
+            new: picture(
+                Rect::new(500.0, 500.0, 64.0, 48.0),
+                ImageFill::Tile { scale: 8.0 },
+            ),
+            plan: Plan::Damage(vec![Rect::new(500.0, 500.0, 64.0, 48.0)]),
+        },
+        Scenario {
+            name: "a nine-slice picture changing its insets",
+            size: SURFACE,
+            old: picture(
+                Rect::new(700.0, 500.0, 90.0, 60.0),
+                ImageFill::Slice(ImageSlice::new(Insets::all(1.0)).with_scale(8.0)),
+            ),
+            new: picture(
+                Rect::new(700.0, 500.0, 90.0, 60.0),
+                ImageFill::Slice(ImageSlice::new(Insets::new(1.0, 0.5, 1.0, 0.5)).with_scale(8.0)),
+            ),
+            plan: Plan::Damage(vec![Rect::new(700.0, 500.0, 90.0, 60.0)]),
         },
         Scenario {
             name: "a rounded clip changing its radius",

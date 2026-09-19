@@ -85,7 +85,7 @@ pub type DefaultDevTools = telar_devtools::DevTools;
 #[cfg(all(feature = "runtime", not(feature = "dev")))]
 pub type DefaultDevTools = ();
 #[cfg(feature = "runtime")]
-pub use geometry_core::{ObjectFit, Point, Rect, Transform};
+pub use geometry_core::{Insets, ObjectFit, Point, Rect, Transform};
 #[cfg(feature = "runtime")]
 pub use layout_core::{
     AlignItems, AvailableSpace, Direction, JustifyContent, LayoutError, LayoutStyle, Margin,
@@ -145,11 +145,12 @@ pub use reactive_core::{
 pub use renderer_assets::{SvgData, SvgError, VectorCommand};
 #[cfg(feature = "runtime")]
 pub use renderer_core::{
-    Border, BorderRadius, Clamp, Color, Declared, DrawCommand, DrawState, FillRule, FontFamily,
-    FontStyle, Gradient, GradientKind, GradientStop, GradientStops, ImageData, LineCap, LineHeight,
-    LineJoin, Paint, PathData, PathStyle, PathVerb, Raster, RectStyle, RendererError, Role, Scale,
-    Semantics, Shadow, ShapeStyle, Span, Stroke, TextAlign, TextShadow, TextStyle, TextWrap,
-    for_each_with_matrix, hash_draw_commands, measure_text, transform_clip_rect,
+    BlendMode, Border, BorderRadius, Clamp, Color, Declared, DrawCommand, DrawState, FillRule,
+    FontFamily, FontStyle, Gradient, GradientKind, GradientStop, GradientStops, ImageData,
+    ImageFill, ImageSlice, LineCap, LineHeight, LineJoin, Paint, PathData, PathStyle, PathVerb,
+    Raster, RectStyle, RendererError, Role, Scale, Semantics, Shadow, ShapeStyle, Span, Stroke,
+    TextAlign, TextShadow, TextStyle, TextWrap, for_each_with_matrix, hash_draw_commands,
+    measure_text, transform_clip_rect,
 };
 // The drawing half of the backend-author API: a frontend implements `RendererFactory` and installs a `TextMetrics` for whatever "how wide is this string" means on its surface.
 #[cfg(feature = "runtime")]

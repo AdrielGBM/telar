@@ -2,9 +2,14 @@
 
 use geometry_core::Rect;
 use raw_window_handle::{HasDisplayHandle, HasWindowHandle};
-use renderer_core::Raster;
+use renderer_core::{BlendMode, Raster};
+
+use crate::primitives::image::Wrap;
 
 use super::HardwareRenderer;
+
+/// What a run of image quads must share to draw in one call: the texture, its filter and its addressing.
+pub(super) type ImageBatchKey = (u64, Raster, Wrap);
 
 // Recorded every frame, once per layer boundary; boxing `Boundary` would put a heap allocation on each of them in the hot path.
 #[allow(clippy::large_enum_variant)]
@@ -25,7 +30,7 @@ pub(super) enum DrawStep {
         start: u32,
         end: u32,
         bind_group: wgpu::BindGroup,
-        key: (u64, Raster),
+        key: ImageBatchKey,
     },
     PathDraw {
         index_start: u32,
@@ -70,18 +75,21 @@ pub(super) enum Boundary {
         cache_hash: Option<u64>,
         // Applied during the composite blit so the layer respects parent clip rects. `None` is the full target.
         scissor: Option<Rect>,
+        blend: BlendMode,
     },
     // Already cached, composited directly without a render pass.
     PrerenderedLayer {
         bind_group: wgpu::BindGroup,
         // Applied during the composite blit so the layer respects parent clip rects. `None` is the full target.
         scissor: Option<Rect>,
+        blend: BlendMode,
     },
 }
 
 pub(super) struct LayerAccum {
     pub(super) opacity: f32,
     pub(super) backdrop_blur: f32,
+    pub(super) blend: BlendMode,
     pub(super) begin_step_index: usize,
     pub(super) bounds: Option<Rect>,
     // Just after the `PushLayer`, where the layer content starts.
@@ -142,7 +150,7 @@ pub(super) fn flush_image_batch(
     pending_steps: &mut Vec<DrawStep>,
     batch_image_start: &mut Option<u32>,
     batch_image_bind_group: &mut Option<wgpu::BindGroup>,
-    batch_image_key: &mut Option<(u64, Raster)>,
+    batch_image_key: &mut Option<ImageBatchKey>,
     pending_image_instances_len: u32,
 ) {
     if let (Some(start), Some(bind_group), Some(key)) = (

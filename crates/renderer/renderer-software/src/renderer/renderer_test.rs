@@ -6,8 +6,8 @@ use platform_headless::HeadlessWindow;
 use renderer_core::dirty::FrameDiff;
 use renderer_core::dirty_scenarios::{self, Plan, Scenario};
 use renderer_core::{
-    BorderRadius, Color, DrawCommand, Element, ElementId, FontMetrics, PathData, PathStyle,
-    RectStyle, RenderBackend, Semantics, Shadow, ShapeStyle, Stroke,
+    BlendMode, BorderRadius, Color, DrawCommand, Element, ElementId, FontMetrics, PathData,
+    PathStyle, RectStyle, RenderBackend, Semantics, Shadow, ShapeStyle, Stroke,
 };
 
 use super::SoftwareRenderer;
@@ -353,6 +353,7 @@ fn a_change_beneath_a_backdrop_blur_repaints_the_whole_blur_exactly() {
             DrawCommand::PushLayer {
                 opacity: 1.0,
                 backdrop_blur: 8.0,
+                blend: BlendMode::Normal,
             },
             boxed(
                 260.0,
@@ -565,6 +566,7 @@ fn a_backdrop_blur_spreads_by_the_sigma_its_radius_converts_to() {
         DrawCommand::PushLayer {
             opacity: 1.0,
             backdrop_blur: RADIUS,
+            blend: BlendMode::Normal,
         },
         // Neither filled nor framed, so it draws nothing and only sizes the layer: what lands in the box is the blurred backdrop alone.
         boxed(x as f32, y as f32, w as f32, h as f32, RectStyle::default()),

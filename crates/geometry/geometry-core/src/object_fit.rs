@@ -3,7 +3,7 @@
 use crate::Rect;
 
 /// How a sized piece of content (an image or SVG) is scaled into its layout box, mirroring CSS `object-fit`.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Default)]
 pub enum ObjectFit {
     /// Stretch to fill the box exactly, ignoring the intrinsic aspect ratio (may distort).
     Fill,
@@ -18,6 +18,8 @@ pub enum ObjectFit {
     ///
     /// Falls back to `Contain` when the content does not fit even once, since there is no whole number below one to floor to.
     ContainInteger,
+    /// Repeats content across the whole box at `scale`× its intrinsic size (CSS `background-repeat: repeat`); placed like [`Fill`](Self::Fill) since the actual repeating is the renderer's job, not resolved here.
+    Tile { scale: f32 },
 }
 
 /// Places `intrinsic`-sized content into `container` per `fit`.
@@ -30,7 +32,7 @@ pub fn fit_rect(intrinsic: (f32, f32), container: Rect, fit: ObjectFit) -> (Rect
         return (container, false);
     }
     match fit {
-        ObjectFit::Fill => (container, false),
+        ObjectFit::Fill | ObjectFit::Tile { .. } => (container, false),
         ObjectFit::Contain | ObjectFit::Cover | ObjectFit::ContainInteger => {
             let sx = container.width / iw;
             let sy = container.height / ih;

@@ -67,7 +67,7 @@ impl<'a> Painter<'a> {
                 self.state.pop_clip();
             }
             DrawCommand::PushLayer { opacity, .. } => {
-                // `backdrop_blur` has no terminal expression and is dropped rather than approximated: a wrong blur reads as a rendering fault, an absent one as a plainer surface.
+                // `backdrop_blur` and `blend` have no terminal expression and are dropped rather than approximated: a wrong blur or blend reads as a rendering fault, an absent one as a plainer surface.
                 let composed = self.alpha() * opacity.clamp(0.0, 1.0);
                 self.opacity.push(composed);
             }
@@ -85,7 +85,10 @@ impl<'a> Painter<'a> {
             } => self.text(text, spans.as_deref(), *rect, style),
             DrawCommand::Line { p1, p2, style } => self.line(*p1, *p2, style),
             DrawCommand::Path { data, style } => self.path(data, style),
-            DrawCommand::Image { data, rect, raster } => self.image(data, *rect, *raster),
+            // A tile or a nine-slice is drawn stretched: a cell is a few source pixels at best, and a pattern repeating inside one reads as noise rather than as a texture.
+            DrawCommand::Image {
+                data, rect, raster, ..
+            } => self.image(data, *rect, *raster),
             // Structure, for a backend whose output is a document. The commands inside are already where they belong, so skipping the markers draws exactly the same grid.
             DrawCommand::PushElement { .. } | DrawCommand::PopElement => {}
         }

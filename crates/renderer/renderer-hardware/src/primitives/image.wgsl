@@ -1,5 +1,6 @@
 struct ImageInstance {
     dest_rect: vec4<f32>,
+    uv_rect:   vec4<f32>,
 }
 
 @group(1) @binding(0) var<storage, read> instances:      array<ImageInstance>;
@@ -26,7 +27,7 @@ fn vs_main(
 
     var out: VertexOutput;
     out.position  = vec4(ndc.x, ndc.y, 0.0, 1.0);
-    out.uv        = off;
+    out.uv        = inst.uv_rect.xy + off * inst.uv_rect.zw;
     out.world_pos = vec2<f32>(px, py);
     return out;
 }

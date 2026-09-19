@@ -17,7 +17,7 @@ use geometry_core::{ObjectFit, Point};
 use rustc_hash::{FxHashMap, FxHasher};
 
 use renderer_core::{
-    Color, DrawCommand, ImageData, PathData, PathStyle, PathVerb, hash_path_style,
+    BlendMode, Color, DrawCommand, ImageData, PathData, PathStyle, PathVerb, hash_path_style,
 };
 
 #[cfg(feature = "dynamic-svg")]
@@ -83,6 +83,7 @@ impl VectorCommand {
             } => DrawCommand::PushLayer {
                 opacity: *opacity,
                 backdrop_blur: *backdrop_blur,
+                blend: BlendMode::Normal,
             },
             VectorCommand::PopLayer => DrawCommand::PopLayer,
         }
@@ -181,7 +182,7 @@ impl SvgData {
             height.to_bits(),
             tint.map(|c| [c.r.to_bits(), c.g.to_bits(), c.b.to_bits(), c.a.to_bits()]),
             stroke.map(f32::to_bits),
-            fit as u8,
+            fit_key(fit),
         );
         let mut memo = self.memo.lock().unwrap();
         if let Some(cached) = memo.get(&key) {
@@ -252,8 +253,11 @@ fn fit_params(
 ) -> (f32, f32, f32, f32) {
     match fit {
         ObjectFit::Fill => (width / vb_w, height / vb_h, 0.0, 0.0),
-        // `ContainInteger` fits like `Contain` here: it exists to keep a bitmap's pixel grid even, and a vector has no grid to keep — flooring the scale would only shrink the drawing for nothing.
-        ObjectFit::Contain | ObjectFit::Cover | ObjectFit::ContainInteger => {
+        // A vector has no pixel grid to keep even and no pixels to repeat, so `ContainInteger` and `Tile` place it as `Contain` does.
+        ObjectFit::Contain
+        | ObjectFit::Cover
+        | ObjectFit::ContainInteger
+        | ObjectFit::Tile { .. } => {
             let sx = width / vb_w;
             let sy = height / vb_h;
             let s = if fit == ObjectFit::Cover {
@@ -263,6 +267,15 @@ fn fit_params(
             };
             (s, s, (width - vb_w * s) * 0.5, (height - vb_h * s) * 0.5)
         }
+    }
+}
+
+/// The part of `fit` that changes the display list: `ContainInteger` and `Tile` place artwork exactly as `Contain` does.
+fn fit_key(fit: ObjectFit) -> u8 {
+    match fit {
+        ObjectFit::Fill => 0,
+        ObjectFit::Contain | ObjectFit::ContainInteger | ObjectFit::Tile { .. } => 1,
+        ObjectFit::Cover => 2,
     }
 }
 

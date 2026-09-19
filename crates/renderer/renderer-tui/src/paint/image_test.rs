@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use renderer_core::{DrawCommand, TextStyle};
+use renderer_core::{BlendMode, DrawCommand, ImageFill, TextStyle};
 
 use super::*;
 use crate::buffer::CellBuffer;
@@ -23,7 +23,12 @@ fn draw(buf: &mut CellBuffer, commands: &[DrawCommand]) {
 }
 
 fn picture(data: Arc<ImageData>, rect: Rect, raster: Raster) -> DrawCommand {
-    DrawCommand::Image { data, rect, raster }
+    DrawCommand::Image {
+        data,
+        rect,
+        raster,
+        fill: ImageFill::Stretch,
+    }
 }
 
 const RED: [u8; 4] = [255, 0, 0, 255];
@@ -182,6 +187,7 @@ fn a_layer_fades_the_picture() {
             DrawCommand::PushLayer {
                 opacity: 0.5,
                 backdrop_blur: 0.0,
+                blend: BlendMode::Normal,
             },
             picture(
                 image(&[[255, 255, 255, 255]], 1, 1),

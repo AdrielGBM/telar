@@ -8,6 +8,14 @@ use super::InstancePipeline;
 #[derive(Clone, Copy, bytemuck::Pod, bytemuck::Zeroable)]
 pub(crate) struct ImageInstance {
     pub dest_rect: [f32; 4],
+    /// The texture coordinates at the rect's top-left corner, then how far they run across it: past 1 under [`Wrap::Repeat`] to tile, a fraction of the picture for one piece of a nine-slice.
+    pub uv_rect: [f32; 4],
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub(crate) enum Wrap {
+    Clamp,
+    Repeat,
 }
 
 /// The per-surface half of drawing images: instance buffers and a pipeline that bakes in this surface's format and sample count. The uploaded textures it samples are shared — see [`crate::caches::SharedImages`].
@@ -51,8 +59,9 @@ impl ImagePipeline {
 }
 
 #[inline]
-pub(crate) fn prepare_image(rect: geometry_core::Rect) -> ImageInstance {
+pub(crate) fn prepare_image(rect: geometry_core::Rect, uv: geometry_core::Rect) -> ImageInstance {
     ImageInstance {
         dest_rect: [rect.x, rect.y, rect.width, rect.height],
+        uv_rect: [uv.x, uv.y, uv.width, uv.height],
     }
 }

@@ -8,7 +8,7 @@ use platform_core::{
     Cursor, Event, Key, NamedKey, NumericValue, PointerButton, PointerSource, WindowCommand,
 };
 use reactive_core::{Effect, Reactive, RwSignal, effect, signal};
-use renderer_core::{Border, Declared, RectStyle};
+use renderer_core::{BlendMode, Border, Declared, RectStyle};
 use theme_core::use_theme_tokens;
 use ui_tree::{Component, EventResult, RenderNode};
 
@@ -153,6 +153,8 @@ pub struct StyledContainer {
     disabled_source: Option<Box<dyn Fn() -> bool>>,
     // A closure, so `view()` re-reads it and a `transition:opacity` resolves per render. `None` is opaque.
     opacity: Option<Rc<dyn Fn() -> f32>>,
+    // Re-read by `view()` like the opacity. `None` composites normally.
+    blend: Option<Box<dyn Fn() -> BlendMode>>,
     // Takes the laid-out `Rect` so rotate/scale can pivot on the box centre; `None` means identity.
     transform: Option<Rc<TransformFn>>,
     // The transform a stroke was pressed under, so a box whose transform follows its own drag is still measured in the frame the drag started in.
@@ -200,6 +202,7 @@ impl StyledContainer {
             state: StateStyle::default(),
             disabled_source: None,
             opacity: None,
+            blend: None,
             transform: None,
             stroke_frame: None,
             children,
@@ -456,6 +459,12 @@ impl StyledContainer {
     pub fn with_opacity(mut self, opacity: impl Fn() -> f32 + 'static) -> Self {
         self.opacity = Some(Rc::new(opacity));
         self.publish_gate();
+        self
+    }
+
+    /// Composites the box and everything inside it onto what is beneath through `blend`, as CSS `mix-blend-mode` does, for a texture overlay that multiplies or screens a wallpaper rather than covering it.
+    pub fn with_blend(mut self, blend: impl Fn() -> BlendMode + 'static) -> Self {
+        self.blend = Some(Box::new(blend));
         self
     }
 
@@ -940,8 +949,9 @@ impl Component for StyledContainer {
             ),
         };
         let opacity = self.opacity.as_ref().map_or(1.0, |o| o());
-        let composed = if opacity < 1.0 {
-            RenderNode::layer(opacity, 0.0, [content])
+        let blend = self.blend.as_ref().map_or(BlendMode::Normal, |b| b());
+        let composed = if opacity < 1.0 || blend != BlendMode::Normal {
+            RenderNode::blended(opacity, blend, [content])
         } else {
             content
         };

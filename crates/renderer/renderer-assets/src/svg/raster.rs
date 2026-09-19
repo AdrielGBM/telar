@@ -5,7 +5,7 @@ use std::sync::Arc;
 use geometry_core::Rect;
 
 use crate::image::apply_tint_premultiplied;
-use renderer_core::{Color, DrawCommand, ImageData, Raster};
+use renderer_core::{Color, DrawCommand, ImageData, ImageFill, Raster};
 
 /// Pixel dimensions to rasterize a `w`x`h` region into, shared by the runtime fallback and the baker so the two stay comparably crisp. Renders at 2x because this layer does not know the display scale factor, then clamps the long side so a large viewBox cannot ask for an unallocatable pixmap.
 pub(super) fn raster_px(w: f32, h: f32) -> (u32, u32) {
@@ -52,5 +52,6 @@ pub(super) fn raster_fallback(
         data: Arc::new(data),
         rect: Rect::new(offset_x, offset_y, fitted_w, fitted_h),
         raster: Raster::Smooth,
+        fill: ImageFill::Stretch,
     }]
 }

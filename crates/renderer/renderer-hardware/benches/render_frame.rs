@@ -9,8 +9,8 @@ use criterion::{Criterion, criterion_group, criterion_main};
 use geometry_core::{Point, Rect};
 use platform_headless::HeadlessWindow;
 use renderer_core::{
-    Color, DrawCommand, PathData, PathStyle, RectStyle, RenderBackend, Shadow, ShapeStyle,
-    TextStyle,
+    BlendMode, Color, DrawCommand, PathData, PathStyle, RectStyle, RenderBackend, Shadow,
+    ShapeStyle, TextStyle,
 };
 use renderer_text::TextShaperConfig;
 use telar_renderer_hardware::HardwareRenderer;
@@ -75,6 +75,7 @@ fn dense_ui() -> Vec<DrawCommand> {
     cmds.push(DrawCommand::PushLayer {
         opacity: 0.85,
         backdrop_blur: 12.0,
+        blend: BlendMode::Normal,
     });
     cmds.push(DrawCommand::Rect {
         rect: Rect::new(320.0, 240.0, 640.0, 320.0),

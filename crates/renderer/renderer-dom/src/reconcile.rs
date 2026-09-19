@@ -7,7 +7,7 @@
 //! And a frame paints at its own level too, outside every element: an application's shell fills the panel its rail stands on, and dims the page behind a drawer. That becomes a box inside the host, placed as it is drawn — see `paint_at_root`.
 
 use geometry_core::Rect;
-use renderer_core::{Color, DrawCommand, Element, Role};
+use renderer_core::{BlendMode, Color, DrawCommand, Element, Role};
 use rustc_hash::FxHashMap;
 use wasm_bindgen::JsCast;
 use wasm_bindgen::prelude::Closure;
@@ -411,9 +411,12 @@ impl Reconciler {
                     claims_background: paint::text_claims_background(style),
                 });
             }
-            DrawCommand::PushLayer { opacity, .. } => {
+            DrawCommand::PushLayer { opacity, blend, .. } => {
                 if *opacity < 1.0 {
                     paint::declare(&mut open.style, "opacity", &paint::round(*opacity));
+                }
+                if *blend != BlendMode::Normal {
+                    paint::declare(&mut open.style, "mix-blend-mode", blend.css_name());
                 }
             }
             DrawCommand::PushClip { radius, .. } => {
@@ -830,14 +833,19 @@ fn draw(drawing: &mut Drawing, command: &DrawCommand) {
         } => drawing.text(text, *rect, style),
         DrawCommand::Path { data, style } => drawing.path(data, style),
         DrawCommand::Line { p1, p2, style } => drawing.line(*p1, *p2, style),
-        DrawCommand::Image { data, rect, raster } => {
+        DrawCommand::Image {
+            data,
+            rect,
+            raster,
+            fill,
+        } => {
             if let Some(href) = crate::bitmap::href(data) {
-                drawing.image(&href, *rect, *raster);
+                drawing.image(&href, (data.width, data.height), *rect, *raster, *fill);
             }
         }
         DrawCommand::PushClip { rect, radius } => drawing.open_clip(*rect, *radius),
         DrawCommand::PushMatrix { matrix } => drawing.open_matrix(*matrix),
-        DrawCommand::PushLayer { opacity, .. } => drawing.open_layer(*opacity),
+        DrawCommand::PushLayer { opacity, blend, .. } => drawing.open_layer(*opacity, *blend),
         DrawCommand::PopClip | DrawCommand::PopMatrix | DrawCommand::PopLayer => {
             drawing.close_group()
         }

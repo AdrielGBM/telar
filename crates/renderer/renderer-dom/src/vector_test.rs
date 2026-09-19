@@ -1,5 +1,5 @@
 use super::*;
-use renderer_core::{Color, FillRule, LineCap, Shadow, ShapeStyle};
+use renderer_core::{Color, FillRule, ImageSlice, Insets, LineCap, Shadow, ShapeStyle};
 
 fn drawing() -> Drawing {
     Drawing::new(7)
@@ -182,7 +182,7 @@ fn text_carries_the_css_a_box_would_have_given_it() {
 #[test]
 fn groups_close_in_the_order_they_opened() {
     let mut d = drawing();
-    d.open_layer(0.5);
+    d.open_layer(0.5, BlendMode::Normal);
     d.open_matrix([2.0, 0.0, 0.0, 2.0, 4.0, 4.0]);
     d.line(
         Point::new(0.0, 0.0),
@@ -219,8 +219,10 @@ fn a_clip_is_a_definition_the_group_points_at() {
     d.open_clip(Rect::new(0.0, 0.0, 30.0, 30.0), BorderRadius::all(6.0));
     d.image(
         "data:image/png;base64,AAA",
+        (4, 4),
         Rect::new(0.0, 0.0, 30.0, 30.0),
         Raster::Pixel,
+        ImageFill::Stretch,
     );
     let out = d.finish();
     assert!(out.contains("<clipPath id=\"t7-1\"><rect x=\"0\" y=\"0\" width=\"30\" height=\"30\" rx=\"6\"/></clipPath>"), "{out}");
@@ -277,4 +279,58 @@ fn a_frame_that_swallows_its_box_is_the_outline_alone() {
         ),
     );
     assert_eq!(svg.matches('M').count(), 1, "{svg}");
+}
+
+#[test]
+fn a_tile_is_a_pattern_repeating_at_the_scaled_picture_size() {
+    let mut d = drawing();
+    d.image(
+        "p.png",
+        (4, 2),
+        Rect::new(10.0, 20.0, 40.0, 30.0),
+        Raster::Smooth,
+        ImageFill::Tile { scale: 3.0 },
+    );
+    let out = d.finish();
+    assert!(
+        out.contains("<pattern id=\"t7-1\" patternUnits=\"userSpaceOnUse\" x=\"10\" y=\"20\" width=\"12\" height=\"6\"><image x=\"0\" y=\"0\" width=\"12\" height=\"6\""),
+        "{out}"
+    );
+    assert!(
+        out.ends_with("<rect x=\"10\" y=\"20\" width=\"40\" height=\"30\" fill=\"url(#t7-1)\"/>"),
+        "{out}"
+    );
+}
+
+#[test]
+fn a_nine_slice_is_one_viewport_per_piece() {
+    let mut d = drawing();
+    d.image(
+        "p.png",
+        (8, 8),
+        Rect::new(0.0, 0.0, 40.0, 20.0),
+        Raster::Pixel,
+        ImageFill::Slice(ImageSlice::new(Insets::all(2.0))),
+    );
+    let out = d.finish();
+    assert_eq!(out.matches("<svg ").count(), 9, "{out}");
+    assert!(
+        out.starts_with("<svg x=\"0\" y=\"0\" width=\"2\" height=\"2\" viewBox=\"0 0 2 2\""),
+        "the corner keeps its size: {out}"
+    );
+    assert!(
+        out.contains("<svg x=\"2\" y=\"0\" width=\"36\" height=\"2\" viewBox=\"2 0 4 2\""),
+        "the top edge stretches along its length: {out}"
+    );
+}
+
+#[test]
+fn a_blended_layer_names_its_mode_in_css() {
+    let mut d = drawing();
+    d.open_layer(1.0, BlendMode::ColorDodge);
+    d.close_group();
+    assert_eq!(
+        d.finish(),
+        "<g opacity=\"1\" style=\"mix-blend-mode:color-dodge\"></g>"
+    );
 }

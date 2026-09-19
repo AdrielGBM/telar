@@ -54,7 +54,10 @@ impl LayerPipeline {
             sample_count: 1,
             dimension: wgpu::TextureDimension::D2,
             format: self.target_format,
-            usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::TEXTURE_BINDING,
+            // Copyable so a blended layer nested in this one can take what this one holds as its backdrop.
+            usage: wgpu::TextureUsages::RENDER_ATTACHMENT
+                | wgpu::TextureUsages::TEXTURE_BINDING
+                | wgpu::TextureUsages::COPY_SRC,
             view_formats: &[],
         });
         let resolve_view = resolve.create_view(&wgpu::TextureViewDescriptor::default());

@@ -5829,6 +5829,7 @@ dependencies = [
  "telar-platform-headless",
  "telar-renderer-cache",
  "telar-renderer-core",
+ "telar-renderer-software",
  "telar-renderer-text",
  "tracing",
  "wasm-bindgen",

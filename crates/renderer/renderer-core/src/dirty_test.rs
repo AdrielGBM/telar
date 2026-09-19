@@ -2,8 +2,8 @@ use super::*;
 use crate::culling;
 use crate::dirty_scenarios::{self, Plan, Scenario};
 use crate::{
-    Border, BorderRadius, Color, Element, ElementId, FontMetrics, Gradient, ImageData, Paint,
-    Raster, RectStyle, Semantics, Shadow, ShapeStyle, TextStyle,
+    BlendMode, Border, BorderRadius, Color, Element, ElementId, FontMetrics, Gradient, ImageData,
+    ImageFill, Paint, Raster, RectStyle, Semantics, Shadow, ShapeStyle, TextStyle,
 };
 use geometry_core::{Point, Rect};
 use std::sync::Arc;
@@ -51,6 +51,7 @@ fn layer(opacity: f32, backdrop_blur: f32) -> DrawCommand {
     DrawCommand::PushLayer {
         opacity,
         backdrop_blur,
+        blend: BlendMode::Normal,
     }
 }
 
@@ -168,6 +169,42 @@ fn every_shared_scenario_plans_what_it_expects() {
 #[test]
 fn a_layer_opacity_change_dirties_only_its_bounds() {
     assert_scenario("a layer animating its opacity");
+}
+
+#[test]
+fn a_layer_blend_mode_change_dirties_only_its_bounds() {
+    assert_scenario("a layer changing its blend mode");
+}
+
+#[test]
+fn a_tile_scale_change_dirties_only_the_picture() {
+    assert_scenario("a tiled picture changing its scale");
+}
+
+#[test]
+fn a_slice_insets_change_dirties_only_the_picture() {
+    assert_scenario("a nine-slice picture changing its insets");
+}
+
+#[test]
+fn an_unchanged_fill_and_blend_dirty_nothing() {
+    let tiled = DrawCommand::Image {
+        data: Arc::new(ImageData::new(vec![0u8; 4 * 4 * 4], 4, 4)),
+        rect: Rect::new(10.0, 10.0, 40.0, 40.0),
+        raster: Raster::Pixel,
+        fill: ImageFill::Tile { scale: 2.0 },
+    };
+    let frame = vec![
+        DrawCommand::PushLayer {
+            opacity: 1.0,
+            backdrop_blur: 0.0,
+            blend: BlendMode::Multiply,
+        },
+        tiled,
+        DrawCommand::PopLayer,
+    ];
+    let damage = dirty(&frame, &frame.clone()).expect("bounded");
+    assert!(damage.is_empty(), "nothing changed, got {damage:?}");
 }
 
 #[test]
@@ -1103,6 +1140,7 @@ fn a_background_whose_pixels_depend_on_where_they_land_repaints_the_clip_whole()
                 data: Arc::new(ImageData::new(vec![0u8; 4 * 4 * 4], 4, 4)),
                 rect: Rect::new(50.0, 50.0, 300.0, 300.0),
                 raster: Raster::Smooth,
+                fill: ImageFill::Stretch,
             },
             "a picture",
         ),

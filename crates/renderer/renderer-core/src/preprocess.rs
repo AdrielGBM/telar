@@ -42,6 +42,7 @@ pub fn expand_fill_layers(commands: &[DrawCommand]) -> Option<Vec<DrawCommand>> 
             result.push(DrawCommand::PushLayer {
                 opacity: alpha,
                 backdrop_blur: 0.0,
+                blend: crate::BlendMode::Normal,
             });
             result.push(DrawCommand::Rect {
                 rect: *rect,
@@ -98,10 +99,16 @@ fn scale_command(cmd: &DrawCommand, sf: f32) -> DrawCommand {
             rect: rect.scale(sf),
             style: Arc::new((**style).clone().scale(sf)),
         },
-        DrawCommand::Image { data, rect, raster } => DrawCommand::Image {
+        DrawCommand::Image {
+            data,
+            rect,
+            raster,
+            fill,
+        } => DrawCommand::Image {
             data: data.clone(),
             rect: rect.scale(sf),
             raster: *raster,
+            fill: fill.scaled(sf),
         },
         DrawCommand::Line { p1, p2, style } => DrawCommand::Line {
             p1: p1.scale(sf),
@@ -132,9 +139,11 @@ fn scale_command(cmd: &DrawCommand, sf: f32) -> DrawCommand {
         DrawCommand::PushLayer {
             opacity,
             backdrop_blur,
+            blend,
         } => DrawCommand::PushLayer {
             opacity: *opacity,
             backdrop_blur: backdrop_blur * sf,
+            blend: *blend,
         },
         DrawCommand::PopLayer => DrawCommand::PopLayer,
         // Markers, not geometry: an element's box is described by the commands inside it, which scale.

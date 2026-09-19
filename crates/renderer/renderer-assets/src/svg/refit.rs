@@ -6,7 +6,8 @@ use geometry_core::{Point, Rect};
 
 use crate::image::apply_tint_premultiplied;
 use renderer_core::{
-    Color, DrawCommand, Gradient, GradientKind, ImageData, Paint, PathStyle, Raster, Stroke,
+    Color, DrawCommand, Gradient, GradientKind, ImageData, ImageFill, Paint, PathStyle, Raster,
+    Stroke,
 };
 
 /// Re-applies the runtime fit (`p' = (p.x * sx + dx, p.y * sy + dy)`) to a baked vector display list.
@@ -138,5 +139,6 @@ pub(super) fn refit_raster(
         data,
         rect: Rect::new(offset_x, offset_y, fitted_w, fitted_h),
         raster: Raster::Smooth,
+        fill: ImageFill::Stretch,
     }]
 }

@@ -247,6 +247,7 @@ pub const FIT_VALUES: &[(&str, &str)] = &[
     ("fill", "ObjectFit::Fill"),
     ("cover", "ObjectFit::Cover"),
     ("contain_integer", "ObjectFit::ContainInteger"),
+    ("tile", "ObjectFit::Tile { scale: 1.0 }"),
 ];
 
 /// `cursor:` — the pointer's shape over a box, one spelling per `Cursor` variant.

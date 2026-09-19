@@ -95,3 +95,49 @@ fn image_single_side_derives_aspect() {
     assert_eq!(rect.width, 100.0);
     assert_eq!(rect.height, 50.0);
 }
+
+fn drawn_fill(node: &RenderNode) -> Option<ImageFill> {
+    match node {
+        RenderNode::Primitive(DrawCommand::Image { fill, .. }) => Some(*fill),
+        RenderNode::Element { children, .. }
+        | RenderNode::Transform { children, .. }
+        | RenderNode::Clip { children, .. }
+        | RenderNode::Layer { children, .. }
+        | RenderNode::Group { children } => children.iter().find_map(drawn_fill),
+        _ => None,
+    }
+}
+
+fn picture_with(fit: ObjectFit) -> Image {
+    reset_layout_runtime();
+    let data = Arc::new(ImageData::new(vec![0u8; 8 * 8 * 4], 8, 8));
+    Image::new(
+        LayoutStyle::new().width(90.0).height(60.0),
+        move || Arc::clone(&data),
+        || Raster::Pixel,
+        move || fit,
+    )
+    .unwrap()
+}
+
+#[test]
+fn a_tile_fit_reaches_the_draw_command_for_the_renderer_to_repeat() {
+    let image = picture_with(ObjectFit::Tile { scale: 2.0 });
+    assert_eq!(
+        drawn_fill(&image.view()),
+        Some(ImageFill::Tile { scale: 2.0 })
+    );
+}
+
+#[test]
+fn a_slice_takes_the_place_of_the_fit() {
+    let slice = ImageSlice::new(renderer_core::Insets::all(3.0));
+    let image = picture_with(ObjectFit::Cover).with_slice(move || slice);
+    assert_eq!(drawn_fill(&image.view()), Some(ImageFill::Slice(slice)));
+}
+
+#[test]
+fn a_contained_picture_is_stretched_into_its_fitted_rect() {
+    let image = picture_with(ObjectFit::Contain);
+    assert_eq!(drawn_fill(&image.view()), Some(ImageFill::Stretch));
+}

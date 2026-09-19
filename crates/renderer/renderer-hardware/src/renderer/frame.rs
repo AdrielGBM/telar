@@ -14,6 +14,13 @@ pub(super) enum Segment {
     Boundary(Boundary),
 }
 
+struct Composite<'a> {
+    bind_group: &'a wgpu::BindGroup,
+    scissor: Option<Rect>,
+    blend: BlendMode,
+    label: &'static str,
+}
+
 // A layer currently being rendered into: its two textures and views, the viewport bind group its draws bind, and the bucket size the textures were allocated at.
 struct LayerTarget {
     msaa_texture: wgpu::Texture,
@@ -356,10 +363,15 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
         let frame_has_backdrop_blur = commands.iter().any(
             |c| matches!(c, DrawCommand::PushLayer { backdrop_blur, .. } if *backdrop_blur > 0.0),
         );
+        // A layer blending in shader copies the target it composites into, and a swapchain image is not a texture it can copy.
+        let frame_copies_target = commands.iter().any(|c| {
+            matches!(c, DrawCommand::PushLayer { blend, .. } if crate::composite::blend_shader_mode(*blend).is_some())
+        });
         // The single-sample damage path Loads the persistent `msaa_texture`, which requires rendering through the offscreen rather than into the rotating swapchain. An app-owned target is never drawn into directly: the frame must arrive through a blend, or a direct draw would replace what the application put in the texture.
         let direct_to_surface = self.msaa_samples == 1
             && clear_color.is_some()
             && !frame_has_backdrop_blur
+            && !frame_copies_target
             && !hw_damage_with_clear_enabled()
             && !self.app_owned_target;
 
@@ -707,6 +719,7 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
                     .push(DrawStep::Boundary(Boundary::PrerenderedLayer {
                         bind_group,
                         scissor: current_scissor,
+                        blend: accum.blend,
                     }));
                 // Skip when `None`: emitting (0,0,w,h) inside the nested layer pass would use window dimensions on a smaller texture and fail validation.
                 if let Some(s) = current_scissor {
@@ -775,6 +788,7 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
                             None
                         },
                         scissor: current_scissor,
+                        blend: accum.blend,
                     }));
                 // Skip when `None`: emitting (0,0,w,h) inside the nested layer pass would use window dimensions on a smaller texture and fail validation.
                 if let Some(s) = current_scissor {
@@ -782,6 +796,8 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
                         .push(DrawStep::SetScissor { rect: Some(s) });
                 }
             }
+            self.composite_pipeline
+                .prepare_blend(&self.device, accum.blend);
         }
         current_scissor
     }
@@ -918,6 +934,7 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
                         // Round-clip layers draw the clip mask into the texture, so their content is not safely cacheable by command hash.
                         cache_hash: None,
                         scissor: outer_scissor,
+                        blend: BlendMode::Normal,
                     }));
                 self.pending_steps.push(DrawStep::SetScissor {
                     rect: outer_scissor,
@@ -1143,11 +1160,20 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
                         )
                     });
                 }
-                DrawCommand::Image { data, rect, raster } => {
+                DrawCommand::Image {
+                    data,
+                    rect,
+                    raster,
+                    fill,
+                } => {
                     self.flush_rect();
                     self.flush_text();
                     self.flush_line();
-                    let key = (data.id, *raster);
+                    let wrap = match fill {
+                        ImageFill::Tile { .. } => Wrap::Repeat,
+                        ImageFill::Stretch | ImageFill::Slice(_) => Wrap::Clamp,
+                    };
+                    let key = (data.id, *raster, wrap);
                     if self.batch_image_start.is_none() || self.batch_image_key != Some(key) {
                         self.flush_image();
                         self.batch_image_key = Some(key);
@@ -1155,23 +1181,29 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
                         self.batch_image_bind_group = crate::caches::with_shared(|caches| {
                             caches
                                 .images
-                                .bind_group(&self.device, &self.queue, data, *raster)
+                                .bind_group(&self.device, &self.queue, data, *raster, wrap)
                         })
                         .flatten();
                     }
-                    let (ix1, iy1) = self.draw_state.apply_point(rect.x, rect.y);
-                    let (ix2, iy2) = self.draw_state.apply_point(rect.x + rect.width, rect.y);
-                    let (ix3, iy3) = self.draw_state.apply_point(rect.x, rect.y + rect.height);
-                    let (ix4, iy4) = self
-                        .draw_state
-                        .apply_point(rect.x + rect.width, rect.y + rect.height);
-                    let imin_x = ix1.min(ix2).min(ix3).min(ix4);
-                    let imin_y = iy1.min(iy2).min(iy3).min(iy4);
-                    let imax_x = ix1.max(ix2).max(ix3).max(ix4);
-                    let imax_y = iy1.max(iy2).max(iy3).max(iy4);
-                    let translated = Rect::new(imin_x, imin_y, imax_x - imin_x, imax_y - imin_y);
-                    self.pending_image_instances
-                        .push(crate::primitives::image::prepare_image(translated));
+                    let whole = Rect::new(0.0, 0.0, 1.0, 1.0);
+                    match fill {
+                        ImageFill::Stretch => self.push_image_piece(*rect, whole),
+                        ImageFill::Tile { scale } => {
+                            if let Some((tile_w, tile_h)) = ImageFill::tile_size(*scale, data) {
+                                let repeats =
+                                    Rect::new(0.0, 0.0, rect.width / tile_w, rect.height / tile_h);
+                                self.push_image_piece(*rect, repeats);
+                            }
+                        }
+                        ImageFill::Slice(slice) => {
+                            let (w, h) = (data.width as f32, data.height as f32);
+                            for piece in slice.pieces((data.width, data.height), *rect) {
+                                let s = piece.source;
+                                let uv = Rect::new(s.x / w, s.y / h, s.width / w, s.height / h);
+                                self.push_image_piece(piece.dest, uv);
+                            }
+                        }
+                    }
                 }
                 DrawCommand::Line { p1, p2, style } => {
                     self.flush_rect();
@@ -1340,6 +1372,7 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
                 DrawCommand::PushLayer {
                     opacity,
                     backdrop_blur,
+                    blend,
                 } => {
                     self.flush_all();
                     // Disable frustum culling inside the layer, to avoid incorrect culling by an outer `PushClip`.
@@ -1348,6 +1381,7 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
                     layer_accum_stack.push(LayerAccum {
                         opacity: *opacity,
                         backdrop_blur: *backdrop_blur,
+                        blend: *blend,
                         begin_step_index: self.pending_steps.len(),
                         bounds: None,
                         command_start: cmd_idx + 1,
@@ -1817,7 +1851,7 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
                                 ) => (*ka, *kb),
                                 _ => unreachable!(),
                             };
-                            (ka.0, filter_ord(ka.1)).cmp(&(kb.0, filter_ord(kb.1)))
+                            (ka.0, filter_ord(ka.1), ka.2).cmp(&(kb.0, filter_ord(kb.1), kb.2))
                         });
                     }
                     i = j;
@@ -2164,6 +2198,120 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
         ctx.frame_scratch_textures.push(cropped_entry);
     }
 
+    /// Draws a finished layer into the target beneath it: the parent layer, or the frame's own target when `parent` is `None`.
+    fn composite_into_parent(
+        &mut self,
+        ctx: &mut FrameCtx,
+        encoder: &mut wgpu::CommandEncoder,
+        parent: Option<&LayerTarget>,
+        root_view: &wgpu::TextureView,
+        composite: Composite<'_>,
+    ) {
+        let backdrop = crate::composite::blend_shader_mode(composite.blend)
+            .map(|_| self.copy_of_target(ctx, encoder, parent, root_view));
+        // At one sample, draws target the resolve view rather than the MSAA view; the wrong one lands composited content on a texture the outer layer never reads, making nested layers disappear.
+        let (target_view, viewport_bind_group, (target_w, target_h)) = match parent {
+            Some(layer) if self.msaa_samples > 1 => (
+                &layer.msaa_view,
+                &layer.viewport_bind_group,
+                (layer.width, layer.height),
+            ),
+            Some(layer) => (
+                &layer.resolve_view,
+                &layer.viewport_bind_group,
+                (layer.width, layer.height),
+            ),
+            None => (
+                root_view,
+                &self.viewport_bind_group,
+                (self.width, self.height),
+            ),
+        };
+        let mut blit = crate::pass::color_pass(
+            encoder,
+            composite.label,
+            target_view,
+            None,
+            crate::pass::load_store(),
+        );
+        blit.set_pipeline(self.composite_pipeline.blend_pipeline(composite.blend));
+        blit.set_bind_group(0, viewport_bind_group, &[]);
+        blit.set_bind_group(1, composite.bind_group, &[]);
+        if let Some(backdrop) = &backdrop {
+            blit.set_bind_group(2, backdrop, &[]);
+        }
+        // Only a top-level composite: a nested one writes into a parent layer in that layer's coordinate space, where the window-space dirty rect does not apply.
+        let scissor = match parent {
+            None => confine_to_dirty(composite.scissor, ctx.dirty_scissor),
+            Some(_) => composite.scissor,
+        };
+        if let Some(s) = scissor {
+            let (x, y, w, h) = physical_scissor(s, target_w, target_h, self.scale_factor);
+            blit.set_scissor_rect(x, y, w, h);
+        }
+        blit.draw(0..6, 0..1);
+    }
+
+    /// Copies the target a blended layer is about to composite into and binds the copy for the blend to read the backdrop from, taken at the composite rather than when the layer opened since nothing draws into the parent while one of its layers is open.
+    fn copy_of_target(
+        &mut self,
+        ctx: &mut FrameCtx,
+        encoder: &mut wgpu::CommandEncoder,
+        parent: Option<&LayerTarget>,
+        root_view: &wgpu::TextureView,
+    ) -> wgpu::BindGroup {
+        let (width, height) = parent.map_or((self.width, self.height), |layer| {
+            (layer.width, layer.height)
+        });
+        // The same usages the backdrop-blur scratch asks for, so one pool serves both.
+        let usage = wgpu::TextureUsages::RENDER_ATTACHMENT
+            | wgpu::TextureUsages::COPY_SRC
+            | wgpu::TextureUsages::COPY_DST
+            | wgpu::TextureUsages::TEXTURE_BINDING;
+        let copy = take_pooled_texture(
+            &self.device,
+            &mut self.texture_pool,
+            width.max(1),
+            height.max(1),
+            self.surface_format,
+            "telar-blend-backdrop",
+            usage,
+        );
+        if self.msaa_samples > 1 {
+            let samples = parent.map_or(root_view, |layer| &layer.msaa_view);
+            let _resolve = crate::pass::color_pass(
+                encoder,
+                "telar-blend-backdrop-resolve",
+                samples,
+                Some(&copy.4),
+                crate::pass::load_store(),
+            );
+        } else {
+            let source = match parent {
+                Some(layer) => &layer.resolve_texture,
+                None => self
+                    .msaa_texture
+                    .as_ref()
+                    .expect("a frame that copies its target renders offscreen"),
+            };
+            encoder.copy_texture_to_texture(
+                texel_copy(source, wgpu::Origin3d::ZERO),
+                texel_copy(&copy.3, wgpu::Origin3d::ZERO),
+                wgpu::Extent3d {
+                    width,
+                    height,
+                    depth_or_array_layers: 1,
+                },
+            );
+        }
+        let bind_group = self
+            .composite_pipeline
+            .backdrop_bind_group(&self.device, &copy.4);
+        // Held until after submit, like the backdrop-blur scratch: back in the pool now, a later layer in this encoder could overwrite it before the GPU reads it.
+        ctx.frame_scratch_textures.push(copy);
+        bind_group
+    }
+
     /// Moves the scrolled pixels of the single-sample target, which is the very texture the previous frame is still in.
     ///
     /// A quad cannot do it there: a pass may not sample the attachment it draws into. So the region goes out to the otherwise idle retained texture and comes back at its new offset, as two exact texel copies — which replace the destination rather than blend over it, so a frame whose pixels are translucent moves as cleanly as an opaque one.
@@ -2457,6 +2605,7 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
                     bind_group,
                     cache_hash,
                     scissor,
+                    blend,
                 }) => {
                     let layer = layer_stack
                         .pop()
@@ -2476,53 +2625,18 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
                         );
                     }
 
-                    // At one sample, draws target the resolve view rather than the MSAA view; the wrong one lands composited content on a texture the outer layer never reads, making nested layers disappear.
-                    let parent_view: &wgpu::TextureView = if let Some(layer) = layer_stack.last() {
-                        if self.msaa_samples > 1 {
-                            &layer.msaa_view
-                        } else {
-                            &layer.resolve_view
-                        }
-                    } else {
-                        &msaa_view
-                    };
-
-                    // Not `layer_pipeline`: its BGL expects the viewport at set 0 and composite params at set 1, incompatible with the single-set layout.
-                    let parent_vp_bg: &wgpu::BindGroup = if let Some(layer) = layer_stack.last() {
-                        &layer.viewport_bind_group
-                    } else {
-                        &self.viewport_bind_group
-                    };
-                    // The layer being composited is already popped, so this is the parent — the attachment the blit writes into, and what its scissor must be clamped against.
-                    let (parent_w, parent_h) = layer_stack
-                        .last()
-                        .map(|layer| (layer.width, layer.height))
-                        .unwrap_or((self.width, self.height));
-
-                    {
-                        let mut blit = crate::pass::color_pass(
-                            encoder,
-                            "telar-layer-blit",
-                            parent_view,
-                            None,
-                            crate::pass::load_store(),
-                        );
-                        blit.set_pipeline(&self.composite_pipeline.pipeline);
-                        blit.set_bind_group(0, parent_vp_bg, &[]);
-                        blit.set_bind_group(1, &bind_group, &[]);
-                        // Only a top-level composite: a nested one writes into a parent layer in that layer's coordinate space, where the window-space dirty rect does not apply.
-                        let composite_scissor = if layer_stack.is_empty() {
-                            confine_to_dirty(scissor, dirty_scissor)
-                        } else {
-                            scissor
-                        };
-                        if let Some(s) = composite_scissor {
-                            let (x, y, w, h) =
-                                physical_scissor(s, parent_w, parent_h, self.scale_factor);
-                            blit.set_scissor_rect(x, y, w, h);
-                        }
-                        blit.draw(0..6, 0..1);
-                    }
+                    self.composite_into_parent(
+                        ctx,
+                        encoder,
+                        layer_stack.last(),
+                        &msaa_view,
+                        Composite {
+                            bind_group: &bind_group,
+                            scissor,
+                            blend,
+                            label: "telar-layer-blit",
+                        },
+                    );
 
                     if let Some(hash) = cache_hash {
                         // Retained so the next frame can composite it directly. The MSAA half is consumed by the resolve, so it drops rather than returning to the pool.
@@ -2569,47 +2683,20 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
                 Segment::Boundary(Boundary::PrerenderedLayer {
                     bind_group,
                     scissor,
+                    blend,
                 }) => {
-                    let parent_view: &wgpu::TextureView = if let Some(layer) = layer_stack.last() {
-                        if self.msaa_samples > 1 {
-                            &layer.msaa_view
-                        } else {
-                            &layer.resolve_view
-                        }
-                    } else {
-                        &msaa_view
-                    };
-                    let parent_vp_bg: &wgpu::BindGroup = if let Some(layer) = layer_stack.last() {
-                        &layer.viewport_bind_group
-                    } else {
-                        &self.viewport_bind_group
-                    };
-                    // The layer being composited is already popped, so this is the parent — the attachment the blit writes into, and what its scissor must be clamped against.
-                    let (parent_w, parent_h) = layer_stack
-                        .last()
-                        .map(|layer| (layer.width, layer.height))
-                        .unwrap_or((self.width, self.height));
-                    let mut blit = crate::pass::color_pass(
+                    self.composite_into_parent(
+                        ctx,
                         encoder,
-                        "telar-prerendered-layer-blit",
-                        parent_view,
-                        None,
-                        crate::pass::load_store(),
+                        layer_stack.last(),
+                        &msaa_view,
+                        Composite {
+                            bind_group: &bind_group,
+                            scissor,
+                            blend,
+                            label: "telar-prerendered-layer-blit",
+                        },
                     );
-                    blit.set_pipeline(&self.composite_pipeline.pipeline);
-                    blit.set_bind_group(0, parent_vp_bg, &[]);
-                    blit.set_bind_group(1, &bind_group, &[]);
-                    let composite_scissor = if layer_stack.is_empty() {
-                        confine_to_dirty(scissor, dirty_scissor)
-                    } else {
-                        scissor
-                    };
-                    if let Some(s) = composite_scissor {
-                        let (x, y, w, h) =
-                            physical_scissor(s, parent_w, parent_h, self.scale_factor);
-                        blit.set_scissor_rect(x, y, w, h);
-                    }
-                    blit.draw(0..6, 0..1);
                 }
             }
         }

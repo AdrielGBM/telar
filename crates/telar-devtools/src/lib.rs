@@ -13,7 +13,7 @@ use web_time::Instant;
 use geometry_core::Rect;
 use platform_core::{Key, ModifiersState};
 use renderer_core::{
-    Border, BorderRadius, Color, DrawCommand, Paint, RectStyle, ShapeStyle, TextStyle,
+    BlendMode, Border, BorderRadius, Color, DrawCommand, Paint, RectStyle, ShapeStyle, TextStyle,
 };
 use ui_tree::{DevAction, DevPlugin, SegmentNodeInfo};
 
@@ -202,6 +202,7 @@ impl DevPlugin for DevTools {
         cmds.push(DrawCommand::PushLayer {
             opacity: 1.0,
             backdrop_blur: BACKDROP_BLUR_RADIUS,
+            blend: BlendMode::Normal,
         });
 
         cmds.push(rect_command(
@@ -237,6 +238,7 @@ impl DevPlugin for DevTools {
             cmds.push(DrawCommand::PushLayer {
                 opacity: 1.0,
                 backdrop_blur: BACKDROP_BLUR_RADIUS,
+                blend: BlendMode::Normal,
             });
 
             cmds.push(rect_command(

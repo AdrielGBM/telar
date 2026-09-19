@@ -9,7 +9,8 @@ use rustc_hash::FxHasher;
 use geometry_core::Rect;
 use raw_window_handle::{HasDisplayHandle, HasWindowHandle};
 use renderer_core::{
-    Color, DrawCommand, Raster, RenderBackend, RendererError, expand_fill_layers, hash_pod_slice,
+    BlendMode, Color, DrawCommand, ImageFill, Raster, RenderBackend, RendererError,
+    expand_fill_layers, hash_pod_slice,
 };
 
 use wgpu::util::DeviceExt;
@@ -18,7 +19,7 @@ use wgpu::{Device, Queue, Surface, SurfaceConfiguration};
 use crate::blur::{BlurParams, BlurPipeline};
 use crate::composite::{CompositeParams, CompositePipeline};
 use crate::config::HardwareRendererConfig;
-use crate::primitives::image::{ImageInstance, ImagePipeline};
+use crate::primitives::image::{ImageInstance, ImagePipeline, Wrap};
 use crate::primitives::layer::LayerPipeline;
 use crate::primitives::line::{LineInstance, LinePipeline};
 use crate::primitives::path::{PathFillData, PathPipeline, PathVertex};
@@ -33,7 +34,7 @@ mod steps;
 
 use pool::{PooledTexture, create_viewport_pool_slot, preferred_format};
 use shadow::{ShadowCacheKey, ShadowOp};
-use steps::{DrawStep, flush_batch, flush_image_batch};
+use steps::{DrawStep, ImageBatchKey, flush_batch, flush_image_batch};
 
 impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRenderer<W> {
     /// Leaves this renderer's cache census where another thread can read it. Called once per frame, throttled.
@@ -111,7 +112,7 @@ pub struct HardwareRenderer<W: HasWindowHandle + HasDisplayHandle + Send + Sync 
     batch_rect_start: Option<u32>,
     batch_text_start: Option<u32>,
     batch_line_start: Option<u32>,
-    batch_image_key: Option<(u64, Raster)>,
+    batch_image_key: Option<ImageBatchKey>,
     batch_image_start: Option<u32>,
     batch_image_bind_group: Option<wgpu::BindGroup>,
     draw_state: renderer_core::DrawState,
@@ -1026,6 +1027,24 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
             self.pending_line_instances.len() as u32,
             |start, end| DrawStep::LineBatch { start, end },
         );
+    }
+
+    /// One quad of a picture, placed through the bounds of `rect` transformed by the current matrix and sampling `uv`: a rotation or a skew is not something this pipeline draws.
+    fn push_image_piece(&mut self, rect: Rect, uv: Rect) {
+        let corners = [
+            self.draw_state.apply_point(rect.x, rect.y),
+            self.draw_state.apply_point(rect.x + rect.width, rect.y),
+            self.draw_state.apply_point(rect.x, rect.y + rect.height),
+            self.draw_state
+                .apply_point(rect.x + rect.width, rect.y + rect.height),
+        ];
+        let (min_x, min_y, max_x, max_y) = corners.iter().fold(
+            (f32::MAX, f32::MAX, f32::MIN, f32::MIN),
+            |(x0, y0, x1, y1), &(x, y)| (x0.min(x), y0.min(y), x1.max(x), y1.max(y)),
+        );
+        let placed = Rect::new(min_x, min_y, max_x - min_x, max_y - min_y);
+        self.pending_image_instances
+            .push(crate::primitives::image::prepare_image(placed, uv));
     }
 
     fn flush_image(&mut self) {

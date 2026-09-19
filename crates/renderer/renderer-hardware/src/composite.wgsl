@@ -69,21 +69,28 @@ fn vs_main(@builtin(vertex_index) vi: u32) -> VertexOutput {
     return out;
 }
 
-@fragment
-fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
-    let color = textureSample(src_texture, src_sampler, in.uv * params.content_uv_scale);
-    var result = color * params.alpha;
-    let pos = params.rect.xy + in.uv * params.rect.zw;
+fn source_color(uv: vec2<f32>) -> vec4<f32> {
+    return textureSample(src_texture, src_sampler, uv * params.content_uv_scale) * params.alpha;
+}
+
+fn composite_coverage(uv: vec2<f32>) -> f32 {
+    var coverage = 1.0;
+    let pos = params.rect.xy + uv * params.rect.zw;
     if params.clip_radius > 0.0 {
-        result = result * rrect_coverage(pos, params.rect, params.clip_radius);
+        coverage = coverage * rrect_coverage(pos, params.rect, params.clip_radius);
     }
     // A composite drawn in a pass of its own carries the enclosing rounded clip here, having left the viewport it was pushed onto behind.
     if params.outer_clip_radius > 0.0 {
-        result = result * rrect_coverage(pos, params.outer_clip_rect, params.outer_clip_radius);
+        coverage = coverage * rrect_coverage(pos, params.outer_clip_rect, params.outer_clip_radius);
     }
     // One drawn inside the main pass — a blurred shadow — still has that viewport bound, and masks against it like every other draw in the pass.
     if viewport.clip_radius > 0.0 {
-        result = result * rrect_coverage(pos, viewport.clip_rect, viewport.clip_radius);
+        coverage = coverage * rrect_coverage(pos, viewport.clip_rect, viewport.clip_radius);
     }
-    return result;
+    return coverage;
+}
+
+@fragment
+fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
+    return source_color(in.uv) * composite_coverage(in.uv);
 }

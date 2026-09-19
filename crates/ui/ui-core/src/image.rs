@@ -5,7 +5,7 @@ use std::sync::Arc;
 use geometry_core::{ObjectFit, Rect};
 use layout_core::{LayoutError, LayoutStyle};
 use platform_core::Event;
-use renderer_core::{BorderRadius, DrawCommand, ImageData, Raster};
+use renderer_core::{BorderRadius, DrawCommand, ImageData, ImageFill, ImageSlice, Raster};
 use ui_tree::{Component, EventResult, RenderNode};
 
 use crate::impl_leaf_widget;
@@ -17,6 +17,7 @@ pub struct Image {
     leaf: LayoutLeaf,
     raster: Box<dyn Fn() -> Raster>,
     fit: Box<dyn Fn() -> ObjectFit>,
+    slice: Option<Box<dyn Fn() -> ImageSlice>>,
     radius: BorderRadius,
 }
 
@@ -39,8 +40,15 @@ impl Image {
             leaf,
             raster: Box::new(raster_fn),
             fit: Box::new(fit_fn),
+            slice: None,
             radius: BorderRadius::zero(),
         })
+    }
+
+    /// Draws the picture nine-sliced across the whole box: its corners at their own size, its edges stretched along the sides and its middle over the rest, the way a frame or a panel skin is drawn. Takes the place of the fit, which has nothing left to place.
+    pub fn with_slice(mut self, slice_fn: impl Fn() -> ImageSlice + 'static) -> Self {
+        self.slice = Some(Box::new(slice_fn));
+        self
     }
 
     /// Rounds the picture's own corners.
@@ -73,15 +81,21 @@ impl Component for Image {
             height: r.height,
         };
         let data = (self.data)();
-        let (content, clip) = geometry_core::fit_rect(
-            (data.width as f32, data.height as f32),
-            r_local,
-            (self.fit)(),
-        );
+        let ((content, clip), fill) = match (&self.slice, (self.fit)()) {
+            (Some(slice), _) => ((r_local, false), ImageFill::Slice(slice())),
+            (None, fit) => (
+                geometry_core::fit_rect((data.width as f32, data.height as f32), r_local, fit),
+                match fit {
+                    ObjectFit::Tile { scale } => ImageFill::Tile { scale },
+                    _ => ImageFill::Stretch,
+                },
+            ),
+        };
         let image = RenderNode::Primitive(DrawCommand::Image {
             data,
             rect: content,
             raster: (self.raster)(),
+            fill,
         });
         // Cover overflows the box. The renderer maps clip rects through the active matrix, so a local (0,0,w,h) clip composes with this widget's transform and any scroll. A radius clips a `Contain` fit too.
         let node = if clip || !self.radius.is_zero() {

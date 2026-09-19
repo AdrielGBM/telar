@@ -2062,3 +2062,47 @@ fn an_effect_lives_exactly_as_long_as_the_scope_that_built_it() {
     source.set(9);
     assert_eq!(seen.get(), 7, "and stops when the scope is disposed");
 }
+
+fn layer_of(node: &RenderNode) -> Option<(f32, BlendMode)> {
+    match node {
+        RenderNode::Layer { opacity, blend, .. } => Some((*opacity, *blend)),
+        RenderNode::Element { children, .. }
+        | RenderNode::Group { children }
+        | RenderNode::Transform { children, .. }
+        | RenderNode::Clip { children, .. }
+        | RenderNode::Overlay { children } => children.iter().find_map(layer_of),
+        _ => None,
+    }
+}
+
+fn plain_box() -> StyledContainer {
+    StyledContainer::new(
+        LayoutStyle::new().width(40.0).height(40.0),
+        |_r| RectStyle::default(),
+        vec![],
+    )
+    .unwrap()
+}
+
+#[test]
+fn a_blend_mode_puts_the_box_in_a_layer_even_when_opaque() {
+    reset_layout_runtime();
+    let overlay = plain_box().with_blend(|| BlendMode::Multiply);
+    assert_eq!(layer_of(&overlay.view()), Some((1.0, BlendMode::Multiply)));
+}
+
+#[test]
+fn a_blend_mode_travels_with_the_opacity() {
+    reset_layout_runtime();
+    let overlay = plain_box()
+        .with_opacity(|| 0.4)
+        .with_blend(|| BlendMode::Screen);
+    assert_eq!(layer_of(&overlay.view()), Some((0.4, BlendMode::Screen)));
+}
+
+#[test]
+fn a_normal_opaque_box_needs_no_layer() {
+    reset_layout_runtime();
+    let normal = plain_box().with_blend(|| BlendMode::Normal);
+    assert_eq!(layer_of(&normal.view()), None);
+}

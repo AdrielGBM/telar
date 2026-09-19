@@ -12,6 +12,7 @@ use renderer_cache::{Cache, Policy};
 use renderer_text::{ATLAS_SIZE, GlyphAtlas, TextShaper};
 use wgpu::{Device, Queue};
 
+use crate::primitives::image::Wrap;
 use crate::primitives::path::PathTessCache;
 use crate::renderer::shadow::ShadowCacheKey;
 
@@ -144,11 +145,44 @@ impl SharedAtlas {
 /// The layout and samplers move here with the cache because a bind group is only usable with the layout it was made from: sharing the entries without sharing what they were built against would hand one renderer a group belonging to another's pipeline. Together they are one set, so a wallpaper decoded once is uploaded once instead of once per surface — the same duplication the atlas had, a level down.
 pub(crate) struct SharedImages {
     pub(crate) bind_group_layout: wgpu::BindGroupLayout,
-    sampler_nearest: wgpu::Sampler,
-    sampler_linear: wgpu::Sampler,
+    samplers: Samplers,
     textures: Cache<(u64, renderer_core::Raster), GpuImage>,
     /// Bind groups over textures the application owns, kept apart from `textures` because neither of that cache's rules holds here: it evicts by the bytes it is holding, and an app-owned texture costs it none, while its entries keep their texture alive by RAII, which is not ours to do. A bind group does keep the view it was built from alive, so an entry stays valid even if the application drops its handle — leaving a plain count as the only bound needed. A `None` entry remembers a handle this backend cannot read, so the refusal is decided and reported once rather than every frame.
-    external: lru::LruCache<(u64, renderer_core::Raster), Option<wgpu::BindGroup>>,
+    external: lru::LruCache<(u64, renderer_core::Raster), Option<WrapBindGroups>>,
+}
+
+struct Samplers {
+    nearest: wgpu::Sampler,
+    linear: wgpu::Sampler,
+    nearest_repeat: wgpu::Sampler,
+    linear_repeat: wgpu::Sampler,
+}
+
+impl Samplers {
+    fn get(&self, filter: renderer_core::Raster, wrap: Wrap) -> &wgpu::Sampler {
+        match (filter, wrap) {
+            (renderer_core::Raster::Pixel, Wrap::Clamp) => &self.nearest,
+            (renderer_core::Raster::Smooth, Wrap::Clamp) => &self.linear,
+            (renderer_core::Raster::Pixel, Wrap::Repeat) => &self.nearest_repeat,
+            (renderer_core::Raster::Smooth, Wrap::Repeat) => &self.linear_repeat,
+        }
+    }
+}
+
+/// The same texture bound once per addressing mode. A bind group is a handful of handles, so both are made up front rather than on the first tiled draw.
+#[derive(Clone)]
+pub(crate) struct WrapBindGroups {
+    clamp: wgpu::BindGroup,
+    repeat: wgpu::BindGroup,
+}
+
+impl WrapBindGroups {
+    fn get(&self, wrap: Wrap) -> &wgpu::BindGroup {
+        match wrap {
+            Wrap::Clamp => &self.clamp,
+            Wrap::Repeat => &self.repeat,
+        }
+    }
 }
 
 /// How many app-owned handles are remembered at once, drawable or not. A window shows one or two viewports, not dozens; the cap exists so an application that mints a fresh id every frame leaks nothing.
@@ -157,7 +191,7 @@ const EXTERNAL_BIND_GROUPS: usize = 8;
 pub(crate) struct GpuImage {
     // Held so the GPU texture is not dropped while the image is in use.
     texture: wgpu::Texture,
-    bind_group: wgpu::BindGroup,
+    bind_groups: WrapBindGroups,
 }
 
 /// What one uploaded texture costs in VRAM. Every texture created here is `Rgba8Unorm`.
@@ -192,8 +226,24 @@ impl SharedImages {
         });
         Self {
             bind_group_layout,
-            sampler_nearest: sampler(device, wgpu::FilterMode::Nearest),
-            sampler_linear: sampler(device, wgpu::FilterMode::Linear),
+            samplers: Samplers {
+                nearest: sampler(
+                    device,
+                    wgpu::FilterMode::Nearest,
+                    wgpu::AddressMode::ClampToEdge,
+                ),
+                linear: sampler(
+                    device,
+                    wgpu::FilterMode::Linear,
+                    wgpu::AddressMode::ClampToEdge,
+                ),
+                nearest_repeat: sampler(
+                    device,
+                    wgpu::FilterMode::Nearest,
+                    wgpu::AddressMode::Repeat,
+                ),
+                linear_repeat: sampler(device, wgpu::FilterMode::Linear, wgpu::AddressMode::Repeat),
+            },
             textures: Cache::new(policy, texture_bytes),
             external: lru::LruCache::new(
                 std::num::NonZeroUsize::new(EXTERNAL_BIND_GROUPS).expect("non-zero"),
@@ -207,14 +257,15 @@ impl SharedImages {
         queue: &Queue,
         image: &std::sync::Arc<renderer_core::ImageData>,
         filter: renderer_core::Raster,
+        wrap: Wrap,
     ) -> Option<wgpu::BindGroup> {
         let key = (image.id, filter);
         if let Some(handle) = image.external_texture() {
             if let Some(cached) = self.external.get(&key) {
-                return cached.clone();
+                return cached.as_ref().map(|groups| groups.get(wrap).clone());
             }
-            let bind_group = match handle.as_any().downcast_ref::<crate::gpu::AppTexture>() {
-                Some(app) => Some(self.view_bind_group(device, &app.view, filter)),
+            let bind_groups = match handle.as_any().downcast_ref::<crate::gpu::AppTexture>() {
+                Some(app) => Some(self.view_bind_groups(device, &app.view, filter)),
                 // Built elsewhere and handed to a backend that cannot read it. Drawing nothing is the honest outcome, but doing it quietly is not: the command is well-formed and the region simply stays empty.
                 None => {
                     tracing::warn!(
@@ -225,15 +276,16 @@ impl SharedImages {
                 }
             };
             // The failure is cached too, which keeps the warning to once per handle rather than once per frame.
-            self.external.put(key, bind_group.clone());
+            let bind_group = bind_groups.as_ref().map(|groups| groups.get(wrap).clone());
+            self.external.put(key, bind_groups);
             return bind_group;
         }
         if let Some(cached) = self.textures.get(&key) {
-            return Some(cached.bind_group.clone());
+            return Some(cached.bind_groups.get(wrap).clone());
         }
 
         let gpu_image = self.upload(device, queue, image, filter);
-        let bind_group = gpu_image.bind_group.clone();
+        let bind_group = gpu_image.bind_groups.get(wrap).clone();
         // The bind group borrows the texture `gpu_image` owns, so a value the budget refused would be dropped here and leave the group pointing at nothing.
         self.textures
             .grow_to(texture_bytes(&gpu_image).saturating_mul(2));
@@ -241,11 +293,23 @@ impl SharedImages {
         Some(bind_group)
     }
 
-    fn view_bind_group(
+    fn view_bind_groups(
         &self,
         device: &Device,
         view: &wgpu::TextureView,
         filter: renderer_core::Raster,
+    ) -> WrapBindGroups {
+        WrapBindGroups {
+            clamp: self.view_bind_group(device, view, self.samplers.get(filter, Wrap::Clamp)),
+            repeat: self.view_bind_group(device, view, self.samplers.get(filter, Wrap::Repeat)),
+        }
+    }
+
+    fn view_bind_group(
+        &self,
+        device: &Device,
+        view: &wgpu::TextureView,
+        sampler: &wgpu::Sampler,
     ) -> wgpu::BindGroup {
         device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: Some("telar-image-texture-bg"),
@@ -257,10 +321,7 @@ impl SharedImages {
                 },
                 wgpu::BindGroupEntry {
                     binding: 1,
-                    resource: wgpu::BindingResource::Sampler(match filter {
-                        renderer_core::Raster::Pixel => &self.sampler_nearest,
-                        renderer_core::Raster::Smooth => &self.sampler_linear,
-                    }),
+                    resource: wgpu::BindingResource::Sampler(sampler),
                 },
             ],
         })
@@ -309,21 +370,21 @@ impl SharedImages {
         );
 
         let view = texture.create_view(&wgpu::TextureViewDescriptor::default());
-        let bind_group = self.view_bind_group(device, &view, filter);
+        let bind_groups = self.view_bind_groups(device, &view, filter);
 
         GpuImage {
             texture,
-            bind_group,
+            bind_groups,
         }
     }
 }
 
-fn sampler(device: &Device, filter: wgpu::FilterMode) -> wgpu::Sampler {
+fn sampler(device: &Device, filter: wgpu::FilterMode, address: wgpu::AddressMode) -> wgpu::Sampler {
     device.create_sampler(&wgpu::SamplerDescriptor {
         label: None,
-        address_mode_u: wgpu::AddressMode::ClampToEdge,
-        address_mode_v: wgpu::AddressMode::ClampToEdge,
-        address_mode_w: wgpu::AddressMode::ClampToEdge,
+        address_mode_u: address,
+        address_mode_v: address,
+        address_mode_w: address,
         mag_filter: filter,
         min_filter: filter,
         mipmap_filter: wgpu::MipmapFilterMode::Nearest,

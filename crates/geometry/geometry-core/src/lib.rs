@@ -7,6 +7,7 @@
 mod border_radius;
 mod color;
 mod grid;
+mod insets;
 mod object_fit;
 mod point;
 mod rect;
@@ -15,6 +16,7 @@ mod transform;
 pub use border_radius::BorderRadius;
 pub use color::Color;
 pub use grid::{LayoutGrid, layout_grid, set_layout_grid};
+pub use insets::Insets;
 pub use object_fit::{ObjectFit, fit_rect};
 pub use point::Point;
 pub use rect::Rect;

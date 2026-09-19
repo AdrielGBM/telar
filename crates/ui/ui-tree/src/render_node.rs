@@ -4,7 +4,9 @@ use std::cell::RefCell;
 use std::sync::Arc;
 
 use geometry_core::Rect;
-use renderer_core::{BorderRadius, DrawCommand, PathData, PathStyle, RectStyle, Span, TextStyle};
+use renderer_core::{
+    BlendMode, BorderRadius, DrawCommand, PathData, PathStyle, RectStyle, Span, TextStyle,
+};
 
 thread_local! {
     static NODE_VEC_POOL: RefCell<Vec<Vec<RenderNode>>> = const { RefCell::new(Vec::new()) };
@@ -72,6 +74,7 @@ pub enum RenderNode {
     Layer {
         opacity: f32,
         backdrop_blur: f32,
+        blend: BlendMode,
         children: NodeVec,
     },
     /// A rasteriser draws straight through it, since the commands inside are already positioned, and pairs one frame with the last by its identity.
@@ -173,6 +176,21 @@ impl RenderNode {
         Self::Layer {
             opacity,
             backdrop_blur,
+            blend: BlendMode::Normal,
+            children: NodeVec::collect(children),
+        }
+    }
+
+    /// A layer that combines with what is beneath it by `blend` as well as by `opacity`.
+    pub fn blended(
+        opacity: f32,
+        blend: BlendMode,
+        children: impl IntoIterator<Item = RenderNode>,
+    ) -> Self {
+        Self::Layer {
+            opacity,
+            backdrop_blur: 0.0,
+            blend,
             children: NodeVec::collect(children),
         }
     }

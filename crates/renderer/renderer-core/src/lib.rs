@@ -5,6 +5,7 @@
 #![warn(rustdoc::broken_intra_doc_links)]
 
 mod align;
+mod blend;
 mod command;
 pub mod culling;
 pub mod dirty;
@@ -17,6 +18,7 @@ pub mod font_config;
 pub mod gpu_sync;
 mod hash;
 mod image;
+mod image_fill;
 mod metrics;
 mod path;
 pub mod perf;
@@ -29,6 +31,7 @@ mod style_pool;
 /// The control-point ratio that approximates a quarter circle with a cubic Bézier.
 pub const BEZIER_CIRCLE_K: f32 = 0.552_284_8;
 
+pub use blend::BlendMode;
 pub use command::DrawCommand;
 pub use culling::{FontMetrics, extend_bounds};
 #[doc(hidden)]
@@ -37,9 +40,10 @@ pub use draw_state::{DrawState, for_each_with_matrix, transform_clip_rect};
 pub use element::{Element, ElementId, Role, Semantics};
 pub use error::RendererError;
 pub use font_config::FontConfig;
-pub use geometry_core::{BorderRadius, Color};
+pub use geometry_core::{BorderRadius, Color, Insets};
 pub use hash::{hash_draw_commands, hash_draw_commands_into, hash_pod_slice};
 pub use image::{ExternalTexture, ImageData, premultiply_rgba};
+pub use image_fill::{ImageFill, ImageSlice, SlicePiece};
 pub use metrics::{
     TextMetrics, line_height, measure_ink_bounds, measure_text, set_default_text_metrics,
     set_text_metrics,

@@ -43,7 +43,12 @@ pub fn hash_draw_commands_into<H: Hasher>(cmds: &[DrawCommand], h: &mut H) {
                 rect.height.to_bits().hash(h);
                 hash_text_style(style).hash(h);
             }
-            DrawCommand::Image { data, rect, raster } => {
+            DrawCommand::Image {
+                data,
+                rect,
+                raster,
+                fill,
+            } => {
                 2u8.hash(h);
                 data.id.hash(h);
                 rect.x.to_bits().hash(h);
@@ -51,6 +56,7 @@ pub fn hash_draw_commands_into<H: Hasher>(cmds: &[DrawCommand], h: &mut H) {
                 rect.width.to_bits().hash(h);
                 rect.height.to_bits().hash(h);
                 (*raster as u8).hash(h);
+                hash_image_fill(fill, h);
             }
             DrawCommand::Line { p1, p2, style } => {
                 3u8.hash(h);
@@ -87,10 +93,12 @@ pub fn hash_draw_commands_into<H: Hasher>(cmds: &[DrawCommand], h: &mut H) {
             DrawCommand::PushLayer {
                 opacity,
                 backdrop_blur,
+                blend,
             } => {
                 9u8.hash(h);
                 opacity.to_bits().hash(h);
                 backdrop_blur.to_bits().hash(h);
+                blend.hash(h);
             }
             DrawCommand::PopLayer => 11u8.hash(h),
             DrawCommand::PushElement { element } => {
@@ -100,6 +108,29 @@ pub fn hash_draw_commands_into<H: Hasher>(cmds: &[DrawCommand], h: &mut H) {
                 element.layout.hash(h);
             }
             DrawCommand::PopElement => 13u8.hash(h),
+        }
+    }
+}
+
+fn hash_image_fill<H: Hasher>(fill: &crate::ImageFill, h: &mut H) {
+    match fill {
+        crate::ImageFill::Stretch => 0u8.hash(h),
+        crate::ImageFill::Tile { scale } => {
+            1u8.hash(h);
+            scale.to_bits().hash(h);
+        }
+        crate::ImageFill::Slice(slice) => {
+            2u8.hash(h);
+            let insets = slice.insets;
+            for value in [
+                insets.top,
+                insets.right,
+                insets.bottom,
+                insets.left,
+                slice.scale,
+            ] {
+                value.to_bits().hash(h);
+            }
         }
     }
 }

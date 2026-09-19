@@ -232,6 +232,7 @@ fn flatten_segment(
             RenderNode::Layer {
                 opacity,
                 backdrop_blur,
+                blend,
                 children,
             } => {
                 stack.push(Step::Node(RenderNode::Primitive(DrawCommand::PopLayer)));
@@ -240,7 +241,8 @@ fn flatten_segment(
                 }
                 emit_command!(DrawCommand::PushLayer {
                     opacity,
-                    backdrop_blur
+                    backdrop_blur,
+                    blend
                 });
             }
             // Opens and closes the box in the command stream, so the structure survives flattening the way a clip's does, and a widget that moved to a different parent counts as changed output.

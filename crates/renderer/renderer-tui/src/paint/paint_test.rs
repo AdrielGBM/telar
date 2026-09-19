@@ -1,7 +1,9 @@
 use std::sync::Arc;
 
 use geometry_core::Rect;
-use renderer_core::{Border, BorderRadius, Color, Paint, RectStyle, ShapeStyle, TextStyle};
+use renderer_core::{
+    BlendMode, Border, BorderRadius, Color, Paint, RectStyle, ShapeStyle, TextStyle,
+};
 
 use super::*;
 
@@ -197,6 +199,7 @@ fn a_layer_fades_what_it_holds() {
             DrawCommand::PushLayer {
                 opacity: 0.5,
                 backdrop_blur: 0.0,
+                blend: BlendMode::Normal,
             },
             rect_cmd(
                 Rect::new(0.0, 0.0, 8.0 * 4.0, 16.0),

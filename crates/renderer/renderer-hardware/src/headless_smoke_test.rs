@@ -8,8 +8,8 @@ use std::sync::Arc;
 use geometry_core::{Point, Rect};
 use platform_headless::HeadlessWindow;
 use renderer_core::{
-    Color, DrawCommand, Gradient, Paint, PathData, PathStyle, RectStyle, RenderBackend, Shadow,
-    ShapeStyle, Stroke, TextShadow, TextStyle,
+    BlendMode, Color, DrawCommand, Gradient, Paint, PathData, PathStyle, RectStyle, RenderBackend,
+    Shadow, ShapeStyle, Stroke, TextShadow, TextStyle,
 };
 use renderer_text::TextShaperConfig;
 use telar_renderer_hardware::HardwareRenderer;
@@ -392,6 +392,7 @@ fn opacity_layer_scene(indicator: Color) -> Vec<DrawCommand> {
         DrawCommand::PushLayer {
             opacity: 0.6,
             backdrop_blur: 0.0,
+            blend: BlendMode::Normal,
         },
         DrawCommand::Rect {
             rect: Rect::new(100.0, 80.0, 600.0, 440.0),
@@ -557,6 +558,7 @@ fn golden_scene() -> Vec<DrawCommand> {
     cmds.push(DrawCommand::PushLayer {
         opacity: 0.85,
         backdrop_blur: 12.0,
+        blend: BlendMode::Normal,
     });
     cmds.push(DrawCommand::Rect {
         rect: Rect::new(320.0, 240.0, 640.0, 320.0),
@@ -652,6 +654,7 @@ fn clip_below_a_layers_bounds_stays_in_the_attachment() {
         DrawCommand::PushLayer {
             opacity: 0.5,
             backdrop_blur: 0.0,
+            blend: BlendMode::Normal,
         },
         DrawCommand::Rect {
             rect: Rect::new(0.0, 0.0, 640.0, 192.0),
@@ -871,6 +874,7 @@ fn a_rounded_clip_cuts_the_corners_of_a_layer_composited_inside_it() {
         DrawCommand::PushLayer {
             opacity: 1.0,
             backdrop_blur: 0.0,
+            blend: BlendMode::Normal,
         },
         filled(
             clip.x,
@@ -920,6 +924,7 @@ fn a_backdrop_blur_spreads_by_its_radius_converted_to_a_sigma() {
         DrawCommand::PushLayer {
             opacity: 1.0,
             backdrop_blur: 24.0,
+            blend: BlendMode::Normal,
         },
         DrawCommand::PopLayer,
     ];

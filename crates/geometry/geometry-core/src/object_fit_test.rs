@@ -69,3 +69,11 @@ fn contain_integer_below_one_falls_back_to_fitting() {
     let (rect, _) = fit_rect((320.0, 180.0), c, ObjectFit::ContainInteger);
     assert_eq!(rect, Rect::new(0.0, 0.0, 160.0, 90.0));
 }
+
+#[test]
+fn tile_places_the_whole_box_for_the_renderer_to_repeat_into() {
+    let c = Rect::new(4.0, 2.0, 120.0, 60.0);
+    let (rect, clip) = fit_rect((10.0, 10.0), c, ObjectFit::Tile { scale: 2.0 });
+    assert_eq!(rect, c);
+    assert!(!clip, "the copies stop at the box, so nothing spills out");
+}

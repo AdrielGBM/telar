@@ -5,8 +5,8 @@ use std::sync::Arc;
 use geometry_core::{Point, Rect};
 
 use crate::{
-    BorderRadius, Element, ImageData, PathData, PathStyle, Raster, RectStyle, Span, Stroke,
-    TextStyle,
+    BlendMode, BorderRadius, Element, ImageData, ImageFill, PathData, PathStyle, Raster, RectStyle,
+    Span, Stroke, TextStyle,
 };
 
 #[derive(Debug, Clone)]
@@ -30,6 +30,8 @@ pub enum DrawCommand {
         rect: Rect,
         /// How this picture's samples meet the pixel grid — the same property a glyph takes.
         raster: Raster,
+        /// Whichever way this fills `rect`, it never paints outside it, so the damage and culling bounds are `rect` regardless.
+        fill: ImageFill,
     },
     Line {
         p1: Point,
@@ -53,6 +55,7 @@ pub enum DrawCommand {
         opacity: f32,
         /// How far what is drawn behind this layer is blurred before it shows through, as a radius in the same units as [`Shadow::blur_radius`](crate::Shadow::blur_radius): a backend turns it into a deviation with [`blur_sigma`](crate::blur_sigma), and the dirty margin around the layer is measured from that same conversion. Spelled out because nothing said so, and a number read as a radius in one place and as the deviation itself in another is two different blurs.
         backdrop_blur: f32,
+        blend: BlendMode,
     },
     PopLayer,
     /// A marker, like [`PushClip`](Self::PushClip): everything until the matching [`PopElement`](Self::PopElement) belongs to this box. A rasteriser draws nothing for either — the commands between them are already positioned — and pairs one frame's commands with the last's by the box that drew them, so a box that appears shifts nothing drawn after it. What a document backend gets is the structure the flattening would otherwise have thrown away, and the identity that lets it move an element instead of rebuilding it.
@@ -95,13 +98,15 @@ impl PartialEq for DrawCommand {
                     data: d1,
                     rect: rect1,
                     raster: raster1,
+                    fill: fill1,
                 },
                 DrawCommand::Image {
                     data: d2,
                     rect: rect2,
                     raster: raster2,
+                    fill: fill2,
                 },
-            ) => d1.id == d2.id && rect1 == rect2 && raster1 == raster2,
+            ) => d1.id == d2.id && rect1 == rect2 && raster1 == raster2 && fill1 == fill2,
             (
                 DrawCommand::Line {
                     p1: p1a,
@@ -144,12 +149,14 @@ impl PartialEq for DrawCommand {
                 DrawCommand::PushLayer {
                     opacity: o1,
                     backdrop_blur: b1,
+                    blend: m1,
                 },
                 DrawCommand::PushLayer {
                     opacity: o2,
                     backdrop_blur: b2,
+                    blend: m2,
                 },
-            ) => o1 == o2 && b1 == b2,
+            ) => o1 == o2 && b1 == b2 && m1 == m2,
             (DrawCommand::PopLayer, DrawCommand::PopLayer) => true,
             (
                 DrawCommand::PushElement { element: e1 },

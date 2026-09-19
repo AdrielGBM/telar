@@ -74,6 +74,7 @@ fn telar_composes_a_texture_the_application_filled() {
                 data,
                 rect: Rect::new(0.0, 0.0, w as f32, h as f32),
                 raster: Raster::Pixel,
+                fill: renderer_core::ImageFill::Stretch,
             }],
             Some(Color::rgb(0.0, 0.0, 0.0)),
         )
