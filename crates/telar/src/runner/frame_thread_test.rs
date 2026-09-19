@@ -18,6 +18,11 @@ struct StubBackend {
     bound_before_first_frame: Arc<AtomicBool>,
     idle_sweep_after: Option<Duration>,
     sweeps: Arc<AtomicU32>,
+    idle_release_after: Option<Duration>,
+    // How many sweeps had run when each release did.
+    releases: Arc<std::sync::Mutex<Vec<u32>>>,
+    // What each release asks for in turn, as a buffer still held would.
+    retries: Vec<Duration>,
 }
 
 impl RenderBackend for StubBackend {
@@ -35,6 +40,16 @@ impl RenderBackend for StubBackend {
 
     fn sweep_idle_caches(&mut self) {
         self.sweeps.fetch_add(1, Ordering::SeqCst);
+    }
+
+    fn idle_release_after(&self) -> Option<Duration> {
+        self.idle_release_after
+    }
+
+    fn release_idle_buffers(&mut self) -> Option<Duration> {
+        let sweeps = self.sweeps.load(Ordering::SeqCst);
+        self.releases.lock().unwrap().push(sweeps);
+        self.retries.pop()
     }
 
     fn begin_frame(
@@ -119,6 +134,9 @@ fn stub_watching_bind(
             bound_before_first_frame: Arc::clone(&bound_before_first_frame),
             idle_sweep_after: None,
             sweeps: Arc::new(AtomicU32::new(0)),
+            idle_release_after: None,
+            releases: Arc::default(),
+            retries: Vec::new(),
         },
         rendered,
         seen,
@@ -263,4 +281,67 @@ fn joining_hands_the_renderer_back() {
 
     let recovered = join.join().expect("render thread panicked");
     assert_eq!(recovered.size, (320, 240), "state survived the join");
+}
+
+#[test]
+fn an_idle_render_thread_releases_its_buffers_before_it_sweeps_and_each_once() {
+    let (mut backend, _rendered, seen, _) = stub_watching_bind(false);
+    backend.idle_release_after = Some(Duration::from_millis(20));
+    backend.idle_sweep_after = Some(Duration::from_millis(120));
+    let sweeps = Arc::clone(&backend.sweeps);
+    let releases = Arc::clone(&backend.releases);
+    let (tx, _ret_rx, join) = spawn_render_thread(backend);
+
+    tx.send(frame(100, 50, 1.0, Duration::ZERO)).unwrap();
+    seen.recv_timeout(Duration::from_secs(5)).unwrap();
+    std::thread::sleep(Duration::from_millis(400));
+    assert_eq!(
+        *releases.lock().unwrap(),
+        [0],
+        "one release per idle stretch, ahead of the sweep"
+    );
+    assert_eq!(sweeps.load(Ordering::SeqCst), 1);
+
+    tx.send(frame(100, 50, 1.0, Duration::ZERO)).unwrap();
+    seen.recv_timeout(Duration::from_secs(5)).unwrap();
+    std::thread::sleep(Duration::from_millis(60));
+    assert_eq!(
+        *releases.lock().unwrap(),
+        [0, 1],
+        "a frame starts a new idle stretch"
+    );
+
+    drop(tx);
+    join.join().unwrap();
+}
+
+#[test]
+fn an_idle_release_that_asks_to_be_retried_runs_again_until_it_is_done() {
+    let (mut backend, _rendered, seen, _) = stub_watching_bind(false);
+    backend.idle_release_after = Some(Duration::from_millis(20));
+    backend.idle_sweep_after = Some(Duration::from_millis(400));
+    backend.retries = vec![Duration::from_millis(30), Duration::from_millis(10)];
+    let sweeps = Arc::clone(&backend.sweeps);
+    let releases = Arc::clone(&backend.releases);
+    let (tx, _ret_rx, join) = spawn_render_thread(backend);
+
+    tx.send(frame(100, 50, 1.0, Duration::ZERO)).unwrap();
+    seen.recv_timeout(Duration::from_secs(5)).unwrap();
+    std::thread::sleep(Duration::from_millis(250));
+    assert_eq!(
+        *releases.lock().unwrap(),
+        [0, 0, 0],
+        "retried twice, and not again once a release asks for nothing"
+    );
+    assert_eq!(
+        sweeps.load(Ordering::SeqCst),
+        0,
+        "the sweep keeps its own time"
+    );
+    std::thread::sleep(Duration::from_millis(400));
+    assert_eq!(sweeps.load(Ordering::SeqCst), 1);
+    assert_eq!(releases.lock().unwrap().len(), 3);
+
+    drop(tx);
+    join.join().unwrap();
 }

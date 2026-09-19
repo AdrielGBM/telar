@@ -32,7 +32,6 @@ pub(super) struct ClipMask {
 
 impl ClipMask {
     pub(super) fn new(width: u32, height: u32) -> Option<Self> {
-        let _span = perf::span(Phase::Mask);
         Some(Self {
             mask: Mask::new(width, height)?,
             outer: None,

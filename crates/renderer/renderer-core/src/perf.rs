@@ -13,23 +13,25 @@ pub enum Phase {
     Build = 0,
     /// UI thread: the per-frame `Vec<DrawCommand>` clone handed to the render thread.
     Clone = 1,
-    /// Hardware: `analyze_frame` (dirty/scroll detection) + `interpret_commands`. Software: clearing and rasterizing the commands into the pixmap.
+    /// Hardware: `analyze_frame` (dirty/scroll detection) + `interpret_commands`. Software: the scroll blit, then clearing and rasterizing the commands into the frame.
     Interpret = 2,
     /// Hardware: segment build + pass execution + `queue.submit` (encompasses `present`).
     Gpu = 3,
     /// A renderer's whole `render_frame`, on whichever thread drives it.
     Frame = 4,
-    /// Hardware: `output.present()` alone — a subset of `gpu` that isolates swapchain/vsync block (FIFO present on mobile) from the CPU-side command-buffer build + submit. Software: acquiring the surface buffer, filling it and committing it, a superset of `convert`.
+    /// Hardware: `output.present()` alone — a subset of `gpu` that isolates swapchain/vsync block (FIFO present on mobile) from the CPU-side command-buffer build + submit. Software: acquiring the surface buffer, filling it and committing it, a superset of `convert`; where the frame is drawn straight into the buffer, committing it alone.
     Present = 5,
-    /// Software: dirty planning and the scroll blit, ahead of `interpret`.
+    /// Software: dirty planning, ahead of `interpret`.
     Plan = 6,
-    /// Software: converting the pixmap into the surface buffer, a subset of `present`.
+    /// Software: converting the pixmap into the surface buffer, a subset of `present`. Absent where the frame is drawn straight into the buffer.
     Convert = 7,
-    /// Software: the clip and damage masks every draw is put through — allocating one, and repainting it whenever the clip stack or the damage set moves. A subset of `interpret`, except on a resize, which allocates outside every other span.
+    /// Software: painting the clip and damage masks every draw is put through, whenever the clip stack or the damage set moves. A subset of `interpret`.
     Mask = 8,
+    /// Software, Wayland alpha: waiting for a buffer the compositor has released and copying into it what changed since it was last filled. A subset of `present` where the frame is converted, and ahead of `interpret` where it is drawn straight into the buffer.
+    Acquire = 9,
 }
 
-const N: usize = 9;
+const N: usize = 10;
 const NAMES: [&str; N] = [
     "build",
     "clone",
@@ -40,6 +42,7 @@ const NAMES: [&str; N] = [
     "plan",
     "convert",
     "mask",
+    "acquire",
 ];
 // Dump cadence in ticked frames; one line per ~second at 60 fps keeps logcat readable.
 const DUMP_EVERY: u64 = 60;

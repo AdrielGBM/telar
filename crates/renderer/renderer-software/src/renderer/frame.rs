@@ -10,7 +10,7 @@ use renderer_core::{
     BorderRadius, Color, DrawCommand, RenderBackend, RendererError, expand_fill_layers,
 };
 use smallvec::SmallVec;
-use tiny_skia::{Mask, Pixmap};
+use tiny_skia::{Mask, Pixmap, PixmapMut, PixmapRef};
 
 use super::SoftwareRenderer;
 use super::clip::{ClipMask, ClipShape};
@@ -22,6 +22,9 @@ use super::present::FrameOp;
 
 pub(super) type Regions = SmallVec<[Rect; 8]>;
 
+// Past every cadence a live UI repaints at — a seconds clock at 1 Hz, a caret blinking at about 2 Hz — with room for jitter, so a window that is still changing never gives up its second buffer and masks only to allocate them again a frame later. Past it, what they cost to make again is one copy of the frame on screen, at most once per idle stretch.
+const IDLE_RELEASE: std::time::Duration = std::time::Duration::from_secs(2);
+
 enum FrameAction {
     Present(FrameOp),
     Render(FramePlan),
@@ -32,6 +35,25 @@ struct FramePlan {
     frame_op: FrameOp,
     damage: Option<Regions>,
     input_hash: u64,
+    blit: Option<ScrollBlit>,
+}
+
+impl FramePlan {
+    fn full(input_hash: u64) -> Self {
+        Self {
+            frame_op: FrameOp::Full,
+            damage: None,
+            input_hash,
+            blit: None,
+        }
+    }
+}
+
+// Content inside `clip` moved by the delta, applied to the previous frame before this one is drawn over it.
+struct ScrollBlit {
+    clip: Rect,
+    delta_x: f32,
+    delta_y: f32,
 }
 
 pub(super) struct Layer {
@@ -44,7 +66,7 @@ pub(super) struct Layer {
 }
 
 struct Canvas<'a> {
-    pixmap: &'a mut Pixmap,
+    pixmap: PixmapMut<'a>,
     mask: Option<&'a Mask>,
     origin: (i32, i32),
     transform: tiny_skia::Transform,
@@ -99,11 +121,7 @@ where
         }
         self.prev_clear_color = clear_color;
 
-        let full = FrameAction::Render(FramePlan {
-            frame_op: FrameOp::Full,
-            damage: None,
-            input_hash,
-        });
+        let full = FrameAction::Render(FramePlan::full(input_hash));
         // Every pixel is cleared to it, so this is the one change no region can bound.
         if clear_color_changed {
             return full;
@@ -111,16 +129,8 @@ where
         let (width, height) = (self.width, self.height);
         // A shadow that finished blurring changes the frame where its command paints, and the commands around it did not change, so its footprint is the only thing pointing at those pixels.
         let arrived = || shadows.iter().copied();
-        let (damage, changed) = match (maybe_scroll, damage) {
+        let (damage, changed, blit) = match (maybe_scroll, damage) {
             (Some(scroll), _) => {
-                if let Some(pixmap) = &mut self.pixmap {
-                    apply_scroll_blit(
-                        pixmap,
-                        scroll.scroll_clip,
-                        scroll.delta_x as f32,
-                        scroll.delta_y as f32,
-                    );
-                }
                 let extra = scroll.extra_dirty.iter().copied();
                 (
                     on_pixels(
@@ -135,11 +145,16 @@ where
                         width,
                         height,
                     ),
+                    Some(ScrollBlit {
+                        clip: scroll.scroll_clip,
+                        delta_x: scroll.delta_x as f32,
+                        delta_y: scroll.delta_y as f32,
+                    }),
                 )
             }
             (None, Some(rects)) => {
                 let damage = on_pixels(rects.into_iter().chain(arrived()), width, height);
-                (damage.clone(), damage)
+                (damage.clone(), damage, None)
             }
             // A change the diff cannot bound, whatever else arrived inside it.
             (None, None) => return full,
@@ -151,6 +166,7 @@ where
             frame_op: FrameOp::Regions(changed),
             damage: Some(damage),
             input_hash,
+            blit,
         })
     }
 
@@ -162,16 +178,23 @@ where
         let plan_start = perf::now_if_enabled();
         let action = self.plan_frame(commands, clear_color);
         perf::record_since(Phase::Plan, plan_start);
+        let Some(action) = self.bind(action, commands) else {
+            return FrameOp::NoChange;
+        };
         let FramePlan {
             frame_op,
             damage,
             input_hash,
+            blit,
         } = match action {
             FrameAction::Present(op) => return op,
             FrameAction::Render(plan) => plan,
         };
 
         let interpret_start = perf::now_if_enabled();
+        if let (Some(blit), Some(mut target)) = (blit, self.target.pixmap_mut()) {
+            apply_scroll_blit(&mut target, blit.clip, blit.delta_x, blit.delta_y);
+        }
         self.clear(clear_color, damage.as_deref());
         self.draw_state.reset();
         self.clip_shapes.clear();
@@ -207,8 +230,46 @@ where
         frame_op
     }
 
+    // On the in-place path the frame is drawn into a present buffer, which is picked and caught up with the frame on screen first; one that cannot be is drawn whole. `None` when there is no buffer to draw into, and the frame is lost.
+    fn bind(&mut self, action: FrameAction, commands: &[DrawCommand]) -> Option<FrameAction> {
+        #[cfg(target_os = "linux")]
+        if let Some(alpha) = self
+            .target
+            .alpha
+            .as_mut()
+            .filter(|alpha| alpha.draws_in_place())
+        {
+            // A frame that changed nothing is already on screen, so it takes no buffer.
+            let whole = match &action {
+                FrameAction::Present(_) => return Some(action),
+                FrameAction::Render(plan) => matches!(plan.frame_op, FrameOp::Full),
+            };
+            match alpha.begin(self.width, self.height, &self.present_log, whole) {
+                None => {
+                    self.forget_previous_frame();
+                    return None;
+                }
+                Some(false) if !whole => {
+                    let input_hash = renderer_core::hash_draw_commands(commands);
+                    return Some(FrameAction::Render(FramePlan::full(input_hash)));
+                }
+                Some(_) => {}
+            }
+        }
+        #[cfg(not(target_os = "linux"))]
+        let _ = commands;
+        Some(action)
+    }
+
+    // So the next frame is drawn whole, since nothing holds this one.
+    pub(super) fn forget_previous_frame(&mut self) {
+        self.prev_commands.clear();
+        self.prev_commands_hash = 0;
+        self.prev_clear_color = None;
+    }
+
     fn clear(&mut self, clear_color: Option<Color>, damage: Option<&[Rect]>) {
-        let Some(pixmap) = &mut self.pixmap else {
+        let Some(mut pixmap) = self.target.pixmap_mut() else {
             return;
         };
         let color = clear_color
@@ -219,7 +280,7 @@ where
             Some(regions) => {
                 let pixel = color.premultiply().to_color_u8();
                 for region in regions {
-                    fill_region(pixmap, *region, pixel);
+                    fill_region(&mut pixmap, *region, pixel);
                 }
             }
         }
@@ -253,7 +314,7 @@ where
                     }
                     _ => None,
                 };
-                (pixmap, mask, *origin)
+                (pixmap.as_mut(), mask, *origin)
             }
             None => {
                 let surface = ClipShape {
@@ -264,11 +325,14 @@ where
                     Some(_) => &mut self.clip_mask,
                     None => &mut self.damage_mask,
                 };
+                if target.is_none() {
+                    *target = ClipMask::new(self.width, self.height);
+                }
                 let ancestors = &self.clip_shapes[..open_clips.saturating_sub(1)];
                 let mask = target
                     .as_mut()
                     .map(|mask| mask.show(shape.unwrap_or(surface), ancestors, (0, 0), damage));
-                (self.pixmap.as_mut()?, mask, (0, 0))
+                (self.target.pixmap_mut()?, mask, (0, 0))
             }
         };
         let (ox, oy) = (origin.0 as f32, origin.1 as f32);
@@ -295,14 +359,18 @@ where
             .or_else(|| Pixmap::new(width, height))?;
         pixmap.fill(tiny_skia::Color::TRANSPARENT);
         if backdrop_blur > 0.0 {
-            let (parent, (parent_x, parent_y)) = match self.layer_stack.last() {
-                Some(parent) => (&parent.pixmap, parent.origin),
-                None => (self.pixmap.as_ref()?, (0, 0)),
+            let top;
+            let (parent, (parent_x, parent_y)): (PixmapRef<'_>, _) = match self.layer_stack.last() {
+                Some(parent) => (parent.pixmap.as_ref(), parent.origin),
+                None => {
+                    top = self.target.pixmap_mut()?;
+                    (top.as_ref(), (0, 0))
+                }
             };
             pixmap.draw_pixmap(
                 parent_x - x,
                 parent_y - y,
-                parent.as_ref(),
+                parent,
                 &tiny_skia::PixmapPaint {
                     opacity: 1.0,
                     blend_mode: tiny_skia::BlendMode::Source,
@@ -338,6 +406,8 @@ where
         let mut skipped_layers: usize = 0;
 
         for (index, cmd) in commands.iter().enumerate() {
+            #[cfg(test)]
+            self.fail_after_commands();
             if skipped_layers > 0 {
                 match cmd {
                     DrawCommand::PushLayer { .. } => skipped_layers += 1,
@@ -372,12 +442,12 @@ where
 
             match cmd {
                 DrawCommand::Rect { rect, style } => {
-                    let Some(canvas) = self.canvas(damage) else {
+                    let Some(mut canvas) = self.canvas(damage) else {
                         break;
                     };
                     crate::caches::with_caches(|c| {
                         crate::primitives::rect::draw_rect(
-                            canvas.pixmap,
+                            &mut canvas.pixmap,
                             *rect,
                             painted,
                             style,
@@ -396,12 +466,12 @@ where
                     rect,
                     style,
                 } => {
-                    let Some(canvas) = self.canvas(damage) else {
+                    let Some(mut canvas) = self.canvas(damage) else {
                         break;
                     };
                     crate::caches::with_caches(|c| {
                         crate::primitives::text::draw_text(
-                            canvas.pixmap,
+                            &mut canvas.pixmap,
                             &mut c.text_shaper,
                             text,
                             spans.as_deref(),
@@ -419,11 +489,11 @@ where
                     });
                 }
                 DrawCommand::Image { data, rect, raster } => {
-                    let Some(canvas) = self.canvas(damage) else {
+                    let Some(mut canvas) = self.canvas(damage) else {
                         break;
                     };
                     crate::primitives::image::draw_image(
-                        canvas.pixmap,
+                        &mut canvas.pixmap,
                         data,
                         *rect,
                         *raster,
@@ -432,11 +502,11 @@ where
                     );
                 }
                 DrawCommand::Line { p1, p2, style } => {
-                    let Some(canvas) = self.canvas(damage) else {
+                    let Some(mut canvas) = self.canvas(damage) else {
                         break;
                     };
                     crate::primitives::line::draw_line(
-                        canvas.pixmap,
+                        &mut canvas.pixmap,
                         *p1,
                         *p2,
                         *style,
@@ -446,12 +516,12 @@ where
                     );
                 }
                 DrawCommand::Path { data, style } => {
-                    let Some(canvas) = self.canvas(damage) else {
+                    let Some(mut canvas) = self.canvas(damage) else {
                         break;
                     };
                     crate::caches::with_caches(|c| {
                         crate::primitives::path::draw_path(
-                            canvas.pixmap,
+                            &mut canvas.pixmap,
                             data,
                             painted,
                             style,
@@ -505,7 +575,7 @@ where
                     let Some(layer) = self.layer_stack.pop() else {
                         continue;
                     };
-                    if let Some(canvas) = self.canvas(damage) {
+                    if let Some(mut canvas) = self.canvas(damage) {
                         canvas.pixmap.draw_pixmap(
                             layer.origin.0 - canvas.origin.0,
                             layer.origin.1 - canvas.origin.1,
@@ -548,6 +618,14 @@ where
         crate::caches::sweep_idle();
     }
 
+    fn idle_release_after(&self) -> Option<std::time::Duration> {
+        Some(IDLE_RELEASE)
+    }
+
+    fn release_idle_buffers(&mut self) -> Option<std::time::Duration> {
+        SoftwareRenderer::release_idle_buffers(self)
+    }
+
     fn begin_frame(
         &mut self,
         width: u32,
@@ -561,9 +639,13 @@ where
         if width != self.width || height != self.height {
             self.width = width;
             self.height = height;
-            self.pixmap = Pixmap::new(width, height);
-            self.clip_mask = ClipMask::new(width, height);
-            self.damage_mask = ClipMask::new(width, height);
+            self.target.pixmap = if self.target.draws_in_place() {
+                None
+            } else {
+                Pixmap::new(width, height)
+            };
+            self.clip_mask = None;
+            self.damage_mask = None;
             self.pixmap_pool.clear();
             self.mask_pool.clear();
             self.prev_commands.clear();
@@ -573,7 +655,7 @@ where
             self.layer_bounds_cache = None;
             // The logged regions were measured at the old size, so the next present refreshes and declares everything.
             self.present_log.reset();
-            // Headless has no surface to resize; the pixmap above is the only target.
+            // Headless has no surface to resize, and the Wayland alpha presenter sizes its buffers as it fills them.
             if let (Some(w), Some(h), Some(surface)) = (
                 NonZeroU32::new(width),
                 NonZeroU32::new(height),
@@ -588,9 +670,8 @@ where
         Ok(())
     }
 
-    // Only the headless renderer keeps a CPU-side pixmap to hand back; the windowed path presents to its softbuffer surface and holds none.
     fn read_rgba(&self) -> Option<Vec<u8>> {
-        self.pixmap.as_ref().map(|p| p.data().to_vec())
+        self.target.rgba().map(<[u8]>::to_vec)
     }
 
     fn render_frame(
@@ -599,7 +680,23 @@ where
         clear_color: Option<Color>,
     ) -> Result<(), RendererError> {
         let _frame_span = perf::span(Phase::Frame);
-        let frame_op = self.render(commands, clear_color);
-        self.present_pixmap(frame_op)
+        #[cfg(target_os = "linux")]
+        {
+            self.idle_retries = 0;
+        }
+        let frame = FrameInFlight(self);
+        let frame_op = frame.0.render(commands, clear_color);
+        frame.0.present_pixmap(frame_op)
+    }
+}
+
+// The render thread catches a frame that unwinds and carries on, so what the frame left half drawn is abandoned on the way out.
+struct FrameInFlight<'a, D: HasDisplayHandle, W: HasWindowHandle>(&'a mut SoftwareRenderer<D, W>);
+
+impl<D: HasDisplayHandle, W: HasWindowHandle> Drop for FrameInFlight<'_, D, W> {
+    fn drop(&mut self) {
+        if std::thread::panicking() {
+            self.0.abandon_frame();
+        }
     }
 }

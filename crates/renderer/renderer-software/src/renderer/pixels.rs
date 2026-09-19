@@ -5,7 +5,7 @@ use geometry_core::Rect;
 use renderer_core::culling::{PaintBounds, command_visual_rect};
 use renderer_core::{DrawCommand, DrawState, FontMetrics, transform_clip_rect};
 use rustc_hash::FxHasher;
-use tiny_skia::Pixmap;
+use tiny_skia::PixmapMut;
 
 #[cfg(target_endian = "big")]
 compile_error!(
@@ -59,7 +59,7 @@ pub(super) fn multiply_mask_region(data: &mut [u8], by: &[u8], stride: usize, re
 }
 
 pub(super) fn fill_region(
-    pixmap: &mut Pixmap,
+    pixmap: &mut PixmapMut<'_>,
     region: Rect,
     color: tiny_skia::PremultipliedColorU8,
 ) {
@@ -131,7 +131,12 @@ pub(super) fn compute_layer_bounds(
 }
 
 // The two are mutually exclusive. The newly exposed strip is left stale for the caller to re-render.
-pub(super) fn apply_scroll_blit(pixmap: &mut Pixmap, clip: Rect, delta_tx: f32, delta_ty: f32) {
+pub(super) fn apply_scroll_blit(
+    pixmap: &mut PixmapMut<'_>,
+    clip: Rect,
+    delta_tx: f32,
+    delta_ty: f32,
+) {
     let width = pixmap.width() as usize;
     let height = pixmap.height() as usize;
     let x0 = (clip.x.floor() as usize).min(width);

@@ -94,7 +94,7 @@ fn build_border_path(
 
 #[allow(clippy::too_many_arguments)]
 fn draw_rect_shadow(
-    pixmap: &mut tiny_skia::Pixmap,
+    pixmap: &mut tiny_skia::PixmapMut<'_>,
     rect: Rect,
     painted: Rect,
     shadow: Shadow,
@@ -199,7 +199,7 @@ fn draw_rect_shadow(
 
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn draw_rect(
-    pixmap: &mut tiny_skia::Pixmap,
+    pixmap: &mut tiny_skia::PixmapMut<'_>,
     rect: Rect,
     painted: Rect,
     style: &RectStyle,

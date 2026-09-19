@@ -161,6 +161,12 @@ impl PresentLog {
         }
     }
 
+    // Everything recorded since the last present, which the next one declares.
+    #[cfg(target_os = "linux")]
+    pub(super) fn pending(&self) -> &FrameOp {
+        &self.pending
+    }
+
     pub(super) fn presented(&mut self) {
         let op = std::mem::replace(&mut self.pending, FrameOp::NoChange);
         self.presented.push_back(op);

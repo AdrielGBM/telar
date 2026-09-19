@@ -50,25 +50,10 @@ where
             // The hint session must carry this thread's own TID, so `reportActualWorkDuration` drives the scheduler for the thread that submits the work. It is not `Send`, so it is created, used and dropped here.
             #[cfg(all(feature = "android-bare", target_os = "android"))]
             let hint_session = platform_android::AdpfSession::new(16_666_667, None);
-            let idle_sweep_after = renderer.idle_sweep_after();
+            let idle_steps = idle_steps(&renderer);
             loop {
-                // One sweep per idle stretch, then park on a plain `recv`: a repeating timer would wake this thread forever on a screen nobody is looking at.
-                let msg = match idle_sweep_after {
-                    Some(after) => match rx.recv_timeout(after) {
-                        Ok(msg) => msg,
-                        Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {
-                            renderer.sweep_idle_caches();
-                            match rx.recv() {
-                                Ok(msg) => msg,
-                                Err(_) => break,
-                            }
-                        }
-                        Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => break,
-                    },
-                    None => match rx.recv() {
-                        Ok(msg) => msg,
-                        Err(_) => break,
-                    },
+                let Some(msg) = next_frame(&rx, &mut renderer, &idle_steps) else {
+                    break;
                 };
                 // Never skip a frame that resizes: the surface is reconfigured inside `begin_frame`, so dropping one leaves it at the old size and the window shows clipped content until the next accepted frame.
                 let size_changed = msg.width != current_width || msg.height != current_height;
@@ -111,6 +96,51 @@ where
         })
         .expect("failed to spawn render thread");
     (tx, ret_rx, join)
+}
+
+#[derive(Clone, Copy)]
+enum IdleStep {
+    ReleaseBuffers,
+    SweepCaches,
+}
+
+fn idle_steps<R: RenderBackend>(renderer: &R) -> Vec<(std::time::Duration, IdleStep)> {
+    [
+        (renderer.idle_release_after(), IdleStep::ReleaseBuffers),
+        (renderer.idle_sweep_after(), IdleStep::SweepCaches),
+    ]
+    .into_iter()
+    .filter_map(|(after, step)| Some((after?, step)))
+    .collect()
+}
+
+// Each step runs once per idle stretch, or again when a release asks to be retried, then the thread parks on a plain `recv`: a repeating timer would wake it forever on a screen nobody is looking at.
+fn next_frame<R: RenderBackend>(
+    rx: &std::sync::mpsc::Receiver<FrameMsg>,
+    renderer: &mut R,
+    steps: &[(std::time::Duration, IdleStep)],
+) -> Option<FrameMsg> {
+    let idle_since = web_time::Instant::now();
+    let mut due: Vec<_> = steps
+        .iter()
+        .map(|&(after, step)| (idle_since + after, step))
+        .collect();
+    while let Some(next) = (0..due.len()).min_by_key(|&i| due[i].0) {
+        let (at, step) = due.swap_remove(next);
+        match rx.recv_timeout(at.saturating_duration_since(web_time::Instant::now())) {
+            Ok(msg) => return Some(msg),
+            Err(std::sync::mpsc::RecvTimeoutError::Timeout) => match step {
+                IdleStep::ReleaseBuffers => {
+                    if let Some(retry) = renderer.release_idle_buffers() {
+                        due.push((web_time::Instant::now() + retry, step));
+                    }
+                }
+                IdleStep::SweepCaches => renderer.sweep_idle_caches(),
+            },
+            Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => return None,
+        }
+    }
+    rx.recv().ok()
 }
 
 #[cfg(test)]

@@ -7,7 +7,7 @@ use tiny_skia::{BlendMode, IntSize, Mask, Pixmap, PixmapPaint, Transform};
 
 /// Renders COLR v1 color glyphs that swash could not rasterize, blitting them onto `pixmap`.
 pub(crate) fn draw_colr_glyphs(
-    pixmap: &mut Pixmap,
+    pixmap: &mut tiny_skia::PixmapMut<'_>,
     glyphs: &[renderer_text::ColrGlyph],
     shaper: &mut renderer_text::TextShaper,
     outer_transform: Transform,

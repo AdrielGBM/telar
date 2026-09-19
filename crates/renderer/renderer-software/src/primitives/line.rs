@@ -6,7 +6,7 @@ use renderer_core::Stroke;
 use crate::primitives::{fill_to_paint, to_skia_line_cap};
 
 pub(crate) fn draw_line(
-    pixmap: &mut tiny_skia::Pixmap,
+    pixmap: &mut tiny_skia::PixmapMut<'_>,
     p1: Point,
     p2: Point,
     style: Stroke,

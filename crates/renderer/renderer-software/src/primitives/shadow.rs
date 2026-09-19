@@ -77,7 +77,7 @@ pub(crate) fn spawn_shadow_async(
 /// `painted` is what the whole command paints in window space, shadow included, and is kept with the receiver so the frame the blur lands on can repaint that much and no more.
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn blit_cached_shadow_async<K, D, A>(
-    pixmap: &mut tiny_skia::Pixmap,
+    pixmap: &mut tiny_skia::PixmapMut<'_>,
     cache: &mut renderer_cache::Cache<K, tiny_skia::Pixmap>,
     pending: &mut std::collections::HashMap<K, PendingShadow>,
     recent: &mut Option<(K, u32, u32)>,
@@ -178,7 +178,7 @@ pub(crate) fn blit_cached_shadow_async<K, D, A>(
 // The synchronous half of `blit_cached_shadow_async`, which forwards its own arguments here unchanged, so the two lists move together.
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn blit_cached_shadow<K, D>(
-    pixmap: &mut tiny_skia::Pixmap,
+    pixmap: &mut tiny_skia::PixmapMut<'_>,
     cache: &mut renderer_cache::Cache<K, tiny_skia::Pixmap>,
     key: K,
     blit_x: i32,

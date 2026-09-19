@@ -105,7 +105,7 @@ pub(crate) type TextShadowCache = Cache<TextShadowCacheKey, tiny_skia::Pixmap>;
 
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn draw_text(
-    pixmap: &mut tiny_skia::Pixmap,
+    pixmap: &mut tiny_skia::PixmapMut<'_>,
     shaper: &mut renderer_text::TextShaper,
     text: &str,
     spans: Option<&[renderer_core::Span]>,
@@ -251,7 +251,7 @@ pub(crate) fn draw_text(
 /// Straight from the shaper's bytes, with no pixmap of its own. This used to keep a second cache here — the same premultiplied RGBA the shaper already held, copied into a `Pixmap` and stored again under the same key — which doubled what every cached label cost and, having neither a byte budget nor an admission rule, quietly kept the strings the shaper's admission had just decided were not worth keeping. `PixmapRef` borrows those bytes instead, so the copy and the cache both go.
 #[allow(clippy::too_many_arguments)]
 fn blit_body(
-    pixmap: &mut tiny_skia::Pixmap,
+    pixmap: &mut tiny_skia::PixmapMut<'_>,
     shaper: &mut renderer_text::TextShaper,
     text: &str,
     spans: Option<&[renderer_core::Span]>,
@@ -280,7 +280,7 @@ fn blit_body(
 
 /// Renders COLR v1 color glyphs that swash cannot rasterize. swash returns `None` for these glyphs, so `Buffer::draw` omits them; we re-rasterize via skrifa + tiny-skia and blit them on top.
 fn draw_colr_fallback(
-    pixmap: &mut tiny_skia::Pixmap,
+    pixmap: &mut tiny_skia::PixmapMut<'_>,
     shaper: &mut renderer_text::TextShaper,
     text: &str,
     rect: Rect,

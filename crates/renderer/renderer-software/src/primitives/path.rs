@@ -90,7 +90,7 @@ fn build_skia_path(data: &PathData) -> Option<tiny_skia::Path> {
 
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn draw_path(
-    pixmap: &mut tiny_skia::Pixmap,
+    pixmap: &mut tiny_skia::PixmapMut<'_>,
     data: &Arc<PathData>,
     painted: Rect,
     style: &PathStyle,

@@ -64,6 +64,7 @@ fn draw(size: (u32, u32), frames: &[&[DrawCommand]], poison: bool) -> Drawn {
         if poison && generation > 0 {
             let [r, g, b, a] = UNTOUCHED;
             renderer
+                .target
                 .pixmap
                 .as_mut()
                 .expect("a frame was drawn")
@@ -628,4 +629,315 @@ fn a_rounded_clip_cuts_the_corners_of_what_a_clip_inside_it_draws() {
         "the corner of the clip above cuts the square clip inside it"
     );
     assert_ne!(at(150, 150), BACKGROUND, "well inside both clips it paints");
+}
+
+// Draws `old`, then `new` with a draw that panics before its first command, as the render thread would catch it, then `new` again, which has to match a fresh frame.
+fn assert_recovers_from_a_frame_that_panics(
+    what: &str,
+    renderer: &mut SoftwareRenderer<HeadlessWindow, HeadlessWindow>,
+    scenario: &Scenario,
+) {
+    let [r, g, b, _] = BACKGROUND;
+    let clear = Some(Color::from_rgb_u8(r, g, b));
+    let (width, height) = scenario.size;
+    renderer.begin_frame(width, height, 1.0, 0).unwrap();
+    renderer.render_frame(&scenario.old, clear).unwrap();
+
+    renderer.fail_after = Some(0);
+    let failed = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        renderer.begin_frame(width, height, 1.0, 1).unwrap();
+        renderer.render_frame(&scenario.new, clear)
+    }));
+    assert!(failed.is_err(), "{what}: the frame panicked");
+
+    renderer.begin_frame(width, height, 1.0, 2).unwrap();
+    renderer.render_frame(&scenario.new, clear).unwrap();
+    let fresh = draw(scenario.size, &[&scenario.new], false).pixels;
+    let drawn = renderer.read_rgba().expect("a frame was drawn");
+    let first_difference = drawn
+        .as_chunks::<4>()
+        .0
+        .iter()
+        .zip(fresh.as_chunks::<4>().0)
+        .position(|(a, b)| a != b)
+        .map(|i| (i as u32 % width, i as u32 / width));
+    assert!(
+        first_difference.is_none(),
+        "{what}: pixel {first_difference:?} is left from the frame that panicked"
+    );
+}
+
+#[test]
+fn a_frame_that_panics_part_way_leaves_nothing_behind_in_the_pixmap() {
+    for scenario in dirty_scenarios::all() {
+        let mut renderer = SoftwareRenderer::<HeadlessWindow, HeadlessWindow>::new_headless(
+            scenario.size.0,
+            scenario.size.1,
+            SoftwareRendererConfig::default(),
+        );
+        assert_recovers_from_a_frame_that_panics(scenario.name, &mut renderer, &scenario);
+    }
+}
+
+#[cfg(target_os = "linux")]
+mod in_place {
+    use std::sync::{Arc, Mutex};
+
+    use platform_headless::HeadlessWindow;
+    use renderer_core::perf::{self, Phase};
+    use renderer_core::{Color, DrawCommand, RenderBackend, dirty_scenarios};
+
+    use super::super::SoftwareRenderer;
+    use super::super::swapchain::{ShmLayout, ShmPresenter};
+    use super::super::test_frames::{Compositor, MemoryWire, Screen};
+    use super::{BACKGROUND, assert_recovers_from_a_frame_that_panics, draw};
+
+    type Renderer = SoftwareRenderer<HeadlessWindow, HeadlessWindow>;
+
+    fn presenting(
+        size: (u32, u32),
+        compositor: Compositor,
+        layout: ShmLayout,
+    ) -> (Renderer, Arc<Mutex<Screen>>) {
+        let (wire, screen) = MemoryWire::new(compositor);
+        let presenter = Box::new(ShmPresenter::new(wire, layout));
+        (
+            Renderer::presenting_through(size.0, size.1, presenter),
+            screen,
+        )
+    }
+
+    fn frame(renderer: &mut Renderer, size: (u32, u32), commands: &[DrawCommand]) {
+        let [r, g, b, _] = BACKGROUND;
+        renderer.begin_frame(size.0, size.1, 1.0, 0).unwrap();
+        renderer
+            .render_frame(commands, Some(Color::from_rgb_u8(r, g, b)))
+            .unwrap();
+    }
+
+    fn assert_shows_a_fresh_frame(
+        what: &str,
+        renderer: &Renderer,
+        screen: &Mutex<Screen>,
+        size: (u32, u32),
+        commands: &[DrawCommand],
+    ) {
+        let fresh = draw(size, &[commands], false).pixels;
+        let drawn = renderer.read_rgba().expect("a presented frame");
+        let first_difference = drawn
+            .as_chunks::<4>()
+            .0
+            .iter()
+            .zip(fresh.as_chunks::<4>().0)
+            .position(|(a, b)| a != b)
+            .map(|i| (i as u32 % size.0, i as u32 / size.0));
+        assert!(
+            first_difference.is_none(),
+            "{what}: pixel {first_difference:?} differs from the frame drawn from scratch"
+        );
+        assert!(
+            screen.lock().unwrap().bytes() == fresh,
+            "{what}: the damage declared brings the compositor up to the frame"
+        );
+    }
+
+    #[test]
+    fn every_shared_scenario_drawn_in_place_matches_a_fresh_frame() {
+        for compositor in [Compositor::Copies, Compositor::Holds] {
+            for scenario in dirty_scenarios::all() {
+                let (mut renderer, screen) = presenting(scenario.size, compositor, ShmLayout::Rgba);
+                // Back and forth, so a held front sends frames to a buffer two presents old.
+                for (step, commands) in [&scenario.old, &scenario.new, &scenario.old, &scenario.new]
+                    .into_iter()
+                    .enumerate()
+                {
+                    frame(&mut renderer, scenario.size, commands);
+                    assert_shows_a_fresh_frame(
+                        &format!("{} ({compositor:?}, step {step})", scenario.name),
+                        &renderer,
+                        &screen,
+                        scenario.size,
+                        commands,
+                    );
+                }
+                assert!(
+                    renderer.pixmap().is_none(),
+                    "{}: the present buffers are the only frame",
+                    scenario.name
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn releasing_idle_buffers_and_making_them_again_keeps_every_pixel() {
+        let scenario = dirty_scenarios::all()
+            .into_iter()
+            .next()
+            .expect("a shared scenario");
+        let size = scenario.size;
+        for layout in [ShmLayout::Rgba, ShmLayout::Argb] {
+            let (mut renderer, screen) = presenting(size, Compositor::Holds, layout);
+            frame(&mut renderer, size, &scenario.old);
+            frame(&mut renderer, size, &scenario.new);
+            assert_eq!(
+                screen.lock().unwrap().alive,
+                2,
+                "{layout:?}: a held front needs a second buffer"
+            );
+
+            renderer.release_idle_buffers();
+            assert_eq!(
+                screen.lock().unwrap().alive,
+                1,
+                "{layout:?}: idle keeps only the front"
+            );
+            assert!(renderer.clip_mask.is_none() && renderer.damage_mask.is_none());
+            assert!(renderer.mask_pool.is_empty() && renderer.pixmap_pool.is_empty());
+
+            for (step, commands) in [&scenario.old, &scenario.new].into_iter().enumerate() {
+                frame(&mut renderer, size, commands);
+                if layout == ShmLayout::Rgba {
+                    assert_shows_a_fresh_frame(
+                        &format!("after going idle, step {step}"),
+                        &renderer,
+                        &screen,
+                        size,
+                        commands,
+                    );
+                } else {
+                    let fresh = draw(size, &[commands], false).pixels;
+                    assert!(
+                        renderer.read_rgba() == Some(fresh.as_slice()),
+                        "step {step}"
+                    );
+                }
+            }
+            assert_eq!(
+                screen.lock().unwrap().alive,
+                2,
+                "{layout:?}: made again on the next change"
+            );
+        }
+    }
+
+    #[test]
+    fn convert_leaves_the_frame_where_it_is_drawn_in_place() {
+        let scenario = dirty_scenarios::all()
+            .into_iter()
+            .next()
+            .expect("a shared scenario");
+        let size = scenario.size;
+        for (layout, converts) in [(ShmLayout::Rgba, 0), (ShmLayout::Argb, 1)] {
+            let (mut renderer, _screen) = presenting(size, Compositor::Copies, layout);
+            frame(&mut renderer, size, &scenario.old);
+            renderer.begin_frame(size.0, size.1, 1.0, 0).unwrap();
+            let ((), recorded) = perf::capture(|| {
+                renderer
+                    .render_frame(&scenario.new, Some(Color::BLACK))
+                    .unwrap()
+            });
+            assert_eq!(recorded.count(Phase::Convert), converts, "{layout:?}");
+            assert_eq!(recorded.count(Phase::Acquire), 1, "{layout:?}");
+            assert_eq!(recorded.count(Phase::Present), 1, "{layout:?}");
+            assert_eq!(recorded.count(Phase::Interpret), 1, "{layout:?}");
+        }
+    }
+
+    #[test]
+    fn a_frame_that_panics_part_way_leaves_nothing_behind_in_the_buffers() {
+        for (compositor, layout) in [
+            (Compositor::Copies, ShmLayout::Rgba),
+            (Compositor::Holds, ShmLayout::Rgba),
+            (Compositor::Holds, ShmLayout::Argb),
+        ] {
+            for scenario in dirty_scenarios::all() {
+                let (mut renderer, screen) = presenting(scenario.size, compositor, layout);
+                let what = format!("{} ({compositor:?}, {layout:?})", scenario.name);
+                assert_recovers_from_a_frame_that_panics(&what, &mut renderer, &scenario);
+                if layout == ShmLayout::Rgba {
+                    let fresh = draw(scenario.size, &[&scenario.new], false).pixels;
+                    assert!(screen.lock().unwrap().bytes() == fresh, "{what}");
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn an_unchanged_frame_takes_no_buffer_and_commits_nothing() {
+        let scenario = dirty_scenarios::all()
+            .into_iter()
+            .next()
+            .expect("a shared scenario");
+        let size = scenario.size;
+        for layout in [ShmLayout::Rgba, ShmLayout::Argb] {
+            let (mut renderer, screen) = presenting(size, Compositor::Holds, layout);
+            frame(&mut renderer, size, &scenario.old);
+            frame(&mut renderer, size, &scenario.new);
+            assert_eq!(renderer.release_idle_buffers(), None);
+            let before = {
+                let screen = screen.lock().unwrap();
+                assert_eq!(screen.alive, 1, "{layout:?}: only the held front is left");
+                (screen.created, screen.commits.len())
+            };
+
+            frame(&mut renderer, size, &scenario.new);
+            let screen = screen.lock().unwrap();
+            assert_eq!(screen.alive, 1, "{layout:?}");
+            assert_eq!(
+                (screen.created, screen.commits.len()),
+                before,
+                "{layout:?}: the frame on screen is left as it is"
+            );
+        }
+    }
+
+    #[test]
+    fn a_buffer_still_held_when_the_window_goes_idle_is_freed_once_released() {
+        let scenario = dirty_scenarios::all()
+            .into_iter()
+            .next()
+            .expect("a shared scenario");
+        let size = scenario.size;
+        let (mut renderer, screen) = presenting(size, Compositor::Lags, ShmLayout::Rgba);
+        frame(&mut renderer, size, &scenario.old);
+        frame(&mut renderer, size, &scenario.new);
+
+        let retry = renderer.release_idle_buffers();
+        assert!(
+            retry.is_some(),
+            "the compositor has not released the back yet"
+        );
+        assert_eq!(screen.lock().unwrap().alive, 2);
+        assert!(
+            renderer.release_idle_buffers() > retry,
+            "each retry waits longer"
+        );
+
+        screen.lock().unwrap().release_lagging();
+        assert_eq!(renderer.release_idle_buffers(), None);
+        assert_eq!(screen.lock().unwrap().alive, 1);
+    }
+
+    #[test]
+    fn a_compositor_that_never_releases_is_retried_a_bounded_number_of_times() {
+        let scenario = dirty_scenarios::all()
+            .into_iter()
+            .next()
+            .expect("a shared scenario");
+        let size = scenario.size;
+        let (mut renderer, _screen) = presenting(size, Compositor::Lags, ShmLayout::Rgba);
+        frame(&mut renderer, size, &scenario.old);
+        frame(&mut renderer, size, &scenario.new);
+        let retries = std::iter::from_fn(|| renderer.release_idle_buffers())
+            .take(100)
+            .count();
+        assert_eq!(retries, 8);
+
+        frame(&mut renderer, size, &scenario.old);
+        assert!(
+            renderer.release_idle_buffers().is_some(),
+            "a frame starts a new idle stretch, with its own retries"
+        );
+    }
 }

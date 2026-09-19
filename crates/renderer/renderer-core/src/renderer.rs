@@ -38,6 +38,16 @@ pub trait RenderBackend {
     /// Drops cache entries no frame has asked for within their idle horizon. Called once per idle stretch, on the render thread, after [`idle_sweep_after`](Self::idle_sweep_after) has elapsed with no frame.
     fn sweep_idle_caches(&mut self) {}
 
+    /// How long the render thread should go without a frame before calling [`release_idle_buffers`](Self::release_idle_buffers). `None` (the default) means never.
+    fn idle_release_after(&self) -> Option<std::time::Duration> {
+        None
+    }
+
+    /// Frees the surface-sized memory only a frame in flight needs, such as a second present buffer or scratch masks, keeping what shows the last frame. Called on the render thread once [`idle_release_after`](Self::idle_release_after) has elapsed with no frame; the next frame re-creates what it needs, drawing the same pixels. Returns how long to wait before calling again when something it would free is still in use, such as a buffer the compositor has not released yet; `None` ends the idle stretch's releases.
+    fn release_idle_buffers(&mut self) -> Option<std::time::Duration> {
+        None
+    }
+
     /// Whether this backend applies `begin_frame`'s `scale_factor` itself — the hardware path folds it into the shader's transform. A backend that returns `false` (the default, and what the software rasteriser does) must be handed commands already scaled into physical pixels, which is why the frame pipeline runs [`ScaleScratch`](crate::ScaleScratch) for it.
     fn applies_scale_factor(&self) -> bool {
         false
@@ -78,6 +88,14 @@ impl RenderBackend for Box<dyn RenderBackend + Send> {
 
     fn sweep_idle_caches(&mut self) {
         (**self).sweep_idle_caches()
+    }
+
+    fn idle_release_after(&self) -> Option<std::time::Duration> {
+        (**self).idle_release_after()
+    }
+
+    fn release_idle_buffers(&mut self) -> Option<std::time::Duration> {
+        (**self).release_idle_buffers()
     }
 
     fn applies_scale_factor(&self) -> bool {
