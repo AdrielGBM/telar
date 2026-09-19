@@ -446,3 +446,296 @@ fn the_runner_feeds_the_pointer_button_registry() {
         "and the release cleared it"
     );
 }
+
+/// An app whose tree owns state the app never sees — a tint created inside `root` and a text field — beside a tint the app holds. A rebuilt tree is told apart from a kept one by what it forgot.
+struct Stateful {
+    held: reactive_core::RwSignal<f32>,
+    local_start: f32,
+    roots: Rc<Cell<u32>>,
+    local: Rc<Cell<Option<reactive_core::RwSignal<f32>>>>,
+    field: Rc<Cell<Option<ui_core::focus::FocusId>>>,
+}
+
+impl Stateful {
+    fn new(held: reactive_core::RwSignal<f32>, local_start: f32) -> Self {
+        Self {
+            held,
+            local_start,
+            roots: Rc::default(),
+            local: Rc::default(),
+            field: Rc::default(),
+        }
+    }
+}
+
+impl App for Stateful {
+    fn root(&self) -> Box<dyn ui_tree::Component> {
+        ui_core::reset_layout_runtime();
+        self.roots.set(self.roots.get() + 1);
+        let local = reactive_core::signal(self.local_start);
+        self.local.set(Some(local));
+        let held = self.held;
+        let tint = ui_core::Rectangle::new(
+            layout_core::LayoutStyle::new().width(40.0).height(40.0),
+            move || {
+                renderer_core::RectStyle::filled(
+                    renderer_core::Color::rgba(local.get(), held.get(), 0.0, 1.0),
+                    0.0,
+                )
+            },
+        )
+        .expect("a rectangle builds");
+        // Drawn in a colour that does not show, so a blinking caret cannot make two frames of the same state differ.
+        let field = ui_core::Input::new(
+            reactive_core::signal(String::new()),
+            layout_core::LayoutStyle::new().width(40.0).height(16.0),
+            || renderer_core::TextStyle::new(12.0, renderer_core::Color::TRANSPARENT),
+        )
+        .expect("a field builds");
+        self.field.set(Some(field.focus_id()));
+        Box::new(
+            ui_core::Container::new(
+                layout_core::LayoutStyle::new(),
+                vec![ui_core::box_item(tint), ui_core::box_item(field)],
+            )
+            .expect("a container builds"),
+        )
+    }
+}
+
+#[derive(Clone, Default)]
+struct RendererLog {
+    frames_per_renderer: Rc<std::cell::RefCell<Vec<u32>>>,
+    alive: Rc<Cell<u32>>,
+}
+
+struct LoggedRenderer {
+    inner: Box<dyn RenderBackend>,
+    index: usize,
+    log: RendererLog,
+}
+
+impl RenderBackend for LoggedRenderer {
+    fn begin_frame(
+        &mut self,
+        width: u32,
+        height: u32,
+        scale_factor: f32,
+        generation: u64,
+    ) -> Result<(), renderer_core::RendererError> {
+        self.inner
+            .begin_frame(width, height, scale_factor, generation)
+    }
+
+    fn render_frame(
+        &mut self,
+        commands: &[renderer_core::DrawCommand],
+        clear_color: Option<renderer_core::Color>,
+    ) -> Result<(), renderer_core::RendererError> {
+        self.log.frames_per_renderer.borrow_mut()[self.index] += 1;
+        self.inner.render_frame(commands, clear_color)
+    }
+
+    fn read_rgba(&self) -> Option<Vec<u8>> {
+        self.inner.read_rgba()
+    }
+}
+
+impl Drop for LoggedRenderer {
+    fn drop(&mut self) {
+        self.log.alive.set(self.log.alive.get() - 1);
+    }
+}
+
+thread_local! {
+    static FREED_MEMORY_RETURNS: Cell<u32> = const { Cell::new(0) };
+}
+
+fn count_freed_memory_return() {
+    FREED_MEMORY_RETURNS.with(|returns| returns.set(returns.get() + 1));
+}
+
+fn freed_memory_returns() -> u32 {
+    FREED_MEMORY_RETURNS.with(Cell::get)
+}
+
+/// The built-in host, with its offscreen renderers logged and its release of freed memory counted rather than performed.
+struct LoggedHost {
+    inner: crate::runner::host::BuiltinHost<HeadlessWindow>,
+    log: RendererLog,
+}
+
+impl LoggedHost {
+    fn new(log: RendererLog) -> Self {
+        Self {
+            inner: crate::runner::host::BuiltinHost::new()
+                .returning_freed_memory_with(count_freed_memory_return),
+            log,
+        }
+    }
+}
+
+impl RendererHost<HeadlessWindow> for LoggedHost {
+    fn start(&mut self, window: &HeadlessWindow, req: &RendererRequest<'_>) -> RendererStart {
+        self.inner.start(window, req)
+    }
+
+    fn channels(&self) -> Option<&RenderChannels> {
+        self.inner.channels()
+    }
+
+    fn suspend(&mut self) {
+        self.inner.suspend();
+    }
+
+    fn retire(&mut self) {
+        self.inner.retire();
+    }
+
+    fn build_offscreen(
+        &mut self,
+        window: &HeadlessWindow,
+        req: &RendererRequest<'_>,
+    ) -> Option<Box<dyn RenderBackend>> {
+        let inner = self.inner.build_offscreen(window, req)?;
+        let index = {
+            let mut frames = self.log.frames_per_renderer.borrow_mut();
+            frames.push(0);
+            frames.len() - 1
+        };
+        self.log.alive.set(self.log.alive.get() + 1);
+        Some(Box::new(LoggedRenderer {
+            inner,
+            index,
+            log: self.log.clone(),
+        }))
+    }
+}
+
+fn stateful_handler(app: Stateful, log: RendererLog) -> AppHandler<HeadlessWindow, ()> {
+    let mut handler = build_app_handler::<HeadlessWindow, ()>(
+        Box::new(LocalApp(app)),
+        Arc::new(services_core::NoPaths),
+        crate::runner::font_config::FontSetup::default(),
+        RendererBackend::Software,
+        UserPrefs::default(),
+        "presentation-test".to_string(),
+        SurfaceRenderer::builtin(),
+    );
+    handler.renderer_host = Box::new(LoggedHost::new(log));
+    handler
+}
+
+fn node_ids(handler: &AppHandler<HeadlessWindow, ()>) -> Vec<u64> {
+    let mut nodes = Vec::new();
+    if let Some(tree) = &handler.tree {
+        tree.walk(&mut nodes);
+    }
+    nodes.into_iter().map(|node| node.id).collect()
+}
+
+fn resume(handler: &mut AppHandler<HeadlessWindow, ()>, window: &HeadlessWindow) {
+    handler.new_events();
+    assert!(handler.on_resume(window), "a headless resume builds one");
+    handler.about_to_wait();
+}
+
+/// Hiding a window gives back what presents it and nothing else; showing it again draws the very same tree, whole.
+#[test]
+fn a_suspended_window_keeps_its_tree_and_presents_it_whole_on_resume() {
+    let held = reactive_core::signal(0.25f32);
+    let app = Stateful::new(held, 0.0);
+    let (roots, local, field) = (
+        Rc::clone(&app.roots),
+        Rc::clone(&app.local),
+        Rc::clone(&app.field),
+    );
+    let log = RendererLog::default();
+    let mut handler = stateful_handler(app, log.clone());
+    let window = HeadlessWindow::new(120, 80);
+
+    resume(&mut handler, &window);
+    let local = local.get().expect("the tree made its signal");
+    let field = field.get().expect("the tree made its field");
+    local.set(0.75);
+    ui_core::focus::request(field);
+    run_a_pass(&mut handler, &window);
+    handler.about_to_wait();
+    let ids = node_ids(&handler);
+    assert_eq!(roots.get(), 1, "precondition: one tree built");
+
+    let returned_before_suspend = freed_memory_returns();
+    handler.on_suspend();
+    assert!(
+        handler.renderer.is_none() && log.alive.get() == 0,
+        "a suspended window must hold no renderer, and with it no pixmap"
+    );
+    assert!(
+        freed_memory_returns() > returned_before_suspend,
+        "the rasteriser's pages go back to the system once nothing is kept warm"
+    );
+
+    held.set(0.5);
+    resume(&mut handler, &window);
+    assert_eq!(roots.get(), 1, "resume rebuilt the tree");
+    assert_eq!(local.get(), 0.75, "the tree's own signal was reset");
+    assert_eq!(node_ids(&handler), ids, "the tree's nodes changed identity");
+    assert_eq!(
+        ui_core::focus::current(),
+        Some(field),
+        "the field lost the keyboard"
+    );
+
+    run_a_pass(&mut handler, &window);
+    handler.about_to_wait();
+    assert_eq!(
+        *log.frames_per_renderer.borrow(),
+        vec![1, 1],
+        "the first frame after resume is the new renderer's first, so nothing retained went into it"
+    );
+    let resumed = handler
+        .last_frame_rgba()
+        .expect("a headless frame reads back");
+    handler.on_suspend();
+    drop(handler);
+
+    let mut fresh = stateful_handler(Stateful::new(held, 0.75), RendererLog::default());
+    resume(&mut fresh, &window);
+    run_a_pass(&mut fresh, &window);
+    fresh.about_to_wait();
+    let fresh_frame = fresh
+        .last_frame_rgba()
+        .expect("a headless frame reads back");
+    assert!(
+        resumed == fresh_frame,
+        "the frame after resume differs from a fresh window showing the same state"
+    );
+}
+
+/// A kept tree comes back clean — nothing changed while it was hidden — and still has to be drawn, because the renderer that drew it last is gone.
+#[test]
+fn a_resumed_window_with_nothing_changed_still_draws() {
+    let log = RendererLog::default();
+    let mut handler = stateful_handler(Stateful::new(reactive_core::signal(0.0), 0.0), log.clone());
+    let window = HeadlessWindow::new(120, 80);
+    resume(&mut handler, &window);
+    run_a_pass(&mut handler, &window);
+    handler.about_to_wait();
+
+    handler.on_suspend();
+    resume(&mut handler, &window);
+    run_a_pass(&mut handler, &window);
+    handler.about_to_wait();
+
+    assert_eq!(
+        *log.frames_per_renderer.borrow(),
+        vec![1, 1],
+        "the resumed window drew nothing, so it would stay blank until something in it changed"
+    );
+    run_a_pass(&mut handler, &window);
+    assert_eq!(
+        *log.frames_per_renderer.borrow(),
+        vec![1, 1],
+        "once drawn, a clean tree goes back to drawing on change only"
+    );
+}

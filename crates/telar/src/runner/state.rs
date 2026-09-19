@@ -24,6 +24,8 @@ pub(super) struct FramePacer {
     /// Content or keepalive; paces the keepalive blit.
     pub(super) last_submit: web_time::Instant,
     pub(super) frame_owed: bool,
+    /// A renderer started with nothing of this tree retained, so the next frame goes out whether or not the tree changed. Cleared once a renderer takes one, not when one is composed: frames composed while a renderer is still being built reach nobody.
+    pub(super) presentation_owed: bool,
 }
 
 impl Default for FramePacer {
@@ -39,6 +41,7 @@ impl Default for FramePacer {
             last_tick: now.checked_sub(FRAME_BUDGET).unwrap_or(now),
             last_submit: now.checked_sub(HW_KEEPALIVE_INTERVAL).unwrap_or(now),
             frame_owed: false,
+            presentation_owed: false,
         }
     }
 }

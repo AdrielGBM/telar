@@ -34,6 +34,8 @@ pub(crate) struct BuiltinHost<W: SurfaceWindow> {
     pending: Option<BackgroundBuild<renderer_hardware::HardwareRenderer<W>>>,
     #[cfg(feature = "hardware")]
     warm: Option<renderer_hardware::HardwareRenderer<W>>,
+    // A seam so a test can see the release happen without asking the real allocator.
+    return_freed_memory: fn(),
     _window: std::marker::PhantomData<W>,
 }
 
@@ -49,16 +51,19 @@ impl<W: SurfaceWindow> BuiltinHost<W> {
             pending: None,
             #[cfg(feature = "hardware")]
             warm: None,
+            return_freed_memory,
             _window: std::marker::PhantomData,
         }
     }
 
-    /// Waits for the render thread, keeping the hardware device when `keep_warm`: its caches, pipelines and adapter are what make a resume cheap. Software has nothing worth carrying.
-    // Every reader is behind a `cfg`, so a build with neither renderer reads it nowhere.
-    #[cfg_attr(
-        not(any(feature = "hardware", target_os = "linux")),
-        allow(unused_variables)
-    )]
+    #[cfg(test)]
+    pub(crate) fn returning_freed_memory_with(mut self, release: fn()) -> Self {
+        self.return_freed_memory = release;
+        self
+    }
+
+    /// Waits for the render thread, keeping the hardware device when `keep_warm`: its caches, pipelines and adapter are what make a resume cheap. Software has nothing worth carrying, and neither has a retire, which drops a device kept by an earlier suspend too: it was built for the transparency and backend being replaced.
+    #[cfg_attr(not(feature = "hardware"), allow(unused_variables))]
     fn join_thread(&mut self, keep_warm: bool) {
         // First, and load-bearing: the thread parks on the frame channel, so it only exits once the sender is gone.
         self.channels = None;
@@ -75,17 +80,28 @@ impl<W: SurfaceWindow> BuiltinHost<W> {
                 Err(_) => tracing::warn!("the render thread panicked, so its renderer is lost"),
             }
         }
+        #[cfg(feature = "hardware")]
+        if !keep_warm {
+            self.warm = None;
+        }
         #[cfg(feature = "software")]
         if let Some(join) = self.sw_join.take() {
             let _ = join.join();
         }
-        // A retired renderer holds the largest allocations in the process and glibc will not return them on its own. Not on the warm path, which is keeping them on purpose.
-        #[cfg(target_os = "linux")]
-        if !keep_warm {
-            unsafe {
-                libc::malloc_trim(0);
-            }
+        // A device kept warm keeps its pages on purpose.
+        if !self.keeps_a_device_warm() {
+            (self.return_freed_memory)();
         }
+    }
+
+    #[cfg(feature = "hardware")]
+    fn keeps_a_device_warm(&self) -> bool {
+        self.warm.is_some()
+    }
+
+    #[cfg(not(feature = "hardware"))]
+    fn keeps_a_device_warm(&self) -> bool {
+        false
     }
 
     #[cfg(feature = "hardware")]
@@ -266,5 +282,13 @@ impl<W: SurfaceWindow> RendererHost<W> for BuiltinHost<W> {
         req: &RendererRequest<'_>,
     ) -> Option<Box<dyn RenderBackend>> {
         self.build_headless(window, req)
+    }
+}
+
+/// Hands the pages of a retired renderer back to the system: it holds the largest allocations in the process, and glibc will not return them on its own.
+fn return_freed_memory() {
+    #[cfg(target_os = "linux")]
+    unsafe {
+        libc::malloc_trim(0);
     }
 }

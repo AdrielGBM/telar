@@ -194,18 +194,21 @@ where
         applied
     }
 
-    /// Enters this handler's surface world for the duration of a lifecycle call, so its build/event/frame resolve layout/overlay/focus (and the reactive current-surface) against the right surface. Returns `None` for a single-window app — its ambient world is its one surface — making this a zero-cost no-op. The returned guard owns the restore state and does not borrow `self`, so callers can mutate `self` while it is held (`let _surface = self.enter_surface();`). Drops the previous tree, builds the app's UI again, and starts it at the surface's real size and past every generation already drawn.
-    ///
-    /// The generation step is the load-bearing part, and the reason this is one function: the counter lives on the tree, so a fresh tree starts over and a surface whose content never changes hands the renderer a number it has already presented — which it answers by re-presenting the texture it retained. See [`FrameGeneration`]. Callers must have `scale_factor` and `renderer_transparent` current before calling.
+    /// Drops the previous tree and builds the app's UI again, then fits it to the surface as [`fit_tree_to`](Self::fit_tree_to) does.
     fn mount_tree(&mut self, window: &W) {
         // Dropped before the new one is built: an effect from the outgoing tree re-running mid-assembly would write into widgets nothing is drawing any more.
         self.tree = None;
         self.tree = Some(self.app.mount());
+        self.fit_tree_to(window);
+    }
+
+    /// Readies the tree for a presentation that has retained nothing of it: past every generation already drawn (see [`FrameGeneration`]), and at the surface's real size. Callers must have `scale_factor` and `renderer_transparent` current before calling.
+    fn fit_tree_to(&mut self, window: &W) {
         self.generation.restart();
         if self.is_transparent() != self.renderer_transparent {
             self.pending_restart = true;
         }
-        // A tree starts at its 0×0 defaults and learns the real size from this event, as it would from a resize.
+        // A new tree starts at its 0×0 defaults and a kept one at the size it was last shown at; both learn the real size from this event, as they would from a resize.
         let resize = Event::WindowResized {
             width: (window.width() as f32 / self.scale_factor) as u32,
             height: (window.height() as f32 / self.scale_factor) as u32,
@@ -215,6 +218,7 @@ where
         }
     }
 
+    /// Enters this handler's surface world for the duration of a lifecycle call, so its build/event/frame resolve layout/overlay/focus (and the reactive current-surface) against the right surface. Returns `None` for a single-window app — its ambient world is its one surface — making this a zero-cost no-op. The returned guard owns the restore state and does not borrow `self`, so callers can mutate `self` while it is held (`let _surface = self.enter_surface();`).
     fn enter_surface(&self) -> Option<LifecycleGuard> {
         self.surface.as_ref().map(|s| LifecycleGuard {
             _surface: s.enter(),
@@ -264,6 +268,34 @@ where
         }
     }
 
+    /// Puts a relay between the hot-reload watcher and this handler, so a rebuilt dylib wakes the loop. Spawned by the resume that mounts the first tree, which is the first moment a waker exists, and never again: a later resume would chain a second relay onto the first.
+    #[cfg(all(
+        feature = "dev",
+        not(target_os = "android"),
+        not(target_arch = "wasm32")
+    ))]
+    fn relay_hot_reload(&mut self) {
+        let Some(rx) = self.hot_reload_rx.take() else {
+            return;
+        };
+        let (relay_tx, relay_rx) = std::sync::mpsc::channel::<crate::hot::HotEvent>();
+        let wake = self.redraw_waker.clone();
+        std::thread::Builder::new()
+            .name("telar-hot-relay".to_string())
+            .spawn(move || {
+                while let Ok(event) = rx.recv() {
+                    if relay_tx.send(event).is_err() {
+                        break;
+                    }
+                    if let Some(wake) = &wake {
+                        wake.wake();
+                    }
+                }
+            })
+            .ok();
+        self.hot_reload_rx = Some(relay_rx);
+    }
+
     /// Asks the host to start a renderer. `false` means the surface cannot present at all; a build still in flight counts as success, because the frame its own wake asks for is what installs it.
     ///
     /// `backend` is passed rather than read from `self` because two callers want something else: the dev toggle asks for hardware before its saved preference is re-read, and the `Auto` fallback asks for software without giving up on hardware for the next restart.
@@ -279,6 +311,7 @@ where
         match self.renderer_host.start(window, &request) {
             RendererStart::Started { keepalive, label } => {
                 self.pacer.renderer_keepalive = keepalive;
+                self.pacer.presentation_owed = true;
                 self.dev.set_renderer_info(label);
                 // A renderer that cannot leave this thread is driven here. `channels()` stays empty, which routes the frame to `render_inline`.
                 self.renderer = self.renderer_host.take_inline();
@@ -299,6 +332,7 @@ where
         match outcome {
             RendererStart::Started { keepalive, label } => {
                 self.pacer.renderer_keepalive = keepalive;
+                self.pacer.presentation_owed = true;
                 self.dev.set_renderer_info(label);
             }
             RendererStart::Building => {}
@@ -351,7 +385,8 @@ where
     /// Whether to submit a frame now, and whether it carries new content. The second of the pass's three clocks: the frame budget gates the whole pass, this gates submission, `about_to_wait` reports the next wake. `None` means skip this turn.
     fn frame_is_due(&self, now: web_time::Instant) -> Option<bool> {
         // A continuous region carries content the tree cannot report, since it repaints its own texture and the commands naming it never change. Counting only `is_dirty` drops the frame to the 1 fps keepalive.
-        let has_content = self.tree.as_ref().map(|t| t.is_dirty()).unwrap_or(false)
+        let has_content = self.pacer.presentation_owed
+            || self.tree.as_ref().map(|t| t.is_dirty()).unwrap_or(false)
             || self.app.motion_has_continuous();
         let needs_keepalive = self.keepalive_due();
         if !has_content && !needs_keepalive {
@@ -392,20 +427,16 @@ where
             .unwrap_or(false)
     }
 
-    /// Draws a frame on this thread, for a renderer that has no thread of its own.
-    ///
-    /// Two kinds end up here. An offscreen renderer must, because headless runs, `[preview]` captures and `cargo telar test` all read the pixels back with `last_frame_rgba` in the same call that asked for them. A renderer that is `!Send` — one built on a browser device, which holds JavaScript objects — must, because it cannot be moved anywhere else.
-    ///
-    /// Deliberately does *not* wrap the render in `catch_unwind`: a panic here is a test failure to surface rather than a dropped frame to recover from.
-    fn render_inline(&mut self, msg: FrameMsg) {
+    /// Offscreen renderers read their pixels back in the same call and `!Send` renderers can't move, so both draw here, without `catch_unwind`: a panic in a test is a failure to surface, not a frame to drop.
+    fn render_inline(&mut self, msg: FrameMsg) -> bool {
         let Some(renderer) = &mut self.renderer else {
-            return;
+            return false;
         };
         if let Err(e) =
             renderer.begin_frame(msg.width, msg.height, msg.scale_factor, msg.generation)
         {
             tracing::error!("begin_frame failed: {e}");
-            return;
+            return false;
         }
         let commands: &[renderer_core::DrawCommand] =
             if renderer.applies_scale_factor() || msg.scale_factor == 1.0 {
@@ -414,12 +445,17 @@ where
                 self.scale_scratch
                     .scale_into(&msg.commands, msg.scale_factor)
             };
-        if let Err(e) = renderer.as_mut().render_frame(commands, msg.clear) {
-            tracing::error!("render_frame failed: {e}");
-        }
+        let rendered = match renderer.as_mut().render_frame(commands, msg.clear) {
+            Ok(()) => true,
+            Err(e) => {
+                tracing::error!("render_frame failed: {e}");
+                false
+            }
+        };
         if self.command_buf_pool.len() < COMMAND_BUF_POOL_CAP {
             self.command_buf_pool.push(msg.commands);
         }
+        rendered
     }
 
     /// This frame's start instant, or `None` while the previous one is still inside [`FRAME_BUDGET`] — which leaves the frame owed, for `about_to_wait` to schedule once the budget allows it.
@@ -564,22 +600,23 @@ where
         }
     }
 
-    /// Hands the frame to the render thread, or rasterises it inline when this surface has no thread of its own.
-    fn submit_frame(&mut self, msg: FrameMsg) {
+    /// Hands the frame to the render thread, or rasterises it inline when this surface has no thread of its own. Returns whether a renderer took it.
+    fn submit_frame(&mut self, msg: FrameMsg) -> bool {
         // Dropped if the render thread is still busy, which keeps input handling off the rasteriser's critical path. On a dropped or disconnected send, the buffer is recovered for the free-list.
         if let Some(channels) = self.renderer_host.channels() {
-            if let Err(e) = channels.tx.try_send(msg) {
-                let recovered = match e {
-                    std::sync::mpsc::TrySendError::Full(m)
-                    | std::sync::mpsc::TrySendError::Disconnected(m) => m.commands,
-                };
-                if self.command_buf_pool.len() < COMMAND_BUF_POOL_CAP {
-                    self.command_buf_pool.push(recovered);
-                }
+            let Err(e) = channels.tx.try_send(msg) else {
+                return true;
+            };
+            let recovered = match e {
+                std::sync::mpsc::TrySendError::Full(m)
+                | std::sync::mpsc::TrySendError::Disconnected(m) => m.commands,
+            };
+            if self.command_buf_pool.len() < COMMAND_BUF_POOL_CAP {
+                self.command_buf_pool.push(recovered);
             }
-            return;
+            return false;
         }
-        self.render_inline(msg);
+        self.render_inline(msg)
     }
 }
 
@@ -608,6 +645,7 @@ where
         }
     }
 
+    /// Starts a renderer and presents the tree: the one a previous [`on_suspend`](EventHandler::on_suspend) kept, or one built from the app on the first resume. Either way the renderer has retained nothing, so the first frame is drawn whole.
     fn on_resume(&mut self, window: &W) -> bool {
         let _surface = self.enter_surface();
         // Before the tree measures a word of text. Building a renderer loads them too — which is what makes measure and draw agree — but a hardware renderer builds on its own thread, so the first layout would be sized in the platform's fonts. A renderer that does not shape glyphs skips the scan, keeping its own measurer.
@@ -645,30 +683,18 @@ where
         if let Some(waker) = self.redraw_waker.clone() {
             self.app.install_task_waker(waker);
         }
-        #[cfg(all(
-            feature = "dev",
-            not(target_os = "android"),
-            not(target_arch = "wasm32")
-        ))]
-        if let Some(rx) = self.hot_reload_rx.take() {
-            let (relay_tx, relay_rx) = std::sync::mpsc::channel::<crate::hot::HotEvent>();
-            let wake = self.redraw_waker.clone();
-            std::thread::Builder::new()
-                .name("telar-hot-relay".to_string())
-                .spawn(move || {
-                    while let Ok(event) = rx.recv() {
-                        if relay_tx.send(event).is_err() {
-                            break;
-                        }
-                        if let Some(wake) = &wake {
-                            wake.wake();
-                        }
-                    }
-                })
-                .ok();
-            self.hot_reload_rx = Some(relay_rx);
+        if self.tree.is_some() {
+            self.fit_tree_to(window);
+        } else {
+            #[cfg(all(
+                feature = "dev",
+                not(target_os = "android"),
+                not(target_arch = "wasm32")
+            ))]
+            self.relay_hot_reload();
+            self.mount_tree(window);
         }
-        self.mount_tree(window);
+        self.pacer.presentation_owed = true;
 
         let w = window.clone();
         self._flush_notify = Some(set_flush_notify(move || w.request_redraw()));
@@ -784,13 +810,20 @@ where
             return;
         };
         let msg = self.build_frame(&pass);
-        self.submit_frame(msg);
+        if self.submit_frame(msg) {
+            self.pacer.presentation_owed = false;
+        }
     }
 
+    /// Releases everything that presents the surface and keeps the tree, so a later [`on_resume`](EventHandler::on_resume) shows the same UI again.
     fn on_suspend(&mut self) {
         let _surface = self.enter_surface();
+        // Before the host suspends, so the memory it hands back to the allocator includes this one's pixmap.
+        self.renderer = None;
         // Let the host keep whatever makes the next resume cheap: for hardware, a device to rebind rather than rebuild.
         self.renderer_host.suspend();
+        // Holds the window, which may be gone, and would ask a hidden surface for frames; the resume installs its own.
+        self._flush_notify = None;
         // Owed to a surface that is gone: kept, it would wake a suspended loop every frame, and the resume asks for its own first frame.
         self.pacer.frame_owed = false;
     }

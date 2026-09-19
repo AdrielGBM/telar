@@ -134,11 +134,13 @@ pub fn window_waker<W: Window + Clone + Send + Sync + 'static>(
     std::sync::Arc::new(move || window.request_redraw())
 }
 
-/// What drives one surface: built on resume, fed events, asked for frames, torn down on suspend.
+/// What drives one surface: presented on resume, fed events, asked for frames, released on suspend, and gone when dropped.
 pub trait EventHandler<W: Window> {
+    /// Starts presenting on `window`: the UI is built on the first resume and kept by every later one. `false` means nothing can present on it.
     fn on_resume(&mut self, window: &W) -> bool;
     fn on_event(&mut self, event: Event, window: &W);
     fn on_redraw(&mut self, window: &W);
+    /// Releases the renderer and window but keeps the UI and its state, so a later [`on_resume`](Self::on_resume) shows it again as it was.
     fn on_suspend(&mut self) {}
 
     /// The window's accessibility tree as it stands, for the platform to hand to whatever is listening.
