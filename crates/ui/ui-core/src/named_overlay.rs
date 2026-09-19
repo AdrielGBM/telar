@@ -8,7 +8,7 @@ use std::cell::RefCell;
 use std::collections::HashMap;
 use std::mem::ManuallyDrop;
 
-use reactive_core::{RwSignal, signal};
+use reactive_core::{RwSignal, detached, signal};
 
 // ManuallyDrop keeps this TLS slot trivially-destructible: registering a TLS destructor from a hot-reloaded dylib would make dlclose unsafe (same constraint as `dismiss` and `telar::hot_state`).
 thread_local! {
@@ -23,8 +23,8 @@ pub fn state(id: &str) -> RwSignal<bool> {
     if let Some(existing) = NAMED.with(|named| named.borrow().get(id).cloned()) {
         return existing;
     }
-    // Created outside the map's borrow: minting a signal touches the reactive runtime, which can reach back into anything holding a borrow across it.
-    let created = signal(false);
+    // Created outside the map's borrow: minting a signal touches the reactive runtime, which can reach back into anything holding a borrow across it. Detached, because the name outlives whichever build first asked for it: owned by that build, a failed or rebuilt subtree would free the signal every later `open` writes.
+    let created = detached(|| signal(false));
     NAMED.with(|named| *named.borrow_mut().entry(id.to_string()).or_insert(created))
 }
 

@@ -7,7 +7,7 @@ use layout_core::{LayoutError, LayoutStyle};
 use platform_core::Event;
 use reactive_core::{Effect, RwSignal, effect};
 use renderer_core::Color;
-use ui_core::dismiss::{DismissId, register_dismiss, unregister_dismiss};
+use ui_core::dismiss::DismissRegistration;
 use ui_core::{
     Component, Container, EventResult, LayoutItem, NodeId, Overlay, ReactiveList, RenderNode,
     box_item,
@@ -44,14 +44,15 @@ impl LayoutItem for Dismissible {
 
 /// Keeps the dismiss stack in step with `open`: on the transition into open the overlay becomes the stack's top, and on the way out it withdraws — including when it was closed by its own Close button rather than by a dismissal, which is why the entry is tracked by id instead of assumed to still be on top.
 fn track_dismissible(open: RwSignal<bool>, dismiss: DismissFn) -> Effect {
-    let registered: Cell<Option<DismissId>> = Cell::new(None);
+    let registered: Cell<Option<DismissRegistration>> = Cell::new(None);
     effect(move || {
         if open.get() {
-            if registered.get().is_none() {
-                registered.set(Some(register_dismiss(dismiss.clone())));
-            }
-        } else if let Some(id) = registered.take() {
-            unregister_dismiss(id);
+            let held = registered
+                .take()
+                .unwrap_or_else(|| DismissRegistration::new(dismiss.clone()));
+            registered.set(Some(held));
+        } else {
+            drop(registered.take());
         }
     })
 }

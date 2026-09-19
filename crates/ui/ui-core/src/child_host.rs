@@ -5,7 +5,6 @@
 //! Reconciliation reuses the host node via [`set_children`] (which replaces all of a node's children in order), re-flattening every slot on each change — so several fragments and static siblings interleave correctly. Compare [`crate::reactive_list::ReactiveList`], which is the boxed, standalone variant.
 
 use std::cell::RefCell;
-use std::collections::HashMap;
 use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
 use std::rc::Rc;
@@ -16,8 +15,10 @@ use reactive_core::{Effect, RwSignal, effect, signal};
 use ui_tree::{EventResult, RenderNode};
 
 use crate::context::{container_is_row, set_children, set_leading_margin};
-use crate::layout_item::{Child, LayoutItem, build_child, dispose_child, make_child};
+use crate::layout_item::{BuildPass, Child, LayoutItem, dispose_child, make_child};
 use crate::pointer::dispatch_container_event;
+use crate::row_keys::{Occurrences, index_by_key};
+use crate::serial::Serial;
 
 fn hash_key<K: Hash>(k: &K) -> u64 {
     let mut h = DefaultHasher::new();
@@ -80,10 +81,12 @@ where
 {
     let install = Box::new(
         move |state: Rc<RefCell<HostState>>, index: usize| -> Effect {
-            // Runs once now to build the initial items, and again on every change to a signal `source` reads.
+            let serial = Serial::new();
             effect(move || {
                 let items = source();
-                reconcile_slot(&state, index, items, &keyer, &build);
+                serial.run(items, |items| {
+                    reconcile_slot(&state, index, items, &keyer, &build)
+                });
             })
         },
     );
@@ -104,7 +107,7 @@ enum SlotState {
     Dynamic(DynState),
 }
 
-/// Shared host state: the container's layout node plus its slots in order. Mutated by fragment reconcile effects (during the reactive flush) and read by the container's `view`/`on_event` (during render/dispatch) — never concurrently, so the `RefCell` never double-borrows.
+/// Shared host state: the container's layout node plus its slots in order. Never borrowed across user code: a fragment reconcile reads its slot, releases the borrow to build items, and commits them in one borrow at the end, so what a build reaches sees the last committed children and a build that panics leaves them standing.
 struct HostState {
     node: NodeId,
     slots: Vec<SlotState>,
@@ -143,33 +146,33 @@ fn reconcile_slot<Item, KeyFn, B>(
     KeyFn: Fn(&Item, usize) -> u64,
     B: Fn(Item) -> Result<Box<dyn LayoutItem>, LayoutError>,
 {
-    let mut st = state.borrow_mut();
-
-    // Indexed by key hash so a persisting key reuses its widget and node.
-    let (old_items, old_keys) = match &mut st.slots[index] {
-        SlotState::Dynamic(dyn_state) => (
-            std::mem::take(&mut dyn_state.items),
-            std::mem::take(&mut dyn_state.keys),
-        ),
+    let (old_items, old_keys) = match &state.borrow().slots[index] {
+        SlotState::Dynamic(dyn_state) => (dyn_state.items.clone(), dyn_state.keys.clone()),
         SlotState::Static(_) => unreachable!("a fragment slot is never static"),
     };
-    let mut old: HashMap<u64, Child> = HashMap::new();
-    for (k, child) in old_keys.into_iter().zip(old_items) {
-        old.entry(k).or_insert(child);
-    }
+
+    // Indexed by key hash so a persisting key reuses its widget and node.
+    let (mut old, strays) = index_by_key(old_keys, old_items);
+    let mut occurrences = Occurrences::new();
 
     let mut new_items: Vec<Child> = Vec::with_capacity(items.len());
     let mut keys: Vec<u64> = Vec::with_capacity(items.len());
+    // An item build that panics leaves the committed slot as it was, so the pass frees the items it had already built along with what the failed one left.
+    let mut pass = BuildPass::start();
     for (idx, item) in items.into_iter().enumerate() {
-        let k = keyer(&item, idx);
+        let k = occurrences.identify(keyer(&item, idx));
         let child = match old.remove(&k) {
             Some(existing) => existing,
-            None => build_child(|| build(item).expect("fragment item build")),
+            None => pass
+                .build_child(|| build(item))
+                .expect("fragment item build"),
         };
         new_items.push(child);
         keys.push(k);
     }
+    pass.keep();
 
+    let mut st = state.borrow_mut();
     // Captured before writing back, so the gap can be re-applied as a per-item margin without re-borrowing.
     let (gap, is_row, item_nodes) = if let SlotState::Dynamic(dyn_state) = &mut st.slots[index] {
         let item_nodes: Vec<NodeId> = new_items.iter().map(Child::node).collect();
@@ -193,7 +196,7 @@ fn reconcile_slot<Item, KeyFn, B>(
             set_leading_margin(item, is_row, if i == 0 { 0.0 } else { gap });
         }
     }
-    for (_, child) in old {
+    for child in old.into_values().chain(strays) {
         dispose_child(&child);
     }
     version.update(|v| *v = v.wrapping_add(1));

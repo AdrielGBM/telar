@@ -70,10 +70,6 @@ fn a_freed_node_is_an_error_and_never_a_panic() {
         "computing layout for a freed node is an error, not a panic"
     );
     assert_eq!(engine.is_size_auto(ghost), (false, false));
-    assert!(
-        engine.is_fixed_size(ghost).is_none(),
-        "a freed node has no size to report"
-    );
     // The reads that cannot fail still have to answer without touching taffy.
     engine.set_width(ghost, Some(10.0));
     engine.set_height(ghost, None);

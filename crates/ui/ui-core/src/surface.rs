@@ -33,7 +33,7 @@ pub enum Edge {
 }
 
 /// Enter-animation duration and slide travel.
-const ENTER_MS: u64 = 200;
+pub(crate) const ENTER_MS: u64 = 200;
 const SLIDE_DISTANCE: f32 = 24.0;
 pub(crate) const IDENTITY: [f32; 6] = [1.0, 0.0, 0.0, 1.0, 0.0, 0.0];
 
@@ -49,18 +49,20 @@ pub(crate) fn enter_transform(motion: EnterMotion, progress: f32) -> ([f32; 6], 
     let opacity = p;
     match motion {
         EnterMotion::Fade => (IDENTITY, opacity),
-        EnterMotion::Slide(anchor) => {
-            let d = SLIDE_DISTANCE * (1.0 - p);
-            let (dx, dy) = match anchor {
-                Edge::Top => (0.0, -d),
-                Edge::Bottom => (0.0, d),
-                Edge::Left => (-d, 0.0),
-                Edge::Right => (d, 0.0),
-                Edge::Center => (0.0, 0.0),
-            };
-            (Transform::translate(dx, dy).to_array(), opacity)
-        }
+        EnterMotion::Slide(anchor) => (slide_matrix(anchor, SLIDE_DISTANCE * (1.0 - p)), opacity),
     }
+}
+
+/// A translation `distance` px off `edge`, toward the outside of the viewport.
+pub(crate) fn slide_matrix(edge: Edge, distance: f32) -> [f32; 6] {
+    let (dx, dy) = match edge {
+        Edge::Top => (0.0, -distance),
+        Edge::Bottom => (0.0, distance),
+        Edge::Left => (-distance, 0.0),
+        Edge::Right => (distance, 0.0),
+        Edge::Center => (0.0, 0.0),
+    };
+    Transform::translate(dx, dy).to_array()
 }
 
 pub(crate) fn apply_enter(node: RenderNode, matrix: [f32; 6], opacity: f32) -> RenderNode {

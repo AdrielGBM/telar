@@ -16,17 +16,21 @@ mod signals;
 mod surface;
 
 pub(crate) use effects::{
-    current_observer, is_alive, register_effect, register_pure_effect, run_effect, schedule,
+    current_observer, force_run_effect, is_alive, register_effect, register_pure_effect,
+    run_effect, schedule, untracked,
 };
-pub use flush::{batch, begin_batch, end_batch, reset_runtime, set_flush_notify};
+pub use flush::{after_settle, batch, begin_batch, end_batch, reset_runtime, set_flush_notify};
+pub(crate) use owner::is_surface_disposed;
 pub use owner::{
-    OwnerGuard, OwnerId, context_provided_here, current_owner, dispose_owner,
-    dispose_surface_owners, live_effect_count, live_signal_count, on_cleanup, owner_scope,
-    provide_context, with_context, with_owner,
+    OwnerGuard, OwnerId, PanicCatch, PanicPayload, context_provided_here, current_owner,
+    dispose_owner, dispose_surface, dispose_surface_owners, find_context, in_surface_world,
+    live_effect_count, live_owner_count, live_signal_count, on_cleanup, owner_scope, owner_within,
+    provide_context, set_panic_catch, with_context, with_owner,
 };
 pub(crate) use signals::{
-    create_signal_storage, notify_signal, set_signal_value, signal_is_alive, track_signal,
-    try_with_signal_value, update_signal_value, with_signal_value,
+    claim_transaction, create_signal_storage, notify_signal, release_transaction, set_signal_value,
+    signal_is_alive, signal_version, track_signal, try_update_signal_value, try_with_signal_value,
+    update_signal_value, with_signal_value,
 };
 pub use surface::{
     SurfaceEnterGuard, SurfaceHandle, current_surface, set_current_surface, set_surface_enter_hook,
@@ -65,19 +69,29 @@ pub(crate) struct SignalStorage {
 
 pub(crate) struct Runtime {
     pub(crate) observer_stack: Vec<EffectId>,
+    /// How many effect runs are on the call stack. Not the observer stack's length: `untracked` hides that stack while the run that called it is still executing.
+    pub(crate) running_effects: usize,
     pub(crate) owners: SlotMap<OwnerId, owner::OwnerEntry>,
     pub(crate) owner_stack: Vec<OwnerId>,
     /// The owner everything created outside every scope belongs to, one per surface, minted on demand.
     pub(crate) roots: FxHashMap<SurfaceHandle, OwnerId>,
+    /// The owner a surface's own worlds belong to, disposed after everything else on the surface: see [`in_surface_world`](owner::in_surface_world).
+    pub(crate) worlds: FxHashMap<SurfaceHandle, OwnerId>,
+    /// Every surface [`dispose_surface`](owner::dispose_surface) has torn down, so a callback queued against one before it settles (see [`after_settle`](flush::after_settle)) can tell its surface is gone rather than running under whatever world happens to be active. Surface ids are never reused, so this only grows.
+    pub(crate) disposed_surfaces: FxHashSet<SurfaceHandle>,
     pub(crate) effects: SlotMap<EffectId, EffectEntry>,
     pub(crate) signals: SlotMap<SignalId, SignalStorage>,
     pub(crate) batch_depth: usize,
     pub(crate) pending: Vec<EffectId>,
     pub(crate) memo_pending: BinaryHeap<(Reverse<u32>, EffectId)>,
     pub(crate) pending_set: FxHashSet<EffectId>,
+    /// The signals a [`crate::Transaction`] is open on, so a second one on the same signal is refused.
+    pub(crate) transactions: FxHashSet<SignalId>,
     // Reused to copy a signal's subscribers out before scheduling, instead of allocating per write.
     subscriber_scratch: Vec<EffectId>,
     flush_callbacks: Vec<(u64, Rc<dyn Fn()>)>,
+    /// Work that waits for every write so far to reach its effects: see [`after_settle`](flush::after_settle).
+    pub(crate) settle_queue: Vec<(SurfaceHandle, Box<dyn FnOnce()>)>,
     next_flush_callback_id: u64,
     /// How many teardowns are in flight. Non-zero means the arenas are mid-surgery — see `owner::Disposing` — and `flush` stays out until it is back to zero.
     pub(crate) disposing: usize,
@@ -92,17 +106,22 @@ impl Runtime {
     fn new() -> Self {
         Runtime {
             observer_stack: Vec::new(),
+            running_effects: 0,
             owners: SlotMap::with_key(),
             owner_stack: Vec::new(),
             roots: FxHashMap::default(),
+            worlds: FxHashMap::default(),
+            disposed_surfaces: FxHashSet::default(),
             effects: SlotMap::with_key(),
             signals: SlotMap::with_key(),
             batch_depth: 0,
             pending: Vec::new(),
             memo_pending: BinaryHeap::new(),
             pending_set: FxHashSet::default(),
+            transactions: FxHashSet::default(),
             subscriber_scratch: Vec::new(),
             flush_callbacks: Vec::new(),
+            settle_queue: Vec::new(),
             next_flush_callback_id: 0,
             disposing: 0,
             flushing: false,

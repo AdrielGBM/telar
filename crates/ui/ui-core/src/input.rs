@@ -151,6 +151,21 @@ impl Input {
         self
     }
 
+    /// Selects the whole text each time the field takes focus, so typing replaces it — what a value opened for editing in place wants.
+    pub fn select_on_focus(self) -> Self {
+        let (id, value, caret, anchor) = (self.id, self.value, self.caret, self.anchor);
+        let had = std::cell::Cell::new(focus::is_focused(id));
+        effect(move || {
+            let now = focus::is_focused(id);
+            if now && !had.get() {
+                caret.set(value.peek().len());
+                anchor.set(Some(0));
+            }
+            had.set(now);
+        });
+        self
+    }
+
     /// The id this field holds in the tab order.
     ///
     /// For the caller that has to answer «who has the keyboard» about a field it did not build — a tab that turns into one, a cell edited in place — and cannot ask [`focus::current`] instead: that says who holds it now, which is the same answer for every field on the surface. `focus_id:$sig` in a `[view]` is this, mirrored into a signal and withdrawn when the field goes.

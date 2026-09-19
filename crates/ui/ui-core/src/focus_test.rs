@@ -137,3 +137,205 @@ fn tab_order_steps_forward_and_back() {
     unregister(a);
     unregister(c);
 }
+
+/// A press handler that shows a hidden field through a signal and focuses it in the same event: the event's batch has not yet run the effect that shows it, so the request is judged once it has.
+#[test]
+fn a_field_shown_and_focused_in_one_event_gets_the_focus() {
+    use layout_core::{AvailableSpace, LayoutStyle};
+    use platform_core::{Event, PointerButton, PointerSource};
+    use reactive_core::signal;
+    use renderer_core::{Color, RectStyle, TextStyle};
+
+    use crate::layout_item::{LayoutItem, box_item};
+    use crate::{ComponentList, Container, Input, StyledContainer, style_follows};
+
+    crate::context::reset_layout_runtime();
+    clear();
+    let shown = signal(false);
+    let field = Input::new(signal(String::new()), LayoutStyle::new(), || {
+        TextStyle::new(14.0, Color::BLACK)
+    })
+    .unwrap();
+    let field_id = field.focus_id();
+    style_follows(field.layout_node(), move || match shown.get() {
+        true => LayoutStyle::new().width(100.0).height(20.0),
+        false => LayoutStyle::new().display_none(),
+    });
+    let opener = StyledContainer::new(
+        LayoutStyle::new().width(100.0).height(20.0),
+        |_| RectStyle::default(),
+        vec![],
+    )
+    .unwrap()
+    .on_press(move || {
+        shown.set(true);
+        request(field_id);
+    });
+    let column = Container::new(
+        LayoutStyle::new().flex_column().width(200.0).height(100.0),
+        vec![box_item(opener), box_item(field)],
+    )
+    .unwrap();
+    crate::context::compute_layout(
+        column.layout_node(),
+        AvailableSpace::Definite(200.0),
+        AvailableSpace::Definite(100.0),
+    )
+    .unwrap();
+    let mut tree = ComponentList::new(box_item(column));
+
+    let at = |pressed: bool| {
+        let (x, y, button, source) = (10.0, 10.0, PointerButton::Primary, PointerSource::Mouse);
+        match pressed {
+            true => Event::PointerPressed {
+                x,
+                y,
+                button,
+                source,
+            },
+            false => Event::PointerReleased {
+                x,
+                y,
+                button,
+                source,
+            },
+        }
+    };
+    tree.on_event(&at(true));
+    tree.on_event(&at(false));
+    assert!(
+        is_focused(field_id),
+        "the field was hidden when asked and shown by the end of the event"
+    );
+}
+
+/// A request judged later still refuses a field that stayed hidden.
+#[test]
+fn a_field_still_hidden_after_the_event_is_not_focused() {
+    use layout_core::LayoutStyle;
+    use reactive_core::{batch, signal};
+    use renderer_core::{Color, TextStyle};
+
+    use crate::layout_item::LayoutItem;
+    use crate::{Input, style_follows};
+
+    crate::context::reset_layout_runtime();
+    clear();
+    let field = Input::new(signal(String::new()), LayoutStyle::new(), || {
+        TextStyle::new(14.0, Color::BLACK)
+    })
+    .unwrap();
+    let field_id = field.focus_id();
+    style_follows(field.layout_node(), || LayoutStyle::new().display_none());
+    batch(|| request(field_id));
+    assert!(!is_focused(field_id));
+}
+
+fn field_shown_by(shown: reactive_core::RwSignal<bool>) -> crate::Input {
+    use layout_core::LayoutStyle;
+    use renderer_core::{Color, TextStyle};
+
+    use crate::layout_item::LayoutItem;
+
+    let field = crate::Input::new(
+        reactive_core::signal(String::new()),
+        LayoutStyle::new(),
+        || TextStyle::new(14.0, Color::BLACK),
+    )
+    .unwrap();
+    crate::style_follows(field.layout_node(), move || match shown.get() {
+        true => LayoutStyle::new().width(100.0).height(20.0),
+        false => LayoutStyle::new().display_none(),
+    });
+    field
+}
+
+/// A hidden field asked for first and shown by the end of the batch must not take focus from a field asked for after it.
+#[test]
+fn a_deferred_request_loses_to_a_later_one() {
+    use reactive_core::{batch, signal};
+
+    crate::context::reset_layout_runtime();
+    clear();
+    let shown = signal(false);
+    let hidden = field_shown_by(shown);
+    let visible = field_shown_by(signal(true));
+
+    batch(|| {
+        request(hidden.focus_id());
+        shown.set(true);
+        request(visible.focus_id());
+    });
+
+    assert!(is_focused(visible.focus_id()));
+}
+
+/// A blur after a request that is still waiting on its batch is the later word.
+#[test]
+fn a_deferred_request_loses_to_a_later_release_or_clear() {
+    use reactive_core::{batch, signal};
+
+    crate::context::reset_layout_runtime();
+    clear();
+    let shown = signal(false);
+    let field = field_shown_by(shown);
+
+    batch(|| {
+        request(field.focus_id());
+        shown.set(true);
+        release(field.focus_id());
+    });
+    assert_eq!(current(), None, "released");
+
+    shown.set(false);
+    batch(|| {
+        request(field.focus_id());
+        shown.set(true);
+        clear();
+    });
+    assert_eq!(current(), None, "cleared");
+
+    shown.set(false);
+    batch(|| {
+        request(field.focus_id());
+        shown.set(true);
+    });
+    assert!(
+        is_focused(field.focus_id()),
+        "and one nothing overrode still lands"
+    );
+}
+
+/// A request waiting on its batch names an id minted by its own surface; once that surface is gone the same number names a stranger in whichever world is active.
+#[test]
+fn a_deferred_request_from_a_surface_that_is_gone_does_nothing() {
+    use reactive_core::{batch, signal};
+
+    crate::context::reset_layout_runtime();
+    clear();
+    let bystander = field_shown_by(signal(true));
+    let wanted_shown = signal(false);
+    let wanted = field_shown_by(wanted_shown);
+
+    batch(|| {
+        let surface = crate::Surface::new();
+        {
+            let _entered = surface.enter();
+            let shown = signal(false);
+            let field = field_shown_by(shown);
+            assert_eq!(
+                field.focus_id(),
+                bystander.focus_id(),
+                "the two surfaces mint the same id"
+            );
+            request(field.focus_id());
+            shown.set(true);
+            drop(field);
+        }
+        drop(surface);
+        request(wanted.focus_id());
+        wanted_shown.set(true);
+    });
+
+    assert!(is_focused(wanted.focus_id()));
+}

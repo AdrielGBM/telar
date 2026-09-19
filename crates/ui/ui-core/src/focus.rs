@@ -108,6 +108,9 @@ struct FocusState {
     // Bumped when a gate or an ownership link is registered, so the guard re-reads an ancestry it could not have subscribed to yet.
     reach: RwSignal<u64>,
     guard: Option<Effect>,
+    // The one request still waiting for its batch to settle, stamped so a request that lost to a later give, blur or request does not act when it is finally judged.
+    deferred: Option<(u64, FocusId)>,
+    requests: u64,
 }
 
 impl FocusState {
@@ -122,6 +125,8 @@ impl FocusState {
             text_entries: FxHashSet::default(),
             reach: signal(0),
             guard: None,
+            deferred: None,
+            requests: 0,
         }
     }
 }
@@ -159,7 +164,7 @@ pub fn is_focused(id: FocusId) -> bool {
 
 // The three commands below `peek` the signal they write: an effect may well issue one ("focus the selected row's field"), and a reactive read would subscribe it to the focus it sets, taking focus straight back on the next change anywhere. Same rule as `ScrollViewport::reveal`.
 
-/// Gives focus to `id`: a no-op if it already holds it, or if it sits in a subtree that takes no input.
+/// Gives focus to `id`: a no-op if it already holds it, or if it sits in a subtree that takes no input, though a subtree hidden when asked is judged again once its batch settles.
 pub fn request(id: FocusId) {
     take(id, false);
 }
@@ -171,10 +176,43 @@ pub fn request_from_pointer(id: FocusId) {
     take(id, true);
 }
 
+/// Only the latest word on focus counts: a request judged after its batch settles acts only if nothing gave, released or requested focus since it was made.
 fn take(id: FocusId, from_pointer: bool) {
-    if node_of(id).is_some_and(|node| !crate::input_region::receives_input(node)) {
+    if !refuses(id) {
+        give(id, from_pointer);
         return;
     }
+    let request = with_focus(|s| {
+        s.requests += 1;
+        s.deferred = Some((s.requests, id));
+        s.requests
+    });
+    let surface = reactive_core::current_surface();
+    reactive_core::after_settle(move || {
+        // The id is only meaningful in the surface that minted it, and that surface may be gone by now.
+        if reactive_core::current_surface() != surface {
+            return;
+        }
+        let current = with_focus(|s| match s.deferred {
+            Some((pending, _)) if pending == request => s.deferred.take().is_some(),
+            _ => false,
+        });
+        if current && is_registered(id) && !refuses(id) {
+            give(id, from_pointer);
+        }
+    });
+}
+
+fn supersede_deferred() {
+    with_focus(|s| s.deferred = None);
+}
+
+fn refuses(id: FocusId) -> bool {
+    node_of(id).is_some_and(|node| !crate::input_region::receives_input(node))
+}
+
+fn give(id: FocusId, from_pointer: bool) {
+    supersede_deferred();
     guard_focus();
     set_pointer_focus(from_pointer);
     let focused = focused_signal();
@@ -203,8 +241,17 @@ fn set_pointer_focus(from_pointer: bool) {
     }
 }
 
-/// Removes focus from `id`, but only if it currently holds it — so a widget blurring itself never steals focus away from another.
+/// Removes focus from `id`, but only if it currently holds it — so a widget blurring itself never steals focus away from another — and withdraws a request for `id` still waiting on its batch.
 pub fn release(id: FocusId) {
+    let held = focused_signal().peek() == Some(id);
+    let pending = with_focus_ref(|s| s.deferred.is_some_and(|(_, waiting)| waiting == id));
+    if held || pending {
+        supersede_deferred();
+    }
+    drop_focus(id);
+}
+
+fn drop_focus(id: FocusId) {
     let focused = focused_signal();
     if focused.peek() == Some(id) {
         focused.set(None);
@@ -215,7 +262,7 @@ fn guard_focus() {
     if with_focus_ref(|s| s.guard.is_some()) {
         return;
     }
-    let guard = reactive_core::detached(|| {
+    let guard = reactive_core::in_surface_world(|| {
         effect(|| {
             with_focus_ref(|s| s.reach).get();
             let Some(id) = focused_signal().get() else {
@@ -228,7 +275,7 @@ fn guard_focus() {
                 rect.get();
             }
             if !crate::input_region::receives_input(node) {
-                release(id);
+                drop_focus(id);
             }
         })
     });
@@ -263,8 +310,9 @@ pub fn blur_from_pointer(x: f32, y: f32) {
     }
 }
 
-/// Clears focus entirely, whoever holds it.
+/// Clears focus entirely, whoever holds it, and withdraws any request still waiting on its batch.
 pub fn clear() {
+    supersede_deferred();
     let focused = focused_signal();
     if focused.peek().is_some() {
         focused.set(None);

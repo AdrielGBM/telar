@@ -15,5 +15,6 @@ pub use easing::Easing;
 pub use keyframes::{Keyframes, KeyframesBuilder, Repeat};
 pub use lerp::Lerp;
 pub use ticker::{
-    Continuous, Tickable, has_active, has_continuous, next_id, register, reset, set_scale, tick,
+    Continuous, Tickable, has_active, has_continuous, next_id, register, reset, scale, set_scale,
+    tick,
 };

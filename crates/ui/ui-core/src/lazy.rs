@@ -9,8 +9,10 @@ use platform_core::Event;
 use reactive_core::{Effect, RwSignal, effect, signal};
 use ui_tree::{Component, EventResult, RenderNode};
 
-use crate::context::{mark_dirty, new_container, set_children, set_display, track_layout};
-use crate::layout_item::{LayoutItem, TrackedChildren, make_child};
+use crate::context::{
+    mark_dirty, new_container, record_nodes, set_children, set_display, track_layout,
+};
+use crate::layout_item::{Child, LayoutItem, TrackedChildren, build_owned, make_child};
 use crate::pointer::dispatch_container_event;
 
 /// The deferred subtree, taken out of the cell and run the first time the block is shown.
@@ -89,10 +91,18 @@ fn realize(state: &Rc<RefCell<LazyState>>) -> bool {
         return false;
     };
     // Built outside the state borrow: constructing widgets reads and writes signals whose effects can reach back into this cell.
-    let Ok(items) = build() else {
-        return false;
-    };
-    let children: TrackedChildren = items.into_iter().map(make_child).collect();
+    let recording = record_nodes();
+    let built = build_owned(|| {
+        build().map(|items| {
+            items
+                .into_iter()
+                .map(make_child)
+                .collect::<TrackedChildren>()
+        })
+    });
+    // Raised rather than dropped: the builder is spent, so a swallowed error would leave the block empty for good, where a panic reaches the nearest boundary as a reactive list's failed row does.
+    let (children, _) = built.expect("lazy block build");
+    recording.keep();
     let nodes: Vec<NodeId> = children.iter().map(|c| c.node()).collect();
 
     let mut st = state.borrow_mut();
@@ -128,8 +138,9 @@ impl Component for Lazy {
         if !(self.visible)() {
             return EventResult::Ignored;
         }
-        let mut st = self.state.borrow_mut();
-        dispatch_container_event(&mut st.children, event)
+        // A snapshot, because a handler can show the block again and the effect that answers reads this state.
+        let mut children: Vec<Child> = self.state.borrow().children.clone();
+        dispatch_container_event(&mut children, event)
     }
 
     fn debug_name(&self) -> &'static str {

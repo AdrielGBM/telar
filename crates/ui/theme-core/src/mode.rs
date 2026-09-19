@@ -13,8 +13,8 @@ use reactive_core::{RwSignal, detached, signal};
 type ApplyMode = Rc<dyn Fn()>;
 
 thread_local! {
-    // ManuallyDrop mirrors THEME/WIDGET_THEME in context.rs: no TLS destructor is registered, so unmapping the dylib on dlclose stays safe. Cleanup happens via reset_runtime() dropping the whole Runtime.
     static ACTIVE_MODE: RwSignal<Option<String>> = detached(|| signal(None));
+    // `ManuallyDrop` so no TLS destructor is registered and unmapping the app dylib on `dlclose` stays safe; the table is leaked at thread exit instead.
     static MODES: ManuallyDrop<RefCell<HashMap<String, ApplyMode>>> =
         ManuallyDrop::new(RefCell::new(HashMap::new()));
 }
@@ -45,7 +45,7 @@ pub fn active_mode() -> Option<String> {
 }
 
 thread_local! {
-    // The (light, dark) mode-id pair, so is_dark can tell which registered mode is the dark one without the app hardcoding it. ManuallyDrop for the same dlclose-safety reason as MODES/ACTIVE_MODE above. None until set_light_dark is called.
+    // The (light, dark) mode-id pair, so is_dark can tell which registered mode is the dark one without the app hardcoding it. ManuallyDrop for the same dlclose-safety reason as MODES above. None until set_light_dark is called.
     static SCHEME_PAIR: ManuallyDrop<RefCell<Option<(String, String)>>> =
         const { ManuallyDrop::new(RefCell::new(None)) };
 }
@@ -66,7 +66,7 @@ pub(crate) fn is_dark() -> bool {
 }
 
 thread_local! {
-    // OS light/dark preference, fed by set_system_dark from the platform layer and read reactively by the follow_system effect. ManuallyDrop for the same dlclose-safety reason as the signals above.
+    // OS light/dark preference, fed by set_system_dark from the platform layer and read reactively by the follow_system effect.
     static SYSTEM_DARK: RwSignal<bool> = detached(|| signal(false));
     // Keeps the follow_system effect alive for the app's lifetime; replaced (old dropped) on re-call, since a hot reload re-runs the app's setup.
     static FOLLOW: ManuallyDrop<RefCell<Option<reactive_core::Effect>>> =

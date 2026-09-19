@@ -8,9 +8,10 @@
 
 use std::cell::{Cell, RefCell};
 use std::mem::ManuallyDrop;
+use std::panic::{AssertUnwindSafe, catch_unwind, resume_unwind};
 
 use layout_core::NodeId;
-use reactive_core::{OwnerId, dispose_owner};
+use reactive_core::{OwnerId, PanicPayload, dispose_owner};
 
 use crate::context::remove_node;
 
@@ -30,7 +31,9 @@ struct Retired {
 pub(crate) fn retire(owner: Option<OwnerId>, node: NodeId) {
     let retired = Retired { owner, node };
     if DEPTH.with(Cell::get) == 0 {
-        free(retired);
+        let mut panicked = None;
+        free(retired, &mut panicked);
+        report(panicked);
         return;
     }
     RETIRED.with(|r| r.borrow_mut().push(retired));
@@ -57,23 +60,45 @@ impl Drop for DispatchGuard {
         if !outermost {
             return;
         }
+        let mut panicked = None;
         // Taken rather than drained in place: freeing an owner runs teardown that may retire something else.
         loop {
             let batch = RETIRED.with(|r| std::mem::take(&mut *r.borrow_mut()));
             if batch.is_empty() {
-                return;
+                break;
             }
             for retired in batch {
-                free(retired);
+                free(retired, &mut panicked);
             }
         }
+        report(panicked);
     }
 }
 
-fn free(retired: Retired) {
+/// Frees one retired child, containing a panic so the rest of a batch is still freed: a teardown that stops early leaks everything after it.
+fn free(retired: Retired, panicked: &mut Option<PanicPayload>) {
     // Owner before node: a node freed first has its id back in circulation while the owner still points at it, which lands the cascade on whatever the id names next.
     if let Some(owner) = retired.owner {
-        dispose_owner(owner);
+        contain(panicked, || dispose_owner(owner));
     }
-    remove_node(retired.node);
+    contain(panicked, || remove_node(retired.node));
 }
+
+fn contain(first: &mut Option<PanicPayload>, f: impl FnOnce()) {
+    if let Err(payload) = catch_unwind(AssertUnwindSafe(f)) {
+        first.get_or_insert(payload);
+    }
+}
+
+/// Resumes the first panic a teardown contained, unless one is already unwinding through here: a second panic out of a `Drop` aborts the process.
+fn report(panicked: Option<PanicPayload>) {
+    if let Some(payload) = panicked
+        && !std::thread::panicking()
+    {
+        resume_unwind(payload);
+    }
+}
+
+#[cfg(test)]
+#[path = "disposal_test.rs"]
+mod tests;

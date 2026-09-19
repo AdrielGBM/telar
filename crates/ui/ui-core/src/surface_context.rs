@@ -11,13 +11,16 @@ use std::rc::{Rc, Weak};
 use layout_reactive::{LayoutContext, LayoutGuard, ParentsContext, ParentsGuard};
 use platform_core::{WindowCommandContext, WindowCommandGuard};
 use reactive_core::{
-    SurfaceEnterGuard, SurfaceHandle, dispose_surface_owners, set_current_surface,
+    SurfaceEnterGuard, SurfaceHandle, dispose_surface, in_surface_world, set_current_surface,
     set_surface_enter_hook,
 };
 use ui_tree::{OverlayContext, OverlayGuard};
 
+use crate::cursor::{CursorContext, CursorGuard};
 use crate::focus::{FocusContext, FocusGuard};
+use crate::inherit::{CascadeContext, CascadeGuard};
 use crate::input_region::{InputRegionContext, InputRegionGuard};
+use crate::presence::{ExitsContext, ExitsGuard};
 
 /// The complete per-surface world plus its reactive [`SurfaceHandle`]. Build one per window/layer-surface with [`Surface::new`]; activate it with [`Surface::enter`].
 pub struct Surface {
@@ -28,6 +31,9 @@ pub struct Surface {
     overlay: OverlayContext,
     focus: FocusContext,
     input_region: InputRegionContext,
+    exits: ExitsContext,
+    cascade: CascadeContext,
+    cursor: CursorContext,
     window_commands: WindowCommandContext,
 }
 
@@ -36,15 +42,23 @@ impl Surface {
     pub fn new() -> Rc<Self> {
         install_enter_hook();
         let handle = next_handle();
-        let surface = Rc::new(Self {
-            handle,
-            layout: LayoutContext::new(),
-            parents: ParentsContext::new(),
-            overlay: OverlayContext::new(),
-            focus: FocusContext::new(),
-            input_region: InputRegionContext::new(),
-            window_commands: WindowCommandContext::new(),
-        });
+        // Built in the surface's own world rather than detached, so what the worlds hold is freed when the surface drops instead of never.
+        let world = {
+            let _active = RestoreSurface(set_current_surface(handle));
+            in_surface_world(|| Self {
+                handle,
+                layout: LayoutContext::new_owned(),
+                parents: ParentsContext::new_owned(),
+                overlay: OverlayContext::new_owned(),
+                focus: FocusContext::new_owned(),
+                input_region: InputRegionContext::new_owned(),
+                exits: ExitsContext::new_owned(),
+                cascade: CascadeContext::new_owned(),
+                cursor: CursorContext::new_owned(),
+                window_commands: WindowCommandContext::new_owned(),
+            })
+        };
+        let surface = Rc::new(world);
         SURFACES.with(|s| s.borrow_mut().insert(handle, Rc::downgrade(&surface)));
         surface
     }
@@ -65,7 +79,10 @@ impl Surface {
             _overlay: self.overlay.enter(),
             _focus: self.focus.enter(),
             _input_region: self.input_region.enter(),
+            _exits: self.exits.enter(),
+            _cascade: self.cascade.enter(),
             _window_commands: self.window_commands.enter(),
+            _cursor: self.cursor.enter(),
             _prev_surface: RestoreSurface(prev_surface),
         }
     }
@@ -84,7 +101,10 @@ impl Surface {
             _overlay: OverlayContext::enter_ambient(),
             _focus: FocusContext::enter_ambient(),
             _input_region: InputRegionContext::enter_ambient(),
+            _exits: ExitsContext::enter_ambient(),
+            _cascade: CascadeContext::enter_ambient(),
             _window_commands: WindowCommandContext::enter_ambient(),
+            _cursor: CursorContext::enter_ambient(),
             _prev_surface: RestoreSurface(prev_surface),
         }
     }
@@ -95,7 +115,7 @@ impl Drop for Surface {
         // Entered while disposing: an owner's teardown reaches into the surface-local worlds about to be dropped, and a withdrawal against whichever surface happened to be active would land on another's layout tree.
         {
             let _entered = self.enter();
-            dispose_surface_owners(self.handle);
+            dispose_surface(self.handle);
         }
         SURFACES.with(|s| {
             s.borrow_mut().remove(&self.handle);
@@ -111,7 +131,10 @@ pub struct SurfaceGuard {
     _overlay: OverlayGuard,
     _focus: FocusGuard,
     _input_region: InputRegionGuard,
+    _exits: ExitsGuard,
+    _cascade: CascadeGuard,
     _window_commands: WindowCommandGuard,
+    _cursor: CursorGuard,
     _prev_surface: RestoreSurface,
 }
 

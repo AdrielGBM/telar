@@ -75,3 +75,22 @@ pub(crate) fn centre(rect: Rect) -> (f64, f64) {
         (rect.y + rect.height / 2.0) as f64,
     )
 }
+
+pub(crate) fn key_with(key: platform_core::Key, modifiers: platform_core::ModifiersState) -> Event {
+    Event::KeyPressed { key, modifiers }
+}
+
+pub(crate) fn named(key: platform_core::NamedKey) -> Event {
+    key_with(platform_core::Key::Named(key), Default::default())
+}
+
+/// Holds exactly the modifiers named, the way the runner feeds the keyboard registry before a dispatch.
+pub(crate) fn hold(is_shift: bool, is_alt: bool) -> platform_core::ModifiersState {
+    let modifiers = platform_core::ModifiersState {
+        is_shift,
+        is_alt,
+        ..Default::default()
+    };
+    ui_core::observe_keyboard(&Event::ModifiersChanged { modifiers });
+    modifiers
+}

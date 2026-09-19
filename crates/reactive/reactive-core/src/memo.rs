@@ -2,6 +2,7 @@
 
 use std::cell::RefCell;
 use std::marker::PhantomData;
+use std::panic::{AssertUnwindSafe, catch_unwind, resume_unwind};
 use std::rc::Rc;
 
 use smallvec::SmallVec;
@@ -11,12 +12,14 @@ use crate::runtime::{self, EffectId, SignalId};
 enum MemoState<T> {
     Computing, // reading while Computing means the closure re-entered itself: a cycle
     Clean(T),
+    /// No value: before the first computation, and after one that panicked.
     Dirty,
 }
 
 struct MemoInner<T> {
     state: MemoState<T>,
     subscribers: SmallVec<[EffectId; 4]>,
+    recompute: Option<EffectId>,
 }
 
 /// A derived value, recomputed when what it reads moves.
@@ -48,10 +51,20 @@ impl<T: 'static> Memo<T> {
     pub fn with<R>(&self, f: impl FnOnce(&T) -> R) -> R {
         let inner = self.shared();
         self.track(&inner);
+        // A computation that panicked left nothing to read, and nothing reschedules it until a source moves: the read computes it again, so it either answers or panics with the real cause.
+        let recompute = {
+            let borrow = inner.borrow();
+            matches!(borrow.state, MemoState::Dirty)
+                .then_some(borrow.recompute)
+                .flatten()
+        };
+        if let Some(recompute) = recompute {
+            runtime::force_run_effect(recompute);
+        }
         let borrow = inner.borrow();
         match &borrow.state {
             MemoState::Clean(v) => f(v),
-            MemoState::Dirty => panic!("memo read while Dirty — flush ordering issue"),
+            MemoState::Dirty => panic!("memo has no value: its computation panicked"),
             MemoState::Computing => panic!("reactive cycle detected in memo"),
         }
     }
@@ -87,6 +100,7 @@ pub fn memo<T: PartialEq + 'static>(f: impl Fn() -> T + 'static) -> Memo<T> {
     let inner: Shared<T> = Rc::new(RefCell::new(MemoInner {
         state: MemoState::Dirty,
         subscribers: SmallVec::new(),
+        recompute: None,
     }));
 
     // The arena slot owns the state, so the memo is disposed with its owner. The closure holds a `Weak` rather than the slot's id, because the recompute runs during a flush that may come after disposal — a `Weak` that fails to upgrade says so, where a stale id would only panic.
@@ -96,7 +110,13 @@ pub fn memo<T: PartialEq + 'static>(f: impl Fn() -> T + 'static) -> Memo<T> {
             return;
         };
         inner.borrow_mut().state = MemoState::Computing;
-        let new_value = f();
+        let new_value = match catch_unwind(AssertUnwindSafe(&f)) {
+            Ok(value) => value,
+            Err(payload) => {
+                inner.borrow_mut().state = MemoState::Dirty;
+                resume_unwind(payload);
+            }
+        };
         let subs: SmallVec<[EffectId; 8]> = {
             let mut memo = inner.borrow_mut();
             let changed = match &memo.state {
@@ -126,9 +146,11 @@ pub fn memo<T: PartialEq + 'static>(f: impl Fn() -> T + 'static) -> Memo<T> {
         }
     });
 
-    let id = runtime::create_signal_storage(inner);
-    // Registered as a pure effect, so it runs before user effects during flush. Nothing holds its id: the owner active here recorded it, and that is what disposes it.
+    let id = runtime::create_signal_storage(Rc::clone(&inner));
+    // Registered as a pure effect, so it runs before user effects during flush. The owner active here recorded it, and that is what disposes it.
     let effect_id = runtime::register_pure_effect(effect_f);
+    inner.borrow_mut().recompute = Some(effect_id);
+    drop(inner);
     runtime::run_effect(effect_id);
 
     Memo {

@@ -226,3 +226,41 @@ fn every_way_out_says_so_once() {
     route(&mut tree, &key(NamedKey::Escape));
     assert_eq!(*said.borrow(), vec!["cerrar"], "escape no lo cerró");
 }
+
+#[test]
+fn declaring_the_rows_leaves_no_layout_nodes_behind() {
+    fresh_layout_runtime();
+    let labels = reactive_core::signal(vec!["b", "c"]);
+    let rows = Children::new(move || {
+        let row = |label: &'static str| {
+            menu_row(
+                MenuRowProps::props().label(label).build(),
+                Children::default(),
+            )
+        };
+        let mut slots = ui_core::Slots::new();
+        slots.push(
+            None,
+            box_item(ui_core::Container::new(
+                LayoutStyle::new(),
+                vec![row("a")?],
+            )?),
+        );
+        slots.push(
+            None,
+            box_item(ui_core::ReactiveList::new(
+                move || labels.get(),
+                |label: &&str| *label,
+                row,
+                0.0,
+            )?),
+        );
+        Ok(slots)
+    });
+    let baseline = ui_core::live_node_count();
+
+    let entries = declared(&rows).unwrap();
+
+    assert_eq!(entries.len(), 3);
+    assert_eq!(ui_core::live_node_count(), baseline);
+}

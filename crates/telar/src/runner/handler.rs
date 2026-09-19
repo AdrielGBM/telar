@@ -152,6 +152,18 @@ where
     }
 }
 
+/// The tree goes first, inside its own surface: its widgets withdraw what they registered from that surface's worlds, which do not outlive the `Surface`, and under hot reload its closures are code in the app's dylib, which dropping `app` unmaps.
+impl<W, D> Drop for AppHandler<W, D>
+where
+    W: Window + Clone + 'static,
+    D: DevPlugin,
+{
+    fn drop(&mut self) {
+        let _surface = self.enter_surface();
+        self.tree = None;
+    }
+}
+
 // Dropped fields restore the previous surface and queue; the two restores are independent, so drop order is irrelevant.
 struct LifecycleGuard {
     _surface: ui_core::SurfaceGuard,

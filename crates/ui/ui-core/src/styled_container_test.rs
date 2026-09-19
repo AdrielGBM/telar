@@ -3,7 +3,7 @@ use std::cell::Cell;
 use std::rc::Rc;
 
 use layout_core::AvailableSpace;
-use platform_core::{PointerButton, PointerSource};
+use platform_core::{PointerButton, PointerSource, WindowCommand};
 use renderer_core::{Color, ShapeStyle};
 use theme_core::{ThemeTokens, set_theme, use_theme};
 

@@ -159,3 +159,87 @@ fn the_ambient_control_size_scales_a_control_that_never_asked_for_one() {
     );
     set_control_size(ControlSize::Regular);
 }
+
+#[test]
+fn a_button_under_a_provider_paints_with_that_theme() {
+    use renderer_core::Color;
+    use theme_core::{ThemeTokens, set_theme};
+
+    #[derive(Clone)]
+    struct Palette {
+        primary: Color,
+        on_primary: Color,
+        spacing: f32,
+    }
+    impl ThemeTokens for Palette {
+        fn primary(&self) -> Color {
+            self.primary
+        }
+        fn on_primary(&self) -> Color {
+            self.on_primary
+        }
+        fn ink(&self) -> Color {
+            Color::BLACK
+        }
+        fn spacing(&self) -> f32 {
+            self.spacing
+        }
+    }
+    let red = Color::rgba(1.0, 0.0, 0.0, 1.0);
+    let blue = Color::rgba(0.0, 0.0, 1.0, 1.0);
+    let white = Color::rgba(1.0, 1.0, 1.0, 1.0);
+    let yellow = Color::rgba(1.0, 1.0, 0.0, 1.0);
+
+    crate::test_support::fresh_layout_runtime();
+    set_theme(Palette {
+        primary: blue,
+        on_primary: yellow,
+        spacing: 8.0,
+    });
+    let themed = ui_core::provide_theme(
+        Palette {
+            primary: red,
+            on_primary: white,
+            spacing: 16.0,
+        },
+        || button(ButtonProps::props().label("A").build(), Children::default()),
+    )
+    .unwrap();
+    let themed_rect = track_layout(themed.layout_node()).unwrap();
+    let plain = button(ButtonProps::props().label("A").build(), Children::default()).unwrap();
+    let plain_rect = track_layout(plain.layout_node()).unwrap();
+    let row = ui_core::Container::new(
+        LayoutStyle::new().flex_row().align_items(AlignItems::START),
+        vec![Box::new(themed), plain],
+    )
+    .unwrap();
+    compute_layout(
+        row.layout_node(),
+        AvailableSpace::MaxContent,
+        AvailableSpace::MaxContent,
+    )
+    .unwrap();
+
+    let tree = ComponentList::new(row);
+    let commands = tree.commands();
+    let fills: Vec<Color> = commands
+        .iter()
+        .filter_map(|c| match c {
+            DrawCommand::Rect { style, .. } => style.fill.as_ref().map(|p| p.solid_color()),
+            _ => None,
+        })
+        .collect();
+    let inks: Vec<Color> = commands
+        .iter()
+        .filter_map(|c| match c {
+            DrawCommand::Text { style, .. } => Some(style.color.solid_color()),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(fills, vec![red, blue]);
+    assert_eq!(inks, vec![white, yellow]);
+    assert!(
+        themed_rect.get().width > plain_rect.get().width,
+        "the provider's spacing pads the button it covers"
+    );
+}

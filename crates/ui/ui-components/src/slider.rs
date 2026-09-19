@@ -145,7 +145,7 @@ pub fn slider(props: SliderProps, _children: Children) -> Result<Box<dyn LayoutI
             max: max as f64,
         }
     })
-    .on_key({
+    .on_focused_key({
         let value = commit_value;
         let on_change = key_on_change.clone();
         move |key: &platform_core::Key| {
@@ -156,7 +156,8 @@ pub fn slider(props: SliderProps, _children: Children) -> Result<Box<dyn LayoutI
                 | platform_core::Key::Named(platform_core::NamedKey::ArrowDown) => -1.0,
                 _ => return,
             };
-            let stride = if step > 0.0 { step } else { (max - min) / 20.0 };
+            let stride = if step > 0.0 { step } else { (max - min) / 20.0 }
+                * ui_core::step_factor(ui_core::modifiers());
             let next = (value.peek() + delta * stride).clamp(min, max);
             value.set(next);
             if let Some(cb) = &on_change {

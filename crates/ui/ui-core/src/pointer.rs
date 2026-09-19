@@ -202,7 +202,7 @@ pub(crate) fn dispatch_container_event(
         let mut any_handled = false;
         for (i, child) in children.iter().enumerate() {
             let _covered = (over.is_some_and(|top| top > i)).then(occlude);
-            if child.owning(|| child.item.borrow_mut().on_event(event)) == EventResult::Handled {
+            if child.deliver(event) == EventResult::Handled {
                 any_handled = true;
             }
         }
@@ -218,7 +218,7 @@ pub(crate) fn dispatch_container_event(
     // Back to front, the order they are painted in: where two children overlap, the one on top takes the event whether or not it wants it. Falling sideways to a covered sibling is what made a wheel over a floating panel zoom the pane underneath.
     for child in children.iter_mut().rev() {
         // Offered even when its box misses the point: an absolutely placed descendant is painted, and pressed, outside it.
-        let result = child.owning(|| child.item.borrow_mut().on_event(event));
+        let result = child.deliver(event);
         if result == EventResult::Handled || covers(child, x, y) {
             return result;
         }
@@ -240,7 +240,7 @@ fn covers(child: &Child, x: f32, y: f32) -> bool {
 
 fn dispatch_to_children(children: &mut TrackedChildren, event: &Event) -> EventResult {
     for child in children.iter_mut() {
-        if child.owning(|| child.item.borrow_mut().on_event(event)) == EventResult::Handled {
+        if child.deliver(event) == EventResult::Handled {
             return EventResult::Handled;
         }
     }

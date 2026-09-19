@@ -1,9 +1,12 @@
 //! The layout runtime the widget tree drives: node rects as signals, dirty roots, and the overlay host.
 
+use std::cell::RefCell;
+use std::mem::ManuallyDrop;
+
 use geometry_core::Rect;
 use layout_core::{AvailableSpace, LayoutEngine, LayoutError, LayoutStyle, MeasureFn, NodeId};
-use reactive_core::{RwSignal, batch, signal};
-use rustc_hash::FxHashMap;
+use reactive_core::{OwnerId, RwSignal, SurfaceHandle, batch, signal};
+use rustc_hash::{FxHashMap, FxHashSet};
 
 reactive_core::surface_local! {
     /// Which node each node hangs from — the tree's *shape*, kept in its own world rather than inside [`LAYOUT_RUNTIME`].
@@ -29,7 +32,9 @@ pub fn reset_layout_runtime() {
 
 /// Creates a leaf node and returns it with the signal its laid-out rect is published through.
 pub fn new_leaf(style: LayoutStyle) -> Result<(NodeId, RwSignal<Rect>), LayoutError> {
-    with_runtime(|rt| rt.new_leaf(style))
+    let created = with_runtime(|rt| rt.new_leaf(style))?;
+    note_created(created.0);
+    Ok(created)
 }
 
 /// A leaf whose intrinsic size is computed by `measure` at layout time (e.g. text whose height depends on how many lines it wraps into at the resolved width).
@@ -42,12 +47,126 @@ pub fn new_measured_leaf(
     let owner = reactive_core::current_owner();
     let measure: MeasureFn =
         Box::new(move |input| reactive_core::with_owner(owner, || measure(input)));
-    with_runtime(|rt| rt.new_measured_leaf(style, measure))
+    let created = with_runtime(|rt| rt.new_measured_leaf(style, measure))?;
+    note_created(created.0);
+    Ok(created)
 }
 
 /// Creates a container node holding `children`.
 pub fn new_container(style: LayoutStyle, children: &[NodeId]) -> Result<NodeId, LayoutError> {
-    with_runtime(|rt| rt.new_container(style, children))
+    let node = with_runtime(|rt| rt.new_container(style, children))?;
+    note_created(node);
+    Ok(node)
+}
+
+// `ManuallyDrop` for the reason every TLS slot here carries it: a destructor registered from the app dylib makes `dlclose` unsafe.
+thread_local! {
+    /// Every open recording, innermost last.
+    static RECORDINGS: ManuallyDrop<RefCell<Vec<Recording>>> =
+        const { ManuallyDrop::new(RefCell::new(Vec::new())) };
+}
+
+/// The surface is part of a recording's claim because node ids are per-surface: a write during a build can flush an effect on another surface, and the ids that effect mints name nodes in a tree this recording cannot free.
+struct Recording {
+    root: Option<OwnerId>,
+    surface: SurfaceHandle,
+    nodes: Vec<(NodeId, Option<OwnerId>)>,
+}
+
+impl Recording {
+    /// Only a node built under the recording's owner is its own: a write during a build can flush effects elsewhere in the tree, and what they create is not the build's to free.
+    fn claims(&self, surface: SurfaceHandle, owner: Option<OwnerId>) -> bool {
+        if surface != self.surface {
+            return false;
+        }
+        match (self.root, owner) {
+            (None, _) => true,
+            (Some(root), Some(owner)) => reactive_core::owner_within(owner, root),
+            (Some(_), None) => false,
+        }
+    }
+}
+
+fn note_created(node: NodeId) {
+    let owner = reactive_core::current_owner();
+    let surface = reactive_core::current_surface();
+    RECORDINGS.with(|stack| {
+        if let Some(innermost) = stack.borrow_mut().last_mut()
+            && innermost.claims(surface, owner)
+        {
+            innermost.nodes.push((node, owner));
+        }
+    });
+}
+
+/// Starts recording the nodes created under the current owner from here on, so a build that panics or returns an error partway can free the ones nothing had attached yet — a disposed subtree only frees what hangs from its root.
+pub fn record_nodes() -> NodeRecording {
+    let depth = RECORDINGS.with(|stack| {
+        let mut stack = stack.borrow_mut();
+        stack.push(Recording {
+            root: reactive_core::current_owner(),
+            surface: reactive_core::current_surface(),
+            nodes: Vec::new(),
+        });
+        stack.len() - 1
+    });
+    NodeRecording { depth, kept: false }
+}
+
+/// An open recording from [`record_nodes`]. Dropped without [`keep`](Self::keep), including by an unwind, it frees every node recorded since it opened, with whatever hangs from them.
+#[must_use = "dropping the recording frees what it recorded"]
+pub struct NodeRecording {
+    depth: usize,
+    kept: bool,
+}
+
+impl NodeRecording {
+    /// Leaves the recorded nodes alive. The recording this one sits inside takes over the ones it would have recorded itself — built on its surface, under its owner — and no others.
+    pub fn keep(mut self) {
+        self.kept = true;
+    }
+
+    fn close(&self) -> Option<Recording> {
+        RECORDINGS.with(|stack| {
+            let mut stack = stack.borrow_mut();
+            if stack.len() <= self.depth {
+                return None;
+            }
+            stack.drain(self.depth..).next()
+        })
+    }
+}
+
+impl Drop for NodeRecording {
+    fn drop(&mut self) {
+        let Some(recording) = self.close() else {
+            return;
+        };
+        if self.kept {
+            RECORDINGS.with(|stack| {
+                if let Some(enclosing) = stack.borrow_mut().last_mut() {
+                    let handed: Vec<_> = recording
+                        .nodes
+                        .into_iter()
+                        .filter(|&(_, owner)| enclosing.claims(recording.surface, owner))
+                        .collect();
+                    enclosing.nodes.extend(handed);
+                }
+            });
+            return;
+        }
+        if recording.nodes.is_empty() {
+            return;
+        }
+        let _entered = recording.surface.enter();
+        // A surface torn down while this was open took its tree with it, and its ids now name nodes in whichever tree is active.
+        if reactive_core::current_surface() != recording.surface {
+            return;
+        }
+        for (node, _) in recording.nodes {
+            remove_node(node);
+        }
+    }
 }
 
 /// Lays out `root` against the given space and reflects the result into the signals that watch it. Collects the updates while holding the runtime borrow, then applies them in a batch *after* releasing it — a `.set()` can flush effects, and one of those may itself touch the layout runtime (a reactive list), which would re-enter the borrow.
@@ -88,6 +207,11 @@ pub fn relayout_if_dirty() {
     }
 }
 
+/// How many layout passes the active surface has run: computes that found something dirty and laid it out, not the calls that found everything clean.
+pub fn layout_passes() -> u64 {
+    with_runtime_ref(|rt| rt.passes)
+}
+
 /// One signal a completed layout has to move, collected under the runtime borrow and applied outside it.
 enum Update {
     Rect(RwSignal<Rect>, Rect),
@@ -110,7 +234,7 @@ pub fn absolute_rect(node: NodeId) -> Option<Rect> {
         let signal = *rt
             .abs_pos_signals
             .entry(node)
-            .or_insert_with(|| reactive_core::detached(|| reactive_core::signal(position)));
+            .or_insert_with(|| reactive_core::in_surface_world(|| reactive_core::signal(position)));
         Some((signal, rt.registry.get(&node).copied()))
     })?;
     let (x, y) = position.get();
@@ -232,9 +356,14 @@ pub fn set_children(parent: NodeId, children: &[NodeId]) -> Result<(), LayoutErr
     with_runtime(|rt| rt.set_children(parent, children))
 }
 
-/// Detaches and frees `node` (a former list item) from the runtime: removes it from the layout tree and drops its rect signal and bookkeeping. The caller must have removed it from its parent's child list (via [`set_children`]) first.
+/// Frees `node` and every node beneath it, with their rect signals and bookkeeping. The caller must have removed it from its parent's child list (via [`set_children`]) first; a node already freed is skipped.
 pub fn remove_node(node: NodeId) {
     with_runtime(|rt| rt.remove_node(node))
+}
+
+/// How many layout nodes the active surface's runtime holds. What a test watches to see a disposal free every node it should.
+pub fn live_node_count() -> usize {
+    with_runtime_ref(|rt| rt.engine.node_count())
 }
 
 /// Pins the overlay host to `node` — the app's window-spanning root — so overlays always fill the viewport even when the app computes several independent layout roots (e.g. a shell with a separate sidebar root computed after the main one, which the auto-detection would otherwise pick as the host). Call it each relayout with the current main root (it survives hot-reload rebuilds, which mint a new root node). Once pinned, auto-detection no longer overrides the host. The area an overlay may occupy: the laid-out rect of the host its content is attached to, which is the window (or the surface) it will be composed into.
@@ -321,10 +450,9 @@ impl OverlayHost {
 struct LayoutRuntime {
     engine: LayoutEngine,
     registry: FxHashMap<NodeId, RwSignal<Rect>>,
-    boundary_nodes: FxHashMap<NodeId, (f32, f32)>,
     // So `compute_layout` can re-run when only the space changed.
     last_space: FxHashMap<NodeId, (AvailableSpace, AvailableSpace)>,
-    // Nodes with a definite `max-width`, their original style, and the width pinned on the previous compute. Captured the first time each compute-root is computed.
+    // Whether each compute-root was authored with an auto width and height, captured on its first compute, before filling the space pins them.
     root_auto: FxHashMap<NodeId, (bool, bool)>,
     overlay_host: OverlayHost,
     // Captured during the top-level root's walk, which runs from the window origin. Node rect signals stay root-local, so this map is the one place with window-absolute positions — which is what lets `absolute_rect` anchor a portaled overlay to a trigger in a sub-root.
@@ -333,6 +461,8 @@ struct LayoutRuntime {
     ///
     /// Lazy is a constraint, not a preference: `new_leaf` already creates a rect signal per node, so minting a second one per node would double the reactive arena and its subscription bookkeeping for a value almost nothing reads. Absolute position is what a portalled overlay anchors to — a handful of nodes.
     abs_pos_signals: FxHashMap<NodeId, RwSignal<(f32, f32)>>,
+    /// How many times the engine has laid anything out, for [`layout_passes`].
+    passes: u64,
     // Guards against a recursive `compute()`: an effect that reads a layout signal and calls `compute_layout`.
     #[cfg(debug_assertions)]
     is_computing: bool,
@@ -343,12 +473,12 @@ impl LayoutRuntime {
         Self {
             engine: LayoutEngine::new(),
             registry: FxHashMap::default(),
-            boundary_nodes: FxHashMap::default(),
             last_space: FxHashMap::default(),
             root_auto: FxHashMap::default(),
             overlay_host: OverlayHost::default(),
             abs_pos: FxHashMap::default(),
             abs_pos_signals: FxHashMap::default(),
+            passes: 0,
             #[cfg(debug_assertions)]
             is_computing: false,
         }
@@ -358,12 +488,9 @@ impl LayoutRuntime {
         &mut self,
         style: LayoutStyle,
     ) -> Result<(NodeId, RwSignal<Rect>), LayoutError> {
-        let node = self.engine.new_leaf(style.clone())?;
+        let node = self.engine.new_leaf(style)?;
         let signal = signal(Rect::default());
         self.registry.insert(node, signal);
-        if let Some(dimensions) = self.engine.is_fixed_size(node) {
-            self.boundary_nodes.insert(node, dimensions);
-        }
         Ok((node, signal))
     }
 
@@ -372,7 +499,7 @@ impl LayoutRuntime {
         style: LayoutStyle,
         measure: MeasureFn,
     ) -> Result<(NodeId, RwSignal<Rect>), LayoutError> {
-        let node = self.engine.new_measured_leaf(style.clone(), measure)?;
+        let node = self.engine.new_measured_leaf(style, measure)?;
         let signal = signal(Rect::default());
         self.registry.insert(node, signal);
         Ok((node, signal))
@@ -383,14 +510,11 @@ impl LayoutRuntime {
         style: LayoutStyle,
         children: &[NodeId],
     ) -> Result<NodeId, LayoutError> {
-        let node = self.engine.new_container(style.clone(), children)?;
+        let node = self.engine.new_container(style, children)?;
         let signal = signal(Rect::default());
         self.registry.insert(node, signal);
         for &child in children {
             link_parent(child, node);
-        }
-        if let Some(dimensions) = self.engine.is_fixed_size(node) {
-            self.boundary_nodes.insert(node, dimensions);
         }
         Ok(node)
     }
@@ -441,9 +565,8 @@ impl LayoutRuntime {
         if did_fill_root {
             self.engine.mark_dirty(root).ok();
         }
-        let mut dirty_nodes = Vec::new();
-        self.engine.collect_dirty_nodes(root, &mut dirty_nodes);
-        if dirty_nodes.is_empty() {
+        // Clean here only when the root was freed: nothing above can dirty a node that is gone.
+        if !self.engine.is_dirty(root) {
             return Ok(Vec::new());
         }
         #[cfg(debug_assertions)]
@@ -457,17 +580,15 @@ impl LayoutRuntime {
             );
             self.is_computing = true;
         }
-        let (layout_root, layout_width, layout_height) =
-            self.find_boundary_root(&dirty_nodes, root, width, height);
-        self.engine
-            .compute_layout(layout_root, layout_width, layout_height)?;
+        self.engine.compute_layout(root, width, height)?;
+        self.passes += 1;
         // Collected under the runtime borrow but applied only after the caller releases it: a `set` flushes effects, one of which may re-enter the runtime.
         let mut updates: Vec<Update> = Vec::new();
-        // Only a full walk of a parent-less root runs from the window origin, so only then are the walked rects window-absolute.
-        let is_window_walk = layout_root == root && with_parents_ref(|p| !p.contains_key(&root));
+        // Only a parent-less root runs from the window origin, so only then are the walked rects window-absolute.
+        let is_window_walk = with_parents_ref(|p| !p.contains_key(&root));
         let mut abs_updates: Vec<(NodeId, f32, f32)> = Vec::new();
         let registry = &self.registry;
-        let walk_result = self.engine.walk(layout_root, &mut |node_id, rect| {
+        let walk_result = self.engine.walk(root, &mut |node_id, rect| {
             if let Some(sig) = registry.get(&node_id)
                 && sig.peek() != rect
             {
@@ -494,34 +615,6 @@ impl LayoutRuntime {
         walk_result.map(|()| updates)
     }
 
-    fn find_boundary_root(
-        &self,
-        dirty_nodes: &[NodeId],
-        global_root: NodeId,
-        global_width: AvailableSpace,
-        global_height: AvailableSpace,
-    ) -> (NodeId, AvailableSpace, AvailableSpace) {
-        let candidate = dirty_nodes
-            .iter()
-            .find_map(|&node| self.find_nearest_boundary(node));
-        match candidate {
-            Some((boundary, boundary_width, boundary_height))
-                if dirty_nodes.iter().all(|&n| self.is_in_subtree(n, boundary)) =>
-            {
-                (
-                    boundary,
-                    AvailableSpace::Definite(boundary_width),
-                    AvailableSpace::Definite(boundary_height),
-                )
-            }
-            _ => (global_root, global_width, global_height),
-        }
-    }
-
-    fn find_nearest_boundary(&self, node: NodeId) -> Option<(NodeId, f32, f32)> {
-        ancestors(node).find_map(|at| self.boundary_nodes.get(&at).map(|&(w, h)| (at, w, h)))
-    }
-
     fn is_hidden_by_display(&self, node: NodeId) -> bool {
         ancestors(node).any(|at| self.engine.is_display_none(at))
     }
@@ -543,19 +636,24 @@ impl LayoutRuntime {
         Ok(())
     }
 
+    /// Frees `node` and every node beneath it: taffy's own `remove` orphans the children, and nothing else would ever free them.
     fn remove_node(&mut self, node: NodeId) {
-        self.engine.remove(node);
-        self.registry.remove(&node);
-        // Every link naming `node` goes with it, not only the one it owned: taffy hands a freed index back out.
-        with_parents(|p| {
-            p.remove(&node);
-            p.retain(|_, above| *above != node);
-        });
-        self.boundary_nodes.remove(&node);
-        self.last_space.remove(&node);
-        self.root_auto.remove(&node);
-        self.abs_pos.remove(&node);
-        self.abs_pos_signals.remove(&node);
+        let mut freed = FxHashSet::default();
+        let mut pending = vec![node];
+        while let Some(at) = pending.pop() {
+            if !freed.insert(at) {
+                continue;
+            }
+            pending.extend(self.engine.children(at));
+            self.engine.remove(at);
+            self.registry.remove(&at);
+            self.last_space.remove(&at);
+            self.root_auto.remove(&at);
+            self.abs_pos.remove(&at);
+            self.abs_pos_signals.remove(&at);
+        }
+        // Every link naming a freed node goes with it, not only the one it owned: taffy hands a freed index back out.
+        with_parents(|p| p.retain(|below, above| !freed.contains(below) && !freed.contains(above)));
     }
 }
 

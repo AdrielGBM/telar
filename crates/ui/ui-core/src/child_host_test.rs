@@ -375,3 +375,180 @@ fn fragment_gap_reorder_moves_gap_off_the_new_first_item() {
         x(n1)
     );
 }
+
+#[test]
+fn a_disposed_fragment_row_frees_every_node_beneath_it() {
+    reset_layout_runtime();
+    let items = signal(Vec::<u32>::new());
+    let src = items;
+    let nested = || -> Result<Box<dyn LayoutItem>, LayoutError> {
+        Ok(Box::new(Container::new(
+            LayoutStyle::new().flex_row(),
+            vec![leaf10(), leaf10()],
+        )?))
+    };
+    let _row = Container::from_slots(
+        LayoutStyle::new().flex_row(),
+        vec![fragment(
+            move || src.get(),
+            |n: &u32| *n,
+            move |_| nested(),
+            0.0,
+        )],
+    )
+    .unwrap();
+    let baseline = crate::context::live_node_count();
+
+    items.set(vec![1, 2, 3, 4]);
+    assert_eq!(crate::context::live_node_count(), baseline + 4 * 3);
+    items.set(vec![5]);
+    assert_eq!(crate::context::live_node_count(), baseline + 3);
+    items.set(Vec::new());
+    assert_eq!(crate::context::live_node_count(), baseline);
+}
+
+fn laid_out_width(node: NodeId) -> f32 {
+    compute_layout(node, AvailableSpace::MaxContent, AvailableSpace::MaxContent).unwrap();
+    track_layout(node).unwrap().get().width
+}
+
+#[test]
+fn an_effect_woken_by_a_fragment_build_may_change_the_same_fragment() {
+    reset_layout_runtime();
+    let items = signal(vec![1u32, 2]);
+    let built = signal(0u32);
+    let _grow = reactive_core::effect(move || {
+        if built.get() == 2 {
+            items.update(|v| {
+                if !v.contains(&3) {
+                    v.push(3);
+                }
+            });
+        }
+    });
+    let container = Container::from_slots(
+        LayoutStyle::new().flex_row(),
+        vec![
+            ChildSlot::stat(leaf10()),
+            fragment(
+                move || items.get(),
+                |n: &u32| *n,
+                move |n| {
+                    built.set(n);
+                    Ok(leaf10())
+                },
+                0.0,
+            ),
+        ],
+    )
+    .unwrap();
+
+    assert_eq!(group_len(&container.view()), 4, "1 static + 3 dynamic");
+    assert_eq!(laid_out_width(container.layout_node()), 40.0);
+}
+
+#[test]
+fn a_fragment_build_that_panics_outside_a_boundary_leaves_the_host_whole() {
+    reset_layout_runtime();
+    let items = signal(vec![1u32, 2]);
+    let container = Container::from_slots(
+        LayoutStyle::new().flex_row(),
+        vec![
+            ChildSlot::stat(leaf10()),
+            fragment(
+                move || items.get(),
+                |n: &u32| *n,
+                |n| {
+                    assert_ne!(n, 99, "row build failed");
+                    Ok(leaf10())
+                },
+                0.0,
+            ),
+        ],
+    )
+    .unwrap();
+
+    let outcome = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        items.set(vec![1, 2, 99]);
+    }));
+    assert!(outcome.is_err(), "no boundary caught the panic");
+    assert_eq!(group_len(&container.view()), 3, "the committed items stand");
+    assert_eq!(
+        laid_out_width(container.layout_node()),
+        30.0,
+        "and so does the layout"
+    );
+
+    items.set(vec![2, 3, 4]);
+    assert_eq!(group_len(&container.view()), 4);
+    assert_eq!(laid_out_width(container.layout_node()), 40.0);
+}
+
+#[test]
+fn fragment_items_that_fail_to_build_leave_nothing_behind() {
+    use crate::test_support::{Failure, live, stateful_leaf};
+
+    reset_layout_runtime();
+    let items = signal(vec![1u32]);
+    let container = Container::from_slots(
+        LayoutStyle::new().flex_row(),
+        vec![fragment(
+            move || items.get(),
+            |n: &u32| *n,
+            |n| {
+                stateful_leaf(match n {
+                    100.. => Failure::Panic,
+                    50.. => Failure::Err,
+                    _ => Failure::None,
+                })
+            },
+            0.0,
+        )],
+    )
+    .unwrap();
+    let baseline = live();
+
+    for attempt in 0..6 {
+        let failing = if attempt % 2 == 0 { 100 } else { 50 } + attempt;
+        let outcome = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            items.set(vec![1, 2, failing]);
+        }));
+        assert!(outcome.is_err(), "no boundary caught attempt {attempt}");
+        assert_eq!(live(), baseline, "attempt {attempt} left something behind");
+    }
+
+    items.set(vec![1, 2]);
+    assert_eq!(group_len(&container.view()), 2);
+}
+
+/// A key the fragment's source repeats names one item per occurrence, every one of them tracked, so reconciling duplicates leaves nothing behind and dropping one frees it.
+#[test]
+fn fragment_duplicate_keys_keep_one_item_each_and_leak_nothing() {
+    use crate::test_support::{Failure, live, stateful_leaf};
+
+    reset_layout_runtime();
+    let items = signal(vec![1u32, 1, 2]);
+    let container = Container::from_slots(
+        LayoutStyle::new().flex_row(),
+        vec![fragment(
+            move || items.get(),
+            |n: &u32| *n,
+            |_| stateful_leaf(Failure::None),
+            0.0,
+        )],
+    )
+    .unwrap();
+    assert_eq!(group_len(&container.view()), 3);
+    let baseline = live();
+
+    for _ in 0..3 {
+        items.set(vec![1, 2, 1]);
+        items.set(vec![1, 1, 2]);
+    }
+    assert_eq!(live(), baseline, "nothing accumulated");
+
+    items.set(vec![2]);
+    items.set(vec![1, 1, 2]);
+    assert_eq!(live(), baseline, "both duplicates went and came back whole");
+    assert_eq!(group_len(&container.view()), 3);
+}

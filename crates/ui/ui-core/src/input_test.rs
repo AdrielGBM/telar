@@ -472,3 +472,20 @@ fn tap_focuses_and_ctrl_chord_is_ignored() {
     assert_eq!(input.on_event(&paste), EventResult::Ignored);
     assert_eq!(value.get(), "hi");
 }
+
+/// A value opened for editing in place is replaced by what is typed, even when the text was written after the field was built.
+#[test]
+fn a_field_that_selects_on_focus_is_typed_over() {
+    reset_layout_runtime();
+    focus::clear();
+    let value = signal(String::new());
+    let mut input = Input::new(value, LayoutStyle::new().width(200.0).height(20.0), || {
+        TextStyle::new(14.0, Color::BLACK)
+    })
+    .unwrap()
+    .select_on_focus();
+    value.set("12.5".to_string());
+    focus::request(input.id);
+    input.on_event(&key(Key::Char('7')));
+    assert_eq!(value.get(), "7");
+}

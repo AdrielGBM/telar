@@ -133,3 +133,38 @@ fn label_builds_without_panicking() {
     );
     assert!(result.is_ok(), "a labelled slider builds");
 }
+
+#[test]
+fn only_the_focused_slider_answers_the_arrows() {
+    crate::test_support::fresh_layout_runtime();
+    ui_core::reset_keyboard();
+    ui_core::focus::clear();
+    let (volume, brightness) = (signal(0.5f32), signal(0.5f32));
+    let mut sliders: Vec<_> = [volume, brightness]
+        .into_iter()
+        .map(|value| {
+            slider(
+                SliderProps::props().value(value).step(0.1).max(1.0).build(),
+                Children::default(),
+            )
+            .unwrap()
+        })
+        .collect();
+    let right = crate::harness::named(platform_core::NamedKey::ArrowRight);
+
+    for widget in &mut sliders {
+        widget.on_event(&right);
+    }
+    assert_eq!(
+        (volume.peek(), brightness.peek()),
+        (0.5, 0.5),
+        "nothing is focused"
+    );
+
+    ui_core::focus::focus_next();
+    for widget in &mut sliders {
+        widget.on_event(&right);
+    }
+    assert!((volume.peek() - 0.6).abs() < 1e-4, "{}", volume.peek());
+    assert_eq!(brightness.peek(), 0.5, "the unfocused slider stayed put");
+}

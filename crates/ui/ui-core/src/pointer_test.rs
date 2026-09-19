@@ -308,3 +308,92 @@ fn cursor_leaving_the_window_does_not_forget_a_held_button() {
         "the release outside the window still clears the button"
     );
 }
+
+fn pressed_through(
+    panel: impl FnOnce() -> Box<dyn LayoutItem>,
+    gate: impl FnOnce(layout_core::NodeId),
+) -> u32 {
+    reset_layout_runtime();
+    let presses = Rc::new(Cell::new(0u32));
+    let sink = presses.clone();
+    let pane = StyledContainer::new(
+        LayoutStyle::new().width(400.0).height(400.0),
+        |_r| RectStyle::default(),
+        vec![],
+    )
+    .unwrap()
+    .on_press(move || sink.set(sink.get() + 1));
+    let panel = panel();
+    gate(panel.layout_node());
+    let mut root = Container::new(
+        LayoutStyle::new().flex_row().width(400.0).height(400.0),
+        vec![Box::new(pane), panel],
+    )
+    .unwrap();
+    compute_layout(
+        root.layout_node(),
+        AvailableSpace::Definite(400.0),
+        AvailableSpace::Definite(400.0),
+    )
+    .unwrap();
+    for event in [
+        Event::PointerPressed {
+            x: 350.0,
+            y: 200.0,
+            button: platform_core::PointerButton::Primary,
+            source: platform_core::PointerSource::Mouse,
+        },
+        Event::PointerReleased {
+            x: 350.0,
+            y: 200.0,
+            button: platform_core::PointerButton::Primary,
+            source: platform_core::PointerSource::Mouse,
+        },
+    ] {
+        root.on_event(&event);
+    }
+    presses.get()
+}
+
+fn floating_panel() -> LayoutStyle {
+    LayoutStyle::new()
+        .absolute()
+        .inset_end(0.0)
+        .inset_top(0.0)
+        .width(100.0)
+        .height(400.0)
+}
+
+/// An inert box is input-transparent everywhere, including to the sibling beneath it: a faded layer must not catch the press meant for what shows through it.
+#[test]
+fn an_inert_box_over_a_pressable_sibling_lets_the_press_through() {
+    let inert = || -> Box<dyn LayoutItem> {
+        Box::new(
+            StyledContainer::new(floating_panel(), |_r| RectStyle::default(), vec![])
+                .unwrap()
+                .inert(|| true),
+        )
+    };
+    assert_eq!(pressed_through(inert, |_| {}), 1);
+}
+
+/// The same when the gate is not the box's own — a list or a presence keeping it mounted while it leaves — and the box itself would otherwise occlude.
+#[test]
+fn a_box_gated_by_another_owner_lets_the_press_through() {
+    let mut handle = crate::input_region::InputHandle::new();
+    let presses = pressed_through(
+        || Box::new(Container::new(floating_panel(), vec![]).unwrap()),
+        |node| handle.gate(node, Some(Rc::new(|| true)), None),
+    );
+    assert_eq!(presses, 1);
+}
+
+/// Without a gate the same box still covers, so the two tests above prove the gate and not the layout.
+#[test]
+fn an_ungated_box_over_a_pressable_sibling_takes_the_press() {
+    let presses = pressed_through(
+        || Box::new(Container::new(floating_panel(), vec![]).unwrap()),
+        |_| {},
+    );
+    assert_eq!(presses, 0);
+}

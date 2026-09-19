@@ -123,29 +123,17 @@ impl Default for MenuStyle {
 ///
 /// A context menu's rows are heterogeneous and half of them are only there when they apply, which in markup is an `if` around a row and in Rust was a `Vec` built with pushes. The pieces below register what they are and hand back a bare node, the way a bound list's pieces do for [`ListContext::declare`](crate::list): the panel still owns the highlight, the keyboard and the submenus, because it still has the entries — they are simply written where they are read now.
 #[derive(Clone)]
-struct MenuEntries(Rc<std::cell::RefCell<Declared>>);
-
-/// What a menu's children left behind: the entries they registered, and every node they handed back.
-///
-/// The nodes are kept because nothing frees a layout node on drop and `remove` does not reach descendants — so taking only what `take_default` returns would leak a row wrapped in anything: a group of rows written as a component of its own, an `if`, a `for`. Each piece knows its own node, so each piece says so.
-#[derive(Default)]
-struct Declared {
-    entries: Vec<Entry>,
-    nodes: Vec<layout_core::NodeId>,
-}
+struct MenuEntries(Rc<std::cell::RefCell<Vec<Entry>>>);
 
 /// Runs `children` for their entries alone, and takes what they handed back out of the tree: a piece that registered itself is not a widget.
 fn declared(children: &Children) -> Result<Vec<Entry>, LayoutError> {
-    let collected = MenuEntries(Rc::new(std::cell::RefCell::new(Declared::default())));
+    let collected = MenuEntries(Rc::default());
     let mut built = children.build_with(collected.clone())?;
+    // Freeing each root frees every piece beneath it, however the pieces were wrapped.
     for item in built.take_default() {
         ui_core::remove_node(item.layout_node());
     }
-    let left = collected.0.take();
-    for node in left.nodes {
-        ui_core::remove_node(node);
-    }
-    Ok(left.entries)
+    Ok(collected.0.take())
 }
 
 /// Registers one entry with the menu being built, and hands back the bare node every piece returns.
@@ -157,9 +145,7 @@ fn register(entry: Entry) -> Result<Box<dyn LayoutItem>, LayoutError> {
         ));
     };
     let bare = StyledContainer::new(LayoutStyle::new(), |_| RectStyle::default(), vec![])?;
-    let mut left = collected.0.borrow_mut();
-    left.entries.push(entry);
-    left.nodes.push(bare.layout_node());
+    collected.0.borrow_mut().push(entry);
     Ok(box_item(bare))
 }
 

@@ -55,7 +55,8 @@ struct Registry {
     declared: Vec<Declared>,
     modes: HashMap<NodeId, InputMode>,
     transparent: usize,
-    gates: HashMap<NodeId, Gate>,
+    /// Several per node, because more than one owner can gate the same node: a box's own `inert`, and a list holding that box mounted while it leaves.
+    gates: HashMap<NodeId, Vec<Gate>>,
     placements: HashMap<NodeId, Vec<(u64, Placement)>>,
     links: HashMap<NodeId, Link>,
 }
@@ -131,14 +132,13 @@ impl InputHandle {
         self.touch(node);
         let token = self.token;
         with_input(|r| {
-            r.gates.insert(
-                node,
-                Gate {
-                    token,
-                    inert,
-                    shown,
-                },
-            );
+            let gates = r.gates.entry(node).or_default();
+            gates.retain(|gate| gate.token != token);
+            gates.push(Gate {
+                token,
+                inert,
+                shown,
+            });
         });
         crate::focus::reach_changed();
     }
@@ -184,8 +184,11 @@ impl Drop for InputHandle {
                     r.answers.remove(&node);
                 }
                 remove_declared(r, node, token);
-                if r.gates.get(&node).is_some_and(|g| g.token == token) {
-                    r.gates.remove(&node);
+                if let Some(gates) = r.gates.get_mut(&node) {
+                    gates.retain(|gate| gate.token != token);
+                    if gates.is_empty() {
+                        r.gates.remove(&node);
+                    }
                 }
                 if let Some(placements) = r.placements.get_mut(&node) {
                     placements.retain(|(owner, _)| *owner != token);
@@ -199,6 +202,17 @@ impl Drop for InputHandle {
             }
         });
     }
+}
+
+#[cfg(test)]
+pub(crate) fn mentions(node: NodeId) -> bool {
+    with_input_ref(|r| {
+        r.answers.contains_key(&node)
+            || r.declared.iter().any(|d| d.node == node)
+            || r.gates.contains_key(&node)
+            || r.placements.contains_key(&node)
+            || r.links.contains_key(&node)
+    })
 }
 
 fn remove_declared(r: &mut Registry, node: NodeId, token: u64) {
@@ -235,11 +249,15 @@ fn mode_of(node: NodeId) -> InputMode {
     with_input_ref(|r| r.modes.get(&node).copied().unwrap_or_default())
 }
 
-fn gate_admits(node: NodeId) -> bool {
-    let Some(gate) = with_input_ref(|r| r.gates.get(&node).cloned()) else {
+/// Whether every gate on `node` itself lets input in. Its ancestors are [`receives_input`]'s question.
+pub(crate) fn gate_admits(node: NodeId) -> bool {
+    let Some(gates) = with_input_ref(|r| r.gates.get(&node).cloned()) else {
         return true;
     };
-    !gate.inert.is_some_and(|inert| inert()) && gate.shown.is_none_or(|shown| shown())
+    gates.iter().all(|gate| {
+        !gate.inert.as_ref().is_some_and(|inert| inert())
+            && gate.shown.as_ref().is_none_or(|shown| shown())
+    })
 }
 
 pub(crate) fn receives_input(node: NodeId) -> bool {
@@ -655,12 +673,12 @@ pub(crate) fn covers(
     if !place(node, Shape::Box(layout), true).is_some_and(|drawn| drawn.contains(x, y)) {
         return false;
     }
+    if !gate_admits(node) {
+        return false;
+    }
     let mode = mode_of(node);
     if mode == InputMode::Auto {
         return occludes();
-    }
-    if !gate_admits(node) {
-        return false;
     }
     if with_input_ref(|r| r.transparent == 0) {
         return mode == InputMode::Opaque;

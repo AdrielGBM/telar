@@ -771,3 +771,190 @@ fn absolute_rect_stays_window_absolute_across_a_separate_content_root() {
         absolute_rect(trigger)
     );
 }
+
+#[test]
+fn removing_a_node_frees_everything_beneath_it() {
+    reset_layout_runtime();
+    let baseline = live_node_count();
+    let (a, _) = new_leaf(LayoutStyle::new()).unwrap();
+    let (b, _) = new_leaf(LayoutStyle::new()).unwrap();
+    let inner = new_container(LayoutStyle::new(), &[a, b]).unwrap();
+    let root = new_container(LayoutStyle::new(), &[inner]).unwrap();
+    assert_eq!(live_node_count(), baseline + 4);
+
+    remove_node(root);
+
+    assert_eq!(live_node_count(), baseline);
+    assert!(track_layout(a).is_none(), "its rect signal went with it");
+    assert_eq!(parent(a), None, "and so did its parent link");
+    remove_node(a);
+}
+
+#[test]
+fn a_dropped_recording_frees_what_it_recorded_and_a_kept_one_does_not() {
+    reset_layout_runtime();
+    let baseline = live_node_count();
+
+    let kept = record_nodes();
+    let (survivor, _) = new_leaf(LayoutStyle::new()).unwrap();
+    kept.keep();
+
+    let recording = record_nodes();
+    let (loose, _) = new_leaf(LayoutStyle::new()).unwrap();
+    let _attached = new_container(LayoutStyle::new(), &[loose]).unwrap();
+    drop(recording);
+
+    assert_eq!(live_node_count(), baseline + 1);
+    assert!(track_layout(survivor).is_some());
+}
+
+/// A build that writes a signal flushes effects elsewhere, and what those create is theirs, not the build's to free.
+#[test]
+fn a_recording_frees_only_what_its_owner_built() {
+    reset_layout_runtime();
+    let elsewhere = reactive_core::owner_scope();
+    let elsewhere_id = elsewhere.id();
+    drop(elsewhere);
+    let baseline = live_node_count();
+
+    let building = reactive_core::owner_scope();
+    let recording = record_nodes();
+    let (mine, _) = new_leaf(LayoutStyle::new()).unwrap();
+    let (theirs, _) =
+        reactive_core::with_owner(Some(elsewhere_id), || new_leaf(LayoutStyle::new())).unwrap();
+    drop(recording);
+    drop(building);
+
+    assert!(track_layout(mine).is_none());
+    assert!(track_layout(theirs).is_some());
+    assert_eq!(live_node_count(), baseline + 1);
+}
+
+#[test]
+fn an_unwind_through_a_recording_frees_what_it_recorded() {
+    reset_layout_runtime();
+    let baseline = live_node_count();
+    let outcome = std::panic::catch_unwind(|| {
+        let _recording = record_nodes();
+        let _ = new_leaf(LayoutStyle::new()).unwrap();
+        panic!("mid-build");
+    });
+    assert!(outcome.is_err());
+    assert_eq!(live_node_count(), baseline);
+}
+
+/// A list elsewhere in the tree reconciles in a flush a build set off and keeps its new rows: they are that list's, and the build failing later must not free them.
+#[test]
+fn a_kept_inner_recording_hands_its_nodes_only_to_an_enclosing_recording_that_owns_them() {
+    reset_layout_runtime();
+    let elsewhere = reactive_core::owner_scope();
+    let baseline = live_node_count();
+
+    let building = reactive_core::owner_scope();
+    let outer = record_nodes();
+    let (theirs, _) = reactive_core::with_owner(Some(elsewhere.id()), || {
+        let inner = record_nodes();
+        let created = new_leaf(LayoutStyle::new()).unwrap();
+        inner.keep();
+        created
+    });
+    let inner = record_nodes();
+    let (mine, _) = new_leaf(LayoutStyle::new()).unwrap();
+    inner.keep();
+    drop(outer);
+    drop(building);
+
+    assert!(
+        track_layout(mine).is_none(),
+        "a kept row of the failed build goes with it"
+    );
+    assert!(
+        track_layout(theirs).is_some(),
+        "a row another list kept stays"
+    );
+    assert_eq!(live_node_count(), baseline + 1);
+    drop(elsewhere);
+}
+
+/// Node ids are per surface, so a recording opened on one surface must not free an id minted on another — it names a different node there.
+#[test]
+fn a_recording_never_frees_a_node_built_on_another_surface() {
+    use reactive_core::{SurfaceEnterGuard, SurfaceHandle, set_current_surface};
+
+    type Worlds = (LayoutContext, ParentsContext);
+    fn enter(handle: SurfaceHandle, worlds: &'static Worlds) -> SurfaceEnterGuard {
+        let prev = set_current_surface(handle);
+        let layout = worlds.0.enter();
+        let parents = worlds.1.enter();
+        SurfaceEnterGuard::new(move || {
+            drop(parents);
+            drop(layout);
+            set_current_surface(prev);
+        })
+    }
+    let (a, b) = (SurfaceHandle(1), SurfaceHandle(2));
+    let a_worlds: &'static Worlds =
+        Box::leak(Box::new((LayoutContext::new(), ParentsContext::new())));
+    let b_worlds: &'static Worlds =
+        Box::leak(Box::new((LayoutContext::new(), ParentsContext::new())));
+    reactive_core::set_surface_enter_hook(move |handle| match handle {
+        h if h == a => enter(a, a_worlds),
+        h if h == b => enter(b, b_worlds),
+        _ => SurfaceEnterGuard::noop(),
+    });
+
+    let on_a = a.enter();
+    let (a_survivor, _) = new_leaf(LayoutStyle::new()).unwrap();
+    let recording = record_nodes();
+    let (b_loose, b_kept) = {
+        let _on_b = b.enter();
+        let (loose, _) = new_leaf(LayoutStyle::new()).unwrap();
+        let inner = record_nodes();
+        let (kept, _) = new_leaf(LayoutStyle::new()).unwrap();
+        inner.keep();
+        (loose, kept)
+    };
+    let (a_failed, _) = new_leaf(LayoutStyle::new()).unwrap();
+    drop(recording);
+
+    assert!(track_layout(a_survivor).is_some());
+    assert!(track_layout(a_failed).is_none());
+    assert_eq!(live_node_count(), 1);
+    drop(on_a);
+    let _on_b = b.enter();
+    assert!(track_layout(b_loose).is_some());
+    assert!(track_layout(b_kept).is_some());
+    assert_eq!(live_node_count(), 2);
+}
+
+#[test]
+fn a_sub_root_under_a_fixed_size_parent_is_laid_out_as_asked() {
+    reset_layout_runtime();
+    let (leaf, leaf_rect) = new_leaf(LayoutStyle::new().width(40.0).height(10.0)).unwrap();
+    let content = new_container(LayoutStyle::new().flex_column(), &[leaf]).unwrap();
+    let frame = new_container(
+        LayoutStyle::new()
+            .width(300.0)
+            .height(200.0)
+            .padding_all(10.0),
+        &[content],
+    )
+    .unwrap();
+    let frame_rect = track_layout(frame).unwrap();
+    let content_rect = track_layout(content).unwrap();
+
+    compute_layout(
+        content,
+        AvailableSpace::Definite(80.0),
+        AvailableSpace::Definite(30.0),
+    )
+    .unwrap();
+
+    assert_eq!(content_rect.get(), Rect::new(0.0, 0.0, 80.0, 30.0));
+    assert_eq!(leaf_rect.get(), Rect::new(0.0, 0.0, 40.0, 10.0));
+    assert_eq!(
+        frame_rect.get(),
+        Rect::default(),
+        "the fixed-size parent was laid out in place of the root that was asked for"
+    );
+}

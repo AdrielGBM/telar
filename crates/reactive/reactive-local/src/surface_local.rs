@@ -85,11 +85,16 @@ macro_rules! surface_local {
         }
 
         impl $ctx {
-            /// Allocates a fresh, inactive per-surface instance.
+            /// Allocates a fresh, inactive per-surface instance whose reactive state belongs to nobody, so nothing ever frees it.
             pub fn new() -> Self {
+                $crate::detached(Self::new_owned)
+            }
+
+            /// Allocates a fresh, inactive per-surface instance whose reactive state belongs to the active owner, for a surface that frees its worlds when it goes: build it inside `reactive_core::in_surface_world`.
+            pub fn new_owned() -> Self {
                 Self {
                     ptr: ::std::boxed::Box::into_raw(::std::boxed::Box::new(
-                        ::std::cell::RefCell::new($crate::detached(|| $init)),
+                        ::std::cell::RefCell::new($init),
                     )),
                 }
             }

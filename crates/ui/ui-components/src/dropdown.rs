@@ -8,6 +8,7 @@ use layout_core::{AlignItems, LayoutError, LayoutStyle};
 use platform_core::{Key, NamedKey};
 use reactive_core::{Reactive, RwSignal, effect, signal};
 use renderer_core::{Border, BorderRadius, Color, RectStyle, ShapeStyle, Stroke};
+use ui_core::dismiss::DismissRegistration;
 use ui_core::focus::Role;
 use ui_core::{
     Children, Container, LayoutItem, Overlay, ReactiveList, StyledContainer, Text, box_item,
@@ -277,15 +278,15 @@ pub(crate) fn dropdown(props: Dropdown) -> Result<Box<dyn LayoutItem>, LayoutErr
     {
         let open = dismiss_open;
         let close: Rc<dyn Fn()> = Rc::new(move || open.set(false));
-        let registered: std::cell::Cell<Option<ui_core::dismiss::DismissId>> =
-            std::cell::Cell::new(None);
+        let registered: std::cell::Cell<Option<DismissRegistration>> = std::cell::Cell::new(None);
         effect(move || {
             if open.get() {
-                if registered.get().is_none() {
-                    registered.set(Some(ui_core::dismiss::register_dismiss(close.clone())));
-                }
-            } else if let Some(id) = registered.take() {
-                ui_core::dismiss::unregister_dismiss(id);
+                let held = registered
+                    .take()
+                    .unwrap_or_else(|| DismissRegistration::new(close.clone()));
+                registered.set(Some(held));
+            } else {
+                drop(registered.take());
             }
         })
     };

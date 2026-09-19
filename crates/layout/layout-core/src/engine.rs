@@ -223,6 +223,18 @@ impl LayoutEngine {
         let _ = self.tree.remove(node);
     }
 
+    /// The nodes `node` currently holds, in order; empty once it has been freed.
+    pub fn children(&self, node: NodeId) -> Vec<NodeId> {
+        if self.alive(node).is_err() {
+            return Vec::new();
+        }
+        self.tree.children(node).unwrap_or_default()
+    }
+
+    pub fn node_count(&self) -> usize {
+        self.live.len()
+    }
+
     pub fn mark_dirty(&mut self, node: NodeId) -> Result<(), LayoutError> {
         self.alive(node)?;
         self.tree.mark_dirty(node).map_err(LayoutError::from)
@@ -370,28 +382,6 @@ impl LayoutEngine {
             layout.size.width,
             layout.size.height,
         ))
-    }
-
-    pub fn is_fixed_size(&self, node: NodeId) -> Option<(f32, f32)> {
-        let style = self.style_of(node)?;
-        let w = style.size.width.into_option()?;
-        let h = style.size.height.into_option()?;
-        if style.flex_grow > 0.0 {
-            return None;
-        }
-        Some((w, h))
-    }
-
-    pub fn collect_dirty_nodes(&self, root: NodeId, out: &mut Vec<NodeId>) {
-        let mut stack = vec![root];
-        while let Some(node) = stack.pop() {
-            if self.is_dirty(node) {
-                out.push(node);
-            }
-            for child in self.tree.child_ids(node) {
-                stack.push(child);
-            }
-        }
     }
 
     pub fn walk<F>(&self, root: NodeId, f: &mut F) -> Result<(), LayoutError>

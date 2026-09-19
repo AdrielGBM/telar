@@ -180,3 +180,106 @@ fn an_application_hosting_other_trees_is_told_the_scheme_changed() {
         "and the default's own work still ran, so the host's tree follows too"
     );
 }
+
+#[derive(Clone)]
+struct Accent(Color);
+impl ThemeTokens for Accent {
+    fn primary(&self) -> Color {
+        self.0
+    }
+    fn ink(&self) -> Color {
+        self.0
+    }
+}
+
+/// One subtree of the scene: a box painted from the accent in force and a label inheriting its ink, counting the box's renders.
+fn themed_card(
+    renders: std::rc::Rc<std::cell::Cell<u32>>,
+) -> Result<Box<dyn LayoutItem>, telar::LayoutError> {
+    let swatch = Rectangle::new(LayoutStyle::new().width(40.0).height(20.0), move || {
+        renders.set(renders.get() + 1);
+        RectStyle::default().with_fill(use_theme_tokens().primary())
+    })?;
+    let label = telar::Text::declaring(|| "card".to_string(), LayoutStyle::new(), |t| t)?;
+    Ok(box_item(telar::Container::new(
+        LayoutStyle::new().flex_column(),
+        vec![box_item(swatch), box_item(label)],
+    )?))
+}
+
+fn drawn(tree: &LocalTree) -> (Vec<Color>, Vec<Color>) {
+    let frame = tree.frame();
+    let fills = frame
+        .iter()
+        .filter_map(|c| match c {
+            DrawCommand::Rect { style, .. } => style.fill.as_ref().map(|p| p.solid_color()),
+            _ => None,
+        })
+        .collect();
+    let inks = frame
+        .iter()
+        .filter_map(|c| match c {
+            DrawCommand::Text { style, .. } => Some(style.color.solid_color()),
+            _ => None,
+        })
+        .collect();
+    (fills, inks)
+}
+
+/// A bar and a differently themed card in one window, each in its own theme, with no per-surface `set_theme` between them.
+#[test]
+fn sibling_subtrees_in_one_window_keep_their_own_themes() {
+    use std::cell::Cell;
+    use std::rc::Rc;
+
+    let bar_accent = Color::rgba(0.1, 0.2, 0.3, 1.0);
+    let card_accent = Color::rgba(0.9, 0.5, 0.1, 1.0);
+    let switched = Color::rgba(0.2, 0.8, 0.4, 1.0);
+
+    reset_layout_runtime();
+    telar::set_theme(Accent(Color::rgba(0.5, 0.5, 0.5, 1.0)));
+    let bar_renders = Rc::new(Cell::new(0));
+    let card_renders = Rc::new(Cell::new(0));
+    let card_theme = telar::ScopedTheme::new(Accent(card_accent));
+    let bar = {
+        let renders = Rc::clone(&bar_renders);
+        telar::provide_theme(Accent(bar_accent), move || themed_card(renders)).unwrap()
+    };
+    let card = {
+        let renders = Rc::clone(&card_renders);
+        telar::provide_theme(card_theme, move || themed_card(renders)).unwrap()
+    };
+    let window = telar::Container::new(
+        LayoutStyle::new()
+            .flex_row()
+            .width(telar::SizeDimension::Percent(1.0))
+            .height(telar::SizeDimension::Percent(1.0)),
+        vec![Box::new(bar), Box::new(card)],
+    )
+    .unwrap();
+    let mut tree = LocalTree::new(Box::new(telar::WindowRoot::new(box_item(window))));
+    tree.on_event(&platform_core::Event::WindowResized {
+        width: 200,
+        height: 100,
+    });
+
+    assert_eq!(
+        drawn(&tree),
+        (vec![bar_accent, card_accent], vec![bar_accent, card_accent]),
+        "each subtree paints and writes in its own theme in the same frame"
+    );
+
+    let bar_before = bar_renders.get();
+    let card_before = card_renders.get();
+    card_theme.set(Accent(switched));
+    telar::relayout_if_dirty();
+    assert_eq!(
+        drawn(&tree),
+        (vec![bar_accent, switched], vec![bar_accent, switched])
+    );
+    assert_eq!(
+        (bar_renders.get(), card_renders.get()),
+        (bar_before, card_before + 1),
+        "switching the card's theme re-renders the card and leaves the bar alone"
+    );
+}

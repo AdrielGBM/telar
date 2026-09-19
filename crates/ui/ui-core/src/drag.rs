@@ -1,9 +1,12 @@
 //! The drag gesture: arming on a press, reporting each move, and deciding who owns the stroke.
 
-use std::cell::Cell;
+use std::cell::{Cell, RefCell};
+use std::mem::ManuallyDrop;
+use std::rc::Rc;
 
 use geometry_core::Rect;
 use platform_core::{Event, ModifiersState, PointerButton};
+use reactive_core::{SurfaceHandle, Transaction};
 use ui_tree::EventResult;
 
 use crate::pointer::PointerButtons;
@@ -22,6 +25,78 @@ thread_local! {
     static ACTIVE: Cell<Option<(DragStart, f32)>> = const { Cell::new(None) };
     /// Whether the press being dispatched right now has already armed a drag somewhere below. See [`claimed`].
     static CLAIMED: Cell<bool> = const { Cell::new(false) };
+    // `ManuallyDrop` keeps the slot trivially destructible, as the dismiss stack's is: a TLS destructor registered from a hot-reloaded dylib would make `dlclose` unsafe.
+    static LIVE: ManuallyDrop<RefCell<Vec<Live>>> = const { ManuallyDrop::new(RefCell::new(Vec::new())) };
+    static NEXT_LIVE: Cell<u64> = const { Cell::new(0) };
+}
+
+/// A [`Transaction`] as a drag drives it, with the value type erased so a box is not generic over what it edits.
+pub(crate) trait GestureTransaction {
+    fn begin(&self) -> bool;
+    fn commit(&self);
+    fn revert(&self);
+}
+
+impl<T: Clone + 'static> GestureTransaction for Transaction<T> {
+    fn begin(&self) -> bool {
+        Transaction::begin(self).is_ok()
+    }
+
+    fn commit(&self) {
+        let _ = Transaction::commit(self);
+    }
+
+    fn revert(&self) {
+        let _ = Transaction::revert(self);
+    }
+}
+
+/// A drag that opened its own transaction and can still be cancelled from outside the tree.
+struct Live {
+    id: u64,
+    // The surface whose events may cancel it: Escape or a press on one window says nothing about a stroke in another.
+    surface: SurfaceHandle,
+    button: PointerButton,
+    cancel: Rc<dyn Fn()>,
+}
+
+/// Cancels the most recently started transacted drag on the active surface: its transaction reverts and its `on_drag_cancel` runs. What Escape does before anything else sees it.
+pub(crate) fn cancel_live() -> bool {
+    cancel_latest_here(|_| true)
+}
+
+/// Cancels the most recent transacted drag on the active surface when `button` is not the one holding it — the modal-operator abort, a second button pressed mid-stroke.
+pub(crate) fn cancel_live_by(button: &PointerButton) -> bool {
+    cancel_latest_here(|live| live.button != *button)
+}
+
+fn cancel_latest_here(cancels: impl FnOnce(&Live) -> bool) -> bool {
+    let surface = reactive_core::current_surface();
+    let live = LIVE.with(|l| {
+        let mut l = l.borrow_mut();
+        let latest = l.iter().rposition(|live| live.surface == surface)?;
+        cancels(&l[latest]).then(|| l.remove(latest))
+    });
+    let Some(live) = live else {
+        return false;
+    };
+    (live.cancel)();
+    true
+}
+
+/// The transaction a stroke opened, for as long as the stroke is undecided.
+struct Stroke {
+    id: u64,
+    transaction: Rc<dyn GestureTransaction>,
+    cancelled: Rc<Cell<bool>>,
+    cancel: Rc<dyn Fn()>,
+}
+
+impl Drop for Stroke {
+    fn drop(&mut self) {
+        let id = self.id;
+        LIVE.with(|l| l.borrow_mut().retain(|live| live.id != id));
+    }
 }
 
 /// Marks the press being dispatched as claimed by a drag. Called by every gesture that arms one.
@@ -88,6 +163,11 @@ pub(crate) struct DragGesture {
     ///
     /// A drag keeps receiving moves after the pointer leaves the widget — that is what makes a slider still track when the hand overshoots — and the same broadcast is what lets a pointer that left the window report a position no layout could ever produce. Bounding it is the caller saying where the answer is allowed to be, once, instead of clamping it at every use.
     within: Option<Box<dyn Fn() -> Rect>>,
+    /// Opened when the drag starts and decided when it ends: the release commits, and Escape, another button, a lost focus or the box going away revert.
+    transaction: Option<Rc<dyn GestureTransaction>>,
+    on_cancel: Option<Rc<dyn Fn()>>,
+    /// Present while this drag owns an open transaction. A drag whose transaction was already open elsewhere joins it without one, and leaves the decision to whoever opened it.
+    stroke: Option<Stroke>,
 }
 
 impl Default for DragGesture {
@@ -106,6 +186,20 @@ impl Default for DragGesture {
             last: (0.0, 0.0),
             axis: DragAxis::Free,
             within: None,
+            transaction: None,
+            on_cancel: None,
+            stroke: None,
+        }
+    }
+}
+
+impl Drop for DragGesture {
+    /// A box taken away mid-stroke cannot hear the release that would have confirmed it. Its `on_drag_cancel` is not run: the box that would answer it is the one going away.
+    fn drop(&mut self) {
+        if let Some(stroke) = self.stroke.take()
+            && !stroke.cancelled.get()
+        {
+            stroke.transaction.revert();
         }
     }
 }
@@ -138,6 +232,81 @@ impl DragGesture {
 
     pub(crate) fn keep_within(&mut self, within: impl Fn() -> Rect + 'static) {
         self.within = Some(Box::new(within));
+    }
+
+    pub(crate) fn transact(&mut self, transaction: Rc<dyn GestureTransaction>) {
+        self.transaction = Some(transaction);
+    }
+
+    pub(crate) fn set_cancel(&mut self, f: impl Fn() + 'static) {
+        self.on_cancel = Some(Rc::new(f));
+    }
+
+    /// Opens the transaction as the drag starts, before its first report previews into it.
+    fn open(&mut self, button: PointerButton) {
+        let Some(transaction) = self.transaction.clone() else {
+            return;
+        };
+        if !transaction.begin() {
+            return;
+        }
+        let cancelled = Rc::new(Cell::new(false));
+        let cancel: Rc<dyn Fn()> = {
+            let cancelled = cancelled.clone();
+            let transaction = transaction.clone();
+            let on_cancel = self.on_cancel.clone();
+            Rc::new(move || {
+                if cancelled.replace(true) {
+                    return;
+                }
+                transaction.revert();
+                if let Some(cb) = &on_cancel {
+                    cb();
+                }
+            })
+        };
+        let id = NEXT_LIVE.with(|n| {
+            n.set(n.get() + 1);
+            n.get()
+        });
+        LIVE.with(|l| {
+            l.borrow_mut().push(Live {
+                id,
+                surface: reactive_core::current_surface(),
+                button,
+                cancel: cancel.clone(),
+            })
+        });
+        self.stroke = Some(Stroke {
+            id,
+            transaction,
+            cancelled,
+            cancel,
+        });
+    }
+
+    /// Forgets a stroke that was cancelled from outside, answering whether there was one — so the box can drop the tap that the same press armed.
+    pub(crate) fn settle(&mut self) -> bool {
+        if !self.stroke.as_ref().is_some_and(|s| s.cancelled.get()) {
+            return false;
+        }
+        self.stroke = None;
+        self.origin = None;
+        self.started = false;
+        true
+    }
+
+    /// Ends the drag without a release: reverted when it owns a transaction, ended where it got to when it has nothing to revert.
+    pub(crate) fn abort(&mut self) {
+        match self.stroke.as_ref().map(|s| s.cancel.clone()) {
+            Some(cancel) => {
+                cancel();
+                self.settle();
+            }
+            None => {
+                self.end(None);
+            }
+        }
     }
 
     /// The point as the callbacks are told it: on the axis it is allowed to travel, and inside the box it is allowed to be. Applied once, here, so every reader of `on_drag`, `on_drag_end` and the travel measured against the threshold sees the same answer.
@@ -177,6 +346,7 @@ impl DragGesture {
     ///
     /// With a threshold set, the press *arms* the gesture without reporting: nothing has travelled yet, so nothing has been dragged.
     pub(crate) fn press(&mut self, event: &Event, rect: Rect) -> EventResult {
+        self.settle();
         if let Event::PointerPressed { x, y, button, .. } = event
             && self.arms(button)
             && rect.contains(*x as f32, *y as f32)
@@ -194,6 +364,7 @@ impl DragGesture {
             // Before anything else runs, so whatever contains this box can ask whether the stroke was already spoken for.
             claim();
             if self.started {
+                self.open(*button);
                 self.report(local.0, local.1);
             }
             return EventResult::Handled;
@@ -203,14 +374,18 @@ impl DragGesture {
 
     /// While a drag is active, reports each move (local to `rect`). Returns `Handled` so it is consumed — and `Ignored` while the gesture is armed but has not travelled far enough to be a drag yet.
     pub(crate) fn moved(&mut self, event: &Event, rect: Rect) -> EventResult {
-        let (Some((press, _)), Event::PointerMoved { x, y, .. }) = (self.origin, event) else {
+        self.settle();
+        let (Some((press, start)), Event::PointerMoved { x, y, .. }) = (self.origin, event) else {
             return EventResult::Ignored;
         };
         let local = (*x as f32 - rect.x, *y as f32 - rect.y);
         let (dx, dy) = (local.0 - press.0, local.1 - press.1);
         self.travel = self.travel.max(dx.hypot(dy));
-        // The drag begins here, not back at the press: reporting the press point retroactively would jump the dragged thing by the slop distance the moment it started moving.
-        self.started |= self.travel > self.threshold;
+        if !self.started && self.travel > self.threshold {
+            // The drag begins here, not back at the press: reporting the press point retroactively would jump the dragged thing by the slop distance the moment it started moving.
+            self.started = true;
+            self.open(start.button);
+        }
         if !self.started {
             return EventResult::Ignored;
         }
@@ -234,6 +409,7 @@ impl DragGesture {
     ///
     /// `at` is the release position when the caller has one. The fallback matters: a drag also ends on `CursorLeft`, and on a child consuming the release, neither of which carries a position — reporting the last place the drag actually reached is the only answer that is true in all three cases. A gesture that never cleared its threshold ends silently and answers `false`: nothing was dragged, so the release belongs to whatever else the widget arms — which is how a click and a drag on one button stop being ambiguous.
     pub(crate) fn end(&mut self, at: Option<(f32, f32)>) -> bool {
+        self.settle();
         // Held before the origin goes: the axis is measured from where the press was.
         let landed = at.map(|at| self.held(at));
         let Some((_, start)) = self.origin.take() else {
@@ -246,6 +422,12 @@ impl DragGesture {
             if let Some(cb) = &self.on_drag_end {
                 in_drag(start, self.travel, || cb(x, y));
             }
+        }
+        // After `on_drag_end`, so a final preview made at the release position is part of what is committed.
+        if let Some(stroke) = self.stroke.take() {
+            let transaction = stroke.transaction.clone();
+            drop(stroke);
+            transaction.commit();
         }
         was_dragging
     }

@@ -1,18 +1,24 @@
 //! [`LayoutItem`]: a component that also owns a layout node, and the clipping and boxing helpers around one.
 
 use std::cell::RefCell;
+use std::panic::{AssertUnwindSafe, catch_unwind, resume_unwind};
 use std::rc::Rc;
 
 use geometry_core::{BorderRadius, Rect};
 use layout_core::{LayoutError, LayoutStyle, NodeId};
+use layout_reactive::NodeRecording;
+use motion_core::Curve;
 use platform_core::Event;
-use reactive_core::{OwnerId, RwSignal, current_owner, owner_scope};
+use reactive_core::{OwnerId, RwSignal, current_owner, dispose_owner, owner_scope};
 use ui_tree::{Component, EventResult, RenderNode, Segment};
 
-use crate::context::{new_container, track_layout};
+use crate::context::{new_container, record_nodes, track_layout};
 use crate::disposal::retire;
-use crate::input_region::{InputHandle, Placement};
+use crate::input_region::{InputHandle, Placement, gate_admits, withhold};
 use crate::layout_leaf::LayoutLeaf;
+use crate::layout_transition::{Flip, translated};
+use crate::presence::{Mount, Transition};
+use crate::surface::{IDENTITY, apply_enter};
 
 /// A container child. The boxed widget is shared (`Rc<RefCell<…>>`) between event dispatch (which borrows it mutably) and its render `segment` (which borrows it immutably to flatten its `view()`) — they never overlap because dispatch is batched. `rect` is the child's layout signal for hit-testing. `Clone` is a cheap handle copy (all fields are `Rc`/signal): a reactive list clones a `Child` to move a reused item to its new position without rebuilding it.
 #[derive(Clone)]
@@ -30,6 +36,15 @@ pub(crate) struct Child {
     ///
     /// [`owner`]: Self::owner
     built_under: Option<OwnerId>,
+    /// Set on a child that is kept mounted through its exit, by a [`Presence`](crate::Presence) or a transitioned list.
+    presented: Option<Rc<Presented>>,
+    /// Set on a child that slides to wherever the layout moves it.
+    flip: Option<Rc<Flip>>,
+}
+
+struct Presented {
+    mount: Mount,
+    _input: InputHandle,
 }
 
 impl Child {
@@ -40,6 +55,96 @@ impl Child {
     /// Runs `f` under the scope this child was built in, for a handler firing long after that build.
     pub(crate) fn owning<R>(&self, f: impl FnOnce() -> R) -> R {
         reactive_core::with_owner(self.built_under, f)
+    }
+
+    pub(crate) fn owned_by(mut self, owner: OwnerId) -> Self {
+        self.owner = Some(owner);
+        self
+    }
+
+    pub(crate) fn mount(&self) -> Option<Mount> {
+        self.presented.as_ref().map(|presented| presented.mount)
+    }
+
+    /// Gives the child an arrival and departure, under its own owner so they are freed with it. A child that already has one keeps it.
+    pub(crate) fn present(&mut self, transition: Transition, entering: bool) -> Mount {
+        if let Some(mount) = self.mount() {
+            return mount;
+        }
+        let mount = reactive_core::with_owner(self.owner.or(self.built_under), || {
+            Mount::new(transition, entering)
+        });
+        let mut input = InputHandle::new();
+        input.gate(self.node, Some(Rc::new(move || mount.is_leaving())), None);
+        input.place(
+            self.node,
+            Placement::Transform(Rc::new(move || {
+                Some(mount.frame_now().0).filter(|matrix| *matrix != IDENTITY)
+            })),
+        );
+        self.presented = Some(Rc::new(Presented {
+            mount,
+            _input: input,
+        }));
+        mount
+    }
+
+    /// Makes the child slide to wherever the layout moves it, under its own owner so the animation is freed with it. A child that already slides keeps its curve.
+    pub(crate) fn animate_layout(&mut self, curve: Curve) {
+        if self.flip.is_some() {
+            return;
+        }
+        let node = self.node;
+        let flip =
+            reactive_core::with_owner(self.owner.or(self.built_under), || Flip::new(node, curve));
+        self.flip = Some(Rc::new(flip));
+    }
+
+    /// Takes the child out of its parent's layout flow while it stays drawn where it was, or puts it back. Only a sliding child is ever taken out.
+    pub(crate) fn set_out_of_flow(&self, out: bool) {
+        if let Some(flip) = &self.flip {
+            flip.set_out_of_flow(out);
+        }
+    }
+
+    /// The child's render boundary, drawn where its transitions have it.
+    pub(crate) fn boundary(&self) -> RenderNode {
+        let boundary = self.segment.boundary();
+        let (matrix, opacity) = self.mount().map_or((IDENTITY, 1.0), |mount| mount.frame());
+        let matrix = match &self.flip {
+            Some(flip) => translated(matrix, flip.offset()),
+            None => matrix,
+        };
+        apply_enter(boundary, matrix, opacity)
+    }
+
+    /// The matrix the child is drawn with right now, without subscribing to it.
+    pub(crate) fn matrix_now(&self) -> [f32; 6] {
+        let matrix = self.mount().map_or(IDENTITY, |mount| mount.frame_now().0);
+        match &self.flip {
+            Some(flip) => translated(matrix, flip.offset_now()),
+            None => matrix,
+        }
+    }
+
+    /// Hands `event` to the child under its own scope. A child whose node is gated shut — inert, invisible, or leaving — is withheld from it, whoever set the gate, and one arriving or sliding gets the pointer where it is drawn.
+    pub(crate) fn deliver(&self, event: &Event) -> EventResult {
+        let send = |event: &Event| self.owning(|| self.item.borrow_mut().on_event(event));
+        if !gate_admits(self.node) {
+            return withhold(event, send);
+        }
+        let matrix = self.matrix_now();
+        match (matrix != IDENTITY)
+            .then(|| crate::pointer::transform_pointer(event, matrix))
+            .flatten()
+        {
+            Some(moved) => send(&moved),
+            None => send(event),
+        }
+    }
+
+    pub(crate) fn is_leaving(&self) -> bool {
+        self.mount().is_some_and(|mount| mount.is_leaving_now())
     }
 }
 
@@ -56,23 +161,92 @@ pub(crate) fn make_child(widget: Box<dyn LayoutItem>) -> Child {
         node,
         owner: None,
         built_under: current_owner(),
+        presented: None,
+        flip: None,
     }
 }
 
 /// Builds a child that owns its own lifetime — a reactive list's row, an `if` branch — under a fresh owner, so [`dispose_child`] frees everything the build made rather than waiting for the last handle to drop.
 ///
 /// The scope covers `make_child` as well as the build: the rect signal and the render segment's effect are per-item too, and an item that leaves has no more use for either.
-pub(crate) fn build_child(build: impl FnOnce() -> Box<dyn LayoutItem>) -> Child {
+pub(crate) fn build_child(
+    build: impl FnOnce() -> Result<Box<dyn LayoutItem>, LayoutError>,
+) -> Result<Child, LayoutError> {
+    let (child, owner) = build_owned(|| build().map(make_child))?;
+    Ok(child.owned_by(owner))
+}
+
+/// Runs `build` under a fresh owner and disposes it on error or panic, so a failed build does not leak one owner's worth of signals and effects per attempt; the nodes it created are freed separately by the [`NodeRecording`] around the build.
+pub(crate) fn build_owned<T>(
+    build: impl FnOnce() -> Result<T, LayoutError>,
+) -> Result<(T, OwnerId), LayoutError> {
     let scope = owner_scope();
     let owner = scope.id();
-    let mut child = make_child(build());
+    let outcome = catch_unwind(AssertUnwindSafe(build));
     drop(scope);
-    child.owner = Some(owner);
-    child
+    match outcome {
+        Ok(Ok(built)) => Ok((built, owner)),
+        Ok(Err(err)) => {
+            dispose_owner(owner);
+            Err(err)
+        }
+        Err(payload) => {
+            dispose_owner_contained(owner);
+            resume_unwind(payload)
+        }
+    }
+}
+
+/// The build's panic is the one worth reporting, so a teardown panicking on the way out is dropped rather than replacing it.
+fn dispose_owner_contained(owner: OwnerId) {
+    let _ = catch_unwind(AssertUnwindSafe(|| dispose_owner(owner)));
+}
+
+/// One pass of building children, released as a whole unless [kept](Self::keep), so a row panicking partway through a pass does not leave the rows built earlier in that pass owned by the host.
+#[must_use = "dropping the pass frees what it built"]
+pub(crate) struct BuildPass {
+    nodes: Option<NodeRecording>,
+    owners: Vec<OwnerId>,
+}
+
+impl BuildPass {
+    pub(crate) fn start() -> Self {
+        Self {
+            nodes: Some(record_nodes()),
+            owners: Vec::new(),
+        }
+    }
+
+    pub(crate) fn build_child(
+        &mut self,
+        build: impl FnOnce() -> Result<Box<dyn LayoutItem>, LayoutError>,
+    ) -> Result<Child, LayoutError> {
+        let child = build_child(build)?;
+        self.owners.extend(child.owner);
+        Ok(child)
+    }
+
+    pub(crate) fn keep(mut self) {
+        self.owners.clear();
+        if let Some(nodes) = self.nodes.take() {
+            nodes.keep();
+        }
+    }
+}
+
+impl Drop for BuildPass {
+    fn drop(&mut self) {
+        for owner in std::mem::take(&mut self.owners) {
+            dispose_owner_contained(owner);
+        }
+        drop(self.nodes.take());
+    }
 }
 
 /// Retires a child: what it created, and the layout node it created it on. See [`crate::disposal`] for when.
 pub(crate) fn dispose_child(child: &Child) {
+    // Retiring frees the node itself, so its owner must not free it again as an orphan.
+    child.set_out_of_flow(false);
     retire(child.owner, child.node());
 }
 

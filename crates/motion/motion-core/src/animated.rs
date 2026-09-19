@@ -33,6 +33,10 @@ pub(crate) struct AnimInner<T: Lerp + 'static> {
     // Tween origin captured at retarget; the tween lerps start -> target.
     start: T,
     elapsed_secs: f32,
+    // Duration of the tween leg currently playing, which may be less than the curve's full duration if it interrupted an in-flight leg.
+    leg_secs: f32,
+    // Distance covered by the last full-duration leg, the reference a shorter interrupting leg's fraction is computed against.
+    full_span: f32,
     curve: Curve,
     settled: bool,
     // Timestamp of the last integration; None means the next tick only establishes t0.
@@ -70,7 +74,7 @@ impl<T: Lerp + 'static> AnimInner<T> {
 
     fn step_tween(&mut self, t: Tween, dt: f32) -> Option<T> {
         self.elapsed_secs += dt;
-        let duration = t.duration.as_secs_f32();
+        let duration = self.leg_secs;
         if duration <= 0.0 || self.elapsed_secs >= duration {
             return Some(self.snap_to_target());
         }
@@ -106,6 +110,32 @@ impl<T: Lerp + 'static> AnimInner<T> {
     // A frame that left the value bit-identical will never move it again — same state, same forces — so the animation is over. This is what guarantees termination: the epsilons above are absolute while the value is not, so a spring on screen coordinates goes numerically dead while still short of `DISP_EPS_SQ`.
     fn value_is_frozen(&self, before: &T) -> bool {
         self.current.sub(before).magnitude_sq() == 0.0
+    }
+
+    fn plan_leg(&mut self) {
+        let Curve::Tween(t) = self.curve else {
+            return;
+        };
+        let distance = self.target.sub(&self.current).magnitude_sq().sqrt();
+        let fraction = if self.settled || self.full_span <= 0.0 {
+            1.0
+        } else {
+            (distance / self.full_span).min(1.0)
+        };
+        if fraction >= 1.0 {
+            self.full_span = distance;
+        }
+        self.start = self.current.clone();
+        self.elapsed_secs = 0.0;
+        self.leg_secs = t.duration.as_secs_f32() * fraction;
+    }
+
+    fn wake(&mut self) {
+        // Reset t0 only from rest, so an idle gap doesn't integrate as one huge step; in flight the clock keeps running.
+        if self.settled {
+            self.last = None;
+        }
+        self.settled = false;
     }
 
     fn snap_to_target(&mut self) -> T {
@@ -173,6 +203,8 @@ impl<T: Lerp + 'static> Animated<T> {
             velocity: T::zero(),
             start: initial,
             elapsed_secs: 0.0,
+            leg_secs: 0.0,
+            full_span: 0.0,
             curve: curve.into(),
             settled: true,
             last: None,
@@ -191,7 +223,7 @@ impl<T: Lerp + 'static> Animated<T> {
         reactive_core::detached(|| Self::new(initial, curve))
     }
 
-    /// Aim at a new `target`. Springs keep position and velocity (interruptible); tweens restart from the current value over the full duration. Retargeting to the current goal is a no-op.
+    /// Aim at a new `target` (a no-op if it's already the goal); a tween interrupted mid-flight takes only the share of its duration proportional to the remaining distance, so it doesn't restart from a full leg.
     pub fn retarget(&self, target: T) {
         {
             let shared = self.inner();
@@ -199,20 +231,31 @@ impl<T: Lerp + 'static> Animated<T> {
             if target.sub(&inner.target).magnitude_sq() <= NOOP_EPS_SQ {
                 return;
             }
-            match inner.curve {
-                Curve::Spring(_) => {
-                    inner.target = target;
-                }
-                Curve::Tween(_) => {
-                    inner.start = inner.current.clone();
-                    inner.elapsed_secs = 0.0;
-                    inner.target = target;
-                }
-            }
-            inner.settled = false;
-            // Re-establish t0 on the next tick so a gap since the last activity does not integrate as one huge step.
-            inner.last = None;
+            inner.target = target;
+            inner.plan_leg();
+            inner.wake();
         }
+        self.register();
+    }
+
+    /// Shifts the value by `delta` and publishes it immediately, keeping the current target — for following a layout move without a visible jump. No-op under a zero time scale.
+    pub fn displace(&self, delta: T) {
+        if delta.magnitude_sq() <= NOOP_EPS_SQ || ticker::scale() <= 0.0 {
+            return;
+        }
+        let (signal, value) = {
+            let shared = self.inner();
+            let mut inner = shared.borrow_mut();
+            inner.current = inner.current.add(&delta);
+            inner.plan_leg();
+            inner.wake();
+            (inner.signal, inner.current.clone())
+        };
+        signal.set(value);
+        self.register();
+    }
+
+    fn register(&self) {
         // Bind the concrete Weak first so it unsize-coerces to Weak<dyn Tickable> at the call.
         let weak = Rc::downgrade(&self.inner());
         ticker::register(self.id, weak);

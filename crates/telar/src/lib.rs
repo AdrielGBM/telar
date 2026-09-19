@@ -137,9 +137,9 @@ pub use platform_desktop::DesktopPathsProvider;
 #[cfg(feature = "runtime")]
 pub use reactive_core::{
     Effect, Emitter, Memo, OwnerGuard, OwnerId, Reactive, ReadSignal, RwSignal, Source, Task,
-    batch, begin_batch, current_owner, derive, derive_pair, detached, dispose_owner, drain_tasks,
-    effect, end_batch, memo, on_cleanup, owner_scope, reset_runtime, reset_tasks, set_task_waker,
-    signal, spawn_stream, spawn_task, with_owner,
+    Transaction, TransactionError, batch, begin_batch, current_owner, derive, derive_pair,
+    detached, dispose_owner, drain_tasks, effect, end_batch, memo, on_cleanup, owner_scope,
+    reset_runtime, reset_tasks, set_task_waker, signal, spawn_stream, spawn_task, with_owner,
 };
 #[cfg(all(feature = "runtime", feature = "svg"))]
 pub use renderer_assets::{SvgData, SvgError, VectorCommand};
@@ -200,9 +200,9 @@ pub use surface::{
 };
 #[cfg(feature = "runtime")]
 pub use theme_core::{
-    ControlSize, Theme, ThemeTokens, active_mode, control_scale, follow_system, register_mode,
-    set_control_size, set_mode, set_system_dark, set_theme, use_control_size, use_theme,
-    use_theme_tokens,
+    ControlSize, ScopedTheme, Theme, ThemeTokens, active_mode, control_scale, follow_system,
+    nearest_theme, register_mode, set_control_size, set_mode, set_system_dark, set_theme,
+    use_control_size, use_theme, use_theme_tokens,
 };
 #[cfg(all(feature = "runtime", feature = "svg"))]
 pub use ui_core::Svg;
@@ -213,20 +213,22 @@ pub use ui_core::{
 };
 #[cfg(feature = "runtime")]
 pub use ui_core::{
-    Axis, Canvas, ChildSlot, Children, Clip, ClipAxis, ClippedItem, Component, ComponentList,
-    Container, DEFAULT_SCRIM, DragAxis, DragStart, Edge, EventResult, Image, Inherited, Input,
-    KeyAnswer, KeyNav, KeyNavMove, LayoutItem, LayoutScrollArea, Lazy, LineGutter, NodeId, NodeVec,
-    Overlay, Path, PointerButtons, ReactiveList, Rectangle, RenderNode, ScrollPage, ScrollViewport,
+    Axis, BuildFailure, COARSE_STEP, Canvas, ChildSlot, Children, Clip, ClipAxis, ClippedItem,
+    Component, ComponentList, Container, DEFAULT_SCRIM, DragAxis, DragStart, Edge, ErrorBoundary,
+    EventResult, FINE_STEP, Image, Inherited, Input, KeyAnswer, KeyNav, KeyNavMove, LayoutItem,
+    LayoutScrollArea, LayoutTransition, Lazy, LineGutter, NodeId, NodeVec, Overlay, Path,
+    PointerButtons, Presence, ReactiveList, Rectangle, RenderNode, ScrollPage, ScrollViewport,
     ScrollbarStyle, Slots, StyledContainer, SurfaceScaffold, SurfaceTransition, Text, TextArea,
-    VirtualList, WindowRoot, anchor_rect, apply_move, box_item, box_transform, close_overlay,
-    compute_layout, current_direction, declare, dismiss_depth, dismiss_top, drag_start,
-    drag_travel, focus, fragment, fragment_positional, inherited_text_style, insertion_index,
-    interactive_rects, kept, key_held, key_nav_apply, key_nav_apply_grid, key_pressed,
-    logical_border_radius, logical_border_widths, mark_dirty, modifiers, new_container, new_leaf,
-    observe_keyboard, observe_pointer, open_overlay, overlay_state, pointer_buttons,
-    relayout_if_dirty, remove_node, set_children, set_direction, set_display, set_min_height,
-    set_overlay_host, track_layout, transform_pointer, undeclare, use_context, use_direction,
-    use_dismiss_depth, visible_window,
+    ThemeProvider, Transition, VirtualList, WindowRoot, anchor_rect, animate_layout, apply_move,
+    box_item, box_transform, close_overlay, compute_layout, confirm_top, current_direction,
+    declare, dismiss_depth, dismiss_top, drag_start, drag_travel, exits_in_flight, focus, fragment,
+    fragment_positional, inherited_text_style, insertion_index, interactive_rects, kept, key_held,
+    key_nav_apply, key_nav_apply_grid, key_pressed, logical_border_radius, logical_border_widths,
+    mark_dirty, modifiers, new_container, new_leaf, observe_keyboard, observe_pointer,
+    open_overlay, overlay_state, pointer_buttons, provide_theme, register_transaction,
+    relayout_if_dirty, remove_node, requested_cursor, set_children, set_direction, set_display,
+    set_min_height, set_overlay_host, step_factor, track_layout, transform_pointer, undeclare,
+    use_context, use_direction, use_dismiss_depth, visible_window,
 };
 
 /// Empties the layout runtime for a fresh tree, and installs the glyph measurer if nothing installed one.
@@ -248,15 +250,16 @@ pub use navigate_core::{
 
 #[cfg(feature = "components-advanced")]
 pub use ui_components::{
-    AccordionProps, ReorderableProps, StepperProps, accordion, reorderable, stepper,
+    AccordionProps, ItemBuilder, ReorderGroup, ReorderZoneProps, ReorderableProps, Slot,
+    StepperProps, accordion, apply_zone_move, reorderable, stepper,
 };
 #[cfg(feature = "components-base")]
 pub use ui_components::{
-    BadgeProps, ButtonProps, CheckboxProps, ChipProps, GroupProps, HeadingProps, ItemProps,
-    ProgressProps, RadioProps, SectionProps, SelectProps, SeparatorProps, SliderProps,
-    SpinnerProps, TabsProps, TextFieldProps, ToggleProps, badge, button, checkbox, chip, group,
-    heading, item, progress, radio, section, select, separator, slider, spinner, tabs, text_field,
-    toggle,
+    BadgeProps, ButtonProps, CheckboxProps, ChipProps, GroupProps, HandleProps, HeadingProps,
+    ItemProps, ProgressProps, RadioProps, ScrubFieldProps, SectionProps, SelectProps,
+    SeparatorProps, SliderProps, SpinnerProps, TabsProps, TextFieldProps, ToggleProps, badge,
+    button, checkbox, chip, group, handle, heading, item, progress, radio, scrub_field, section,
+    select, separator, slider, spinner, tabs, text_field, toggle,
 };
 #[cfg(feature = "components-overlays")]
 pub use ui_components::{

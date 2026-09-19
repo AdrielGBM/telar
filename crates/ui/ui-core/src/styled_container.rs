@@ -4,9 +4,7 @@ use std::rc::Rc;
 
 use geometry_core::{Rect, Transform};
 use layout_core::{LayoutError, LayoutStyle, NodeId};
-use platform_core::{
-    Cursor, Event, Key, NamedKey, NumericValue, PointerButton, PointerSource, WindowCommand,
-};
+use platform_core::{Cursor, Event, Key, NamedKey, NumericValue, PointerButton, PointerSource};
 use reactive_core::{Effect, Reactive, RwSignal, effect, signal};
 use renderer_core::{BlendMode, Border, Declared, RectStyle};
 use theme_core::use_theme_tokens;
@@ -14,6 +12,7 @@ use ui_tree::{Component, EventResult, RenderNode};
 
 use crate::child_host::{ChildSlot, DynHost};
 use crate::context::{new_container, track_layout};
+use crate::cursor::{self, CursorClaim};
 use crate::drag::DragGesture;
 use crate::focus::{self, FocusId};
 use crate::input_region::{self, InputHandle, InputMode, Placement};
@@ -116,8 +115,7 @@ struct PointerHooks {
     // The continuous half of `hover`, which reports only the crossings.
     moved: Option<Box<dyn Fn(f32, f32)>>,
     scroll: Option<Box<dyn Fn(f32, f32)>>,
-    // Restored to the default on leave.
-    cursor: Option<Reactive<Cursor>>,
+    cursor: Option<CursorClaim>,
 }
 
 impl PointerHooks {
@@ -141,6 +139,8 @@ struct Focusable {
     activates: bool,
     // Registered when the box is given a `disabled` source; withdrawn on drop.
     scope: Option<focus::ScopeId>,
+    // Set by `on_focused_key`: the key handler answers only while this box holds focus.
+    keys_need_focus: bool,
 }
 
 /// The painted box every interactive widget is built on: state styles, gestures, focus and transforms.
@@ -335,12 +335,8 @@ impl StyledContainer {
             && inside != self.state.is_hovered.get()
         {
             self.state.is_hovered.set(inside);
-            if let Some(cursor) = &self.pointer.cursor {
-                platform_core::push_window_command(WindowCommand::SetCursor(if inside {
-                    cursor.get()
-                } else {
-                    Cursor::Default
-                }));
+            if let Some(claim) = &self.pointer.cursor {
+                claim.hover(cursor::depth(), inside);
             }
             if let Some(cb) = &self.pointer.hover {
                 cb(inside);
@@ -450,10 +446,10 @@ impl StyledContainer {
     }
 
     fn dispatch_children(&mut self, event: &Event) -> EventResult {
-        match &self.dyn_host {
+        cursor::nested(|| match &self.dyn_host {
             Some(host) => host.dispatch(event),
             None => dispatch_container_event(&mut self.children, event),
-        }
+        })
     }
 
     pub fn with_opacity(mut self, opacity: impl Fn() -> f32 + 'static) -> Self {
@@ -594,9 +590,8 @@ impl StyledContainer {
             || self.pointer.cursor.is_some();
         if tracks_hover && self.state.is_hovered.get() {
             self.state.is_hovered.set(false);
-            // Nothing else restores the shape while the pointer is still inside the window.
-            if self.pointer.cursor.is_some() {
-                platform_core::push_window_command(WindowCommand::SetCursor(Cursor::Default));
+            if let Some(claim) = &self.pointer.cursor {
+                claim.hover(cursor::depth(), false);
             }
             if let Some(cb) = &self.pointer.hover {
                 cb(false);
@@ -604,23 +599,18 @@ impl StyledContainer {
         }
     }
 
-    /// Shows `cursor` while the pointer is over this box, and restores the default when it leaves.
-    ///
-    /// The shape is the app's statement of what the next press will do — orbit, resize a panel, place a point — so it belongs to the widget that would handle that press, not to a mode the app tracks.
-    ///
-    /// **A shape is as often worked out as it is written**: one strip resizes a column and the same component resizes a row. So it takes a [`Reactive<Cursor>`] — a `Cursor` converts into one, so a literal call site says exactly what it did before — and one that reads follows what it reads, including while the pointer is already inside: the shape is a fact about the box, not about the crossing.
+    /// Requests `cursor` from the platform while the pointer is over this box, or while a drag that started on it runs; nested boxes resolve innermost first, a dragged box winning over any hovered one, and leaving a box hands the shape back to the one it sits in.
     pub fn cursor(mut self, cursor: impl Into<Reactive<Cursor>>) -> Self {
         let cursor = cursor.into();
-        if matches!(cursor, Reactive::Read(_)) {
-            let (hovered, held) = (self.state.is_hovered, cursor.clone());
-            effect(move || {
-                let shape = held.get();
-                if hovered.get() {
-                    platform_core::push_window_command(WindowCommand::SetCursor(shape));
-                }
-            });
+        let claim = CursorClaim::new(Cursor::Default);
+        let id = claim.id();
+        match cursor {
+            Reactive::Read(read) => {
+                effect(move || id.set_shape(read()));
+            }
+            Reactive::Const(shape) => id.set_shape(shape),
         }
-        self.pointer.cursor = Some(cursor);
+        self.pointer.cursor = Some(claim);
         self.mark_interactive();
         self
     }
@@ -744,9 +734,7 @@ impl StyledContainer {
         self
     }
 
-    /// Make the box draggable. The callback fires with the pointer position (layout space) on a press inside the box and on every move until release — even after the pointer leaves the box. Map the coordinate to a value (slider) or an offset (reorder/resize). Fires once when a drag started on this box ends, with the position it finished at (layout space, local to the box, same as [`on_drag`](Self::on_drag)).
-    ///
-    /// This is what makes a *threshold* gesture expressible: `on_drag` alone reports where the pointer is but never that it let go, so a swipe-to-dismiss or a drag-to-open can be tracked and never decided. A drag also ends when the pointer leaves the window or a child consumes the release; those carry no position, so the last one the drag reached is reported instead — the gesture always ends exactly once.
+    /// `on_drag` never says the pointer let go, so a threshold gesture decides here; a release the drag never saw (pointer left the window, a child consumed it) reports the last position, and a cancelled transacted drag ends in `on_drag_cancel` instead.
     pub fn on_drag_end(self, f: impl Fn(f32, f32) + 'static) -> Self {
         self.maybe_on_drag_end(Some(f))
     }
@@ -802,6 +790,21 @@ impl StyledContainer {
     /// A drag goes on receiving moves after the pointer has left the widget — that is what keeps a slider tracking when the hand overshoots — and the same broadcast is what lets a pointer dragged out of the window report a place no layout could produce. This is where a caller says how far out the answer may go: once, rather than at every use. Read on each report, so a box that resizes takes its bounds with it.
     pub fn drag_within(mut self, bounds: impl Fn() -> Rect + 'static) -> Self {
         self.drag.keep_within(bounds);
+        self
+    }
+
+    /// Runs each drag as `transaction`: it begins as the drag starts, [`on_drag`](Self::on_drag) previews into it, and the release commits after [`on_drag_end`](Self::on_drag_end); Escape or another button mid-stroke cancels it instead, reverting the transaction and firing [`on_drag_cancel`](Self::on_drag_cancel). A transaction already open elsewhere is joined rather than restarted.
+    pub fn drag_transaction<T: Clone + 'static>(
+        mut self,
+        transaction: reactive_core::Transaction<T>,
+    ) -> Self {
+        self.drag.transact(Rc::new(transaction));
+        self
+    }
+
+    /// Fires when a transacted drag is cancelled, after its transaction has reverted. See [`drag_transaction`](Self::drag_transaction).
+    pub fn on_drag_cancel(mut self, f: impl Fn() + 'static) -> Self {
+        self.drag.set_cancel(f);
         self
     }
 
@@ -873,6 +876,12 @@ impl StyledContainer {
         let Some(f) = f else { return self };
         self.on_key = Some(Box::new(move |key| f(key).took()));
         self
+    }
+
+    /// [`on_key`](Self::on_key) for a control rather than a shortcut table: `f` hears keys only while this box holds focus, so two sliders on one screen do not both answer the arrows. The box must be focusable — see [`control`](Self::control); one that is not never hears a key through this.
+    pub fn on_focused_key<A: KeyAnswer>(mut self, f: impl Fn(&Key) -> A + 'static) -> Self {
+        self.focusable.keys_need_focus = true;
+        self.maybe_on_key(Some(f))
     }
 
     /// Make the box focusable and fire `f(true)`/`f(false)` when it gains/loses keyboard focus. It joins the tab order (Tab/Shift-Tab reach it) and takes focus on tap. Use it to drive a focus ring or to build a custom focusable widget on top of a `box`.
@@ -967,13 +976,31 @@ impl Component for StyledContainer {
     }
 
     fn on_event(&mut self, event: &Event) -> EventResult {
+        let answer = self.route(event);
+        if let Some(claim) = &self.pointer.cursor {
+            claim.drag(cursor::depth(), self.drag.has_started());
+        }
+        answer
+    }
+
+    fn debug_name(&self) -> &'static str {
+        "StyledContainer"
+    }
+}
+
+impl StyledContainer {
+    fn route(&mut self, event: &Event) -> EventResult {
         let transformed = self
             .stroke_matrix(event)
             .and_then(|matrix| transform_pointer(event, matrix));
         let event = transformed.as_ref().unwrap_or(event);
+        if self.drag.settle() {
+            self.press.cancel();
+            self.set_active(false);
+        }
         if !self.receives_input() {
             self.end_containment();
-            self.drag.end(None);
+            self.drag.abort();
             return input_region::withhold(event, |event| self.dispatch_children(event));
         }
         // Ahead of the pure-routing bail below, which a wrapper with no handlers would otherwise take. The state it was showing goes with it, or a box disabled mid-hover keeps a highlight it can no longer honour.
@@ -983,13 +1010,13 @@ impl Component for StyledContainer {
                 | Event::PointerReleased { .. }
                 | Event::Scrolled { .. } => {
                     self.end_containment();
-                    self.drag.end(None);
+                    self.drag.abort();
                     EventResult::Ignored
                 }
                 // Consumed rather than declined, because a disabled box keeps its claim: on a surface whose input region is carved from those claims the press has already been taken from whatever sits behind the surface, so letting it through as unhandled is a click that happens nowhere at all.
                 Event::PointerPressed { x, y, .. } => {
                     self.end_containment();
-                    self.drag.end(None);
+                    self.drag.abort();
                     if self.rect.get().contains(*x as f32, *y as f32) {
                         EventResult::Handled
                     } else {
@@ -1019,7 +1046,7 @@ impl Component for StyledContainer {
             // Where a live gesture really must end: a window losing focus never sends the release for what was held.
             Event::FocusChanged { is_focused: false } => {
                 self.end_containment();
-                self.drag.end(None);
+                self.drag.abort();
                 self.dispatch_children(event)
             }
             // Children get first refusal; only then does an `on_scroll` box under the wheel consume it.
@@ -1061,6 +1088,8 @@ impl Component for StyledContainer {
                 }
                 // Not while a field has the caret: this is the app's shortcut table, which would otherwise fire on every letter typed. Nor from a subtree that is out of the layout flow: a key carries no position to miss the box with, so the chain is the only thing that can keep the shortcuts of a table nobody can see from firing.
                 if let Some(cb) = &self.on_key
+                    && (!self.focusable.keys_need_focus
+                        || self.focusable.id.is_some_and(focus::is_focused))
                     && !focus::text_entry_takes_key(key, *modifiers)
                     && input_region::receives_input(self.node)
                     && cb(key)
@@ -1071,10 +1100,6 @@ impl Component for StyledContainer {
             }
             _ => self.dispatch_children(event),
         }
-    }
-
-    fn debug_name(&self) -> &'static str {
-        "StyledContainer"
     }
 }
 
@@ -1130,3 +1155,7 @@ mod tests;
 #[cfg(test)]
 #[path = "styled_container_paint_state_test.rs"]
 mod paint_state_tests;
+
+#[cfg(test)]
+#[path = "styled_container_transaction_test.rs"]
+mod transaction_tests;

@@ -739,3 +739,145 @@ fn a_resumed_window_with_nothing_changed_still_draws() {
         "once drawn, a clean tree goes back to drawing on change only"
     );
 }
+
+/// A 120x80 card showing `Grab`, with a 40x40 grip at its top-left showing `EwResize` that drags.
+struct Handles;
+
+impl App for Handles {
+    fn root(&self) -> Box<dyn ui_tree::Component> {
+        ui_core::reset_layout_runtime();
+        let grip = ui_core::StyledContainer::new(
+            layout_core::LayoutStyle::new().width(40.0).height(40.0),
+            |_| renderer_core::RectStyle::default(),
+            vec![],
+        )
+        .expect("a grip builds")
+        .cursor(platform_core::Cursor::EwResize)
+        .on_drag(|_, _| {});
+        let card = ui_core::StyledContainer::new(
+            layout_core::LayoutStyle::new()
+                .flex_column()
+                .width(120.0)
+                .height(80.0),
+            |_| renderer_core::RectStyle::default(),
+            vec![ui_core::box_item(grip)],
+        )
+        .expect("a card builds")
+        .cursor(platform_core::Cursor::Grab);
+        Box::new(ui_core::WindowRoot::new(ui_core::box_item(card)))
+    }
+}
+
+/// The runner forwards a box's cursor request to the window: the innermost hovered box decides, a drag keeps its shape wherever the pointer goes, and leaving hands the shape back.
+#[test]
+fn the_window_shows_the_cursor_the_box_under_the_pointer_asks_for() {
+    use platform_core::{Cursor, PointerButton, PointerSource};
+
+    let mut handler = build_app_handler::<HeadlessWindow, ()>(
+        Box::new(LocalApp(Handles)),
+        Arc::new(services_core::NoPaths),
+        crate::runner::font_config::FontSetup::default(),
+        RendererBackend::Software,
+        UserPrefs::default(),
+        "cursor-test".to_string(),
+        SurfaceRenderer::builtin(),
+    );
+    let window = HeadlessWindow::new(120, 80);
+    handler.new_events();
+    assert!(handler.on_resume(&window));
+    run_a_pass(&mut handler, &window);
+
+    let moved = |x, y| Event::PointerMoved {
+        x,
+        y,
+        source: PointerSource::Mouse,
+    };
+    handler.on_event(moved(20.0, 20.0), &window);
+    handler.on_event(moved(20.0, 20.0), &window);
+    assert_eq!(window.cursor(), Cursor::EwResize, "over the grip");
+    handler.on_event(moved(100.0, 60.0), &window);
+    assert_eq!(window.cursor(), Cursor::Grab, "over the card only");
+
+    handler.on_event(moved(20.0, 20.0), &window);
+    handler.on_event(
+        Event::PointerPressed {
+            x: 20.0,
+            y: 20.0,
+            button: PointerButton::Primary,
+            source: PointerSource::Mouse,
+        },
+        &window,
+    );
+    handler.on_event(moved(300.0, 300.0), &window);
+    assert_eq!(
+        window.cursor(),
+        Cursor::EwResize,
+        "a drag keeps its shape outside"
+    );
+    handler.on_event(
+        Event::PointerReleased {
+            x: 300.0,
+            y: 300.0,
+            button: PointerButton::Primary,
+            source: PointerSource::Mouse,
+        },
+        &window,
+    );
+    assert_eq!(
+        window.cursor(),
+        Cursor::Default,
+        "and gives it back where it ended"
+    );
+}
+
+thread_local! {
+    static DROPPED_UNDER: Cell<Option<reactive_core::SurfaceHandle>> = const { Cell::new(None) };
+}
+
+/// Notes which surface is active when it is dropped.
+struct SurfaceWitness;
+
+impl ui_tree::Component for SurfaceWitness {
+    fn view(&self) -> ui_tree::RenderNode {
+        ui_tree::RenderNode::group([])
+    }
+}
+
+impl Drop for SurfaceWitness {
+    fn drop(&mut self) {
+        DROPPED_UNDER.with(|at| at.set(Some(reactive_core::current_surface())));
+    }
+}
+
+struct Witnessed;
+
+impl App for Witnessed {
+    fn root(&self) -> Box<dyn ui_tree::Component> {
+        Box::new(SurfaceWitness)
+    }
+}
+
+/// A tree's widgets withdraw what they registered from their surface's worlds as they drop, so the tree has to go while that surface is still there and active.
+#[test]
+fn a_dropped_handler_drops_its_tree_inside_its_surface() {
+    let mut handler = build_app_handler::<HeadlessWindow, ()>(
+        Box::new(LocalApp(Witnessed)),
+        Arc::new(services_core::NoPaths),
+        crate::runner::font_config::FontSetup::default(),
+        RendererBackend::Software,
+        UserPrefs::default(),
+        "drop-order-test".to_string(),
+        SurfaceRenderer::builtin(),
+    );
+    let surface = ui_core::Surface::new();
+    let handle = surface.handle();
+    handler.surface = Some(surface);
+    {
+        let _surface = handler.enter_surface();
+        handler.tree = Some(handler.app.mount());
+    }
+
+    drop(handler);
+
+    assert_eq!(DROPPED_UNDER.with(Cell::get), Some(handle));
+}

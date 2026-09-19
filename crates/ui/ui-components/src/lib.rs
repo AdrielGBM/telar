@@ -13,6 +13,8 @@ mod context_menu;
 #[cfg(feature = "overlays")]
 mod drawer;
 mod dropdown;
+mod edit;
+mod handle;
 #[cfg(test)]
 mod harness;
 mod heading;
@@ -24,9 +26,12 @@ mod modal;
 mod progress;
 mod radio;
 #[cfg(feature = "advanced")]
+mod reorder_zones;
+#[cfg(feature = "advanced")]
 mod reorderable;
 #[cfg(feature = "overlays")]
 mod scrim;
+mod scrub_field;
 mod section;
 mod select;
 mod shared;
@@ -57,6 +62,7 @@ pub use context_menu::{
 };
 #[cfg(feature = "overlays")]
 pub use drawer::{DrawerProps, drawer};
+pub use handle::{HandleProps, ToPoint, ToValue, handle};
 pub use heading::{HeadingProps, heading};
 pub use list::{GroupProps, ItemProps, SeparatorProps, group, item, separator};
 #[cfg(feature = "overlays")]
@@ -66,7 +72,10 @@ pub use modal::{ModalProps, modal};
 pub use progress::{ProgressProps, progress};
 pub use radio::{RadioProps, radio};
 #[cfg(feature = "advanced")]
-pub use reorderable::{ReorderableProps, reorderable};
+pub use reorder_zones::{ReorderGroup, ReorderZoneProps, Slot, apply_zone_move};
+#[cfg(feature = "advanced")]
+pub use reorderable::{ItemBuilder, ReorderableProps, reorderable};
+pub use scrub_field::{DOUBLE_CLICK, Format, Parse, ScrubFieldProps, scrub_field};
 pub use section::{SectionProps, section};
 pub use select::{SelectProps, select};
 pub use slider::{SliderProps, slider};

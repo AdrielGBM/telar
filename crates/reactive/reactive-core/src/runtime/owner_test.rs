@@ -179,3 +179,29 @@ fn a_surface_teardown_does_not_run_effects_over_what_it_already_freed() {
 
     assert_eq!(*seen.borrow(), vec!["0".to_string()]);
 }
+
+#[test]
+fn find_context_walks_past_the_values_it_turns_down() {
+    let _outer = owner_scope();
+    provide_context(1u32);
+    let _middle = owner_scope();
+    provide_context(2u32);
+    let _inner = owner_scope();
+    provide_context(3u32);
+
+    assert_eq!(find_context::<u32, _>(|n| (*n < 3).then_some(*n)), Some(2));
+    assert_eq!(find_context::<u32, _>(|n| (*n == 1).then_some(*n)), Some(1));
+    assert_eq!(find_context::<u32, _>(|n| (*n > 3).then_some(*n)), None);
+    assert_eq!(find_context::<u64, _>(|n| Some(*n)), None);
+}
+
+#[test]
+fn find_context_may_read_a_signal_while_it_decides() {
+    let _scope = owner_scope();
+    let wanted = signal(true);
+    provide_context(wanted);
+    assert_eq!(
+        find_context::<crate::RwSignal<bool>, _>(|s| s.get().then_some("read")),
+        Some("read")
+    );
+}

@@ -226,3 +226,124 @@ fn global_signal_reruns_all_surfaces_each_under_its_context() {
         "B's effect must re-run under B: {entries:?}"
     );
 }
+
+#[test]
+fn each_surface_reads_its_own_cascade() {
+    use crate::inherit::{declare, inherited_text_style};
+    use layout_reactive::{LayoutStyle, new_container};
+    use renderer_core::Declared;
+
+    let a = Surface::new();
+    let b = Surface::new();
+
+    let in_a = {
+        let _guard = a.enter();
+        let node = new_container(LayoutStyle::new(), &[]).unwrap();
+        declare(node, Declared::default().with_font_size(11.0));
+        node
+    };
+    let in_b = {
+        let _guard = b.enter();
+        let node = new_container(LayoutStyle::new(), &[]).unwrap();
+        declare(node, Declared::default().with_font_size(22.0));
+        node
+    };
+    assert_eq!(
+        in_a, in_b,
+        "the two surfaces must share the node id, or this proves nothing"
+    );
+
+    {
+        let _guard = a.enter();
+        assert_eq!(inherited_text_style(in_a).font_size, 11.0);
+    }
+    let _guard = b.enter();
+    assert_eq!(inherited_text_style(in_b).font_size, 22.0);
+}
+
+#[test]
+fn dropping_a_surface_frees_its_worlds() {
+    use layout_reactive::{
+        AvailableSpace, LayoutStyle, absolute_rect, compute_layout, new_leaf, set_overlay_host,
+    };
+    use reactive_core::{live_effect_count, live_owner_count, live_signal_count};
+
+    drop(Surface::new());
+    // `compute_layout` reads the thread-global text direction, which mints its own signal (not per-surface, and outside the scope of this test) on first read. Warm it up before the baseline so the loop below only measures what the surface itself owns.
+    {
+        let warm = Surface::new();
+        let _entered = warm.enter();
+        let (node, _) = new_leaf(LayoutStyle::new()).unwrap();
+        compute_layout(
+            node,
+            AvailableSpace::Definite(1.0),
+            AvailableSpace::Definite(1.0),
+        )
+        .unwrap();
+    }
+    let signals = live_signal_count();
+    let effects = live_effect_count();
+    let owners = live_owner_count();
+
+    for _ in 0..8 {
+        let surface = Surface::new();
+        {
+            let _entered = surface.enter();
+            crate::inherit::reset_cascade();
+            let exits = crate::presence::exits_in_flight();
+            effect(move || {
+                exits.get();
+            });
+
+            let id = crate::focus::next_id();
+            crate::focus::request(id);
+            assert!(
+                crate::focus::is_focused(id),
+                "focus must land inside the surface it was requested in"
+            );
+
+            let (node, _) = new_leaf(LayoutStyle::new().width(10.0).height(10.0)).unwrap();
+            compute_layout(
+                node,
+                AvailableSpace::Definite(100.0),
+                AvailableSpace::Definite(100.0),
+            )
+            .unwrap();
+            set_overlay_host(node);
+            assert!(
+                absolute_rect(node).is_some(),
+                "absolute_rect must mint the node's position signal"
+            );
+        }
+        drop(surface);
+    }
+
+    assert_eq!(live_signal_count(), signals);
+    assert_eq!(live_effect_count(), effects);
+    assert_eq!(live_owner_count(), owners);
+}
+
+#[test]
+fn after_settle_skips_a_surface_dropped_before_it_settles() {
+    use reactive_core::{begin_batch, end_batch};
+    use std::cell::Cell;
+    use std::rc::Rc;
+
+    let ran = Rc::new(Cell::new(false));
+    let ran_c = Rc::clone(&ran);
+
+    begin_batch();
+    {
+        let surface = Surface::new();
+        let _entered = surface.enter();
+        reactive_core::after_settle(move || {
+            ran_c.set(true);
+        });
+    }
+    end_batch();
+
+    assert!(
+        !ran.get(),
+        "after_settle must not run a closure whose surface was disposed before the batch settled"
+    );
+}

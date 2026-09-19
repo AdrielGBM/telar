@@ -100,6 +100,35 @@ pub(crate) fn update_signal_value<T: 'static>(id: SignalId, f: impl FnOnce(&mut 
     });
 }
 
+/// [`update_signal_value`] that answers `None` for freed storage and never notifies, for state a signal's subscribers must not hear about.
+pub(crate) fn try_update_signal_value<T: 'static, R>(
+    id: SignalId,
+    f: impl FnOnce(&mut T) -> R,
+) -> Option<R> {
+    RUNTIME.with(|rt| {
+        let mut rt = rt.borrow_mut();
+        let storage = rt.signals.get_mut(id)?;
+        Some(f(storage
+            .value
+            .downcast_mut::<T>()
+            .expect("signal type mismatch")))
+    })
+}
+
+/// How many writes the signal has seen, or `None` once its storage is gone.
+pub(crate) fn signal_version(id: SignalId) -> Option<u64> {
+    RUNTIME.with(|rt| rt.borrow().signals.get(id).map(|s| s.version))
+}
+
+/// Marks `id` as held by a transaction, answering `false` when one already holds it.
+pub(crate) fn claim_transaction(id: SignalId) -> bool {
+    RUNTIME.with(|rt| rt.borrow_mut().transactions.insert(id))
+}
+
+pub(crate) fn release_transaction(id: SignalId) {
+    RUNTIME.with(|rt| rt.borrow_mut().transactions.remove(&id));
+}
+
 pub(crate) fn track_signal(id: SignalId) {
     RUNTIME.with(|rt| {
         let mut rt = rt.borrow_mut();

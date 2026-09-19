@@ -1,8 +1,8 @@
 //! A window with no window behind it: a size, a scale factor and nothing to present to.
 
-use std::sync::Arc;
+use std::sync::{Arc, Mutex, PoisonError};
 
-use platform_core::Window;
+use platform_core::{Cursor, Window};
 use raw_window_handle::{
     DisplayHandle, HandleError, HasDisplayHandle, HasWindowHandle, WindowHandle,
 };
@@ -20,6 +20,7 @@ struct Inner {
     height: u32,
     scale_factor: f64,
     prefers_dark: Option<bool>,
+    cursor: Mutex<Cursor>,
 }
 
 impl HeadlessWindow {
@@ -41,8 +42,18 @@ impl HeadlessWindow {
                 height,
                 scale_factor,
                 prefers_dark,
+                cursor: Mutex::new(Cursor::Default),
             }),
         }
+    }
+
+    /// The pointer shape last requested through [`Window::set_cursor`], so a test can see what a real window would show.
+    pub fn cursor(&self) -> Cursor {
+        *self
+            .inner
+            .cursor
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
     }
 }
 
@@ -76,7 +87,18 @@ impl Window for HeadlessWindow {
     fn prefers_dark(&self) -> Option<bool> {
         self.inner.prefers_dark
     }
+    fn set_cursor(&self, cursor: Cursor) {
+        *self
+            .inner
+            .cursor
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner) = cursor;
+    }
     fn is_offscreen(&self) -> bool {
         true
     }
 }
+
+#[cfg(test)]
+#[path = "window_test.rs"]
+mod tests;

@@ -191,3 +191,163 @@ fn an_animation_ends_with_the_scope_that_made_it() {
     reactive_core::dispose_owner(owner);
     assert!(!has_active(), "disposing the owner ends the animation");
 }
+
+fn run(a: &Animated<f32>, from: Instant, ms: u64, step_ms: u64) -> (Instant, Option<u64>) {
+    let mut now = from;
+    let mut spent = 0;
+    while spent < ms {
+        spent += step_ms;
+        now += Duration::from_millis(step_ms);
+        tick(now);
+        if a.is_settled() {
+            return (now, Some(spent));
+        }
+    }
+    (now, None)
+}
+
+#[test]
+fn a_reversed_linear_tween_takes_the_time_it_had_spent() {
+    let base = fresh();
+    let a = Animated::new(0.0f32, tween(Duration::from_millis(200), Easing::Linear));
+    a.retarget(1.0);
+    tick(base);
+    let turned = base + Duration::from_millis(60);
+    tick(turned);
+    assert!((a.get() - 0.3).abs() < 1e-4, "{}", a.get());
+
+    a.retarget(0.0);
+    let (_, settled_after) = run(&a, turned, 200, 1);
+    let took = settled_after.expect("the reversal settles");
+    assert!(
+        took.abs_diff(60) <= 1,
+        "the way back took {took} ms, the way out 60"
+    );
+    assert_eq!(a.get(), 0.0);
+}
+
+#[test]
+fn a_reversed_eased_tween_takes_its_share_of_the_distance() {
+    let base = fresh();
+    let a = Animated::new(0.0f32, tween(Duration::from_millis(200), Easing::EaseOut));
+    a.retarget(1.0);
+    tick(base);
+    let turned = base + Duration::from_millis(40);
+    tick(turned);
+    let travelled = a.get();
+
+    a.retarget(0.0);
+    let (_, settled_after) = run(&a, turned, 400, 1);
+    let expected = (200.0 * travelled).ceil() as u64;
+    let took = settled_after.expect("the reversal settles");
+    assert!(
+        took.abs_diff(expected) <= 1,
+        "took {took} ms, expected about {expected} ms for {travelled} of the way"
+    );
+}
+
+#[test]
+fn a_tween_nudged_further_takes_the_time_that_was_left() {
+    let base = fresh();
+    let a = Animated::new(0.0f32, tween(Duration::from_millis(200), Easing::Linear));
+    a.retarget(1.0);
+    tick(base);
+    let nudged = base + Duration::from_millis(100);
+    tick(nudged);
+    a.retarget(1.1);
+    let (_, settled_after) = run(&a, nudged, 400, 1);
+    let took = settled_after.expect("the leg settles");
+    assert!(
+        took.abs_diff(120) <= 1,
+        "took {took} ms for 0.6 of a full leg"
+    );
+}
+
+#[test]
+fn a_tween_from_rest_takes_its_full_duration_after_an_earlier_leg() {
+    let base = fresh();
+    let a = Animated::new(0.0f32, tween(Duration::from_millis(200), Easing::Linear));
+    a.retarget(1.0);
+    tick(base);
+    let (rested, _) = run(&a, base, 200, 10);
+    assert!(a.is_settled());
+
+    a.retarget(0.9);
+    tick(rested);
+    let (_, settled_after) = run(&a, rested, 400, 1);
+    let took = settled_after.expect("the leg settles");
+    assert!(
+        took.abs_diff(200) <= 1,
+        "a short leg from rest took {took} ms, not the whole duration"
+    );
+}
+
+#[test]
+fn an_interrupting_retarget_moves_on_the_very_next_frame() {
+    let base = fresh();
+    let a = Animated::new(0.0f32, tween(Duration::from_millis(200), Easing::Linear));
+    a.retarget(1.0);
+    tick(base);
+    tick(base + Duration::from_millis(100));
+    let at_interrupt = a.get();
+    a.retarget(0.0);
+    assert_eq!(a.get(), at_interrupt, "retargeting never jumps the value");
+    tick(base + Duration::from_millis(116));
+    assert!(
+        a.get() < at_interrupt,
+        "the frame after an interruption already moves: {}",
+        a.get()
+    );
+}
+
+#[test]
+fn displacing_publishes_at_once_and_eases_back_to_the_target() {
+    let base = fresh();
+    let a = Animated::new(0.0f32, tween(Duration::from_millis(200), Easing::Linear));
+    a.displace(40.0);
+    assert_eq!(a.get(), 40.0, "the jump is drawn in the frame it happens");
+    tick(base);
+    tick(base + Duration::from_millis(100));
+    assert!((a.get() - 20.0).abs() < 1e-3, "{}", a.get());
+    tick(base + Duration::from_millis(200));
+    assert_eq!(a.get(), 0.0);
+    assert!(a.is_settled());
+}
+
+#[test]
+fn displacing_a_spring_keeps_its_velocity() {
+    let base = fresh();
+    let a = Animated::new(0.0f32, spring(170.0, 26.0));
+    a.displace(100.0);
+    tick(base);
+    let mut now = base;
+    for _ in 0..4 {
+        now += Duration::from_millis(16);
+        tick(now);
+    }
+    let before = a.get();
+    tick(now + Duration::from_millis(16));
+    let speed = before - a.get();
+    now += Duration::from_millis(16);
+    let shifted = a.get();
+    a.displace(50.0);
+    assert_eq!(a.get(), shifted + 50.0);
+    tick(now + Duration::from_millis(16));
+    let speed_after = shifted + 50.0 - a.get();
+    assert!(
+        speed_after > speed * 0.5,
+        "momentum lost across the displacement: {speed_after} vs {speed}"
+    );
+}
+
+#[test]
+fn displacing_under_a_zero_time_scale_shows_nothing() {
+    let _ = fresh();
+    set_scale(0.0);
+    let a = Animated::new(0.0f32, spring(170.0, 26.0));
+    a.displace(40.0);
+    assert_eq!(a.get(), 0.0);
+    assert!(a.is_settled());
+    assert!(!has_active());
+    set_scale(1.0);
+}

@@ -135,20 +135,79 @@ pub trait ThemeTokens: 'static {
     }
 }
 
-thread_local! {
-    // No `ManuallyDrop` and no TLS destructor: an `RwSignal` is an id with no destructor, so the slot is trivially droppable and `dlclose` stays safe. `reset_runtime` frees the storage.
-    //
-    // One value behind two views: the catalogue asks it questions through `ThemeTokens`, while `use_theme` hands the application its own type back. `Rc<dyn Any>` is all the downcast needs, which is why a theme no longer implements a trait to supply it.
-    static THEME: RwSignal<Option<Rc<dyn Any>>> = detached(|| signal(None));
-    static THEME_TOKENS: RwSignal<Option<Rc<dyn ThemeTokens>>> =
-        detached(|| signal(None));
+/// One theme behind the two views it is read through: the catalogue asks it questions through `ThemeTokens`, while `use_theme` hands the application its own type back. `Rc<dyn Any>` is all the downcast needs, which is why a theme does not implement a trait to supply it.
+#[derive(Clone)]
+struct Installed {
+    theme: Rc<dyn Any>,
+    tokens: Rc<dyn ThemeTokens>,
 }
 
-/// Installs `theme` as the active one, for both [`use_theme`] and the catalogue's token reads.
+impl Installed {
+    fn new<T: ThemeTokens + Clone + 'static>(theme: T) -> Self {
+        let theme = Rc::new(theme);
+        Self {
+            theme: theme.clone(),
+            tokens: theme,
+        }
+    }
+}
+
+thread_local! {
+    // No `ManuallyDrop` and no TLS destructor: an `RwSignal` is an id with no destructor, so the slot is trivially droppable and `dlclose` stays safe. `reset_runtime` frees the storage.
+    static THEME: RwSignal<Option<Installed>> = detached(|| signal(None));
+}
+
+/// Installs `theme` as the global default, for both [`use_theme`] and the catalogue's token reads, wherever no [`ScopedTheme`] is provided.
 pub fn set_theme<T: ThemeTokens + Clone + 'static>(theme: T) {
-    let theme = Rc::new(theme);
-    THEME.with(|s| s.set(Some(theme.clone() as Rc<dyn Any>)));
-    THEME_TOKENS.with(|s| s.set(Some(theme as Rc<dyn ThemeTokens>)));
+    THEME.with(|s| s.set(Some(Installed::new(theme))));
+}
+
+/// A theme for one subtree, switchable in place: once [provided](Self::provide) to an owner, every read under that owner — including in effects, measures and handlers that re-enter it later — resolves this theme instead of the global one, and [`set`](Self::set) re-runs only the readers that resolved it.
+#[derive(Clone, Copy)]
+pub struct ScopedTheme(RwSignal<Installed>);
+
+impl ScopedTheme {
+    /// A scoped theme belonging to the current owner, which is what frees it.
+    pub fn new<T: ThemeTokens + Clone + 'static>(theme: T) -> Self {
+        Self(signal(Installed::new(theme)))
+    }
+
+    /// Swaps the theme, re-running whatever resolved this one.
+    pub fn set<T: ThemeTokens + Clone + 'static>(&self, theme: T) {
+        self.0.set(Installed::new(theme));
+    }
+
+    /// This theme's tokens, read reactively.
+    pub fn tokens(&self) -> Rc<dyn ThemeTokens> {
+        self.0.with(|installed| Rc::clone(&installed.tokens))
+    }
+
+    /// Makes this the theme of everything built under the current owner, shadowing any provided above it.
+    pub fn provide(self) {
+        reactive_core::provide_context(Provided(self));
+    }
+}
+
+impl<T: ThemeTokens + Clone + 'static> From<T> for ScopedTheme {
+    fn from(theme: T) -> Self {
+        Self::new(theme)
+    }
+}
+
+/// A newtype so the key in an owner's context is this crate's alone.
+struct Provided(ScopedTheme);
+
+/// The nearest theme provided at or above the current owner, or `None` where only the global one applies.
+pub fn nearest_theme() -> Option<ScopedTheme> {
+    reactive_core::with_context::<Provided, _>(|provided| provided.0)
+}
+
+/// The theme in force here, subscribing the caller to exactly that one.
+fn in_force() -> Option<Installed> {
+    match nearest_theme() {
+        Some(scoped) => Some(scoped.0.get()),
+        None => THEME.with(|s| s.get()),
+    }
 }
 
 /// A handle to the theme in force, read with `.get()` like any other reactive source.
@@ -178,33 +237,31 @@ impl<T: Clone + 'static> Theme<T> {
     }
 }
 
-/// The active theme as the application's own type. Reads reactively, so a switch re-runs the caller.
+/// The theme in force as the application's own type: the nearest [`ScopedTheme`] above the current owner that holds a `T`, else the global theme, walking past providers of other types. Reads reactively, so a switch re-runs the caller; panics if no provider or the global theme holds a `T`.
 pub fn use_theme<T: Clone + 'static>() -> T {
-    THEME.with(|s| {
-        let theme = s.get().unwrap_or_else(|| {
+    let scoped = reactive_core::find_context::<Provided, _>(|provided| {
+        provided
+            .0
+            .0
+            .with(|installed| installed.theme.downcast_ref::<T>().cloned())
+    });
+    if let Some(theme) = scoped {
+        return theme;
+    }
+    THEME
+        .with(|s| s.with(|global| global.as_ref()?.theme.downcast_ref::<T>().cloned()))
+        .unwrap_or_else(|| {
             panic!(
-                "use_theme::<{}> called but no theme has been set; call set_theme first",
+                "use_theme::<{}> found no theme of that type in force; install one with set_theme or a ScopedTheme",
                 std::any::type_name::<T>()
             )
-        });
-        theme
-            .downcast_ref::<T>()
-            .unwrap_or_else(|| {
-                panic!(
-                    "use_theme::<{}> called but a theme of a different type is set",
-                    std::any::type_name::<T>()
-                )
-            })
-            .clone()
-    })
+        })
 }
 
-/// The tokens in force: the registered theme, or the trait's own answers when nothing is registered.
-///
-/// Not an `Option`, because no theme registered is not a different set of values — it is this same table with nobody having overridden it. Every caller that had to handle the `None` supplied a fallback of its own, and those fallbacks became a second palette that drifted: the focus ring's accent and [`primary`](ThemeTokens::primary) were different blues, and [`ink`](ThemeTokens::ink) and [`surface`](ThemeTokens::surface) follow the light/dark mode here while the constants standing in for them did not — so an application that registered no theme could not reach the mode-following default at all.
+/// Never `None`: with no theme registered the answer is the same table nobody overrode, because per-caller fallbacks drifted into a second palette that ignored light/dark mode.
 pub fn use_theme_tokens() -> Rc<dyn ThemeTokens> {
-    match THEME_TOKENS.with(|s| s.get()) {
-        Some(tokens) => tokens,
+    match in_force() {
+        Some(installed) => installed.tokens,
         None => DEFAULT_TOKENS.with(Rc::clone),
     }
 }

@@ -28,6 +28,16 @@ pub enum Cursor {
     ColResize,
     /// Over a horizontal splitter (drag up/down).
     RowResize,
+    /// Over a handle that resizes or scrubs along the horizontal axis.
+    EwResize,
+    /// Over a handle that resizes along the vertical axis.
+    NsResize,
+    /// Over a handle that resizes along the top-left to bottom-right diagonal.
+    NwseResize,
+    /// Over a handle that resizes along the top-right to bottom-left diagonal.
+    NeswResize,
+    /// Over a handle that moves freely in both axes.
+    Move,
     /// Over a text field.
     Text,
     /// Over a target that refuses the current gesture.

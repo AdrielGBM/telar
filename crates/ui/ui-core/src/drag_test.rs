@@ -107,3 +107,35 @@ fn a_drag_reports_what_armed_it_and_not_what_is_held_now() {
         "and nothing leaks out of the callback it was scoped to"
     );
 }
+
+/// Escape or another button on one surface says nothing about a stroke on another: that stroke stays live, and the event goes on to the surface it was meant for.
+#[test]
+fn a_live_drag_is_cancelled_only_from_its_own_surface() {
+    let cancelled = Rc::new(std::cell::Cell::new(false));
+    let here = crate::Surface::new();
+    let there = crate::Surface::new();
+    let mut drag = {
+        let _entered = there.enter();
+        let (mut drag, _log) = logging(0.0);
+        drag.transact(Rc::new(Transaction::new(reactive_core::signal(0.0_f32))));
+        let seen = cancelled.clone();
+        drag.set_cancel(move || seen.set(true));
+        drag.press(&press_at(10.0, 10.0), RECT);
+        drag
+    };
+
+    {
+        let _entered = here.enter();
+        assert!(!cancel_live(), "Escape here has no stroke to cancel");
+        assert!(!cancel_live_by(&PointerButton::Secondary));
+    }
+    assert!(!cancelled.get());
+
+    let _entered = there.enter();
+    assert!(
+        cancel_live_by(&PointerButton::Secondary),
+        "a second button there does"
+    );
+    assert!(cancelled.get());
+    assert!(drag.settle());
+}

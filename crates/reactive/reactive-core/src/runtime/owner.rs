@@ -1,21 +1,12 @@
-//! The owner tree — what disposes reactive state, once anything does.
-//!
-//! Every signal, memo and effect belongs to a node in a tree, recorded at creation from whatever owner is active, the same way [`EffectEntry::surface`](super::EffectEntry) records the surface. Disposing an owner walks its children first, then frees what it holds itself. A view mints one per component instance, per reactive `if` branch and per list row.
-//!
-//! # How this composes with `surface_local!`
-//!
-//! **A surface is the outer world; an owner is a node in the inner tree.** They are not competing scoping mechanisms and must not be read as one.
-//!
-//! A surface owns a set of swappable thread-local worlds — its layout tree, overlays, focus, input region, window-command queue (`ui-core/src/surface_context.rs`). Those keep their job exactly as it is. An owner owns *reactive state*: the entries in this runtime's arenas. An owner belongs to exactly one surface, the one active when it was created, and disposing a surface disposes the owner roots stamped with it — never the reverse. Owners nest inside a surface; a surface never nests inside an owner.
-//!
-//! The reason to write it down: both answer "who cleans this up", so the temptation is to fold one into the other. They clean up different things, on different schedules — a surface lives for a window, an owner for a component instance, an `if` branch, or one row of a list.
+//! The owner tree disposes reactive state; an owner belongs to exactly one surface, and disposing a surface disposes its owner roots, never the reverse.
 
 use std::any::{Any, TypeId};
+use std::panic::{AssertUnwindSafe, catch_unwind, resume_unwind};
 use std::rc::Rc;
 
 use rustc_hash::FxHashMap;
 
-use super::flush::{batch, flush};
+use super::flush::{batch, flush_when_settled};
 use super::surface::current_surface;
 use super::{EffectId, RUNTIME, Runtime, SignalId, SurfaceHandle};
 use crate::runtime::effects::deregister_effect;
@@ -34,6 +25,7 @@ pub(crate) struct OwnerEntry {
     cleanups: Vec<Box<dyn FnOnce()>>,
     /// What this owner tells everything below it, keyed by type. Empty for almost every owner: only a scope that provides something ever reaches the allocator for this.
     context: FxHashMap<TypeId, Rc<dyn Any>>,
+    catch: Option<PanicCatch>,
     surface: SurfaceHandle,
 }
 
@@ -47,21 +39,33 @@ impl OwnerEntry {
             effects: Vec::new(),
             cleanups: Vec::new(),
             context: FxHashMap::default(),
+            catch: None,
             surface,
         }
     }
 }
 
-/// The owner a signal or effect created right now would belong to, or `None` outside every owner scope.
-///
-/// `None` does not mean unowned: creation falls back to the active surface's root, which `owning_id` mints on demand. This answers the narrower question of whether a scope is open.
+/// The owner a signal or effect created right now would belong to, or `None` outside every owner scope (creation still falls back to the surface root via `owning_id`).
 pub fn current_owner() -> Option<OwnerId> {
     RUNTIME.with(|rt| rt.borrow().owner_stack.last().copied())
 }
 
-/// Opens a fresh owner as a child of the active one and makes it current until the guard drops.
-///
-/// **The active one is whoever would own a context**, which with an empty stack is the surface's root — the same rule [`provide_context`] and [`with_context`] read by. Parenting off the bare stack instead made a scope opened at the top of a surface build an orphan: the builder had written its context on the surface root, and the walk up from the orphan never reached it. Every `.rsx` component opens a scope like this, so a panel asking which module it was built for read an empty string and drew the fallback.
+/// Whether `owner` is `ancestor` or sits anywhere beneath it. `false` once either has been disposed.
+pub fn owner_within(owner: OwnerId, ancestor: OwnerId) -> bool {
+    RUNTIME.with(|rt| {
+        let rt = rt.borrow();
+        let mut at = Some(owner);
+        while let Some(id) = at {
+            if id == ancestor {
+                return true;
+            }
+            at = rt.owners.get(id).and_then(|entry| entry.parent);
+        }
+        false
+    })
+}
+
+/// Opens a fresh owner as a child of the active one (the surface root if the stack is empty, matching [`provide_context`]/[`with_context`]) and makes it current until the guard drops.
 pub fn owner_scope() -> OwnerGuard {
     let surface = current_surface();
     RUNTIME.with(|rt| {
@@ -79,9 +83,7 @@ pub fn owner_scope() -> OwnerGuard {
     })
 }
 
-/// Restores the owner scope that was active before [`owner_scope`].
-///
-/// Truncates to the depth recorded on entry rather than popping one, so an unwind through a build that left inner scopes open still lands the stack where it started. An unbalanced stack is the worst kind of bug to leave behind: every later creation goes to the wrong owner, and being a lifetime error it surfaces nowhere near the panic that caused it. `batch_depth` meets this standard already.
+/// Restores the owner scope that was active before [`owner_scope`], truncating to the recorded depth so an unwind through open inner scopes still lands the stack where it started.
 #[must_use = "the owner scope is only active while this guard is alive"]
 pub struct OwnerGuard {
     id: OwnerId,
@@ -113,13 +115,7 @@ pub(crate) fn attach_effect(rt: &mut Runtime, id: EffectId) {
     }
 }
 
-/// The owner a creation right now belongs to, minting the active surface's root if the stack is empty.
-///
-/// **Every surface has a root, including the ambient one** — `SurfaceHandle::NONE`, which is the whole world a single-window app ever has. Without it, everything a top-level view creates belongs to nobody: harmless while the handle refcount was still what freed things, and a plain leak once it is not. It is also what a declaration made outside every scope needs, since Phase 4 made withdrawal an owner's job.
-///
-/// The cost is the trade this whole design makes, and it lands here: a signal created outside every scope now lives until its surface does, where the refcount would have freed it at the last handle. In a UI that is almost always what you wanted; it is still a change.
-///
-/// `None` means one thing only: [`detached`](reactive_local::detached). A `surface_local!` world initialises on first access, and the first access is somebody's build — attributing a surface's own state to whatever row happened to touch it would free it when that row went away.
+/// The owner a creation right now belongs to, minting the active surface's root (including the ambient `SurfaceHandle::NONE`) if the stack is empty so nothing created outside a scope ends up unowned; `None` means only [`detached`](reactive_local::detached) state.
 fn owning(rt: &mut Runtime) -> Option<&mut OwnerEntry> {
     let id = owning_id(rt)?;
     rt.owners.get_mut(id)
@@ -143,9 +139,7 @@ pub(crate) fn owning_id(rt: &mut Runtime) -> Option<OwnerId> {
     Some(root)
 }
 
-/// Runs `f` under `owner`, for code that executes long after the build that made it.
-///
-/// The counterpart to the surface re-entry in `run_effect`, and needed for the same reason one layer in. An event handler is a plain closure: by the time it is called the owner stack is empty, so anything it asks for ambiently would resolve against the surface root rather than against the component it belongs to. Mints nothing — the owner already exists, and the handler must land *in* it rather than beside it.
+/// Runs `f` under `owner`, for code such as an event handler that executes long after the build that made it and would otherwise resolve context against the surface root instead of its own component.
 pub fn with_owner<R>(owner: Option<OwnerId>, f: impl FnOnce() -> R) -> R {
     let depth = RUNTIME.with(|rt| {
         let mut rt = rt.borrow_mut();
@@ -168,8 +162,6 @@ pub fn with_owner<R>(owner: Option<OwnerId>, f: impl FnOnce() -> R) -> R {
 }
 
 /// Whether the *current* owner provided a `T` itself, as opposed to inheriting one from above.
-///
-/// What tells an owner repeating itself apart from one shadowing its parent: the first is a mistake, the second is what nesting is for.
 pub fn context_provided_here<T: 'static>() -> bool {
     RUNTIME.with(|rt| {
         let mut rt = rt.borrow_mut();
@@ -182,9 +174,7 @@ pub fn context_provided_here<T: 'static>() -> bool {
     })
 }
 
-/// Puts `value` in the current owner's context, replacing whatever this owner had of that type.
-///
-/// Replacing rather than refusing, because a rebuild is the normal case: the same owner builds its content again and says the same things about it. The old spelling worked around a scope that could not be provided to twice by writing through an `Rc<RefCell<T>>` slot, which is a mutable cell standing in for a scope that ends.
+/// Puts `value` in the current owner's context, replacing whatever this owner had of that type — a rebuild builds its content again and says the same things about it.
 pub fn provide_context<T: 'static>(value: T) {
     RUNTIME.with(|rt| {
         let mut rt = rt.borrow_mut();
@@ -194,32 +184,51 @@ pub fn provide_context<T: 'static>(value: T) {
     });
 }
 
-/// Reads the nearest value of type `T` at or above the current owner.
-///
-/// A walk rather than a copy. The scope stack this replaces merged every parent entry into each new scope on entry, so opening one cost an `Rc` clone per inherited service; a walk makes entry free and pays on the read instead, which happens at user speed inside a handler rather than per compound-component build.
+/// Reads the nearest value of type `T` at or above the current owner, walking rather than copying so opening a scope stays free and the cost lands on the read instead.
 pub fn with_context<T: 'static, R>(f: impl FnOnce(&T) -> R) -> Option<R> {
     // Cloned out before the borrow is released, because `f` is the caller's and may read a signal, which would re-enter the runtime and abort.
-    let found: Rc<dyn Any> = RUNTIME.with(|rt| {
+    let (found, _) = RUNTIME.with(|rt| {
         let mut rt = rt.borrow_mut();
-        let mut at = owning_id(&mut rt);
-        let wanted = TypeId::of::<T>();
-        while let Some(id) = at {
-            let entry = rt.owners.get(id)?;
-            if let Some(value) = entry.context.get(&wanted) {
-                return Some(Rc::clone(value));
-            }
-            at = entry.parent;
-        }
-        None
+        let from = owning_id(&mut rt);
+        context_from(&rt, from, TypeId::of::<T>())
     })?;
     found.downcast_ref::<T>().map(f)
 }
 
-/// Registers work the current owner runs when it is disposed.
-///
-/// For state whose lifetime is an owner's but whose *name* is somebody else's — the cascade keys its declarations by layout `NodeId`, which this crate sits three below and cannot mention. A closure crosses that where a field could not.
-///
-/// Outside every owner the closure is dropped unrun, which is the honest answer: nothing will ever dispose it, so pretending otherwise would only move the leak.
+/// Reads the nearest value of type `T` at or above the current owner that `f` accepts, walking past the ones it turns down; `f` runs with the runtime released, so it may read a signal.
+pub fn find_context<T: 'static, R>(mut f: impl FnMut(&T) -> Option<R>) -> Option<R> {
+    let wanted = TypeId::of::<T>();
+    let mut next = RUNTIME.with(|rt| {
+        let mut rt = rt.borrow_mut();
+        let from = owning_id(&mut rt);
+        context_from(&rt, from, wanted)
+    });
+    while let Some((found, above)) = next {
+        if let Some(answer) = found.downcast_ref::<T>().and_then(&mut f) {
+            return Some(answer);
+        }
+        next = RUNTIME.with(|rt| context_from(&rt.borrow(), above, wanted));
+    }
+    None
+}
+
+/// The nearest context of type `wanted` at or above `from`, with the owner above the one that holds it.
+fn context_from(
+    rt: &Runtime,
+    mut at: Option<OwnerId>,
+    wanted: TypeId,
+) -> Option<(Rc<dyn Any>, Option<OwnerId>)> {
+    while let Some(id) = at {
+        let entry = rt.owners.get(id)?;
+        if let Some(value) = entry.context.get(&wanted) {
+            return Some((Rc::clone(value), entry.parent));
+        }
+        at = entry.parent;
+    }
+    None
+}
+
+/// Registers work the current owner runs when it is disposed; outside every owner the closure is dropped unrun, since nothing will ever dispose it.
 pub fn on_cleanup(f: impl FnOnce() + 'static) {
     RUNTIME.with(|rt| {
         let mut rt = rt.borrow_mut();
@@ -229,11 +238,66 @@ pub fn on_cleanup(f: impl FnOnce() + 'static) {
     });
 }
 
-/// Raised for as long as a teardown is mid-flight, so nothing flushes against a tree that is half taken down.
-///
-/// The window is the whole of [`dispose_owner`]: [`uproot`] has already removed the owner entries, the effects are still registered and still subscribed, and the signals come out last. An effect that runs in there reads a tree that no longer describes itself — and the read that finds a freed storage panics, in the middle of a window closing, where nothing can act on it.
-///
-/// Counted rather than a flag, because the nesting is real: a cleanup may dispose another owner, and [`dispose_surface_owners`] takes down a whole set. Only the outermost one is finished when it says it is.
+/// What `catch_unwind` hands back for a panic.
+pub type PanicPayload = Box<dyn Any + Send>;
+
+/// What an owner does with a panic unwinding out of an effect it holds, or one held by an owner below it — the nearest owner above the effect with a catch answers for that subtree, since the write that re-runs the effect is not where the panic belongs.
+#[derive(Clone)]
+pub enum PanicCatch {
+    /// Keep unwinding: a build of this scope is still on the stack and catches the panic itself, and handling it here would tear the scope down underneath that build.
+    Unwind,
+    /// `Err` hands the payload back, to be offered to the owners above.
+    Handle(Rc<dyn Fn(PanicPayload) -> Result<(), PanicPayload>>),
+}
+
+/// Sets what `owner` does with a panic out of an effect at or below it. `None` passes such a panic on to its parent.
+pub fn set_panic_catch(owner: OwnerId, catch: Option<PanicCatch>) {
+    RUNTIME.with(|rt| {
+        if let Some(entry) = rt.borrow_mut().owners.get_mut(owner) {
+            entry.catch = catch;
+        }
+    });
+}
+
+/// Offers a panic out of an effect held by `owner` to the nearest owner that catches, resuming the unwind when none does; inside another effect's run it always resumes, since the catching owner may hold that still-executing outer effect.
+pub(crate) fn deliver_panic(owner: Option<OwnerId>, mut payload: PanicPayload) {
+    if RUNTIME.with(|rt| rt.borrow().running_effects > 0) {
+        resume_unwind(payload);
+    }
+    let mut from = owner;
+    loop {
+        let found = RUNTIME.with(|rt| {
+            let rt = rt.borrow();
+            let mut at = from;
+            while let Some(id) = at {
+                let entry = rt.owners.get(id)?;
+                if let Some(catch) = &entry.catch {
+                    return Some((catch.clone(), entry.parent));
+                }
+                at = entry.parent;
+            }
+            None
+        });
+        let Some((PanicCatch::Handle(handle), parent)) = found else {
+            resume_unwind(payload);
+        };
+        match handle(payload) {
+            Ok(()) => return,
+            Err(unhandled) => {
+                payload = unhandled;
+                from = parent;
+            }
+        }
+    }
+}
+
+fn contain(first: &mut Option<PanicPayload>, f: impl FnOnce()) {
+    if let Err(payload) = catch_unwind(AssertUnwindSafe(f)) {
+        first.get_or_insert(payload);
+    }
+}
+
+/// Raised for as long as a teardown is mid-flight (owner entries removed but effects and signals not yet cleared), so nothing flushes against a half-torn-down tree; counted rather than a flag because disposal nests.
 struct Disposing;
 
 impl Disposing {
@@ -252,25 +316,10 @@ impl Drop for Disposing {
     }
 }
 
-/// Runs what a teardown's cleanups invalidated, once there is no teardown left to run it over.
-///
-/// Deferred rather than dropped: a cleanup that writes a signal a *surviving* effect reads still has to reach it, and by here everything the teardown was going to free is freed, so the effects that referenced it are deregistered and the flush skips them. What this cannot rescue is an effect that outlives the owner of a memo it reads — that is a lifetime error in the tree itself, and moving the flush only moves where it surfaces.
-fn flush_when_settled() {
-    let settled = RUNTIME.with(|rt| {
-        let rt = rt.borrow();
-        rt.disposing == 0
-            && rt.batch_depth == 0
-            && !rt.flushing
-            && (!rt.pending.is_empty() || !rt.memo_pending.is_empty())
-    });
-    if settled {
-        flush();
-    }
-}
-
-/// Disposes an owner and everything below it, children first.
+/// Disposes an owner and everything below it, children first; a panic mid-teardown resumes only once it completes, and whatever the cleanups invalidated is flushed afterward rather than dropped, since a surviving effect may still need to see it.
 pub fn dispose_owner(id: OwnerId) {
     let (cleanups, effects, signals) = uproot(id);
+    let mut panicked = None;
 
     {
         let _disposing = Disposing::enter();
@@ -278,12 +327,12 @@ pub fn dispose_owner(id: OwnerId) {
         // One wave, not one per withdrawal: `undeclare` bumps the cascade's `structure` signal, which every context read subscribes to, so tearing down N nodes outside a batch is N invalidations across the tree.
         batch(|| {
             for cleanup in cleanups {
-                cleanup();
+                contain(&mut panicked, cleanup);
             }
         });
 
         for effect in effects {
-            deregister_effect(effect);
+            contain(&mut panicked, || deregister_effect(effect));
         }
         // Taken out under the borrow and dropped after releasing it: a signal whose value owns signal handles re-enters the runtime as that value drops, which under the borrow aborts.
         let removed: Vec<Box<dyn Any>> = RUNTIME.with(|rt| {
@@ -294,35 +343,94 @@ pub fn dispose_owner(id: OwnerId) {
                 .map(|storage| storage.value)
                 .collect()
         });
-        drop(removed);
+        contain(&mut panicked, || drop(removed));
     }
 
     flush_when_settled();
+    if let Some(payload) = panicked {
+        resume_unwind(payload);
+    }
 }
 
-/// Disposes every owner root belonging to a surface. What `Surface`'s teardown calls.
+/// Runs `f` with what it creates belonging to the active surface's world: state that lives exactly as long as the surface, for a surface's own worlds (its layout tree, cascade, exit count) that must outlive every scope inside it and be freed when it is, which nothing [`detached`](crate::detached) ever is.
+pub fn in_surface_world<R>(f: impl FnOnce() -> R) -> R {
+    let surface = current_surface();
+    let depth = RUNTIME.with(|rt| {
+        let mut rt = rt.borrow_mut();
+        let world = match rt.worlds.get(&surface).copied() {
+            Some(world) if rt.owners.contains_key(world) => world,
+            _ => {
+                let world = rt.owners.insert(OwnerEntry::new(None, surface));
+                rt.worlds.insert(surface, world);
+                world
+            }
+        };
+        let depth = rt.owner_stack.len();
+        rt.owner_stack.push(world);
+        depth
+    });
+    struct Restore(usize);
+    impl Drop for Restore {
+        fn drop(&mut self) {
+            RUNTIME.with(|rt| rt.borrow_mut().owner_stack.truncate(self.0));
+        }
+    }
+    let _restore = Restore(depth);
+    f()
+}
+
+/// Disposes everything a surface holds: its owner roots, then its world — the world goes last because the roots' cleanups still write into it.
+pub fn dispose_surface(surface: SurfaceHandle) {
+    RUNTIME.with(|rt| rt.borrow_mut().disposed_surfaces.insert(surface));
+    let mut panicked = None;
+    {
+        let _disposing = Disposing::enter();
+        contain(&mut panicked, || dispose_surface_owners(surface));
+        let world = RUNTIME.with(|rt| rt.borrow_mut().worlds.remove(&surface));
+        if let Some(world) = world {
+            contain(&mut panicked, || dispose_owner(world));
+        }
+    }
+    flush_when_settled();
+    if let Some(payload) = panicked {
+        resume_unwind(payload);
+    }
+}
+
+/// Whether [`dispose_surface`] has already torn this surface down. [`SurfaceHandle::NONE`], the ambient surface, is never disposed.
+pub(crate) fn is_surface_disposed(surface: SurfaceHandle) -> bool {
+    !surface.is_none() && RUNTIME.with(|rt| rt.borrow().disposed_surfaces.contains(&surface))
+}
+
+/// Disposes every owner root belonging to a surface, leaving its world standing: see [`dispose_surface`].
 pub fn dispose_surface_owners(surface: SurfaceHandle) {
     let roots: Vec<OwnerId> = RUNTIME.with(|rt| {
-        rt.borrow()
-            .owners
+        let mut rt = rt.borrow_mut();
+        rt.roots.remove(&surface);
+        let world = rt.worlds.get(&surface).copied();
+        rt.owners
             .iter()
-            .filter(|(_, entry)| entry.parent.is_none() && entry.surface == surface)
+            .filter(|(id, entry)| {
+                entry.parent.is_none() && entry.surface == surface && Some(*id) != world
+            })
             .map(|(id, _)| id)
             .collect()
     });
+    let mut panicked = None;
     {
         // Held across the whole set rather than left to each root: the roots of one surface read each other, so a flush landing between two of them runs effects over what the one before it just freed.
         let _disposing = Disposing::enter();
         for root in roots {
-            dispose_owner(root);
+            contain(&mut panicked, || dispose_owner(root));
         }
     }
     flush_when_settled();
+    if let Some(payload) = panicked {
+        resume_unwind(payload);
+    }
 }
 
-/// How many signals the runtime is holding.
-///
-/// The arenas are private, so a lifetime that nothing frees is otherwise invisible — a test can watch a row rebuild ten times and see only that it still renders. Owner-scoped disposal makes the count the evidence: it is flat when disposal runs, and climbs when it does not.
+/// How many signals the runtime is holding — the arenas are private, so this is the only evidence a test has that disposal actually freed something rather than just re-rendering.
 pub fn live_signal_count() -> usize {
     RUNTIME.with(|rt| rt.borrow().signals.len())
 }
@@ -332,9 +440,12 @@ pub fn live_effect_count() -> usize {
     RUNTIME.with(|rt| rt.borrow().effects.len())
 }
 
-/// Removes an owner's subtree from the arena and hands back what it held, deepest owner first.
-///
-/// Iterative rather than recursive: the depth is the component nesting of a real view, and a stack overflow inside disposal would abort rather than unwind.
+/// How many owners the runtime is holding. See [`live_signal_count`].
+pub fn live_owner_count() -> usize {
+    RUNTIME.with(|rt| rt.borrow().owners.len())
+}
+
+/// Removes an owner's subtree from the arena and hands back what it held, deepest owner first; iterative rather than recursive, since a stack overflow inside disposal would abort rather than unwind.
 type Uprooted = (Vec<Box<dyn FnOnce()>>, Vec<EffectId>, Vec<SignalId>);
 
 fn uproot(root: OwnerId) -> Uprooted {
@@ -374,3 +485,7 @@ fn uproot(root: OwnerId) -> Uprooted {
 #[cfg(test)]
 #[path = "owner_test.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "panic_test.rs"]
+mod panic_tests;

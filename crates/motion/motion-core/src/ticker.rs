@@ -137,6 +137,10 @@ pub fn set_scale(scale: f32) {
     REGISTRY.with(|r| r.borrow_mut().scale = scale.max(0.0));
 }
 
+pub fn scale() -> f32 {
+    REGISTRY.with(|r| r.borrow().scale)
+}
+
 #[cfg(test)]
 #[path = "ticker_test.rs"]
 mod tests;

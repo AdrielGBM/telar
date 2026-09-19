@@ -1,14 +1,29 @@
 //! Effect registration, subscription cleanup, and the version and epoch checks that decide whether a scheduled effect actually has to run.
 
 use std::cmp::Reverse;
+use std::panic::{AssertUnwindSafe, catch_unwind};
 
 use super::flush::flush;
+use super::owner::deliver_panic;
 
 use super::surface::current_surface;
 use super::{EffectEntry, EffectId, RUNTIME, SignalId};
 
 pub(crate) fn current_observer() -> Option<EffectId> {
     RUNTIME.with(|rt| rt.borrow().observer_stack.last().copied())
+}
+
+/// Runs `f` with no observer, so nothing it reads subscribes whichever effect is running.
+pub(crate) fn untracked<R>(f: impl FnOnce() -> R) -> R {
+    struct Restore(Vec<EffectId>);
+    impl Drop for Restore {
+        fn drop(&mut self) {
+            let hidden = std::mem::take(&mut self.0);
+            RUNTIME.with(|rt| rt.borrow_mut().observer_stack = hidden);
+        }
+    }
+    let _restore = Restore(RUNTIME.with(|rt| std::mem::take(&mut rt.borrow_mut().observer_stack)));
+    f()
 }
 
 pub(crate) fn register_effect(f: Box<dyn Fn()>) -> EffectId {
@@ -137,6 +152,17 @@ pub(crate) fn clean_effect(id: EffectId) {
     }
 }
 
+/// Runs `id` now whatever its epoch and versions say: for a memo read that finds no value, because the computation that would have left one panicked and nothing has moved since to schedule another.
+pub(crate) fn force_run_effect(id: EffectId) {
+    RUNTIME.with(|rt| {
+        if let Some(entry) = rt.borrow_mut().effects.get_mut(id) {
+            entry.memo_dirty = true;
+            entry.last_run_epoch = 0;
+        }
+    });
+    run_effect(id);
+}
+
 pub(crate) fn run_effect(id: EffectId) {
     let ptr = RUNTIME.with(|rt| {
         let mut rt = rt.borrow_mut();
@@ -189,6 +215,7 @@ pub(crate) fn run_effect(id: EffectId) {
         let owner_depth = RUNTIME.with(|rt| {
             let mut rt = rt.borrow_mut();
             rt.observer_stack.push(id);
+            rt.running_effects += 1;
             let depth = rt.owner_stack.len();
             if let Some(owner) = owner
                 && rt.owners.contains_key(owner)
@@ -203,16 +230,17 @@ pub(crate) fn run_effect(id: EffectId) {
                 RUNTIME.with(|rt| {
                     let mut rt = rt.borrow_mut();
                     rt.observer_stack.pop();
+                    rt.running_effects -= 1;
                     rt.owner_stack.truncate(self.0);
                 });
             }
         }
         let _guard = PopGuard(owner_depth);
         // Re-enter this effect's surface, so its layout, overlay and focus resolve against the surface that built it even when the write that scheduled it came from another. Outside the runtime borrow, and inert for a single-surface app.
-        {
+        let outcome = {
             let _surface_guard = surface.enter();
-            unsafe { (*ptr)() };
-        }
+            catch_unwind(AssertUnwindSafe(|| unsafe { (*ptr)() }))
+        };
         drop(_guard);
         RUNTIME.with(|rt| {
             let mut rt = rt.borrow_mut();
@@ -239,5 +267,8 @@ pub(crate) fn run_effect(id: EffectId) {
                 entry.height = new_height;
             }
         });
+        if let Err(payload) = outcome {
+            deliver_panic(owner, payload);
+        }
     }
 }

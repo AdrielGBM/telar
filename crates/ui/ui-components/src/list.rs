@@ -88,7 +88,6 @@ impl ListContext {
         self.0.declaring.set(true);
         let declared = rows.build_with(self.clone());
         self.0.declaring.set(false);
-        // Nothing frees a layout node on drop and `remove` does not reach descendants, which is why the pieces hand back a childless node rather than a built row.
         for item in declared?.take_default() {
             ui_core::remove_node(item.layout_node());
         }
