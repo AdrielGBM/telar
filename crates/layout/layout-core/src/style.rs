@@ -539,6 +539,32 @@ impl LayoutStyle {
         self
     }
 
+    pub fn grid_template_rows(mut self, tracks: Vec<TemplateTrack>) -> Self {
+        self.inner.grid_template_rows = tracks
+            .into_iter()
+            .map(|t| t.into_template_component())
+            .collect();
+        self
+    }
+
+    /// Sizes the implicit rows a grid creates beyond its `grid_template_rows` — the tracks explicit placement (`grid_row`) or overflow auto-placed items land on. Defaults to `auto`, which is what taffy assumes when this is never called.
+    pub fn grid_auto_rows(mut self, tracks: Vec<TemplateTrack>) -> Self {
+        self.inner.grid_auto_rows = tracks
+            .into_iter()
+            .map(TemplateTrack::into_track_sizing_function)
+            .collect();
+        self
+    }
+
+    /// Sizes the implicit columns, as [`Self::grid_auto_rows`] does for rows.
+    pub fn grid_auto_columns(mut self, tracks: Vec<TemplateTrack>) -> Self {
+        self.inner.grid_auto_columns = tracks
+            .into_iter()
+            .map(TemplateTrack::into_track_sizing_function)
+            .collect();
+        self
+    }
+
     pub fn grid_column_span(mut self, count: u16) -> Self {
         self.inner.grid_column = taffy::geometry::Line {
             start: GridPlacement::Span(count),
@@ -551,6 +577,24 @@ impl LayoutStyle {
         self.inner.grid_row = taffy::geometry::Line {
             start: GridPlacement::Span(count),
             end: GridPlacement::Auto,
+        };
+        self
+    }
+
+    /// Places the item at an explicit column line (1-based, or negative to count from the end, as CSS defines) and has it span `span` tracks from there. Overlap with another explicitly placed item is not checked — that's the caller's job. Leaving the row auto on an otherwise-pinned item still moves taffy's shared auto-placement cursor, which can shift where a later, fully auto-placed sibling lands — pin both axes to avoid that.
+    pub fn grid_column(mut self, start: i16, span: u16) -> Self {
+        self.inner.grid_column = taffy::geometry::Line {
+            start: GridPlacement::Line(start.into()),
+            end: GridPlacement::Span(span),
+        };
+        self
+    }
+
+    /// Places the item at an explicit row line, as [`Self::grid_column`] does for columns.
+    pub fn grid_row(mut self, start: i16, span: u16) -> Self {
+        self.inner.grid_row = taffy::geometry::Line {
+            start: GridPlacement::Line(start.into()),
+            end: GridPlacement::Span(span),
         };
         self
     }

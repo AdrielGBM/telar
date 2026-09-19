@@ -55,6 +55,18 @@ impl TemplateTrack {
         }
     }
 
+    /// For `grid_auto_rows`/`grid_auto_columns`, which — like CSS's `grid-auto-rows`/`grid-auto-columns` — size one implicit track at a time and have no `repeat()` form.
+    pub(crate) fn into_track_sizing_function(self) -> TrackSizingFunction {
+        match self {
+            TemplateTrack::Single(tsf) => tsf,
+            TemplateTrack::Repeat(..) => {
+                panic!(
+                    "grid_auto_rows/grid_auto_columns take single tracks; repeat() has no meaning as an auto track"
+                )
+            }
+        }
+    }
+
     pub(crate) fn into_template_component(self) -> GridTemplateComponent<String> {
         match self {
             TemplateTrack::Single(tsf) => GridTemplateComponent::Single(tsf),

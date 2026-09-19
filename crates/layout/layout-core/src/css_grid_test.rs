@@ -17,6 +17,24 @@ fn a_grid_says_its_columns() {
     );
 }
 
+#[test]
+fn a_grid_says_its_rows() {
+    let out = css(LayoutStyle::new()
+        .display_grid()
+        .grid_template_rows(vec![TemplateTrack::px(80.0), TemplateTrack::px(120.0)]));
+    assert!(out.contains("grid-template-rows:80px 120px;"), "got {out}");
+}
+
+#[test]
+fn a_grid_says_its_implicit_track_sizes() {
+    let out = css(LayoutStyle::new()
+        .display_grid()
+        .grid_auto_rows(vec![TemplateTrack::px(90.0)])
+        .grid_auto_columns(vec![TemplateTrack::fr(1.0)]));
+    assert!(out.contains("grid-auto-rows:90px;"), "got {out}");
+    assert!(out.contains("grid-auto-columns:1fr;"), "got {out}");
+}
+
 /// What `grid cols:"fit 150"` means, and the case that made the sandbox stack: a grid with no track list is one implicit column, so every card came out full width.
 #[test]
 fn an_auto_fitting_repeat_keeps_its_keyword() {
@@ -66,6 +84,20 @@ fn a_span_is_stated_and_a_single_track_is_not() {
         "a single-track span is the default, so it needs no declaration: {}",
         css(LayoutStyle::new().grid_column_span(1))
     );
+}
+
+#[test]
+fn an_explicit_placement_says_its_line_and_span() {
+    let out = css(LayoutStyle::new().grid_column(2, 1).grid_row(3, 2));
+    assert!(out.contains("grid-column:2 / span 1;"), "got {out}");
+    assert!(out.contains("grid-row:3 / span 2;"), "got {out}");
+}
+
+/// A negative line counts from the end of the explicit grid, as CSS defines, so the dump must keep the sign rather than treat it as a track count.
+#[test]
+fn an_explicit_placement_keeps_a_negative_line() {
+    let out = css(LayoutStyle::new().grid_column(-1, 1));
+    assert!(out.contains("grid-column:-1 / span 1;"), "got {out}");
 }
 
 /// A track list only means anything on a grid, and saying it elsewhere is noise the browser parses.

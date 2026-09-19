@@ -160,6 +160,12 @@ fn css_of(style: &Style) -> Css {
         if let Some(tracks) = template(&style.grid_template_rows) {
             css.push("grid-template-rows", &tracks);
         }
+        if let Some(tracks) = auto_tracks(&style.grid_auto_columns) {
+            css.push("grid-auto-columns", &tracks);
+        }
+        if let Some(tracks) = auto_tracks(&style.grid_auto_rows) {
+            css.push("grid-auto-rows", &tracks);
+        }
     }
     if let Some(span) = placement_span(&style.grid_column) {
         css.push("grid-column", &span);
@@ -177,6 +183,15 @@ fn template(tracks: &[taffy::GridTemplateComponent<String>]) -> Option<String> {
         return None;
     }
     let written: Vec<String> = tracks.iter().map(component).collect();
+    Some(written.join(" "))
+}
+
+/// The implicit-track sizing list `grid-auto-rows`/`grid-auto-columns` write — plain tracks, since CSS gives that property no `repeat()` form.
+fn auto_tracks(tracks: &[taffy::TrackSizingFunction]) -> Option<String> {
+    if tracks.is_empty() {
+        return None;
+    }
+    let written: Vec<String> = tracks.iter().copied().map(sizing_of).collect();
     Some(written.join(" "))
 }
 
@@ -233,10 +248,13 @@ fn track_length(compact: CompactLength) -> Option<String> {
     }
 }
 
-/// `span N`, which is the only placement this vocabulary can express.
+/// `span N` for an auto-placed item, or `<line> / span N` for one placed at an explicit line — the only two placements this vocabulary can express.
 fn placement_span(line: &taffy::Line<taffy::GridPlacement<String>>) -> Option<String> {
-    match line.start {
-        taffy::GridPlacement::Span(n) if n > 1 => Some(format!("span {n}")),
+    match (&line.start, &line.end) {
+        (taffy::GridPlacement::Line(start), taffy::GridPlacement::Span(span)) => {
+            Some(format!("{} / span {span}", start.as_i16()))
+        }
+        (taffy::GridPlacement::Span(n), _) if *n > 1 => Some(format!("span {n}")),
         _ => None,
     }
 }

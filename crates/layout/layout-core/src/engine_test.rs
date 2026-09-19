@@ -356,3 +356,159 @@ fn engine_set_style() {
     assert_eq!(rect.width, 80.0_f32);
     assert_eq!(rect.height, 60.0_f32);
 }
+
+/// A three-column, fixed-track grid to exercise explicit line placement against real taffy layout, not just the CSS dump.
+fn three_column_grid(engine: &mut LayoutEngine, children: &[NodeId]) -> NodeId {
+    use crate::track::TemplateTrack;
+    let root = engine
+        .new_container(
+            LayoutStyle::new()
+                .display_grid()
+                .grid_template_columns(vec![
+                    TemplateTrack::px(50.0),
+                    TemplateTrack::px(50.0),
+                    TemplateTrack::px(50.0),
+                ])
+                .width(150.0)
+                .height(80.0),
+            children,
+        )
+        .unwrap();
+    lay_out(engine, root);
+    root
+}
+
+#[test]
+fn engine_grid_explicit_placement_puts_the_item_at_the_requested_cell() {
+    let mut engine = LayoutEngine::new();
+    let item = engine
+        .new_leaf(LayoutStyle::new().grid_column(2, 1).grid_row(1, 1))
+        .unwrap();
+    three_column_grid(&mut engine, &[item]);
+
+    let rect = engine.layout(item).unwrap();
+    assert_eq!(rect.x, 50.0_f32, "line 2 is the start of the 2nd column");
+    assert_eq!(rect.y, 0.0_f32);
+    assert_eq!(rect.width, 50.0_f32, "one track wide, as requested");
+}
+
+#[test]
+fn engine_grid_explicit_span_covers_tracks_from_its_start() {
+    let mut engine = LayoutEngine::new();
+    let item = engine
+        .new_leaf(LayoutStyle::new().grid_column(1, 2))
+        .unwrap();
+    three_column_grid(&mut engine, &[item]);
+
+    let rect = engine.layout(item).unwrap();
+    assert_eq!(rect.x, 0.0_f32);
+    assert_eq!(
+        rect.width, 100.0_f32,
+        "spans 2 tracks of 50px from column line 1"
+    );
+}
+
+/// Taffy's auto-placement flows unplaced items into the first free cell scanning the grid, explicit items included or not: an item pinned to column 2 leaves column 1's cell free for the auto item that follows it in the tree, even though it comes second in document order.
+#[test]
+fn engine_grid_mixes_auto_and_explicit_cells() {
+    let mut engine = LayoutEngine::new();
+    let pinned = engine
+        .new_leaf(
+            LayoutStyle::new()
+                .grid_column(2, 1)
+                .grid_row(1, 1)
+                .height(40.0),
+        )
+        .unwrap();
+    let auto = engine.new_leaf(LayoutStyle::new().height(40.0)).unwrap();
+    three_column_grid(&mut engine, &[pinned, auto]);
+
+    let pinned_rect = engine.layout(pinned).unwrap();
+    let auto_rect = engine.layout(auto).unwrap();
+    assert_eq!(pinned_rect.x, 50.0_f32, "stays exactly where it was pinned");
+    assert_eq!(
+        auto_rect.x, 0.0_f32,
+        "auto-placement flows into the free first column"
+    );
+    assert_eq!(auto_rect.y, pinned_rect.y, "same row: both are cell (1, *)");
+}
+
+/// Overlap detection is explicitly left to the caller: two items pinned to the same cell both land there rather than one being rejected or nudged.
+#[test]
+fn engine_grid_two_explicit_items_on_the_same_cell_overlap() {
+    let mut engine = LayoutEngine::new();
+    let a = engine
+        .new_leaf(LayoutStyle::new().grid_column(1, 1).grid_row(1, 1))
+        .unwrap();
+    let b = engine
+        .new_leaf(LayoutStyle::new().grid_column(1, 1).grid_row(1, 1))
+        .unwrap();
+    three_column_grid(&mut engine, &[a, b]);
+
+    let rect_a = engine.layout(a).unwrap();
+    let rect_b = engine.layout(b).unwrap();
+    assert_eq!(rect_a.x, rect_b.x);
+    assert_eq!(rect_a.y, rect_b.y);
+    assert_eq!(rect_a.width, rect_b.width);
+}
+
+#[test]
+fn engine_grid_explicit_row_template_sizes_the_row_an_item_lands_at() {
+    use crate::track::TemplateTrack;
+    let mut engine = LayoutEngine::new();
+    let item = engine
+        .new_leaf(LayoutStyle::new().grid_column(1, 1).grid_row(2, 1))
+        .unwrap();
+    let root = engine
+        .new_container(
+            LayoutStyle::new()
+                .display_grid()
+                .grid_template_columns(vec![TemplateTrack::px(100.0)])
+                .grid_template_rows(vec![TemplateTrack::px(30.0), TemplateTrack::px(50.0)])
+                .width(100.0)
+                .height(80.0),
+            &[item],
+        )
+        .unwrap();
+    lay_out(&mut engine, root);
+
+    let rect = engine.layout(item).unwrap();
+    assert_eq!(
+        rect.y, 30.0_f32,
+        "row line 2 starts after the first template row (30px)"
+    );
+    assert_eq!(rect.height, 50.0_f32, "and stretches to fill it");
+}
+
+/// `grid_auto_rows` sizes the implicit rows an overflowing auto-placed item creates beyond the explicit template — here, the whole grid, since no `grid_template_rows` is given at all.
+#[test]
+fn engine_grid_auto_rows_sizes_implicit_rows() {
+    use crate::track::TemplateTrack;
+    let mut engine = LayoutEngine::new();
+    let first = engine.new_leaf(LayoutStyle::new()).unwrap();
+    let second = engine.new_leaf(LayoutStyle::new()).unwrap();
+    let root = engine
+        .new_container(
+            LayoutStyle::new()
+                .display_grid()
+                .grid_template_columns(vec![TemplateTrack::px(100.0)])
+                .grid_auto_rows(vec![TemplateTrack::px(40.0)])
+                .width(100.0)
+                .height(80.0),
+            &[first, second],
+        )
+        .unwrap();
+    lay_out(&mut engine, root);
+
+    let first_rect = engine.layout(first).unwrap();
+    let second_rect = engine.layout(second).unwrap();
+    assert_eq!(
+        first_rect.height, 40.0_f32,
+        "the one-column grid forces both auto items into their own implicit row, sized by grid_auto_rows"
+    );
+    assert_eq!(
+        second_rect.y, 40.0_f32,
+        "the second implicit row starts after the first's 40px"
+    );
+    assert_eq!(second_rect.height, 40.0_f32);
+}
