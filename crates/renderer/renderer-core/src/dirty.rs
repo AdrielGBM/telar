@@ -3,7 +3,7 @@
 use std::ops::ControlFlow;
 
 use geometry_core::Rect;
-use smallvec::{SmallVec, smallvec};
+use smallvec::SmallVec;
 
 use crate::align::{Aligner, Step};
 use crate::culling::PaintBounds;
@@ -11,11 +11,20 @@ use crate::{
     DrawCommand, DrawState, GradientKind, Paint, blur_padding, blur_sigma, transform_clip_rect,
 };
 
-/// Inline capacity for the dirty-rect list. Beyond this the rects are collapsed into a single union (see MAX_DIRTY_RECTS).
+/// Inline capacity for the dirty-rect list. Beyond MAX_DIRTY_RECTS the cheapest-to-merge pairs are folded together instead.
 pub type DirtyRects = SmallVec<[Rect; 8]>;
 
-/// Above this count we stop tracking individual disjoint regions and fall back to a single union rect, keeping the per-frame work bounded.
+/// Above this count we stop tracking every disjoint region separately and start merging the cheapest pairs, keeping the per-frame work bounded.
 const MAX_DIRTY_RECTS: usize = 4;
+
+fn area(r: Rect) -> f32 {
+    r.width * r.height
+}
+
+/// The extra area a repaint would cover by treating `a` and `b` as one rect instead of two; negative when one already contains the other.
+fn union_area_added(a: Rect, b: Rect) -> f32 {
+    area(a.union(b)) - area(a) - area(b)
+}
 
 /// Two rects that touch or overlap (within `slop` pixels) should be merged so the dirty list stays small and the skip test stays cheap.
 fn rects_adjacent_or_overlapping(a: Rect, b: Rect, slop: f32) -> bool {
@@ -25,38 +34,42 @@ fn rects_adjacent_or_overlapping(a: Rect, b: Rect, slop: f32) -> bool {
         && b.y <= a.y + a.height + slop
 }
 
-// An adjacent or overlapping rect is unioned in, which can cascade. Past `MAX_DIRTY_RECTS` distinct regions the list collapses to a single union, to bound growth.
+// Merge slop in pixels: regions separated by a thin gap are cheaper to repaint as one than to track separately.
+const SLOP: f32 = 1.0;
+
 fn push_dirty_rect(rects: &mut DirtyRects, r: Rect) {
-    // Merge slop in pixels: regions separated by a thin gap are cheaper to repaint as one than to track separately.
-    const SLOP: f32 = 1.0;
-    if let Some(idx) = rects
+    insert_disjoint(rects, r);
+    collapse_to_bound(rects);
+}
+
+// Each union can reach entries it did not touch before, so the search restarts until `r` is disjoint from all of them.
+fn insert_disjoint(rects: &mut DirtyRects, mut r: Rect) {
+    while let Some(idx) = rects
         .iter()
         .position(|e| rects_adjacent_or_overlapping(*e, r, SLOP))
     {
-        let mut merged = rects[idx].union(r);
-        rects.swap_remove(idx);
-        // The merged rect may now touch other entries; keep folding until it is disjoint from all of them.
-        let mut i = 0;
-        while i < rects.len() {
-            if rects_adjacent_or_overlapping(rects[i], merged, SLOP) {
-                merged = rects[i].union(merged);
-                rects.swap_remove(i);
-            } else {
-                i += 1;
+        r = rects.swap_remove(idx).union(r);
+    }
+    rects.push(r);
+}
+
+// Past MAX_DIRTY_RECTS, repeatedly fold the pair whose union adds the least extra area until the list is back within bound, rather than unioning everything into one rect that would repaint whatever sits between the farthest two.
+fn collapse_to_bound(rects: &mut DirtyRects) {
+    while rects.len() > MAX_DIRTY_RECTS {
+        let mut best: Option<(usize, usize, f32)> = None;
+        for i in 0..rects.len() {
+            for j in (i + 1)..rects.len() {
+                let added = union_area_added(rects[i], rects[j]);
+                if best.is_none_or(|(_, _, current)| added < current) {
+                    best = Some((i, j, added));
+                }
             }
         }
-        rects.push(merged);
-    } else {
-        rects.push(r);
-    }
-
-    if rects.len() > MAX_DIRTY_RECTS {
-        let union = rects
-            .iter()
-            .copied()
-            .reduce(Rect::union)
-            .expect("non-empty");
-        *rects = smallvec![union];
+        let (i, j, _) = best.expect("len > MAX_DIRTY_RECTS >= 2 pairs a rect with another");
+        let merged = rects[i].union(rects[j]);
+        rects.swap_remove(j);
+        rects.swap_remove(i);
+        insert_disjoint(rects, merged);
     }
 }
 

@@ -383,6 +383,128 @@ fn disjoint_changes_stay_separate_rects() {
     }
 }
 
+fn total_area(rects: &[Rect]) -> f32 {
+    rects.iter().map(|r| r.width * r.height).sum()
+}
+
+#[test]
+fn five_distant_changes_stay_bounded_with_area_close_to_their_sum() {
+    // Four spread far apart, and a fifth close to the second, so exactly one pair is cheap to fold.
+    let xs = [0.0, 1000.0, 2000.0, 3000.0, 1030.0];
+    let old: Vec<_> = xs.iter().map(|&x| rect_cmd(x, 0.0, 10.0, 10.0)).collect();
+    let new: Vec<_> = xs.iter().map(|&x| rect_cmd(x, 0.0, 20.0, 20.0)).collect();
+    let rects = dirty(&new, &old).unwrap();
+    assert_eq!(
+        rects.len(),
+        MAX_DIRTY_RECTS,
+        "five distinct changes collapse to exactly the bound: {rects:?}"
+    );
+    let individual_sum: f32 = new.len() as f32 * 400.0;
+    assert!(
+        total_area(&rects) < individual_sum * 2.0,
+        "only the closest pair should be folded, not a single spanning union: {rects:?} (sum was {individual_sum})"
+    );
+    let spanning_union = Rect::new(0.0, 0.0, 3050.0, 20.0);
+    assert!(
+        total_area(&rects) < spanning_union.width * spanning_union.height / 2.0,
+        "must stay far below what collapsing everything into one union would cost: {rects:?}"
+    );
+}
+
+#[test]
+fn stacked_cards_arriving_damage_no_more_than_a_single_union_would() {
+    // Five cards with an 8px gap: past the bound, only adjacent cards should fold, instead of unioning the whole column.
+    let ys = [100.0, 148.0, 196.0, 244.0, 292.0];
+    let old: Vec<DrawCommand> = vec![];
+    let mut new = vec![];
+    for (i, &y) in ys.iter().enumerate() {
+        new.extend(boxed(i as u64 + 1, 300.0, y, 200.0, 40.0));
+    }
+    let rects = dirty(&new, &old).unwrap();
+    assert!(
+        rects.len() <= MAX_DIRTY_RECTS,
+        "the bound must still hold: {rects:?}"
+    );
+    let todays_full_union = Rect::new(300.0, 100.0, 200.0, 292.0 + 40.0 - 100.0);
+    let todays_area = todays_full_union.width * todays_full_union.height;
+    assert!(
+        total_area(&rects) <= todays_area,
+        "grouping by proximity must damage no more than today's single union: {rects:?} vs {todays_area}"
+    );
+}
+
+#[test]
+fn collapse_to_bound_breaks_ties_deterministically() {
+    let mut rects: DirtyRects = smallvec::smallvec![
+        Rect::new(0.0, 0.0, 10.0, 10.0),
+        Rect::new(20.0, 0.0, 10.0, 10.0),
+        Rect::new(40.0, 0.0, 10.0, 10.0),
+        Rect::new(60.0, 0.0, 10.0, 10.0),
+        Rect::new(80.0, 0.0, 10.0, 10.0),
+    ];
+    collapse_to_bound(&mut rects);
+    assert_eq!(rects.len(), MAX_DIRTY_RECTS);
+    assert!(
+        rects.contains(&Rect::new(0.0, 0.0, 30.0, 10.0)),
+        "every adjacent pair ties on added area, so the first one found merges: {rects:?}"
+    );
+    for untouched in [
+        Rect::new(40.0, 0.0, 10.0, 10.0),
+        Rect::new(60.0, 0.0, 10.0, 10.0),
+        Rect::new(80.0, 0.0, 10.0, 10.0),
+    ] {
+        assert!(
+            rects.contains(&untouched),
+            "only the first tied pair should fold, the rest stay as they were: {rects:?}"
+        );
+    }
+}
+
+#[test]
+fn collapse_to_bound_merges_a_fully_contained_rect_for_free() {
+    let outer = Rect::new(0.0, 0.0, 100.0, 100.0);
+    let inner = Rect::new(10.0, 10.0, 5.0, 5.0);
+    let mut rects: DirtyRects = smallvec::smallvec![
+        outer,
+        inner,
+        Rect::new(1000.0, 0.0, 10.0, 10.0),
+        Rect::new(2000.0, 0.0, 10.0, 10.0),
+        Rect::new(3000.0, 0.0, 10.0, 10.0),
+    ];
+    collapse_to_bound(&mut rects);
+    assert_eq!(rects.len(), MAX_DIRTY_RECTS);
+    assert!(
+        rects.contains(&outer),
+        "a rect entirely inside another costs nothing to fold in, so it goes first: {rects:?}"
+    );
+    assert!(
+        !rects.contains(&inner),
+        "the contained rect must not survive as its own entry: {rects:?}"
+    );
+}
+
+#[test]
+fn collapse_to_bound_absorbs_what_a_fold_comes_to_touch() {
+    let touched_only_by_the_fold = Rect::new(12.0, 10.5, 6.0, 100.0);
+    let mut rects: DirtyRects = smallvec::smallvec![
+        Rect::new(0.0, 0.0, 10.0, 10.0),
+        Rect::new(20.0, 0.0, 10.0, 10.0),
+        touched_only_by_the_fold,
+        Rect::new(1000.0, 0.0, 10.0, 10.0),
+        Rect::new(2000.0, 0.0, 10.0, 10.0),
+    ];
+    collapse_to_bound(&mut rects);
+    assert_eq!(rects.len(), 3, "{rects:?}");
+    for (i, a) in rects.iter().enumerate() {
+        for b in &rects[i + 1..] {
+            assert!(
+                !rects_adjacent_or_overlapping(*a, *b, SLOP),
+                "the list must stay pairwise disjoint: {rects:?}"
+            );
+        }
+    }
+}
+
 #[test]
 fn a_translated_command_dirties_where_it_was_and_went() {
     let old = vec![
