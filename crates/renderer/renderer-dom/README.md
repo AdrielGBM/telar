@@ -26,3 +26,16 @@ cargo test -p telar-renderer-dom --target wasm32-unknown-unknown
 
 The dev shell provides the runner, a headless Chromium and the `CHROMEDRIVER` that drives it; the flags the
 browser is started with are in `webdriver.json` beside this file. Set `NO_HEADLESS=1` to watch it happen.
+
+`src/keyboard_test.rs` checks the keyboard this crate shares with the page, together with
+`telar-platform-web`. It covers which keys are prevented on which focused box, which boxes are Tab stops,
+and that a focus move the browser made is reported as `Event::BoxFocused`. Each focusable box carries
+`data-telar-keys` (the keys it keeps), `data-telar-focus` (its identity) and a `tabindex`. See
+[docs/keyboard.md](https://github.com/AdrielGBM/telar/blob/main/docs/keyboard.md).
+
+The dev shell's chromedriver may not match its Chromium. In that case run the tests in Firefox:
+
+```sh
+nix shell nixpkgs#firefox nixpkgs#geckodriver --command bash -c \
+  'unset CHROMEDRIVER; GECKODRIVER=$(which geckodriver) cargo test -p telar-renderer-dom --target wasm32-unknown-unknown'
+```

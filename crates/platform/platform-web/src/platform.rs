@@ -2,7 +2,9 @@
 
 use std::cell::RefCell;
 
-use platform_core::{Event, EventHandler, Platform, PlatformError, Window, WindowConfig};
+use platform_core::{
+    Event, EventHandler, Key, NamedKey, Platform, PlatformError, Window, WindowConfig,
+};
 use wasm_bindgen::JsCast;
 use wasm_bindgen::prelude::Closure;
 
@@ -87,6 +89,10 @@ pub struct WebPlatformConfig {
     ///
     /// Set where the app draws pixels: there is nothing on a canvas the browser's own menu could act on — no text to copy, no link to open, no image to save — so the only menu worth showing is the app's. A document is the other case entirely, and taking that menu away there takes away the page.
     pub owns_context_menu: bool,
+    /// Whether every key the app might use is the app's, whatever holds focus.
+    ///
+    /// Set where the app draws pixels: nothing on a canvas is a native control, so Tab and the arrows are never the page's. A document is the other case: the browser walks its own Tab order through the boxes and scrolls with the arrows, and the focused box's declared [`ConsumedKeys`](platform_core::ConsumedKeys) decide which keys it keeps.
+    pub owns_keyboard: bool,
 }
 
 impl Default for WebPlatformConfig {
@@ -97,6 +103,7 @@ impl Default for WebPlatformConfig {
             owns_gestures: true,
             owns_scroll: false,
             owns_context_menu: true,
+            owns_keyboard: true,
         }
     }
 }
@@ -267,11 +274,12 @@ fn install_listeners(
     }
 
     for (name, pressed) in [("keydown", true), ("keyup", false)] {
+        let owns_keyboard = config.owns_keyboard;
         listeners.push(listen(target, name, false, move |event| {
             let Ok(event) = event.dyn_into::<web_sys::KeyboardEvent>() else {
                 return;
             };
-            on_key(pressed, &event);
+            on_key(pressed, owns_keyboard, &event);
         }));
     }
 
@@ -391,14 +399,23 @@ fn on_pointer(
     push(events);
 }
 
-fn on_key(pressed: bool, event: &web_sys::KeyboardEvent) {
+fn on_key(pressed: bool, owns_keyboard: bool, event: &web_sys::KeyboardEvent) {
     let modifiers = map::key_modifiers(event);
     let Some(key) = map::key_of(&event.key()) else {
         return;
     };
+    let kept = if owns_keyboard {
+        map::key_steals_default(&key)
+    } else {
+        platform_core::consumes(kept_by_target(event), &key)
+    };
     // A chord the browser owns — copy, paste, reload, a new tab — stays the browser's.
-    if !modifiers.is_ctrl && !modifiers.is_meta && map::key_steals_default(&key) {
+    if kept && !modifiers.is_ctrl && !modifiers.is_meta {
         event.prevent_default();
+    }
+    // The browser walks its own Tab order here, and reports where it landed as focus; delivered as a key too, the app would walk its own order a second step.
+    if !owns_keyboard && !kept && key == Key::Named(NamedKey::Tab) {
+        return;
     }
     let event = if pressed {
         Event::KeyPressed { key, modifiers }
@@ -406,6 +423,18 @@ fn on_key(pressed: bool, event: &web_sys::KeyboardEvent) {
         Event::KeyReleased { key, modifiers }
     };
     push([Event::ModifiersChanged { modifiers }, event]);
+}
+
+/// The keys the element a key was sent to keeps, as the document backend wrote them on it. Nothing for an element that declared none: the host itself, or anything that is not a Telar box.
+fn kept_by_target(event: &web_sys::KeyboardEvent) -> platform_core::ConsumedKeys {
+    event
+        .target()
+        .and_then(|target| target.dyn_into::<web_sys::Element>().ok())
+        .and_then(|element| {
+            element.get_attribute(platform_core::consumed_keys::CONSUMED_KEYS_ATTRIBUTE)
+        })
+        .map(|names| platform_core::ConsumedKeys::from_names(&names))
+        .unwrap_or_default()
 }
 
 fn install_frame_callback() {

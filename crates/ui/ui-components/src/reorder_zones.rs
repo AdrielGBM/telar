@@ -7,7 +7,7 @@ use telar_macros::Props;
 
 use geometry_core::Rect;
 use layout_core::{LayoutError, LayoutStyle, SizeDimension};
-use platform_core::{Cursor, Key, NamedKey};
+use platform_core::{ConsumedKeys, Cursor, Key, NamedKey};
 use reactive_core::{Reactive, RwSignal, Transaction, on_cleanup, signal};
 use renderer_core::{RectStyle, ShapeStyle};
 use ui_core::focus::Role;
@@ -329,6 +329,7 @@ impl ReorderGroup {
             ])
         })
         .control(Role::ListItem)
+        .consumes_keys(|| ConsumedKeys::ACTIVATION | ConsumedKeys::ARROWS)
         .on_focus({
             let group = self.0.clone();
             move |now| {

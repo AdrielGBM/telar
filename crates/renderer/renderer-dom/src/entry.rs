@@ -4,7 +4,11 @@
 //!
 //! So there is one, parked over whichever field holds the keyboard and invisible on top of it. It never shows what was typed — Telar draws that — and it is emptied after every insertion, so it accumulates nothing and has no state to keep in step. What it produces goes back through the platform's own event queue as the keys the field would have received anyway, which is what lets the whole editing path — selection, undo, the caret — stay exactly where it was.
 
-use platform_core::{Event, Key, ModifiersState, NamedKey};
+use std::cell::RefCell;
+use std::rc::Rc;
+
+use platform_core::consumed_keys::CONSUMED_KEYS_ATTRIBUTE;
+use platform_core::{ConsumedKeys, Event, Key, ModifiersState, NamedKey};
 use wasm_bindgen::JsCast;
 use wasm_bindgen::prelude::Closure;
 
@@ -18,6 +22,15 @@ color:transparent;caret-color:transparent;font:inherit;resize:none;overflow:hidd
 /// What the entry answers to while standing for a field that named nothing.
 const FALLBACK: &str = "Text field";
 
+/// The field an entry is parked over, as the reconcile found it in the document.
+pub struct Field<'a> {
+    pub rect: geometry_core::Rect,
+    pub multiline: bool,
+    pub label: Option<&'a str>,
+    pub keys: Option<&'a str>,
+    pub element: Option<web_sys::HtmlElement>,
+}
+
 /// The hidden editable element the browser types into, placed over whichever field holds the keyboard.
 pub struct TextEntry {
     node: web_sys::HtmlElement,
@@ -29,6 +42,10 @@ pub struct TextEntry {
     named: Option<String>,
     /// Whether it currently stands for a field, so it can be taken out of the way when none does.
     active: bool,
+    /// The keys the field it stands for keeps, as last written.
+    keys: Option<String>,
+    /// The field it stands for, which is where the browser's own Tab order has to start from.
+    field: Rc<RefCell<Option<web_sys::HtmlElement>>>,
 }
 
 impl TextEntry {
@@ -50,8 +67,12 @@ impl TextEntry {
         let _ = node.set_attribute("aria-label", FALLBACK);
         host.append_child(node.as_ref()).ok()?;
 
+        let field: Rc<RefCell<Option<web_sys::HtmlElement>>> = Rc::default();
         let listeners = vec![
-            listen(&node, "keydown", on_key_down),
+            listen(&node, "keydown", {
+                let field = field.clone();
+                move |event| on_key_down(event, &field)
+            }),
             listen(&node, "beforeinput", on_before_input),
             listen(&node, "input", on_input),
         ];
@@ -61,6 +82,8 @@ impl TextEntry {
             placed: String::new(),
             named: Some(FALLBACK.to_string()),
             active: false,
+            keys: None,
+            field,
         })
     }
 
@@ -69,7 +92,16 @@ impl TextEntry {
     /// Focus goes here rather than to the field's own element, and that is the point: the element a person sees is not one a browser will type into, and the one it will type into must not be seen.
     ///
     /// It answers to the field's own name while it stands for it. A screen reader reads the *focused* element, which is this one and never the field, so an entry with no name is a person being told they are in an edit box and not which one — and an unnamed form control is a failure every accessibility audit reports. `FALLBACK` covers the field that named nothing, because "text field" read out is still better than silence.
-    pub fn park(&mut self, rect: geometry_core::Rect, multiline: bool, label: Option<&str>) {
+    ///
+    /// It also carries the keys the field keeps, since the platform reads them off whichever element the key was sent to. `take_focus` is false when a person moved focus elsewhere on the page: the entry still follows the field, and leaves the keyboard where it went.
+    pub fn park(&mut self, field: Field<'_>, take_focus: bool) {
+        let Field {
+            rect,
+            multiline,
+            label,
+            keys,
+            element,
+        } = field;
         let mut style = String::from(HIDDEN);
         paint::declare(&mut style, "left", &paint::px(rect.x));
         paint::declare(&mut style, "top", &paint::px(rect.y));
@@ -87,8 +119,20 @@ impl TextEntry {
         let _ = self
             .node
             .set_attribute("enterkeyhint", if multiline { "enter" } else { "done" });
+        if self.keys.as_deref() != keys {
+            match keys {
+                Some(keys) => {
+                    let _ = self.node.set_attribute(CONSUMED_KEYS_ATTRIBUTE, keys);
+                }
+                None => {
+                    let _ = self.node.remove_attribute(CONSUMED_KEYS_ATTRIBUTE);
+                }
+            }
+            self.keys = keys.map(str::to_string);
+        }
+        *self.field.borrow_mut() = element;
         self.active = true;
-        if !self.holds_focus() {
+        if take_focus && !self.holds_focus() {
             let _ = self.node.focus();
         }
     }
@@ -102,6 +146,7 @@ impl TextEntry {
         }
         let _ = self.node.set_attribute("style", HIDDEN);
         self.placed.clear();
+        *self.field.borrow_mut() = None;
         // Back to the generic name: standing for no field, it must not keep answering to the last one.
         if self.named.as_deref() != Some(FALLBACK) {
             let _ = self.node.set_attribute("aria-label", FALLBACK);
@@ -133,7 +178,7 @@ impl TextEntry {
 fn listen(
     node: &web_sys::HtmlElement,
     event: &str,
-    handler: fn(&web_sys::Event),
+    handler: impl Fn(&web_sys::Event) + 'static,
 ) -> Closure<dyn FnMut(web_sys::Event)> {
     let closure = Closure::<dyn FnMut(web_sys::Event)>::new(move |event: web_sys::Event| {
         handler(&event);
@@ -218,10 +263,18 @@ fn post_key(key: Key) {
 /// While the entry holds the keyboard there are two ways for one keystroke to become text: the platform's own `keydown` listener on the host, and the `beforeinput` this element reports. Both fire, and the field received every letter twice.
 ///
 /// The split is by what the two can each see. A printable character is exactly what `beforeinput` describes better — it is the same event whether it came from a key, a soft keyboard, an input method or dictation — so it stops here. Everything else, arrows and Escape and every shortcut, produces no input event at all, and goes on up to the platform as it always did.
-fn on_key_down(event: &web_sys::Event) {
+///
+/// A Tab the field does not keep is the browser's to walk, and the walk has to start from the field: the entry sits at the end of the host, so a walk from here would start past the app's last box. Handing focus to the field before the default runs is what makes the browser step from where the person sees the caret.
+fn on_key_down(event: &web_sys::Event, field: &RefCell<Option<web_sys::HtmlElement>>) {
     let Some(event) = event.dyn_ref::<web_sys::KeyboardEvent>() else {
         return;
     };
+    if event.key() == "Tab" && !event.is_composing() && !field_keeps_tab(event) {
+        if let Some(field) = field.borrow().as_ref() {
+            let _ = field.focus();
+        }
+        return;
+    }
     // The keys an input method is in the middle of consuming are its own, whatever they say they are.
     if event.is_composing() {
         event.stop_propagation();
@@ -234,4 +287,12 @@ fn on_key_down(event: &web_sys::Event) {
     if event.key().chars().count() == 1 {
         event.stop_propagation();
     }
+}
+
+fn field_keeps_tab(event: &web_sys::KeyboardEvent) -> bool {
+    event
+        .target()
+        .and_then(|target| target.dyn_into::<web_sys::Element>().ok())
+        .and_then(|element| element.get_attribute(CONSUMED_KEYS_ATTRIBUTE))
+        .is_some_and(|keys| ConsumedKeys::from_names(&keys).contains(ConsumedKeys::TAB))
 }

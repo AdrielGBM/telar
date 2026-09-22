@@ -140,6 +140,7 @@ fn start<A: App>(
         // The boxes that scroll are the document's own, and a wheel the app claimed would be a wheel the compositor never sees.
         owns_scroll: document,
         owns_context_menu: options.owns_context_menu.unwrap_or(!document),
+        owns_keyboard: !document,
     };
     let platform = WebPlatform::with_host(host.clone(), platform_config);
 

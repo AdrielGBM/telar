@@ -5810,13 +5810,16 @@ dependencies = [
 name = "telar-renderer-dom"
 version = "0.2.1"
 dependencies = [
+ "js-sys",
  "rustc-hash 2.1.3",
  "telar-geometry-core",
  "telar-layout-core",
  "telar-platform-core",
+ "telar-platform-web",
  "telar-renderer-core",
  "tracing",
  "wasm-bindgen",
+ "wasm-bindgen-futures",
  "wasm-bindgen-test",
  "web-sys",
 ]

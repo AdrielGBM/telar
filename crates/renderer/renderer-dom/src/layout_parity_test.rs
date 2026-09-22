@@ -10,7 +10,7 @@
 
 use std::sync::Arc;
 
-use geometry_core::Rect;
+use geometry_core::{Rect, Size};
 use layout_core::{
     AlignItems, AvailableSpace, Direction, JustifyContent, LayoutEngine, LayoutStyle, NodeId,
     SizeDimension, TemplateTrack,
@@ -81,7 +81,7 @@ fn frame(engine: &LayoutEngine, built: &Built, origin: (f32, f32), out: &mut Vec
     let css = engine
         .declared_style(built.node)
         .expect("the node kept its style")
-        .to_css(engine.direction());
+        .to_css(engine.direction(), engine.surface_size());
     out.push(DrawCommand::PushElement {
         element: Arc::new(Element::new(
             ElementId(built.node.into()),
@@ -183,6 +183,7 @@ fn parity(case: &str, direction: Direction, root: Spec) {
 fn parity_over(case: &str, direction: Direction, root: Spec, frames: usize) {
     let mut engine = LayoutEngine::new();
     engine.set_direction(direction);
+    engine.set_surface_size(Size::new(SURFACE.0, SURFACE.1));
     let built = build(&mut engine, root);
     engine
         .compute_layout(
@@ -352,6 +353,62 @@ fn an_absolute_child_stays_inside_the_box_that_holds_it() {
                     ),
                 ],
             )],
+        ),
+    );
+}
+
+#[wasm_bindgen_test]
+fn a_grid_track_sized_by_the_surface_is_the_same_width_in_both() {
+    parity(
+        "surface grid tracks",
+        Direction::Ltr,
+        surface(
+            LayoutStyle::new()
+                .display_grid()
+                .padding_all(20.0)
+                .gap(10.0)
+                .grid_template_columns(vec![
+                    TemplateTrack::length(SizeDimension::SurfaceWidth(0.2)),
+                    TemplateTrack::fr(1.0),
+                    TemplateTrack::minmax(
+                        TemplateTrack::length(SizeDimension::SurfaceMin(0.1)),
+                        TemplateTrack::fr(1.0),
+                    ),
+                ]),
+            vec![
+                a_box(LayoutStyle::new().height(40.0)),
+                a_box(LayoutStyle::new().height(40.0)),
+                a_box(LayoutStyle::new().height(40.0)),
+            ],
+        ),
+    );
+}
+
+/// A fraction of the surface reaches the document as the pixels the engine resolved it to, so a box nested inside padding still takes its share of the whole surface rather than of its parent.
+#[wasm_bindgen_test]
+fn surface_fractions_resolve_against_the_surface_in_both() {
+    parity(
+        "surface fractions",
+        Direction::Ltr,
+        surface(
+            LayoutStyle::new()
+                .flex_column()
+                .padding_all(SizeDimension::SurfaceMin(0.05))
+                .gap(SizeDimension::SurfaceHeight(0.02)),
+            vec![
+                holding(
+                    LayoutStyle::new()
+                        .flex_row()
+                        .padding_start(SizeDimension::SurfaceWidth(0.02))
+                        .height(SizeDimension::SurfaceHeight(0.2)),
+                    vec![sized(40.0, 20.0)],
+                ),
+                a_box(
+                    LayoutStyle::new()
+                        .width(SizeDimension::SurfaceWidth(0.5))
+                        .height(SizeDimension::SurfaceMax(0.05)),
+                ),
+            ],
         ),
     );
 }

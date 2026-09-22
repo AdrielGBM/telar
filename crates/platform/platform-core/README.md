@@ -13,6 +13,11 @@ environment into ordered BCP 47 tags. See
 [docs/system-preferences.md](https://github.com/AdrielGBM/telar/blob/main/docs/system-preferences.md) for
 where each target reads them.
 
+It also defines how a key is matched against a focused box's declared `ConsumedKeys`: `key_member` and
+`consumes`, plus the two attributes a document backend writes for its platform to read. It also defines
+`Event::BoxFocused`, sent when the surface moved focus to a box on its own. See
+[docs/keyboard.md](https://github.com/AdrielGBM/telar/blob/main/docs/keyboard.md).
+
 **Applications depend on the [`telar`](https://crates.io/crates/telar) facade, not on this crate.** Telar
 is split into small crates so a build carries only the target and the capabilities it named, and every one
 of them has to be published for the facade to be. The facade re-exports what an application needs behind

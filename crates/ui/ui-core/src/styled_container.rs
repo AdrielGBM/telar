@@ -4,7 +4,9 @@ use std::rc::Rc;
 
 use geometry_core::{Rect, Transform};
 use layout_core::{LayoutError, LayoutStyle, NodeId};
-use platform_core::{Cursor, Event, Key, NamedKey, NumericValue, PointerButton, PointerSource};
+use platform_core::{
+    ConsumedKeys, Cursor, Event, Key, NamedKey, NumericValue, PointerButton, PointerSource,
+};
 use reactive_core::{Effect, Reactive, RwSignal, effect, signal};
 use renderer_core::{BlendMode, Border, Declared, RectStyle};
 use theme_core::use_theme_tokens;
@@ -141,6 +143,8 @@ struct Focusable {
     scope: Option<focus::ScopeId>,
     // Set by `on_focused_key`: the key handler answers only while this box holds focus.
     keys_need_focus: bool,
+    // Set by `consumes_keys`; `None` keeps what the role keeps.
+    consumes: Option<Box<dyn Fn() -> ConsumedKeys>>,
 }
 
 /// The painted box every interactive widget is built on: state styles, gestures, focus and transforms.
@@ -249,6 +253,8 @@ impl StyledContainer {
         if let Some(id) = self.focusable.id {
             semantics.focused = focus::is_focused(id);
             semantics.toggled = focus::toggled_state(id);
+            let declared = self.focusable.consumes.as_ref().map(|keys| keys());
+            semantics.focusable = Some(focus::focusable_of(id, semantics.role, declared));
         }
         semantics.disabled = self.is_disabled();
         crate::element::with_semantics(self.node, semantics)
@@ -882,6 +888,14 @@ impl StyledContainer {
     pub fn on_focused_key<A: KeyAnswer>(mut self, f: impl Fn(&Key) -> A + 'static) -> Self {
         self.focusable.keys_need_focus = true;
         self.maybe_on_key(Some(f))
+    }
+
+    /// Declares which keys this box keeps while it holds focus, in place of what its [`control`](Self::control) role keeps. Re-read every render, so the answer may follow state: a dropdown walks rows with the arrows only while it is open.
+    ///
+    /// A target that shares the keyboard with its host lets the host act on every key the focused box does not keep — Tab moves focus, the arrows scroll — so a box that answers a key it did not declare fights the host for it there.
+    pub fn consumes_keys(mut self, keys: impl Fn() -> ConsumedKeys + 'static) -> Self {
+        self.focusable.consumes = Some(Box::new(keys));
+        self
     }
 
     /// Make the box focusable and fire `f(true)`/`f(false)` when it gains/loses keyboard focus. It joins the tab order (Tab/Shift-Tab reach it) and takes focus on tap. Use it to drive a focus ring or to build a custom focusable widget on top of a `box`.

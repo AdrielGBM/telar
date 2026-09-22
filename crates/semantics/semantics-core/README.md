@@ -5,6 +5,10 @@ What a thing in a Telar interface is: the roles a screen reader, a document and 
 Part of [Telar](https://github.com/AdrielGBM/telar), a modular Rust UI framework with its own template
 language, reactive signals and a self-contained renderer.
 
+Besides roles, it defines `ConsumedKeys`, the keys a focused box keeps from its host (Tab, Space, Enter, the arrows,
+paging and Home/End), with each role's default in `Role::consumed_keys`. `Semantics::focusable` carries the
+set and whether the box is a Tab stop right now. See [docs/keyboard.md](https://github.com/AdrielGBM/telar/blob/main/docs/keyboard.md).
+
 **Applications depend on the [`telar`](https://crates.io/crates/telar) facade, not on this crate.** Telar
 is split into small crates so a build carries only the target and the capabilities it named, and every one
 of them has to be published for the facade to be. The facade re-exports what an application needs behind

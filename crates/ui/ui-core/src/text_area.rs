@@ -46,11 +46,10 @@ pub struct TextArea {
 impl TextArea {
     /// A multi-line editor, and whether the keyboard is in it. See [`Input::semantics`](crate::Input).
     fn semantics(&self) -> renderer_core::Semantics {
-        renderer_core::Semantics::of(renderer_core::Role::MultilineTextInput).in_state(
-            focus::is_focused(self.id),
-            None,
-            false,
-        )
+        let role = renderer_core::Role::MultilineTextInput;
+        renderer_core::Semantics::of(role)
+            .in_state(focus::is_focused(self.id), None, false)
+            .focusable(focus::focusable_of(self.id, role, None))
     }
 
     pub fn new(

@@ -157,6 +157,9 @@ const CONTAINER_PAINT: &[AttrSpec] = &[
     AttrSpec::free("on_hover"),
     AttrSpec::free("on_pointer_move"),
     AttrSpec::free("on_key"),
+    AttrSpec::free("consumes_keys").doc(
+        "Keys this box keeps while it holds focus, in place of what its role keeps: names such as `arrows`, `up`, `space`, `tab` separated by commas or spaces, or a `$`-reading expression that yields a `ConsumedKeys`. A document target hands every other key back to the page, so Tab and scrolling keep working.",
+    ),
     AttrSpec::free("on_drag"),
     AttrSpec::free("on_drag_end"),
     AttrSpec::free("on_scroll"),
@@ -693,3 +696,38 @@ mod role_tests;
 #[cfg(test)]
 #[path = "registry_vocabulary_test.rs"]
 mod vocabulary_tests;
+
+/// The names `consumes_keys:` takes, and the `ConsumedKeys` constant each one is.
+///
+/// Written here for the same reason as [`ROLE_VALUES`]: the transpiler emits a path. `every_key_name_is_one_the_runtime_reads` holds it to `ConsumedKeys::named`.
+pub const KEY_VALUES: &[(&str, &str)] = &[
+    ("tab", "TAB"),
+    ("space", "SPACE"),
+    ("enter", "ENTER"),
+    ("backspace", "BACKSPACE"),
+    ("up", "ARROW_UP"),
+    ("down", "ARROW_DOWN"),
+    ("left", "ARROW_LEFT"),
+    ("right", "ARROW_RIGHT"),
+    ("pageup", "PAGE_UP"),
+    ("pagedown", "PAGE_DOWN"),
+    ("home", "HOME"),
+    ("end", "END"),
+    ("arrows", "ARROWS"),
+    ("vertical-arrows", "VERTICAL_ARROWS"),
+    ("horizontal-arrows", "HORIZONTAL_ARROWS"),
+    ("activation", "ACTIVATION"),
+    ("paging", "PAGING"),
+    ("edges", "EDGES"),
+    ("scrolling", "SCROLLING"),
+    ("none", "EMPTY"),
+];
+
+/// The `ConsumedKeys` constant `name` spells, or `None` for a word nothing answers to.
+pub fn key_constant(name: &str) -> Option<&'static str> {
+    keyword(KEY_VALUES, name)
+}
+
+#[cfg(test)]
+#[path = "registry_keys_test.rs"]
+mod keys_tests;

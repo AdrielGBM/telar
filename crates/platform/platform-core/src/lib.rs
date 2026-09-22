@@ -6,6 +6,7 @@
 
 pub mod accessibility;
 pub mod app_ctx;
+pub mod consumed_keys;
 pub mod error;
 pub mod event;
 pub mod event_sink;
@@ -18,6 +19,7 @@ pub mod window_command;
 
 pub use accessibility::{AccessNode, NumericValue, Role};
 pub use app_ctx::{AppCtx, RedrawWaker};
+pub use consumed_keys::{ConsumedKeys, consumes, key_member};
 pub use error::PlatformError;
 pub use event::{Event, Key, ModifiersState, NamedKey, PointerButton, PointerSource, ScrollDelta};
 pub use event_sink::{post_event, set_event_sink};

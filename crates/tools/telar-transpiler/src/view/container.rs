@@ -168,6 +168,7 @@ impl ViewGen<'_> {
         let on_alt_press = self.closure_attr_call(el, "on_alt_press", "on_alt_press");
         let (specs, mut errors) = self.parse_transitions(el);
         errors.extend(input_contradictions(el));
+        let consumes_keys = consumes_keys_call(el, &mut errors);
         let transitions: HashMap<String, String> = specs.into_iter().collect();
         let mut hoists: Vec<String> = Vec::new();
         let transform_call = self.transform_call(el, &transitions, &mut hoists);
@@ -176,7 +177,7 @@ impl ViewGen<'_> {
 
         // Any of these forces the StyledContainer upgrade. `on_press` is excluded because its closure form wires on a plain Container; `on_press_forwarded` covers the other case.
         let styling = format!(
-            "{hover_call}{active_call}{disabled_call}{focus_ring}{disabled}{transform_call}{on_hover}{on_pointer_move}{on_key}{on_drag}{on_drag_end}{on_scroll}{on_focus}{on_long_press}{on_alt_press}{cursor}{drag_button}{drag_threshold}{input}{inert}"
+            "{hover_call}{active_call}{disabled_call}{focus_ring}{disabled}{transform_call}{on_hover}{on_pointer_move}{on_key}{on_drag}{on_drag_end}{on_scroll}{on_focus}{on_long_press}{on_alt_press}{cursor}{drag_button}{drag_threshold}{input}{inert}{consumes_keys}"
         );
         let pieces =
             if always_style || has_paint(&attrs) || !styling.is_empty() || on_press_forwarded {
@@ -221,7 +222,7 @@ impl ViewGen<'_> {
             Some((closure, opacity_call)) => {
                 let _ = writeln!(
                     code,
-                    "{inner_pad}{bind}StyledContainer::{ctor}({style}, {closure}, {children})?{opacity_call}{hover_call}{active_call}{disabled_call}{focus_ring}{disabled}{on_press}{transform_call}{on_hover}{on_pointer_move}{on_key}{on_drag}{on_drag_end}{on_scroll}{on_focus}{on_long_press}{on_alt_press}{cursor}{drag_button}{drag_threshold}{input}{inert}{holds_stroke}{role}{styled_by}{declaring}{terminator}"
+                    "{inner_pad}{bind}StyledContainer::{ctor}({style}, {closure}, {children})?{opacity_call}{hover_call}{active_call}{disabled_call}{focus_ring}{disabled}{on_press}{transform_call}{on_hover}{on_pointer_move}{on_key}{on_drag}{on_drag_end}{on_scroll}{on_focus}{on_long_press}{on_alt_press}{cursor}{drag_button}{drag_threshold}{input}{inert}{consumes_keys}{holds_stroke}{role}{styled_by}{declaring}{terminator}"
                 );
             }
             None => {
@@ -483,3 +484,47 @@ fn split_outside_delimiters(value: &str) -> Vec<(usize, &str)> {
     }
     tokens
 }
+
+/// `.consumes_keys(..)` for a box that names the keys it keeps: a list of names checked here, so a misspelt key is a compile error rather than a key silently handed back to the page, or a `$`-reading expression re-read every render.
+fn consumes_keys_call(el: &Element, errors: &mut Vec<String>) -> String {
+    let Some(attr) = el.attributes.iter().find(|a| a.key == "consumes_keys") else {
+        return String::new();
+    };
+    let raw = attr.value.text().trim();
+    let value = super::redundant_parens(raw).unwrap_or(raw).trim();
+    if value.contains('$') {
+        let read = substitute_reads(value);
+        return format!(
+            ".consumes_keys({})",
+            wrap_signal_clones(&[value], format!("move || {read}"))
+        );
+    }
+    let mut constants = Vec::new();
+    for name in value
+        .split([',', ' '])
+        .map(str::trim)
+        .filter(|name| !name.is_empty())
+    {
+        match crate::registry::key_constant(name) {
+            Some(constant) => constants.push(format!("::telar::ConsumedKeys::{constant}")),
+            None => {
+                let known: Vec<&str> = crate::registry::KEY_VALUES
+                    .iter()
+                    .map(|(name, _)| *name)
+                    .collect();
+                errors.push(format!(
+                    "`consumes_keys` does not know the key `{name}`; expected one of: {}",
+                    known.join(", ")
+                ));
+            }
+        }
+    }
+    if constants.is_empty() {
+        constants.push("::telar::ConsumedKeys::EMPTY".to_string());
+    }
+    format!(".consumes_keys(|| {})", constants.join(" | "))
+}
+
+#[cfg(test)]
+#[path = "container_test.rs"]
+mod tests;

@@ -5,7 +5,7 @@ use std::rc::Rc;
 
 use geometry_core::Rect;
 use layout_core::{AlignItems, LayoutError, LayoutStyle};
-use platform_core::{Key, NamedKey};
+use platform_core::{ConsumedKeys, Key, NamedKey};
 use reactive_core::{Reactive, RwSignal, effect, signal};
 use renderer_core::{Border, BorderRadius, Color, RectStyle, ShapeStyle, Stroke};
 use ui_core::dismiss::DismissRegistration;
@@ -213,7 +213,14 @@ pub(crate) fn dropdown(props: Dropdown) -> Result<Box<dyn LayoutItem>, LayoutErr
             Role::Button
         })
         .on_focus(move |now| trigger_focused.set(now))
-        .on_key(on_key);
+        .on_key(on_key)
+        .consumes_keys(move || {
+            if open.get() {
+                ConsumedKeys::VERTICAL_ARROWS | ConsumedKeys::EDGES | ConsumedKeys::ACTIVATION
+            } else {
+                ConsumedKeys::ARROW_DOWN | ConsumedKeys::ACTIVATION
+            }
+        });
     let trigger_node = trigger.layout_node();
     // `track_layout` returns the signal now and layout fills it in, so the trigger's rect is known by the time the panel is built.
     let trigger_rect = track_layout(trigger_node).expect("trigger node is registered");

@@ -2106,3 +2106,65 @@ fn a_normal_opaque_box_needs_no_layer() {
     let normal = plain_box().with_blend(|| BlendMode::Normal);
     assert_eq!(layer_of(&normal.view()), None);
 }
+
+fn keyboard_of(card: &StyledContainer) -> Option<renderer_core::Focusable> {
+    let was = ui_tree::set_element_capture(true);
+    let view = card.view();
+    ui_tree::set_element_capture(was);
+    match view {
+        RenderNode::Element { element, .. } => element.semantics.focusable,
+        _ => panic!("expected the box's element"),
+    }
+}
+
+#[test]
+fn a_control_s_element_says_how_the_keyboard_reaches_it() {
+    let mut card = laid_out_box().control(focus::Role::Slider);
+    settle(&mut card);
+    assert_eq!(
+        keyboard_of(&card),
+        Some(renderer_core::Focusable {
+            tab_stop: true,
+            consumes: focus::Role::Slider.consumed_keys(),
+        })
+    );
+}
+
+#[test]
+fn a_box_that_cannot_hold_focus_says_nothing_about_keys() {
+    let mut card = laid_out_box().on_press(|| {});
+    settle(&mut card);
+    assert_eq!(keyboard_of(&card), None);
+}
+
+#[test]
+fn a_disabled_control_is_no_stop_and_hands_every_key_back() {
+    let mut card = laid_out_box()
+        .control(focus::Role::Slider)
+        .disabled(|| true);
+    settle(&mut card);
+    assert_eq!(
+        keyboard_of(&card),
+        Some(renderer_core::Focusable::default())
+    );
+}
+
+#[test]
+fn declared_keys_follow_the_state_they_are_read_from() {
+    let open = signal(false);
+    let mut card = laid_out_box()
+        .control(focus::Role::ComboBox)
+        .consumes_keys(move || {
+            if open.get() {
+                ConsumedKeys::VERTICAL_ARROWS | ConsumedKeys::ACTIVATION
+            } else {
+                ConsumedKeys::ARROW_DOWN | ConsumedKeys::ACTIVATION
+            }
+        });
+    settle(&mut card);
+    let closed = keyboard_of(&card).expect("a control is focusable");
+    assert!(!closed.consumes.contains(ConsumedKeys::ARROW_UP));
+    open.set(true);
+    let opened = keyboard_of(&card).expect("a control is focusable");
+    assert!(opened.consumes.contains(ConsumedKeys::VERTICAL_ARROWS));
+}

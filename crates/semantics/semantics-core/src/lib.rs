@@ -15,6 +15,10 @@
 
 use std::sync::Arc;
 
+mod keys;
+
+pub use keys::ConsumedKeys;
+
 /// What a box is.
 ///
 /// Deliberately not open-ended. Each variant has to earn itself by changing what at least one target does with it — a role that lands on the same element with the same attributes and the same announcement is a role that does not exist.
@@ -240,6 +244,18 @@ pub struct Semantics {
     pub disabled: bool,
     /// Whether the box refuses pointer events, so what is drawn under it takes them instead.
     pub click_through: bool,
+    /// How the keyboard reaches the box. `None` for a box that cannot hold focus.
+    pub focusable: Option<Focusable>,
+}
+
+/// How the keyboard reaches a focusable box, and what it keeps once there.
+///
+/// Carried on the box because a target that shares the keyboard with its host decides from it synchronously, before the app has seen the key: whether the host's own Tab order stops here, and which keys the host must not act on while the box is focused.
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug, Default)]
+pub struct Focusable {
+    /// Whether Tab stops here right now: registered as a stop, enabled, and reachable.
+    pub tab_stop: bool,
+    pub consumes: ConsumedKeys,
 }
 
 impl Semantics {
@@ -272,6 +288,11 @@ impl Semantics {
     pub fn linking_to(mut self, target: impl Into<Arc<str>>) -> Self {
         self.role = Role::Link;
         self.link = Some(target.into());
+        self
+    }
+
+    pub fn focusable(mut self, focusable: Focusable) -> Self {
+        self.focusable = Some(focusable);
         self
     }
 

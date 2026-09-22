@@ -112,8 +112,8 @@ pub use i18n_core::set_catalog;
 pub use i18n_core::{current_locale, detect_system_locale, set_locale, use_locale};
 #[cfg(feature = "runtime")]
 pub use platform_core::{
-    Cursor, Event, FullscreenMode, Key, NamedKey, ScrollDelta, WindowCommand, WindowConfig,
-    WindowPosition, push_window_command, take_window_commands,
+    ConsumedKeys, Cursor, Event, FullscreenMode, Key, NamedKey, ScrollDelta, WindowCommand,
+    WindowConfig, WindowPosition, push_window_command, take_window_commands,
 };
 #[cfg(feature = "watch")]
 pub use watch::watch_path;

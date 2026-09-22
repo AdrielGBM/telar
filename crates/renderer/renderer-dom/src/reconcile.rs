@@ -7,7 +7,8 @@
 //! And a frame paints at its own level too, outside every element: an application's shell fills the panel its rail stands on, and dims the page behind a drawer. That becomes a box inside the host, placed as it is drawn — see `paint_at_root`.
 
 use geometry_core::Rect;
-use renderer_core::{BlendMode, Color, DrawCommand, Element, Role};
+use platform_core::consumed_keys::{CONSUMED_KEYS_ATTRIBUTE, FOCUS_BOX_ATTRIBUTE};
+use renderer_core::{BlendMode, Color, DrawCommand, Element, Focusable, Role};
 use rustc_hash::FxHashMap;
 use wasm_bindgen::JsCast;
 use wasm_bindgen::prelude::Closure;
@@ -96,6 +97,7 @@ struct Described {
     /// Part of the record even though it writes no attribute: a box that has just become the focused one is a box this has to act on, and comparing without it made the acting unreachable.
     focused: bool,
     control: bool,
+    focusable: Option<Focusable>,
 }
 
 /// Text a drag across this box must not select, because the drag means something else there.
@@ -199,6 +201,9 @@ pub struct Reconciler {
     entry: Option<crate::entry::TextEntry>,
     /// The field that holds the keyboard this frame, measured once everything is in the document.
     entry_target: Option<(web_sys::Element, bool)>,
+    /// The box that holds the keyboard this frame, when it is not a field; focused once it is in the document.
+    focus_target: Option<web_sys::HtmlElement>,
+    _follows_focus: Option<FocusFollower>,
 }
 
 impl Reconciler {
@@ -211,7 +216,9 @@ impl Reconciler {
         let _ = host.set_attribute(HOST_ATTRIBUTE, "");
         install_reset(&document);
         let entry = crate::entry::TextEntry::new(&document, &host);
+        let follows_focus = follow_focus(&host);
         Ok(Self {
+            _follows_focus: follows_focus,
             audit: audit_requested(&host),
             background: String::new(),
             root_paint: Vec::new(),
@@ -219,6 +226,7 @@ impl Reconciler {
             claimed_focus: false,
             entry,
             entry_target: None,
+            focus_target: None,
             document,
             host,
             live: FxHashMap::default(),
@@ -508,11 +516,16 @@ impl Reconciler {
         });
     }
 
-    /// Keeps the keyboard inside the app.
+    /// Keeps the document's focus on the box Telar focused, and the keyboard inside the app.
     ///
-    /// Key listeners sit on the host, and an event only reaches them by bubbling *up* to it — so focus that escapes to `<body>` takes the whole keyboard with it, silently. It escapes on its own: an element this reconcile replaces takes its focus down with it, and the browser hands it to the document. When no box claimed the keyboard this frame and nothing inside the app holds it, the host takes it back.
+    /// Key listeners sit on the host, and an event only reaches them by bubbling *up* to it — so focus that escapes to `<body>` takes the whole keyboard with it, silently. It escapes on its own: an element this reconcile replaces takes its focus down with it, and the browser hands it to the document. Run once everything is in the document, because a detached element can be neither measured nor focused.
+    ///
+    /// Focus a person moved elsewhere on the page — tabbing past the app's last control, clicking a link beside it — is left where it went: taking it back every frame is a keyboard trap.
     fn keep_the_keyboard(&mut self) {
-        // A field is typed into through the entry, placed against what the browser did with the field — only knowable now, with everything in the document.
+        let focus_target = self.focus_target.take();
+        let claimed = std::mem::take(&mut self.claimed_focus);
+        let ours = self.keyboard_is_ours();
+        // A field is typed into through the entry, placed against what the browser did with the field.
         if let Some((node, multiline)) = self.entry_target.take() {
             let host = self.host.get_bounding_client_rect();
             let box_rect = node.get_bounding_client_rect();
@@ -523,13 +536,26 @@ impl Reconciler {
                 box_rect.height() as f32,
             );
             let label = node.get_attribute("aria-label");
+            let keys = node.get_attribute(CONSUMED_KEYS_ATTRIBUTE);
             if let Some(entry) = self.entry.as_mut() {
-                entry.park(placed, multiline, label.as_deref());
+                let field = crate::entry::Field {
+                    rect: placed,
+                    multiline,
+                    label: label.as_deref(),
+                    keys: keys.as_deref(),
+                    element: node.dyn_into::<web_sys::HtmlElement>().ok(),
+                };
+                entry.park(field, ours);
             }
-            self.claimed_focus = false;
             return;
         }
-        if std::mem::take(&mut self.claimed_focus) {
+        if let Some(target) = focus_target {
+            let active = self.document.active_element();
+            if ours && active.as_ref() != Some(target.as_ref()) {
+                let _ = target.focus();
+            }
+        }
+        if claimed {
             return;
         }
         if let Some(entry) = self.entry.as_mut() {
@@ -539,9 +565,21 @@ impl Reconciler {
             .document
             .active_element()
             .is_some_and(|active| self.host.contains(Some(active.as_ref())));
-        if !inside {
+        if ours && !inside {
             let _ = self.host.focus();
         }
+    }
+
+    /// Whether the document's focus is the app's to move: inside it, or fallen to nowhere in particular.
+    fn keyboard_is_ours(&self) -> bool {
+        let Some(active) = self.document.active_element() else {
+            return true;
+        };
+        self.host.contains(Some(active.as_ref()))
+            || self
+                .document
+                .body()
+                .is_some_and(|body| body.is_same_node(Some(active.as_ref())))
     }
 
     /// Says what the box is, in whatever way the element it became does not already say it.
@@ -565,25 +603,19 @@ impl Reconciler {
             disabled: semantics.disabled,
             focused,
             control: semantics.role.is_control(),
+            focusable: semantics.focusable,
         };
-        // Every frame, before the attributes: what is written can be skipped when nothing changed, but where the keyboard is has to be answered each time — a frame that skipped it read as one where no box held the keyboard, and took the entry out from under the field being typed into.
+        // Every frame, whatever else is skipped: a frame that did not answer where the keyboard is read as one where no box held it, and took the entry out from under the field being typed into.
         if focused {
             self.claimed_focus = true;
-            // A browser accepts characters for an editable element, and the box a person sees is not one. Measured at the end of the frame, because this runs as the box is opened and a detached element measures as nothing.
             match semantics.role {
+                // A browser accepts characters for an editable element, and the box a person sees is not one.
                 Role::TextInput | Role::MultilineTextInput => {
                     self.entry_target =
                         Some((node.clone(), semantics.role == Role::MultilineTextInput));
                 }
-                // The document has a focus of its own, and two that disagree is one interface the keyboard and the screen reader read differently. Only ever moved to what Telar focused: blurring here would fight the element about to take it.
-                _ => {
-                    if let Some(html) = node.dyn_ref::<web_sys::HtmlElement>() {
-                        let active = self.document.active_element();
-                        if active.as_ref() != Some(node) {
-                            let _ = html.focus();
-                        }
-                    }
-                }
+                // The document has a focus of its own, and two that disagree is one interface the keyboard and the screen reader read differently.
+                _ => self.focus_target = node.clone().dyn_into::<web_sys::HtmlElement>().ok(),
             }
         }
         let Some(live) = self.live.get_mut(&element.id.0) else {
@@ -604,8 +636,20 @@ impl Reconciler {
                 .map(|on| if on { "true" } else { "false" }),
         );
         set_or_clear(node, "aria-disabled", described.disabled.then_some("true"));
-        // A `div` cannot hold focus at all without this, and every control that is not a `<button>` is one. `-1` rather than `0`: Telar owns the tab order, and a second one the browser kept would walk a person through the interface in a different order than the app believes.
-        set_or_clear(node, "tabindex", described.control.then_some("-1"));
+        // The browser walks Tab through the boxes Telar says are stops, in document order, which is the order Telar registers them in; everything else focusable takes focus only when Telar gives it.
+        let tabindex = match described.focusable {
+            Some(focusable) if focusable.tab_stop => Some("0"),
+            Some(_) => Some("-1"),
+            None => described.control.then_some("-1"),
+        };
+        set_or_clear(node, "tabindex", tabindex);
+        let keys = described
+            .focusable
+            .map(|focusable| focusable.consumes.to_names())
+            .filter(|names| !names.is_empty());
+        set_or_clear(node, CONSUMED_KEYS_ATTRIBUTE, keys.as_deref());
+        let id = described.focusable.map(|_| element.id.0.to_string());
+        set_or_clear(node, FOCUS_BOX_ATTRIBUTE, id.as_deref());
         live.described = described;
     }
 
@@ -948,4 +992,89 @@ fn watch_scroll(node: &web_sys::Element, id: u64) -> Option<Closure<dyn FnMut(we
     )
     .ok()?;
     Some(closure)
+}
+
+/// Reports where the document moves focus on its own — its own Tab order — so the app's focus follows it.
+///
+/// A box the document focuses becomes the app's focused box; Telar's own focus comes back through here too, and is answered as a move to where focus already is. Focus leaving the app for content beside it, or for the browser's own interface, leaves no box holding it.
+fn follow_focus(host: &web_sys::HtmlElement) -> Option<FocusFollower> {
+    let into = Closure::<dyn FnMut(web_sys::Event)>::new(move |event: web_sys::Event| {
+        let Some(box_id) = event
+            .target()
+            .and_then(|target| target.dyn_into::<web_sys::Element>().ok())
+            .and_then(|element| element.get_attribute(FOCUS_BOX_ATTRIBUTE))
+            .and_then(|id| id.parse::<u64>().ok())
+        else {
+            return;
+        };
+        platform_core::post_event(platform_core::Event::BoxFocused { box_id });
+    });
+    let watched = host.clone();
+    let out = Closure::<dyn FnMut(web_sys::Event)>::new(move |event: web_sys::Event| {
+        let next = event
+            .dyn_ref::<web_sys::FocusEvent>()
+            .and_then(|event| event.related_target());
+        match next
+            .as_ref()
+            .and_then(|next| next.dyn_ref::<web_sys::Node>())
+        {
+            Some(next) if watched.contains(Some(next)) => {}
+            Some(_) => platform_core::post_event(platform_core::Event::FocusLeftBoxes),
+            // No next element is also a window losing focus, or a focused element being replaced; which one is only knowable once the move has settled.
+            None => {
+                let watched = watched.clone();
+                let settled = Closure::once_into_js(move || {
+                    if focus_went_to_the_browser(&watched) {
+                        platform_core::post_event(platform_core::Event::FocusLeftBoxes);
+                    }
+                });
+                if let Some(window) = web_sys::window() {
+                    let _ = window.set_timeout_with_callback(settled.unchecked_ref());
+                }
+            }
+        }
+    });
+    let options = web_sys::AddEventListenerOptions::new();
+    options.set_passive(true);
+    for (name, closure) in [("focusin", &into), ("focusout", &out)] {
+        host.add_event_listener_with_callback_and_add_event_listener_options(
+            name,
+            closure.as_ref().unchecked_ref(),
+            &options,
+        )
+        .ok()?;
+    }
+    Some(FocusFollower {
+        host: host.clone(),
+        into,
+        out,
+    })
+}
+
+/// Whether focus that left the host with nowhere to go went to the browser's own interface: the document lost it, and the element that had it no longer does. A window that only lost focus keeps its focused element; a replaced element leaves the document focused.
+fn focus_went_to_the_browser(host: &web_sys::HtmlElement) -> bool {
+    let Some(document) = host.owner_document() else {
+        return false;
+    };
+    let still_inside = document
+        .active_element()
+        .is_some_and(|active| host.contains(Some(active.as_ref())));
+    !document.has_focus().unwrap_or(true) && !still_inside
+}
+
+/// The focus listeners on the host, taken off when the reconcile goes: the host outlives it, and a listener left behind would call into a closure that no longer exists.
+struct FocusFollower {
+    host: web_sys::HtmlElement,
+    into: Closure<dyn FnMut(web_sys::Event)>,
+    out: Closure<dyn FnMut(web_sys::Event)>,
+}
+
+impl Drop for FocusFollower {
+    fn drop(&mut self) {
+        for (name, closure) in [("focusin", &self.into), ("focusout", &self.out)] {
+            let _ = self
+                .host
+                .remove_event_listener_with_callback(name, closure.as_ref().unchecked_ref());
+        }
+    }
 }

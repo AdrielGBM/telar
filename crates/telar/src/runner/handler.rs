@@ -798,6 +798,19 @@ where
                 window.request_redraw();
                 return;
             }
+            Event::BoxFocused { box_id } => {
+                if ui_core::focus::follow_box(*box_id) {
+                    window.request_redraw();
+                }
+                return;
+            }
+            Event::FocusLeftBoxes => {
+                if ui_core::focus::current().is_some() {
+                    ui_core::focus::clear();
+                    window.request_redraw();
+                }
+                return;
+            }
             Event::KeyPressed { key, modifiers } => match self.dev.on_key(key, *modifiers) {
                 DevAction::Redraw => window.request_redraw(),
                 DevAction::ToggleBackend => {

@@ -103,9 +103,25 @@ Two ways to draw, and they are genuinely different rather than a fallback order:
 - **`web`** adds pixels on a canvas through WebGPU, which draws exactly what the desktop build draws. It
   carries a glyph shaper and needs a face, because a canvas has no fonts of its own.
 
+The two also share the keyboard differently. A document keeps the browser's own Tab walk and keyboard
+scrolling, and prevents only the keys the focused control declares. A canvas keeps Tab, Space, the arrows and
+the paging keys for the app. See [docs/keyboard.md](keyboard.md).
+
+Both read the OS theme, reduced motion, high contrast and `navigator.languages` through media queries and
+`languagechange` (see [docs/system-preferences.md](system-preferences.md)), and both measure the host
+element's own box for surface size rather than the browser viewport (see
+[docs/surface-size.md](surface-size.md)).
+
 With `web`, `WebRenderer::Auto` picks pixels where the browser offers a GPU adapter and a document where it
 does not; the page can override at load time with `?telar-renderer=dom`. Build with `--profile web`, which
 optimises for size rather than cycles — a module crosses a network before it runs an instruction.
+`--profile web` needs a `[profile.web]` entry in the manifest, which `new` and `init` write for a web
+target; `doctor` and `build --target web` name the fix when it is missing (see
+[docs/build-tuning.md](build-tuning.md)).
+
+`--renderer` on `new`/`init` picks which one the project's `default` names: `dom` writes
+`default = ["web-dom"]` instead of `["web"]`, so the scaffolded project never links wgpu or a glyph shaper
+until you ask for `web` again.
 
 ## Android
 

@@ -339,3 +339,136 @@ fn a_deferred_request_from_a_surface_that_is_gone_does_nothing() {
 
     assert!(is_focused(wanted.focus_id()));
 }
+
+fn laid_out_box() -> crate::StyledContainer {
+    use crate::context::compute_layout;
+    use crate::{LayoutItem, StyledContainer};
+    use layout_core::{AvailableSpace, LayoutStyle};
+
+    let control = StyledContainer::new(
+        LayoutStyle::new().width(50.0).height(20.0),
+        |_r| renderer_core::RectStyle::default(),
+        vec![],
+    )
+    .unwrap();
+    compute_layout(
+        control.layout_node(),
+        AvailableSpace::Definite(50.0),
+        AvailableSpace::Definite(20.0),
+    )
+    .unwrap();
+    control
+}
+
+#[test]
+fn a_control_keeps_what_its_role_keeps_and_is_a_tab_stop() {
+    use crate::LayoutItem;
+    crate::context::reset_layout_runtime();
+    let node = laid_out_box().layout_node();
+    let id = next_id();
+    register_with_role(id, FocusKind::Widget, node, Role::Slider);
+
+    let focusable = focusable_of(id, Role::Slider, None);
+    assert!(focusable.tab_stop);
+    assert_eq!(focusable.consumes, Role::Slider.consumed_keys());
+}
+
+#[test]
+fn a_declared_set_replaces_the_role_s() {
+    use crate::LayoutItem;
+    crate::context::reset_layout_runtime();
+    let node = laid_out_box().layout_node();
+    let id = next_id();
+    register_with_role(id, FocusKind::Widget, node, Role::Button);
+
+    let declared = ConsumedKeys::ARROW_DOWN | ConsumedKeys::ACTIVATION;
+    assert_eq!(
+        focusable_of(id, Role::Button, Some(declared)).consumes,
+        declared
+    );
+}
+
+#[test]
+fn a_control_driven_by_another_keeps_its_keys_without_being_a_stop() {
+    use crate::LayoutItem;
+    crate::context::reset_layout_runtime();
+    let node = laid_out_box().layout_node();
+    let id = next_id();
+    register_presented(id, node, Role::MenuItem);
+
+    let focusable = focusable_of(id, Role::MenuItem, None);
+    assert!(!focusable.tab_stop);
+    assert_eq!(focusable.consumes, Role::MenuItem.consumed_keys());
+}
+
+#[test]
+fn an_id_nobody_registered_is_no_stop_and_keeps_nothing() {
+    assert_eq!(
+        focusable_of(next_id(), Role::Slider, None),
+        Focusable::default()
+    );
+}
+
+#[test]
+fn inside_a_modal_that_holds_focus_tab_is_kept() {
+    use crate::LayoutItem;
+    crate::context::reset_layout_runtime();
+    let node = laid_out_box().layout_node();
+    let id = next_id();
+    register_with_role(id, FocusKind::Widget, node, Role::Button);
+    let open = reactive_core::signal(true);
+    let scope = register_scope(node, move || open.get(), true);
+
+    assert!(
+        focusable_of(id, Role::Button, None)
+            .consumes
+            .contains(ConsumedKeys::TAB),
+        "stepping inside the trap is Telar's"
+    );
+    open.set(false);
+    let closed = focusable_of(id, Role::Button, None);
+    assert!(!closed.consumes.contains(ConsumedKeys::TAB));
+    unregister_scope(scope);
+}
+
+#[test]
+fn a_host_focus_move_becomes_telar_s() {
+    use crate::LayoutItem;
+    crate::context::reset_layout_runtime();
+    let node = laid_out_box().layout_node();
+    let id = next_id();
+    register_at(id, FocusKind::Widget, node);
+    clear();
+
+    assert!(follow_box(u64::from(node)));
+    assert_eq!(current(), Some(id));
+    assert!(is_focus_visible(id), "a Tab the host walked shows the ring");
+    assert!(
+        !follow_box(u64::from(node)),
+        "the move reported for focus already there changes nothing"
+    );
+}
+
+#[test]
+fn a_host_focus_move_echoing_a_tap_keeps_the_ring_off() {
+    use crate::LayoutItem;
+    crate::context::reset_layout_runtime();
+    let node = laid_out_box().layout_node();
+    let id = next_id();
+    register_at(id, FocusKind::Widget, node);
+
+    request_from_pointer(id);
+    follow_box(u64::from(node));
+    assert!(is_focused(id));
+    assert!(!is_focus_visible(id));
+}
+
+#[test]
+fn a_host_focus_move_to_no_known_box_changes_nothing() {
+    let id = next_id();
+    register_as(id, FocusKind::Widget);
+    request(id);
+
+    assert!(!follow_box(u64::MAX));
+    assert_eq!(current(), Some(id));
+}

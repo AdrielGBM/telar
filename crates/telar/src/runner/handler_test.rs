@@ -881,3 +881,21 @@ fn a_dropped_handler_drops_its_tree_inside_its_surface() {
 
     assert_eq!(DROPPED_UNDER.with(Cell::get), Some(handle));
 }
+
+#[test]
+fn focus_the_surface_took_out_of_every_box_leaves_none_focused() {
+    let mut handler = handler();
+    let window = HeadlessWindow::new(120, 80);
+    let id = ui_core::focus::next_id();
+    ui_core::focus::register_as(id, ui_core::focus::FocusKind::Widget);
+    ui_core::focus::request(id);
+
+    handler.on_event(Event::FocusChanged { is_focused: false }, &window);
+    assert_eq!(
+        ui_core::focus::current(),
+        Some(id),
+        "a window that only lost focus gets its box back on return"
+    );
+    handler.on_event(Event::FocusLeftBoxes, &window);
+    assert_eq!(ui_core::focus::current(), None);
+}

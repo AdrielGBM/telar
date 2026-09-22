@@ -5,8 +5,9 @@
 use std::rc::Rc;
 
 use layout_core::NodeId;
-use platform_core::{Key, ModifiersState, NamedKey, NumericValue};
+use platform_core::{ConsumedKeys, Key, ModifiersState, NamedKey, NumericValue};
 use reactive_core::{Effect, RwSignal, effect, signal};
+use renderer_core::Focusable;
 use rustc_hash::FxHashSet;
 
 /// An opaque focus identity, one per focusable widget. Allocate with [`next_id`].
@@ -621,6 +622,61 @@ pub fn focus_first_in(node: NodeId) -> bool {
         }
         None => false,
     }
+}
+
+/// How the keyboard reaches `id` right now: whether Tab stops there, and which keys it keeps.
+///
+/// `declared` is the widget's own set for the state it is in; `None` takes `role`'s. A control out of reach keeps nothing, and one inside a modal that holds focus keeps Tab as well, because stepping inside the trap is Telar's and a host walking its own order would leave it. Reactive, like [`current`]: the box re-emits when a scope it sits in opens or closes.
+pub fn focusable_of(id: FocusId, role: Role, declared: Option<ConsumedKeys>) -> Focusable {
+    let (entry, scopes) = with_focus_ref(|s| {
+        let entry = s
+            .order
+            .iter()
+            .find(|e| e.id == id)
+            .map(|e| (e.node, e.tabbable));
+        let scopes: Vec<ScopeView> = s
+            .scopes
+            .iter()
+            .map(|sc| (sc.node, sc.showing.clone(), sc.traps))
+            .collect();
+        (entry, scopes)
+    });
+    let Some((node, tabbable)) = entry else {
+        return Focusable::default();
+    };
+    if !reachable(node, &scopes) {
+        return Focusable::default();
+    }
+    let consumes = declared.unwrap_or_else(|| role.consumed_keys());
+    let trapped = scopes.iter().any(|(_, showing, traps)| *traps && showing());
+    Focusable {
+        tab_stop: tabbable,
+        consumes: if trapped {
+            consumes | ConsumedKeys::TAB
+        } else {
+            consumes
+        },
+    }
+}
+
+/// Follows a focus move the surface made on its own to the box `box_id` names (see [`Event::BoxFocused`](platform_core::Event::BoxFocused)), reporting whether Telar's focus changed.
+///
+/// Taken as keyboard focus, so the ring shows. A box already focused is left alone: the move that reports it may be the echo of a tap that focused it first, and re-taking it would turn that tap's ring on.
+pub fn follow_box(box_id: u64) -> bool {
+    let found = with_focus_ref(|s| {
+        s.order
+            .iter()
+            .find(|e| e.node.is_some_and(|node| u64::from(node) == box_id))
+            .map(|e| e.id)
+    });
+    let Some(id) = found else {
+        return false;
+    };
+    if focused_signal().peek() == Some(id) {
+        return false;
+    }
+    request(id);
+    true
 }
 
 /// Whether `id` is still registered, so a caller restoring remembered focus does not aim at a widget that has since been dropped.

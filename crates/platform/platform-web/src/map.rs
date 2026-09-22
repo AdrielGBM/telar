@@ -144,9 +144,9 @@ fn function_key(n: u8) -> Option<Key> {
         .map(Key::Named)
 }
 
-/// Whether the browser's default action for a key would fight the app for it.
+/// Whether the browser's default action for a key would fight a surface that owns the keyboard for it — see `WebPlatformConfig::owns_keyboard`.
 ///
-/// Tab moves focus out of the surface, the arrows and space scroll the page, and Backspace navigates back in some browsers — all while the app is using them. Only suppressed while the surface has focus, which is what keeps the rest of the page usable.
+/// Tab moves focus out of the surface, the arrows and space scroll the page, and Backspace navigates back in some browsers — all while the app is using them. Only suppressed while the surface has focus, which is what keeps the rest of the page usable. A document surface asks the focused box instead.
 pub fn key_steals_default(key: &Key) -> bool {
     matches!(
         key,

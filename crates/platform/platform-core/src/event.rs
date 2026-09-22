@@ -173,6 +173,16 @@ pub enum Event {
         x: f64,
         y: f64,
     },
+    /// The surface moved the keyboard to a box on its own — a document walking its Tab order — and this is the box it landed on.
+    ///
+    /// A fact, like [`BoxScrolled`](Self::BoxScrolled): focus has already moved, and the app's own idea of it is what needs correcting. `box_id` names the box the same way.
+    BoxFocused {
+        box_id: u64,
+    },
+    /// The surface moved the keyboard out of every box on its own — a document tabbing past the app, or to content beside it — so no box holds it now.
+    ///
+    /// Not a window losing focus ([`FocusChanged`](Self::FocusChanged)): there the box keeps the keyboard and gets it back on return. Here the person took it somewhere else.
+    FocusLeftBoxes,
     /// The user's system preferences, whole: sent once before a surface's first resume, so its first layout already follows them, and again whenever any field changes.
     ///
     /// A snapshot rather than a delta, so a consumer never has to remember what came before to know where it stands.
