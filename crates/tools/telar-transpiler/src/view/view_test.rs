@@ -1278,6 +1278,46 @@ fn a_text_naming_no_family_is_untouched() {
     );
 }
 
+/// T-5.1: a bare generic names its `FontFamily` variant, the fix for the family that used to shape in `SansSerif` no matter which generic was asked for.
+#[test]
+fn a_bare_generic_names_its_variant() {
+    let src = "[view]\ntext \"x\" font_family:monospace\n";
+    let out = crate::transpile_source(src, "demo", None, None).unwrap();
+    assert!(
+        out.rust_code
+            .contains(".with_font_family(FontFamily::Monospace)"),
+        "{}",
+        out.rust_code
+    );
+}
+
+/// Quoting a generic (`font_family:"monospace"`) is the bug this task starts from: the family named a CSS keyword and still came out `Named`, which the DOM then quoted, so the generic never applied. The DSL's names are Telar's own vocabulary regardless of quoting, so both spellings resolve to the same variant.
+#[test]
+fn a_quoted_generic_still_names_its_variant() {
+    let src = "[view]\ntext \"x\" font_family:\"monospace\"\n";
+    let out = crate::transpile_source(src, "demo", None, None).unwrap();
+    assert!(
+        out.rust_code
+            .contains(".with_font_family(FontFamily::Monospace)"),
+        "{}",
+        out.rust_code
+    );
+}
+
+/// A quoted comma list is an ordered fallback: the face first, then the generic it degrades to, exactly the order CSS `font-family` takes.
+#[test]
+fn a_quoted_comma_list_becomes_an_ordered_stack() {
+    let src = "[view]\ntext \"x\" font_family:\"Iosevka, monospace\"\n";
+    let out = crate::transpile_source(src, "demo", None, None).unwrap();
+    assert!(
+        out.rust_code.contains(
+            r#".with_font_family(FontFamily::stack(["Iosevka".into(), FontFamily::Monospace]))"#
+        ),
+        "{}",
+        out.rust_code
+    );
+}
+
 /// A `Canvas` is a `ui-core` primitive that had no tag, so the only way to place one was to build it in `[logic]` and splice the binding through `widget` — which is also why a canvas could never sit inside anything that rebuilds. Named as a tag, it is constructed where it is placed.
 #[test]
 fn canvas_tag_builds_the_primitive_where_it_is_placed() {

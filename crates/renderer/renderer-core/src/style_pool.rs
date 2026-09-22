@@ -56,16 +56,35 @@ pub fn hash_path_style(s: &PathStyle) -> u64 {
     h.finish()
 }
 
+/// Tagged by variant, with `Stack` folding its members in order so two stacks of the same families in different orders (a different fallback chain) hash apart.
+fn hash_font_family(family: &FontFamily, h: &mut FxHasher) {
+    match family {
+        FontFamily::SansSerif => h.write_u8(1),
+        FontFamily::Serif => h.write_u8(2),
+        FontFamily::Monospace => h.write_u8(3),
+        FontFamily::SystemUi => h.write_u8(4),
+        FontFamily::Cursive => h.write_u8(5),
+        FontFamily::Fantasy => h.write_u8(6),
+        FontFamily::Named(name) => {
+            h.write_u8(7);
+            h.write(name.as_bytes());
+        }
+        FontFamily::Stack(families) => {
+            h.write_u8(8);
+            h.write_u32(families.len() as u32);
+            for member in families.iter() {
+                hash_font_family(member, h);
+            }
+        }
+    }
+}
+
 /// Hashes a span's overrides. Every field, unlike `hash_text_style`, because a span exists precisely to differ in one of them: a bold range and a plain one over identical text must not hash alike.
 pub fn hash_declared(d: &Declared) -> u64 {
     let mut h = FxHasher::default();
     match &d.font_family {
         None => h.write_u8(0),
-        Some(FontFamily::SansSerif) => h.write_u8(1),
-        Some(FontFamily::Named(name)) => {
-            h.write_u8(2);
-            h.write(name.as_bytes());
-        }
+        Some(family) => hash_font_family(family, &mut h),
     }
     hash_opt_f32(d.font_size, &mut h);
     hash_opt_paint(d.color.as_ref(), &mut h);

@@ -143,11 +143,43 @@ impl Clamp {
 /// Which face a run of text shapes in.
 ///
 /// [`SansSerif`](Self::SansSerif) is whatever the surface's font configuration resolves it to — the application's own family, an OEM stack, or the platform's default — and it is a *value* rather than a `None` on purpose: a property that flows down a tree has to be able to tell "nobody named a family" from "somebody named the default one", and an `Option` collapses those into the same thing.
+///
+/// The other bare variants are the CSS generic families (`serif`, `monospace`, `system-ui`, `cursive`, `fantasy`), each a value rather than a string, so a backend translates it instead of pattern-matching text: web-dom emits the CSS keyword unquoted, the shaper resolves it to an installed face. [`Stack`](Self::Stack) orders several of these (bare or [`Named`](Self::Named)) as one property, tried in turn — the same idea as CSS's comma list, and walked the same way: web-dom hands the whole list to the browser and the GPU/software shaper walks it against its own font database, in order, shaping in the first member that has an installed face rather than only ever trying the first preference. TUI ignores the whole property, the same as it ignores every other axis a character cell has no room for.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Default)]
 pub enum FontFamily {
     #[default]
     SansSerif,
+    Serif,
+    Monospace,
+    /// The platform's UI font — `system-ui` in CSS. No shaper backend keys a face to it directly, so it resolves like [`SansSerif`](Self::SansSerif); kept distinct because a web author can still tell the two apart in the generated CSS.
+    SystemUi,
+    Cursive,
+    Fantasy,
     Named(Arc<str>),
+    /// An ordered fallback list. Built by [`FontFamily::stack`] rather than in the open, so a list of one collapses to that family instead of carrying a `Stack` nobody asked for.
+    Stack(Arc<[FontFamily]>),
+}
+
+impl FontFamily {
+    /// `families` in order, first-preferred first. A single family collapses to itself and an empty list to the default, so `Stack` is only ever the two-or-more case a fallback chain actually is.
+    pub fn stack(families: impl IntoIterator<Item = FontFamily>) -> FontFamily {
+        let families: Vec<FontFamily> = families.into_iter().collect();
+        match families.len() {
+            0 => FontFamily::default(),
+            1 => families.into_iter().next().expect("len checked above"),
+            _ => FontFamily::Stack(families.into()),
+        }
+    }
+
+    /// This family, or its first preference when it is a [`Stack`](Self::Stack) — for a caller that genuinely has no notion of fallback and only ever wants the author's first choice. The GPU/software shaper does not use this: it walks the whole stack against its own font database instead, the same as a browser walks a CSS `font-family` list.
+    pub fn primary(&self) -> &FontFamily {
+        match self {
+            FontFamily::Stack(families) => {
+                families.first().map(FontFamily::primary).unwrap_or(self)
+            }
+            other => other,
+        }
+    }
 }
 
 impl<T: AsRef<str>> From<T> for FontFamily {

@@ -41,10 +41,9 @@ fn make_context() -> Option<web_sys::CanvasRenderingContext2d> {
 
 /// The `font` shorthand a 2D context takes, from a Telar text style.
 fn font_of(style: &TextStyle) -> String {
-    let family = match &style.font_family {
-        renderer_core::FontFamily::Named(name) => format!("\"{name}\",sans-serif"),
-        renderer_core::FontFamily::SansSerif => "sans-serif".to_string(),
-    };
+    // The canvas `font` shorthand takes the same family-list grammar CSS does, so the DOM's own serializer is the measurer's too — the two have to agree on what a generic resolves to, or the number this reports is for a face the page will not draw.
+    let family = crate::paint::font_family_list(&style.font_family)
+        .unwrap_or_else(|| "sans-serif".to_string());
     let slant = if style.font_style == renderer_core::FontStyle::Normal {
         ""
     } else {

@@ -323,11 +323,46 @@ pub(super) fn raw_color_value(attrs: &[Attr]) -> &str {
 
 /// The family a `font_family:` names, as an expression `TextStyle::with_font_family` accepts.
 ///
-/// A quoted literal is the common case; anything else is the author's own Rust — a `theme.font()` read, a `[logic]` binding — carried through, because the families an application has are its own vocabulary and not one the DSL can enumerate.
+/// A bare or quoted generic (`monospace`, `"monospace"`) names its `FontFamily` variant either way — the DSL's names are Telar's own vocabulary, not CSS text kept apart by quoting. A quoted comma list (`"Inter, sans_serif"`) is an ordered fallback, [`registry::FONT_FAMILY_VALUES`] resolving each name that is one and `FontFamily::from` carrying the rest through as faces. Anything else — an unquoted expression that names no generic — is the author's own Rust: a `theme.font()` read, a `[logic]` binding, carried through because the families an application has are its own vocabulary and not one the DSL can enumerate.
 pub(super) fn font_family_expr(attr: &Attr) -> String {
     match &attr.value {
-        Value::Quoted(name) => rust_str(name),
-        value => value.text().trim().to_string(),
+        Value::Quoted(text) => quoted_font_family_expr(text),
+        value => {
+            let raw = value.text().trim();
+            registry::keyword(registry::FONT_FAMILY_VALUES, raw)
+                .map(str::to_string)
+                .unwrap_or_else(|| raw.to_string())
+        }
+    }
+}
+
+/// A quoted `font_family:` value split on commas, CSS's own separator for a fallback list: one name is that face (or its generic), several become an ordered `FontFamily::stack(…)`.
+fn quoted_font_family_expr(text: &str) -> String {
+    let names: Vec<&str> = text
+        .split(',')
+        .map(str::trim)
+        .filter(|n| !n.is_empty())
+        .collect();
+    match names.as_slice() {
+        [] => "FontFamily::SansSerif".to_string(),
+        [one] => registry::keyword(registry::FONT_FAMILY_VALUES, one)
+            .map(str::to_string)
+            .unwrap_or_else(|| rust_str(one)),
+        many => {
+            let pieces: Vec<String> = many
+                .iter()
+                .map(|name| font_family_stack_piece(name))
+                .collect();
+            format!("FontFamily::stack([{}])", pieces.join(", "))
+        }
+    }
+}
+
+/// One entry of a fallback list: a generic's constant, already a `FontFamily`, or a face name converted into one.
+fn font_family_stack_piece(name: &str) -> String {
+    match registry::keyword(registry::FONT_FAMILY_VALUES, name) {
+        Some(variant) => variant.to_string(),
+        None => format!("{}.into()", rust_str(name)),
     }
 }
 

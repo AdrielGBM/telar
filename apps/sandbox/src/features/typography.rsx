@@ -33,6 +33,13 @@ col gap:20
             text "Centered in its box" font_size:14 color:$theme.muted text_align:center
             text "Aligned to the end" font_size:14 color:$theme.muted text_align:right
         code_line code:"text 'Bold' font_weight:bold   ·   'Note' font_style:italic   ·   '…' text_align:center"
+    example title:"Family — a generic, a face, or an ordered fallback"
+        card gap:6
+            text "sans_serif — the default face" font_size:16 color:$theme.ink
+            text "monospace — a CSS generic, unquoted in the DOM" font_size:16 color:$theme.ink font_family:monospace
+            text "serif" font_size:16 color:$theme.ink font_family:serif
+            text "\"Iosevka, monospace\" — a named face, falling back to the generic" font_size:16 color:$theme.ink font_family:"Iosevka, monospace"
+        code_line code:"text 'code' font_family:monospace   ·   text 'set' font_family:'Iosevka, monospace'"
     example title:"Line clamp & ellipsis"
         card gap:8
             text "This paragraph is clamped to two lines with lines:2, so however long the copy gets the box never grows past two lines and the overflow is simply dropped." font_size:14 color:$theme.muted lines:2
@@ -64,6 +71,7 @@ col gap:20
     example title:"Attributes"
         col gap:6
             prop_row name:"font_size" values:"number" about:"Font size in px (default 14)."
+            prop_row name:"font_family" values:"generic·\"face\"·\"face, generic\"" about:"A CSS generic (bare or quoted), a named face, or a quoted comma list for an ordered fallback (default sans_serif)."
             prop_row name:"color" values:"token · #hex · $signal" about:"Text color (default ink via a token)."
             prop_row name:"font_weight" values:"thin…black · 100–900" about:"Font weight, keyword or number (default 400)."
             prop_row name:"font_style" values:"normal·italic·oblique" about:"Slant the text."

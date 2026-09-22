@@ -97,7 +97,14 @@ impl TextShaper {
         let [r, g, b, a] = rgba;
         let cosmic_color = CosmicColor::rgba(r, g, b, a);
 
-        let mut buffer = make_buffer(&mut self.font_system, text, spans, rect, style);
+        let mut buffer = make_buffer(
+            &mut self.font_system,
+            &mut self.family_availability,
+            text,
+            spans,
+            rect,
+            style,
+        );
 
         let mut pixels = vec![0u8; (width as usize) * (height as usize) * 4];
         self.draw_buffer(
@@ -156,7 +163,14 @@ impl TextShaper {
 
         let white = CosmicColor::rgba(255, 255, 255, 255);
 
-        let mut buffer = make_buffer(&mut self.font_system, text, None, rect, style);
+        let mut buffer = make_buffer(
+            &mut self.font_system,
+            &mut self.family_availability,
+            text,
+            None,
+            rect,
+            style,
+        );
 
         let mut pixels = vec![0u8; (width as usize) * (height as usize) * 4];
         self.draw_buffer(&mut buffer, white, style.raster, |bx, by, bw, bh, color| {

@@ -36,7 +36,14 @@ impl TextShaper {
         }
 
         if let Some(spans) = spans.filter(|s| !s.is_empty()) {
-            let buffer = make_buffer(&mut self.font_system, text, Some(spans), rect, style);
+            let buffer = make_buffer(
+                &mut self.font_system,
+                &mut self.family_availability,
+                text,
+                Some(spans),
+                rect,
+                style,
+            );
             let mut glyphs: Vec<(CacheKey, i32, i32, Color)> = Vec::new();
             for run in buffer.layout_runs() {
                 for glyph in run.glyphs.iter() {
@@ -80,7 +87,14 @@ impl TextShaper {
             if let Some(cached) = self.shaping_cache.get(&shaping_key) {
                 cached.clone()
             } else {
-                let buffer = make_buffer(&mut self.font_system, text, None, rect, style);
+                let buffer = make_buffer(
+                    &mut self.font_system,
+                    &mut self.family_availability,
+                    text,
+                    None,
+                    rect,
+                    style,
+                );
                 let mut pos: Vec<(CacheKey, i32, i32)> = Vec::new();
                 for run in buffer.layout_runs() {
                     for glyph in run.glyphs.iter() {
@@ -301,7 +315,14 @@ impl TextShaper {
             height: 100000.0,
         };
         // `make_buffer` already applies the clamp, so the measured extent reflects it.
-        let buffer = make_buffer(&mut self.font_system, text, spans, rect, style);
+        let buffer = make_buffer(
+            &mut self.font_system,
+            &mut self.family_availability,
+            text,
+            spans,
+            rect,
+            style,
+        );
 
         let mut width: f32 = 0.0;
         let mut height: f32 = 0.0;
@@ -338,7 +359,14 @@ impl TextShaper {
             width: max_width,
             height: 100000.0,
         };
-        let buffer = make_buffer(&mut self.font_system, text, None, rect, style);
+        let buffer = make_buffer(
+            &mut self.font_system,
+            &mut self.family_availability,
+            text,
+            None,
+            rect,
+            style,
+        );
         // Collected first, so the immutable `layout_runs` borrow ends before the mutable lookups below.
         let mut glyphs: Vec<(CacheKey, i32)> = Vec::new();
         for run in buffer.layout_runs() {

@@ -66,6 +66,8 @@ pub struct TextShaper {
     blank_glyphs: FxHashSet<CacheKey>,
     // Computed lazily on first request and reused across frames.
     font_metrics_cache: Option<renderer_core::FontMetrics>,
+    // Whether a `Named` family in a `Stack` has an installed face — a `fontdb::Database::query` per distinct name rather than per shape call. Unbounded like `blank_glyphs`, for the same reason: the set is bounded by the family names an application actually names, not by how often it shapes.
+    family_availability: rustc_hash::FxHashMap<Arc<str>, bool>,
 }
 
 /// The buffer line height in pixels for `style`: `line_height` (a multiple of font size) when set, else the natural `LINE_HEIGHT_FACTOR`. Shared by shaping and measuring so both reserve the same vertical space.
@@ -132,9 +134,17 @@ fn cosmic_align(align: TextAlign) -> Option<Align> {
 }
 
 /// The cosmic-text attributes one resolved style asks for.
-fn text_attrs(style: &TextStyle) -> Attrs<'_> {
+fn text_attrs<'a>(
+    style: &'a TextStyle,
+    font_system: &mut FontSystem,
+    family_availability: &mut rustc_hash::FxHashMap<Arc<str>, bool>,
+) -> Attrs<'a> {
     let mut attrs = Attrs::new()
-        .family(cosmic_family(&style.font_family))
+        .family(resolve_cosmic_family(
+            &style.font_family,
+            font_system,
+            family_availability,
+        ))
         .weight(Weight(style.font_weight))
         .style(cosmic_style(style.font_style));
     // Only when non-default, so unspaced text keeps cosmic-text's exact default shaping and the byte-golden.
@@ -173,6 +183,7 @@ fn styled_runs<'a>(text: &'a str, spans: &[Span], style: &TextStyle) -> Vec<(&'a
 
 fn shape_buffer(
     font_system: &mut FontSystem,
+    family_availability: &mut rustc_hash::FxHashMap<Arc<str>, bool>,
     text: &str,
     spans: Option<&[Span]>,
     rect: Rect,
@@ -184,28 +195,27 @@ fn shape_buffer(
     // `None` width is cosmic-text for "do not wrap": the line grows past the box instead of breaking, which is what a label that is really a token wants.
     let wrap_width = (!(style.text_wrap == TextWrap::NoWrap)).then_some(rect.width);
     buffer.set_size(wrap_width, Some(rect.height));
-    let attrs = text_attrs(style);
+    let attrs = text_attrs(style, font_system, family_availability);
     // `set_text` rather than a one-span `set_rich_text`: the same call underneath, but this is the one the byte-exact software golden was recorded against.
     match spans.filter(|s| !s.is_empty()) {
         None => buffer.set_text(text, &attrs, Shaping::Advanced, None),
         Some(spans) => {
             let runs = styled_runs(text, spans, style);
-            let resolved: Vec<(&str, Attrs<'_>)> = runs
-                .iter()
-                .map(|(slice, run_style)| {
-                    let mut run_attrs = text_attrs(run_style);
-                    if run_style.font_size != style.font_size {
-                        run_attrs = run_attrs.metrics(Metrics::new(
-                            run_style.font_size,
-                            effective_line_height(run_style),
-                        ));
-                    }
-                    if let Paint::Solid(color) = run_style.color {
-                        run_attrs = run_attrs.color(to_cosmic_color(color));
-                    }
-                    (*slice, run_attrs)
-                })
-                .collect();
+            // A loop rather than `.iter().map(...).collect()`: each run resolves its family against the font database through the same `&mut` cache, which a closure re-invoked per item cannot reborrow as readily as a plain loop body can.
+            let mut resolved: Vec<(&str, Attrs<'_>)> = Vec::with_capacity(runs.len());
+            for (slice, run_style) in runs.iter() {
+                let mut run_attrs = text_attrs(run_style, font_system, family_availability);
+                if run_style.font_size != style.font_size {
+                    run_attrs = run_attrs.metrics(Metrics::new(
+                        run_style.font_size,
+                        effective_line_height(run_style),
+                    ));
+                }
+                if let Paint::Solid(color) = run_style.color {
+                    run_attrs = run_attrs.color(to_cosmic_color(color));
+                }
+                resolved.push((*slice, run_attrs));
+            }
             buffer.set_rich_text(resolved, &attrs, Shaping::Advanced, None);
         }
     }
@@ -257,12 +267,13 @@ fn visual_line_starts(buffer: &Buffer) -> Vec<usize> {
 /// Shapes `text` into `rect`, then applies `max_lines`/`ellipsis` clamping: cosmic-text has no public ellipsis, so a clamped overflow is truncated at the start of the first dropped visual line, and (with ellipsis) `…` is appended and characters are dropped until it fits.
 fn make_buffer(
     font_system: &mut FontSystem,
+    family_availability: &mut rustc_hash::FxHashMap<Arc<str>, bool>,
     text: &str,
     spans: Option<&[Span]>,
     rect: Rect,
     style: &TextStyle,
 ) -> Buffer {
-    let buffer = shape_buffer(font_system, text, spans, rect, style);
+    let buffer = shape_buffer(font_system, family_availability, text, spans, rect, style);
     let Some(max) = style.clamp.max_lines() else {
         return buffer;
     };
@@ -274,14 +285,28 @@ fn make_buffer(
     let head = text[..cut].trim_end();
     if !style.clamp.ellipsis() {
         let clipped = clip_spans(spans, head.len());
-        return shape_buffer(font_system, head, clipped.as_deref(), rect, style);
+        return shape_buffer(
+            font_system,
+            family_availability,
+            head,
+            clipped.as_deref(),
+            rect,
+            style,
+        );
     }
     // Appends `…`, dropping trailing chars until the result fits. The `…` takes the paragraph's own style, as CSS gives it the block's, and the spans are cut to what survives.
     let mut end = head.len();
     loop {
         let candidate = format!("{}\u{2026}", &head[..end]);
         let clipped = clip_spans(spans, end);
-        let b = shape_buffer(font_system, &candidate, clipped.as_deref(), rect, style);
+        let b = shape_buffer(
+            font_system,
+            family_availability,
+            &candidate,
+            clipped.as_deref(),
+            rect,
+            style,
+        );
         if b.layout_runs().count() <= max {
             return b;
         }
@@ -307,13 +332,65 @@ fn cosmic_style(font_style: FontStyle) -> Style {
     }
 }
 
-/// The cosmic-text family a style asks for.
+/// The cosmic-text family a style asks for, walking a [`FontFamily::Stack`] to the first member the font database actually has a face for — matching what the browser does with a CSS `font-family` list, rather than shaping every fallback chain in its first preference regardless of whether that face exists.
 ///
-/// `SansSerif` is the database's own routed default, which [`Fonts::font_system`] has already pointed at the configured family — so a style naming nothing shapes exactly as it did before there was an axis to name, and a style naming a face reaches it without displacing anyone else's.
-fn cosmic_family(family: &FontFamily) -> Family<'_> {
+/// `SansSerif` is the database's own routed default, which [`Fonts::font_system`] has already pointed at the configured family — so a style naming nothing shapes exactly as it did before there was an axis to name, and a style naming a face reaches it without displacing anyone else's. `SystemUi` has no face of its own in fontdb's world (there is no platform UI catalogue to query, only a font database), so it resolves the same way: deterministic, if not distinct.
+fn resolve_cosmic_family<'a>(
+    family: &'a FontFamily,
+    font_system: &mut FontSystem,
+    family_availability: &mut rustc_hash::FxHashMap<Arc<str>, bool>,
+) -> Family<'a> {
     match family {
-        FontFamily::SansSerif => Family::SansSerif,
+        FontFamily::Stack(members) => members
+            .iter()
+            .find(|member| family_exists(member, font_system, family_availability))
+            // Every member missing is a database with no fallback face at all — the same wall a single `Named` with no face has always hit, so it shapes in whatever `SansSerif` routes to rather than a face nobody has.
+            .map_or(Family::SansSerif, |member| {
+                resolve_cosmic_family(member, font_system, family_availability)
+            }),
+        other => bare_cosmic_family(other),
+    }
+}
+
+/// One member of a fallback list, or the sole family when there is no list at all — never itself a `Stack`, since [`resolve_cosmic_family`] only ever calls this on a leaf.
+fn bare_cosmic_family(family: &FontFamily) -> Family<'_> {
+    match family {
+        FontFamily::SansSerif | FontFamily::SystemUi => Family::SansSerif,
+        FontFamily::Serif => Family::Serif,
+        FontFamily::Monospace => Family::Monospace,
+        FontFamily::Cursive => Family::Cursive,
+        FontFamily::Fantasy => Family::Fantasy,
         FontFamily::Named(name) => Family::Name(name),
+        // Unreachable through `resolve_cosmic_family`, which only ever hands this a leaf — kept as the total match's safety net rather than an `unreachable!()`, so a future caller that skips the stack walk still gets a deterministic answer instead of a panic.
+        FontFamily::Stack(_) => Family::SansSerif,
+    }
+}
+
+/// Whether `family` names a face the font database this shaper loaded actually has — a generic always does (it is the query's own vocabulary, not a name that can miss), a `Named` is asked of `fontdb` and the answer cached by name so a fallback chain shaped a thousand times queries the database once per distinct name in it, and a nested `Stack` exists if any of its own members do.
+fn family_exists(
+    family: &FontFamily,
+    font_system: &mut FontSystem,
+    family_availability: &mut rustc_hash::FxHashMap<Arc<str>, bool>,
+) -> bool {
+    match family {
+        FontFamily::Named(name) => {
+            if let Some(&known) = family_availability.get(name) {
+                return known;
+            }
+            let found = font_system
+                .db_mut()
+                .query(&fontdb::Query {
+                    families: &[fontdb::Family::Name(name)],
+                    ..fontdb::Query::default()
+                })
+                .is_some();
+            family_availability.insert(name.clone(), found);
+            found
+        }
+        FontFamily::Stack(members) => members
+            .iter()
+            .any(|member| family_exists(member, font_system, family_availability)),
+        _ => true,
     }
 }
 
@@ -367,6 +444,7 @@ impl TextShaper {
             colr_font_cache: Cache::new(limits::FONT_FILE, |font| font.0.len()),
             blank_glyphs: FxHashSet::default(),
             font_metrics_cache: None,
+            family_availability: rustc_hash::FxHashMap::default(),
         }
     }
 

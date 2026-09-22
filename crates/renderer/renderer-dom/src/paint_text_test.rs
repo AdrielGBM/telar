@@ -1,6 +1,6 @@
 use super::*;
 use geometry_core::Point;
-use renderer_core::TextWrap;
+use renderer_core::{FontFamily, TextWrap};
 
 fn css_of(style: &TextStyle) -> String {
     let mut out = String::new();
@@ -78,4 +78,60 @@ fn a_shadow_behind_the_glyphs_is_drawn() {
         css.contains("text-shadow:0px 1px 3px #000000;"),
         "and no spread, which `text-shadow` has no length for: {css}"
     );
+}
+
+/// The bug T-5.1 starts from: a generic quoted like a face name never reached the browser as the keyword it was — `"monospace"` is not the same declaration as `monospace`.
+#[test]
+fn a_generic_family_goes_out_unquoted() {
+    let style = TextStyle::new(12.0, Color::BLACK).with_font_family(FontFamily::Monospace);
+    let css = css_of(&style);
+    assert!(
+        css.contains("font-family:monospace;"),
+        "the generic has to reach the browser as its own keyword, not a quoted string: {css}"
+    );
+}
+
+/// The default sans-serif names nothing, so it declares nothing and leaves the document's own stylesheet to decide — unchanged since before there was a generic to name.
+#[test]
+fn the_default_sans_serif_declares_nothing() {
+    let style = TextStyle::new(12.0, Color::BLACK);
+    assert!(
+        !css_of(&style).contains("font-family"),
+        "{}",
+        css_of(&style)
+    );
+}
+
+/// A bare name with no author-written fallback still degrades to sans-serif, as it always has.
+#[test]
+fn a_named_family_is_quoted_with_a_sans_serif_fallback() {
+    let style = TextStyle::new(12.0, Color::BLACK).with_font_family(FontFamily::from("Iosevka"));
+    let css = css_of(&style);
+    assert!(
+        css.contains(r#"font-family:"Iosevka",sans-serif;"#),
+        "{css}"
+    );
+}
+
+/// A quote inside a family name would otherwise close the CSS string early and let the rest of the name run as raw CSS.
+#[test]
+fn a_family_name_with_a_quote_is_escaped() {
+    let style =
+        TextStyle::new(12.0, Color::BLACK).with_font_family(FontFamily::from(r#"Weird"Face"#));
+    let css = css_of(&style);
+    assert!(
+        css.contains(r#"font-family:"Weird\"Face",sans-serif;"#),
+        "{css}"
+    );
+}
+
+/// An explicit fallback list is emitted in the order the author wrote it, with no extra generic appended after it — the author already chose where the chain ends.
+#[test]
+fn a_stack_is_emitted_in_order_with_no_extra_fallback() {
+    let style = TextStyle::new(12.0, Color::BLACK).with_font_family(FontFamily::stack([
+        FontFamily::from("Iosevka"),
+        FontFamily::Monospace,
+    ]));
+    let css = css_of(&style);
+    assert!(css.contains(r#"font-family:"Iosevka",monospace;"#), "{css}");
 }

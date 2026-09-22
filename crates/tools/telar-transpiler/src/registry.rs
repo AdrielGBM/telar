@@ -312,6 +312,18 @@ pub const FONT_WEIGHT_VALUES: &[(&str, &str)] = &[
     ("heavy", "900"),
 ];
 
+/// `font_family:` — a CSS-style generic, one spelling per bare `FontFamily` variant.
+///
+/// A closed set **or** an expression, the same ladder [`CURSOR_VALUES`] takes: a name here is the variant it names (`font_family:monospace`), and anything else — a quoted face, a `$theme` read, a hand-built `FontFamily::stack(…)` — is the author's own value. Quoting one of these names (`font_family:"monospace"`) means the same thing as writing it bare: the DSL's names are Telar's own vocabulary, not CSS text, so there is only one way to ask for the generic.
+pub const FONT_FAMILY_VALUES: &[(&str, &str)] = &[
+    ("sans_serif", "FontFamily::SansSerif"),
+    ("serif", "FontFamily::Serif"),
+    ("monospace", "FontFamily::Monospace"),
+    ("system_ui", "FontFamily::SystemUi"),
+    ("cursive", "FontFamily::Cursive"),
+    ("fantasy", "FontFamily::Fantasy"),
+];
+
 /// `font_style:` — the slant of the face.
 ///
 /// Three-valued where the markup had a bare `italic` flag, because the shaper has modelled oblique all along and nothing could ask for it.
@@ -477,7 +489,9 @@ pub fn keyword(
 /// The text properties that flow down the tree. See [`is_inheritable_text_attr`].
 const INHERITABLE_TEXT_ATTRS: &[AttrSpec] = &[
     AttrSpec::num("font_size"),
-    AttrSpec::free("font_family"),
+    AttrSpec::free("font_family").doc(
+        "A generic (sans_serif|serif|monospace|system_ui|cursive|fantasy, bare or quoted), a quoted face (\"Inter\"), a quoted comma list for an ordered fallback (\"Inter, sans_serif\"), or any expression yielding a FontFamily.",
+    ),
     AttrSpec::keywords_or_number("font_weight", FONT_WEIGHT_VALUES),
     AttrSpec::keywords("font_style", FONT_STYLE_VALUES),
     AttrSpec::color("color"),

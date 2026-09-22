@@ -202,6 +202,56 @@ pub fn text_claims_background(style: &TextStyle) -> bool {
     matches!(style.color, Paint::Gradient(_))
 }
 
+/// The CSS `font-family` value for `family`, or `None` for the bare default — nobody named anything, so nothing is declared and the document's own stylesheet decides, exactly as before there was a generic to name.
+pub fn font_family_list(family: &renderer_core::FontFamily) -> Option<String> {
+    use renderer_core::FontFamily;
+    let mut pieces = Vec::new();
+    match family {
+        FontFamily::SansSerif => return None,
+        // A bare name with no author-written fallback still degrades to the platform's sans-serif, as it always has.
+        FontFamily::Named(name) => {
+            pieces.push(css_family_name(name));
+            pieces.push("sans-serif".to_string());
+        }
+        other => push_family_piece(other, &mut pieces),
+    }
+    Some(pieces.join(","))
+}
+
+/// One member of a `Stack`, or the sole family when there is no stack at all — every generic goes out as its CSS keyword, unquoted, which is the fix: quoting `monospace` is what kept the generic from ever applying.
+fn push_family_piece(family: &renderer_core::FontFamily, out: &mut Vec<String>) {
+    use renderer_core::FontFamily;
+    match family {
+        FontFamily::SansSerif => out.push("sans-serif".to_string()),
+        FontFamily::Serif => out.push("serif".to_string()),
+        FontFamily::Monospace => out.push("monospace".to_string()),
+        FontFamily::SystemUi => out.push("system-ui".to_string()),
+        FontFamily::Cursive => out.push("cursive".to_string()),
+        FontFamily::Fantasy => out.push("fantasy".to_string()),
+        FontFamily::Named(name) => out.push(css_family_name(name)),
+        FontFamily::Stack(families) => {
+            for member in families.iter() {
+                push_family_piece(member, out);
+            }
+        }
+    }
+}
+
+/// A family name as a CSS string: quoted, because a name with a space in it is otherwise several identifiers, and escaped, because an unescaped `"` in the name would close the string early.
+fn css_family_name(name: &str) -> String {
+    let mut out = String::with_capacity(name.len() + 2);
+    out.push('"');
+    for c in name.chars() {
+        match c {
+            '"' => out.push_str("\\\""),
+            '\\' => out.push_str("\\\\"),
+            _ => out.push(c),
+        }
+    }
+    out.push('"');
+    out
+}
+
 /// What a `Text` command contributes to the element that holds it.
 pub fn text_style(style: &TextStyle, out: &mut String) {
     declare(out, "font-size", &px(style.font_size));
@@ -235,9 +285,8 @@ pub fn text_style(style: &TextStyle, out: &mut String) {
     if style.font_style != renderer_core::FontStyle::Normal {
         declare(out, "font-style", "italic");
     }
-    if let renderer_core::FontFamily::Named(family) = &style.font_family {
-        // Quoted, because a family name with a space in it is otherwise several identifiers.
-        declare(out, "font-family", &format!("\"{family}\",sans-serif"));
+    if let Some(family) = font_family_list(&style.font_family) {
+        declare(out, "font-family", &family);
     }
     match style.text_align {
         renderer_core::TextAlign::Start => {}

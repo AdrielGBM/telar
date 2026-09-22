@@ -2,9 +2,124 @@
 
 use super::cache::{hash_text, text_style_bits};
 use super::*;
+use cosmic_text::Family;
 use geometry_core::Rect;
+use renderer_core::FontFamily;
 use renderer_core::TextWrap;
 use renderer_core::{Color, Declared, Span, TextStyle};
+
+// T-5.1: every generic resolves to the cosmic-text family fontdb actually indexes it under, deterministically — `SystemUi` has no such face and so takes the same route `SansSerif` always has. A bare generic never queries the database at all: `family_exists` treats every generic as always resolvable.
+#[test]
+fn every_generic_resolves_to_a_concrete_cosmic_family() {
+    let mut sh = TextShaper::new();
+    let mut cache = rustc_hash::FxHashMap::default();
+    assert_eq!(
+        resolve_cosmic_family(&FontFamily::SansSerif, &mut sh.font_system, &mut cache),
+        Family::SansSerif
+    );
+    assert_eq!(
+        resolve_cosmic_family(&FontFamily::Serif, &mut sh.font_system, &mut cache),
+        Family::Serif
+    );
+    assert_eq!(
+        resolve_cosmic_family(&FontFamily::Monospace, &mut sh.font_system, &mut cache),
+        Family::Monospace
+    );
+    assert_eq!(
+        resolve_cosmic_family(&FontFamily::SystemUi, &mut sh.font_system, &mut cache),
+        Family::SansSerif
+    );
+    assert_eq!(
+        resolve_cosmic_family(&FontFamily::Cursive, &mut sh.font_system, &mut cache),
+        Family::Cursive
+    );
+    assert_eq!(
+        resolve_cosmic_family(&FontFamily::Fantasy, &mut sh.font_system, &mut cache),
+        Family::Fantasy
+    );
+}
+
+// T-5.1 follow-up: `Attrs` still takes one family, but which one is now walked against the font database the shaper already holds — a `Named` with no installed face is skipped exactly as the browser skips a missing face in a CSS `font-family` list, rather than being shaped in regardless.
+#[test]
+fn a_stack_falls_to_the_next_member_whose_face_is_missing() {
+    let mut sh = TextShaper::new();
+    let mut cache = rustc_hash::FxHashMap::default();
+    let missing = FontFamily::from("Definitely Not An Installed Face 9182");
+    let stack = FontFamily::stack([missing, FontFamily::Monospace]);
+    assert_eq!(
+        resolve_cosmic_family(&stack, &mut sh.font_system, &mut cache),
+        Family::Monospace,
+        "the missing first preference must be skipped, not shaped in anyway"
+    );
+}
+
+// The common case: nothing is missing, so the chain never looks past its own first preference.
+#[test]
+fn a_stack_uses_its_first_member_when_every_member_exists() {
+    let mut sh = TextShaper::new();
+    let mut cache = rustc_hash::FxHashMap::default();
+    let installed = installed_family_name(&mut sh);
+    let Some(installed) = installed else {
+        return;
+    };
+    let stack = FontFamily::stack([FontFamily::from(installed.as_str()), FontFamily::Monospace]);
+    assert_eq!(
+        resolve_cosmic_family(&stack, &mut sh.font_system, &mut cache),
+        Family::Name(installed.as_str())
+    );
+}
+
+// A generic is always resolvable, so it wins wherever it sits in the chain — including last, after every named preference ahead of it turned out missing.
+#[test]
+fn a_generic_at_the_end_always_wins() {
+    let mut sh = TextShaper::new();
+    let mut cache = rustc_hash::FxHashMap::default();
+    let stack = FontFamily::stack([
+        FontFamily::from("Also Not Installed Anywhere 4471"),
+        FontFamily::from("Nor This One Either 5582"),
+        FontFamily::Serif,
+    ]);
+    assert_eq!(
+        resolve_cosmic_family(&stack, &mut sh.font_system, &mut cache),
+        Family::Serif
+    );
+}
+
+// The whole point of caching by name: a chain shaped many times over must query the database once per distinct name in it, not once per shape.
+#[test]
+fn a_missing_names_availability_is_cached_after_the_first_query() {
+    let mut sh = TextShaper::new();
+    let mut cache = rustc_hash::FxHashMap::default();
+    let missing: std::sync::Arc<str> = "Still Not Installed Anywhere 6693".into();
+    assert!(!family_exists(
+        &FontFamily::Named(missing.clone()),
+        &mut sh.font_system,
+        &mut cache
+    ));
+    assert_eq!(
+        cache.len(),
+        1,
+        "the query must be recorded under the name it asked about"
+    );
+    assert!(!family_exists(
+        &FontFamily::Named(missing),
+        &mut sh.font_system,
+        &mut cache
+    ));
+    assert_eq!(
+        cache.len(),
+        1,
+        "a second lookup of the same name must be answered from the cache, not a second query"
+    );
+}
+
+/// The first family name the loaded font database actually indexes a face under, or `None` on a host with nothing installed — the same escape hatch `a_named_family_shapes_in_that_face` uses below, for a test that needs a real, existing face rather than two of them.
+fn installed_family_name(sh: &mut TextShaper) -> Option<String> {
+    sh.font_system
+        .db()
+        .faces()
+        .find_map(|face| face.families.first().map(|(name, _)| name.clone()))
+}
 
 // Text positions are logical, so a multi-line block must occupy the same vertical extent at any scale factor. cosmic-text's `physical` adds the y-offset unscaled, which collapsed every line onto the first.
 #[test]
@@ -61,7 +176,14 @@ fn max_lines_cuts_the_shaped_lines_and_ellipsis_marks_the_cut() {
     };
     let base = TextStyle::new(16.0, Color::BLACK);
     let shaped = |sh: &mut TextShaper, style: &TextStyle| {
-        make_buffer(&mut sh.font_system, text, None, rect, style)
+        make_buffer(
+            &mut sh.font_system,
+            &mut sh.family_availability,
+            text,
+            None,
+            rect,
+            style,
+        )
     };
 
     if shaped(&mut sh, &base).layout_runs().count() <= 2 {
@@ -103,7 +225,14 @@ fn a_clamp_that_cuts_a_later_paragraph_keeps_every_earlier_paragraph_whole() {
     };
     let base = TextStyle::new(16.0, Color::BLACK);
 
-    let unclamped = make_buffer(&mut sh.font_system, &text, None, rect, &base);
+    let unclamped = make_buffer(
+        &mut sh.font_system,
+        &mut sh.family_availability,
+        &text,
+        None,
+        rect,
+        &base,
+    );
     let first_runs = unclamped
         .layout_runs()
         .filter(|run| run.line_i == 0)
@@ -116,6 +245,7 @@ fn a_clamp_that_cuts_a_later_paragraph_keeps_every_earlier_paragraph_whole() {
     for ellipsis in [false, true] {
         let clamped = make_buffer(
             &mut sh.font_system,
+            &mut sh.family_availability,
             &text,
             None,
             rect,
@@ -230,7 +360,14 @@ fn pixel_raster_collapses_the_subpixel_bins_smooth_keeps() {
         height: 40.0,
     };
     let style = TextStyle::new(16.0, Color::WHITE);
-    let buffer = make_buffer(&mut sh.font_system, "Hi", None, rect, &style);
+    let buffer = make_buffer(
+        &mut sh.font_system,
+        &mut sh.family_availability,
+        "Hi",
+        None,
+        rect,
+        &style,
+    );
     let Some(glyph) = buffer
         .layout_runs()
         .flat_map(|run| run.glyphs.iter())
@@ -263,11 +400,18 @@ fn pixel_raster_shapes_under_its_own_cache_key() {
     };
     let base = TextStyle::new(16.0, Color::WHITE);
     let flags = |style: &TextStyle, sh: &mut TextShaper| {
-        make_buffer(&mut sh.font_system, "Hi", None, rect, style)
-            .layout_runs()
-            .flat_map(|run| run.glyphs.iter())
-            .next()
-            .map(|glyph| glyph.cache_key_flags)
+        make_buffer(
+            &mut sh.font_system,
+            &mut sh.family_availability,
+            "Hi",
+            None,
+            rect,
+            style,
+        )
+        .layout_runs()
+        .flat_map(|run| run.glyphs.iter())
+        .next()
+        .map(|glyph| glyph.cache_key_flags)
     };
     let Some(smooth) = flags(&base, &mut sh) else {
         return;
@@ -510,7 +654,14 @@ fn a_named_family_shapes_in_that_face() {
     };
     let face_of = |sh: &mut TextShaper, family: &str| {
         let style = TextStyle::new(16.0, Color::BLACK).with_font_family(family);
-        let buffer = make_buffer(&mut sh.font_system, "Ag", None, rect, &style);
+        let buffer = make_buffer(
+            &mut sh.font_system,
+            &mut sh.family_availability,
+            "Ag",
+            None,
+            rect,
+            &style,
+        );
         buffer
             .layout_runs()
             .next()
@@ -537,7 +688,14 @@ fn a_clamped_paragraph_is_elided_whether_or_not_it_has_spans() {
     let base = TextStyle::new(16.0, Color::BLACK).with_clamp(2, true);
     let spans = [Span::new(0..5, Declared::default().with_font_weight(700))];
 
-    let plain = make_buffer(&mut sh.font_system, text, None, rect, &base);
+    let plain = make_buffer(
+        &mut sh.font_system,
+        &mut sh.family_availability,
+        text,
+        None,
+        rect,
+        &base,
+    );
     if plain.layout_runs().count() < 2 {
         return;
     }
@@ -546,7 +704,14 @@ fn a_clamped_paragraph_is_elided_whether_or_not_it_has_spans() {
         return;
     }
 
-    let spanned = make_buffer(&mut sh.font_system, text, Some(&spans), rect, &base);
+    let spanned = make_buffer(
+        &mut sh.font_system,
+        &mut sh.family_availability,
+        text,
+        Some(&spans),
+        rect,
+        &base,
+    );
     assert_eq!(
         spanned.layout_runs().count(),
         2,
@@ -572,7 +737,14 @@ fn a_span_restyles_only_its_own_range() {
     let style = TextStyle::new(16.0, Color::BLACK);
     let text = "aaa bbb";
     let spans = [Span::new(4..7, Declared::default().with_font_weight(900))];
-    let buffer = make_buffer(&mut sh.font_system, text, Some(&spans), rect, &style);
+    let buffer = make_buffer(
+        &mut sh.font_system,
+        &mut sh.family_availability,
+        text,
+        Some(&spans),
+        rect,
+        &style,
+    );
     let weights: Vec<(usize, u16)> = buffer
         .layout_runs()
         .flat_map(|run| run.glyphs.iter().map(|g| (g.start, g.font_weight.0)))
