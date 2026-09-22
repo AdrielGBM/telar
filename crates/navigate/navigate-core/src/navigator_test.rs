@@ -1,10 +1,30 @@
 use super::*;
+use crate::location::Location;
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 enum Route {
     Home,
     Settings,
     Detail,
+}
+
+impl crate::route::Route for Route {
+    fn to_location(&self) -> Location {
+        match self {
+            Route::Home => Location::root(),
+            Route::Settings => Location::root().segment("settings"),
+            Route::Detail => Location::root().segment("detail"),
+        }
+    }
+
+    fn from_location(location: &Location) -> Option<Self> {
+        match location.segments() {
+            [] => Some(Route::Home),
+            [s] if s == "settings" => Some(Route::Settings),
+            [s] if s == "detail" => Some(Route::Detail),
+            _ => None,
+        }
+    }
 }
 
 #[test]
@@ -112,6 +132,29 @@ fn from_signal_seeds_an_empty_stack_with_the_root() {
     assert_eq!(nav.current(), Route::Home);
     assert_eq!(nav.depth(), 1);
     assert!(!nav.can_pop(), "a signal-seeded stack starts at its root");
+}
+
+#[test]
+fn location_reads_the_current_page_as_a_location() {
+    let nav = Navigator::new(Route::Home);
+    assert_eq!(nav.location(), Location::root());
+    nav.push(Route::Settings);
+    assert_eq!(nav.location(), Location::root().segment("settings"));
+}
+
+#[test]
+fn locations_reads_the_whole_stack_root_first() {
+    let nav = Navigator::new(Route::Home);
+    nav.push(Route::Settings);
+    nav.push(Route::Detail);
+    assert_eq!(
+        nav.locations(),
+        vec![
+            Location::root(),
+            Location::root().segment("settings"),
+            Location::root().segment("detail"),
+        ]
+    );
 }
 
 #[test]

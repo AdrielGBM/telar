@@ -2,6 +2,9 @@
 
 use reactive_core::{RwSignal, signal};
 
+use crate::location::Location;
+use crate::route::Route;
+
 /// A reactive navigation stack over an app-defined route type `R` (typically a small `Clone + Eq` enum).
 ///
 /// The stack is never empty: the root route stays at the bottom, so [`current`](Self::current) always yields a page and [`pop`](Self::pop) is a no-op at the root. Reads ([`current`](Self::current), [`depth`](Self::depth), [`can_pop`](Self::can_pop), [`with_stack`](Self::with_stack)) subscribe the caller, so a widget that renders `nav.current()` re-renders on every navigation. Cheap to clone — the inner `RwSignal` is refcounted — and shared between the shell that reads it and the controls that push/pop it, exactly like the app-state signals threaded through a GUI.
@@ -109,6 +112,20 @@ impl<R: Clone + 'static> Navigator<R> {
     /// The backing signal, for callers that need to observe or drive the stack directly.
     pub fn signal(&self) -> RwSignal<Vec<R>> {
         self.stack
+    }
+}
+
+impl<R: Route + 'static> Navigator<R> {
+    /// Reactive read of the current page's location — the address a [`LocationSource`](crate) adapter
+    /// pushes or replaces to the platform.
+    pub fn location(&self) -> Location {
+        self.current().to_location()
+    }
+
+    /// Reactive read of the whole stack as locations, root-first — what a target restores its native
+    /// history from (a browser's session history, a desktop deep-link stack).
+    pub fn locations(&self) -> Vec<Location> {
+        self.with_stack(|s| s.iter().map(Route::to_location).collect())
     }
 }
 

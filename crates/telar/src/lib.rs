@@ -245,7 +245,8 @@ pub fn reset_layout_runtime() {
 
 #[cfg(feature = "navigate")]
 pub use navigate_core::{
-    NavHost, NavPage, NavTransition, Navigator, PagePolicy, SimplePage, TabHost, TabStacks,
+    Location, NavHost, NavPage, NavTransition, Navigator, PagePolicy, Route, SimplePage, TabHost,
+    TabStacks,
 };
 
 #[cfg(feature = "components-advanced")]
