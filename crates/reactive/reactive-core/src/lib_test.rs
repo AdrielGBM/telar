@@ -336,3 +336,19 @@ fn disposing_a_signal_whose_value_touches_the_runtime_does_not_double_borrow() {
     let after = signal(5i32);
     assert_eq!(after.get(), 5);
 }
+
+#[test]
+fn a_memo_whose_value_did_not_change_wakes_nobody() {
+    let n = signal(1i32);
+    let read = n.read_only();
+    let parity = memo(move || read.get() % 2);
+    let runs = Rc::new(RefCell::new(0usize));
+    let r = runs.clone();
+    let _e = effect(move || {
+        parity.get();
+        *r.borrow_mut() += 1;
+    });
+    n.set(3);
+    n.set(5);
+    assert_eq!(*runs.borrow(), 1);
+}

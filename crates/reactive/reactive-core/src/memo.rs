@@ -109,7 +109,8 @@ pub fn memo<T: PartialEq + 'static>(f: impl Fn() -> T + 'static) -> Memo<T> {
         let Some(inner) = weak.upgrade() else {
             return;
         };
-        inner.borrow_mut().state = MemoState::Computing;
+        // The previous value is held aside rather than overwritten: it is what the new one is compared against, and marking the state `Computing` in place threw it away, so every recompute notified onward whether or not anything changed.
+        let previous = std::mem::replace(&mut inner.borrow_mut().state, MemoState::Computing);
         let new_value = match catch_unwind(AssertUnwindSafe(&f)) {
             Ok(value) => value,
             Err(payload) => {
@@ -119,7 +120,7 @@ pub fn memo<T: PartialEq + 'static>(f: impl Fn() -> T + 'static) -> Memo<T> {
         };
         let subs: SmallVec<[EffectId; 8]> = {
             let mut memo = inner.borrow_mut();
-            let changed = match &memo.state {
+            let changed = match &previous {
                 MemoState::Clean(old) => old != &new_value,
                 _ => true,
             };
