@@ -5,9 +5,8 @@
 *.jks
 .env
 
-/docs/*
-!/docs/build-tuning.md
-!/docs/targets.md
+/docs/ui-frameworks/
+/docs/static-assets.md
 /librust_out.*
 
 .direnv/
