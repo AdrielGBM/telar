@@ -45,6 +45,14 @@ cargo telar dev
 
 That is the whole of the setup. `cargo telar new` writes the manifest, the build profiles, a theme, an app root and one `.rsx` component, with **one target already named** — there is nothing to wire up and no feature list to read first.
 
+Already have a directory — a fresh `git init`, a Nix flake, a README you wrote first? `cargo telar init` writes the same files into it in place. It never overwrites anything: a name it would itself write that already exists is a conflict, and it refuses the whole write and lists every one rather than touching any of them (an existing `Cargo.toml` included — merge one by hand, or start from an empty directory instead).
+
+```sh
+cargo telar init            # scaffolds the current directory
+cargo telar init my-app     # or a path, same as `new`
+cargo telar init --target web --renderer dom   # dom | canvas | auto, browser only
+```
+
 <details>
 <summary>What it writes, for adding Telar to a project you already have</summary>
 

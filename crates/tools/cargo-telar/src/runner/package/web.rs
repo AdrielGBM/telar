@@ -5,7 +5,9 @@ use std::process::Command;
 
 use super::{dist_dir, tool_missing};
 use crate::runner::cli::{Target, WebRenderer};
-use crate::runner::config::{TelarSection, resolve_package, split_android_flag};
+use crate::runner::config::{
+    TelarSection, WEB_PROFILE_TOML, has_web_profile, resolve_package, split_android_flag,
+};
 
 /// The name `wasm-bindgen` gives its output, and what the generated page imports.
 const BUNDLE: &str = "app";
@@ -45,6 +47,15 @@ pub(crate) fn build_web_bundle(
 ) -> Result<PathBuf, String> {
     let (_android, rest) = split_android_flag(cargo_args);
     let resolved = resolve_package(&rest);
+
+    // Checked before cargo ever runs: `--profile web` below would otherwise fail with cargo's own "profile
+    // `web` is not defined" error, which names neither the file to fix nor what to put in it.
+    if release && !has_web_profile(&resolved.workspace_root) {
+        return Err(format!(
+            "this project's Cargo.toml has no `[profile.web]`, which a release web build needs (`cargo telar build --target web` passes `--profile web`). Add this to {}:\n\n{WEB_PROFILE_TOML}",
+            resolved.workspace_root.join("Cargo.toml").display(),
+        ));
+    }
 
     let mut build_args = vec![
         "build".to_string(),

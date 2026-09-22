@@ -1,25 +1,30 @@
-//! `cargo telar new`: writing a project that already names one target.
+//! `cargo telar new` and `cargo telar init`: writing a project that already names one target.
+//!
+//! Both write the same files (`scaffold_files`); they differ only in what they consider a conflict.
+//! `new` wants an empty destination and refuses the whole directory otherwise, matching the workspace
+//! convention that it creates a place rather than moving into one. `init` is for a place that already
+//! exists for another reason (a fresh `git init`, a Nix flake already checked in) — it writes into
+//! whatever is there and refuses only the specific names it would itself have to overwrite, listing
+//! every one so nothing is ever silently replaced. Neither ever touches a file this scaffold does not
+//! itself own: an existing `Cargo.toml` is exactly such a conflict, refused for the same reason as any
+//! other file in the list, since merging one honestly is a job for `cargo add`, not for this command.
 
 use std::fs;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
-use crate::runner::cli::{NewArgs, Target};
+use crate::runner::cli::{InitArgs, NewArgs, Target, WebRenderer};
+use crate::runner::config::WEB_PROFILE_TOML;
 
 const TELAR_VERSION: &str = env!("CARGO_PKG_VERSION");
 
 pub(crate) fn run_new_cmd(args: NewArgs) {
-    let NewArgs { path, name, target } = args;
-    let crate_name = match name.or_else(|| {
-        path.file_name()
-            .and_then(|n| n.to_str())
-            .map(|segment| segment.to_string())
-    }) {
-        Some(name) => name,
-        None => fail(&format!(
-            "cannot derive a package name from `{}` — pass --name",
-            path.display()
-        )),
-    };
+    let NewArgs {
+        path,
+        name,
+        target,
+        renderer,
+    } = args;
+    let crate_name = derive_crate_name(&path, name);
     if let Err(msg) = validate_name(&crate_name) {
         fail(&msg);
     }
@@ -34,27 +39,94 @@ pub(crate) fn run_new_cmd(args: NewArgs) {
         ));
     }
 
+    let files = scaffold_files(&crate_name, target, renderer);
+    write_all(&path, &files);
+    finish(&path, &crate_name, target, renderer);
+}
+
+pub(crate) fn run_init_cmd(args: InitArgs) {
+    let InitArgs {
+        path,
+        name,
+        target,
+        renderer,
+    } = args;
+    let path = path.unwrap_or_else(|| PathBuf::from("."));
+    let crate_name = derive_crate_name(&path, name);
+    if let Err(msg) = validate_name(&crate_name) {
+        fail(&msg);
+    }
+
+    let files = scaffold_files(&crate_name, target, renderer);
+    let conflicts = conflicts_in(&path, &files);
+    if !conflicts.is_empty() {
+        fail(&format!(
+            "`{}` already has files this scaffold would write, so nothing was written:\n{}\n\nRemove or rename them first — `init` never overwrites an existing file.",
+            path.display(),
+            conflicts
+                .iter()
+                .map(|rel| format!("  {rel}"))
+                .collect::<Vec<_>>()
+                .join("\n")
+        ));
+    }
+
+    write_all(&path, &files);
+    finish(&path, &crate_name, target, renderer);
+}
+
+/// The files `new` and `init` both write, differing only in the target (and, for the web, the renderer)
+/// baked into the manifest.
+fn scaffold_files(
+    crate_name: &str,
+    target: Target,
+    renderer: Option<WebRenderer>,
+) -> Vec<(&'static str, String)> {
     let module = crate_name.replace('-', "_");
-    for (rel, contents) in [
-        ("Cargo.toml", manifest(&crate_name, target)),
-        ("telar.toml", config(&crate_name, target)),
+    vec![
+        ("Cargo.toml", manifest(crate_name, target, renderer)),
+        ("telar.toml", config(crate_name, target)),
         (".gitignore", "/target\n/.telar\n".to_string()),
         ("src/main.rs", main_rs(&module)),
         ("src/lib.rs", LIB_RS.to_string()),
         ("src/app.rs", APP_RS.to_string()),
         ("src/theme.rs", THEME_RS.to_string()),
         ("src/home.rsx", HOME_RSX.to_string()),
-    ] {
-        write(&path, rel, &contents);
-    }
+    ]
+}
 
+/// Which of `files` already exist under `root` — what `init` refuses to overwrite. A pure query so the
+/// conflict list can be tested without going through the process-exiting command itself.
+fn conflicts_in<'a>(root: &Path, files: &[(&'a str, String)]) -> Vec<&'a str> {
+    files
+        .iter()
+        .map(|(rel, _)| *rel)
+        .filter(|rel| root.join(rel).exists())
+        .collect()
+}
+
+fn write_all(root: &Path, files: &[(&str, String)]) {
+    for (rel, contents) in files {
+        write(root, rel, contents);
+    }
+}
+
+/// Transpiles the freshly written project and prints the closing instructions. Shared by `new` and `init`
+/// since both leave a project in the same state once their files are on disk.
+fn finish(path: &Path, crate_name: &str, target: Target, renderer: Option<WebRenderer>) {
     // Left transpiled so the project checks out of the box: opened in an editor before its first `cargo telar` command it would otherwise greet its author with the error naming one. No `cargo metadata` to resolve a version against — nothing is fetched yet, and the manifest just written pins this binary's own.
     let producer = format!("cargo-telar {TELAR_VERSION}");
-    super::transpile::transpile_member(&path, &producer, TELAR_VERSION);
+    super::transpile::transpile_member(path, &producer, TELAR_VERSION);
 
-    let dev = match target {
-        Target::Desktop => "cargo telar dev".to_string(),
-        other => format!("cargo telar dev --target {}", target_name(other)),
+    let dev = match (target, renderer) {
+        (Target::Desktop, _) => "cargo telar dev".to_string(),
+        (Target::Web, Some(renderer)) => {
+            format!(
+                "cargo telar dev --target web --renderer {}",
+                renderer.as_str()
+            )
+        }
+        (other, _) => format!("cargo telar dev --target {}", target_name(other)),
     };
     println!("Created `{crate_name}` at {}", path.display());
     println!();
@@ -64,6 +136,33 @@ pub(crate) fn run_new_cmd(args: NewArgs) {
     println!(
         "Other targets are one word each: `default = [\"…\"]` in Cargo.toml, or `--target` on the command line."
     );
+}
+
+/// The package name a project starts with: the flag when one was passed, otherwise the destination
+/// directory's own name — resolved against the current directory first when the destination is `.`,
+/// since a bare dot has no name of its own to read.
+fn derive_crate_name(path: &Path, name: Option<String>) -> String {
+    name.or_else(|| name_from_path(path, || std::env::current_dir().ok()))
+        .unwrap_or_else(|| {
+            fail(&format!(
+                "cannot derive a package name from `{}` — pass --name",
+                path.display()
+            ))
+        })
+}
+
+/// `derive_crate_name`'s pure half: `cwd` is a lookup rather than a direct call so tests can hand it a
+/// fixed directory instead of touching the process's real one.
+fn name_from_path(path: &Path, cwd: impl FnOnce() -> Option<PathBuf>) -> Option<String> {
+    let effective = if path.as_os_str() == std::ffi::OsStr::new(".") {
+        cwd().unwrap_or_else(|| path.to_path_buf())
+    } else {
+        path.to_path_buf()
+    };
+    effective
+        .file_name()
+        .and_then(|n| n.to_str())
+        .map(|segment| segment.to_string())
 }
 
 fn write(root: &Path, rel: &str, contents: &str) {
@@ -110,9 +209,15 @@ fn target_name(target: Target) -> &'static str {
     }
 }
 
-fn manifest(name: &str, target: Target) -> String {
-    let target = target_name(target);
+fn manifest(name: &str, target: Target, renderer: Option<WebRenderer>) -> String {
+    // `Target::feature` is what tells `web-dom` and `web` apart; every other target names the same word either way.
+    let default_feature = target.feature(renderer);
     let tooling = super::config::tooling_feature_entry();
+    // A module crosses a network before it runs an instruction, which `[profile.release]` was never tuned for — `cargo telar build --target web` passes `--profile web` and needs the entry to exist (see docs/build-tuning.md).
+    let web_profile = match target {
+        Target::Web => format!("\n{WEB_PROFILE_TOML}"),
+        _ => String::new(),
+    };
     format!(
         r#"[package]
 name = "{name}"
@@ -136,12 +241,13 @@ telar = {{ version = "{TELAR_VERSION}", default-features = false, features = [
 ] }}
 
 [features]
-# The target this project builds for. Each of the four below is complete on its own — swapping one word
-# here, or passing `--target` on the command line, is the whole of the change.
-default = ["{target}"]
+# The target this project builds for. Each one is complete on its own — swapping one word here, or
+# passing `--target` (and, for the browser, `--renderer`) on the command line, is the whole of the change.
+default = ["{default_feature}"]
 desktop = ["telar/desktop"]
 tui = ["telar/tui"]
 web = ["telar/web"]
+web-dom = ["telar/web-dom"]
 android = ["telar/android"]
 # Never turned on by a build: `cargo telar` names these on the command line for its own commands, and this entry is what lets Cargo.lock pin what they bring in.
 {tooling}
@@ -163,7 +269,7 @@ opt-level = 3
 lto = "fat"
 codegen-units = 1
 strip = "symbols"
-"#
+{web_profile}"#
     )
 }
 

@@ -259,6 +259,16 @@ impl ResolvedPackage {
                 .any(|frontend| self.default_names(frontend))
     }
 
+    /// Whether this package can be built for the browser at all — its `default` names one of the two web
+    /// frontends, or it declares a feature for one that a `--target web` build would reach. What decides
+    /// whether `[profile.web]` (see [`WEB_PROFILE_TOML`]) is this project's problem to have.
+    pub(crate) fn targets_web(&self) -> bool {
+        self.features.contains_key("web")
+            || self.features.contains_key("web-dom")
+            || self.default_names("web")
+            || self.default_names("web-dom")
+    }
+
     /// How this package reaches `wanted`, which is the frontend feature a `--target` asked for.
     pub(crate) fn frontend_feature(&self, wanted: &str) -> FrontendFeature {
         if self.default_names(wanted) {
@@ -485,6 +495,28 @@ pub(crate) fn manifest_has_telar(dir: &Path) -> bool {
         .and_then(|m| m.package)
         .and_then(|p| p.metadata)
         .and_then(|m| m.telar)
+        .is_some()
+}
+
+/// The `[profile.web]` entry `cargo telar new`/`init` writes for a web target, and what `doctor` and
+/// `build --target web` point at when a project is missing it. Kept as one string so the three call sites
+/// can never drift apart on what the fix is.
+pub(crate) const WEB_PROFILE_TOML: &str =
+    "[profile.web]\ninherits = \"release\"\nopt-level = \"z\"\npanic = \"abort\"\n";
+
+/// Whether `workspace_root`'s Cargo.toml declares `[profile.web]`. Cargo only reads `[profile.*]` from the
+/// manifest at the root of the build — a workspace root, or a standalone package's own manifest when it
+/// is not part of one — so that is the one file worth checking regardless of which member is building.
+pub(crate) fn has_web_profile(workspace_root: &Path) -> bool {
+    let Ok(content) = std::fs::read_to_string(workspace_root.join("Cargo.toml")) else {
+        return false;
+    };
+    let Ok(value) = toml::from_str::<toml::Value>(&content) else {
+        return false;
+    };
+    value
+        .get("profile")
+        .and_then(|profile| profile.get("web"))
         .is_some()
 }
 

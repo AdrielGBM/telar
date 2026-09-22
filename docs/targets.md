@@ -21,7 +21,9 @@ Counted with `cargo tree -p telar --no-default-features --features "<target>" -e
 so every platform's dependencies are in the figure at once. The spread is the point: a desktop build is
 mostly wgpu and its shader toolchain, and a terminal build links neither.
 
-`cargo telar new --target <name>` writes the manifest for you. Switching later is one word in `Cargo.toml`,
+`cargo telar new --target <name>` writes the manifest for you (`cargo telar init --target <name>` does the
+same into a directory that already exists, refusing only the specific files it would otherwise overwrite).
+Switching later is one word in `Cargo.toml`,
 or `--target` on the command line for a one-off — which builds *that* target and no other: when the package
 declares a feature by that name, the command turns its `default` off and names this one instead, so
 `--target tui` on a project whose default is a window compiles the terminal graph alone. Everything else in
@@ -79,6 +81,7 @@ web-dom = ["telar/web-dom"]
 ```
 
 ```sh
+cargo telar new my-app --target web --renderer dom   # or `init`, into an existing directory
 cargo telar dev --target web              # serves on :8080
 cargo telar build --target web --renderer dom
 ```

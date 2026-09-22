@@ -30,7 +30,7 @@ use config::{TelarSection, load_config, resolve_package};
 use doctor::run_doctor_cmd;
 use fmt::run_fmt_cmd;
 use migrate::run_migrate_cmd;
-use new::run_new_cmd;
+use new::{run_init_cmd, run_new_cmd};
 use package::{build_appimage, build_deb, build_desktop_dir, build_dmg, build_nsis, build_web};
 use transpile::transpile_workspace;
 use watch::{HotLoopOpts, HotMode, run_hot_loop};
@@ -44,6 +44,7 @@ pub fn run(args: Vec<String>) {
     if !matches!(
         command,
         TelarCommand::New(_)
+            | TelarCommand::Init(_)
             | TelarCommand::Doctor
             | TelarCommand::Fmt(_)
             | TelarCommand::Migrate(_)
@@ -55,6 +56,7 @@ pub fn run(args: Vec<String>) {
     }
     match command {
         TelarCommand::New(args) => run_new_cmd(args),
+        TelarCommand::Init(args) => run_init_cmd(args),
         TelarCommand::Dev(args) => run_dev_cmd(args),
         TelarCommand::Preview(args) => run_preview_cmd(args),
         TelarCommand::Build(args) => run_build_cmd(args),

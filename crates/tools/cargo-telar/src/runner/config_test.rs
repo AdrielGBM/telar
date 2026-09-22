@@ -222,3 +222,57 @@ fn the_entry_cargo_telar_new_writes_locks_every_tooling_feature() {
         None
     );
 }
+
+#[test]
+fn targets_web_is_true_for_either_spelling_of_the_browser_frontend() {
+    assert!(resolved(MULTI_TARGET.replace("tui", "web").as_str()).targets_web());
+    let dom = r#"
+[package]
+name = "app"
+[features]
+default = ["desktop"]
+desktop = ["telar/desktop"]
+web-dom = ["telar/web-dom"]
+"#;
+    assert!(resolved(dom).targets_web());
+    assert!(
+        !resolved(MULTI_TARGET).targets_web(),
+        "a desktop/tui project names neither `web` nor `web-dom`"
+    );
+}
+
+fn write_workspace_manifest(dir: &Path, contents: &str) {
+    std::fs::create_dir_all(dir).unwrap();
+    std::fs::write(dir.join("Cargo.toml"), contents).unwrap();
+}
+
+fn temp_dir(name: &str) -> PathBuf {
+    let dir =
+        std::env::temp_dir().join(format!("cargo_telar_config_{name}_{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    dir
+}
+
+#[test]
+fn has_web_profile_reads_the_workspace_root_manifest() {
+    let dir = temp_dir("has_profile");
+    write_workspace_manifest(
+        &dir,
+        "[package]\nname = \"app\"\n\n[profile.web]\ninherits = \"release\"\n",
+    );
+    assert!(has_web_profile(&dir));
+}
+
+#[test]
+fn has_web_profile_is_false_when_the_manifest_names_no_such_profile() {
+    let dir = temp_dir("no_profile");
+    write_workspace_manifest(&dir, "[package]\nname = \"app\"\n\n[profile.release]\n");
+    assert!(!has_web_profile(&dir));
+}
+
+#[test]
+fn has_web_profile_is_false_when_there_is_no_manifest_at_all() {
+    assert!(!has_web_profile(Path::new(
+        "/nonexistent/cargo_telar_test_path"
+    )));
+}

@@ -19,6 +19,8 @@ pub(crate) struct Cli {
 pub(crate) enum TelarCommand {
     /// Create a new project that already names one target
     New(NewArgs),
+    /// Scaffold a Telar project into an existing directory, without overwriting what's already there
+    Init(InitArgs),
     /// Start the app with hot reload (default)
     Dev(DevArgs),
     /// Show all component previews with hot reload
@@ -52,6 +54,26 @@ pub(crate) struct NewArgs {
     /// Target platform the project starts on
     #[arg(long, value_enum, default_value = "desktop")]
     pub(crate) target: Target,
+    /// Which renderer a `--target web` project starts on (`dom` writes `default = ["web-dom"]`)
+    #[arg(long, value_enum)]
+    pub(crate) renderer: Option<WebRenderer>,
+}
+
+/// Same scaffold as `new`, into a directory that may already exist and hold files: only a name this would
+/// itself write is a conflict, never anything else already sitting there.
+#[derive(clap::Args)]
+pub(crate) struct InitArgs {
+    /// Directory to scaffold into; defaults to the current directory, whose name becomes the package name
+    pub(crate) path: Option<std::path::PathBuf>,
+    /// Package name, when it should differ from the directory
+    #[arg(long)]
+    pub(crate) name: Option<String>,
+    /// Target platform the project starts on
+    #[arg(long, value_enum, default_value = "desktop")]
+    pub(crate) target: Target,
+    /// Which renderer a `--target web` project starts on (`dom` writes `default = ["web-dom"]`)
+    #[arg(long, value_enum)]
+    pub(crate) renderer: Option<WebRenderer>,
 }
 
 /// Idempotent by construction: a file already in the new grammar comes out byte-identical, so running it twice is safe and `--check` is how a CI says a project is migrated.

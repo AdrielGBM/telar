@@ -3,7 +3,10 @@
 use std::process::Command;
 
 use super::android::{android_sdk_root, installed_android_platforms, resolve_ndk_root};
-use super::config::{backend_as_str, find_package_dir, load_config, manifest_has_telar};
+use super::config::{
+    WEB_PROFILE_TOML, backend_as_str, find_package_dir, has_web_profile, load_config,
+    manifest_has_telar, resolve_package,
+};
 
 struct Doctor {
     warnings: usize,
@@ -126,6 +129,21 @@ pub(crate) fn run_doctor_cmd() -> ! {
         "config precedence",
         "CLI flags > telar.toml > [package.metadata.telar] > defaults",
     );
+    let resolved = resolve_package(&[]);
+    if resolved.targets_web() {
+        if has_web_profile(&resolved.workspace_root) {
+            doc.ok("[profile.web]", "present");
+        } else {
+            doc.fail(
+                "[profile.web]",
+                &format!(
+                    "missing from {} — a release web build passes `--profile web` and fails without it. Add:\n      {}",
+                    resolved.workspace_root.join("Cargo.toml").display(),
+                    WEB_PROFILE_TOML.trim_end().replace('\n', "\n      ")
+                ),
+            );
+        }
+    }
 
     doc.section("Desktop");
     let backend = config
