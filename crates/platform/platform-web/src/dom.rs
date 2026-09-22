@@ -57,12 +57,3 @@ fn query_value(name: &str) -> Option<String> {
             _ => None,
         })
 }
-
-/// Whether the user's system asks for a dark interface.
-pub fn prefers_dark() -> Option<bool> {
-    window()
-        .match_media("(prefers-color-scheme: dark)")
-        .ok()
-        .flatten()
-        .map(|query| query.matches())
-}

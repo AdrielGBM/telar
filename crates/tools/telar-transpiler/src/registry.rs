@@ -349,7 +349,7 @@ pub enum ValueKind {
     Keywords(&'static [(&'static str, &'static str)]),
     /// A closed set of spellings *or* a plain number, for the one axis that is genuinely both: an OpenType weight *is* a number, and the names are the nine steps of it everyone actually writes.
     KeywordsOrNumber(&'static [(&'static str, &'static str)]),
-    /// A number: a literal, a `50%`, or any Rust expression that yields one.
+    /// A number: a literal, a `50%`, a fraction of the surface on a length (`50sw`, `50sh`, `50smin`, `50smax`), or any Rust expression that yields one.
     Number,
     /// A yes or a no: the bare key, `true`/`false`, or any Rust expression that yields one. Only the first three are literals — the rest is read, so a style carrying one re-resolves from what it reads.
     Boolean,

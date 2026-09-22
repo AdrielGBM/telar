@@ -6,6 +6,7 @@ pub mod accessibility;
 #[cfg(feature = "async-assets")]
 mod async_asset;
 mod border;
+mod breakpoints;
 mod canvas;
 mod caret;
 mod child_host;
@@ -66,6 +67,7 @@ pub use async_asset::{
     AssetCache, AssetDecoder, AssetError, AssetKey, AssetLoader, AssetState, AssetTransport, Reply,
 };
 pub use border::{logical_border_radius, logical_border_widths};
+pub use breakpoints::{Breakpoints, breakpoint};
 pub use canvas::Canvas;
 pub use child_host::{ChildSlot, fragment, fragment_positional};
 pub use container::Container;
@@ -73,7 +75,8 @@ pub use context::{
     NodeId, absolute_rect, compute_layout, current_direction, live_node_count, mark_dirty,
     new_container, new_leaf, overlay_viewport, relayout_if_dirty, remove_node,
     reset_layout_runtime, set_children, set_direction, set_display, set_min_height,
-    set_overlay_host, track_layout, use_direction,
+    set_overlay_host, set_surface_size, surface_size, track_layout, use_direction,
+    use_surface_height, use_surface_size, use_surface_width,
 };
 pub use cursor::requested_cursor;
 pub use dismiss::{

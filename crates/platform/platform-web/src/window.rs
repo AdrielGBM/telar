@@ -131,10 +131,6 @@ impl Window for WebWindow {
         let _ = self.inner.host.style().set_property("cursor", name);
     }
 
-    fn prefers_dark(&self) -> Option<bool> {
-        dom::prefers_dark()
-    }
-
     /// None: a frame is requested through `requestAnimationFrame`, whose callback belongs to the thread that registered it. The platform installs a process-global waker instead, which reaches the same loop.
     fn redraw_waker(&self) -> Option<std::sync::Arc<dyn Fn() + Send + Sync>> {
         None

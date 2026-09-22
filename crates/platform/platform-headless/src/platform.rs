@@ -5,7 +5,8 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use platform_core::{
-    EventHandler, MultiSurfacePlatform, Platform, PlatformError, SurfaceId, WindowConfig,
+    Event, EventHandler, MultiSurfacePlatform, Platform, PlatformError, SurfaceId,
+    SystemPreferences, Window, WindowConfig,
 };
 
 use crate::window::HeadlessWindow;
@@ -28,10 +29,12 @@ pub struct HeadlessPlatform {
     frames: u32,
     sink: Option<FrameSink>,
     surface_sink: Option<SurfaceFrameSink>,
+    system_preferences: SystemPreferences,
+    resizes: Vec<(u32, u32)>,
 }
 
 impl HeadlessPlatform {
-    /// A `width`×`height` offscreen surface at scale 1.0, one render frame.
+    /// A `width`×`height` offscreen surface at scale 1.0, one render frame, and every system preference unknown.
     pub fn new(width: u32, height: u32) -> Self {
         Self {
             width,
@@ -39,7 +42,21 @@ impl HeadlessPlatform {
             frames: 1,
             sink: None,
             surface_sink: None,
+            system_preferences: SystemPreferences::default(),
+            resizes: Vec::new(),
         }
+    }
+
+    /// The preferences every surface is told the user has, delivered before it first resumes. There is no user here to ask, so a test or a prerender declares them; left alone, every field is unknown.
+    pub fn with_system_preferences(mut self, preferences: SystemPreferences) -> Self {
+        self.system_preferences = preferences;
+        self
+    }
+
+    /// Sizes the window is dragged to, one before each frame in order, delivered as the resize a windowing system would send. The run drives at least one frame per resize. Only the single-surface run follows them.
+    pub fn with_resizes(mut self, sizes: impl IntoIterator<Item = (u32, u32)>) -> Self {
+        self.resizes = sizes.into_iter().collect();
+        self
     }
 
     /// How many render frames to drive. Defaults to 1. Use more to let animations or multi-pass reactive settling converge before the final pixels are captured.
@@ -69,10 +86,16 @@ impl Platform for HeadlessPlatform {
         _config: WindowConfig,
         mut handler: H,
     ) -> Result<(), PlatformError> {
-        let window = HeadlessWindow::with_options(self.width, self.height, 1.0, None);
+        let window = HeadlessWindow::new(self.width, self.height);
 
         // Mirror the winit loop's iteration shape (new_events → dispatch → about_to_wait) so the handler's reactive batching brackets stay balanced exactly as they do under winit.
         handler.new_events();
+        handler.on_event(
+            Event::SystemPreferencesChanged {
+                preferences: self.system_preferences.clone(),
+            },
+            &window,
+        );
         let resumed = handler.on_resume(&window);
         handler.about_to_wait();
         if !resumed {
@@ -81,8 +104,20 @@ impl Platform for HeadlessPlatform {
             ));
         }
 
-        for _ in 0..self.frames.max(1) {
+        let frames = self.frames.max(1).max(self.resizes.len() as u32);
+        for frame in 0..frames {
             handler.new_events();
+            if let Some(&(width, height)) = self.resizes.get(frame as usize) {
+                window.resize(width, height);
+                let scale = window.scale_factor();
+                handler.on_event(
+                    Event::WindowResized {
+                        width: (width as f64 / scale).round() as u32,
+                        height: (height as f64 / scale).round() as u32,
+                    },
+                    &window,
+                );
+            }
             std::thread::sleep(FRAME_BUDGET);
             handler.on_redraw(&window);
             handler.about_to_wait();
@@ -114,6 +149,7 @@ impl MultiSurfacePlatform for HeadlessPlatform {
         // Every surface shares this thread and one reactive runtime. The handler factory gives each its own `Surface` world, activated around every lifecycle call, so they stay isolated without a thread apiece.
         let frames = self.frames.max(1);
         let sink = self.surface_sink.clone();
+        let preferences = self.system_preferences;
 
         // Build every handler and window up front, on this thread.
         let mut states: Vec<(SurfaceId, HeadlessWindow, H)> = Vec::with_capacity(surfaces.len());
@@ -126,6 +162,12 @@ impl MultiSurfacePlatform for HeadlessPlatform {
         states.retain_mut(|(id, window, handler)| {
             handler.new_events();
             let resumed = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                handler.on_event(
+                    Event::SystemPreferencesChanged {
+                        preferences: preferences.clone(),
+                    },
+                    window,
+                );
                 handler.on_resume(window)
             }));
             let _ =
@@ -168,3 +210,7 @@ impl MultiSurfacePlatform for HeadlessPlatform {
         Ok(())
     }
 }
+
+#[cfg(test)]
+#[path = "platform_test.rs"]
+mod tests;

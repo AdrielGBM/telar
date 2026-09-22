@@ -1,6 +1,6 @@
 //! `Surface` — one RSX surface's complete per-surface world.
 //!
-//! A surface (a window, or a Wayland layer-surface) owns a set of thread-local worlds: its layout tree, overlay registry, focus state, input region, force-tick, and window-command queue. Under M3 several surfaces share one UI thread and one reactive runtime, so those worlds are swappable: the runner activates a surface with [`Surface::enter`] around its build/event/frame, and the reactive flush re-enters the surface that owns each effect through the hook this module installs into reactive-core.
+//! A surface (a window, or a Wayland layer-surface) owns a set of thread-local worlds: its layout tree, its size, overlay registry, focus state, input region, force-tick, and window-command queue. Under M3 several surfaces share one UI thread and one reactive runtime, so those worlds are swappable: the runner activates a surface with [`Surface::enter`] around its build/event/frame, and the reactive flush re-enters the surface that owns each effect through the hook this module installs into reactive-core.
 //!
 //! Single-window apps never build a `Surface`: the reactive current-surface stays [`SurfaceHandle::NONE`], every effect captures `NONE`, and `enter` is a no-op — so they run against the ambient thread-local worlds exactly as before, at zero added cost.
 
@@ -8,7 +8,9 @@ use std::cell::{Cell, RefCell};
 use std::collections::HashMap;
 use std::rc::{Rc, Weak};
 
-use layout_reactive::{LayoutContext, LayoutGuard, ParentsContext, ParentsGuard};
+use layout_reactive::{
+    LayoutContext, LayoutGuard, ParentsContext, ParentsGuard, SurfaceSizeContext, SurfaceSizeGuard,
+};
 use platform_core::{WindowCommandContext, WindowCommandGuard};
 use reactive_core::{
     SurfaceEnterGuard, SurfaceHandle, dispose_surface, in_surface_world, set_current_surface,
@@ -28,6 +30,7 @@ pub struct Surface {
     layout: LayoutContext,
     /// Which node hangs from which, swapped with `layout` and never apart from it. Each surface's layout tree mints its node ids from its own counter, so the same `NodeId` names a different node in every surface — one shared map would have them overwrite each other's links, and a climb would leave the surface it started in. It is a separate world only because a measure closure runs inside the layout runtime's borrow and reaching back into it would re-enter.
     parents: ParentsContext,
+    size: SurfaceSizeContext,
     overlay: OverlayContext,
     focus: FocusContext,
     input_region: InputRegionContext,
@@ -49,6 +52,7 @@ impl Surface {
                 handle,
                 layout: LayoutContext::new_owned(),
                 parents: ParentsContext::new_owned(),
+                size: SurfaceSizeContext::new_owned(),
                 overlay: OverlayContext::new_owned(),
                 focus: FocusContext::new_owned(),
                 input_region: InputRegionContext::new_owned(),
@@ -76,6 +80,7 @@ impl Surface {
         SurfaceGuard {
             _layout: self.layout.enter(),
             _parents: self.parents.enter(),
+            _size: self.size.enter(),
             _overlay: self.overlay.enter(),
             _focus: self.focus.enter(),
             _input_region: self.input_region.enter(),
@@ -98,6 +103,7 @@ impl Surface {
         SurfaceGuard {
             _layout: LayoutContext::enter_ambient(),
             _parents: ParentsContext::enter_ambient(),
+            _size: SurfaceSizeContext::enter_ambient(),
             _overlay: OverlayContext::enter_ambient(),
             _focus: FocusContext::enter_ambient(),
             _input_region: InputRegionContext::enter_ambient(),
@@ -128,6 +134,7 @@ impl Drop for Surface {
 pub struct SurfaceGuard {
     _layout: LayoutGuard,
     _parents: ParentsGuard,
+    _size: SurfaceSizeGuard,
     _overlay: OverlayGuard,
     _focus: FocusGuard,
     _input_region: InputRegionGuard,

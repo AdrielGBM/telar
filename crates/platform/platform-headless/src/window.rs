@@ -1,5 +1,6 @@
 //! A window with no window behind it: a size, a scale factor and nothing to present to.
 
+use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::{Arc, Mutex, PoisonError};
 
 use platform_core::{Cursor, Window};
@@ -16,35 +17,34 @@ pub struct HeadlessWindow {
 }
 
 struct Inner {
-    width: u32,
-    height: u32,
+    width: AtomicU32,
+    height: AtomicU32,
     scale_factor: f64,
-    prefers_dark: Option<bool>,
     cursor: Mutex<Cursor>,
 }
 
 impl HeadlessWindow {
-    /// A logical `width`×`height` offscreen surface at scale 1.0 reporting no OS light/dark preference.
+    /// A logical `width`×`height` offscreen surface at scale 1.0.
     pub fn new(width: u32, height: u32) -> Self {
-        Self::with_options(width, height, 1.0, None)
+        Self::with_scale_factor(width, height, 1.0)
     }
 
-    /// Full control over the reported [`Window::scale_factor`] and [`Window::prefers_dark`].
-    pub fn with_options(
-        width: u32,
-        height: u32,
-        scale_factor: f64,
-        prefers_dark: Option<bool>,
-    ) -> Self {
+    /// Full control over the reported [`Window::scale_factor`].
+    pub fn with_scale_factor(width: u32, height: u32, scale_factor: f64) -> Self {
         Self {
             inner: Arc::new(Inner {
-                width,
-                height,
+                width: AtomicU32::new(width),
+                height: AtomicU32::new(height),
                 scale_factor,
-                prefers_dark,
                 cursor: Mutex::new(Cursor::Default),
             }),
         }
+    }
+
+    /// Gives the window a new size, as a user dragging its edge would. Every clone sees it: they are one window.
+    pub fn resize(&self, width: u32, height: u32) {
+        self.inner.width.store(width, Ordering::Relaxed);
+        self.inner.height.store(height, Ordering::Relaxed);
     }
 
     /// The pointer shape last requested through [`Window::set_cursor`], so a test can see what a real window would show.
@@ -75,17 +75,14 @@ impl Window for HeadlessWindow {
     }
 
     fn width(&self) -> u32 {
-        self.inner.width
+        self.inner.width.load(Ordering::Relaxed)
     }
     fn height(&self) -> u32 {
-        self.inner.height
+        self.inner.height.load(Ordering::Relaxed)
     }
     fn request_redraw(&self) {}
     fn scale_factor(&self) -> f64 {
         self.inner.scale_factor
-    }
-    fn prefers_dark(&self) -> Option<bool> {
-        self.inner.prefers_dark
     }
     fn set_cursor(&self, cursor: Cursor) {
         *self

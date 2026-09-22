@@ -3,6 +3,8 @@
 use rustc_hash::{FxHashMap, FxHashSet};
 use taffy::{TaffyTree, TraversePartialTree};
 
+use geometry_core::Size;
+
 use crate::direction::Direction;
 use crate::error::LayoutError;
 use crate::style::{AvailableSpace, LayoutStyle};
@@ -17,6 +19,7 @@ pub type MeasureFn = Box<dyn FnMut(f32) -> (f32, f32)>;
 pub struct LayoutEngine {
     tree: TaffyTree<MeasureFn>,
     direction: Direction,
+    surface: Size,
     /// What every node was asked for, which every path pushing a style to taffy resolves from. See [`current_style`](Self::current_style) for why it is every node and not only those needing it.
     styles: FxHashMap<NodeId, LayoutStyle>,
     /// Every node this engine currently owns. Kept because taffy has no total way to ask: `style()` indexes its slot map and panics on a freed key rather than answering, so there is nothing to guard with. See [`alive`](Self::alive) for why anything asks at all.
@@ -28,6 +31,7 @@ impl LayoutEngine {
         Self {
             tree: TaffyTree::new(),
             direction: Direction::default(),
+            surface: Size::ZERO,
             styles: FxHashMap::default(),
             live: FxHashSet::default(),
         }
@@ -54,6 +58,30 @@ impl LayoutEngine {
         true
     }
 
+    /// The size fractions of the surface currently resolve against.
+    pub fn surface_size(&self) -> Size {
+        self.surface
+    }
+
+    /// Re-resolves every node written as a fraction of the surface against `surface`, returning whether any was. Like [`set_direction`](Self::set_direction) this only rewrites styles, and only those that name the surface: every other node keeps its cached layout.
+    pub fn set_surface_size(&mut self, surface: Size) -> bool {
+        if self.surface == surface {
+            return false;
+        }
+        self.surface = surface;
+        let styles = std::mem::take(&mut self.styles);
+        let mut resolved = false;
+        for (&node, style) in styles
+            .iter()
+            .filter(|(_, style)| style.is_surface_relative())
+        {
+            self.push_style(node, style);
+            resolved = true;
+        }
+        self.styles = styles;
+        resolved
+    }
+
     /// Records the intent this node was built from, which every later push resolves again.
     fn track(&mut self, node: NodeId, style: LayoutStyle) {
         self.live.insert(node);
@@ -74,7 +102,7 @@ impl LayoutEngine {
 
     /// Resolves `style` and pushes it to taffy, placing the leading margin — `resolve` cannot, since that needs the parent's axis to know which physical edge is "leading".
     fn push_style(&mut self, node: NodeId, style: &LayoutStyle) {
-        let mut resolved = style.resolve(self.direction);
+        let mut resolved = style.resolve(self.direction, self.surface);
         if let Some((is_row, px)) = style.logical.leading_margin {
             let leading_right = is_row && self.leads_from_right(node);
             let m = taffy::LengthPercentageAuto::length(px);
@@ -108,7 +136,9 @@ impl LayoutEngine {
     }
 
     pub fn new_leaf(&mut self, style: LayoutStyle) -> Result<NodeId, LayoutError> {
-        let node = self.tree.new_leaf(style.resolve(self.direction))?;
+        let node = self
+            .tree
+            .new_leaf(style.resolve(self.direction, self.surface))?;
         self.track(node, style);
         Ok(node)
     }
@@ -120,7 +150,7 @@ impl LayoutEngine {
     ) -> Result<NodeId, LayoutError> {
         let node = self
             .tree
-            .new_leaf_with_context(style.resolve(self.direction), measure)?;
+            .new_leaf_with_context(style.resolve(self.direction, self.surface), measure)?;
         self.track(node, style);
         Ok(node)
     }
@@ -132,7 +162,7 @@ impl LayoutEngine {
     ) -> Result<NodeId, LayoutError> {
         let node = self
             .tree
-            .new_with_children(style.resolve(self.direction), children)?;
+            .new_with_children(style.resolve(self.direction, self.surface), children)?;
         self.track(node, style);
         Ok(node)
     }
@@ -250,18 +280,12 @@ impl LayoutEngine {
 
     /// Sets the node's width to a definite length, or back to `auto` when `None`.
     pub fn set_width(&mut self, node: NodeId, width: Option<f32>) {
-        self.mutate_style(node, |style| {
-            style.inner.size.width =
-                width.map_or(taffy::Dimension::auto(), taffy::Dimension::length);
-        });
+        self.mutate_style(node, |style| style.set_definite_width(width));
     }
 
     /// Sets the node's height to a definite length, or back to `auto` when `None`.
     pub fn set_height(&mut self, node: NodeId, height: Option<f32>) {
-        self.mutate_style(node, |style| {
-            style.inner.size.height =
-                height.map_or(taffy::Dimension::auto(), taffy::Dimension::length);
-        });
+        self.mutate_style(node, |style| style.set_definite_height(height));
     }
 
     /// Sets the node's minimum height to a definite length, or clears it (`auto`) when `None`. Lets a content-measured leaf (e.g. a code editor's text area) fill a viewport it would otherwise underflow.

@@ -12,10 +12,12 @@ mod dom;
 mod log;
 mod map;
 mod platform;
+mod preferences;
 mod window;
 
 pub use clipboard::WebClipboard;
 pub use dom::{host as host_element, page_setting};
 pub use log::install_console_logging;
 pub use platform::{WebPlatform, WebPlatformConfig};
+pub use preferences::{MediaAnswers, read as read_system_preferences};
 pub use window::{Measured, WebWindow};

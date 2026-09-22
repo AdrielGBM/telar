@@ -87,14 +87,6 @@ impl Window for TuiWindow {
         let _ = write!(out, "\x1b]0;{title}\x07");
         let _ = out.flush();
     }
-
-    /// What `COLORFGBG` says, which is the only light/dark signal a terminal offers without a round trip. Its second field is the background's palette index: the dark half of the 16 colours, plus 8 (grey), means a dark background.
-    fn prefers_dark(&self) -> Option<bool> {
-        let value = std::env::var("COLORFGBG").ok()?;
-        let background = value.rsplit(';').next()?.trim();
-        let index: u8 = background.parse().ok()?;
-        Some(matches!(index, 0..=6 | 8))
-    }
 }
 
 #[cfg(test)]

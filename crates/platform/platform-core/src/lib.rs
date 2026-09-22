@@ -12,6 +12,7 @@ pub mod event_sink;
 #[cfg(feature = "dylib")]
 pub mod guest;
 pub mod loop_waker;
+pub mod system_preferences;
 pub mod window;
 pub mod window_command;
 
@@ -21,6 +22,10 @@ pub use error::PlatformError;
 pub use event::{Event, Key, ModifiersState, NamedKey, PointerButton, PointerSource, ScrollDelta};
 pub use event_sink::{post_event, set_event_sink};
 pub use loop_waker::{loop_waker, set_loop_waker};
+pub use system_preferences::{
+    ColorScheme, SystemPreferences, locales_from_env, posix_locale_to_bcp47,
+    system_locales_from_env,
+};
 pub use window::{
     Cursor, EventHandler, FullscreenMode, MultiSurfacePlatform, Platform, SurfaceId, Window,
     WindowConfig, WindowPosition, window_waker,

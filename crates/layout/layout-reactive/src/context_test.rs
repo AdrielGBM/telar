@@ -958,3 +958,42 @@ fn a_sub_root_under_a_fixed_size_parent_is_laid_out_as_asked() {
         "the fixed-size parent was laid out in place of the root that was asked for"
     );
 }
+
+#[test]
+fn a_resize_relays_out_a_surface_fraction_without_anyone_marking_it() {
+    reset_layout_runtime();
+    crate::set_surface_size(geometry_core::Size::new(1000.0, 800.0));
+    let (half, half_rect) = new_leaf(
+        LayoutStyle::new()
+            .width(SizeDimension::SurfaceWidth(0.5))
+            .height(SizeDimension::SurfaceHeight(0.1)),
+    )
+    .unwrap();
+    let root = new_container(LayoutStyle::new().flex_column(), &[half]).unwrap();
+    compute_layout(
+        root,
+        AvailableSpace::Definite(1000.0),
+        AvailableSpace::Definite(800.0),
+    )
+    .unwrap();
+    assert_eq!(half_rect.get().width, 500.0);
+    assert_eq!(half_rect.get().height, 80.0);
+
+    crate::set_surface_size(geometry_core::Size::new(600.0, 400.0));
+    relayout_if_dirty();
+    assert_eq!(
+        half_rect.get().width,
+        300.0,
+        "the root's space is unchanged, so only the surface can have moved it"
+    );
+    assert_eq!(half_rect.get().height, 40.0);
+}
+
+#[test]
+fn a_document_hears_a_surface_fraction_as_the_pixels_it_resolved_to() {
+    reset_layout_runtime();
+    crate::set_surface_size(geometry_core::Size::new(1000.0, 800.0));
+    let (node, _) = new_leaf(LayoutStyle::new().width(SizeDimension::SurfaceWidth(0.25))).unwrap();
+    let css = declared_css(node).unwrap();
+    assert!(css.as_str().contains("width:250px;"), "{css}");
+}

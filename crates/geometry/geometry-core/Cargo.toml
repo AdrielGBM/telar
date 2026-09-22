@@ -3,7 +3,7 @@ name = "telar-geometry-core"
 version = { workspace = true }
 edition = { workspace = true }
 rust-version = { workspace = true }
-description = "Geometry and color primitives for Telar: points, rects, transforms, border radii and Oklch colors."
+description = "Geometry and color primitives for Telar: points, rects, sizes, transforms, border radii and Oklch colors."
 keywords = ["telar", "geometry", "color", "graphics", "oklch"]
 categories = ["graphics", "mathematics"]
 readme = "README.md"

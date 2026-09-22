@@ -3,7 +3,7 @@ name = "telar-platform-desktop"
 version = { workspace = true }
 edition = { workspace = true }
 rust-version = { workspace = true }
-description = "Desktop platform backend for Telar: winit event loop, system paths and OS color-scheme detection."
+description = "Desktop platform backend for Telar: winit event loop, system paths and OS preference detection."
 keywords = ["telar", "desktop", "platform", "winit", "gui"]
 categories = ["gui", "os"]
 readme = "README.md"
@@ -21,7 +21,7 @@ clipboard = ["dep:arboard"]
 clipboard-wayland = ["clipboard", "arboard/wayland-data-control"]
 # Native file pickers: the XDG portal on Linux, the OS panel elsewhere. The cheapest of the four to drop — a kiosk that opens no files links `rfd` for nothing.
 dialogs = ["dep:rfd"]
-# Linux only, and the one thing winit does not answer there: Windows and macOS report the preference natively and need no feature.
+# Linux only: the freedesktop settings portal, which is where colour scheme, contrast and reduced motion come from there, over `zbus`. Windows and macOS answer through their own system APIs and need no feature.
 system-theme = ["dep:zbus"]
 
 [dependencies]
@@ -48,3 +48,12 @@ winit = { workspace = true, features = [
 
 [target.'cfg(target_os = "linux")'.dependencies]
 zbus = { version = "5.17.0", optional = true }
+
+[target.'cfg(target_os = "windows")'.dependencies]
+windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_Globalization", "Win32_Graphics_Gdi", "Win32_System_LibraryLoader", "Win32_UI_Accessibility", "Win32_UI_WindowsAndMessaging"] }
+
+[target.'cfg(target_os = "macos")'.dependencies]
+block2 = "0.6"
+objc2 = "0.6"
+objc2-app-kit = { version = "0.3", default-features = false, features = ["std", "NSAccessibility", "NSWorkspace"] }
+objc2-foundation = { version = "0.3", default-features = false, features = ["std", "NSArray", "NSEnumerator", "NSLocale", "NSString", "block2", "NSNotification", "NSOperation"] }

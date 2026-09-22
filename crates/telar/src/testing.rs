@@ -6,8 +6,9 @@ use geometry_core::Rect;
 use renderer_core::DrawCommand;
 use ui_core::{Component, ComponentList};
 
-/// Mounts `root` and lays it out against a `width`×`height` window, which is what the runner's first `WindowResized` does — a percent-sized tree resolves to nothing until something hands it a definite space.
+/// Mounts `root` and lays it out against a `width`×`height` window on a surface that size, which is what the runner's first `WindowResized` does — a percent-sized tree resolves to nothing until something hands it a definite space.
 pub fn mount<C: Component + 'static>(root: C, width: u32, height: u32) -> ComponentList {
+    ui_core::set_surface_size(geometry_core::Size::new(width as f32, height as f32));
     let mut tree = ComponentList::new(root);
     tree.on_event(&platform_core::Event::WindowResized { width, height });
     tree

@@ -121,6 +121,7 @@ pub fn try_run_test(entries: Vec<PreviewEntry>, config: AppConfig) -> ! {
         let owner = scope.id();
         let outcome = catch_unwind(AssertUnwindSafe(|| -> Result<usize, LayoutError> {
             crate::reset_layout_runtime();
+            ui_core::set_surface_size(geometry_core::Size::new(width, height));
             let item = (entry.build)()?;
             let node = item.layout_node();
             compute_layout(

@@ -7,6 +7,8 @@ use taffy::{
     FlexWrap, LengthPercentage, LengthPercentageAuto, Position, Style,
 };
 
+use geometry_core::Size;
+
 use crate::direction::Direction;
 use crate::style::LayoutStyle;
 
@@ -42,11 +44,11 @@ impl std::fmt::Display for Css {
 }
 
 impl LayoutStyle {
-    /// This style as CSS declarations, resolved for `direction`.
+    /// This style as CSS declarations, resolved for `direction` on a surface of `surface` size.
     ///
-    /// Resolved rather than logical: the same `resolve` every layout pass runs, so what a browser is told and what Taffy computed came from one function and cannot drift apart in an RTL locale.
-    pub fn to_css(&self, direction: Direction) -> Css {
-        css_of(&self.resolve(direction))
+    /// Resolved rather than logical: the same `resolve` every layout pass runs, so what a browser is told and what Taffy computed came from one function and cannot drift apart in an RTL locale. A fraction of the surface is written as the pixels it resolved to rather than as `vw`/`vh`: the viewport those name is not always the surface (an embedded host, a scrollbar, a mobile toolbar), and pixels are the one spelling guaranteed to agree with Taffy.
+    pub fn to_css(&self, direction: Direction, surface: Size) -> Css {
+        css_of(&self.resolve(direction, surface))
     }
 }
 

@@ -136,6 +136,11 @@ impl TextureUi {
         let surface = Surface::new();
         let (tree, root) = {
             let _g = surface.enter();
+            let logical = scale.max(f32::MIN_POSITIVE);
+            ui_core::set_surface_size(geometry_core::Size::new(
+                width as f32 / logical,
+                height as f32 / logical,
+            ));
             let content = build()?;
             let root = new_container(
                 LayoutStyle::new()
@@ -257,6 +262,7 @@ impl TextureUi {
             self.width as f32 / self.scale,
             self.height as f32 / self.scale,
         );
+        ui_core::set_surface_size(geometry_core::Size::new(w, h));
         let _ = mark_dirty(self.root);
         let _ = compute_layout(
             self.root,

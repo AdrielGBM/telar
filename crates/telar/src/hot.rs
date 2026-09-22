@@ -224,6 +224,29 @@ impl crate::app_runtime::AppRuntime for HotApp {
         }
     }
 
+    // The dylib reads its own copy of the store, so it is written across the boundary; the host's copy is kept too, for the devtools that live on this side. A missing symbol leaves the dylib's preferences unknown until it is rebuilt.
+    fn set_system_preferences(&self, preferences: &platform_core::SystemPreferences) {
+        crate::system_preferences::set_system_preferences(preferences.clone());
+        if let Ok(set) = unsafe {
+            self._lib
+                .get::<unsafe extern "Rust" fn(&platform_core::SystemPreferences)>(
+                    b"_rsx_hot_set_system_preferences\0",
+                )
+        } {
+            unsafe { set(preferences) }
+        }
+    }
+
+    // The dylib lays out and reads against its own copy of the size, so it is written across the boundary. A missing symbol leaves the dylib's surface at zero until it is rebuilt, which only surface fractions and breakpoints notice.
+    fn set_surface_size(&self, size: geometry_core::Size) {
+        if let Ok(set) = unsafe {
+            self._lib
+                .get::<unsafe extern "Rust" fn(f32, f32)>(b"_rsx_hot_set_surface_size\0")
+        } {
+            unsafe { set(size.width, size.height) }
+        }
+    }
+
     // `spawn_task` registered their callbacks in the dylib's own reactive-core thread-local, so the host must drain it across this boundary; its own copy is empty. A missing symbol degrades to a no-op.
     fn drain_tasks(&self) {
         if let Ok(drain) = unsafe {

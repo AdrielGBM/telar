@@ -10,6 +10,10 @@ pub mod fonts;
 mod paths;
 #[cfg(target_os = "android")]
 pub mod platform;
+#[cfg(any(test, target_os = "android"))]
+mod preference_values;
+#[cfg(target_os = "android")]
+mod preferences;
 #[cfg(target_os = "android")]
 mod sys_prop;
 

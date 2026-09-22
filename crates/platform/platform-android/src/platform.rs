@@ -1,7 +1,9 @@
 //! The Android event loop: choreographer-paced frames, and the surface lifecycle an activity puts them through.
 
 use android_activity::AndroidApp;
-use platform_core::{Event, EventHandler, Platform, PlatformError, Window, WindowConfig};
+use platform_core::{
+    Event, EventHandler, Platform, PlatformError, SystemPreferences, Window, WindowConfig,
+};
 
 // `ANativeWindow_setFrameRate` is API 30+ and may live in libnativewindow.so on some OEM devices, so it is resolved at runtime to avoid a hard dlopen failure where the NDK stub does not match the runtime library.
 #[cfg(target_os = "android")]
@@ -154,25 +156,12 @@ use platform_winit::{SurfaceIntent, TouchDrag, WinitWindow as AndroidWindow, map
 /// The Android event loop, driven by `android-activity` and paced by the choreographer.
 pub struct AndroidPlatform {
     event_loop: EventLoop<()>,
-    // winit's `theme()` is always `None` on Android and the `Window` never sees the activity's configuration, so the OS light/dark preference has to be read from here — the same role the freedesktop portal plays on Linux.
+    // winit's `theme()` is always `None` on Android and the `Window` never sees the activity's configuration, so the system preferences have to be read from here.
     app: AndroidApp,
 }
 
-/// How often the OS light/dark preference is re-read. A theme flip is a human action, so half a second reads as instant, and it keeps a config copy out of every frame.
-const THEME_POLL_INTERVAL: std::time::Duration = std::time::Duration::from_millis(500);
-
-/// The OS light/dark preference, or `None` when the device expresses no opinion.
-///
-/// Read from the **asset manager**, not from `AndroidApp::config()`. That cached `ConfigurationRef` is only refreshed when android-activity receives NativeActivity's `onConfigurationChanged`, and that callback does not always arrive: on a Redmi/HyperOS device the system applied `night` to the activity — visible in `dumpsys activity activities` as `mLastReportedConfigurations` — while the cached config stayed on the value it had at launch for as long as the process lived. The asset manager tracks the change either way, and it is the same source the glue itself copies from when the callback does fire.
-fn prefers_dark(app: &AndroidApp) -> Option<bool> {
-    // Through android-activity's own re-export rather than a direct `ndk` dependency, so the types can never be a different version of the ones it uses internally.
-    use android_activity::ndk::configuration::{Configuration, UiModeNight};
-    match Configuration::from_asset_manager(&app.asset_manager()).ui_mode_night() {
-        UiModeNight::Yes => Some(true),
-        UiModeNight::No => Some(false),
-        _ => None,
-    }
-}
+/// How often the system preferences are re-read. Changing one is a human action, so half a second reads as instant, and it keeps the reads out of every frame.
+const PREFERENCES_POLL_INTERVAL: std::time::Duration = std::time::Duration::from_millis(500);
 
 impl AndroidPlatform {
     pub fn try_new(app: AndroidApp) -> Result<Self, PlatformError> {
@@ -201,33 +190,41 @@ struct AndroidRunner<H: EventHandler<AndroidWindow>> {
     // Last position of an active touch finger, used to emit Scrolled deltas from drag gestures.
     touch: TouchDrag,
     app: AndroidApp,
-    // The preference last reported to the app, so a poll only produces an event when it actually changed.
-    last_dark: Option<bool>,
-    last_theme_poll: Option<std::time::Instant>,
+    // The snapshot last reported to the app, so a poll only produces an event when something actually changed.
+    preferences: Option<SystemPreferences>,
+    last_preferences_poll: Option<std::time::Instant>,
     #[cfg(target_os = "android")]
     choreographer: Option<choreographer::Choreographer>,
     #[cfg(target_os = "android")]
     is_animation_pending: std::sync::Arc<std::sync::atomic::AtomicBool>,
 }
 
+impl<H: EventHandler<AndroidWindow>> AndroidRunner<H> {
+    fn reread_preferences(&mut self) {
+        self.last_preferences_poll = Some(std::time::Instant::now());
+        // Suspended means nothing to tell, and `resumed` reads and reports afresh.
+        let Some(window) = self.window.clone() else {
+            return;
+        };
+        let preferences = crate::preferences::read(&self.app);
+        if self.preferences.as_ref() == Some(&preferences) {
+            return;
+        }
+        self.preferences = Some(preferences.clone());
+        self.handler
+            .on_event(Event::SystemPreferencesChanged { preferences }, &window);
+    }
+}
+
 impl<H: EventHandler<AndroidWindow>> ApplicationHandler<()> for AndroidRunner<H> {
     fn new_events(&mut self, _event_loop: &ActiveEventLoop, _cause: StartCause) {
         self.handler.new_events();
-        // Polled rather than pushed: the notification this would hang off is the very thing that does not arrive. Done here so the event lands inside the batch `new_events` just opened, like a real input event.
+        // Polled rather than pushed: `onConfigurationChanged` is the very notification that does not always arrive, and the settings providers send none to native code. Done here so the event lands inside the batch `new_events` just opened, like a real input event.
         if self
-            .last_theme_poll
-            .is_none_or(|at| at.elapsed() >= THEME_POLL_INTERVAL)
+            .last_preferences_poll
+            .is_none_or(|at| at.elapsed() >= PREFERENCES_POLL_INTERVAL)
         {
-            self.last_theme_poll = Some(std::time::Instant::now());
-            let dark = prefers_dark(&self.app);
-            if dark != self.last_dark {
-                self.last_dark = dark;
-                // No window yet (or suspended) means nothing to tell: `resumed` re-reads and reports.
-                if let (Some(dark), Some(window)) = (dark, self.window.clone()) {
-                    self.handler
-                        .on_event(Event::ColorSchemeChanged { dark }, &window);
-                }
-            }
+            self.reread_preferences();
         }
     }
 
@@ -293,13 +290,11 @@ impl<H: EventHandler<AndroidWindow>> ApplicationHandler<()> for AndroidRunner<H>
                     }
                 }
                 let window = AndroidWindow(Arc::new(w));
-                // Before the tree mounts, so its first layout is already in the right theme rather than building light and flipping on the next turn.
-                self.last_dark = prefers_dark(&self.app);
-                self.last_theme_poll = Some(std::time::Instant::now());
-                if let Some(dark) = self.last_dark {
-                    self.handler
-                        .on_event(Event::ColorSchemeChanged { dark }, &window);
-                }
+                let preferences = crate::preferences::read(&self.app);
+                self.preferences = Some(preferences.clone());
+                self.last_preferences_poll = Some(std::time::Instant::now());
+                self.handler
+                    .on_event(Event::SystemPreferencesChanged { preferences }, &window);
                 if !self.handler.on_resume(&window) {
                     event_loop.exit();
                     return;
@@ -342,6 +337,7 @@ impl<H: EventHandler<AndroidWindow>> ApplicationHandler<()> for AndroidRunner<H>
                 self.handler.on_event(e, &window);
                 event_loop.exit();
             }
+            SurfaceIntent::RereadPreferences => self.reread_preferences(),
             SurfaceIntent::Ignore => {}
         }
     }
@@ -373,8 +369,8 @@ impl Platform for AndroidPlatform {
             cursor_position: (0.0, 0.0),
             touch: TouchDrag::default(),
             app: self.app,
-            last_dark: None,
-            last_theme_poll: None,
+            preferences: None,
+            last_preferences_poll: None,
             #[cfg(target_os = "android")]
             choreographer,
             #[cfg(target_os = "android")]

@@ -1,4 +1,4 @@
-//! The plain geometric values every other crate speaks in: points, rects, colours, corner radii and affine transforms.
+//! The plain geometric values every other crate speaks in: points, rects, sizes, colours, corner radii and affine transforms.
 //!
 //! Deliberately dependency-free, so layout, rendering and the widget tree can all name the same types without any of them depending on each other.
 
@@ -11,6 +11,7 @@ mod insets;
 mod object_fit;
 mod point;
 mod rect;
+mod size;
 mod transform;
 
 pub use border_radius::BorderRadius;
@@ -20,4 +21,5 @@ pub use insets::Insets;
 pub use object_fit::{ObjectFit, fit_rect};
 pub use point::Point;
 pub use rect::Rect;
+pub use size::Size;
 pub use transform::Transform;

@@ -5,7 +5,7 @@ use std::sync::Arc;
 
 use platform_core::{
     Event, EventHandler, FullscreenMode, MultiSurfacePlatform, Platform, PlatformError, SurfaceId,
-    Window, WindowConfig, WindowPosition,
+    SystemPreferences, Window, WindowConfig, WindowPosition,
 };
 use winit::application::ApplicationHandler;
 use winit::event::{StartCause, WindowEvent};
@@ -14,14 +14,17 @@ use winit::window::{Fullscreen, WindowAttributes, WindowId, WindowLevel};
 
 use platform_winit::{SurfaceIntent, TouchDrag, WinitWindow, map_window_event};
 
+use crate::system_preferences::PreferencesTracker;
+
 // Winit user-event payloads injected from background threads (via EventLoopProxy) to wake the loop.
 enum UserEvent {
     // Routed through the loop rather than answered where it arrives: AccessKit calls its handlers on a platform thread, and the UI that has to answer is `!Send`.
     #[cfg(feature = "a11y")]
     Accessibility(accesskit_winit::Event),
-    // Linux only: the portal watch sends it, where winit reports nothing. Elsewhere winit delivers `ThemeChanged` itself.
     #[cfg(all(target_os = "linux", feature = "system-theme"))]
-    ColorScheme(bool),
+    Appearance(crate::system_preferences::appearance::AppearanceSetting),
+    #[cfg(any(target_os = "windows", target_os = "macos"))]
+    RereadPreferences,
     // Redraw every live surface so each one's `on_frame` runs and drains its channels, wherever the waking app's content currently lives.
     Wake,
 }
@@ -58,6 +61,7 @@ struct WinitRunner<H: EventHandler<WinitWindow>> {
     touch: TouchDrag,
     // True only on `WaitUntil` timer expiry, so keepalive redraws do not fire on every event-queue drain.
     timer_has_fired: bool,
+    preferences: PreferencesTracker,
     // Built at resume, before the window is shown, which the adapter requires. The tree behind it is assembled only while an assistive technology is attached.
     #[cfg(feature = "a11y")]
     a11y: Option<accesskit_winit::Adapter>,
@@ -108,10 +112,23 @@ impl<H: EventHandler<WinitWindow>> ApplicationHandler<UserEvent> for WinitRunner
             #[cfg(feature = "a11y")]
             UserEvent::Accessibility(event) => self.on_accessibility(event.window_event),
             #[cfg(all(target_os = "linux", feature = "system-theme"))]
-            UserEvent::ColorScheme(dark) => {
-                if let Some(window) = &self.window {
+            UserEvent::Appearance(setting) => {
+                if let Some(window) = &self.window
+                    && let Some(preferences) = self
+                        .preferences
+                        .modify(|preferences| setting.apply(preferences))
+                {
                     self.handler
-                        .on_event(Event::ColorSchemeChanged { dark }, window);
+                        .on_event(Event::SystemPreferencesChanged { preferences }, window);
+                }
+            }
+            #[cfg(any(target_os = "windows", target_os = "macos"))]
+            UserEvent::RereadPreferences => {
+                if let Some(window) = &self.window
+                    && let Some(preferences) = self.preferences.reread(window)
+                {
+                    self.handler
+                        .on_event(Event::SystemPreferencesChanged { preferences }, window);
                 }
             }
             UserEvent::Wake => {
@@ -145,11 +162,9 @@ impl<H: EventHandler<WinitWindow>> ApplicationHandler<UserEvent> for WinitRunner
         let Some(window) = create_window_from_config(event_loop, &self.config) else {
             return;
         };
-        // Before the tree mounts, so its first layout uses the right theme. winit reports it on Windows and macOS; on Linux fall back to the freedesktop portal.
-        if let Some(dark) = initial_prefers_dark(&window) {
-            self.handler
-                .on_event(Event::ColorSchemeChanged { dark }, &window);
-        }
+        let preferences = self.preferences.refresh(&window);
+        self.handler
+            .on_event(Event::SystemPreferencesChanged { preferences }, &window);
         if !self.handler.on_resume(&window) {
             event_loop.exit();
             return;
@@ -194,6 +209,12 @@ impl<H: EventHandler<WinitWindow>> ApplicationHandler<UserEvent> for WinitRunner
         if redrawn {
             self.publish_accessibility();
         }
+        if matches!(outcome, WindowEventOutcome::PreferencesStale)
+            && let Some(preferences) = self.preferences.reread(&window)
+        {
+            self.handler
+                .on_event(Event::SystemPreferencesChanged { preferences }, &window);
+        }
         // A custom title-bar close button sets the handler's exit request during dispatch, so it is honoured alongside the OS close.
         if matches!(outcome, WindowEventOutcome::CloseRequested) || self.handler.take_exit_request()
         {
@@ -205,6 +226,7 @@ impl<H: EventHandler<WinitWindow>> ApplicationHandler<UserEvent> for WinitRunner
 enum WindowEventOutcome {
     Continue,
     CloseRequested,
+    PreferencesStale,
 }
 
 // Shared by the single- and multi-surface runners.
@@ -262,6 +284,7 @@ fn dispatch_window_event<H: EventHandler<WinitWindow>>(
 ) -> WindowEventOutcome {
     match map_window_event(event, cursor_position, scale_factor, modifiers, touch) {
         SurfaceIntent::Event(e) => handler.on_event(e, window),
+        SurfaceIntent::RereadPreferences => return WindowEventOutcome::PreferencesStale,
         SurfaceIntent::Dragged(scrolled, moved) => {
             handler.on_event(scrolled, window);
             handler.on_event(moved, window);
@@ -297,6 +320,7 @@ impl Platform for WinitPlatform {
             modifiers: platform_core::ModifiersState::default(),
             touch: TouchDrag::default(),
             timer_has_fired: false,
+            preferences: PreferencesTracker::default(),
             #[cfg(feature = "a11y")]
             a11y: None,
             #[cfg(feature = "a11y")]
@@ -309,31 +333,32 @@ impl Platform for WinitPlatform {
         platform_core::set_loop_waker(std::sync::Arc::new(move || {
             let _ = wake_proxy.send_event(UserEvent::Wake);
         }));
-        // winit has no Linux integration, so a portal watch thread pushes changes back through the loop. Elsewhere winit delivers `ThemeChanged` natively.
         #[cfg(all(target_os = "linux", feature = "system-theme"))]
-        {
-            let proxy = self.event_loop.create_proxy();
-            crate::color_scheme::spawn_watch(move |dark| {
-                let _ = proxy.send_event(UserEvent::ColorScheme(dark));
-            });
-        }
+        watch_portal(&self.event_loop);
+        #[cfg(any(target_os = "windows", target_os = "macos"))]
+        watch_os(&self.event_loop);
         self.event_loop
             .run_app(&mut runner)
             .map_err(|e| PlatformError(e.to_string()))
     }
 }
 
-// winit's native answer on Windows and macOS, falling back to the freedesktop portal on Linux, where winit always reports `None`.
-fn initial_prefers_dark(window: &WinitWindow) -> Option<bool> {
-    let winit = window.prefers_dark();
-    #[cfg(all(target_os = "linux", feature = "system-theme"))]
-    {
-        winit.or_else(crate::color_scheme::portal_prefers_dark)
-    }
-    #[cfg(not(all(target_os = "linux", feature = "system-theme")))]
-    {
-        winit
-    }
+// winit has no Linux integration for any of these, so a portal watch thread pushes each changed key back through the loop.
+#[cfg(all(target_os = "linux", feature = "system-theme"))]
+fn watch_portal(event_loop: &EventLoop<UserEvent>) {
+    let proxy = event_loop.create_proxy();
+    crate::system_preferences::portal::spawn_watch(move |setting| {
+        let _ = proxy.send_event(UserEvent::Appearance(setting));
+    });
+}
+
+// Every change is only a reason to read again: the listener runs on whatever thread the OS announces on, and the reads belong to the loop.
+#[cfg(any(target_os = "windows", target_os = "macos"))]
+fn watch_os(event_loop: &EventLoop<UserEvent>) {
+    let proxy = event_loop.create_proxy();
+    crate::system_preferences::watch(move || {
+        let _ = proxy.send_event(UserEvent::RereadPreferences);
+    });
 }
 
 //
@@ -408,15 +433,13 @@ impl SurfaceRunner {
 }
 
 // Built under a panic guard, so a build that fails returns `false` and the caller drops it without disturbing the others. Reads the window's current size, so calling it once the compositor has configured the window keeps the layout and the render surface the same size.
-fn resume_surface(surface: &mut SurfaceRunner) -> bool {
+fn resume_surface(surface: &mut SurfaceRunner, preferences: SystemPreferences) -> bool {
     let window = surface.window.clone();
     surface.handler.new_events();
     let built = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-        if let Some(dark) = initial_prefers_dark(&window) {
-            surface
-                .handler
-                .on_event(Event::ColorSchemeChanged { dark }, &window);
-        }
+        surface
+            .handler
+            .on_event(Event::SystemPreferencesChanged { preferences }, &window);
         surface.handler.on_resume(&window)
     }));
     surface.pace = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
@@ -438,9 +461,25 @@ struct WinitMultiRunner {
     a11y_proxy: winit::event_loop::EventLoopProxy<UserEvent>,
     // True only on `WaitUntil` timer expiry, so keepalive redraws fire only on timer ticks.
     timer_has_fired: bool,
+    // One snapshot for the process: preferences belong to the user, not to a window.
+    preferences: PreferencesTracker,
 }
 
 impl WinitMultiRunner {
+    // Each surface in its own batch bracket, since this is not inside a dispatch that already opened one.
+    fn broadcast_preferences(&mut self, preferences: SystemPreferences) {
+        for surface in self.surfaces.values_mut().filter(|surface| surface.resumed) {
+            surface.handler.new_events();
+            surface.handler.on_event(
+                Event::SystemPreferencesChanged {
+                    preferences: preferences.clone(),
+                },
+                &surface.window,
+            );
+            surface.pace = surface.handler.about_to_wait();
+        }
+    }
+
     // `resume_now` brings it up immediately, for the initial surfaces whose window winit has already configured; a dynamically opened surface passes `false` and is resumed on its first event, once the compositor has given it its real size.
     fn spawn_surface(
         &mut self,
@@ -483,7 +522,8 @@ impl WinitMultiRunner {
             title: config.title.clone(),
         };
         if resume_now {
-            if !resume_surface(&mut surface) {
+            let preferences = self.preferences.current(&surface.window);
+            if !resume_surface(&mut surface, preferences) {
                 tracing::error!("surface on_resume failed or panicked; skipping it");
                 return;
             }
@@ -519,14 +559,25 @@ impl ApplicationHandler<UserEvent> for WinitMultiRunner {
                 }
             }
             #[cfg(all(target_os = "linux", feature = "system-theme"))]
-            UserEvent::ColorScheme(dark) => {
-                // This callback is not inside a shared batch bracket.
-                for surface in self.surfaces.values_mut() {
-                    surface.handler.new_events();
-                    surface
-                        .handler
-                        .on_event(Event::ColorSchemeChanged { dark }, &surface.window);
-                    surface.pace = surface.handler.about_to_wait();
+            UserEvent::Appearance(setting) => {
+                if let Some(preferences) = self
+                    .preferences
+                    .modify(|preferences| setting.apply(preferences))
+                {
+                    self.broadcast_preferences(preferences);
+                }
+            }
+            #[cfg(any(target_os = "windows", target_os = "macos"))]
+            UserEvent::RereadPreferences => {
+                let window = self
+                    .surfaces
+                    .values()
+                    .next()
+                    .map(|surface| surface.window.clone());
+                if let Some(window) = window
+                    && let Some(preferences) = self.preferences.reread(&window)
+                {
+                    self.broadcast_preferences(preferences);
                 }
             }
             UserEvent::Wake => {
@@ -616,7 +667,8 @@ impl ApplicationHandler<UserEvent> for WinitMultiRunner {
             if !configured {
                 return;
             }
-            if resume_surface(surface) {
+            let preferences = self.preferences.current(&surface.window);
+            if resume_surface(surface, preferences) {
                 surface.resumed = true;
                 // Fall through to dispatch this `Resized`: it carries the authoritative size, which relays the layout out even if `window.inner_size()` lagged it.
             } else {
@@ -687,6 +739,11 @@ impl ApplicationHandler<UserEvent> for WinitMultiRunner {
             );
             // Decided in `about_to_wait`, after the same iteration's queued requests are spawned, so detaching the last tab does not exit before the new window exists.
         }
+        if matches!(dispatched, Ok(WindowEventOutcome::PreferencesStale))
+            && let Some(preferences) = self.preferences.reread(&window)
+        {
+            self.broadcast_preferences(preferences);
+        }
     }
 }
 
@@ -713,20 +770,17 @@ impl MultiSurfacePlatform for WinitPlatform {
             #[cfg(feature = "a11y")]
             a11y_proxy: self.event_loop.create_proxy(),
             timer_has_fired: false,
+            preferences: PreferencesTracker::default(),
         };
         // Through this proxy, which redraws every surface, rather than by holding a window: an app can cache it and, if its content later moves to another window, wakeups still reach it wherever it now lives.
         let wake_proxy = self.event_loop.create_proxy();
         platform_core::set_loop_waker(std::sync::Arc::new(move || {
             let _ = wake_proxy.send_event(UserEvent::Wake);
         }));
-        // Delivered to every surface.
         #[cfg(all(target_os = "linux", feature = "system-theme"))]
-        {
-            let proxy = self.event_loop.create_proxy();
-            crate::color_scheme::spawn_watch(move |dark| {
-                let _ = proxy.send_event(UserEvent::ColorScheme(dark));
-            });
-        }
+        watch_portal(&self.event_loop);
+        #[cfg(any(target_os = "windows", target_os = "macos"))]
+        watch_os(&self.event_loop);
         self.event_loop
             .run_app(&mut runner)
             .map_err(|e| PlatformError(e.to_string()))

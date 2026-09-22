@@ -175,9 +175,13 @@ pub fn compute_layout(
     width: AvailableSpace,
     height: AvailableSpace,
 ) -> Result<(), LayoutError> {
-    // Reconciled here rather than in `set_direction`, so the flip reaches every surface on the thread.
+    // Reconciled here rather than in `set_direction`, so the flip reaches every surface on the thread; the size is the active surface's own, reconciled on the same pass so a resize and the layout answering it agree.
     let direction = crate::direction::current_direction();
-    with_runtime(|rt| rt.engine.set_direction(direction));
+    let surface = crate::surface_size::surface_size();
+    with_runtime(|rt| {
+        rt.engine.set_direction(direction);
+        rt.engine.set_surface_size(surface);
+    });
     let updates = with_runtime(|rt| rt.compute_layout(root, width, height))?;
     batch(|| {
         for update in updates {
@@ -661,14 +665,24 @@ impl LayoutRuntime {
 #[path = "context_test.rs"]
 mod tests;
 
-/// The CSS for what `node` was asked for, resolved against the direction in force.
+/// The CSS for what `node` was asked for, resolved against the direction in force and the active surface's size.
 ///
 /// For a backend whose output is a document rather than pixels: it is handed the box's intent, not the rect the intent produced, so the browser can lay the box out itself. `None` for a node this runtime does not own — a widget mid-teardown, or one built on another surface.
+///
+/// Subscribes the caller to the surface's size when the style is written as a fraction of it: those lengths reach the document as pixels, which go stale on a resize even where the box's own rect happens not to move.
 pub fn declared_css(node: NodeId) -> Option<layout_core::Css> {
     let direction = crate::direction::current_direction();
-    with_runtime(|rt| {
-        rt.engine
-            .declared_style(node)
-            .map(|style| style.to_css(direction))
-    })
+    let surface = crate::surface_size::surface_size();
+    let (css, follows_surface) = with_runtime(|rt| {
+        rt.engine.declared_style(node).map(|style| {
+            (
+                style.to_css(direction, surface),
+                style.is_surface_relative(),
+            )
+        })
+    })?;
+    if follows_surface {
+        crate::surface_size::use_surface_size();
+    }
+    Some(css)
 }

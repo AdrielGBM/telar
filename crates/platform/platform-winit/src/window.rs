@@ -53,11 +53,6 @@ impl PlatformWindow for WinitWindow {
         )
     }
 
-    fn prefers_dark(&self) -> Option<bool> {
-        // winit reports the OS theme natively on Windows/macOS; on Linux it is always `None` (winit has no color-scheme integration there) — the desktop adapter supplies the freedesktop-portal fallback.
-        self.0.theme().map(|t| t == winit::window::Theme::Dark)
-    }
-
     fn drag_window(&self) {
         let _ = self.0.drag_window();
     }

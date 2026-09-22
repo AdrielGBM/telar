@@ -6,7 +6,7 @@
 //!
 //! **It used to be part of [`App`].** Fourteen `#[doc(hidden)]` methods sat on the trait an application implements, every one of them carrying a paragraph explaining that only the dylib-backed app overrides it — so what an author saw was eighteen methods of which four were theirs, and `impl App for Box<A>` redelegated all eighteen by hand. None of it was reachable from application code and none of it belonged in its way.
 
-use platform_core::{AppCtx, Event, RedrawWaker, WindowCommand, WindowConfig};
+use platform_core::{AppCtx, Event, RedrawWaker, SystemPreferences, WindowCommand, WindowConfig};
 use renderer_core::Color;
 use web_time::Instant;
 
@@ -85,6 +85,16 @@ pub trait AppRuntime: 'static {
         theme_core::set_system_dark(dark);
     }
 
+    /// Reports the user's system preferences into the store [`use_system_preferences`](crate::use_system_preferences) reads.
+    fn set_system_preferences(&self, preferences: &SystemPreferences) {
+        crate::system_preferences::set_system_preferences(preferences.clone());
+    }
+
+    /// Reports how big the surface being driven is into the store [`use_surface_size`](crate::use_surface_size) reads and the layout pass resolves surface fractions against.
+    fn set_surface_size(&self, size: geometry_core::Size) {
+        ui_core::set_surface_size(size);
+    }
+
     /// Runs the completion callbacks of `spawn_task` work that finished since the last frame, on the UI thread.
     fn drain_tasks(&self) {
         reactive_core::drain_tasks();
@@ -98,7 +108,7 @@ pub trait AppRuntime: 'static {
 
 /// An [`App`] whose tree lives in this process — every application that is not a hot-reloaded dylib.
 ///
-/// Holds nothing but the app: each of the runtime methods above is already correct for a tree on this side, so this overrides only what an application actually answers — the four of [`App`], plus the colour-scheme hook, which is the default's own work followed by the application's.
+/// Holds nothing but the app: each of the runtime methods above is already correct for a tree on this side, so this overrides only what an application actually answers — the four of [`App`], plus the colour-scheme and system-preference hooks, each the default's own work followed by the application's.
 pub struct LocalApp<A: App>(pub A);
 
 impl<A: App> AppRuntime for LocalApp<A> {
@@ -122,5 +132,10 @@ impl<A: App> AppRuntime for LocalApp<A> {
     fn set_system_dark(&self, dark: bool) {
         theme_core::set_system_dark(dark);
         self.0.on_color_scheme(dark);
+    }
+
+    fn set_system_preferences(&self, preferences: &SystemPreferences) {
+        crate::system_preferences::set_system_preferences(preferences.clone());
+        self.0.on_system_preferences(preferences);
     }
 }

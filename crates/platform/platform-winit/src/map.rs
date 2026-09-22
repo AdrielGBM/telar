@@ -140,6 +140,8 @@ pub enum SurfaceIntent {
     Close(Event),
     // A finger that moved: the scroll it amounts to, then the move itself. Both, because a drag is both — the list under the finger scrolls while a slider under that same finger tracks the movement.
     Dragged(Event, Event),
+    // The OS reported a changed appearance. The backend owns the whole `SystemPreferences` snapshot, so it re-reads and delivers that rather than a lone colour scheme.
+    RereadPreferences,
     // State-only (e.g. `ModifiersChanged`) or an unmapped event — nothing to deliver.
     Ignore,
 }
@@ -315,9 +317,7 @@ pub fn map_window_event(
                 },
             })
         }
-        WindowEvent::ThemeChanged(theme) => SurfaceIntent::Event(Event::ColorSchemeChanged {
-            dark: theme == winit::window::Theme::Dark,
-        }),
+        WindowEvent::ThemeChanged(_) => SurfaceIntent::RereadPreferences,
         _ => SurfaceIntent::Ignore,
     }
 }

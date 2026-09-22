@@ -1,6 +1,6 @@
 //! [`App`]: what an application answers for.
 
-use platform_core::{AppCtx, WindowConfig};
+use platform_core::{AppCtx, SystemPreferences, WindowConfig};
 use renderer_core::Color;
 use ui_core::Component;
 
@@ -26,8 +26,11 @@ pub trait App: 'static {
 
     /// The OS light/dark preference changed. The theme runtime `follow_system` reads is already updated when this runs; override it to carry the change somewhere that runtime does not reach.
     ///
-    /// Which in practice means across a process or an FFI boundary: a host that draws other applications' trees out of dylibs has one theme runtime per loaded library, and only the host's own is updated for it. `Event::ColorSchemeChanged` is consumed by the runner and never reaches the tree, so this is the only place an application hears about it.
+    /// Which in practice means across a process or an FFI boundary: a host that draws other applications' trees out of dylibs has one theme runtime per loaded library, and only the host's own is updated for it. `Event::SystemPreferencesChanged` is consumed by the runner and never reaches the tree, so this is the only place an application hears about it.
     fn on_color_scheme(&self, _dark: bool) {}
+
+    /// The user's system preferences changed; [`use_system_preferences`](crate::use_system_preferences) already answers the new ones when this runs. The counterpart of [`on_color_scheme`](Self::on_color_scheme) for everything else, for the same kind of host.
+    fn on_system_preferences(&self, _preferences: &SystemPreferences) {}
 }
 
 /// Lets a caller hold applications of different types as one — [`crate::run_multi_with_platform`] driving a surface per monitor, each with its own root.
@@ -46,5 +49,8 @@ impl<A: App + ?Sized> App for Box<A> {
     }
     fn on_color_scheme(&self, dark: bool) {
         (**self).on_color_scheme(dark)
+    }
+    fn on_system_preferences(&self, preferences: &SystemPreferences) {
+        (**self).on_system_preferences(preferences)
     }
 }

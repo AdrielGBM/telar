@@ -1,6 +1,6 @@
 //! The frame loop: one surface's [`EventHandler`](platform_core::EventHandler), from resume to teardown.
 
-use platform_core::{Event, EventHandler, Window, WindowCommand};
+use platform_core::{ColorScheme, Event, EventHandler, SystemPreferences, Window, WindowCommand};
 use reactive_core::{FlushNotifyHandle, begin_batch, end_batch, set_flush_notify};
 use renderer_core::RenderBackend;
 use services_core::AppPathsProvider;
@@ -59,6 +59,8 @@ where
     pub(super) command_buf_pool: Vec<Vec<renderer_core::DrawCommand>>,
     /// Just the text of the last frame, kept so the accessibility tree can be built when it is asked for rather than on every frame. A control is named by the text drawn inside it, and that is the only part of a frame the naming needs — a handful of commands, held by refcounted `Arc<str>`.
     pub(super) frame_text: Vec<renderer_core::DrawCommand>,
+    // The snapshot last applied, so the theme hears only a changed scheme and a hot swap can hand the new runtime what the old one knew.
+    pub(super) system_preferences: Option<SystemPreferences>,
     #[cfg(all(
         feature = "dev",
         not(target_os = "android"),
@@ -143,6 +145,7 @@ where
         _window: std::marker::PhantomData,
         command_buf_pool: Vec::new(),
         frame_text: Vec::new(),
+        system_preferences: None,
         #[cfg(all(
             feature = "dev",
             not(target_os = "android"),
@@ -206,10 +209,40 @@ where
         applied
     }
 
+    /// Writes a snapshot into the app's runtime, batched so the effects it drives re-render once across the hot-reload boundary. The theme's `follow_system` hears only a changed scheme, and only once there has been one to hear: an unknown scheme that stays unknown is not a vote for light.
+    fn apply_system_preferences(&mut self, preferences: SystemPreferences) {
+        let scheme_changed = match &self.system_preferences {
+            Some(last) => last.color_scheme != preferences.color_scheme,
+            None => preferences.color_scheme.is_some(),
+        };
+        self.app.begin_event_batch();
+        self.app.set_system_preferences(&preferences);
+        if scheme_changed {
+            self.app
+                .set_system_dark(preferences.color_scheme == Some(ColorScheme::Dark));
+        }
+        self.app.end_event_batch();
+        self.system_preferences = Some(preferences);
+    }
+
+    /// Hands a freshly loaded runtime the preferences the previous one had been told, since its own copy starts out knowing nothing.
+    #[cfg(all(
+        feature = "dev",
+        not(target_os = "android"),
+        not(target_arch = "wasm32")
+    ))]
+    fn replay_system_preferences(&mut self) {
+        if let Some(preferences) = self.system_preferences.take() {
+            self.apply_system_preferences(preferences);
+        }
+    }
+
     /// Drops the previous tree and builds the app's UI again, then fits it to the surface as [`fit_tree_to`](Self::fit_tree_to) does.
     fn mount_tree(&mut self, window: &W) {
         // Dropped before the new one is built: an effect from the outgoing tree re-running mid-assembly would write into widgets nothing is drawing any more.
         self.tree = None;
+        let (width, height) = self.logical_size(window);
+        self.report_surface_size(width, height);
         self.tree = Some(self.app.mount());
         self.fit_tree_to(window);
     }
@@ -221,13 +254,25 @@ where
             self.pending_restart = true;
         }
         // A new tree starts at its 0×0 defaults and a kept one at the size it was last shown at; both learn the real size from this event, as they would from a resize.
-        let resize = Event::WindowResized {
-            width: (window.width() as f32 / self.scale_factor) as u32,
-            height: (window.height() as f32 / self.scale_factor) as u32,
-        };
+        let (width, height) = self.logical_size(window);
+        self.report_surface_size(width, height);
+        let resize = Event::WindowResized { width, height };
         if let Some(ref mut tree) = self.tree {
             tree.on_event(&resize);
         }
+    }
+
+    fn logical_size(&self, window: &W) -> (u32, u32) {
+        (
+            (window.width() as f32 / self.scale_factor) as u32,
+            (window.height() as f32 / self.scale_factor) as u32,
+        )
+    }
+
+    /// Tells the app's runtime how big this surface is, ahead of the tree hearing it: a tree built at a size, and the layout pass answering a resize, both resolve against it rather than against the size before.
+    fn report_surface_size(&self, width: u32, height: u32) {
+        self.app
+            .set_surface_size(geometry_core::Size::new(width as f32, height as f32));
     }
 
     /// Enters this handler's surface world for the duration of a lifecycle call, so its build/event/frame resolve layout/overlay/focus (and the reactive current-surface) against the right surface. Returns `None` for a single-window app — its ambient world is its one surface — making this a zero-cost no-op. The returned guard owns the restore state and does not borrow `self`, so callers can mutate `self` while it is held (`let _surface = self.enter_surface();`).
@@ -266,6 +311,7 @@ where
                     // Dropped first, so effect closures holding old-dylib code are destroyed while that lib is still mapped; only then does replacing `self.app` dlclose it.
                     self.tree = None;
                     self.app = Box::new(new_app);
+                    self.replay_system_preferences();
                     self.mount_tree(window);
                     self.dev.set_build_error(None);
                     tracing::info!("hot reloaded: {}", new_path.display());
@@ -746,11 +792,9 @@ where
         // Matched once. As four sequential `if let`s it re-tested the same value each time, and the two that end the dispatch read as guards on the ones above them rather than exits.
         match &event {
             Event::ScaleFactorChanged { scale_factor } => self.scale_factor = *scale_factor as f32,
-            Event::ColorSchemeChanged { dark } => {
-                // Drives the `follow_system` effect, so batch the app's runtime for a clean re-render across the hot-reload boundary. No widget consumes this event.
-                self.app.begin_event_batch();
-                self.app.set_system_dark(*dark);
-                self.app.end_event_batch();
+            Event::WindowResized { width, height } => self.report_surface_size(*width, *height),
+            Event::SystemPreferencesChanged { preferences } => {
+                self.apply_system_preferences(preferences.clone());
                 window.request_redraw();
                 return;
             }

@@ -2,7 +2,7 @@ use super::*;
 use crate::style::{AlignItems, JustifyContent, SizeDimension};
 
 pub(crate) fn css(style: LayoutStyle) -> String {
-    style.to_css(Direction::Ltr).into_string()
+    style.to_css(Direction::Ltr, Size::ZERO).into_string()
 }
 
 /// Every property CSS already starts where taffy does is left unsaid, so what reaches the browser is what the app actually asked for.
@@ -30,11 +30,11 @@ fn a_row_reverses_under_rtl() {
     let style = LayoutStyle::new().flex_row();
     assert!(
         style
-            .to_css(Direction::Rtl)
+            .to_css(Direction::Rtl, Size::ZERO)
             .as_str()
             .contains("flex-direction:row-reverse"),
         "got {}",
-        style.to_css(Direction::Rtl)
+        style.to_css(Direction::Rtl, Size::ZERO)
     );
 }
 
@@ -164,18 +164,18 @@ fn a_logical_edge_follows_the_direction() {
     let style = LayoutStyle::new().padding_start(SizeDimension::Px(20.0));
     assert!(
         style
-            .to_css(Direction::Ltr)
+            .to_css(Direction::Ltr, Size::ZERO)
             .as_str()
             .contains("padding:0 0 0 20px;"),
         "ltr: {}",
-        style.to_css(Direction::Ltr)
+        style.to_css(Direction::Ltr, Size::ZERO)
     );
     assert!(
         style
-            .to_css(Direction::Rtl)
+            .to_css(Direction::Rtl, Size::ZERO)
             .as_str()
             .contains("padding:0 20px 0 0;"),
         "rtl: {}",
-        style.to_css(Direction::Rtl)
+        style.to_css(Direction::Rtl, Size::ZERO)
     );
 }

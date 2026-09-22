@@ -173,9 +173,11 @@ pub enum Event {
         x: f64,
         y: f64,
     },
-    // `dark` is true for a dark preference. On Linux this is surfaced only where the compositor exposes it; X11 sessions typically never emit it.
-    ColorSchemeChanged {
-        dark: bool,
+    /// The user's system preferences, whole: sent once before a surface's first resume, so its first layout already follows them, and again whenever any field changes.
+    ///
+    /// A snapshot rather than a delta, so a consumer never has to remember what came before to know where it stands.
+    SystemPreferencesChanged {
+        preferences: crate::SystemPreferences,
     },
 }
 

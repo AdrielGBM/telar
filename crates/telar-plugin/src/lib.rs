@@ -157,10 +157,11 @@ impl PluginInstance {
         }
     }
 
-    /// Lay the content out to the host-assigned sub-rect size, then let it re-lay-out its own scroll viewports.
+    /// Lay the content out to the host-assigned sub-rect size, which is this plugin's surface size, then let it re-lay-out its own scroll viewports.
     pub fn relayout(&mut self, width: f32, height: f32) {
         let _g = self.surface.enter();
         self.size = (width, height);
+        ui_core::set_surface_size(geometry_core::Size::new(width, height));
         let _ = mark_dirty(self.root);
         let _ = compute_layout(
             self.root,

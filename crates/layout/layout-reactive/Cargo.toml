@@ -3,7 +3,7 @@ name = "telar-layout-reactive"
 version = { workspace = true }
 edition = { workspace = true }
 rust-version = { workspace = true }
-description = "Reactive layout context for Telar: signal-driven writing direction and layout state."
+description = "Reactive layout context for Telar: signal-driven writing direction, surface size and layout state."
 keywords = ["telar", "layout", "reactive", "ui", "rtl"]
 categories = ["gui"]
 readme = "README.md"

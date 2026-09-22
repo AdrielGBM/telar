@@ -338,6 +338,18 @@ pub fn app(input: TokenStream) -> TokenStream {
             pub unsafe extern "Rust" fn _rsx_hot_set_system_dark(dark: bool) {
                 ::telar::set_system_dark(dark);
             }
+            // The dylib's own copy of the preference store, which its views read.
+            #[unsafe(no_mangle)]
+            pub unsafe extern "Rust" fn _rsx_hot_set_system_preferences(
+                preferences: &::telar::SystemPreferences,
+            ) {
+                ::telar::set_system_preferences(preferences.clone());
+            }
+            // The dylib's own copy of the surface's size, which its layout resolves surface fractions against and its views read.
+            #[unsafe(no_mangle)]
+            pub unsafe extern "Rust" fn _rsx_hot_set_surface_size(width: f32, height: f32) {
+                ::telar::set_surface_size(::telar::Size::new(width, height));
+            }
             // Drain the dylib's own window-command queue: a title bar's `on_press` pushes into this dylib's thread-local, so the host must drain it across this boundary to apply drag/minimize/maximize/ close — its own copy is empty.
             #[unsafe(no_mangle)]
             pub unsafe extern "Rust" fn _rsx_hot_drain_window_commands()

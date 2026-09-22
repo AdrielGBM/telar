@@ -156,10 +156,13 @@ impl Platform for WebPlatform {
         install_frame_callback();
 
         handler.new_events();
-        // Delivered before the tree mounts, so its first layout is already in the right theme. The media query reports only changes, and a page opened by someone already in dark mode has no change to report.
-        if let Some(dark) = window.prefers_dark() {
-            handler.on_event(Event::ColorSchemeChanged { dark }, &window);
-        }
+        // The listeners report only changes, and a page opened by someone already in dark mode has no change to report.
+        handler.on_event(
+            Event::SystemPreferencesChanged {
+                preferences: crate::preferences::read(),
+            },
+            &window,
+        );
         let resumed = handler.on_resume(&window);
         handler.about_to_wait();
         if !resumed {
@@ -309,19 +312,24 @@ fn install_listeners(
         request_frame();
     }));
 
-    if let Ok(Some(query)) = dom::window().match_media("(prefers-color-scheme: dark)") {
-        let target: web_sys::EventTarget = query.into();
-        listeners.push(listen(&target, "change", true, move |event| {
-            let Ok(event) = event.dyn_into::<web_sys::MediaQueryListEvent>() else {
-                return;
-            };
-            push([Event::ColorSchemeChanged {
-                dark: event.matches(),
-            }]);
-        }));
+    // Each change re-reads the whole snapshot: one event means one field moved, but the snapshot is what gets delivered.
+    for query in crate::preferences::WATCHED_QUERIES {
+        if let Some(list) = crate::preferences::media_query(query) {
+            let target: web_sys::EventTarget = list.into();
+            listeners.push(listen(&target, "change", true, |_| push_preferences()));
+        }
     }
+    listeners.push(listen(&viewport, "languagechange", true, |_| {
+        push_preferences()
+    }));
 
     listeners
+}
+
+fn push_preferences() {
+    push([Event::SystemPreferencesChanged {
+        preferences: crate::preferences::read(),
+    }]);
 }
 
 #[derive(Clone, Copy)]

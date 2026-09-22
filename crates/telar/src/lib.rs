@@ -43,6 +43,8 @@ mod raster;
 pub mod runner;
 #[cfg(feature = "runtime")]
 pub mod surface;
+#[cfg(feature = "runtime")]
+pub mod system_preferences;
 #[cfg(all(feature = "runtime", feature = "testing"))]
 pub mod testing;
 #[cfg(feature = "hardware")]
@@ -85,7 +87,7 @@ pub type DefaultDevTools = telar_devtools::DevTools;
 #[cfg(all(feature = "runtime", not(feature = "dev")))]
 pub type DefaultDevTools = ();
 #[cfg(feature = "runtime")]
-pub use geometry_core::{Insets, ObjectFit, Point, Rect, Transform};
+pub use geometry_core::{Insets, ObjectFit, Point, Rect, Size, Transform};
 #[cfg(feature = "runtime")]
 pub use layout_core::{
     AlignItems, AvailableSpace, Direction, JustifyContent, LayoutError, LayoutStyle, Margin,
@@ -192,11 +194,18 @@ pub use services_core::{AppPathsProvider, NoPaths};
 pub use services_core::{Clipboard, clipboard, clipboard_text, set_clipboard, set_clipboard_text};
 // Available in every GUI build rather than opt-in: `ui_core::Surface` composes the per-surface service scope, so `runtime` turns on services-core/di. A non-GUI build has no ui-core and nothing to re-export.
 #[cfg(feature = "runtime")]
+pub use platform_core::{ColorScheme, SystemPreferences};
+#[cfg(feature = "runtime")]
 pub use services_core::{Scope, context, provide, set_context, try_inject, with_service};
 #[cfg(feature = "runtime")]
 pub use surface::{
     SurfaceContent, SurfaceControl, SurfaceHost, SurfaceToken, open_surface, set_surface_host,
     surface_content,
+};
+#[cfg(feature = "runtime")]
+pub use system_preferences::{
+    set_system_preferences, system_preferences, use_color_scheme, use_high_contrast,
+    use_preferred_locales, use_reduced_motion, use_system_preferences,
 };
 #[cfg(feature = "runtime")]
 pub use theme_core::{
@@ -206,6 +215,11 @@ pub use theme_core::{
 };
 #[cfg(all(feature = "runtime", feature = "svg"))]
 pub use ui_core::Svg;
+#[cfg(feature = "runtime")]
+pub use ui_core::{
+    Breakpoints, breakpoint, set_surface_size, surface_size, use_surface_height, use_surface_size,
+    use_surface_width,
+};
 // The seam and nothing behind it: `telar-dynamic` carries the decoders and transports that plug in here, and an application's own plug in exactly the same way.
 #[cfg(feature = "async-assets")]
 pub use ui_core::{

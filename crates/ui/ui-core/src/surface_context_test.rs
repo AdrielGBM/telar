@@ -347,3 +347,44 @@ fn after_settle_skips_a_surface_dropped_before_it_settles() {
         "after_settle must not run a closure whose surface was disposed before the batch settled"
     );
 }
+
+#[test]
+fn a_component_reads_the_size_of_the_surface_it_was_built_on() {
+    use geometry_core::Size;
+    use layout_reactive::{set_surface_size, use_surface_width};
+    use std::cell::RefCell;
+    use std::rc::Rc;
+
+    let window = Surface::new();
+    let panel = Surface::new();
+    {
+        let _in = window.enter();
+        set_surface_size(Size::new(1280.0, 800.0));
+    }
+    {
+        let _in = panel.enter();
+        set_surface_size(Size::new(320.0, 800.0));
+    }
+
+    let seen: Rc<RefCell<Vec<f32>>> = Rc::default();
+    let log = Rc::clone(&seen);
+    {
+        let _in = window.enter();
+        effect(move || log.borrow_mut().push(use_surface_width()));
+    }
+    {
+        let _in = panel.enter();
+        set_surface_size(Size::new(400.0, 800.0));
+    }
+    {
+        let _in = window.enter();
+        set_surface_size(Size::new(1024.0, 800.0));
+    }
+    let _elsewhere = panel.enter();
+    set_surface_size(Size::new(360.0, 800.0));
+    assert_eq!(
+        *seen.borrow(),
+        [1280.0, 1024.0],
+        "the panel resizing is not the window resizing"
+    );
+}

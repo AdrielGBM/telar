@@ -7,6 +7,7 @@
 mod clipboard;
 mod map;
 mod platform;
+mod preferences;
 mod term;
 mod window;
 

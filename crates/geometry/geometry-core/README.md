@@ -1,6 +1,6 @@
 # telar-geometry-core
 
-Geometry and color primitives for Telar: points, rects, transforms, border radii and Oklch colors.
+Geometry and color primitives for Telar: points, rects, sizes, transforms, border radii and Oklch colors.
 
 Part of [Telar](https://github.com/AdrielGBM/telar), a modular Rust UI framework with its own template
 language, reactive signals and a self-contained renderer.

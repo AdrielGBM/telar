@@ -134,11 +134,12 @@ col gap:8 pad:(space::lg() * 2.0) align:center
 ```
 
 Parenthesise an expression that holds a space — `(a + b)` *is* an expression, so nothing new is invented.
-Three sugars survive, because each is a token shape rather than a second language:
+Four sugars survive, because each is a token shape rather than a second language:
 
 | written | means |
 | --- | --- |
 | `50%` | `SizeDimension::Percent(0.5)` |
+| `50sw` `50sh` `50smin` `50smax` | a fraction of the surface: `SizeDimension::SurfaceWidth(0.5)` and its siblings — see [docs/surface-size.md](docs/surface-size.md) |
 | `#3d78fa` | `Color::rgba(…)` |
 | `$sig` | `sig.get()` — a read of anything reactive, including the `theme` handle the view binds |
 
@@ -182,9 +183,10 @@ Without a `mod.rsx`, a directory that holds both `.rsx` files and a hand-written
 Everything here is either always present or one word away. Nothing is bundled.
 
 - **Reactive signals** — a fine-grained graph of signals, memos and effects; no virtual DOM, no diffing.
-- **Flexbox and grid layout** on top of Taffy, with reactive writing direction (LTR/RTL).
+- **Flexbox and grid layout** on top of Taffy, with reactive writing direction (LTR/RTL), lengths relative to the surface, and width breakpoints that re-resolve only across a threshold. → [docs/surface-size.md](docs/surface-size.md)
 - **Motion** — tweens and springs driven by one frame ticker, with colors interpolated in Oklch.
-- **Theming** — theme tokens plus light/dark mode that can follow the OS.
+- **Theming** — theme tokens plus light/dark mode, reduced motion and high contrast that can follow the OS, and the user's preferred locales, read the same way on every target. → [docs/system-preferences.md](docs/system-preferences.md)
+- **Keyboard** — each focusable control declares the keys it keeps, so a browser build shares Tab and scrolling with the host page instead of fighting it for them. → [docs/keyboard.md](docs/keyboard.md)
 - **Internationalization** — translation catalogs baked at build time; `t!` validates keys and arguments at compile time.
 - **Two renderers** — a CPU rasterizer on `tiny-skia` and a GPU one on `wgpu`, behind the same drawing vocabulary. `desktop` and `android` bring both, and `backend = "auto"` picks per machine.
 - **A widget catalogue** — buttons, fields, selects, menus, modals, tabs, sliders, and the rest. → `components`

@@ -132,6 +132,55 @@ fn a_percentage_is_a_length_wherever_a_length_is() {
     }
 }
 
+#[test]
+fn a_fraction_of_the_surface_is_a_length_wherever_a_length_is() {
+    for (value, expected) in [
+        ("50sw", "SizeDimension::SurfaceWidth(0.5)"),
+        ("100sh", "SizeDimension::SurfaceHeight(1.0)"),
+        ("12.5smin", "SizeDimension::SurfaceMin(0.125)"),
+        ("80smax", "SizeDimension::SurfaceMax(0.8)"),
+    ] {
+        for key in [
+            "width",
+            "max_height",
+            "pad",
+            "gap",
+            "margin_start",
+            "inset_top",
+        ] {
+            assert!(
+                call(key, value)
+                    .as_deref()
+                    .is_some_and(|c| c.contains(expected)),
+                "`{key}:{value}` should be {expected}"
+            );
+        }
+    }
+}
+
+#[test]
+fn a_grid_track_takes_a_fraction_of_the_surface_like_any_length() {
+    assert_eq!(
+        call("cols", "25sw 1fr").as_deref(),
+        Some(
+            ".display_grid().grid_template_columns(vec![TemplateTrack::length(SizeDimension::SurfaceWidth(0.25)), TemplateTrack::fr(1.0)])"
+        )
+    );
+    assert!(
+        call("cols", "fill 20smin")
+            .as_deref()
+            .is_some_and(|c| c.contains("TemplateTrack::fill(TemplateTrack::minmax(TemplateTrack::length(SizeDimension::SurfaceMin(0.2)), TemplateTrack::fr(1.0)))")),
+        "{:?}",
+        call("cols", "fill 20smin")
+    );
+}
+
+#[test]
+fn a_name_ending_like_a_unit_is_still_the_name() {
+    assert_eq!(format_number("row_sw").as_deref(), Ok("row_sw"));
+    assert_eq!(format_number("wsh").as_deref(), Ok("wsh"));
+}
+
 /// S3: a value outside a closed keyword set now says what the set is, on the attribute, instead of the property being dropped and the layout coming out subtly wrong.
 #[test]
 fn an_unknown_keyword_names_the_set_it_is_not_in() {

@@ -114,10 +114,6 @@ pub trait Window {
     fn focus_window(&self) {}
     /// Sets the pointer shape over this window. No-op where unsupported (headless).
     fn set_cursor(&self, _cursor: Cursor) {}
-    /// The OS light/dark preference, if the platform can report it: `Some(true)` = prefer dark. `None` when undetectable (e.g. X11, or a compositor without the settings portal). Defaults to `None`.
-    fn prefers_dark(&self) -> Option<bool> {
-        None
-    }
     /// A handle that asks this window for a frame, usable from any thread.
     ///
     /// `None` where a window cannot hand one out: a browser surface redraws through a callback that never leaves the thread that registered it. Such a platform installs a process-global [`set_loop_waker`](crate::set_loop_waker) instead, which is what the runtime prefers anyway. A window that is `Clone + Send + Sync` answers this with [`window_waker`].

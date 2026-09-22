@@ -55,6 +55,14 @@ name = "path_lays_out"
 path = "src/path_lays_out_test.rs"
 
 [[test]]
+name = "system_preferences_flow"
+path = "src/system_preferences_flow_test.rs"
+
+[[test]]
+name = "surface_size_flow"
+path = "src/surface_size_flow_test.rs"
+
+[[test]]
 name = "text_style_baseline"
 path = "src/text_style_baseline_test.rs"
 
@@ -208,8 +216,9 @@ clipboard-wayland = ["clipboard", "platform-desktop?/clipboard-wayland"]
 ## Native file pickers: the XDG portal on Linux, the OS panel elsewhere.
 dialogs = ["platform-desktop?/dialogs"]
 
-## Following the OS light/dark preference. Only ever compiled on Linux, over the freedesktop portal —
-## Windows and macOS answer through winit and need no feature for it.
+## The colour scheme, contrast and reduced-motion preferences on Linux, read from the freedesktop settings
+## portal. Only ever compiled on Linux: Windows and macOS answer through their own system APIs and need no
+## feature for it. Without it, a Linux build still knows the preferred locales.
 system-theme = ["platform-desktop?/system-theme"]
 
 #! ## Set by the tooling

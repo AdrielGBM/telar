@@ -1,4 +1,5 @@
 use super::*;
+use crate::style::SizeDimension;
 
 fn lay_out(engine: &mut LayoutEngine, root: NodeId) {
     engine
@@ -507,4 +508,114 @@ fn engine_grid_auto_rows_sizes_implicit_rows() {
         "the second implicit row starts after the first's 40px"
     );
     assert_eq!(second_rect.height, 40.0_f32);
+}
+
+fn surface_sized_leaf(engine: &mut LayoutEngine) -> (NodeId, NodeId, NodeId) {
+    let fraction = engine
+        .new_leaf(
+            LayoutStyle::new()
+                .width(SizeDimension::SurfaceWidth(0.5))
+                .height(10.0),
+        )
+        .unwrap();
+    let fixed = engine
+        .new_leaf(LayoutStyle::new().width(40.0).height(10.0))
+        .unwrap();
+    let root = engine
+        .new_container(
+            LayoutStyle::new().flex_column().width(300.0).height(100.0),
+            &[fraction, fixed],
+        )
+        .unwrap();
+    (root, fraction, fixed)
+}
+
+#[test]
+fn a_surface_fraction_follows_the_surface_not_the_parent() {
+    let mut engine = LayoutEngine::new();
+    let (root, fraction, _) = surface_sized_leaf(&mut engine);
+    engine.set_surface_size(Size::new(1000.0, 600.0));
+    lay_out(&mut engine, root);
+    assert_eq!(engine.layout(fraction).unwrap().width, 500.0);
+
+    assert!(engine.set_surface_size(Size::new(200.0, 600.0)));
+    lay_out(&mut engine, root);
+    assert_eq!(
+        engine.layout(fraction).unwrap().width,
+        100.0,
+        "the resize alone dirtied it: nothing marked the tree by hand"
+    );
+}
+
+#[test]
+fn a_resize_leaves_nodes_that_do_not_name_the_surface_clean() {
+    let mut engine = LayoutEngine::new();
+    let fixed = engine
+        .new_leaf(LayoutStyle::new().width(40.0).height(10.0))
+        .unwrap();
+    let root = engine
+        .new_container(
+            LayoutStyle::new().flex_column().width(300.0).height(100.0),
+            &[fixed],
+        )
+        .unwrap();
+    lay_out(&mut engine, root);
+    assert!(
+        !engine.set_surface_size(Size::new(800.0, 600.0)),
+        "no style names the surface, so there is nothing to re-resolve"
+    );
+    assert!(!engine.is_dirty(root));
+}
+
+#[test]
+fn the_same_surface_size_is_not_a_change() {
+    let mut engine = LayoutEngine::new();
+    let (root, _, _) = surface_sized_leaf(&mut engine);
+    engine.set_surface_size(Size::new(640.0, 480.0));
+    lay_out(&mut engine, root);
+    assert!(!engine.set_surface_size(Size::new(640.0, 480.0)));
+    assert!(!engine.is_dirty(root));
+}
+
+#[test]
+fn filling_a_root_replaces_a_surface_width_it_was_declared_with() {
+    let mut engine = LayoutEngine::new();
+    let root = engine
+        .new_leaf(LayoutStyle::new().width(SizeDimension::SurfaceWidth(0.5)))
+        .unwrap();
+    engine.set_width(root, Some(70.0));
+    engine.set_surface_size(Size::new(1000.0, 600.0));
+    lay_out(&mut engine, root);
+    assert_eq!(engine.layout(root).unwrap().width, 70.0);
+}
+
+#[test]
+fn a_grid_column_sized_by_the_surface_follows_a_resize() {
+    use crate::track::TemplateTrack;
+
+    let mut engine = LayoutEngine::new();
+    let first = engine.new_leaf(LayoutStyle::new().height(10.0)).unwrap();
+    let second = engine.new_leaf(LayoutStyle::new().height(10.0)).unwrap();
+    let grid = engine
+        .new_container(
+            LayoutStyle::new()
+                .display_grid()
+                .width(300.0)
+                .height(100.0)
+                .grid_template_columns(vec![
+                    TemplateTrack::length(SizeDimension::SurfaceWidth(0.1)),
+                    TemplateTrack::fr(1.0),
+                ]),
+            &[first, second],
+        )
+        .unwrap();
+    engine.set_surface_size(Size::new(1000.0, 600.0));
+    lay_out(&mut engine, grid);
+    assert_eq!(engine.layout(first).unwrap().width, 100.0);
+    assert_eq!(engine.layout(second).unwrap().x, 100.0);
+
+    assert!(engine.set_surface_size(Size::new(500.0, 600.0)));
+    lay_out(&mut engine, grid);
+    assert_eq!(engine.layout(first).unwrap().width, 50.0);
+    assert_eq!(engine.layout(second).unwrap().width, 250.0);
 }

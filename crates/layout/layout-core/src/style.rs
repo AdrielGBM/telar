@@ -7,17 +7,49 @@ use taffy::{
 
 pub use taffy::{AlignItems, AvailableSpace, JustifyContent};
 
-use geometry_core::LayoutGrid;
+use geometry_core::{LayoutGrid, Size};
 
 use crate::direction::Direction;
 use crate::track::TemplateTrack;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
-/// A width or height: a length in logical pixels, a percentage of the parent, or `auto`.
+/// A width or height: a length in logical pixels, a fraction of the parent, a fraction of the surface, or `auto`.
+///
+/// The surface variants are fractions like [`Percent`](Self::Percent) (`0.5` is half), taken of the surface the tree is laid out on — the window, the page, the terminal — rather than of the parent. They have no value until the engine knows that surface, so a style holding one is resolved against it at layout time and again whenever it changes; converted directly into a taffy type, one stands in as `auto` (or zero where there is no `auto`).
 pub enum SizeDimension {
     Px(f32),
     Percent(f32),
+    SurfaceWidth(f32),
+    SurfaceHeight(f32),
+    /// A fraction of whichever side of the surface is shorter.
+    SurfaceMin(f32),
+    /// A fraction of whichever side of the surface is longer.
+    SurfaceMax(f32),
     Auto,
+}
+
+impl SizeDimension {
+    /// Whether this length is a fraction of the surface, and so means nothing until the surface's size is known.
+    pub fn is_surface_relative(self) -> bool {
+        matches!(
+            self,
+            SizeDimension::SurfaceWidth(_)
+                | SizeDimension::SurfaceHeight(_)
+                | SizeDimension::SurfaceMin(_)
+                | SizeDimension::SurfaceMax(_)
+        )
+    }
+
+    /// This length in pixels against `surface` if it is a fraction of one, and unchanged otherwise.
+    pub fn against(self, surface: Size) -> Self {
+        match self {
+            SizeDimension::SurfaceWidth(f) => SizeDimension::Px(f * surface.width),
+            SizeDimension::SurfaceHeight(f) => SizeDimension::Px(f * surface.height),
+            SizeDimension::SurfaceMin(f) => SizeDimension::Px(f * surface.min_side()),
+            SizeDimension::SurfaceMax(f) => SizeDimension::Px(f * surface.max_side()),
+            other => other,
+        }
+    }
 }
 
 impl From<f32> for SizeDimension {
@@ -31,7 +63,7 @@ impl From<SizeDimension> for Dimension {
         match d {
             SizeDimension::Px(v) => Dimension::length(v),
             SizeDimension::Percent(v) => Dimension::percent(v),
-            SizeDimension::Auto => Dimension::auto(),
+            _ => Dimension::auto(),
         }
     }
 }
@@ -42,7 +74,7 @@ impl From<SizeDimension> for LengthPercentage {
         match d {
             SizeDimension::Px(v) => LengthPercentage::length(v),
             SizeDimension::Percent(v) => LengthPercentage::percent(v),
-            SizeDimension::Auto => LengthPercentage::length(0.0),
+            _ => LengthPercentage::length(0.0),
         }
     }
 }
@@ -103,8 +135,119 @@ impl From<SizeDimension> for LengthPercentageAuto {
         match d {
             SizeDimension::Px(v) => LengthPercentageAuto::length(v),
             SizeDimension::Percent(v) => LengthPercentageAuto::percent(v),
-            SizeDimension::Auto => LengthPercentageAuto::auto(),
+            _ => LengthPercentageAuto::auto(),
         }
+    }
+}
+
+/// A physical property a surface-relative length can be written into. The logical edges need none: [`LogicalStyle`] already keeps them as [`SizeDimension`]s until resolution.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Slot {
+    Width,
+    Height,
+    MinWidth,
+    MinHeight,
+    MaxWidth,
+    MaxHeight,
+    FlexBasis,
+    PaddingTop,
+    PaddingBottom,
+    PaddingLeft,
+    PaddingRight,
+    MarginTop,
+    MarginBottom,
+    InsetTop,
+    InsetBottom,
+    GapX,
+    GapY,
+}
+
+impl Slot {
+    /// Puts `d` on the grid the way the builder for this property would have, had it been pixels all along.
+    fn snap(self, d: SizeDimension) -> SizeDimension {
+        match self {
+            Slot::Width | Slot::MinWidth | Slot::MaxWidth => size_x(d),
+            Slot::Height | Slot::MinHeight | Slot::MaxHeight => size_y(d),
+            Slot::FlexBasis => d,
+            Slot::PaddingLeft | Slot::PaddingRight | Slot::GapX => space_x(d),
+            Slot::PaddingTop
+            | Slot::PaddingBottom
+            | Slot::MarginTop
+            | Slot::MarginBottom
+            | Slot::GapY => space_y(d),
+            Slot::InsetTop | Slot::InsetBottom => pos_y(d),
+        }
+    }
+
+    fn write(self, style: &mut Style, d: SizeDimension) {
+        match self {
+            Slot::Width => style.size.width = d.into(),
+            Slot::Height => style.size.height = d.into(),
+            Slot::MinWidth => style.min_size.width = d.into(),
+            Slot::MinHeight => style.min_size.height = d.into(),
+            Slot::MaxWidth => style.max_size.width = d.into(),
+            Slot::MaxHeight => style.max_size.height = d.into(),
+            Slot::FlexBasis => style.flex_basis = d.into(),
+            Slot::PaddingTop => style.padding.top = d.into(),
+            Slot::PaddingBottom => style.padding.bottom = d.into(),
+            Slot::PaddingLeft => style.padding.left = d.into(),
+            Slot::PaddingRight => style.padding.right = d.into(),
+            Slot::MarginTop => style.margin.top = d.into(),
+            Slot::MarginBottom => style.margin.bottom = d.into(),
+            Slot::InsetTop => style.inset.top = d.into(),
+            Slot::InsetBottom => style.inset.bottom = d.into(),
+            Slot::GapX => style.gap.width = d.into(),
+            Slot::GapY => style.gap.height = d.into(),
+        }
+    }
+}
+
+/// A grid track list, which a fraction of the surface has to be written into again on every resolution.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum TrackSlot {
+    TemplateColumns,
+    TemplateRows,
+    AutoColumns,
+    AutoRows,
+}
+
+impl TrackSlot {
+    fn is_auto(self) -> bool {
+        matches!(self, TrackSlot::AutoColumns | TrackSlot::AutoRows)
+    }
+
+    fn write(self, style: &mut Style, tracks: &[TemplateTrack], surface: Size) {
+        let template = || {
+            tracks
+                .iter()
+                .map(|track| track.template_component(surface))
+                .collect()
+        };
+        let auto = || {
+            tracks
+                .iter()
+                .map(|track| track.track_sizing_function(surface))
+                .collect()
+        };
+        match self {
+            TrackSlot::TemplateColumns => style.grid_template_columns = template(),
+            TrackSlot::TemplateRows => style.grid_template_rows = template(),
+            TrackSlot::AutoColumns => style.grid_auto_columns = auto(),
+            TrackSlot::AutoRows => style.grid_auto_rows = auto(),
+        }
+    }
+}
+
+/// A logical edge's length in pixels against `surface`, snapped as its builder snaps pixels. A length that was never surface-relative was snapped when it was written and is returned untouched.
+fn settle(
+    d: SizeDimension,
+    surface: Size,
+    snap: fn(SizeDimension) -> SizeDimension,
+) -> SizeDimension {
+    if d.is_surface_relative() {
+        snap(d.against(surface))
+    } else {
+        d
     }
 }
 
@@ -131,6 +274,8 @@ pub(crate) struct LogicalStyle {
     pub(crate) min_height_override: Option<f32>,
     /// Set by `LayoutEngine::set_leading_margin`; `(is_row, px)`, placed by the engine since which physical edge is "leading" depends on the parent's axis.
     pub(crate) leading_margin: Option<(bool, f32)>,
+    /// Set by [`LayoutStyle::bordered`] on a surface that draws strokes in whole cells: the cell its frame needs, reserved at resolution from the padding the box actually resolved to.
+    pub(crate) stroke_cell: Option<LayoutGrid>,
 }
 
 impl LogicalStyle {
@@ -179,6 +324,10 @@ impl Margin {
 pub struct LayoutStyle {
     pub(crate) inner: Style,
     pub(crate) logical: LogicalStyle,
+    /// The physical properties written as a fraction of the surface, each still holding that fraction; [`inner`](Self::inner) holds a placeholder for them until [`resolve`](Self::resolve) knows the surface.
+    surface: Vec<(Slot, SizeDimension)>,
+    /// The grid track lists naming a fraction of the surface, kept as written for the same reason as [`surface`](Self::surface).
+    tracks: Vec<(TrackSlot, Vec<TemplateTrack>)>,
 }
 
 impl LayoutStyle {
@@ -192,7 +341,65 @@ impl LayoutStyle {
                 ..Style::default()
             },
             logical: LogicalStyle::default(),
+            surface: Vec::new(),
+            tracks: Vec::new(),
         }
+    }
+
+    fn put(&mut self, slot: Slot, d: SizeDimension) {
+        let d = slot.snap(d);
+        self.surface.retain(|(held, _)| *held != slot);
+        if d.is_surface_relative() {
+            self.surface.push((slot, d));
+        }
+        slot.write(&mut self.inner, d);
+    }
+
+    /// Sets a definite width, or `auto` when `None`, exactly as given: what the engine fills a root with is the space it was handed, already on the grid.
+    pub(crate) fn set_definite_width(&mut self, width: Option<f32>) {
+        self.surface.retain(|(held, _)| *held != Slot::Width);
+        self.inner.size.width = width.map_or(Dimension::auto(), Dimension::length);
+    }
+
+    /// The height counterpart of [`set_definite_width`](Self::set_definite_width).
+    pub(crate) fn set_definite_height(&mut self, height: Option<f32>) {
+        self.surface.retain(|(held, _)| *held != Slot::Height);
+        self.inner.size.height = height.map_or(Dimension::auto(), Dimension::length);
+    }
+
+    fn put_tracks(&mut self, slot: TrackSlot, tracks: Vec<TemplateTrack>) {
+        if slot.is_auto() {
+            tracks.iter().for_each(TemplateTrack::assert_single);
+        }
+        slot.write(&mut self.inner, &tracks, Size::ZERO);
+        self.tracks.retain(|(held, _)| *held != slot);
+        if tracks.iter().any(TemplateTrack::is_surface_relative) {
+            self.tracks.push((slot, tracks));
+        }
+    }
+
+    fn surface_slot(&self, slot: Slot) -> Option<SizeDimension> {
+        self.surface
+            .iter()
+            .find_map(|&(held, d)| (held == slot).then_some(d))
+    }
+
+    /// Whether anything in this style is a fraction of the surface, and so has to be resolved again when the surface changes size.
+    pub fn is_surface_relative(&self) -> bool {
+        let logical = &self.logical;
+        !self.surface.is_empty()
+            || !self.tracks.is_empty()
+            || [
+                logical.padding_start,
+                logical.padding_end,
+                logical.margin_start,
+                logical.margin_end,
+                logical.inset_start,
+                logical.inset_end,
+            ]
+            .into_iter()
+            .flatten()
+            .any(SizeDimension::is_surface_relative)
     }
 
     /// A flex row along the inline axis: items run left-to-right under [`Direction::Ltr`] and right-to-left under [`Direction::Rtl`], the way `flex-direction: row` follows `dir` on the web. Use [`flex_row_reverse`](Self::flex_row_reverse) for a row that is reversed in both directions.
@@ -246,6 +453,8 @@ impl LayoutStyle {
             top: zero,
             bottom: zero,
         };
+        self.surface
+            .retain(|(held, _)| !matches!(held, Slot::InsetTop | Slot::InsetBottom));
         self
     }
 
@@ -257,63 +466,63 @@ impl LayoutStyle {
 
     /// Inset from the top edge, for a node already taken out of flow. Physical, not logical: `top` does not swap under RTL the way [`inset_start`](Self::inset_start) does.
     pub fn inset_top(mut self, size: impl Into<SizeDimension>) -> Self {
-        self.inner.inset.top = pos_y(size).into();
+        self.put(Slot::InsetTop, size.into());
         self
     }
 
     /// Inset from the bottom edge, for a node already taken out of flow.
     pub fn inset_bottom(mut self, size: impl Into<SizeDimension>) -> Self {
-        self.inner.inset.bottom = pos_y(size).into();
+        self.put(Slot::InsetBottom, size.into());
         self
     }
 
-    /// The node's `width` in pixels if it is a definite length, else `None` (e.g. percent or auto). Lets widgets with an intrinsic size (e.g. `<svg>`/`<img>`) inspect a caller-supplied width before registering their layout leaf.
+    /// The node's `width` in pixels if it is a definite length, else `None` (e.g. percent, a fraction of the surface, or auto). Lets widgets with an intrinsic size (e.g. `<svg>`/`<img>`) inspect a caller-supplied width before registering their layout leaf.
     pub fn width_px(&self) -> Option<f32> {
         self.inner.size.width.into_option()
     }
 
     /// True when `width` was left at its default, which taffy also treats as `auto`.
     pub fn is_width_auto(&self) -> bool {
-        self.inner.size.width.is_auto()
+        self.inner.size.width.is_auto() && self.surface_slot(Slot::Width).is_none()
     }
 
     pub fn width(mut self, dim: impl Into<SizeDimension>) -> Self {
-        self.inner.size.width = size_x(dim).into();
+        self.put(Slot::Width, dim.into());
         self
     }
 
-    /// The node's `height` in pixels if it is a definite length, else `None` (e.g. percent or auto).
+    /// The node's `height` in pixels if it is a definite length, else `None` (e.g. percent, a fraction of the surface, or auto).
     pub fn height_px(&self) -> Option<f32> {
         self.inner.size.height.into_option()
     }
 
     /// True when `height` was left at its default, which taffy also treats as `auto`.
     pub fn is_height_auto(&self) -> bool {
-        self.inner.size.height.is_auto()
+        self.inner.size.height.is_auto() && self.surface_slot(Slot::Height).is_none()
     }
 
     pub fn height(mut self, dim: impl Into<SizeDimension>) -> Self {
-        self.inner.size.height = size_y(dim).into();
+        self.put(Slot::Height, dim.into());
         self
     }
 
     pub fn min_width(mut self, dim: impl Into<SizeDimension>) -> Self {
-        self.inner.min_size.width = size_x(dim).into();
+        self.put(Slot::MinWidth, dim.into());
         self
     }
 
     pub fn min_height(mut self, dim: impl Into<SizeDimension>) -> Self {
-        self.inner.min_size.height = size_y(dim).into();
+        self.put(Slot::MinHeight, dim.into());
         self
     }
 
     pub fn max_width(mut self, dim: impl Into<SizeDimension>) -> Self {
-        self.inner.max_size.width = size_x(dim).into();
+        self.put(Slot::MaxWidth, dim.into());
         self
     }
 
     pub fn max_height(mut self, dim: impl Into<SizeDimension>) -> Self {
-        self.inner.max_size.height = size_y(dim).into();
+        self.put(Slot::MaxHeight, dim.into());
         self
     }
 
@@ -328,56 +537,55 @@ impl LayoutStyle {
     }
 
     pub fn flex_basis(mut self, dim: impl Into<SizeDimension>) -> Self {
-        self.inner.flex_basis = dim.into().into();
+        self.put(Slot::FlexBasis, dim.into());
         self
     }
 
     pub fn padding_all(mut self, size: impl Into<SizeDimension>) -> Self {
         let d = size.into();
         // Snapped per axis, not once: the two steps differ, and a cell is taller than it is wide.
-        let (x, y): (LengthPercentage, LengthPercentage) = (space_x(d).into(), space_y(d).into());
-        self.inner.padding = taffy::geometry::Rect {
-            left: x,
-            right: x,
-            top: y,
-            bottom: y,
-        };
+        for slot in [
+            Slot::PaddingLeft,
+            Slot::PaddingRight,
+            Slot::PaddingTop,
+            Slot::PaddingBottom,
+        ] {
+            self.put(slot, d);
+        }
         self
     }
 
     pub fn padding_horizontal(mut self, size: impl Into<SizeDimension>) -> Self {
-        let value: LengthPercentage = space_x(size).into();
-        self.inner.padding.left = value;
-        self.inner.padding.right = value;
+        let d = size.into();
+        self.put(Slot::PaddingLeft, d);
+        self.put(Slot::PaddingRight, d);
         self
     }
 
     pub fn padding_vertical(mut self, size: impl Into<SizeDimension>) -> Self {
-        let value: LengthPercentage = space_y(size).into();
-        self.inner.padding.top = value;
-        self.inner.padding.bottom = value;
+        let d = size.into();
+        self.put(Slot::PaddingTop, d);
+        self.put(Slot::PaddingBottom, d);
         self
     }
 
     pub fn padding_top(mut self, size: impl Into<SizeDimension>) -> Self {
-        self.inner.padding.top = space_y(size).into();
+        self.put(Slot::PaddingTop, size.into());
         self
     }
 
     pub fn padding_bottom(mut self, size: impl Into<SizeDimension>) -> Self {
-        self.inner.padding.bottom = space_y(size).into();
+        self.put(Slot::PaddingBottom, size.into());
         self
     }
 
     pub fn padding_left(mut self, px: f32) -> Self {
-        self.inner.padding.left =
-            LengthPercentage::length(geometry_core::layout_grid().snap_space_x(px));
+        self.put(Slot::PaddingLeft, SizeDimension::Px(px));
         self
     }
 
     pub fn padding_right(mut self, px: f32) -> Self {
-        self.inner.padding.right =
-            LengthPercentage::length(geometry_core::layout_grid().snap_space_x(px));
+        self.put(Slot::PaddingRight, SizeDimension::Px(px));
         self
     }
 
@@ -403,13 +611,13 @@ impl LayoutStyle {
 
     /// Margin on the edge the block axis starts from — the top, in every writing mode this engine supports.
     pub fn margin_block_start(mut self, size: impl Into<SizeDimension>) -> Self {
-        self.inner.margin.top = space_y(size).into();
+        self.put(Slot::MarginTop, size.into());
         self
     }
 
     /// Margin on the edge the block axis ends at — the bottom.
     pub fn margin_block_end(mut self, size: impl Into<SizeDimension>) -> Self {
-        self.inner.margin.bottom = space_y(size).into();
+        self.put(Slot::MarginBottom, size.into());
         self
     }
 
@@ -461,35 +669,24 @@ impl LayoutStyle {
 
     /// The rule itself, with the grid handed in rather than read. Split out so it can be tested without writing the process-wide grid: that global is documented as written once by a frontend before any component exists, and a test that re-writes it mid-run breaks the contract every other test in the binary is relying on.
     fn bordered_on(mut self, grid: LayoutGrid) -> Self {
-        // Only what the padding does not already give. A raster backend draws a stroke *inside* the box, overlapping whatever padding is there, and the cell equivalent is a frame in the outermost cell — so a box already padded by a cell or more has the room and reserving another would double its frame for nothing. Read from `self`, which is why this belongs after the padding calls in a builder chain.
-        let short = |declared: LengthPercentage, step: f32| {
-            LengthPercentage::length((step - length_of(declared)).max(0.0))
-        };
-        self.inner.border = taffy::geometry::Rect {
-            left: short(self.inner.padding.left, grid.x),
-            right: short(self.inner.padding.right, grid.x),
-            top: short(self.inner.padding.top, grid.y),
-            bottom: short(self.inner.padding.bottom, grid.y),
-        };
+        self.logical.stroke_cell = Some(grid);
         self
     }
 
     pub fn gap(mut self, size: impl Into<SizeDimension>) -> Self {
         let d = size.into();
-        self.inner.gap = taffy::geometry::Size {
-            width: space_x(d).into(),
-            height: space_y(d).into(),
-        };
+        self.put(Slot::GapX, d);
+        self.put(Slot::GapY, d);
         self
     }
 
     pub fn gap_x(mut self, size: impl Into<SizeDimension>) -> Self {
-        self.inner.gap.width = space_x(size).into();
+        self.put(Slot::GapX, size.into());
         self
     }
 
     pub fn gap_y(mut self, size: impl Into<SizeDimension>) -> Self {
-        self.inner.gap.height = space_y(size).into();
+        self.put(Slot::GapY, size.into());
         self
     }
 
@@ -532,36 +729,24 @@ impl LayoutStyle {
     }
 
     pub fn grid_template_columns(mut self, tracks: Vec<TemplateTrack>) -> Self {
-        self.inner.grid_template_columns = tracks
-            .into_iter()
-            .map(|t| t.into_template_component())
-            .collect();
+        self.put_tracks(TrackSlot::TemplateColumns, tracks);
         self
     }
 
     pub fn grid_template_rows(mut self, tracks: Vec<TemplateTrack>) -> Self {
-        self.inner.grid_template_rows = tracks
-            .into_iter()
-            .map(|t| t.into_template_component())
-            .collect();
+        self.put_tracks(TrackSlot::TemplateRows, tracks);
         self
     }
 
     /// Sizes the implicit rows a grid creates beyond its `grid_template_rows` — the tracks explicit placement (`grid_row`) or overflow auto-placed items land on. Defaults to `auto`, which is what taffy assumes when this is never called.
     pub fn grid_auto_rows(mut self, tracks: Vec<TemplateTrack>) -> Self {
-        self.inner.grid_auto_rows = tracks
-            .into_iter()
-            .map(TemplateTrack::into_track_sizing_function)
-            .collect();
+        self.put_tracks(TrackSlot::AutoRows, tracks);
         self
     }
 
     /// Sizes the implicit columns, as [`Self::grid_auto_rows`] does for rows.
     pub fn grid_auto_columns(mut self, tracks: Vec<TemplateTrack>) -> Self {
-        self.inner.grid_auto_columns = tracks
-            .into_iter()
-            .map(TemplateTrack::into_track_sizing_function)
-            .collect();
+        self.put_tracks(TrackSlot::AutoColumns, tracks);
         self
     }
 
@@ -604,11 +789,14 @@ impl LayoutStyle {
         self
     }
 
-    /// The physical `taffy::Style` this describes under `direction`. Called by the engine at every point a style reaches a node, and again for each affected node when the direction flips.
+    /// The physical `taffy::Style` this describes under `direction`, on a surface of `surface` size. Called by the engine at every point a style reaches a node, and again for each affected node when the direction flips or the surface is resized.
     ///
     /// Does not place the leading margin ([`LogicalStyle::leading_margin`]) — the engine does that afterwards, since it needs the parent's axis to know which physical edge "leading" means.
-    pub(crate) fn resolve(&self, direction: Direction) -> Style {
+    pub(crate) fn resolve(&self, direction: Direction, surface: Size) -> Style {
         let mut style = self.inner.clone();
+        for &(slot, d) in &self.surface {
+            slot.write(&mut style, slot.snap(d.against(surface)));
+        }
         let logical = &self.logical;
         if logical.row_follows_direction || logical.row_forced {
             style.flex_direction = if direction.is_rtl() {
@@ -630,18 +818,33 @@ impl LayoutStyle {
         };
         for (edge, size) in [(start, logical.padding_start), (end, logical.padding_end)] {
             if let Some(size) = size {
-                *edge.of_mut(&mut style.padding) = size.into();
+                *edge.of_mut(&mut style.padding) = settle(size, surface, space_x).into();
             }
         }
         for (edge, size) in [(start, logical.margin_start), (end, logical.margin_end)] {
             if let Some(size) = size {
-                *edge.of_mut(&mut style.margin) = size.into();
+                *edge.of_mut(&mut style.margin) = settle(size, surface, space_x).into();
             }
         }
         for (edge, size) in [(start, logical.inset_start), (end, logical.inset_end)] {
             if let Some(size) = size {
-                *edge.of_mut(&mut style.inset) = size.into();
+                *edge.of_mut(&mut style.inset) = settle(size, surface, pos_x).into();
             }
+        }
+        for (slot, tracks) in &self.tracks {
+            slot.write(&mut style, tracks, surface);
+        }
+        if let Some(grid) = logical.stroke_cell {
+            // Only what the padding does not already give: a raster backend draws a stroke inside the box over its padding, and the cell equivalent is a frame in the outermost cell, so a box padded by a cell or more already has the room. Read from the resolved padding, logical and surface-relative edges included, so the builder order does not matter.
+            let short = |padding: LengthPercentage, step: f32| {
+                LengthPercentage::length((step - length_of(padding)).max(0.0))
+            };
+            style.border = taffy::geometry::Rect {
+                left: short(style.padding.left, grid.x),
+                right: short(style.padding.right, grid.x),
+                top: short(style.padding.top, grid.y),
+                bottom: short(style.padding.bottom, grid.y),
+            };
         }
         style
     }
@@ -671,6 +874,10 @@ impl Default for LayoutStyle {
 #[cfg(test)]
 #[path = "style_border_reservation_test.rs"]
 mod border_reservation_tests;
+
+#[cfg(test)]
+#[path = "style_surface_test.rs"]
+mod surface_tests;
 
 #[cfg(test)]
 #[path = "style_test.rs"]

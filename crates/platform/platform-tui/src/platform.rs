@@ -105,6 +105,12 @@ impl TuiPlatform {
         mapper: &mut Mapper,
     ) -> Result<(), PlatformError> {
         handler.new_events();
+        handler.on_event(
+            Event::SystemPreferencesChanged {
+                preferences: crate::preferences::read(),
+            },
+            window,
+        );
         let resumed = handler.on_resume(window);
         handler.about_to_wait();
         if !resumed {

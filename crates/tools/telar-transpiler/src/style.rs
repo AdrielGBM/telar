@@ -142,7 +142,7 @@ fn layout_call(key: &str, value: &str) -> Result<Option<String>, String> {
         "cols" => {
             let tracks = parse_grid_template(value).ok_or_else(|| {
                 format!(
-                    "`cols:{value}` is not a track list: write a count (`cols:3`), sizes (`cols(240 1fr auto)`), or `cols(fill 260)`"
+                    "`cols:{value}` is not a track list: write a count (`cols:3`), sizes (`cols(240 25sw 1fr auto)`), or `cols(fill 260)`"
                 )
             })?;
             format!(".display_grid().grid_template_columns(vec![{tracks}])")
@@ -204,11 +204,10 @@ fn parse_grid_template(value: &str) -> Option<String> {
     let s = value.trim();
     let tokens: Vec<&str> = s.split_whitespace().collect();
     if let [kind @ ("fill" | "fit"), min] = tokens.as_slice() {
-        let min_px = min.parse::<f32>().ok()?;
+        let min = fixed_track(min)?;
         let repeat = if *kind == "fill" { "fill" } else { "fit" };
         return Some(format!(
-            "TemplateTrack::{repeat}(TemplateTrack::minmax(TemplateTrack::px({}), TemplateTrack::fr(1.0)))",
-            format_f32(min_px)
+            "TemplateTrack::{repeat}(TemplateTrack::minmax({min}, TemplateTrack::fr(1.0)))"
         ));
     }
     if let Ok(n) = s.parse::<u32>() {
@@ -228,6 +227,17 @@ fn parse_track_token(s: &str) -> Option<String> {
     }
     if s == "auto" {
         return Some("TemplateTrack::auto()".to_string());
+    }
+    fixed_track(s)
+}
+
+/// A track of one fixed length: pixels, or a fraction of the surface written as `25sw` the way any other length is.
+fn fixed_track(s: &str) -> Option<String> {
+    if let Some((variant, n)) = surface_fraction(s) {
+        return Some(format!(
+            "TemplateTrack::length(SizeDimension::{variant}({}))",
+            format_f32(n / 100.0)
+        ));
     }
     let n: f32 = s.parse().ok()?;
     Some(format!("TemplateTrack::px({})", format_f32(n)))
@@ -256,7 +266,7 @@ pub fn color(value: &str) -> Result<(), String> {
 
 /// Resolves a numeric value to the Rust expression it stands for.
 ///
-/// Two token shapes resolve here — `50%` and a `$` read — and a plain literal is normalised so `12` reaches an `f32` parameter. Everything else is the author's own Rust, spliced as written for rustc to judge against this attribute's own line.
+/// Three token shapes resolve here — `50%`, a fraction of the surface like `50sw` (see [`surface_fraction`]) and a `$` read — and a plain literal is normalised so `12` reaches an `f32` parameter. Everything else is the author's own Rust, spliced as written for rustc to judge against this attribute's own line.
 pub fn format_number(value: &str) -> Result<String, String> {
     // Emitted, the markup's delimiting parens warn `unused_parens` in code the author cannot edit.
     let v = value.trim();
@@ -268,6 +278,12 @@ pub fn format_number(value: &str) -> Result<String, String> {
             Err(_) => Err(format!("`{v}` is not a percentage")),
         };
     }
+    if let Some((variant, n)) = surface_fraction(v) {
+        return Ok(format!(
+            "SizeDimension::{variant}({})",
+            format_f32(n / 100.0)
+        ));
+    }
     // Emitted inline, which is correct in both places the style expression lands: at construction, and again inside the `styled_by` effect a reactive layout prop grows.
     if v.contains('$') {
         return Ok(crate::view::substitute_reads(v));
@@ -276,6 +292,20 @@ pub fn format_number(value: &str) -> Result<String, String> {
         return Ok(format_f32(n));
     }
     Ok(v.to_string())
+}
+
+/// The fraction of the surface a token like `50sw` names, as the `SizeDimension` variant and the number before the unit: `sw` and `sh` are the surface's width and height, `smin` and `smax` its shorter and longer side. Named for the surface rather than the viewport because a window and a terminal have one too.
+pub fn surface_fraction(value: &str) -> Option<(&'static str, f32)> {
+    const UNITS: [(&str, &str); 4] = [
+        ("smin", "SurfaceMin"),
+        ("smax", "SurfaceMax"),
+        ("sw", "SurfaceWidth"),
+        ("sh", "SurfaceHeight"),
+    ];
+    UNITS.iter().find_map(|(unit, variant)| {
+        let n = value.strip_suffix(unit)?.trim().parse::<f32>().ok()?;
+        Some((*variant, n))
+    })
 }
 
 /// The integer twin of [`format_number`], for the one property that counts rather than measures: `lines:2` feeds a `u16`, so it stays `2` where a length would become `2.0`.

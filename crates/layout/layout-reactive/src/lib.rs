@@ -4,8 +4,13 @@
 
 mod context;
 mod direction;
+mod surface_size;
 
 pub use direction::{current_direction, set_direction, use_direction};
+pub use surface_size::{
+    SurfaceSizeContext, SurfaceSizeGuard, set_surface_size, surface_size, use_surface_height,
+    use_surface_size, use_surface_width,
+};
 
 pub use context::{
     Ancestors, LayoutContext, LayoutGuard, NodeRecording, ParentsContext, ParentsGuard,

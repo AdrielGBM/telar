@@ -136,7 +136,7 @@ fn a_tree_mounted_before_the_flush_still_takes_the_theme_the_flush_installs() {
     );
 }
 
-/// And whether the *application* is told, which a host that draws other applications' trees is the whole reason for: it has one theme runtime per loaded dylib, and `set_system_dark` reaches only its own. `Event::ColorSchemeChanged` is consumed by the runner and never reaches the tree, so this hook is the only place such a host can hear the change and carry it across the boundary.
+/// And whether the *application* is told, which a host that draws other applications' trees is the whole reason for: it has one theme runtime per loaded dylib, and `set_system_dark` reaches only its own. `Event::SystemPreferencesChanged` is consumed by the runner and never reaches the tree, so this hook is the only place such a host can hear the change and carry it across the boundary.
 #[test]
 fn an_application_hosting_other_trees_is_told_the_scheme_changed() {
     use std::cell::Cell;

@@ -3,10 +3,10 @@ use super::*;
 #[test]
 fn logical_padding_resolves_to_the_edge_the_direction_starts_from() {
     let style = LayoutStyle::new().padding_start(8.0).padding_end(2.0);
-    let ltr = style.resolve(Direction::Ltr);
+    let ltr = style.resolve(Direction::Ltr, Size::ZERO);
     assert_eq!(ltr.padding.left, LengthPercentage::length(8.0));
     assert_eq!(ltr.padding.right, LengthPercentage::length(2.0));
-    let rtl = style.resolve(Direction::Rtl);
+    let rtl = style.resolve(Direction::Rtl, Size::ZERO);
     assert_eq!(rtl.padding.right, LengthPercentage::length(8.0));
     assert_eq!(rtl.padding.left, LengthPercentage::length(2.0));
 }
@@ -15,7 +15,7 @@ fn logical_padding_resolves_to_the_edge_the_direction_starts_from() {
 fn a_physical_edge_is_left_alone_by_the_direction() {
     let style = LayoutStyle::new().padding_left(12.0);
     for direction in [Direction::Ltr, Direction::Rtl] {
-        let resolved = style.resolve(direction);
+        let resolved = style.resolve(direction, Size::ZERO);
         assert_eq!(resolved.padding.left, LengthPercentage::length(12.0));
         assert_eq!(resolved.padding.right, LengthPercentage::length(0.0));
     }
@@ -25,8 +25,8 @@ fn a_physical_edge_is_left_alone_by_the_direction() {
 fn resolving_twice_does_not_accumulate() {
     // The engine re-resolves from the same LayoutStyle on every flip, so resolution must be a pure function of the intent.
     let style = LayoutStyle::new().padding_start(8.0);
-    let _ = style.resolve(Direction::Rtl);
-    let back = style.resolve(Direction::Ltr);
+    let _ = style.resolve(Direction::Rtl, Size::ZERO);
+    let back = style.resolve(Direction::Ltr, Size::ZERO);
     assert_eq!(back.padding.left, LengthPercentage::length(8.0));
     assert_eq!(back.padding.right, LengthPercentage::length(0.0));
 }
@@ -35,17 +35,17 @@ fn resolving_twice_does_not_accumulate() {
 fn a_row_reverses_under_rtl_but_an_explicit_reverse_does_not_flip_back() {
     let row = LayoutStyle::new().flex_row();
     assert_eq!(
-        row.resolve(Direction::Ltr).flex_direction,
+        row.resolve(Direction::Ltr, Size::ZERO).flex_direction,
         FlexDirection::Row
     );
     assert_eq!(
-        row.resolve(Direction::Rtl).flex_direction,
+        row.resolve(Direction::Rtl, Size::ZERO).flex_direction,
         FlexDirection::RowReverse
     );
     let reversed = LayoutStyle::new().flex_row_reverse();
     for direction in [Direction::Ltr, Direction::Rtl] {
         assert_eq!(
-            reversed.resolve(direction).flex_direction,
+            reversed.resolve(direction, Size::ZERO).flex_direction,
             FlexDirection::RowReverse,
             "an explicit reverse is physical"
         );
@@ -56,7 +56,10 @@ fn a_row_reverses_under_rtl_but_an_explicit_reverse_does_not_flip_back() {
 fn a_column_is_unaffected_by_direction() {
     let col = LayoutStyle::new().flex_column();
     for direction in [Direction::Ltr, Direction::Rtl] {
-        assert_eq!(col.resolve(direction).flex_direction, FlexDirection::Column);
+        assert_eq!(
+            col.resolve(direction, Size::ZERO).flex_direction,
+            FlexDirection::Column
+        );
     }
 }
 
@@ -64,11 +67,11 @@ fn a_column_is_unaffected_by_direction() {
 #[test]
 fn a_logical_edge_resolves_to_the_side_the_direction_chose() {
     let style = LayoutStyle::new().margin_inline_start(4.0);
-    let ltr = style.resolve(Direction::Ltr).margin;
+    let ltr = style.resolve(Direction::Ltr, Size::ZERO).margin;
     assert_eq!(ltr.left, LengthPercentageAuto::length(4.0));
     assert_eq!(ltr.right, LengthPercentageAuto::length(0.0));
 
-    let rtl = style.resolve(Direction::Rtl).margin;
+    let rtl = style.resolve(Direction::Rtl, Size::ZERO).margin;
     assert_eq!(rtl.right, LengthPercentageAuto::length(4.0));
     assert_eq!(rtl.left, LengthPercentageAuto::length(0.0));
 }
@@ -207,8 +210,8 @@ fn margin_writes_the_block_pair_directly_and_defers_the_inline_pair() {
 #[test]
 fn a_margin_from_the_left_stays_left_under_rtl() {
     let style = LayoutStyle::new().margin_from_left(20.0);
-    let ltr = style.resolve(Direction::Ltr);
-    let rtl = style.resolve(Direction::Rtl);
+    let ltr = style.resolve(Direction::Ltr, Size::ZERO);
+    let rtl = style.resolve(Direction::Rtl, Size::ZERO);
     assert_eq!(ltr.margin.left, LengthPercentageAuto::length(20.0));
     assert_eq!(rtl.margin.left, LengthPercentageAuto::length(20.0));
 }

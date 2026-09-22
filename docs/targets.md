@@ -51,6 +51,10 @@ time — an app that ships to a known fleet can drop one:
 telar = { version = "0.1", default-features = false, features = ["desktop-bare", "software"] }
 ```
 
+Reads the OS theme, reduced motion, high contrast and locales through winit and the platform's own APIs
+(see [docs/system-preferences.md](system-preferences.md)), and its surface size from winit's `Resized`
+(see [docs/surface-size.md](surface-size.md)).
+
 ## Terminal
 
 ```toml
@@ -70,6 +74,11 @@ this build is a third of a desktop one.
 Boxes, fills, strokes and text render; anything that needs subpixel geometry (gradients, shadows, arbitrary
 paths, images) is approximated or dropped, because a cell is the smallest thing a terminal can colour — a
 picture comes back as half blocks, two colours to a cell.
+
+Reads `COLORFGBG` for colour scheme and the environment for locales, like Linux desktop; reduced motion and
+high contrast are unknown here, a terminal keeps those to itself (see
+[docs/system-preferences.md](system-preferences.md)). Its surface size is the terminal's columns and rows,
+snapped to whole cells (see [docs/surface-size.md](surface-size.md)).
 
 ## Browser
 
@@ -117,6 +126,10 @@ here than anywhere else.
 The Android frontend is opt-in rather than implied by the target triple, because a command-line build under
 Termux is an ordinary Linux process with no activity behind it, and linking one would be dead weight.
 
+Reads colour scheme, reduced motion, high contrast and the locale list over JNI, polled every 500 ms (see
+[docs/system-preferences.md](system-preferences.md)); surface size comes from the same winit `Resized` path
+desktop uses (see [docs/surface-size.md](surface-size.md)).
+
 ## Headless
 
 ```toml
@@ -126,6 +139,11 @@ telar = { version = "0.1", default-features = false, features = ["headless"] }
 No surface: `rasterize` takes draw commands and returns pixels, on the CPU. For rendering a component to
 PNG from a test, a server, or a build script. `cargo telar test` is this target — it renders every
 `[preview]` block and reports the ones that failed.
+
+Nothing is read from a real user: a caller declares the `SystemPreferences` snapshot and the sizes to
+resize through (see [docs/system-preferences.md](system-preferences.md) and
+[docs/surface-size.md](surface-size.md)). Left undeclared, every preference is unknown and the surface keeps
+the size it was created with.
 
 ## More than one target from one codebase
 

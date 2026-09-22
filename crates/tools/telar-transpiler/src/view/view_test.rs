@@ -886,6 +886,28 @@ fn a_computed_layout_value_is_re_resolved_even_without_a_sigil() {
     assert!(!flat.contains(".styled_by("), "{flat}");
 }
 
+#[test]
+fn a_fraction_of_the_surface_needs_no_effect_of_its_own() {
+    let out = crate::transpile_source(
+        "[view]\ncol width:50sw height:100sh pad:2smin\n    text \"x\"\n",
+        "demo",
+        None,
+        None,
+    )
+    .unwrap()
+    .rust_code;
+    assert!(
+        out.contains(
+            ".width(SizeDimension::SurfaceWidth(0.5)).height(SizeDimension::SurfaceHeight(1.0)).padding_all(SizeDimension::SurfaceMin(0.02))"
+        ),
+        "{out}"
+    );
+    assert!(
+        !out.contains(".styled_by("),
+        "the layout engine re-resolves it on a resize, so nothing in the view has to:\n{out}"
+    );
+}
+
 /// A closure that runs again cannot move what it names, and a computed value names whatever the author had in scope — including `props`, which the generated scope binds and `#[derive(Props)]` makes cloneable for exactly this.
 #[test]
 fn a_re_resolving_style_clones_what_it_names_instead_of_moving_it() {
