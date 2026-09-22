@@ -1,0 +1,19 @@
+{
+  "package": "landing",
+  "target": "web",
+  "renderer": "dom",
+  "cargo_profile": "web",
+  "gate": "brotli",
+  "threshold_percent": 10,
+  "baseline": {
+    "raw_bytes": 822957,
+    "brotli_bytes": 268597,
+    "gzip_bytes": 336013
+  },
+  "recorded_at": "2026-09-22",
+  "recorded_with": {
+    "wasm_bindgen": "0.2.127",
+    "binaryen": "version_132"
+  },
+  "artifact": "app-<hash>_bg.wasm"
+}

@@ -125,6 +125,36 @@ jobs:
           export CHROMEDRIVER="$CHROMEWEBDRIVER/chromedriver"
           cargo test -p telar-renderer-dom --target wasm32-unknown-unknown
 
+  # `apps/landing` is what ships to production, and the module a visitor downloads is what `--profile web`
+  # plus `wasm-opt` produce, not what `cargo check` sees. This is the only leg that builds it release-mode
+  # and holds its compressed size to a budget — see `.github/size-budget/landing-web-dom.json` and
+  # `docs/build-tuning.md` for what the gate measures and how to move it on purpose.
+  web-size-budget:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+      - uses: Swatinem/rust-cache@v2
+      # Pinned to the `wasm-bindgen` crate's own version (Cargo.lock), same as `parity-web-dom`: the glue
+      # `wasm-bindgen` writes is rejected by a mismatched runtime, and a size gate needs the binary that
+      # ships, not whatever a floating install would resolve to.
+      - name: Install wasm-bindgen-cli
+        run: |
+          curl -fsSL https://github.com/rustwasm/wasm-bindgen/releases/download/0.2.127/wasm-bindgen-0.2.127-x86_64-unknown-linux-musl.tar.gz \
+            | tar -xz --strip-components=1 -C ~/.cargo/bin
+      # Pinned to the version the flake's devShell provides, for the same reason: `wasm-opt`'s output size
+      # is part of what this gate measures, and a different optimiser version can shift it without the
+      # source changing at all.
+      - name: Install binaryen
+        run: |
+          mkdir -p "$HOME/.local"
+          curl -fsSL https://github.com/WebAssembly/binaryen/releases/download/version_132/binaryen-version_132-x86_64-linux.tar.gz \
+            | tar -xz --strip-components=1 -C "$HOME/.local"
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+      - run: .github/scripts/check-web-size.sh
+
   # `cargo telar new` is the first command a new user runs, and nothing else in this file compiles what it
   # writes: the `.rsx`, the theme derive and the app root live as string constants inside `cargo-telar`,
   # where a rename in the facade breaks them with nothing to notice. The generated projects are patched onto
