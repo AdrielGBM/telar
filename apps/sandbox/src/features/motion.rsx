@@ -47,6 +47,24 @@ let equalizer = move |rect: Rect| {
     RenderNode::group(render)
 };
 
+// A Timeline<Color> sampled by a slider's progress rather than by the ticker — the same `value_at`
+// interpolation Keyframes plays per frame, but driven by whatever already has a p in [0,1]. This is the
+// shape a scroll or view progress (T-4.2) will sample once that lands.
+let stops = motion::Timeline::<Color>::builder(theme.get().primary)
+    .then(
+        theme.get().purple,
+        std::time::Duration::from_millis(500),
+        motion::Easing::Linear,
+    )
+    .then(
+        theme.get().success,
+        std::time::Duration::from_millis(500),
+        motion::Easing::Linear,
+    )
+    .build();
+let scrub = signal(0.0f32);
+let scrub_color = memo(move || stops.sample(scrub.get() / 100.0));
+
 // A one-shot timeline; the button restarts this same handle.
 let progress = motion::Keyframes::<f32>::new(0.0)
     .then(
@@ -97,3 +115,11 @@ col gap:20
                 text "{$progress.round()}%" font_size:12 color:$theme.muted
                 button label:"Replay" fill:$theme.primary on_press:(|| { $progress.restart() })
         code_line code:"Keyframes::new(0.0).then(100.0, 1100ms, EaseInOut).start(Repeat::Once)"
+    example title:"Timeline — sampled by progress, not by a clock"
+        card gap:8
+            row gap:14 align:center
+                box width:56 height:56 fill:$scrub_color radius:10
+                col gap:6 grow:1
+                    slider value:$scrub min:0 max:100 step:1 width:220
+                    text "p = {$scrub / 100.0}" font_size:12 color:$theme.muted
+        code_line code:"Timeline::builder(a).then(b, …).then(c, …).build().sample(p)"

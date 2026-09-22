@@ -186,7 +186,9 @@ const CONTAINER_PAINT: &[AttrSpec] = &[
     AttrSpec::free("focus_style").doc(
         "Composed over whichever state won rather than replacing it, so it survives a hover.",
     ),
-    AttrSpec::free("transition"),
+    AttrSpec::free("transition").doc(
+        "Animates a property on change: `transition(prop dur [easing|spring(k,c)])`, comma-separated for several. Easing is linear|ease-in|ease-out|ease-in-out|cubic-bezier(a,b,c,d)|steps(n[, position]); see docs/animations.md.",
+    ),
 ];
 
 /// `align:` on a container: where children sit across the axis they are not laid along.
@@ -500,7 +502,9 @@ const TRANSFORM_ATTRS: &[AttrSpec] = &[
 const TEXT_ONLY_ATTRS: &[AttrSpec] = &[
     AttrSpec::free("lines"),
     AttrSpec::flag("ellipsis"),
-    AttrSpec::free("transition"),
+    AttrSpec::free("transition").doc(
+        "Animates a property on change: `transition(prop dur [easing|spring(k,c)])`, comma-separated for several. Easing is linear|ease-in|ease-out|ease-in-out|cubic-bezier(a,b,c,d)|steps(n[, position]); see docs/animations.md.",
+    ),
 ];
 
 /// Every attribute `tag` accepts, with what each one takes and what it does.

@@ -1,6 +1,6 @@
 //! Parses the `transition(…)` attribute value into per-property animation curves for the `motion` engine.
 //!
-//! Syntax (see `docs/animations.md` → Design → `.rsx` transition syntax): `transition(<prop> <duration> [<easing>|spring(k,c)])`, with several properties separated by commas. `<duration>` is `200ms`/`0.3s`; easing keywords are `linear|ease-in|ease-out|ease-in-out` or `cubic-bezier(a,b,c,d)`; the easing defaults to `ease-out` when omitted; a `spring(stiffness, damping)` replaces the duration+easing entirely.
+//! Syntax (see `docs/animations.md` → Design → `.rsx` transition syntax): `transition(<prop> <duration> [<easing>|spring(k,c)])`, with several properties separated by commas. `<duration>` is `200ms`/`0.3s`; easing keywords are `linear|ease-in|ease-out|ease-in-out`, `cubic-bezier(a,b,c,d)`, or `steps(n[, position])` with `position` one of `jump-start|jump-end|jump-none|jump-both` (or the legacy `start|end` aliases), defaulting to `jump-end`; the easing overall defaults to `ease-out` when omitted; a `spring(stiffness, damping)` replaces the duration+easing entirely.
 
 use crate::style::format_f32;
 
@@ -115,12 +115,15 @@ fn parse_easing(tok: &str) -> Result<String, String> {
         "ease-out" => "motion::Easing::EaseOut".to_string(),
         "ease-in-out" => "motion::Easing::EaseInOut".to_string(),
         _ => {
+            if let Some(inner) = tok.strip_prefix("steps(").and_then(|s| s.strip_suffix(')')) {
+                return parse_steps(inner);
+            }
             let inner = tok
                 .strip_prefix("cubic-bezier(")
                 .and_then(|s| s.strip_suffix(')'))
                 .ok_or_else(|| {
                     format!(
-                        "has an unknown easing `{tok}` (expected linear|ease-in|ease-out|ease-in-out|cubic-bezier(...)|spring(...))"
+                        "has an unknown easing `{tok}` (expected linear|ease-in|ease-out|ease-in-out|cubic-bezier(...)|steps(...)|spring(...))"
                     )
                 })?;
             let nums = parse_f32_list(inner)?;
@@ -133,6 +136,35 @@ fn parse_easing(tok: &str) -> Result<String, String> {
             )
         }
     })
+}
+
+/// Parses the inside of a `steps(n[, position])` easing. `position` accepts the CSS `<step-position>`
+/// keywords (`jump-start|jump-end|jump-none|jump-both`) plus the legacy `start|end` aliases, and
+/// defaults to `jump-end` when omitted — same default as CSS `steps(n)`.
+fn parse_steps(inner: &str) -> Result<String, String> {
+    let parts = split_top_level(inner, ',');
+    let n: u32 = parts
+        .first()
+        .map(|s| s.trim())
+        .filter(|s| !s.is_empty())
+        .ok_or_else(|| "has an empty `steps(...)` (expected `steps(n[, position])`)".to_string())?
+        .parse()
+        .map_err(|_| {
+            format!("has a non-integer step count in `steps({inner})` (expected a whole number)")
+        })?;
+    let position = match parts.get(1).map(|s| s.trim()) {
+        None => "motion::StepPosition::JumpEnd",
+        Some("jump-start" | "start") => "motion::StepPosition::JumpStart",
+        Some("jump-end" | "end") => "motion::StepPosition::JumpEnd",
+        Some("jump-none") => "motion::StepPosition::JumpNone",
+        Some("jump-both") => "motion::StepPosition::JumpBoth",
+        Some(other) => {
+            return Err(format!(
+                "has an unknown step position `{other}` (expected jump-start|jump-end|jump-none|jump-both|start|end)"
+            ));
+        }
+    };
+    Ok(format!("motion::Easing::Steps({n}, {position})"))
 }
 
 fn parse_spring(inner: &str) -> Result<String, String> {

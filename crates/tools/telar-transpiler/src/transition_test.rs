@@ -70,3 +70,62 @@ fn unsupported_property_and_bad_duration_report_errors() {
         "the error must name the duration: {errors:?}"
     );
 }
+
+#[test]
+fn steps_with_no_position_defaults_to_jump_end() {
+    let (specs, errors) = parse_transition_value("translate_x 400ms steps(4)");
+    assert!(errors.is_empty(), "unexpected errors: {errors:?}");
+    assert_eq!(
+        specs[0].curve,
+        "motion::tween(std::time::Duration::from_millis(400), motion::Easing::Steps(4, motion::StepPosition::JumpEnd))"
+    );
+}
+
+#[test]
+fn steps_accepts_css_and_legacy_positions() {
+    let (specs, _) = parse_transition_value("translate_x 400ms steps(4, jump-start)");
+    assert_eq!(
+        specs[0].curve,
+        "motion::tween(std::time::Duration::from_millis(400), motion::Easing::Steps(4, motion::StepPosition::JumpStart))"
+    );
+    let (specs, _) = parse_transition_value("translate_x 400ms steps(4, start)");
+    assert_eq!(
+        specs[0].curve,
+        "motion::tween(std::time::Duration::from_millis(400), motion::Easing::Steps(4, motion::StepPosition::JumpStart))"
+    );
+    let (specs, _) = parse_transition_value("translate_x 400ms steps(5, jump-none)");
+    assert_eq!(
+        specs[0].curve,
+        "motion::tween(std::time::Duration::from_millis(400), motion::Easing::Steps(5, motion::StepPosition::JumpNone))"
+    );
+    let (specs, _) = parse_transition_value("translate_x 400ms steps(3, jump-both)");
+    assert_eq!(
+        specs[0].curve,
+        "motion::tween(std::time::Duration::from_millis(400), motion::Easing::Steps(3, motion::StepPosition::JumpBoth))"
+    );
+}
+
+#[test]
+fn steps_rejects_unknown_position_and_non_integer_count() {
+    let (_, errors) = parse_transition_value("translate_x 400ms steps(4, mid)");
+    assert!(
+        errors[0].contains("unknown step position `mid`"),
+        "{errors:?}"
+    );
+    let (_, errors) = parse_transition_value("translate_x 400ms steps(4.5)");
+    assert!(errors[0].contains("non-integer step count"), "{errors:?}");
+}
+
+#[test]
+fn steps_composes_with_comma_separated_clauses() {
+    let (specs, errors) =
+        parse_transition_value("opacity 200ms, translate_x 400ms steps(6, jump-both)");
+    assert!(errors.is_empty(), "unexpected errors: {errors:?}");
+    assert_eq!(specs.len(), 2);
+    assert_eq!(specs[1].prop, "translate_x");
+    assert!(
+        specs[1]
+            .curve
+            .contains("Steps(6, motion::StepPosition::JumpBoth)")
+    );
+}

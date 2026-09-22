@@ -8,6 +8,8 @@ use crate::shared::components::prop_row::{prop_row, PropRowProps};
 let accent = signal(theme.get().primary);
 let alt = signal(false);
 let fade = signal(1.0f32);
+let stepped = signal(false);
+let stepped_x = memo(move || if stepped.get() { 176.0 } else { 0.0 });
 
 [view]
 col gap:20
@@ -30,8 +32,15 @@ col gap:20
                     text "fade" font_size:13 color:$theme.on_primary
                 button label:"Toggle" fill:$theme.primary on_press:(|| { let v = $fade.peek(); $fade.set(if v > 0.5 { 0.15 } else { 1.0 }) })
         code_line code:"box opacity:$fade transition(opacity 300ms ease-in-out)"
+    example title:"Steps — a mechanical jump instead of a continuous ease"
+        card gap:12
+            row gap:14 align:center wrap
+                box width:24 height:24 fill:$theme.primary radius:6 translate_x:$stepped_x transition(translate_x 600ms steps(6, jump-end))
+                button label:"Move" fill:$theme.primary on_press:(|| { $stepped.toggle() })
+        code_line code:"box translate_x:$x transition(translate_x 600ms steps(6, jump-end))"
     example title:"Notes"
         col gap:6
             prop_row name:"transition(…)" values:"prop dur easing" about:"e.g. fill 250ms ease-out — runs when the value changes."
             prop_row name:"properties" values:"fill·stroke·color·opacity" about:"Only these animate today."
+            prop_row name:"steps(n, pos)" values:"jump-start·jump-end·jump-none·jump-both" about:"n flat plateaus instead of a curve, CSS steps() semantics."
             prop_row name:"spring(k, c)" values:"stiffness, damping" about:"Physics curve instead of a fixed duration."

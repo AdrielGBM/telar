@@ -61,10 +61,91 @@ fn value_at<T: Lerp>(steps: &[Step<T>], t: f32) -> T {
     step.start.lerp(&step.end, step.easing.apply(local))
 }
 
-pub(crate) struct KeyframesInner<T: Lerp + 'static> {
-    signal: RwSignal<T>,
+/// A sequence of legs sampled by progress `p ∈ [0, 1]` rather than by wall-clock time.
+///
+/// `Timeline` is the shared machinery behind [`Keyframes`]: a `Keyframes` is a `Timeline` driven by
+/// the ticker, converting elapsed time into a progress fraction before sampling. Anything that already
+/// owns a progress value — a scroll or view range, a drag gesture, a scrubber — samples the same
+/// interpolation this way without the ticker.
+pub struct Timeline<T: Lerp> {
     steps: Vec<Step<T>>,
     total_duration: f32,
+}
+
+impl<T: Lerp> Timeline<T> {
+    /// Start building a sequence resting at `initial`.
+    #[allow(clippy::new_ret_no_self)]
+    pub fn builder(initial: T) -> TimelineBuilder<T> {
+        TimelineBuilder {
+            initial: initial.clone(),
+            cursor: initial,
+            steps: Vec::new(),
+        }
+    }
+
+    /// The value at progress `p`, clamped to `[0, 1]`. `p=0` is the first step's start, `p=1` the last
+    /// step's end; a `Timeline` with no `then()` steps holds `initial` at every `p`.
+    pub fn sample(&self, p: f32) -> T {
+        let t = p.clamp(0.0, 1.0) * self.total_duration;
+        value_at(&self.steps, t)
+    }
+}
+
+/// Accumulates steps for a [`Timeline`] before it is sampled.
+pub struct TimelineBuilder<T: Lerp> {
+    initial: T,
+    // Running end value of the last appended step (or `initial` if none yet), so the next step knows its start.
+    cursor: T,
+    steps: Vec<Step<T>>,
+}
+
+impl<T: Lerp> TimelineBuilder<T> {
+    /// Append a step interpolating from the current end of the sequence to `value`.
+    pub fn then(mut self, value: T, duration: Duration, easing: Easing) -> Self {
+        self.steps.push(Step {
+            start: self.cursor,
+            end: value.clone(),
+            duration,
+            easing,
+        });
+        self.cursor = value;
+        self
+    }
+
+    /// Append a step that holds the current value for `duration` (delay / stagger).
+    pub fn hold(mut self, duration: Duration) -> Self {
+        self.steps.push(Step {
+            start: self.cursor.clone(),
+            end: self.cursor.clone(),
+            duration,
+            easing: Easing::Linear,
+        });
+        self
+    }
+
+    pub fn build(self) -> Timeline<T> {
+        let steps = if self.steps.is_empty() {
+            // A sequence needs at least one step so `locate`/`value_at` never see an empty slice.
+            vec![Step {
+                start: self.initial.clone(),
+                end: self.initial.clone(),
+                duration: Duration::ZERO,
+                easing: Easing::Linear,
+            }]
+        } else {
+            self.steps
+        };
+        let total_duration = steps.iter().map(|s| s.duration.as_secs_f32()).sum();
+        Timeline {
+            steps,
+            total_duration,
+        }
+    }
+}
+
+pub(crate) struct KeyframesInner<T: Lerp + 'static> {
+    signal: RwSignal<T>,
+    timeline: Timeline<T>,
     initial: T,
     repeat: Repeat,
     direction: Direction,
@@ -99,33 +180,38 @@ impl<T: Lerp + 'static> KeyframesInner<T> {
             return None;
         }
         // All-zero-duration sequence: Once settles instantly; Loop/PingPong just hold to avoid a `% 0.0`.
-        if self.total_duration <= 0.0 {
+        if self.timeline.total_duration <= 0.0 {
             return matches!(self.repeat, Repeat::Once).then(|| self.finish_once());
         }
         self.advance(dt);
-        if matches!(self.repeat, Repeat::Once) && self.elapsed_secs >= self.total_duration {
+        if matches!(self.repeat, Repeat::Once) && self.elapsed_secs >= self.timeline.total_duration
+        {
             return Some(self.finish_once());
         }
-        self.current = value_at(&self.steps, self.elapsed_secs);
+        self.current = value_at(&self.timeline.steps, self.elapsed_secs);
         Some(self.current.clone())
     }
 
     fn advance(&mut self, dt: f32) {
         match self.repeat {
-            Repeat::Once => self.elapsed_secs = (self.elapsed_secs + dt).min(self.total_duration),
+            Repeat::Once => {
+                self.elapsed_secs = (self.elapsed_secs + dt).min(self.timeline.total_duration)
+            }
             // Wrapping back to 0 replays the first step's start value, which is a deliberate discrete jump if it differs from the last step's end (CSS-style restart, not a smoothed loop).
-            Repeat::Loop => self.elapsed_secs = (self.elapsed_secs + dt) % self.total_duration,
+            Repeat::Loop => {
+                self.elapsed_secs = (self.elapsed_secs + dt) % self.timeline.total_duration
+            }
             Repeat::PingPong => {
                 let mut remaining = dt;
                 while remaining > 0.0 {
                     match self.direction {
                         Direction::Forward => {
-                            let to_edge = self.total_duration - self.elapsed_secs;
+                            let to_edge = self.timeline.total_duration - self.elapsed_secs;
                             if remaining < to_edge {
                                 self.elapsed_secs += remaining;
                                 remaining = 0.0;
                             } else {
-                                self.elapsed_secs = self.total_duration;
+                                self.elapsed_secs = self.timeline.total_duration;
                                 remaining -= to_edge;
                                 self.direction = Direction::Backward;
                             }
@@ -148,8 +234,14 @@ impl<T: Lerp + 'static> KeyframesInner<T> {
     }
 
     fn finish_once(&mut self) -> T {
-        self.elapsed_secs = self.total_duration;
-        self.current = self.steps.last().expect("steps is never empty").end.clone();
+        self.elapsed_secs = self.timeline.total_duration;
+        self.current = self
+            .timeline
+            .steps
+            .last()
+            .expect("steps is never empty")
+            .end
+            .clone();
         self.completed_once = true;
         self.settled = true;
         self.current.clone()
@@ -160,12 +252,12 @@ impl<T: Lerp + 'static> KeyframesInner<T> {
         if matches!(self.repeat, Repeat::Once) {
             return self.finish_once();
         }
-        let (_, start_cum, end_cum) = locate(&self.steps, self.elapsed_secs);
+        let (_, start_cum, end_cum) = locate(&self.timeline.steps, self.elapsed_secs);
         self.elapsed_secs = match self.direction {
             Direction::Forward => end_cum,
             Direction::Backward => start_cum,
         };
-        self.current = value_at(&self.steps, self.elapsed_secs);
+        self.current = value_at(&self.timeline.steps, self.elapsed_secs);
         self.current.clone()
     }
 }
@@ -210,8 +302,7 @@ impl<T: Lerp + 'static> Keyframes<T> {
     pub fn new(initial: T) -> KeyframesBuilder<T> {
         KeyframesBuilder {
             initial: initial.clone(),
-            cursor: initial,
-            steps: Vec::new(),
+            inner: Timeline::builder(initial),
         }
     }
 
@@ -258,57 +349,33 @@ impl<T: Lerp + 'static> Keyframes<T> {
     }
 }
 
-/// Accumulates steps for a [`Keyframes`] sequence before it starts.
+/// Accumulates steps for a [`Keyframes`] sequence before it starts; a thin, time-driven wrapper over
+/// [`TimelineBuilder`] so a `Keyframes` sequence is expressed with the same steps a [`Timeline`] samples.
 pub struct KeyframesBuilder<T: Lerp + 'static> {
     initial: T,
-    // Running end value of the last appended step (or `initial` if none yet), so the next step knows its start.
-    cursor: T,
-    steps: Vec<Step<T>>,
+    inner: TimelineBuilder<T>,
 }
 
 impl<T: Lerp + 'static> KeyframesBuilder<T> {
     /// Append a step interpolating from the current end of the sequence to `value`.
     pub fn then(mut self, value: T, duration: Duration, easing: Easing) -> Self {
-        self.steps.push(Step {
-            start: self.cursor,
-            end: value.clone(),
-            duration,
-            easing,
-        });
-        self.cursor = value;
+        self.inner = self.inner.then(value, duration, easing);
         self
     }
 
     /// Append a step that holds the current value for `duration` (delay / stagger).
     pub fn hold(mut self, duration: Duration) -> Self {
-        self.steps.push(Step {
-            start: self.cursor.clone(),
-            end: self.cursor.clone(),
-            duration,
-            easing: Easing::Linear,
-        });
+        self.inner = self.inner.hold(duration);
         self
     }
 
     /// Register the sequence with the ticker and start playback under `repeat`.
     pub fn start(self, repeat: Repeat) -> Keyframes<T> {
-        let steps = if self.steps.is_empty() {
-            // A sequence needs at least one step so `locate`/`value_at` never see an empty slice.
-            vec![Step {
-                start: self.initial.clone(),
-                end: self.initial.clone(),
-                duration: Duration::ZERO,
-                easing: Easing::Linear,
-            }]
-        } else {
-            self.steps
-        };
-        let total_duration = steps.iter().map(|s| s.duration.as_secs_f32()).sum();
+        let timeline = self.inner.build();
         let signal = signal(self.initial.clone());
         let inner = Rc::new(RefCell::new(KeyframesInner {
             signal,
-            steps,
-            total_duration,
+            timeline,
             initial: self.initial.clone(),
             repeat,
             direction: Direction::Forward,

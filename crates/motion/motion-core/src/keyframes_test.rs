@@ -143,6 +143,55 @@ fn spring_presets_build_expected_values() {
 }
 
 #[test]
+fn timeline_sample_hits_step_edges() {
+    let tl = Timeline::builder(0.0f32)
+        .then(10.0, Duration::from_millis(100), Easing::Linear)
+        .then(30.0, Duration::from_millis(100), Easing::Linear)
+        .build();
+    assert_eq!(tl.sample(0.0), 0.0);
+    assert!((tl.sample(0.25) - 5.0).abs() < 1e-4, "{}", tl.sample(0.25));
+    assert_eq!(tl.sample(0.5), 10.0, "the boundary between the two steps");
+    assert!((tl.sample(0.75) - 20.0).abs() < 1e-4, "{}", tl.sample(0.75));
+    assert_eq!(tl.sample(1.0), 30.0);
+}
+
+#[test]
+fn timeline_sample_clamps_out_of_range_progress() {
+    let tl = Timeline::builder(0.0f32)
+        .then(1.0, Duration::from_millis(100), Easing::Linear)
+        .build();
+    assert_eq!(tl.sample(-1.0), tl.sample(0.0));
+    assert_eq!(tl.sample(2.0), tl.sample(1.0));
+}
+
+#[test]
+fn timeline_with_no_steps_holds_initial_everywhere() {
+    let tl = Timeline::builder(7.0f32).build();
+    assert_eq!(tl.sample(0.0), 7.0);
+    assert_eq!(tl.sample(0.5), 7.0);
+    assert_eq!(tl.sample(1.0), 7.0);
+}
+
+#[test]
+fn keyframes_matches_timeline_sample_at_the_same_progress() {
+    let base = fresh();
+    let tl = Timeline::builder(0.0f32)
+        .then(1.0, Duration::from_millis(200), Easing::EaseInOut)
+        .build();
+    let kf = Keyframes::new(0.0f32)
+        .then(1.0, Duration::from_millis(200), Easing::EaseInOut)
+        .start(Repeat::Once);
+    tick(base);
+    tick(base + Duration::from_millis(80));
+    assert!(
+        (kf.get() - tl.sample(0.4)).abs() < 1e-4,
+        "kf={} tl={}",
+        kf.get(),
+        tl.sample(0.4)
+    );
+}
+
+#[test]
 fn ticker_tracks_animated_and_keyframes_together() {
     let base = fresh();
     let anim = Animated::new(0.0f32, tween(Duration::from_millis(100), Easing::Linear));

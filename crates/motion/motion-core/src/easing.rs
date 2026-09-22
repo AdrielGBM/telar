@@ -9,6 +9,22 @@ pub enum Easing {
     EaseInOut,
     /// CSS `cubic-bezier(x1, y1, x2, y2)` with control points P1/P2 (P0=(0,0), P3=(1,1)).
     CubicBezier(f32, f32, f32, f32),
+    /// CSS `steps(n, <jumpterm>)`: `n` flat plateaus instead of a continuous curve.
+    Steps(u32, StepPosition),
+}
+
+/// Where a [`Easing::Steps`] plateau jumps relative to its interval, matching CSS `<step-position>`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum StepPosition {
+    /// Jumps at the start of each interval (CSS `jump-start` / legacy `start`).
+    JumpStart,
+    /// Jumps at the end of each interval (CSS `jump-end` / legacy `end`); the CSS default.
+    #[default]
+    JumpEnd,
+    /// No jump at either boundary: `t=0` and `t=1` hold flat (CSS `jump-none`, needs `n >= 2`).
+    JumpNone,
+    /// Jumps at both boundaries, adding one extra plateau (CSS `jump-both`).
+    JumpBoth,
 }
 
 // Newton-Raphson iteration cap before falling back to bisection.
@@ -40,8 +56,30 @@ impl Easing {
                 let u = solve_bezier_x(t, x1, x2);
                 bezier_axis(u, y1, y2)
             }
+            Easing::Steps(n, position) => step_progress(n, position, t),
         }
     }
+}
+
+// CSS Easing Level 1 `step_easing_function`, specialized to `x` already clamped to `[0, 1]` by `apply`, which drops the spec's extrapolation branches.
+fn step_progress(n: u32, position: StepPosition, x: f32) -> f32 {
+    let n = n.max(1) as f32;
+    let mut current = (x * n).floor();
+    if matches!(position, StepPosition::JumpStart | StepPosition::JumpBoth) {
+        current += 1.0;
+    }
+    if current < 0.0 {
+        current = 0.0;
+    }
+    let jumps = match position {
+        StepPosition::JumpStart | StepPosition::JumpEnd => n,
+        StepPosition::JumpNone => (n - 1.0).max(1.0),
+        StepPosition::JumpBoth => n + 1.0,
+    };
+    if current > jumps {
+        current = jumps;
+    }
+    current / jumps
 }
 
 // One Bezier axis given its two control-point coordinates (endpoints are 0 and 1).

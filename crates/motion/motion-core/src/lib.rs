@@ -11,8 +11,8 @@ mod ticker;
 
 pub use animated::Animated;
 pub use curve::{Curve, Spring, Tween, spring, tween};
-pub use easing::Easing;
-pub use keyframes::{Keyframes, KeyframesBuilder, Repeat};
+pub use easing::{Easing, StepPosition};
+pub use keyframes::{Keyframes, KeyframesBuilder, Repeat, Timeline, TimelineBuilder};
 pub use lerp::Lerp;
 pub use ticker::{
     Continuous, Tickable, has_active, has_continuous, next_id, register, reset, scale, set_scale,
