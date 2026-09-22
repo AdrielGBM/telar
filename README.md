@@ -208,7 +208,7 @@ The VS Code extension provides syntax highlighting, snippets, diagnostics, compl
 
 ## Build tuning
 
-`cargo telar new` writes profiles that keep dev builds fast and release builds small. Adding Telar to an existing workspace, wanting a faster linker, or wanting to know why **`panic = "abort"` must stay off**: see **[docs/build-tuning.md](docs/build-tuning.md)**.
+`cargo telar new` writes profiles that keep dev builds fast and release builds small. Adding Telar to an existing workspace, wanting a faster linker, or wanting to know why **`panic = "abort"` must stay off `[profile.dev]`/`[profile.release]` but is fine in `[profile.web]`**: see **[docs/build-tuning.md](docs/build-tuning.md)**.
 
 ## Crates
 

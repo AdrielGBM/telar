@@ -60,6 +60,25 @@ pub fn motion(props: MotionProps, children: Children) -> Result<Box<dyn LayoutIt
         RenderNode::group(render)
     };
 
+    // A Timeline<Color> sampled by a slider's progress rather than by the ticker — the same `value_at`
+    // interpolation Keyframes plays per frame, but driven by whatever already has a p in [0,1]. This is the
+    // shape a scroll or view progress (T-4.2) will sample once that lands.
+    let stops = motion::Timeline::<Color>::builder(theme.get().primary)
+        .then(
+            theme.get().purple,
+            std::time::Duration::from_millis(500),
+            motion::Easing::Linear,
+        )
+        .then(
+            theme.get().success,
+            std::time::Duration::from_millis(500),
+            motion::Easing::Linear,
+        )
+        .build();
+    let scrub = signal(0.0f32);
+    let scrub_rsx_mv = scrub.clone();
+    let scrub_color = memo(move || stops.sample(scrub_rsx_mv.get() / 100.0));
+
     // A one-shot timeline; the button restarts this same handle.
     let progress = motion::Keyframes::<f32>::new(0.0)
         .then(
@@ -233,7 +252,67 @@ pub fn motion(props: MotionProps, children: Children) -> Result<Box<dyn LayoutIt
             );
             example(ExampleProps::props().title("One-shot timeline — Replay restarts the same handle").build(), __deferred)?
         };
-        Container::new(LayoutStyle::new().flex_column().gap(20.0), children![__node_0, __node_1, __node_5, __node_8])?
+        let __node_12 = {
+            let __deferred = Children::new(
+                {
+                    let scrub_color = scrub_color.clone();
+                    let scrub = scrub.clone();
+                    let theme = theme.clone();
+                move || {
+                    let scrub_color = scrub_color.clone();
+                    let scrub = scrub.clone();
+                    let theme = theme.clone();
+                    let mut __slots = Slots::new();
+                    let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
+                    let __node_13 = {
+                        let __deferred = Children::new(
+                            {
+                                let scrub_color = scrub_color.clone();
+                                let scrub = scrub.clone();
+                                let theme = theme.clone();
+                            move || {
+                                let scrub_color = scrub_color.clone();
+                                let scrub = scrub.clone();
+                                let theme = theme.clone();
+                                let mut __slots = Slots::new();
+                                let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
+                                let __row_2 = {
+                                    let __sbox_2 = {
+                                        StyledContainer::new(LayoutStyle::new().flex_column().width(56.0).height(56.0), { let scrub_color = scrub_color.clone(); move |_| RectStyle::default().with_fill(scrub_color.get()).with_radius(BorderRadius::all(10.0)) }, children![])?
+                                    };
+                                    let __col_1 = {
+                                        let __node_14 = slider(SliderProps::props().value(scrub.clone()).min(0.0).max(100.0).step(1.0).width(220.0).build(), Children::default())?;
+                                        let __text_1 = {
+                                            let scrub = scrub.clone();
+                                            Text::declaring(
+                                                move || format!("p = {}", { scrub.get() / 100.0 }),
+                                                LayoutStyle::new(),
+                                                { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(12.0).with_color(theme.get().muted) },
+                                            )?
+                                        };
+                                        Container::new(LayoutStyle::new().flex_column().gap(6.0).flex_grow(1.0), children![__node_14, __text_1])?
+                                    };
+                                    Container::new(LayoutStyle::new().flex_row().gap(14.0).align_items(AlignItems::CENTER), children![__sbox_2, __col_1])?
+                                };
+                                __children.push(box_item(__row_2));
+                                __slots.extend_default(__children);
+                                Ok(__slots)
+                            }
+                            }
+                        );
+                        card(CardProps::props().gap(8.0).build(), __deferred)?
+                    };
+                    __children.push(box_item(__node_13));
+                    let __node_15 = code_line(CodeLineProps::props().code("Timeline::builder(a).then(b, …).then(c, …).build().sample(p)").build(), Children::default())?;
+                    __children.push(box_item(__node_15));
+                    __slots.extend_default(__children);
+                    Ok(__slots)
+                }
+                }
+            );
+            example(ExampleProps::props().title("Timeline — sampled by progress, not by a clock").build(), __deferred)?
+        };
+        Container::new(LayoutStyle::new().flex_column().gap(20.0), children![__node_0, __node_1, __node_5, __node_8, __node_12])?
     };
     Ok(Box::new(__col_0))
 }

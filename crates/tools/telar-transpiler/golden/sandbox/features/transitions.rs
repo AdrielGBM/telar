@@ -21,6 +21,9 @@ pub fn transitions(props: TransitionsProps, children: Children) -> Result<Box<dy
     let accent = signal(theme.get().primary);
     let alt = signal(false);
     let fade = signal(1.0f32);
+    let stepped = signal(false);
+    let stepped_rsx_mv = stepped.clone();
+    let stepped_x = memo(move || if stepped_rsx_mv.get() { 176.0 } else { 0.0 });
 
     let __col_0 = {
         let __node_0 = doc_header(DocHeaderProps::props().kicker("INTERACTION").title("Transitions").desc("Add transition(…) to any animatable property and a value change eases over time instead of snapping. Choose a duration + easing, or a spring.").build(), Children::default())?;
@@ -153,14 +156,65 @@ pub fn transitions(props: TransitionsProps, children: Children) -> Result<Box<dy
         };
         let __node_9 = {
             let __deferred = Children::new(
+                {
+                    let theme = theme.clone();
+                    let stepped_x = stepped_x.clone();
+                    let stepped = stepped.clone();
+                move || {
+                    let theme = theme.clone();
+                    let stepped_x = stepped_x.clone();
+                    let stepped = stepped.clone();
+                    let mut __slots = Slots::new();
+                    let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
+                    let __node_10 = {
+                        let __deferred = Children::new(
+                            {
+                                let theme = theme.clone();
+                                let stepped_x = stepped_x.clone();
+                                let stepped = stepped.clone();
+                            move || {
+                                let theme = theme.clone();
+                                let stepped_x = stepped_x.clone();
+                                let stepped = stepped.clone();
+                                let mut __slots = Slots::new();
+                                let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
+                                let __row_2 = {
+                                    let __sbox_3 = {
+                                        let __transition_3 = motion::Animated::new((stepped_x.get()) as f32, motion::tween(std::time::Duration::from_millis(600), motion::Easing::Steps(6, motion::StepPosition::JumpEnd)));
+                                        StyledContainer::new(LayoutStyle::new().flex_column().width(24.0).height(24.0), { let theme = theme.clone(); move |_| RectStyle::default().with_fill(theme.get().primary).with_radius(BorderRadius::all(6.0)) }, children![])?.with_transform({ let stepped_x = stepped_x.clone(); move |__r: Rect| box_transform(__r, (0) as f32, (1) as f32, (1) as f32, { __transition_3.retarget((stepped_x.get()) as f32); __transition_3.get() }, (0) as f32) })
+                                    };
+                                    let __node_11 = button(ButtonProps::props().label("Move").fill(Reactive::of({ let theme = theme.clone(); move || theme.get().primary })).on_press(std::rc::Rc::new({ let stepped = stepped.clone(); move || { stepped.toggle() } })).build(), Children::default())?;
+                                    Container::new(LayoutStyle::new().flex_row().gap(14.0).align_items(AlignItems::CENTER).flex_wrap(), children![__sbox_3, __node_11])?
+                                };
+                                __children.push(box_item(__row_2));
+                                __slots.extend_default(__children);
+                                Ok(__slots)
+                            }
+                            }
+                        );
+                        card(CardProps::props().gap(12.0).build(), __deferred)?
+                    };
+                    __children.push(box_item(__node_10));
+                    let __node_12 = code_line(CodeLineProps::props().code("box translate_x:$x transition(translate_x 600ms steps(6, jump-end))").build(), Children::default())?;
+                    __children.push(box_item(__node_12));
+                    __slots.extend_default(__children);
+                    Ok(__slots)
+                }
+                }
+            );
+            example(ExampleProps::props().title("Steps — a mechanical jump instead of a continuous ease").build(), __deferred)?
+        };
+        let __node_13 = {
+            let __deferred = Children::new(
                 move || {
                     let mut __slots = Slots::new();
                     let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
                     let __col_3 = {
-                        let __node_10 = prop_row(PropRowProps::props().name("transition(…)").values("prop dur easing").about("e.g. fill 250ms ease-out — runs when the value changes.").build(), Children::default())?;
-                        let __node_11 = prop_row(PropRowProps::props().name("properties").values("fill·stroke·color·opacity").about("Only these animate today.").build(), Children::default())?;
-                        let __node_12 = prop_row(PropRowProps::props().name("spring(k, c)").values("stiffness, damping").about("Physics curve instead of a fixed duration.").build(), Children::default())?;
-                        Container::new(LayoutStyle::new().flex_column().gap(6.0), children![__node_10, __node_11, __node_12])?
+                        let __node_14 = prop_row(PropRowProps::props().name("transition(…)").values("prop dur easing").about("e.g. fill 250ms ease-out — runs when the value changes.").build(), Children::default())?;
+                        let __node_15 = prop_row(PropRowProps::props().name("properties").values("fill·stroke·color·opacity").about("Only these animate today.").build(), Children::default())?;
+                        let __node_16 = prop_row(PropRowProps::props().name("steps(n, pos)").values("jump-start·jump-end·jump-none·jump-both").about("n flat plateaus instead of a curve, CSS steps() semantics.").build(), Children::default())?;
+                        let __node_17 = prop_row(PropRowProps::props().name("spring(k, c)").values("stiffness, damping").about("Physics curve instead of a fixed duration.").build(), Children::default())?;
+                        Container::new(LayoutStyle::new().flex_column().gap(6.0), children![__node_14, __node_15, __node_16, __node_17])?
                     };
                     __children.push(box_item(__col_3));
                     __slots.extend_default(__children);
@@ -169,7 +223,7 @@ pub fn transitions(props: TransitionsProps, children: Children) -> Result<Box<dy
             );
             example(ExampleProps::props().title("Notes").build(), __deferred)?
         };
-        Container::new(LayoutStyle::new().flex_column().gap(20.0), children![__node_0, __node_1, __node_5, __node_9])?
+        Container::new(LayoutStyle::new().flex_column().gap(20.0), children![__node_0, __node_1, __node_5, __node_9, __node_13])?
     };
     Ok(Box::new(__col_0))
 }
