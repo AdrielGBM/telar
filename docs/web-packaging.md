@@ -1,8 +1,10 @@
 # Web packaging
 
 `cargo telar build --target web` and `cargo telar dev --target web` write a static site to
-`target/telar-dist/web/`. This page covers what goes into it: the page template, the public directory,
-content-hashed assets with their manifest, and what the dev server serves.
+`telar-dist/web/` under the workspace's target directory — `target/telar-dist/web/` unless that's been
+moved with `--target-dir`, `CARGO_TARGET_DIR`, or `build.target-dir` in `.cargo/config.toml`, which cargo-telar
+resolves the same way cargo does. This page covers what goes into it: the page template, the public
+directory, content-hashed assets with their manifest, and what the dev server serves.
 
 Everything here only means something to a browser, so it lives in the packaging and in `[telar.web]` in
 `telar.toml`, never in `.rsx`.

@@ -43,9 +43,7 @@ fn android_package_id(args: &[String]) -> String {
 fn apk_path(args: &[String]) -> PathBuf {
     let resolved = resolve_package(args);
     let profile = profile_of(args);
-    resolved
-        .workspace_root
-        .join("target")
+    telar_project::find_target_dir(&resolved.workspace_root)
         .join(profile)
         .join("apk")
         .join(format!("{}.apk", resolved.name()))

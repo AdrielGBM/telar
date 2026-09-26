@@ -1,5 +1,58 @@
 use super::*;
 
+/// `cargo metadata` reports the target directory after it has already applied `CARGO_TARGET_DIR`, so a
+/// packager reading `target_directory` picks up the override without knowing that variable exists.
+#[test]
+fn find_target_dir_honours_cargo_target_dir() {
+    let root = find_workspace_root(Path::new(env!("CARGO_MANIFEST_DIR")))
+        .expect("this crate is a workspace member");
+    let custom = std::env::temp_dir().join(format!(
+        "telar-target-dir-test-{}-{}",
+        std::process::id(),
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos()
+    ));
+
+    let previous = std::env::var_os("CARGO_TARGET_DIR");
+    unsafe {
+        std::env::set_var("CARGO_TARGET_DIR", &custom);
+    }
+    let resolved = find_target_dir(&root);
+    unsafe {
+        match &previous {
+            Some(value) => std::env::set_var("CARGO_TARGET_DIR", value),
+            None => std::env::remove_var("CARGO_TARGET_DIR"),
+        }
+    }
+
+    assert_eq!(
+        resolved, custom,
+        "expected cargo metadata's target_directory to reflect CARGO_TARGET_DIR"
+    );
+}
+
+/// When cargo cannot be run at all, the plain workspace-relative join is the only answer left — the same
+/// fallback [`resolve_telar_version`] uses.
+#[test]
+fn find_target_dir_falls_back_when_cargo_is_unavailable() {
+    let root = Path::new("/nonexistent/workspace/for/telar-target-dir-test");
+    let previous = std::env::var_os("PATH");
+    unsafe {
+        std::env::set_var("PATH", "");
+    }
+    let resolved = find_target_dir(root);
+    unsafe {
+        match &previous {
+            Some(value) => std::env::set_var("PATH", value),
+            None => std::env::remove_var("PATH"),
+        }
+    }
+
+    assert_eq!(resolved, root.join("target"));
+}
+
 /// Every crate here is published together and depends on the others by an exact version, so the version literals in `[workspace.dependencies]` have to move with `[workspace.package] version`.
 ///
 /// Nothing enforces that today, and the two are written in different places: a member's own version is inherited (`version = { workspace = true }`), but the version a *dependent* asks for is a literal string beside the path. A release that bumps the package version and leaves those literals behind still builds here — `path` wins over `version` inside a workspace, so every in-tree build resolves the sibling on disk and passes. It is the published artifact that breaks: `telar 0.2.0` would carry a dependency on `telar-dynamic ^0.1.8`, cargo would resolve the *old published* copy, and an application depending on both gets two copies of `renderer-assets` — which is the mismatch `telar-dynamic`'s own crate docs warn about, arrived at without anyone writing a wrong version anywhere.

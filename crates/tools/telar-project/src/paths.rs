@@ -52,12 +52,34 @@ pub fn resolve_telar_version(workspace_root: &Path) -> Option<String> {
 #[derive(serde::Deserialize)]
 struct CargoMetadata {
     packages: Vec<CargoMetadataPackage>,
+    target_directory: PathBuf,
 }
 
 #[derive(serde::Deserialize)]
 struct CargoMetadataPackage {
     name: String,
     version: String,
+}
+
+/// Where cargo writes build output for the workspace rooted at `workspace_root` — the one directory every
+/// packager (web, desktop, android, hot reload) must agree on.
+///
+/// Delegates to `cargo metadata` rather than assuming `<workspace_root>/target`: cargo itself resolves the
+/// target directory from `--target-dir`, then `CARGO_TARGET_DIR`, then `build.target-dir` in
+/// `.cargo/config.toml` (searched from the current directory upward, not just the workspace root), before
+/// falling back to the workspace-relative default, and `target_directory` in `cargo metadata`'s output is
+/// that resolution already done. Falls back to the plain join only when cargo cannot be run at all, which
+/// is the same fallback [`resolve_telar_version`] uses for the same reason.
+pub fn find_target_dir(workspace_root: &Path) -> PathBuf {
+    std::process::Command::new("cargo")
+        .args(["metadata", "--format-version", "1", "--no-deps"])
+        .current_dir(workspace_root)
+        .output()
+        .ok()
+        .filter(|output| output.status.success())
+        .and_then(|output| serde_json::from_slice::<CargoMetadata>(&output.stdout).ok())
+        .map(|metadata| metadata.target_directory)
+        .unwrap_or_else(|| workspace_root.join("target"))
 }
 
 /// Nearest ancestor directory whose `Cargo.toml` declares a `[workspace]` table.

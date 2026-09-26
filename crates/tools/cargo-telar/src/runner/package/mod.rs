@@ -31,7 +31,9 @@ pub(crate) fn package_lib_path(
     let file = format!("{lib_name}.dll");
     #[cfg(not(any(target_os = "macos", target_os = "windows")))]
     let file = format!("lib{lib_name}.so");
-    workspace_root.join("target").join(profile).join(file)
+    telar_project::find_target_dir(workspace_root)
+        .join(profile)
+        .join(file)
 }
 
 pub(crate) fn package_bin_path(
@@ -40,15 +42,14 @@ pub(crate) fn package_bin_path(
     profile: &str,
 ) -> PathBuf {
     // EXE_SUFFIX so `dir` packaging and the hot-reload spawn find `<name>.exe` on Windows.
-    workspace_root
-        .join("target")
+    telar_project::find_target_dir(workspace_root)
         .join(profile)
         .join(format!("{package_name}{}", std::env::consts::EXE_SUFFIX))
 }
 
-// Under target/, next to the binary they package, so they inherit its gitignore and are never confused with the generated `.rsx/` source.
+// Under the resolved target dir, next to the binary they package, so they inherit its gitignore and are never confused with the generated `.rsx/` source.
 pub(crate) fn dist_dir(workspace_root: &Path) -> PathBuf {
-    workspace_root.join("target").join("telar-dist")
+    telar_project::find_target_dir(workspace_root).join("telar-dist")
 }
 
 // The release/debug profile cargo emits into, mirroring build_cargo_args's `--release` handling.

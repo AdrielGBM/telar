@@ -100,9 +100,8 @@ pub(crate) fn build_web_bundle(
     }
 
     let profile = if release { WEB_PROFILE } else { "debug" };
-    let module = resolved
-        .workspace_root
-        .join(format!("target/{WASM_TARGET}"))
+    let module = telar_project::find_target_dir(&resolved.workspace_root)
+        .join(WASM_TARGET)
         .join(profile)
         .join(format!("{}.wasm", resolved.name().replace('-', "_")));
     if !module.exists() {
