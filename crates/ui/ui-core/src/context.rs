@@ -9,6 +9,7 @@ pub use layout_reactive::overlay_viewport;
 /// **What this cannot do for you: dispose the previous tree's owners.** Anything still running from the old tree — an effect styling a node, a keyboard walk reading one — names ids the new tree now owns. The surface root is not the thing to dispose here, because it holds app-lifetime state that has nothing to do with the tree being replaced. Whoever mounted the old tree scoped it, and whoever replaces it disposes that scope.
 pub fn reset_layout_runtime() {
     crate::inherit::reset_cascade();
+    crate::annotation::reset();
     crate::input_region::reset();
     crate::presence::reset_exits();
     crate::cursor::reset();

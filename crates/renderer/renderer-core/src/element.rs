@@ -5,7 +5,7 @@
 use geometry_core::Rect;
 
 /// What a box *is* and what to call it. Shared with the platform layer rather than defined here: the desktop announcing a checkbox and a document drawing one are describing the same box, and two vocabularies for that is how they came to disagree.
-pub use semantics_core::{ConsumedKeys, Focusable, Role, Semantics};
+pub use semantics_core::{Annotation, ConsumedKeys, Focusable, Role, Semantics};
 
 /// Identifies one box across frames.
 ///

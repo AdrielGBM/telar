@@ -108,6 +108,12 @@ const SECTIONS: &[SectionDef] = sections![
     ("Positioning", crate::features::positioning::positioning, crate::features::positioning::PositioningProps, "positioning.rsx"),
     ("Pointer & drag", crate::features::pointer::pointer, crate::features::pointer::PointerProps, "pointer.rsx"),
     ("Keyboard", crate::features::keyboard::keyboard, crate::features::keyboard::KeyboardProps, "keyboard.rsx"),
+    (
+        "Accessibility",
+        crate::features::accessibility::accessibility,
+        crate::features::accessibility::AccessibilityProps,
+        "accessibility.rsx"
+    ),
 ];
 
 /// A restored hot-reload stack (or a deep link) can name a section that no longer exists; clamp rather than panic.

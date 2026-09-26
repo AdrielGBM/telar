@@ -78,3 +78,22 @@ fn color_keys_cover_every_attribute_that_paints() {
         assert!(!color_attr_keys().contains(&key), "{key} should be gone");
     }
 }
+
+/// Naming, language and hiding are generic: any tag that builds a box with a meaning of its own takes them, pictures included.
+#[test]
+fn every_meaningful_tag_takes_the_accessibility_attributes() {
+    for tag in [
+        "text", "col", "row", "grid", "box", "img", "image", "svg", "path", "canvas", "scroll",
+        "input",
+    ] {
+        for key in ["label", "lang", "a11y"] {
+            assert!(
+                tag_attr_keys(tag).contains(&key),
+                "`{tag}` should take `{key}`"
+            );
+        }
+    }
+    assert!(
+        matches!(value_kind("text", "a11y"), Some(ValueKind::Keywords(table)) if keyword(table, "hidden") == Some("a11y_hidden"))
+    );
+}

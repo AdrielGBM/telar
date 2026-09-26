@@ -1,5 +1,6 @@
 use std::sync::Arc;
 
+use layout_core::NodeId;
 use layout_core::{AvailableSpace, LayoutStyle};
 use renderer_core::{RectStyle, TextStyle};
 
@@ -168,4 +169,204 @@ fn nodes_come_back_in_reading_order() {
     ]);
     let names: Vec<&str> = nodes.iter().map(|n| n.name.as_str()).collect();
     assert_eq!(names, vec!["first", "second", "third"]);
+}
+
+fn open(node: NodeId, bounds: Rect) -> DrawCommand {
+    DrawCommand::PushElement {
+        element: Arc::new(renderer_core::Element::new(
+            renderer_core::ElementId(node.into()),
+            renderer_core::Semantics::group(),
+            "",
+            bounds,
+        )),
+    }
+}
+
+fn letter(c: &'static str) -> Text {
+    Text::new(
+        move || c.to_string(),
+        LayoutStyle::new().width(10.0).height(16.0),
+        || TextStyle::new(12.0, renderer_core::Color::BLACK),
+    )
+    .unwrap()
+}
+
+/// Split letters: the row is read as the word it spells, once, and none of the letters is read on its own.
+#[test]
+fn a_named_box_over_hidden_letters_reads_as_one_word() {
+    use crate::annotation::Accessible;
+    reset_layout_runtime();
+    focus::clear();
+    let h = letter("H").a11y_hidden();
+    let i = letter("i").a11y_hidden();
+    let (h_node, i_node) = (h.layout_node(), i.layout_node());
+    let word = Container::new(
+        LayoutStyle::new().flex_row(),
+        vec![box_item(h), box_item(i)],
+    )
+    .unwrap()
+    .a11y_label(|| "Hi")
+    .a11y_lang(|| "en");
+    compute_layout(
+        word.layout_node(),
+        AvailableSpace::Definite(200.0),
+        AvailableSpace::Definite(200.0),
+    )
+    .unwrap();
+
+    let frame = [
+        open(word.layout_node(), rect(0.0, 0.0, 20.0, 16.0)),
+        open(h_node, rect(0.0, 0.0, 10.0, 16.0)),
+        text_at("H", rect(0.0, 0.0, 10.0, 16.0)),
+        DrawCommand::PopElement,
+        open(i_node, rect(10.0, 0.0, 10.0, 16.0)),
+        text_at("i", rect(10.0, 0.0, 10.0, 16.0)),
+        DrawCommand::PopElement,
+        DrawCommand::PopElement,
+    ];
+    let nodes = snapshot(&frame);
+    assert_eq!(nodes.len(), 1, "one word, not a word and its letters");
+    assert_eq!(nodes[0].name, "Hi");
+    assert_eq!(nodes[0].role, Role::Label);
+    assert_eq!(nodes[0].lang.as_deref(), Some("en"));
+    assert_eq!(platform_core::accessibility::transcript(&nodes), "Hi");
+}
+
+/// A language reaches everything under the box that said it, and a nearer one wins.
+#[test]
+fn a_language_reaches_the_text_beneath_it() {
+    use crate::annotation::Accessible;
+    reset_layout_runtime();
+    focus::clear();
+    let quote = letter("Hola").a11y_lang(|| "es");
+    let quote_node = quote.layout_node();
+    let page = Container::new(LayoutStyle::new(), vec![box_item(quote)])
+        .unwrap()
+        .a11y_lang(|| "en");
+    let frame = [
+        open(page.layout_node(), rect(0.0, 0.0, 100.0, 40.0)),
+        text_at("Hello", rect(0.0, 0.0, 40.0, 16.0)),
+        open(quote_node, rect(0.0, 20.0, 40.0, 16.0)),
+        text_at("Hola", rect(0.0, 20.0, 40.0, 16.0)),
+        DrawCommand::PopElement,
+        DrawCommand::PopElement,
+    ];
+    let nodes = snapshot(&frame);
+    let lang_of = |name: &str| {
+        nodes
+            .iter()
+            .find(|n| n.name == name)
+            .and_then(|n| n.lang.clone())
+    };
+    assert_eq!(lang_of("Hello").as_deref(), Some("en"));
+    assert_eq!(lang_of("Hola").as_deref(), Some("es"));
+}
+
+/// A control the application named is announced by that name, and not by the glyph it draws.
+#[test]
+fn a_named_control_is_not_renamed_by_its_icon() {
+    use crate::annotation::Accessible;
+    reset_layout_runtime();
+    focus::clear();
+    let close = StyledContainer::new(
+        LayoutStyle::new().width(30.0).height(30.0),
+        |_r| RectStyle::default(),
+        vec![],
+    )
+    .unwrap()
+    .control(Role::Button)
+    .on_press(|| {})
+    .a11y_label(|| "Close");
+    let node = close.layout_node();
+    let root = Container::new(LayoutStyle::new().flex_column(), vec![box_item(close)]).unwrap();
+    compute_layout(
+        root.layout_node(),
+        AvailableSpace::Definite(200.0),
+        AvailableSpace::Definite(200.0),
+    )
+    .unwrap();
+
+    let nodes = snapshot(&[
+        open(node, rect(0.0, 0.0, 30.0, 30.0)),
+        text_at("×", rect(5.0, 5.0, 20.0, 20.0)),
+        DrawCommand::PopElement,
+    ]);
+    assert_eq!(nodes.len(), 1);
+    assert_eq!(nodes[0].name, "Close");
+    assert_eq!(nodes[0].role, Role::Button);
+    assert_eq!(
+        platform_core::accessibility::transcript(&nodes),
+        "Close, button"
+    );
+}
+
+/// A control inside a hidden box is not offered to a reader either: hiding takes the subtree.
+#[test]
+fn a_hidden_box_takes_its_controls_with_it() {
+    use crate::annotation::Accessible;
+    reset_layout_runtime();
+    focus::clear();
+    let button = StyledContainer::new(
+        LayoutStyle::new().width(30.0).height(30.0),
+        |_r| RectStyle::default(),
+        vec![],
+    )
+    .unwrap()
+    .control(Role::Button)
+    .on_press(|| {});
+    let button_node = button.layout_node();
+    let decoration = Container::new(LayoutStyle::new(), vec![box_item(button)])
+        .unwrap()
+        .a11y_hidden();
+    compute_layout(
+        decoration.layout_node(),
+        AvailableSpace::Definite(200.0),
+        AvailableSpace::Definite(200.0),
+    )
+    .unwrap();
+
+    let nodes = snapshot(&[
+        open(decoration.layout_node(), rect(0.0, 0.0, 30.0, 30.0)),
+        open(button_node, rect(0.0, 0.0, 30.0, 30.0)),
+        text_at("Go", rect(0.0, 0.0, 30.0, 30.0)),
+        DrawCommand::PopElement,
+        DrawCommand::PopElement,
+    ]);
+    assert!(
+        nodes.is_empty(),
+        "nothing under a hidden box is read: {nodes:?}"
+    );
+}
+
+/// A picture is read only when it is named, and then as an image.
+#[test]
+fn a_named_picture_is_read_as_an_image() {
+    use crate::annotation::Accessible;
+    reset_layout_runtime();
+    focus::clear();
+    let logo = letter("").a11y_label(|| "Company logo");
+    let node = logo.layout_node();
+    compute_layout(
+        node,
+        AvailableSpace::Definite(200.0),
+        AvailableSpace::Definite(200.0),
+    )
+    .unwrap();
+    let picture = DrawCommand::Image {
+        data: Arc::new(renderer_core::ImageData::new(vec![0; 4], 1, 1)),
+        rect: rect(0.0, 0.0, 10.0, 16.0),
+        raster: renderer_core::Raster::Smooth,
+        fill: renderer_core::ImageFill::Stretch,
+    };
+    let nodes = snapshot(&[
+        open(node, rect(0.0, 0.0, 10.0, 16.0)),
+        picture,
+        DrawCommand::PopElement,
+    ]);
+    assert_eq!(nodes.len(), 1);
+    assert_eq!(nodes[0].role, Role::Drawing);
+    assert_eq!(
+        platform_core::accessibility::transcript(&nodes),
+        "Company logo, image"
+    );
 }

@@ -1,5 +1,6 @@
 //! The terminal's event loop.
 
+use std::path::PathBuf;
 use std::time::Duration;
 
 use platform_core::{
@@ -15,6 +16,9 @@ use crate::window::TuiWindow;
 /// A terminal offers no way to interrupt a blocking read from another thread, so a reactive change with no keystroke behind it — a finished task, a timer — is picked up on the next turn rather than immediately. Long enough that an idle app costs nothing measurable, short enough that the delay is not felt.
 const IDLE_POLL: Duration = Duration::from_millis(30);
 
+/// The environment variable naming the file [`TuiPlatformConfig::reading`] keeps the plain-text reading in.
+pub const READING_ENV: &str = "TELAR_TUI_READING";
+
 #[derive(Clone, Debug)]
 /// How the terminal surface is sized and coloured.
 pub struct TuiPlatformConfig {
@@ -26,6 +30,10 @@ pub struct TuiPlatformConfig {
     ///
     /// On by default, because raw mode turns Ctrl+C from a signal into an ordinary key: an app that does not bind it would otherwise have no way out at all, and the user would need another terminal to kill it. An app that wants the chord for itself turns this off and handles the key.
     pub quit_on_ctrl_c: bool,
+    /// Where to keep a plain-text reading of the screen, rewritten whenever it changes: each thing on screen on its own line, named the way a screen reader would name it, with what is hidden from one left out.
+    ///
+    /// A terminal screen reader reads the cells, which carry neither a name the application gave nor what it hid, so this is where those reach a reader: another terminal following the file. Read from `TELAR_TUI_READING` by default.
+    pub reading: Option<PathBuf>,
 }
 
 impl Default for TuiPlatformConfig {
@@ -35,6 +43,7 @@ impl Default for TuiPlatformConfig {
             cell_height: 16.0,
             mouse: true,
             quit_on_ctrl_c: true,
+            reading: std::env::var_os(READING_ENV).map(PathBuf::from),
         }
     }
 }
@@ -120,6 +129,7 @@ impl TuiPlatform {
         }
 
         let mut events = Vec::new();
+        let mut reading = Reading::new(self.config.reading.clone());
         loop {
             handler.new_events();
 
@@ -148,6 +158,7 @@ impl TuiPlatform {
             }
 
             handler.on_redraw(window);
+            reading.follow(handler);
             if quit || handler.take_exit_request() {
                 return Ok(());
             }
@@ -169,3 +180,37 @@ impl TuiPlatform {
         self.config.cell_height
     }
 }
+
+/// The plain-text reading of the screen, written out only when it changes.
+struct Reading {
+    path: Option<PathBuf>,
+    last: Option<String>,
+}
+
+impl Reading {
+    fn new(path: Option<PathBuf>) -> Self {
+        Self { path, last: None }
+    }
+
+    fn follow<H: EventHandler<TuiWindow>>(&mut self, handler: &H) {
+        let Some(path) = &self.path else {
+            return;
+        };
+        let now = platform_core::accessibility::transcript(&handler.accessibility());
+        if self.last.as_ref() == Some(&now) {
+            return;
+        }
+        if let Err(e) = std::fs::write(path, &now) {
+            tracing::warn!(
+                "could not write the screen reading to {}: {e}",
+                path.display()
+            );
+            self.path = None;
+        }
+        self.last = Some(now);
+    }
+}
+
+#[cfg(test)]
+#[path = "platform_test.rs"]
+mod tests;

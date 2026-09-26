@@ -1,6 +1,6 @@
 //! What a thing in an interface *is*, as opposed to where it is or what it looks like.
 //!
-//! One vocabulary, three answers. A screen reader on the desktop is told a box is the navigation; a document backend makes it a `<nav>`; a terminal has nothing to do with it yet and ignores it. None of the three is the source: the widget said what it was, once, and each target says that in its own idiom.
+//! One vocabulary, three answers. A screen reader on the desktop is told a box is the navigation; a document backend makes it a `<nav>`; a terminal writes it into a plain-text reading of the screen. None of the three is the source: the widget said what it was, once, and each target says that in its own idiom.
 //!
 //! ## Why these words and not HTML's
 //!
@@ -246,6 +246,26 @@ pub struct Semantics {
     pub click_through: bool,
     /// How the keyboard reaches the box. `None` for a box that cannot hold focus.
     pub focusable: Option<Focusable>,
+    /// The language the box and everything under it is written in, as a BCP 47 tag, where it differs from the one around it. `None` inherits.
+    pub lang: Option<Arc<str>>,
+    /// Whether assistive technology skips the box and everything under it. Still drawn and still operable by pointer: this is what a reader is told, not what is on screen.
+    pub hidden: bool,
+}
+
+/// What an application said about a box for assistive technology, laid over what the widget derived.
+///
+/// Apart from [`Semantics`] because it is authored rather than derived: a widget knows it is a checkbox and whether it is ticked, but only the application knows the word a row of drawn letters spells, or which paragraph is in another language.
+#[derive(Clone, PartialEq, Eq, Hash, Debug, Default)]
+pub struct Annotation {
+    pub label: Option<Arc<str>>,
+    pub lang: Option<Arc<str>>,
+    pub hidden: bool,
+}
+
+impl Annotation {
+    pub fn is_empty(&self) -> bool {
+        self.label.is_none() && self.lang.is_none() && !self.hidden
+    }
 }
 
 /// How the keyboard reaches a focusable box, and what it keeps once there.
@@ -281,6 +301,28 @@ impl Semantics {
 
     pub fn with_label(mut self, label: impl Into<Arc<str>>) -> Self {
         self.label = Some(label.into());
+        self
+    }
+
+    pub fn with_lang(mut self, lang: impl Into<Arc<str>>) -> Self {
+        self.lang = Some(lang.into());
+        self
+    }
+
+    pub fn hidden_from_readers(mut self) -> Self {
+        self.hidden = true;
+        self
+    }
+
+    /// What the widget derived, with what the application said on top: its label and language win, and hiding can only be added.
+    pub fn annotated(mut self, annotation: &Annotation) -> Self {
+        if let Some(label) = &annotation.label {
+            self.label = Some(label.clone());
+        }
+        if let Some(lang) = &annotation.lang {
+            self.lang = Some(lang.clone());
+        }
+        self.hidden |= annotation.hidden;
         self
     }
 

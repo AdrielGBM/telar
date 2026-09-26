@@ -84,6 +84,22 @@ const LAYOUT_ATTRS: &[AttrSpec] = &[
     AttrSpec::keywords("justify", JUSTIFY_VALUES),
 ];
 
+/// What any built-in tag may say about itself to assistive technology. See [`A11Y_VALUES`].
+const ACCESSIBILITY_ATTRS: &[AttrSpec] = &[
+    AttrSpec::free("label").doc(
+        "The name assistive technology reads for the box: a quoted string, `t!(…)`, or an expression reading `$state`. An `img` or `svg` without one is decoration.",
+    ),
+    AttrSpec::free("lang").doc(
+        "The language of the box and everything under it, as a BCP 47 tag (`\"ja\"`, `\"es-CL\"`); the nearest one wins.",
+    ),
+    AttrSpec::keywords("a11y", A11Y_VALUES).doc(
+        "`a11y:hidden` takes the box and everything under it out of what assistive technology is told; it is still drawn and still answers the pointer.",
+    ),
+];
+
+/// `a11y:` — how assistive technology treats the box, paired with the `Accessible` method it calls.
+pub const A11Y_VALUES: &[(&str, &str)] = &[("hidden", "a11y_hidden")];
+
 /// The layout keys, spelling only. Completion and the emitter's unknown-attribute check read the same table [`value_kind`] does.
 pub fn layout_attr_keys() -> Vec<&'static str> {
     LAYOUT_ATTRS.iter().map(|spec| spec.key).collect()
@@ -562,6 +578,7 @@ pub fn tag_attr_specs(tag: &str) -> Vec<AttrSpec> {
     let with = |extra: &[AttrSpec]| {
         let mut specs = LAYOUT_ATTRS.to_vec();
         specs.extend_from_slice(extra);
+        specs.extend_from_slice(ACCESSIBILITY_ATTRS);
         specs
     };
     match tag {

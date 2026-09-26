@@ -91,6 +91,7 @@ struct Described {
     role: Option<&'static str>,
     label: Option<String>,
     link: Option<String>,
+    lang: Option<String>,
     hidden: bool,
     checked: Option<bool>,
     disabled: bool,
@@ -607,17 +608,23 @@ impl Reconciler {
     /// A `<nav>` needs no `role="navigation"` — it *is* one, and duplicating it is noise a reader has to step over. Only the roles with no element of their own carry the attribute.
     fn describe(&mut self, node: &web_sys::Element, element: &Element, tag: &'static str) {
         let semantics = &element.semantics;
-        let role = (tag == "div" || tag == "svg")
-            .then(|| aria_role(semantics.role))
-            .flatten();
         let label = semantics.label.as_deref();
+        let role = match (tag == "div" || tag == "svg")
+            .then(|| aria_role(semantics.role))
+            .flatten()
+        {
+            // A plain `div` may not carry a name, and a browser drops one it does; `group` is the generic role a name is allowed on.
+            None if tag == "div" && label.is_some() => Some("group"),
+            role => role,
+        };
         // Artwork nobody named is decoration, and a graphic with no accessible name is noise to read out.
-        let hidden = semantics.role == Role::Drawing && label.is_none();
+        let hidden = semantics.hidden || (semantics.role == Role::Drawing && label.is_none());
         let focused = semantics.focused;
         let described = Described {
             role,
             label: label.map(str::to_string),
             link: semantics.link.as_deref().map(str::to_string),
+            lang: semantics.lang.as_deref().map(str::to_string),
             hidden,
             checked: semantics.toggled,
             disabled: semantics.disabled,
@@ -647,6 +654,7 @@ impl Reconciler {
         set_or_clear(node, "role", described.role);
         set_or_clear(node, "aria-label", described.label.as_deref());
         set_or_clear(node, "href", described.link.as_deref());
+        set_or_clear(node, "lang", described.lang.as_deref());
         set_or_clear(node, "aria-hidden", described.hidden.then_some("true"));
         set_or_clear(
             node,

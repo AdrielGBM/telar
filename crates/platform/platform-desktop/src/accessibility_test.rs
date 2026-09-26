@@ -12,6 +12,7 @@ fn node(id: Option<u64>, role: Role, name: &str) -> AccessNode {
         enabled: true,
         toggled: None,
         value: None,
+        lang: None,
     }
 }
 
@@ -101,4 +102,22 @@ fn a_request_maps_back_to_the_control_that_claimed_it() {
         None,
         "the window itself is not a control"
     );
+}
+
+/// A quotation in another language is read in that language's voice, and a node the application said nothing about inherits the window's.
+#[test]
+fn a_node_in_another_language_says_which() {
+    let mut quote = node(None, Role::Label, "Bonjour");
+    quote.lang = Some("fr".to_string());
+    let update = tree_update(&[quote, node(None, Role::Label, "Hello")], "Editor");
+    assert_eq!(update.nodes[0].1.language(), Some("fr"));
+    assert_eq!(update.nodes[1].1.language(), None);
+}
+
+/// A named picture is an image to the reader, which is what AccessKit calls it.
+#[test]
+fn a_named_drawing_is_an_image() {
+    let update = tree_update(&[node(None, Role::Drawing, "Company logo")], "Editor");
+    assert_eq!(update.nodes[0].1.role(), AkRole::Image);
+    assert_eq!(update.nodes[0].1.label(), Some("Company logo"));
 }

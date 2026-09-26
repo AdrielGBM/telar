@@ -46,6 +46,9 @@ pub(crate) fn tree_update(nodes: &[AccessNode], title: &str) -> TreeUpdate {
         if !node.enabled {
             ak.set_disabled();
         }
+        if let Some(lang) = &node.lang {
+            ak.set_language(lang.as_str());
+        }
         if node.focused {
             focus = id;
         }

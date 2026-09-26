@@ -57,6 +57,7 @@ pub fn run_tui_app_with_name<A: App>(
         cell_height: options.cell.height,
         mouse: options.mouse,
         quit_on_ctrl_c: options.quit_on_ctrl_c,
+        ..TuiPlatformConfig::default()
     });
     let factory = TuiRendererFactory::new(TuiConfig {
         cell: options.cell,

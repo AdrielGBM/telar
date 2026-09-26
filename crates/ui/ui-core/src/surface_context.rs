@@ -18,6 +18,7 @@ use reactive_core::{
 };
 use ui_tree::{OverlayContext, OverlayGuard};
 
+use crate::annotation::{AnnotationsContext, AnnotationsGuard};
 use crate::cursor::{CursorContext, CursorGuard};
 use crate::focus::{FocusContext, FocusGuard};
 use crate::inherit::{CascadeContext, CascadeGuard};
@@ -37,6 +38,7 @@ pub struct Surface {
     exits: ExitsContext,
     cascade: CascadeContext,
     cursor: CursorContext,
+    annotations: AnnotationsContext,
     window_commands: WindowCommandContext,
 }
 
@@ -59,6 +61,7 @@ impl Surface {
                 exits: ExitsContext::new_owned(),
                 cascade: CascadeContext::new_owned(),
                 cursor: CursorContext::new_owned(),
+                annotations: AnnotationsContext::new_owned(),
                 window_commands: WindowCommandContext::new_owned(),
             })
         };
@@ -88,6 +91,7 @@ impl Surface {
             _cascade: self.cascade.enter(),
             _window_commands: self.window_commands.enter(),
             _cursor: self.cursor.enter(),
+            _annotations: self.annotations.enter(),
             _prev_surface: RestoreSurface(prev_surface),
         }
     }
@@ -111,6 +115,7 @@ impl Surface {
             _cascade: CascadeContext::enter_ambient(),
             _window_commands: WindowCommandContext::enter_ambient(),
             _cursor: CursorContext::enter_ambient(),
+            _annotations: AnnotationsContext::enter_ambient(),
             _prev_surface: RestoreSurface(prev_surface),
         }
     }
@@ -142,6 +147,7 @@ pub struct SurfaceGuard {
     _cascade: CascadeGuard,
     _window_commands: WindowCommandGuard,
     _cursor: CursorGuard,
+    _annotations: AnnotationsGuard,
     _prev_surface: RestoreSurface,
 }
 

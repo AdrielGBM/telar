@@ -59,6 +59,10 @@ fn element_of(node: NodeId, semantics: Semantics) -> Element {
     let rect = layout_reactive::track_layout(node)
         .map(|rect| rect.get())
         .unwrap_or_default();
+    let semantics = match crate::annotation::of(node) {
+        Some(annotation) => semantics.annotated(&annotation),
+        None => semantics,
+    };
     Element::new(ElementId(node.into()), semantics, layout, rect)
 }
 

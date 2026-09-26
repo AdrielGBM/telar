@@ -1,5 +1,6 @@
 //! Generates the body of the component function from the `[view]` section.
 
+mod accessible;
 mod component;
 mod container;
 mod control_flow;
@@ -517,7 +518,10 @@ impl<'a> ViewGen<'a> {
             },
         };
         let emit = match node {
-            ViewNode::Element(el) => self.clip_tail(el, emit),
+            ViewNode::Element(el) => {
+                let emit = self.accessible_tail(el, emit);
+                self.clip_tail(el, emit)
+            }
             _ => emit,
         };
         // Nested nodes nest their own markers; a `let` has no line of its own and inherits the enclosing node's.

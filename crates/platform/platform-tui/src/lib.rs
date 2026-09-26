@@ -12,6 +12,6 @@ mod term;
 mod window;
 
 pub use clipboard::OscClipboard;
-pub use platform::{TuiPlatform, TuiPlatformConfig};
+pub use platform::{READING_ENV, TuiPlatform, TuiPlatformConfig};
 pub use term::restore;
 pub use window::TuiWindow;

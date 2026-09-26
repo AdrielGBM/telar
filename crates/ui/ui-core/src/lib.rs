@@ -3,6 +3,7 @@
 #![warn(rustdoc::broken_intra_doc_links)]
 
 pub mod accessibility;
+mod annotation;
 #[cfg(feature = "async-assets")]
 mod async_asset;
 mod border;
@@ -62,6 +63,7 @@ pub use text_metrics::{SINGLE_LINE_LEADING, single_line_box};
 mod virtual_list;
 mod window_root;
 
+pub use annotation::Accessible;
 #[cfg(feature = "async-assets")]
 pub use async_asset::{
     AssetCache, AssetDecoder, AssetError, AssetKey, AssetLoader, AssetState, AssetTransport, Reply,

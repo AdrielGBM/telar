@@ -25,6 +25,8 @@ pub struct AccessNode {
     ///
     /// Without it a slider announces "Volume, slider" and stops — the reader can say what the control is and not what it says, which is the one thing a value control exists to report. `None` for the roles that carry no number.
     pub value: Option<NumericValue>,
+    /// The language the node is in, as a BCP 47 tag, where the application said. `None` is the surface's own.
+    pub lang: Option<String>,
 }
 
 /// A numeric control's reading: where it is now, and the range that makes that number mean something.
@@ -34,3 +36,33 @@ pub struct NumericValue {
     pub min: f64,
     pub max: f64,
 }
+
+/// The snapshot as a reader would speak it, one line per node in reading order: what a terminal, a log or a test can carry where there is no accessibility API to hand the nodes to.
+pub fn transcript(nodes: &[AccessNode]) -> String {
+    let mut out = String::new();
+    for node in nodes {
+        if !out.is_empty() {
+            out.push('\n');
+        }
+        out.push_str(&node.name);
+        if node.role != Role::Label {
+            let role = match node.role {
+                Role::Drawing => "image",
+                role => role.as_str(),
+            };
+            out.push_str(", ");
+            out.push_str(role);
+        }
+        if let Some(on) = node.toggled {
+            out.push_str(if on { ", checked" } else { ", not checked" });
+        }
+        if !node.enabled {
+            out.push_str(", unavailable");
+        }
+    }
+    out
+}
+
+#[cfg(test)]
+#[path = "accessibility_test.rs"]
+mod tests;

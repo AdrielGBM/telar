@@ -57,7 +57,7 @@ where
     pub(super) _window: std::marker::PhantomData<W>,
     // Refilled by the send path with buffers the render thread hands back, instead of allocating each frame.
     pub(super) command_buf_pool: Vec<Vec<renderer_core::DrawCommand>>,
-    /// Just the text of the last frame, kept so the accessibility tree can be built when it is asked for rather than on every frame. A control is named by the text drawn inside it, and that is the only part of a frame the naming needs — a handful of commands, held by refcounted `Arc<str>`.
+    /// Just what the accessibility tree reads of the last frame — its text, its artwork and its element nesting — kept so the tree can be built when it is asked for rather than on every frame. Every one of those commands is held by refcount, so the copy costs no allocation per command.
     pub(super) frame_text: Vec<renderer_core::DrawCommand>,
     // The snapshot last applied, so the theme hears only a changed scheme and a hot swap can hand the new runtime what the old one knew.
     pub(super) system_preferences: Option<SystemPreferences>,
@@ -635,7 +635,7 @@ where
         self.frame_text.extend(
             frame_commands
                 .iter()
-                .filter(|c| matches!(c, renderer_core::DrawCommand::Text { .. }))
+                .filter(|c| ui_core::accessibility::is_read(c))
                 .cloned(),
         );
         // The message owns its commands from here, so release the tree and dev-plugin borrows for the submit below.

@@ -30,6 +30,7 @@ impl EventHandler<TestWindow> for TestHandler {
             enabled: true,
             toggled: None,
             value: None,
+            lang: None,
         }]
     }
 }

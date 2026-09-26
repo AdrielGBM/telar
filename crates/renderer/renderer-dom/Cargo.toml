@@ -43,3 +43,7 @@ path = "src/keyboard_test.rs"
 [[test]]
 name = "blend"
 path = "src/blend_test.rs"
+
+[[test]]
+name = "semantics"
+path = "src/semantics_test.rs"

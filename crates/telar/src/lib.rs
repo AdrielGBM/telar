@@ -223,28 +223,28 @@ pub use ui_core::{
     use_surface_width,
 };
 // The seam and nothing behind it: `telar-dynamic` carries the decoders and transports that plug in here, and an application's own plug in exactly the same way.
+#[cfg(feature = "runtime")]
+pub use ui_core::{
+    Accessible, Axis, BuildFailure, COARSE_STEP, Canvas, ChildSlot, Children, Clip, ClipAxis,
+    ClippedItem, Component, ComponentList, Container, DEFAULT_SCRIM, DragAxis, DragStart, Edge,
+    ErrorBoundary, EventResult, FINE_STEP, Image, Inherited, Input, KeyAnswer, KeyNav, KeyNavMove,
+    LayoutItem, LayoutScrollArea, LayoutTransition, Lazy, LineGutter, NodeId, NodeVec, Overlay,
+    Path, PointerButtons, Presence, ReactiveList, Rectangle, RenderNode, ScrollPage,
+    ScrollViewport, ScrollbarStyle, Slots, StyledContainer, SurfaceScaffold, SurfaceTransition,
+    Text, TextArea, ThemeProvider, Transition, VirtualList, WindowRoot, anchor_rect,
+    animate_layout, apply_move, box_item, box_transform, close_overlay, compute_layout,
+    confirm_top, current_direction, declare, dismiss_depth, dismiss_top, drag_start, drag_travel,
+    exits_in_flight, focus, fragment, fragment_positional, inherited_text_style, insertion_index,
+    interactive_rects, kept, key_held, key_nav_apply, key_nav_apply_grid, key_pressed,
+    logical_border_radius, logical_border_widths, mark_dirty, modifiers, new_container, new_leaf,
+    observe_keyboard, observe_pointer, open_overlay, overlay_state, pointer_buttons, provide_theme,
+    register_transaction, relayout_if_dirty, remove_node, requested_cursor, set_children,
+    set_direction, set_display, set_min_height, set_overlay_host, step_factor, track_layout,
+    transform_pointer, undeclare, use_context, use_direction, use_dismiss_depth, visible_window,
+};
 #[cfg(feature = "async-assets")]
 pub use ui_core::{
     AssetCache, AssetDecoder, AssetError, AssetKey, AssetLoader, AssetState, AssetTransport, Reply,
-};
-#[cfg(feature = "runtime")]
-pub use ui_core::{
-    Axis, BuildFailure, COARSE_STEP, Canvas, ChildSlot, Children, Clip, ClipAxis, ClippedItem,
-    Component, ComponentList, Container, DEFAULT_SCRIM, DragAxis, DragStart, Edge, ErrorBoundary,
-    EventResult, FINE_STEP, Image, Inherited, Input, KeyAnswer, KeyNav, KeyNavMove, LayoutItem,
-    LayoutScrollArea, LayoutTransition, Lazy, LineGutter, NodeId, NodeVec, Overlay, Path,
-    PointerButtons, Presence, ReactiveList, Rectangle, RenderNode, ScrollPage, ScrollViewport,
-    ScrollbarStyle, Slots, StyledContainer, SurfaceScaffold, SurfaceTransition, Text, TextArea,
-    ThemeProvider, Transition, VirtualList, WindowRoot, anchor_rect, animate_layout, apply_move,
-    box_item, box_transform, close_overlay, compute_layout, confirm_top, current_direction,
-    declare, dismiss_depth, dismiss_top, drag_start, drag_travel, exits_in_flight, focus, fragment,
-    fragment_positional, inherited_text_style, insertion_index, interactive_rects, kept, key_held,
-    key_nav_apply, key_nav_apply_grid, key_pressed, logical_border_radius, logical_border_widths,
-    mark_dirty, modifiers, new_container, new_leaf, observe_keyboard, observe_pointer,
-    open_overlay, overlay_state, pointer_buttons, provide_theme, register_transaction,
-    relayout_if_dirty, remove_node, requested_cursor, set_children, set_direction, set_display,
-    set_min_height, set_overlay_host, step_factor, track_layout, transform_pointer, undeclare,
-    use_context, use_direction, use_dismiss_depth, visible_window,
 };
 
 /// Empties the layout runtime for a fresh tree, and installs the glyph measurer if nothing installed one.
