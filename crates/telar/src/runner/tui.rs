@@ -50,6 +50,7 @@ pub fn run_tui_app_with_name<A: App>(
     // A cell is the smallest step this surface can show, so easing across a wheel notch would repaint the screen several times to draw the same rows.
     ui_tree::set_smooth_wheel(false);
     services_core::set_clipboard(Arc::new(OscClipboard::new()));
+    services_core::set_uri_opener(Arc::new(services_core::SystemOpener));
 
     let paths: Arc<dyn AppPathsProvider> = Arc::new(SystemPaths);
     let platform = TuiPlatform::new(TuiPlatformConfig {

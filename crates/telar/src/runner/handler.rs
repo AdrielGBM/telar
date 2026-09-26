@@ -841,6 +841,12 @@ where
                 }
                 return;
             }
+            Event::BoxActivated { box_id } => {
+                if ui_core::activate_box(*box_id) {
+                    window.request_redraw();
+                }
+                return;
+            }
             Event::FocusLeftBoxes => {
                 if ui_core::focus::current().is_some() {
                     ui_core::focus::clear();

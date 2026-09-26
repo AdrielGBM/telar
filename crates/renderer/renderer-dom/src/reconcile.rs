@@ -7,6 +7,7 @@
 //! And a frame paints at its own level too, outside every element: an application's shell fills the panel its rail stands on, and dims the page behind a drawer. That becomes a box inside the host, placed as it is drawn — see `paint_at_root`.
 
 use geometry_core::Rect;
+use platform_core::Destination;
 use platform_core::consumed_keys::{CONSUMED_KEYS_ATTRIBUTE, FOCUS_BOX_ATTRIBUTE};
 use renderer_core::{BlendMode, Color, DrawCommand, Element, Focusable, Role};
 use rustc_hash::FxHashMap;
@@ -91,6 +92,9 @@ struct Described {
     role: Option<&'static str>,
     label: Option<String>,
     link: Option<String>,
+    // Whether the link is an external one, which a page must not be able to reach back from.
+    external: bool,
+    opens_beside: bool,
     lang: Option<String>,
     hidden: bool,
     checked: Option<bool>,
@@ -208,6 +212,7 @@ pub struct Reconciler {
     /// The box that holds the keyboard this frame, when it is not a field; focused once it is in the document.
     focus_target: Option<web_sys::HtmlElement>,
     _follows_focus: Option<FocusFollower>,
+    _follows_links: Option<crate::links::LinkFollower>,
     /// The document's own scroll, while a box that is the surface's primary scroll holds it.
     document_scroll: Option<crate::document_scroll::DocumentScroll>,
     /// The box that took the document scroll this frame; only the first primary scroll at the top level can.
@@ -229,6 +234,7 @@ impl Reconciler {
         let follows_focus = follow_focus(&host);
         Ok(Self {
             _follows_focus: follows_focus,
+            _follows_links: crate::links::follow_links(&host),
             document_scroll: None,
             primary_this_frame: None,
             surface_origin: None,
@@ -681,11 +687,15 @@ impl Reconciler {
         };
         // Artwork nobody named is decoration, and a graphic with no accessible name is noise to read out.
         let hidden = semantics.hidden || (semantics.role == Role::Drawing && label.is_none());
+        // An `<a>` without an `href` is no link, which is what a disabled one has to be.
+        let link = semantics.link.as_ref().filter(|_| !semantics.disabled);
         let focused = semantics.focused;
         let described = Described {
             role,
             label: label.map(str::to_string),
-            link: semantics.link.as_deref().map(str::to_string),
+            link: link.map(platform_core::address_of),
+            external: matches!(link, Some(Destination::External(_))),
+            opens_beside: matches!(link, Some(Destination::External(uri)) if uri.is_web()),
             lang: semantics.lang.as_deref().map(str::to_string),
             hidden,
             checked: semantics.toggled,
@@ -716,6 +726,8 @@ impl Reconciler {
         set_or_clear(node, "role", described.role);
         set_or_clear(node, "aria-label", described.label.as_deref());
         set_or_clear(node, "href", described.link.as_deref());
+        set_or_clear(node, "target", described.opens_beside.then_some("_blank"));
+        set_or_clear(node, "rel", described.external.then_some("noopener"));
         set_or_clear(node, "lang", described.lang.as_deref());
         set_or_clear(node, "aria-hidden", described.hidden.then_some("true"));
         set_or_clear(

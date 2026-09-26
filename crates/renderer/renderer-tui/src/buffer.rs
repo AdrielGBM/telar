@@ -1,5 +1,7 @@
 //! The cell grid, and turning one frame's difference from the last into terminal output.
 
+use std::sync::Arc;
+
 use unicode_width::UnicodeWidthStr;
 
 use crate::cell::{Attrs, Cell, Grapheme};
@@ -10,6 +12,8 @@ pub struct CellBuffer {
     cols: u16,
     rows: u16,
     cells: Vec<Cell>,
+    // The URIs this frame's cells link to; a cell's `link` is an index into it, plus one.
+    links: Vec<Arc<str>>,
 }
 
 impl CellBuffer {
@@ -18,6 +22,7 @@ impl CellBuffer {
             cols,
             rows,
             cells: vec![Cell::blank(bg); cols as usize * rows as usize],
+            links: Vec::new(),
         }
     }
 
@@ -33,6 +38,7 @@ impl CellBuffer {
     pub fn resize(&mut self, cols: u16, rows: u16, bg: Rgb) {
         self.cols = cols;
         self.rows = rows;
+        self.links.clear();
         self.cells.clear();
         self.cells
             .resize(cols as usize * rows as usize, Cell::blank(bg));
@@ -41,6 +47,7 @@ impl CellBuffer {
     pub fn clear(&mut self, bg: Rgb) {
         let blank = Cell::blank(bg);
         self.cells.fill(blank);
+        self.links.clear();
     }
 
     fn index(&self, col: u16, row: u16) -> Option<usize> {
@@ -70,14 +77,34 @@ impl CellBuffer {
         self.cells[i].glyph = glyph;
         self.cells[i].fg = fg;
         self.cells[i].attrs = attrs;
+        self.cells[i].link = 0;
         if width == 2 {
             let tail = i + 1;
             self.cells[tail].glyph = Grapheme::SPACE;
             self.cells[tail].fg = fg;
             self.cells[tail].attrs = attrs.with(Attrs::WIDE_TAIL);
+            self.cells[tail].link = 0;
             self.cells[tail].bg = self.cells[i].bg;
         }
         width
+    }
+
+    /// The number cells linking to `uri` carry this frame. `0`, no link, once a frame holds more distinct links than a cell can number.
+    pub fn link_id(&mut self, uri: &str) -> u16 {
+        if let Some(index) = self.links.iter().position(|known| &**known == uri) {
+            return index as u16 + 1;
+        }
+        let Ok(id) = u16::try_from(self.links.len() + 1) else {
+            return 0;
+        };
+        self.links.push(uri.into());
+        id
+    }
+
+    /// The URI a cell's `link` names.
+    pub fn link_uri(&self, link: u16) -> Option<&str> {
+        let index = usize::from(link).checked_sub(1)?;
+        self.links.get(index).map(|uri| &**uri)
     }
 
     /// Whether the cell at `col` is the leading half of a double-width grapheme.
@@ -91,6 +118,8 @@ impl CellBuffer {
         let sized_alike = previous.cols == self.cols && previous.rows == self.rows;
         let mut pen = Pen::unset();
         let mut cursor: Option<(u16, u16)> = None;
+        // The OSC 8 hyperlink the terminal is currently writing, which outlives cursor moves and attribute resets alike.
+        let mut open_link: Option<&str> = None;
 
         for row in 0..self.rows {
             let mut col = 0;
@@ -105,9 +134,10 @@ impl CellBuffer {
                 let span = if wide { 2 } else { 1 };
                 let unchanged = sized_alike
                     && (0..span).all(|k| {
-                        previous
-                            .get(col + k, row)
-                            .is_some_and(|p| p == &self.cells[i + k as usize])
+                        previous.get(col + k, row).is_some_and(|p| {
+                            let c = &self.cells[i + k as usize];
+                            p == c && previous.link_uri(p.link) == self.link_uri(c.link)
+                        })
                     });
                 if unchanged {
                     col += span;
@@ -117,15 +147,33 @@ impl CellBuffer {
                     write_move(out, col, row);
                 }
                 pen.apply(cell, depth, out);
+                let link = self.link_uri(cell.link);
+                if link != open_link {
+                    write_hyperlink(out, link);
+                    open_link = link;
+                }
                 out.extend_from_slice(cell.glyph.as_str().as_bytes());
                 cursor = Some((col + span, row));
                 col += span;
             }
         }
+        if open_link.is_some() {
+            write_hyperlink(out, None);
+        }
         if !out.is_empty() {
             out.extend_from_slice(b"\x1b[0m");
         }
     }
+}
+
+/// Opens an OSC 8 hyperlink to `uri`, or closes the open one. A terminal that does not know the sequence skips it and shows the text alone.
+fn write_hyperlink(out: &mut Vec<u8>, uri: Option<&str>) {
+    out.extend_from_slice(b"\x1b]8;;");
+    if let Some(uri) = uri {
+        // Control characters would end the sequence early and spill the rest of the URI onto the screen.
+        out.extend(uri.bytes().filter(|byte| !byte.is_ascii_control()));
+    }
+    out.extend_from_slice(b"\x1b\\");
 }
 
 fn write_move(out: &mut Vec<u8>, col: u16, row: u16) {
@@ -278,8 +326,18 @@ impl TerminalModel {
                 self.put(c);
                 continue;
             }
-            // Every escape this writer emits is either a CSI or a one-character sequence; only the CSIs that move the cursor change what ends up on the screen.
-            if chars.next() == Some('[') {
+            // Every escape this writer emits is a CSI or an OSC 8 hyperlink; only the CSIs that move the cursor change what ends up on the screen.
+            let introducer = chars.next();
+            if introducer == Some(']') {
+                while let Some(c) = chars.next() {
+                    if c == '\x1b' {
+                        chars.next();
+                        break;
+                    }
+                }
+                continue;
+            }
+            if introducer == Some('[') {
                 let mut params = String::new();
                 let final_byte = loop {
                     match chars.next() {

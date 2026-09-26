@@ -183,6 +183,12 @@ pub enum Event {
     ///
     /// Not a window losing focus ([`FocusChanged`](Self::FocusChanged)): there the box keeps the keyboard and gets it back on return. Here the person took it somewhere else.
     FocusLeftBoxes,
+    /// The surface followed a link by itself — a document whose `<a>` was clicked, pressed with Enter or activated by a reader — and this is the box it belongs to.
+    ///
+    /// A fact, like [`BoxFocused`](Self::BoxFocused): the surface has already decided the activation was the app's to handle, and the app follows the box's destination.
+    BoxActivated {
+        box_id: u64,
+    },
     /// The user's system preferences, whole: sent once before a surface's first resume, so its first layout already follows them, and again whenever any field changes.
     ///
     /// A snapshot rather than a delta, so a consumer never has to remember what came before to know where it stands.
@@ -196,6 +202,9 @@ pub enum Event {
         history: Vec<crate::Location>,
     },
 }
+
+/// How far a pointer may travel from where it went down, in logical pixels, and still be a tap rather than a drag or a scroll. One number for every layer that tells the two apart.
+pub const TAP_SLOP: f32 = 10.0;
 
 #[derive(Debug, Clone, PartialEq)]
 /// What produced a pointer event: a mouse, a finger, or a pen.

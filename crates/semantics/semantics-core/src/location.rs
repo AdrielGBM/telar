@@ -5,9 +5,9 @@
 ///
 /// This is deliberately not a URL. There is no scheme, host, or percent-encoding here — a `Location` is a
 /// value a desktop deep link, an Android intent, a TUI argument, or a web `history.pushState` path can each
-/// carry in their own way. Spelling one as text is [`LocationFormat`](crate::LocationFormat)'s job, never
+/// carry in their own way. Spelling one as text is `platform_core::LocationFormat`'s job, never
 /// this type's.
-#[derive(Clone, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Debug, Default, PartialEq, Eq, Hash)]
 pub struct Location {
     segments: Vec<String>,
     fragment: Option<String>,

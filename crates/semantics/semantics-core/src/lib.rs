@@ -15,9 +15,13 @@
 
 use std::sync::Arc;
 
+mod destination;
 mod keys;
+mod location;
 
+pub use destination::{Destination, Uri};
 pub use keys::ConsumedKeys;
+pub use location::Location;
 
 /// What a box is.
 ///
@@ -232,8 +236,8 @@ pub struct Semantics {
     ///
     /// Left `None` wherever the drawn text already says it, which is the common case and the one that cannot fall out of step with what is on screen.
     pub label: Option<Arc<str>>,
-    /// Where a [`Link`](Role::Link) goes. Meaningless on every other role, and absent there.
-    pub link: Option<Arc<str>>,
+    /// Where a [`Link`](Role::Link) goes. Absent on every other role.
+    pub link: Option<Destination>,
     /// Whether the box is where the keyboard currently is.
     ///
     /// A target that draws its own focus ring does not need telling; one that hands the box to a document does, because the document has a focus of its own and the two must be the same box.
@@ -326,10 +330,10 @@ impl Semantics {
         self
     }
 
-    /// A link to `target`. Sets the role too: a box with somewhere to go is a link whatever else it said.
-    pub fn linking_to(mut self, target: impl Into<Arc<str>>) -> Self {
+    /// A link to `destination`. Sets the role too: a box with somewhere to go is a link whatever else it said.
+    pub fn linking_to(mut self, destination: Destination) -> Self {
         self.role = Role::Link;
-        self.link = Some(target.into());
+        self.link = Some(destination);
         self
     }
 

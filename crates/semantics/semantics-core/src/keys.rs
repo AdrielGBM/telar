@@ -126,7 +126,6 @@ impl Role {
         use ConsumedKeys as K;
         match self {
             Self::Button
-            | Self::Link
             | Self::CheckBox
             | Self::Radio
             | Self::Switch
@@ -158,6 +157,8 @@ impl Role {
             | Self::TabPanel
             | Self::ProgressBar
             | Self::Label => K::EMPTY,
+            // A document activates a link on Enter by itself and scrolls on Space, and a link keeping either would take that from it.
+            Self::Link => K::EMPTY,
         }
     }
 }

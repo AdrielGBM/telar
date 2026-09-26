@@ -270,3 +270,56 @@ fn a_filled_path_covers_its_interior() {
     assert_eq!(buf.get(1, 1).unwrap().bg, Rgb { r: 0, g: 255, b: 0 });
     assert_eq!(buf.get(5, 1).unwrap().bg, Rgb::BLACK, "outside the path");
 }
+
+fn element_linking(id: u64, destination: renderer_core::Destination) -> DrawCommand {
+    DrawCommand::PushElement {
+        element: Arc::new(renderer_core::Element::new(
+            renderer_core::ElementId(id),
+            renderer_core::Semantics::group().linking_to(destination),
+            "",
+            Rect::default(),
+        )),
+    }
+}
+
+#[test]
+fn the_glyphs_of_an_external_link_are_written_as_an_osc_8_hyperlink() {
+    let mut buf = grid(12, 1);
+    let uri = renderer_core::Destination::external("https://example.com");
+    paint(
+        &mut buf,
+        &[
+            text_cmd("go", Rect::new(0.0, 0.0, 16.0, 16.0)),
+            element_linking(1, uri),
+            text_cmd("ab", Rect::new(3.0 * 8.0, 0.0, 16.0, 16.0)),
+            DrawCommand::PopElement,
+        ],
+    );
+    let mut out = Vec::new();
+    buf.diff_into(&grid(0, 0), crate::ColorDepth::TrueColor, &mut out);
+    let out = String::from_utf8(out).unwrap();
+    let opened = out
+        .find("\x1b]8;;https://example.com\x1b\\")
+        .expect("the link is opened");
+    let closed = out.rfind("\x1b]8;;\x1b\\").expect("and closed");
+    let linked = &out[opened..closed];
+    assert!(linked.contains('a') && linked.contains('b'));
+    assert!(!linked.contains('g'), "text outside the link is not in it");
+}
+
+#[test]
+fn a_route_link_has_nothing_a_terminal_can_open() {
+    let mut buf = grid(4, 1);
+    let route = renderer_core::Destination::Route(Default::default());
+    paint(
+        &mut buf,
+        &[
+            element_linking(1, route),
+            text_cmd("ab", Rect::new(0.0, 0.0, 16.0, 16.0)),
+            DrawCommand::PopElement,
+        ],
+    );
+    let mut out = Vec::new();
+    buf.diff_into(&grid(0, 0), crate::ColorDepth::TrueColor, &mut out);
+    assert!(!String::from_utf8(out).unwrap().contains("\x1b]8"));
+}

@@ -194,6 +194,7 @@ Everything here is either always present or one word away. Nothing is bundled.
 - **A widget catalogue** — buttons, fields, selects, menus, modals, tabs, sliders, and the rest. → `components`
 - **Navigation** — a reactive page stack with animated transitions. → `navigate`
 - **Location** — one address per app on every target: browser history with scroll restoration, `--location` deep links remembered between runs, Android `ACTION_VIEW` and the back button. → [docs/location.md](docs/location.md)
+- **Links** — `to:` makes a box a link to a route, an anchor on the page or a URI outside the app: a real `<a href>` on web-dom, `open_uri` through the system everywhere else, OSC 8 in a terminal. → [docs/links.md](docs/links.md)
 - **Images and SVG** — baked into the binary at build time out of `src:"…"`, with no parser in the binary. → `svg`
 - **Translation catalogs** baked the same way, with `t!` validating keys and arguments at compile time.
 

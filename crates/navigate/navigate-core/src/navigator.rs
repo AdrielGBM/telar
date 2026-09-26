@@ -5,7 +5,7 @@ use std::rc::Rc;
 use platform_core::{HistoryFollower, Location};
 use reactive_core::{RwSignal, signal};
 
-use crate::route::Route;
+use crate::Route;
 
 /// A reactive navigation stack over an app-defined route type `R` (typically a small `Clone + Eq` enum).
 ///

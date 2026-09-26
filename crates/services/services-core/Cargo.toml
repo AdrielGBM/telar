@@ -26,3 +26,5 @@ di = ["dep:rustc-hash", "dep:thiserror"]
 # The host OS's user directories. Opt-in: a target with no filesystem (the web) must not link a crate
 # whose whole job is to name paths on one.
 system-paths = ["dep:dirs"]
+# Opening a URI by starting the system launcher (`xdg-open`, `open`, the Windows URL handler). Opt-in for the same reason: a browser has no process to start.
+system-opener = []

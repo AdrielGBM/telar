@@ -6,7 +6,7 @@ mod shape;
 mod text;
 
 use geometry_core::Rect;
-use renderer_core::{Color, DrawCommand, DrawState};
+use renderer_core::{Color, Destination, DrawCommand, DrawState};
 
 pub use geom::CellRect;
 
@@ -33,6 +33,8 @@ pub struct Painter<'a> {
     pub(crate) depth: crate::ColorDepth,
     /// Reused across every paragraph in a frame, so wrapping allocates once per process rather than per text.
     pub(crate) lines: Vec<WrappedLine>,
+    // The link each open element puts its glyphs in, innermost last; `0` for none.
+    links: Vec<u16>,
 }
 
 impl<'a> Painter<'a> {
@@ -45,6 +47,7 @@ impl<'a> Painter<'a> {
             opacity: vec![1.0],
             depth,
             lines: Vec::new(),
+            links: Vec::new(),
         }
     }
 
@@ -89,8 +92,17 @@ impl<'a> Painter<'a> {
             DrawCommand::Image {
                 data, rect, raster, ..
             } => self.image(data, *rect, *raster),
-            // Structure, for a backend whose output is a document. The commands inside are already where they belong, so skipping the markers draws exactly the same grid.
-            DrawCommand::PushElement { .. } | DrawCommand::PopElement => {}
+            // Structure, for a backend whose output is a document. The commands inside are already where they belong; all a terminal takes from it is which glyphs an external link covers, which it marks with OSC 8.
+            DrawCommand::PushElement { element } => {
+                let link = match &element.semantics.link {
+                    Some(Destination::External(uri)) => self.buf.link_id(uri.as_str()),
+                    _ => self.link(),
+                };
+                self.links.push(link);
+            }
+            DrawCommand::PopElement => {
+                self.links.pop();
+            }
         }
     }
 
@@ -118,6 +130,10 @@ impl<'a> Painter<'a> {
 
     pub(crate) fn scale(&self) -> f32 {
         self.state.scale()
+    }
+
+    fn link(&self) -> u16 {
+        self.links.last().copied().unwrap_or(0)
     }
 
     pub(crate) fn alpha(&self) -> f32 {
@@ -207,7 +223,12 @@ impl<'a> Painter<'a> {
             return 1;
         };
         let bg = self.buf.get(c, r).map(|cell| cell.bg).unwrap_or(Rgb::BLACK);
-        self.buf.put(c, r, glyph, bg.under(color), attrs)
+        let width = self.buf.put(c, r, glyph, bg.under(color), attrs);
+        let link = self.link();
+        if let Some(cell) = self.buf.get_mut(c, r) {
+            cell.link = link;
+        }
+        width
     }
 
     /// A colour as this surface will actually show it: the enclosing layers applied, then the palette's own floor. Both are alpha, and both have to be settled before anything blends — see [`ColorDepth::compress_alpha`].

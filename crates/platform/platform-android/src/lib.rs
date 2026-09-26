@@ -24,7 +24,7 @@ pub use adpf::AdpfSession;
 #[cfg(target_os = "android")]
 pub use android_activity::AndroidApp;
 #[cfg(target_os = "android")]
-pub use intent::IntentLocation;
+pub use intent::{AndroidUriOpener, IntentLocation};
 #[cfg(target_os = "android")]
 pub use paths::AndroidPathsProvider;
 #[cfg(target_os = "android")]

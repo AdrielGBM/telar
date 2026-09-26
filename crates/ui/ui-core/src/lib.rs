@@ -33,6 +33,7 @@ mod layout_leaf;
 mod layout_transition;
 mod lazy;
 mod line_gutter;
+mod link;
 mod named_overlay;
 pub mod overlay;
 mod path;
@@ -100,6 +101,10 @@ pub use layout_item::{Clip, ClipAxis, ClipPointer, ClippedItem, LayoutItem, box_
 pub use layout_transition::{LayoutTransition, animate_layout};
 pub use lazy::Lazy;
 pub use line_gutter::LineGutter;
+pub use link::{
+    AnchorRegistration, activate_box, follow, follow_beside, follow_pressed, register_anchor,
+    reveal_anchor,
+};
 pub use named_overlay::{close as close_overlay, open as open_overlay, state as overlay_state};
 pub use overlay::{Overlay, Placement, anchor_rect};
 pub use path::Path;

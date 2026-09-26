@@ -89,6 +89,7 @@ const SECTIONS: &[SectionDef] = sections![
         crate::features::navigation::NavigationProps,
         "navigation.rsx"
     ),
+    ("Links", crate::features::links::links, crate::features::links::LinksProps, "links.rsx"),
     ("Badges & chips", crate::features::pills::pills, crate::features::pills::PillsProps, "pills.rsx"),
     ("Menus & select", crate::features::menus::menus, crate::features::menus::MenusProps, "menus.rsx"),
     ("Dialogs & overlays", crate::features::dialogs::dialogs, crate::features::dialogs::DialogsProps, "dialogs.rsx"),

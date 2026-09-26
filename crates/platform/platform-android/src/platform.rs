@@ -176,6 +176,9 @@ impl AndroidPlatform {
             .with_android_app(app.clone())
             .build()
             .map_err(|e| PlatformError(e.to_string()))?;
+        services_core::set_uri_opener(std::sync::Arc::new(crate::intent::AndroidUriOpener::new(
+            app.clone(),
+        )));
         Ok(Self { event_loop, app })
     }
 }

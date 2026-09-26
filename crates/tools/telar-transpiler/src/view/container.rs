@@ -28,6 +28,7 @@ const POINTER_HANDLERS: &[&str] = &[
     "active_style",
     "focus_style",
     "cursor",
+    "to",
 ];
 
 /// The input declarations one box cannot hold together, as compile errors: two answers to whether it takes the pointer, or a transparent box that also answers the pointer and so claims its rect.
@@ -48,6 +49,16 @@ fn input_contradictions(el: &Element) -> Vec<String> {
         ));
     }
     errors
+}
+
+/// The string an `external("…")` destination is written with, when it is a plain literal.
+fn external_literal(value: &str) -> Option<&str> {
+    value
+        .strip_prefix("external(")?
+        .strip_suffix(')')?
+        .trim()
+        .strip_prefix('"')?
+        .strip_suffix('"')
 }
 
 impl ViewGen<'_> {
@@ -141,12 +152,15 @@ impl ViewGen<'_> {
             })
             .map(|variant| format!(".with_blend(|| {variant})"))
             .unwrap_or_default();
+        let (specs, mut errors) = self.parse_transitions(el);
+        errors.extend(input_contradictions(el));
         let input = ["input_opaque", "input_transparent"]
             .into_iter()
             .filter(|key| el.attributes.iter().any(|a| a.key == *key))
             .map(|key| format!(".{key}()"))
             .collect::<String>();
         let inert = self.predicate_call(el, "inert");
+        let to = self.destination_call(el, &mut errors);
         let holds_stroke = el
             .attributes
             .iter()
@@ -176,8 +190,6 @@ impl ViewGen<'_> {
         let on_focus = self.closure_attr_call(el, "on_focus", "on_focus");
         let on_long_press = self.closure_attr_call(el, "on_long_press", "on_long_press");
         let on_alt_press = self.closure_attr_call(el, "on_alt_press", "on_alt_press");
-        let (specs, mut errors) = self.parse_transitions(el);
-        errors.extend(input_contradictions(el));
         let consumes_keys = consumes_keys_call(el, &mut errors);
         let transitions: HashMap<String, String> = specs.into_iter().collect();
         let mut hoists: Vec<String> = Vec::new();
@@ -187,7 +199,7 @@ impl ViewGen<'_> {
 
         // Any of these forces the StyledContainer upgrade. `on_press` is excluded because its closure form wires on a plain Container; `on_press_forwarded` covers the other case.
         let styling = format!(
-            "{hover_call}{active_call}{disabled_call}{focus_ring}{disabled}{transform_call}{on_hover}{on_pointer_move}{on_key}{on_drag}{on_drag_end}{on_scroll}{on_focus}{on_long_press}{on_alt_press}{cursor}{drag_button}{drag_threshold}{input}{inert}{consumes_keys}"
+            "{hover_call}{active_call}{disabled_call}{focus_ring}{disabled}{transform_call}{on_hover}{on_pointer_move}{on_key}{on_drag}{on_drag_end}{on_scroll}{on_focus}{on_long_press}{on_alt_press}{cursor}{drag_button}{drag_threshold}{input}{inert}{consumes_keys}{to}"
         );
         let pieces =
             if always_style || has_paint(&attrs) || !styling.is_empty() || on_press_forwarded {
@@ -232,7 +244,7 @@ impl ViewGen<'_> {
             Some((closure, opacity_call)) => {
                 let _ = writeln!(
                     code,
-                    "{inner_pad}{bind}StyledContainer::{ctor}({style}, {closure}, {children})?{opacity_call}{blend}{hover_call}{active_call}{disabled_call}{focus_ring}{disabled}{on_press}{transform_call}{on_hover}{on_pointer_move}{on_key}{on_drag}{on_drag_end}{on_scroll}{on_focus}{on_long_press}{on_alt_press}{cursor}{drag_button}{drag_threshold}{input}{inert}{consumes_keys}{holds_stroke}{role}{styled_by}{declaring}{terminator}"
+                    "{inner_pad}{bind}StyledContainer::{ctor}({style}, {closure}, {children})?{opacity_call}{blend}{hover_call}{active_call}{disabled_call}{focus_ring}{disabled}{on_press}{transform_call}{on_hover}{on_pointer_move}{on_key}{on_drag}{on_drag_end}{on_scroll}{on_focus}{on_long_press}{on_alt_press}{cursor}{drag_button}{drag_threshold}{input}{inert}{consumes_keys}{holds_stroke}{role}{to}{styled_by}{declaring}{terminator}"
                 );
             }
             None => {
@@ -303,6 +315,26 @@ impl ViewGen<'_> {
         let read = substitute_reads(value);
         format!(
             ".{key}({})",
+            wrap_signal_clones(&[value], format!("move || {read}"))
+        )
+    }
+
+    /// `to:` as `.to(move || …)`: a closure, so a destination built from `$state` follows it. An `external("…")` whose literal names no scheme is a build error here rather than a panic when the box is built.
+    fn destination_call(&self, el: &Element, errors: &mut Vec<String>) -> String {
+        let Some(attr) = el.attributes.iter().find(|a| a.key == "to") else {
+            return String::new();
+        };
+        let value = attr.value.text().trim();
+        if let Some(literal) = external_literal(value)
+            && semantics_core::Uri::parse(literal).is_none()
+        {
+            errors.push(format!(
+                "`to:external(\"{literal}\")` is not an absolute URI: it names no scheme (`https:`, `mailto:`…)"
+            ));
+        }
+        let read = substitute_reads(value);
+        format!(
+            ".to({})",
             wrap_signal_clones(&[value], format!("move || {read}"))
         )
     }

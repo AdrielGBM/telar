@@ -13,6 +13,7 @@ fn node(role: Role, name: &str) -> AccessNode {
         toggled: None,
         value: None,
         lang: None,
+        url: None,
     }
 }
 

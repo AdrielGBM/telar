@@ -7,17 +7,18 @@
 pub mod accessibility;
 pub mod app_ctx;
 pub mod consumed_keys;
+pub mod destination;
 pub mod error;
 pub mod event;
 pub mod event_sink;
 #[cfg(feature = "dylib")]
 pub mod guest;
 pub mod history;
-pub mod location;
 pub mod location_format;
 pub mod location_source;
 pub mod loop_waker;
 pub mod primary_scroll;
+pub mod route;
 pub mod system_preferences;
 pub mod window;
 pub mod window_command;
@@ -25,15 +26,17 @@ pub mod window_command;
 pub use accessibility::{AccessNode, NumericValue, Role};
 pub use app_ctx::{AppCtx, RedrawWaker};
 pub use consumed_keys::{ConsumedKeys, consumes, key_member};
+pub use destination::{Destination, IntoDestination, Uri, address_of, anchor, external};
 pub use error::PlatformError;
-pub use event::{Event, Key, ModifiersState, NamedKey, PointerButton, PointerSource, ScrollDelta};
+pub use event::{
+    Event, Key, ModifiersState, NamedKey, PointerButton, PointerSource, ScrollDelta, TAP_SLOP,
+};
 pub use event_sink::{post_event, set_event_sink};
 pub use history::{
     HistoryFollower, HistoryFollowerId, follow_location_history, history_back, location_history,
     push_location, receive_location_history, replace_location, report_location_history,
     rewrite_location_history, unfollow_location_history,
 };
-pub use location::Location;
 pub use location_format::{LocationFormat, location_format, set_location_format};
 pub use location_source::{
     ArgumentLocation, FixedLocation, HistorySink, HistoryStep, HistoryUpdate, LocationSource,
@@ -43,6 +46,8 @@ pub use primary_scroll::{
     PrimaryScroll, PrimaryScrollClaim, claim_primary_scroll, primary_scroll_offset,
     scroll_primary_to,
 };
+pub use route::Route;
+pub use semantics_core::Location;
 pub use system_preferences::{
     ColorScheme, SystemPreferences, locales_from_env, posix_locale_to_bcp47,
     system_locales_from_env,

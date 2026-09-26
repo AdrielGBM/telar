@@ -31,6 +31,7 @@ impl EventHandler<TestWindow> for TestHandler {
             toggled: None,
             value: None,
             lang: None,
+            url: None,
         }]
     }
 }

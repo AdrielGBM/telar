@@ -7,7 +7,7 @@ enum Route {
     Detail,
 }
 
-impl crate::route::Route for Route {
+impl crate::Route for Route {
     fn to_location(&self) -> Location {
         match self {
             Route::Home => Location::root(),

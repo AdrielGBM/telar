@@ -29,7 +29,7 @@ geometry-core = { workspace = true }
 platform-core = { workspace = true }
 platform-winit = { workspace = true }
 renderer-core = { workspace = true }
-services-core = { workspace = true, features = ["system-paths"] }
+services-core = { workspace = true, features = ["system-opener", "system-paths"] }
 
 accesskit = { version = "0.25.0", optional = true }
 accesskit_winit = { version = "0.34.0", optional = true }
@@ -50,10 +50,10 @@ winit = { workspace = true, features = [
 zbus = { version = "5.17.0", optional = true }
 
 [target.'cfg(target_os = "windows")'.dependencies]
-windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_Globalization", "Win32_Graphics_Gdi", "Win32_System_LibraryLoader", "Win32_UI_Accessibility", "Win32_UI_WindowsAndMessaging"] }
+windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_Globalization", "Win32_Graphics_Gdi", "Win32_System_LibraryLoader", "Win32_UI_Accessibility", "Win32_UI_Shell", "Win32_UI_WindowsAndMessaging"] }
 
 [target.'cfg(target_os = "macos")'.dependencies]
 block2 = "0.6"
 objc2 = "0.6"
 objc2-app-kit = { version = "0.3", default-features = false, features = ["std", "NSAccessibility", "NSWorkspace"] }
-objc2-foundation = { version = "0.3", default-features = false, features = ["std", "NSArray", "NSEnumerator", "NSLocale", "NSString", "block2", "NSNotification", "NSOperation"] }
+objc2-foundation = { version = "0.3", default-features = false, features = ["std", "NSArray", "NSEnumerator", "NSLocale", "NSString", "block2", "NSNotification", "NSOperation", "NSURL"] }

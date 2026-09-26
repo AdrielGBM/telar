@@ -17,6 +17,8 @@ thread_local! {
     static QUEUE: RefCell<Vec<Event>> = const { RefCell::new(Vec::new()) };
     static APP: RefCell<Option<App>> = const { RefCell::new(None) };
     static FRAME: RefCell<Frame> = const { RefCell::new(Frame { scheduled: false, callback: None }) };
+    // The pointer that went down and where, until it travels far enough to be a drag or comes back up.
+    static PRESSED: std::cell::Cell<Option<(i32, f32, f32)>> = const { std::cell::Cell::new(None) };
 }
 
 struct Frame {
@@ -368,13 +370,21 @@ fn on_pointer(
     let modifiers = map::mouse_modifiers(event);
     let mut events = vec![Event::ModifiersChanged { modifiers }];
     match kind {
-        PointerKind::Move => events.push(Event::PointerMoved { x, y, source }),
+        PointerKind::Move => {
+            capture_once_dragging(host, event);
+            events.push(Event::PointerMoved { x, y, source });
+        }
         PointerKind::Down => {
             let Some(button) = map::button_of(event.button()) else {
                 return;
             };
-            // Capture, so a drag that leaves the element keeps arriving — which is what a slider or a resize handle needs, and what the browser otherwise stops at the boundary.
-            let _ = host.set_pointer_capture(event.pointer_id());
+            PRESSED.with(|pressed| {
+                pressed.set(Some((
+                    event.pointer_id(),
+                    event.client_x() as f32,
+                    event.client_y() as f32,
+                )))
+            });
             // Only where the keyboard is somewhere else entirely. A document backend gives focus to the element the press landed on, and taking it straight back would leave the app focused and the box it just focused not.
             if !focus_is_inside(host) {
                 let _ = host.focus();
@@ -385,6 +395,7 @@ fn on_pointer(
             let Some(button) = map::button_of(event.button()) else {
                 return;
             };
+            PRESSED.with(|pressed| pressed.set(None));
             let _ = host.release_pointer_capture(event.pointer_id());
             events.push(Event::PointerReleased {
                 x,
@@ -395,6 +406,7 @@ fn on_pointer(
         }
         // A cancelled pointer never comes back up, so the press is released where it was last seen rather than left held — a finger the browser took for a system gesture must not stick a button down.
         PointerKind::Cancel => {
+            PRESSED.with(|pressed| pressed.set(None));
             let _ = host.release_pointer_capture(event.pointer_id());
             events.push(Event::PointerReleased {
                 x,
@@ -504,4 +516,20 @@ fn focus_is_inside(host: &web_sys::HtmlElement) -> bool {
     dom::document()
         .active_element()
         .is_some_and(|active| host.contains(Some(active.as_ref())))
+}
+
+/// Captures the pointer once a press has travelled past the tap slop, so a drag that leaves the element keeps arriving — which is what a slider or a resize handle needs.
+///
+/// Not at the press itself: a captured pointer's `click` goes to the host rather than to what was pressed, so a document's `<a>` would never be activated by the browser, and neither would any other native control.
+fn capture_once_dragging(host: &web_sys::HtmlElement, event: &web_sys::PointerEvent) {
+    let Some((id, x, y)) = PRESSED.with(|pressed| pressed.get()) else {
+        return;
+    };
+    let (dx, dy) = (event.client_x() as f32 - x, event.client_y() as f32 - y);
+    if id == event.pointer_id()
+        && dx * dx + dy * dy > platform_core::TAP_SLOP * platform_core::TAP_SLOP
+    {
+        PRESSED.with(|pressed| pressed.set(None));
+        let _ = host.set_pointer_capture(id);
+    }
 }

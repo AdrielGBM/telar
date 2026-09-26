@@ -52,6 +52,9 @@ pub(crate) fn tree_update(nodes: &[AccessNode], title: &str, lang: Option<&str>)
         if let Some(lang) = &node.lang {
             ak.set_language(lang.as_str());
         }
+        if let Some(url) = &node.url {
+            ak.set_url(url.as_str());
+        }
         if node.focused {
             focus = id;
         }

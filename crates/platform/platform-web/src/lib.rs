@@ -14,6 +14,7 @@ mod log;
 mod map;
 mod platform;
 mod preferences;
+mod uri;
 mod window;
 
 pub use clipboard::WebClipboard;
@@ -22,4 +23,5 @@ pub use location::WebLocation;
 pub use log::install_console_logging;
 pub use platform::{WebPlatform, WebPlatformConfig};
 pub use preferences::{MediaAnswers, read as read_system_preferences};
+pub use uri::WebUriOpener;
 pub use window::{Measured, WebWindow};

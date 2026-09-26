@@ -27,6 +27,8 @@ pub struct AccessNode {
     pub value: Option<NumericValue>,
     /// The language the node is in, as a BCP 47 tag, where the application said. `None` is the surface's own.
     pub lang: Option<String>,
+    /// Where a link goes, written as [`address_of`](crate::address_of) writes it. `None` for everything that is not a link.
+    pub url: Option<String>,
 }
 
 /// A numeric control's reading: where it is now, and the range that makes that number mean something.

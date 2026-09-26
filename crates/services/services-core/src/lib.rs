@@ -1,4 +1,4 @@
-//! The ambient services an application reaches for without naming a backend: the clipboard, file dialogs and the per-app directories.
+//! The ambient services an application reaches for without naming a backend: the clipboard, file dialogs, the per-app directories and opening a URI.
 
 #![warn(rustdoc::broken_intra_doc_links)]
 
@@ -10,6 +10,7 @@ pub mod paths;
 mod registry;
 #[cfg(feature = "di")]
 mod scope;
+pub mod uri;
 
 pub use clipboard::{Clipboard, clipboard, clipboard_text, set_clipboard, set_clipboard_text};
 pub use dialogs::{FileDialog, FileDialogs, FileFilter, file_dialogs, set_file_dialogs};
@@ -20,6 +21,9 @@ pub use paths::{AppPathsProvider, NoPaths};
 pub use registry::ServiceError;
 #[cfg(feature = "di")]
 pub use scope::{Scope, context, provide, set_context, try_inject, with_service};
+#[cfg(feature = "system-opener")]
+pub use uri::SystemOpener;
+pub use uri::{UriOpener, open_beside, open_uri, set_uri_opener, uri_opener};
 
 #[cfg(all(test, feature = "di"))]
 mod tests {

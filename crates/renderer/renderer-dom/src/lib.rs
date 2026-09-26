@@ -21,6 +21,8 @@ mod document_scroll;
 #[cfg(target_arch = "wasm32")]
 mod entry;
 #[cfg(target_arch = "wasm32")]
+mod links;
+#[cfg(target_arch = "wasm32")]
 mod metrics;
 #[cfg(target_arch = "wasm32")]
 mod reconcile;

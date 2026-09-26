@@ -54,6 +54,52 @@ pub fn leave(app: &AndroidApp) {
     }
 }
 
+/// Opens URIs with an `ACTION_VIEW` intent, as any Android app opens a link: the system picks the browser, the mail app, or the app that claimed the link.
+pub struct AndroidUriOpener {
+    app: AndroidApp,
+}
+
+impl AndroidUriOpener {
+    pub fn new(app: AndroidApp) -> Self {
+        Self { app }
+    }
+}
+
+impl services_core::UriOpener for AndroidUriOpener {
+    fn open(&self, uri: &str) -> bool {
+        start_view(&self.app, uri)
+            .inspect_err(|error| tracing::warn!(uri, %error, "no activity opened the URI"))
+            .is_ok()
+    }
+}
+
+fn start_view(app: &AndroidApp, uri: &str) -> jni::errors::Result<()> {
+    with_activity(app, |env, activity| {
+        let text = env.new_string(uri)?;
+        let parsed = env
+            .call_static_method(
+                jni_str!("android/net/Uri"),
+                jni_str!("parse"),
+                jni_sig!("(Ljava/lang/String;)Landroid/net/Uri;"),
+                &[JValue::Object(&text)],
+            )?
+            .l()?;
+        let action = env.new_string(ACTION_VIEW)?;
+        let intent = env.new_object(
+            jni_str!("android/content/Intent"),
+            jni_sig!("(Ljava/lang/String;Landroid/net/Uri;)V"),
+            &[JValue::Object(&action), JValue::Object(&parsed)],
+        )?;
+        env.call_method(
+            activity,
+            jni_str!("startActivity"),
+            jni_sig!("(Landroid/content/Intent;)V"),
+            &[JValue::Object(&intent)],
+        )?;
+        Ok(())
+    })
+}
+
 fn view_uri(app: &AndroidApp) -> jni::errors::Result<Option<String>> {
     with_activity(app, |env, activity| {
         let intent = env

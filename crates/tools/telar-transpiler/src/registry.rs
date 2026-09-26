@@ -193,6 +193,9 @@ const CONTAINER_PAINT: &[AttrSpec] = &[
         .doc("How far a press must travel before it is a drag rather than a click."),
     AttrSpec::keywords("role", ROLE_VALUES)
         .doc("What the box is, beyond a box: a region, a list, a heading."),
+    AttrSpec::free("to").doc(
+        "Makes the box a link: a typed route, `anchor(\"name\")` on this page, or `external(\"https://…\")` outside the app. Focusable, followed on a tap or Enter, and a real `<a href>` in a document.",
+    ),
     AttrSpec::flag("input_opaque")
         .doc("Claims the pointer over the box without a handler, so nothing beneath takes the press."),
     AttrSpec::flag("input_transparent")

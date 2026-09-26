@@ -102,6 +102,8 @@ pub struct Cell {
     pub fg: Rgb,
     pub bg: Rgb,
     pub attrs: Attrs,
+    /// The link the glyph belongs to, as the [`CellBuffer`](crate::buffer::CellBuffer) it is in numbers them. `0` for none.
+    pub link: u16,
 }
 
 impl Cell {
@@ -111,6 +113,7 @@ impl Cell {
             fg: Rgb::WHITE,
             bg,
             attrs: Attrs::NONE,
+            link: 0,
         }
     }
 

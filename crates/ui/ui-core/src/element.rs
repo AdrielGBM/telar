@@ -37,6 +37,19 @@ pub(crate) fn identity(node: NodeId) -> Arc<Element> {
     ))
 }
 
+/// [`identity`], for a box that is a link to `destination`.
+pub(crate) fn identity_linking(
+    node: NodeId,
+    destination: platform_core::Destination,
+) -> Arc<Element> {
+    Arc::new(Element::new(
+        ElementId(node.into()),
+        Semantics::group().linking_to(destination),
+        "",
+        Rect::default(),
+    ))
+}
+
 /// The element for a node that means something more than a box, asking the backend to put its own scroll at `scroll_to`, and saying whether it is the surface's primary scroll. See [`renderer_core::Element::scroll_to`] and [`renderer_core::Element::primary_scroll`].
 pub(crate) fn with_semantics_scrolled(
     node: NodeId,

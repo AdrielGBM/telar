@@ -194,6 +194,7 @@ pub use renderer_software::{CacheStat, cache_stats, sweep_idle as sweep_renderer
 pub use services_core::app_paths as paths;
 pub use services_core::{AppPathsProvider, NoPaths};
 pub use services_core::{Clipboard, clipboard, clipboard_text, set_clipboard, set_clipboard_text};
+pub use services_core::{UriOpener, open_beside, open_uri, set_uri_opener};
 // Available in every GUI build rather than opt-in: `ui_core::Surface` composes the per-surface service scope, so `runtime` turns on services-core/di. A non-GUI build has no ui-core and nothing to re-export.
 #[cfg(feature = "runtime")]
 pub use platform_core::{ColorScheme, SystemPreferences, system_locales_from_env};
@@ -206,6 +207,8 @@ pub use platform_core::{
     LocationFormat, LocationSource, history_back, location_format, location_history, push_location,
     receive_location_history, replace_location,
 };
+#[cfg(feature = "runtime")]
+pub use platform_core::{Destination, IntoDestination, Route, Uri, address_of, anchor, external};
 #[cfg(feature = "runtime")]
 pub use preferences_core::{
     set_system_preferences, system_preferences, use_color_scheme, use_high_contrast,
@@ -228,6 +231,8 @@ pub use theme_core::{
 };
 #[cfg(all(feature = "runtime", feature = "svg"))]
 pub use ui_core::Svg;
+#[cfg(feature = "runtime")]
+pub use ui_core::{AnchorRegistration, follow, register_anchor, reveal_anchor};
 #[cfg(feature = "runtime")]
 pub use ui_core::{
     Breakpoints, breakpoint, set_surface_size, surface_size, use_surface_height, use_surface_size,
@@ -272,7 +277,7 @@ pub fn reset_layout_runtime() {
 
 #[cfg(feature = "navigate")]
 pub use navigate_core::{
-    NavHost, NavPage, NavTransition, Navigator, PagePolicy, Route, SimplePage, TabHost, TabStacks,
+    NavHost, NavPage, NavTransition, Navigator, PagePolicy, SimplePage, TabHost, TabStacks,
 };
 
 #[cfg(feature = "components-advanced")]

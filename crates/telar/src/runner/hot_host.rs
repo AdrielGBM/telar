@@ -35,6 +35,7 @@ pub fn run_hot_reload_host(
     platform_desktop::DesktopFileDialogs::install();
     #[cfg(feature = "clipboard")]
     platform_desktop::DesktopClipboard::install();
+    platform_desktop::DesktopUriOpener::install();
     let prefs = UserPrefs::load(app_name, paths.as_ref());
     let backend = prefs.backend.unwrap_or_else(config::compile_time_backend);
     let platform = match WinitPlatform::try_new() {

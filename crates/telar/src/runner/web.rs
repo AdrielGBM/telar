@@ -88,6 +88,7 @@ pub fn run_web_app_with_name<A: App>(
     };
 
     services_core::set_clipboard(Arc::new(WebClipboard::new()));
+    services_core::set_uri_opener(Arc::new(platform_web::WebUriOpener));
 
     // The choice has to be made before the app is built: it decides what measures text, and text is measured while the tree is being built. Asking the browser costs one promise, and answering wrong costs a page that never draws.
     let wanted = options.renderer.resolved(&host);

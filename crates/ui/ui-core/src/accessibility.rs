@@ -55,6 +55,7 @@ pub fn snapshot(commands: &[DrawCommand]) -> Vec<AccessNode> {
                 toggled: e.toggled,
                 value: e.value,
                 lang: reading.scope(e.node).lang.as_deref().map(str::to_string),
+                url: reading.links.get(&e.node).map(platform_core::address_of),
             }
         })
         .collect();
@@ -103,6 +104,7 @@ pub fn snapshot(commands: &[DrawCommand]) -> Vec<AccessNode> {
                 toggled: None,
                 value: None,
                 lang: piece.lang.as_deref().map(str::to_string),
+                url: None,
             }),
         }
     }
@@ -149,6 +151,7 @@ struct Reading {
     scopes: FxHashMap<NodeId, Scope>,
     named: Vec<Named>,
     text: Vec<Piece>,
+    links: FxHashMap<NodeId, platform_core::Destination>,
 }
 
 impl Reading {
@@ -161,6 +164,9 @@ impl Reading {
             match command {
                 DrawCommand::PushElement { element } => {
                     let node = NodeId::from(element.id.0);
+                    if let Some(link) = &element.semantics.link {
+                        reading.links.insert(node, link.clone());
+                    }
                     let annotation = crate::annotation::peek(node).unwrap_or_default();
                     let inner = Scope {
                         hidden: scope.hidden || annotation.hidden,

@@ -17,6 +17,7 @@ default = ["transpile"]
 transpile = ["dep:telar-parser", "dep:thiserror"]
 
 [dependencies]
+semantics-core = { workspace = true }
 telar-parser = { workspace = true, optional = true }
 telar-project = { workspace = true }
 
@@ -26,9 +27,6 @@ serde_json = { workspace = true }
 syn = { workspace = true, features = ["visit"] }
 thiserror = { workspace = true, optional = true }
 toml = { workspace = true }
-
-[dev-dependencies]
-semantics-core = { workspace = true }
 
 [[test]]
 name = "golden"

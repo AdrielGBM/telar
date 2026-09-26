@@ -5,7 +5,8 @@ use std::rc::Rc;
 use geometry_core::{Rect, Transform};
 use layout_core::{LayoutError, LayoutStyle, NodeId};
 use platform_core::{
-    ConsumedKeys, Cursor, Event, Key, NamedKey, NumericValue, PointerButton, PointerSource,
+    ConsumedKeys, Cursor, Destination, Event, IntoDestination, Key, NamedKey, NumericValue,
+    PointerButton, PointerSource,
 };
 use reactive_core::{Effect, Reactive, RwSignal, effect, signal};
 use renderer_core::{BlendMode, Border, Declared, RectStyle};
@@ -179,6 +180,7 @@ pub struct StyledContainer {
     holds_stroke: bool,
     // What the box is, where it is more than a box. `None` reads it from what the box does.
     role: Option<renderer_core::Role>,
+    link: Option<Rc<dyn Fn() -> Destination>>,
 }
 
 impl StyledContainer {
@@ -221,6 +223,7 @@ impl StyledContainer {
             registration: InputHandle::new(),
             holds_stroke: false,
             role: None,
+            link: None,
         }
     }
 
@@ -257,6 +260,9 @@ impl StyledContainer {
             semantics.focusable = Some(focus::focusable_of(id, semantics.role, declared));
         }
         semantics.disabled = self.is_disabled();
+        if let Some(link) = &self.link {
+            semantics = semantics.linking_to(link());
+        }
         crate::element::with_semantics(self.node, semantics)
     }
 
@@ -544,6 +550,23 @@ impl StyledContainer {
         }
         self.mark_interactive();
         self
+    }
+
+    /// Makes the box a link to what `destination` reads: a typed route, a [`Location`](platform_core::Location), an [`anchor`](platform_core::anchor) or an [`external`](platform_core::external) URI. Re-read whenever what it read changes.
+    ///
+    /// A link is a control: it joins the tab order with the `link` role, follows its destination on a tap and on Enter (not Space, which scrolls the page a link sits on), and is announced with where it goes. Ctrl, Cmd or Shift on the press ask for a view beside this one, which only a browser has. An [`on_press`](Self::on_press) on the same box still runs, before the link is followed.
+    ///
+    /// A surface that follows links by itself — a document, whose `<a>` answers the click — is left to: it reports the activation back rather than having it followed twice.
+    pub fn to<D: IntoDestination>(mut self, destination: impl Fn() -> D + 'static) -> Self {
+        let read: Rc<dyn Fn() -> Destination> = Rc::new(move || destination().into_destination());
+        crate::link::register_link(self.node, read.clone());
+        self.link = Some(read.clone());
+        self.press.set_follow(move || {
+            if !crate::link::surface_follows_links() {
+                crate::link::follow_pressed(&read(), crate::modifiers());
+            }
+        });
+        self.control(renderer_core::Role::Link)
     }
 
     /// What this box *is*, beyond a box: a region of the screen, a list, an article.
@@ -983,10 +1006,7 @@ impl Component for StyledContainer {
             None => composed,
         };
         // The element wraps everything, so a document backend folds the transform and the layer into the box's own style rather than inventing a wrapper for each.
-        RenderNode::element(
-            crate::element::for_target(self.node, || self.element()),
-            [placed],
-        )
+        RenderNode::element(self.target_element(), [placed])
     }
 
     fn on_event(&mut self, event: &Event) -> EventResult {
@@ -1003,6 +1023,25 @@ impl Component for StyledContainer {
 }
 
 impl StyledContainer {
+    /// A terminal marks a link's cells with where it goes, so a link box says so even where nothing reads the rest of what it is.
+    fn target_element(&self) -> std::sync::Arc<renderer_core::Element> {
+        match &self.link {
+            Some(link) if !ui_tree::element_capture() => {
+                crate::element::identity_linking(self.node, link())
+            }
+            _ => crate::element::for_target(self.node, || self.element()),
+        }
+    }
+
+    /// Whether `key` fires the press of a focused control. Space scrolls the page a link sits on, so a link answers Enter alone.
+    fn activated_by(&self, key: &Key) -> bool {
+        match key {
+            Key::Named(NamedKey::Enter) => true,
+            Key::Named(NamedKey::Space) => self.link.is_none(),
+            _ => false,
+        }
+    }
+
     fn route(&mut self, event: &Event) -> EventResult {
         let transformed = self
             .stroke_matrix(event)
@@ -1095,7 +1134,7 @@ impl StyledContainer {
                     && self.on_key.is_none()
                     && let Some(id) = self.focusable.id
                     && focus::is_focused(id)
-                    && matches!(key, Key::Named(NamedKey::Enter | NamedKey::Space))
+                    && self.activated_by(key)
                     && self.press.activate()
                 {
                     return EventResult::Handled;
@@ -1119,6 +1158,9 @@ impl StyledContainer {
 
 impl Drop for StyledContainer {
     fn drop(&mut self) {
+        if self.link.is_some() {
+            crate::link::unregister_link(self.node);
+        }
         // Before releasing focus below, so `on_focus` does not fire during teardown.
         self.focusable._effect.take();
         if let Some(id) = self.focusable.id {

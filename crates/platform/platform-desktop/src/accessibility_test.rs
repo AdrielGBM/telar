@@ -13,6 +13,7 @@ fn node(id: Option<u64>, role: Role, name: &str) -> AccessNode {
         toggled: None,
         value: None,
         lang: None,
+        url: None,
     }
 }
 
@@ -139,4 +140,16 @@ fn a_named_drawing_is_an_image() {
     let update = tree_update(&[node(None, Role::Drawing, "Company logo")], "Editor", None);
     assert_eq!(update.nodes[0].1.role(), AkRole::Image);
     assert_eq!(update.nodes[0].1.label(), Some("Company logo"));
+}
+
+#[test]
+fn a_link_is_announced_with_where_it_goes() {
+    let link = AccessNode {
+        url: Some("https://example.com".to_string()),
+        ..node(Some(3), Role::Link, "Example")
+    };
+    let update = tree_update(&[link], "Links", None);
+    let ak = &update.nodes[0].1;
+    assert_eq!(ak.role(), AkRole::Link);
+    assert_eq!(ak.url(), Some("https://example.com"));
 }

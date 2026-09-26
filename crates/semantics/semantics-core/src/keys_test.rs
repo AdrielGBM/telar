@@ -38,11 +38,16 @@ fn only_the_multiline_editor_keeps_tab() {
 
 #[test]
 fn a_pressable_control_keeps_the_keys_that_press_it_and_leaves_scrolling_alone() {
-    for role in [Role::Button, Role::Link, Role::CheckBox, Role::Switch] {
+    for role in [Role::Button, Role::CheckBox, Role::Switch] {
         let keys = role.consumed_keys();
         assert_eq!(keys, ConsumedKeys::ACTIVATION, "{role:?}");
         assert!(!keys.intersects(ConsumedKeys::ARROWS | ConsumedKeys::PAGING));
     }
+}
+
+#[test]
+fn a_link_leaves_its_keys_to_the_host_that_follows_it() {
+    assert_eq!(Role::Link.consumed_keys(), ConsumedKeys::EMPTY);
 }
 
 #[test]
@@ -75,8 +80,11 @@ fn what_is_only_read_keeps_nothing() {
 }
 
 #[test]
-fn every_control_keeps_something() {
-    for role in ALL_ROLES.into_iter().filter(Role::is_control) {
+fn every_control_but_a_link_keeps_something() {
+    for role in ALL_ROLES
+        .into_iter()
+        .filter(|role| role.is_control() && *role != Role::Link)
+    {
         assert!(!role.consumed_keys().is_empty(), "{role:?}");
     }
 }

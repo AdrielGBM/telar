@@ -20,6 +20,7 @@ fn run_desktop_with_plugin<A: App, D: DevPlugin>(config: AppConfig, app: A, app_
     platform_desktop::DesktopFileDialogs::install();
     #[cfg(feature = "clipboard")]
     platform_desktop::DesktopClipboard::install();
+    platform_desktop::DesktopUriOpener::install();
     let platform = match WinitPlatform::try_new() {
         Ok(p) => p,
         Err(e) => {
@@ -88,6 +89,7 @@ pub fn open_window<A: App>(app: A) -> SurfaceToken {
     platform_desktop::DesktopFileDialogs::install();
     #[cfg(feature = "clipboard")]
     platform_desktop::DesktopClipboard::install();
+    platform_desktop::DesktopUriOpener::install();
     let prefs = crate::prefs::UserPrefs::load("telar-window", paths.as_ref());
     // The same convention as the primary window — resolved preference, else the compile-time default — because a secondary window is a first-class window.
     let backend = prefs

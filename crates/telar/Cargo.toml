@@ -122,7 +122,13 @@ desktop = [
 
 ## The terminal the app was launched from, drawn through `renderer-tui`. No window, no GPU and no glyph
 ## shaper.
-tui = ["runtime", "dep:platform-tui", "dep:renderer-tui", "services-core/system-paths"]
+tui = [
+    "runtime",
+    "dep:platform-tui",
+    "dep:renderer-tui",
+    "services-core/system-paths",
+    "services-core/system-opener",
+]
 
 ## An Android `NativeActivity`, drawn by the GPU where there is one and the CPU where there is not. Opt-in
 ## like every other frontend: `runtime` used to bring it in unconditionally, which linked winit and an
