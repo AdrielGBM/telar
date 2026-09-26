@@ -23,16 +23,10 @@ impl Destination {
         Self::Anchor(name.into())
     }
 
-    /// An external destination at `uri`.
-    ///
-    /// # Panics
-    ///
-    /// When `uri` names no scheme (`https:`, `mailto:`…). Use [`Uri::parse`] for text that is not known to be absolute.
-    pub fn external(uri: &str) -> Self {
-        match Uri::parse(uri) {
-            Some(uri) => Self::External(uri),
-            None => panic!("external(\"{uri}\") is not an absolute URI: it names no scheme"),
-        }
+    /// An external destination at `uri`, or `None` when `uri` names no scheme (`https:`, `mailto:`…) — a runtime
+    /// string built from user data, unlike a literal in `.rsx`, which the transpiler refuses at build time.
+    pub fn external(uri: &str) -> Option<Self> {
+        Uri::parse(uri).map(Self::External)
     }
 }
 

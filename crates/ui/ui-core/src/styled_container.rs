@@ -180,7 +180,7 @@ pub struct StyledContainer {
     holds_stroke: bool,
     // What the box is, where it is more than a box. `None` reads it from what the box does.
     role: Option<renderer_core::Role>,
-    link: Option<Rc<dyn Fn() -> Destination>>,
+    link: Option<Rc<dyn Fn() -> Option<Destination>>>,
 }
 
 impl StyledContainer {
@@ -261,14 +261,18 @@ impl StyledContainer {
         }
         semantics.disabled = self.is_disabled();
         if let Some(link) = &self.link {
-            semantics = semantics.linking_to(link());
+            semantics = match link() {
+                Some(destination) => semantics.linking_to(destination),
+                None => semantics.with_role(renderer_core::Role::Link),
+            };
         }
         crate::element::with_semantics(self.node, semantics)
     }
 
-    /// Whether the box is currently refusing input. `None` — the common case — answers without a dyn call on the pointer-move broadcast path, which every box in the tree pays.
+    /// Whether the box is currently refusing input: the application asked, or it is a link with nowhere to go right now.
     fn is_disabled(&self) -> bool {
         self.disabled_source.as_ref().is_some_and(|f| f())
+            || self.link.as_ref().is_some_and(|link| link().is_none())
     }
 
     fn stroke_matrix(&mut self, event: &Event) -> Option<[f32; 6]> {
@@ -552,18 +556,23 @@ impl StyledContainer {
         self
     }
 
-    /// Makes the box a link to what `destination` reads: a typed route, a [`Location`](platform_core::Location), an [`anchor`](platform_core::anchor) or an [`external`](platform_core::external) URI. Re-read whenever what it read changes.
+    /// Makes the box a link to what `destination` reads: a typed route, a [`Location`](platform_core::Location), an [`anchor`](platform_core::anchor) or an [`external`](platform_core::external) URI — or an `Option` of one, which lets a route or an external URI built from a runtime value fall through to "nowhere yet". Re-read whenever what it read changes.
     ///
     /// A link is a control: it joins the tab order with the `link` role, follows its destination on a tap and on Enter (not Space, which scrolls the page a link sits on), and is announced with where it goes. Ctrl, Cmd or Shift on the press ask for a view beside this one, which only a browser has. An [`on_press`](Self::on_press) on the same box still runs, before the link is followed.
     ///
+    /// A destination that reads `None` right now still makes the box a link — it just makes it a disabled one: no `href`, not followed by a tap, Enter or assistive activation, and nothing for a screen reader or a terminal to point at. It becomes live again as soon as what it reads becomes `Some`.
+    ///
     /// A surface that follows links by itself — a document, whose `<a>` answers the click — is left to: it reports the activation back rather than having it followed twice.
     pub fn to<D: IntoDestination>(mut self, destination: impl Fn() -> D + 'static) -> Self {
-        let read: Rc<dyn Fn() -> Destination> = Rc::new(move || destination().into_destination());
+        let read: Rc<dyn Fn() -> Option<Destination>> =
+            Rc::new(move || destination().into_destination());
         crate::link::register_link(self.node, read.clone());
         self.link = Some(read.clone());
         self.press.set_follow(move || {
-            if !crate::link::surface_follows_links() {
-                crate::link::follow_pressed(&read(), crate::modifiers());
+            if !crate::link::surface_follows_links()
+                && let Some(destination) = read()
+            {
+                crate::link::follow_pressed(&destination, crate::modifiers());
             }
         });
         self.control(renderer_core::Role::Link)
@@ -1023,12 +1032,13 @@ impl Component for StyledContainer {
 }
 
 impl StyledContainer {
-    /// A terminal marks a link's cells with where it goes, so a link box says so even where nothing reads the rest of what it is.
+    /// A terminal marks a link's cells with where it goes, so a link box says so even where nothing reads the rest of what it is. A disabled link (nowhere to go right now) carries no destination here, so it gets no OSC 8 and no accessibility URL.
     fn target_element(&self) -> std::sync::Arc<renderer_core::Element> {
         match &self.link {
-            Some(link) if !ui_tree::element_capture() => {
-                crate::element::identity_linking(self.node, link())
-            }
+            Some(link) if !ui_tree::element_capture() => match link() {
+                Some(destination) => crate::element::identity_linking(self.node, destination),
+                None => crate::element::identity(self.node),
+            },
             _ => crate::element::for_target(self.node, || self.element()),
         }
     }

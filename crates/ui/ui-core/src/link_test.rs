@@ -4,8 +4,8 @@ use std::sync::{Arc, Mutex, OnceLock};
 
 use layout_core::{AvailableSpace, LayoutStyle};
 use platform_core::{
-    Event, Key, Location, ModifiersState, NamedKey, PointerButton, PointerSource, anchor, external,
-    location_history, receive_location_history,
+    Event, IntoDestination, Key, Location, ModifiersState, NamedKey, PointerButton, PointerSource,
+    anchor, external, location_history, receive_location_history,
 };
 use renderer_core::{RectStyle, Role};
 use services_core::UriOpener;
@@ -43,6 +43,10 @@ fn opened() -> &'static Arc<Opened> {
 }
 
 fn link_to(destination: Destination) -> StyledContainer {
+    link_reading(move || destination.clone())
+}
+
+fn link_reading<D: IntoDestination + 'static>(read: impl Fn() -> D + 'static) -> StyledContainer {
     reset_layout_runtime();
     focus::clear();
     receive_location_history(vec![Location::root()]);
@@ -52,7 +56,7 @@ fn link_to(destination: Destination) -> StyledContainer {
         vec![],
     )
     .unwrap()
-    .to(move || destination.clone());
+    .to(read);
     compute_layout(
         link.layout_node(),
         AvailableSpace::Definite(100.0),
@@ -122,7 +126,7 @@ fn enter_follows_a_link_and_space_does_not() {
 #[test]
 fn an_external_link_is_handed_to_the_system() {
     let opened = opened();
-    let mut link = link_to(external("https://example.com/tapped"));
+    let mut link = link_to(external("https://example.com/tapped").unwrap());
     tap(&mut link);
     assert!(
         opened
@@ -132,6 +136,30 @@ fn an_external_link_is_handed_to_the_system() {
             .contains(&"https://example.com/tapped".to_string())
     );
     assert_eq!(location_history(), vec![Location::root()]);
+}
+
+#[test]
+fn an_invalid_runtime_external_renders_a_disabled_link_that_goes_nowhere() {
+    let opened = opened();
+    receive_location_history(vec![Location::root()]);
+    let mut link = link_reading(|| external("not-a-uri"));
+    focus::focus_next();
+    tap(&mut link);
+    assert_eq!(link.on_event(&key(NamedKey::Enter)), EventResult::Ignored);
+    assert!(
+        !opened
+            .uris
+            .lock()
+            .unwrap()
+            .iter()
+            .any(|uri| uri.contains("not-a-uri"))
+    );
+    assert_eq!(location_history(), vec![Location::root()]);
+
+    let element = element_of(&link, true);
+    assert_eq!(element.semantics.role, Role::Link);
+    assert!(element.semantics.disabled);
+    assert_eq!(element.semantics.link, None);
 }
 
 #[test]

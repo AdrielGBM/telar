@@ -14,8 +14,7 @@ StyledContainer::new(style, paint, children)?.to(move || Page::Project(slug.clon
 ```
 
 `to:` takes any expression; one that reads `$state` is re-read when that state changes. `external("…")` must
-name a scheme (`https:`, `mailto:`…): a literal without one is a build error on the attribute, and the Rust
-function panics.
+name a scheme (`https:`, `mailto:`…): a literal without one is a build error on the attribute. A runtime string without one yields `None`: the box stays a link but a disabled one that goes nowhere, and a warning names the rejected string.
 
 ## What a link is
 

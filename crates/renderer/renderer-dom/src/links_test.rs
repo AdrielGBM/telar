@@ -19,6 +19,7 @@ const ROUTE: u64 = 201;
 const WEB: u64 = 202;
 const MAIL: u64 = 203;
 const DISABLED: u64 = 204;
+const INVALID_EXTERNAL: u64 = 205;
 
 thread_local! {
     static RECORDED: RefCell<Vec<Event>> = const { RefCell::new(Vec::new()) };
@@ -96,6 +97,24 @@ fn link(id: u64, destination: Destination, disabled: bool) -> Element {
     )
 }
 
+/// What a `to:` reads when the runtime value it built (`external(some_runtime_string)`) was rejected: still a link
+/// role, but disabled and pointed nowhere, since [`IntoDestination`](platform_core::IntoDestination) flattened
+/// its `None` rather than the box carrying a destination it does not have.
+fn link_without_a_destination(id: u64) -> Element {
+    let semantics = Semantics::of(Role::Link)
+        .in_state(false, None, true)
+        .focusable(Focusable {
+            tab_stop: false,
+            consumes: Role::Link.consumed_keys(),
+        });
+    Element::new(
+        ElementId(id),
+        semantics,
+        "width:100px;height:20px",
+        Rect::new(0.0, 0.0, 100.0, 20.0),
+    )
+}
+
 fn render() {
     mount();
     let links = [
@@ -104,13 +123,22 @@ fn render() {
             Destination::Route(Location::root().segment("projects").segment("telar")),
             false,
         ),
-        link(WEB, external("https://example.com/"), false),
-        link(MAIL, external("mailto:someone@example.com"), false),
+        link(
+            WEB,
+            external("https://example.com/").expect("a scheme"),
+            false,
+        ),
+        link(
+            MAIL,
+            external("mailto:someone@example.com").expect("a scheme"),
+            false,
+        ),
         link(
             DISABLED,
             Destination::Route(Location::root().segment("nowhere")),
             true,
         ),
+        link_without_a_destination(INVALID_EXTERNAL),
     ];
     let mut commands = Vec::new();
     for element in links {
@@ -235,6 +263,11 @@ fn each_destination_is_an_anchor_with_the_address_a_browser_follows() {
         None,
         "a disabled link goes nowhere"
     );
+    assert_eq!(
+        anchor(INVALID_EXTERNAL).get_attribute("href"),
+        None,
+        "a link whose runtime destination was rejected carries no href"
+    );
 }
 
 #[wasm_bindgen_test]
@@ -269,6 +302,10 @@ async fn a_modified_click_an_external_one_and_a_disabled_one_are_the_browser_s()
     assert!(!click(&anchor(WEB), &web_sys::MouseEventInit::new()));
     assert!(!click(&anchor(MAIL), &web_sys::MouseEventInit::new()));
     assert!(!click(&anchor(DISABLED), &web_sys::MouseEventInit::new()));
+    assert!(!click(
+        &anchor(INVALID_EXTERNAL),
+        &web_sys::MouseEventInit::new()
+    ));
     next_frames().await;
     assert_eq!(activated(), Vec::<u64>::new());
 }

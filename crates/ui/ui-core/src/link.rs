@@ -9,7 +9,7 @@ use platform_core::{Destination, ModifiersState};
 use rustc_hash::FxHashMap;
 
 type Reveal = Rc<dyn Fn() -> bool>;
-type ReadDestination = Rc<dyn Fn() -> Destination>;
+type ReadDestination = Rc<dyn Fn() -> Option<Destination>>;
 
 thread_local! {
     static ANCHORS: RefCell<FxHashMap<Arc<str>, Reveal>> = RefCell::default();
@@ -81,10 +81,11 @@ impl Drop for AnchorRegistration {
     }
 }
 
-/// Follows the link on the box `box_id` names, for a surface that activated it by itself (see [`Event::BoxActivated`](platform_core::Event::BoxActivated)). `false` when the box is gone or is no link.
+/// Follows the link on the box `box_id` names, for a surface that activated it by itself (see [`Event::BoxActivated`](platform_core::Event::BoxActivated)). `false` when the box is gone, is no link, or has nowhere to go right now.
 pub fn activate_box(box_id: u64) -> bool {
     let read = LINKS.with(|links| links.borrow().get(&NodeId::from(box_id)).cloned());
-    read.is_some_and(|read| follow(&read()))
+    read.and_then(|read| read())
+        .is_some_and(|destination| follow(&destination))
 }
 
 pub(crate) fn register_link(node: NodeId, read: ReadDestination) {

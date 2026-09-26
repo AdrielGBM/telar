@@ -285,7 +285,7 @@ fn element_linking(id: u64, destination: renderer_core::Destination) -> DrawComm
 #[test]
 fn the_glyphs_of_an_external_link_are_written_as_an_osc_8_hyperlink() {
     let mut buf = grid(12, 1);
-    let uri = renderer_core::Destination::external("https://example.com");
+    let uri = renderer_core::Destination::external("https://example.com").unwrap();
     paint(
         &mut buf,
         &[
