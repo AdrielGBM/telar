@@ -21,11 +21,13 @@ cargo run -q -p cargo-telar -- transpile
 cargo run -q -p cargo-telar -- build --target web --renderer dom -p landing -- --release
 
 OUT_DIR="target/telar-dist/web"
-WASM=$(find "$OUT_DIR" -maxdepth 1 -name 'app-*_bg.wasm' ! -name '*.br' ! -name '*.gz' | head -n1)
-if [[ -z "$WASM" ]]; then
-  echo "::error::no fingerprinted wasm module found under $OUT_DIR"
+MANIFEST="$OUT_DIR/asset-manifest.json"
+MODULE=$(jq -r '."app_bg.wasm" // empty' "$MANIFEST" 2>/dev/null)
+if [[ -z "$MODULE" ]]; then
+  echo "::error::$MANIFEST does not name the wasm module (\"app_bg.wasm\")"
   exit 1
 fi
+WASM="$OUT_DIR/$MODULE"
 BROTLI="${WASM}.br"
 GZIP="${WASM}.gz"
 for f in "$WASM" "$BROTLI" "$GZIP"; do

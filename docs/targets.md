@@ -123,6 +123,11 @@ target; `doctor` and `build --target web` name the fix when it is missing (see
 `default = ["web-dom"]` instead of `["web"]`, so the scaffolded project never links wgpu or a glyph shaper
 until you ask for `web` again.
 
+The build writes a static site to `target/telar-dist/web/`: a page expanded from a template (`web/index.html`
+or the built-in one), content-hashed module and glue listed in `asset-manifest.json`, and `web/public/`
+copied verbatim. The dev server serves it with a full media-type table and `Range` support. See
+[docs/web-packaging.md](web-packaging.md) for the template markers and the `[telar.web]` keys.
+
 ## Android
 
 ```toml

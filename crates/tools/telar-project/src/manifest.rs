@@ -75,6 +75,39 @@ pub struct I18nSection {
     pub default: Option<String>,
 }
 
+/// What only means something to a browser build: `[telar.web]`, read by `cargo telar build --target web` and `dev --target web` and by nothing else.
+#[derive(Deserialize, Debug, Clone, Default, PartialEq)]
+#[serde(deny_unknown_fields)]
+pub struct WebSection {
+    /// The page template, joined onto the package root. Default `"web/index.html"`, falling back to the built-in page when that file does not exist.
+    pub template: Option<String>,
+    /// The directory copied verbatim into the output, joined onto the package root. Default `"web/public"`.
+    pub public: Option<String>,
+}
+
+impl WebSection {
+    const DEFAULT_TEMPLATE: &str = "web/index.html";
+    const DEFAULT_PUBLIC: &str = "web/public";
+
+    /// The template to expand, and whether the project named it rather than leaving the default.
+    pub fn template_path(&self, package_root: &Path) -> (PathBuf, bool) {
+        Self::resolve(
+            package_root,
+            self.template.as_deref(),
+            Self::DEFAULT_TEMPLATE,
+        )
+    }
+
+    /// The directory to copy, and whether the project named it rather than leaving the default.
+    pub fn public_dir(&self, package_root: &Path) -> (PathBuf, bool) {
+        Self::resolve(package_root, self.public.as_deref(), Self::DEFAULT_PUBLIC)
+    }
+
+    fn resolve(package_root: &Path, named: Option<&str>, default: &str) -> (PathBuf, bool) {
+        (package_root.join(named.unwrap_or(default)), named.is_some())
+    }
+}
+
 /// The `[telar]` table.
 #[derive(Deserialize, Debug, Clone, Default, PartialEq)]
 #[serde(deny_unknown_fields)]
@@ -88,6 +121,8 @@ pub struct TelarSection {
     pub dev: DevSection,
     #[serde(default)]
     pub i18n: I18nSection,
+    #[serde(default)]
+    pub web: WebSection,
     /// The pre-`[telar.i18n]` spelling of [`I18nSection::root`].
     pub locales: Option<String>,
     /// The pre-`[telar.i18n]` spelling of [`I18nSection::default`].
@@ -176,6 +211,10 @@ impl TelarSection {
                 root: self.i18n.root.or(base.i18n.root),
                 scan: self.i18n.scan.or(base.i18n.scan),
                 default: self.i18n.default.or(base.i18n.default),
+            },
+            web: WebSection {
+                template: self.web.template.or(base.web.template),
+                public: self.web.public.or(base.web.public),
             },
             locales: self.locales.or(base.locales),
             default_locale: self.default_locale.or(base.default_locale),

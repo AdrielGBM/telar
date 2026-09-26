@@ -111,7 +111,7 @@ a line of source.
 ```sh
 cargo run -q -p cargo-telar -- transpile
 cargo run -q -p cargo-telar -- build --target web --renderer dom -p landing -- --release
-ls -la target/telar-dist/web/app-*_bg.wasm*
+ls -la target/telar-dist/web/$(jq -r '."app_bg.wasm"' target/telar-dist/web/asset-manifest.json)*
 ```
 
 or run the CI check itself: `.github/scripts/check-web-size.sh`.
@@ -120,7 +120,7 @@ or run the CI check itself: `.github/scripts/check-web-size.sh`.
 whether the growth is justified:
 
 1. Reproduce the measurement above and read the new `raw`, `brotli` and `gzip` byte counts off the three
-   `app-*_bg.wasm*` files.
+   module files (the module is `app_bg-<hash>.wasm`, named in `target/telar-dist/web/asset-manifest.json`).
 2. Update `baseline.raw_bytes`, `baseline.brotli_bytes` and `baseline.gzip_bytes` in
    `.github/size-budget/landing-web-dom.json` to those values, and `recorded_at` to today's date.
 3. Commit the file on its own, with a message naming what grew and why (a new dependency, a new feature

@@ -198,7 +198,7 @@ Both are baked by the CLI, and so is the `.rsx` itself: build through `cargo tel
 - **Assets that arrive later**, behind a transport-agnostic reactive seam: a signal that advances `Loading` → `Ready`/`Failed`, with the transport, the cache and the decoder each yours to choose. → `async-assets`
 - **Decoders and transports for that seam** — SVG, bitmaps, translation catalogs, over HTTP or from a directory — in the companion crate [`telar-dynamic`](crates/telar-dynamic), one feature each. Yours plugs in the same way.
 - **Hot reload** in `cargo telar dev`, and an in-app devtools overlay for inspecting the live component tree — or one of your own, through the same seam. *(the CLI sets this one)*
-- **Packaging** to native installers per platform, plus Android APKs. → `cargo telar build --format …`
+- **Packaging** to native installers per platform, plus Android APKs. → `cargo telar build --format …` For the browser, a static site from a page template with content-hashed assets, an `asset-manifest.json` and a verbatim `web/public/` → `cargo telar build --target web`, configured under `[telar.web]` ([docs/web-packaging.md](docs/web-packaging.md)).
 
 The complete list, with what each feature pulls in and why, is on **[docs.rs](https://docs.rs/telar#feature-flags)**.
 

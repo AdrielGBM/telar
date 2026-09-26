@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="%telar.lang%" dir="%telar.dir%">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>%telar.title%</title>
+    %telar.meta%
+    %telar.fonts%
+    <style>
+      /* What the page is before the app has drawn anything, and what shows through an overscroll once it has: without it both are white on a system asking for dark. */
+      html { color-scheme: light dark; }
+      html, body { margin: 0; height: 100%; overflow: hidden; }
+      /* `100%` rather than `100vw`, which includes a reserved scrollbar; `dvh` rather than `vh`, which on mobile is the viewport with the URL bar retracted, which it is not on arrival. */
+      #telar-root { width: 100%; height: 100dvh; }
+    </style>
+    %telar.bootstrap%
+  </head>
+  <body>
+    <div id="telar-root" data-telar-renderer="%telar.renderer%">%telar.prerendered%</div>
+    %telar.state%
+  </body>
+</html>

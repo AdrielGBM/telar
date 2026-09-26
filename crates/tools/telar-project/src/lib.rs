@@ -39,7 +39,7 @@ pub use discovery::{
 };
 pub use manifest::{
     DevSection, I18nSection, MANIFEST_FILENAME, ManifestError, RendererBackend, TelarManifest,
-    TelarSection, WindowSection,
+    TelarSection, WebSection, WindowSection,
 };
 pub use paths::{
     find_ancestor_dir, find_package_root, find_telar_root, find_workspace_root,

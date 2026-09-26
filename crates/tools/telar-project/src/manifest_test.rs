@@ -64,6 +64,7 @@ fn a_misspelled_key_is_an_error_that_names_it() {
         ("dev", "[telar.dev]\ndevtool = true\n"),
         ("window", "[telar.dev.window]\nwith = 800\n"),
         ("i18n", "[telar.i18n]\nscann = \"lang\"\n"),
+        ("web", "[telar.web]\ntemplat = \"page.html\"\n"),
         ("table", "[telarr]\nbackend = \"software\"\n"),
     ] {
         let root = package(&format!("typo_{}", label.replace(' ', "_")), Some(manifest));
@@ -144,4 +145,29 @@ fn a_package_inherits_the_workspace_manifest_key_by_key() {
         .telar;
     assert_eq!(telar.theme.as_deref(), Some("config::Nord"));
     let _ = std::fs::remove_dir_all(&root);
+}
+
+#[test]
+fn a_project_without_a_web_table_gets_the_web_defaults() {
+    let root = package("web_defaults", Some("[telar]\nbackend = \"auto\"\n"));
+    let web = TelarManifest::load(&root).unwrap().telar.web;
+    assert_eq!(
+        web.template_path(&root),
+        (root.join("web/index.html"), false)
+    );
+    assert_eq!(web.public_dir(&root), (root.join("web/public"), false));
+}
+
+#[test]
+fn the_web_table_names_its_template_and_public_directory() {
+    let root = package(
+        "web_named",
+        Some("[telar.web]\ntemplate = \"site/page.html\"\npublic = \"static\"\n"),
+    );
+    let web = TelarManifest::load(&root).unwrap().telar.web;
+    assert_eq!(
+        web.template_path(&root),
+        (root.join("site/page.html"), true)
+    );
+    assert_eq!(web.public_dir(&root), (root.join("static"), true));
 }

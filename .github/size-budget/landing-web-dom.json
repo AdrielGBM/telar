@@ -15,5 +15,5 @@
     "wasm_bindgen": "0.2.127",
     "binaryen": "version_132"
   },
-  "artifact": "app-<hash>_bg.wasm"
+  "artifact": "asset-manifest.json[\"app_bg.wasm\"]"
 }
