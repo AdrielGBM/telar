@@ -80,14 +80,9 @@ pub trait AppRuntime: 'static {
         platform_core::take_window_commands()
     }
 
-    /// Reports the OS light/dark preference into the theme runtime that `follow_system` reads.
-    fn set_system_dark(&self, dark: bool) {
-        theme_core::set_system_dark(dark);
-    }
-
-    /// Reports the user's system preferences into the store [`use_system_preferences`](crate::use_system_preferences) reads.
+    /// Reports the user's system preferences into the store [`use_system_preferences`](crate::use_system_preferences) reads, which the theme's `follow_system` and the motion engine follow from there.
     fn set_system_preferences(&self, preferences: &SystemPreferences) {
-        crate::system_preferences::set_system_preferences(preferences.clone());
+        preferences_core::set_system_preferences(preferences.clone());
     }
 
     /// Reports how big the surface being driven is into the store [`use_surface_size`](crate::use_surface_size) reads and the layout pass resolves surface fractions against.
@@ -108,7 +103,7 @@ pub trait AppRuntime: 'static {
 
 /// An [`App`] whose tree lives in this process — every application that is not a hot-reloaded dylib.
 ///
-/// Holds nothing but the app: each of the runtime methods above is already correct for a tree on this side, so this overrides only what an application actually answers — the four of [`App`], plus the colour-scheme and system-preference hooks, each the default's own work followed by the application's.
+/// Holds nothing but the app: each of the runtime methods above is already correct for a tree on this side, so this overrides only what an application actually answers — the four of [`App`], plus the system-preference hook, the default's own work followed by the application's.
 pub struct LocalApp<A: App>(pub A);
 
 impl<A: App> AppRuntime for LocalApp<A> {
@@ -128,14 +123,9 @@ impl<A: App> AppRuntime for LocalApp<A> {
         self.0.on_frame(ctx)
     }
 
-    // The theme runtime this side reads is the default's job; the application is told after it, so an override sees a state that already agrees with the host it is fanning out from.
-    fn set_system_dark(&self, dark: bool) {
-        theme_core::set_system_dark(dark);
-        self.0.on_color_scheme(dark);
-    }
-
+    // The store is written first, so a hook fanning the snapshot out to other runtimes sees a state that already agrees with it.
     fn set_system_preferences(&self, preferences: &SystemPreferences) {
-        crate::system_preferences::set_system_preferences(preferences.clone());
+        preferences_core::set_system_preferences(preferences.clone());
         self.0.on_system_preferences(preferences);
     }
 }

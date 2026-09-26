@@ -83,3 +83,19 @@ fn a_stopped_glide_takes_no_more_notches_and_moves_no_further() {
     run(&glide, 20);
     assert_eq!(offset.peek(), caught);
 }
+
+#[test]
+fn a_zero_time_scale_arrives_at_once() {
+    let offset = reactive_core::signal(0.0);
+    let glide = Glide::start(offset, 60.0, (0.0, 1000.0)).expect("a notch to cover");
+    glide.tick(Instant::now(), 0.0);
+    assert_eq!(offset.peek(), 60.0);
+    assert!(
+        glide.is_settled(),
+        "a zero scale must end it, not freeze it"
+    );
+    assert!(
+        glide.reducible(),
+        "a notch is an animation the user can ask to skip"
+    );
+}

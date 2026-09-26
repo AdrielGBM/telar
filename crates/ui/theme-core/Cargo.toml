@@ -12,5 +12,6 @@ repository = { workspace = true }
 
 [dependencies]
 geometry-core = { workspace = true }
+preferences-core = { workspace = true }
 reactive-core = { workspace = true }
 renderer-core = { workspace = true }

@@ -22,7 +22,7 @@ use web_time::Instant;
 
 use geometry_core::Rect;
 use layout_core::AvailableSpace;
-use platform_core::{Event, WindowCommand};
+use platform_core::{Event, SystemPreferences, WindowCommand};
 use renderer_core::{BorderRadius, Color, DrawCommand};
 use ui_core::{ComponentList, EventResult, NodeId, Surface, compute_layout, mark_dirty};
 use ui_tree::{Component, RenderNode};
@@ -237,12 +237,10 @@ impl PluginInstance {
         platform_core::take_window_commands()
     }
 
-    /// Write the OS light/dark preference into the plugin's theme runtime (drives its `follow_system`).
-    pub fn set_system_dark(&self, dark: bool) {
+    /// Write the user's system preferences into the plugin's own copy of the store, which its views, its theme's `follow_system` and its motion engine read.
+    pub fn set_system_preferences(&self, preferences: &SystemPreferences) {
         let _g = self.surface.enter();
-        reactive_core::begin_batch();
-        theme_core::set_system_dark(dark);
-        reactive_core::end_batch();
+        preferences_core::set_system_preferences(preferences.clone());
     }
 
     /// Run the plugin's per-frame background-work hook, forwarding the host's `ctx` (so a plugin worker thread can wake the host loop via `ctx.redraw_waker()`, just as an in-process app does).
@@ -331,7 +329,7 @@ plugin_shim!(__plugin_end_frame() => end_frame);
 plugin_shim!(__plugin_motion_tick(now: Instant) => motion_tick);
 plugin_shim!(__plugin_motion_active() -> bool => motion_active);
 plugin_shim!(__plugin_drain_window_commands() -> WindowCommands => drain_window_commands);
-plugin_shim!(__plugin_set_system_dark(dark: bool) => set_system_dark);
+plugin_shim!(__plugin_set_system_preferences(preferences: &SystemPreferences) => set_system_preferences);
 plugin_shim!(__plugin_activate() => activate);
 plugin_shim!(__plugin_clear_color() -> Option<Color> => clear_color);
 plugin_shim!(__plugin_title() -> String => title);
@@ -346,7 +344,7 @@ pub unsafe fn __plugin_on_frame(inst: *mut PluginInstance, ctx: &mut AppCtx) {
 }
 
 /// The version of the guest/host contract below. Bump it whenever [`PluginVTable`] changes shape — adding a field, reordering one, or changing a signature — so a stale `.so` is refused with a version mismatch instead of being called through a table whose fields have moved under it.
-pub const TELAR_PLUGIN_ABI: u32 = 1;
+pub const TELAR_PLUGIN_ABI: u32 = 2;
 
 /// Everything the host calls on a plugin, as one exported symbol.
 ///
@@ -369,7 +367,7 @@ pub struct PluginVTable {
     pub motion_tick: unsafe extern "Rust" fn(*mut PluginInstance, Instant),
     pub motion_active: unsafe extern "Rust" fn(*mut PluginInstance) -> bool,
     pub drain_window_commands: unsafe extern "Rust" fn(*mut PluginInstance) -> WindowCommands,
-    pub set_system_dark: unsafe extern "Rust" fn(*mut PluginInstance, bool),
+    pub set_system_preferences: unsafe extern "Rust" fn(*mut PluginInstance, &SystemPreferences),
     pub activate: unsafe extern "Rust" fn(*mut PluginInstance),
     pub clear_color: unsafe extern "Rust" fn(*mut PluginInstance) -> Option<Color>,
     pub title: unsafe extern "Rust" fn(*mut PluginInstance) -> String,
@@ -411,7 +409,7 @@ macro_rules! plugin {
                 motion_tick: $crate::__plugin_motion_tick,
                 motion_active: $crate::__plugin_motion_active,
                 drain_window_commands: $crate::__plugin_drain_window_commands,
-                set_system_dark: $crate::__plugin_set_system_dark,
+                set_system_preferences: $crate::__plugin_set_system_preferences,
                 activate: $crate::__plugin_activate,
                 clear_color: $crate::__plugin_clear_color,
                 title: $crate::__plugin_title,
@@ -450,27 +448,52 @@ mod host {
 
         let symbol: libloading::Symbol<*const PluginVTable> =
             unsafe { lib.get(b"_rsx_plugin_vtable\0")? };
-        let ptr: *const PluginVTable = *symbol;
-        // A guest built against a shorter table has fewer bytes than `PluginVTable`, so copying the whole struct before the check would read past its end. `#[repr(C)]` puts `abi` at offset 0 for every version.
-        let abi = unsafe { *ptr.cast::<u32>() };
-        if abi != TELAR_PLUGIN_ABI {
-            return Err(format!(
-                "plugin built for ABI {abi}, host is ABI {TELAR_PLUGIN_ABI} — rebuild {}",
-                path.display()
-            )
-            .into());
-        }
-        let vtable = unsafe { *ptr };
+        let vtable = unsafe { read_vtable(*symbol) }
+            .map_err(|mismatch| format!("{mismatch} — rebuild {}", path.display()))?;
 
         let inst = unsafe { (vtable.create)(args) };
         if inst.is_null() {
             return Err("plugin create returned null".into());
         }
-        Ok(LoadedPlugin {
+        let plugin = LoadedPlugin {
             inst,
             vtable,
             _lib: lib,
-        })
+        };
+        // A plugin starts with a store of its own that knows nothing, and a host only forwards changes; without this one opened mid-session would draw light on a dark desktop until the user next changed a setting.
+        plugin.set_system_preferences(&preferences_core::system_preferences());
+        Ok(plugin)
+    }
+
+    /// Copies a guest's table out after checking it was built against this one.
+    ///
+    /// # Safety
+    /// `ptr` must point at a guest's exported table, of this or any other ABI version.
+    pub(crate) unsafe fn read_vtable(
+        ptr: *const PluginVTable,
+    ) -> Result<PluginVTable, AbiMismatch> {
+        // A guest built against a shorter table has fewer bytes than `PluginVTable`, so copying the whole struct before the check would read past its end. `#[repr(C)]` puts `abi` at offset 0 for every version.
+        let abi = unsafe { *ptr.cast::<u32>() };
+        if abi != TELAR_PLUGIN_ABI {
+            return Err(AbiMismatch { plugin: abi });
+        }
+        Ok(unsafe { *ptr })
+    }
+
+    /// A guest built against another version of [`PluginVTable`].
+    #[derive(Debug, PartialEq, Eq)]
+    pub(crate) struct AbiMismatch {
+        pub(crate) plugin: u32,
+    }
+
+    impl std::fmt::Display for AbiMismatch {
+        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            write!(
+                f,
+                "plugin built for ABI {}, host is ABI {TELAR_PLUGIN_ABI}",
+                self.plugin
+            )
+        }
     }
 
     impl LoadedPlugin {
@@ -505,8 +528,9 @@ mod host {
         pub fn drain_window_commands(&self) -> WindowCommands {
             unsafe { (self.vtable.drain_window_commands)(self.inst) }
         }
-        pub fn set_system_dark(&self, dark: bool) {
-            unsafe { (self.vtable.set_system_dark)(self.inst, dark) }
+        /// Hands the plugin a new snapshot of the user's system preferences. [`load_plugin`] seeds it with the host's own; call this from the host's `on_system_preferences` so the plugin follows later changes.
+        pub fn set_system_preferences(&self, preferences: &SystemPreferences) {
+            unsafe { (self.vtable.set_system_preferences)(self.inst, preferences) }
         }
         pub fn activate(&self) {
             unsafe { (self.vtable.activate)(self.inst) }

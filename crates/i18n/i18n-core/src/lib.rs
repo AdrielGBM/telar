@@ -9,13 +9,15 @@ mod catalog;
 mod installed;
 mod locale;
 mod message;
+mod negotiate;
 mod plural;
 
 #[cfg(feature = "runtime-catalog")]
 pub use catalog::{CatalogModel, MessageModel, PartModel, flatten, is_plural_table, parse_message};
 pub use installed::{catalog, set_catalog, t};
-pub use locale::{current_locale, detect_system_locale, set_locale, use_locale};
+pub use locale::{current_locale, set_locale, use_locale};
 pub use message::{Catalog, Entry, Message, Part};
+pub use negotiate::negotiate_locale;
 pub use plural::{PluralCategory, plural_category};
 
 /// Looks up `key` in `catalog` for the currently active locale and renders it with `args`.

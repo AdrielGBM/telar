@@ -50,3 +50,78 @@ fn a_continuous_region_is_not_an_active_animation() {
     assert!(has_continuous(), "a continuous region keeps frames coming");
     assert!(!has_active(), "no animation was registered");
 }
+
+struct Probe {
+    reducible: bool,
+    seen: std::cell::Cell<Option<f32>>,
+}
+
+impl Tickable for Probe {
+    fn tick(&self, _now: Instant, scale: f32) {
+        self.seen.set(Some(scale));
+    }
+    fn is_settled(&self) -> bool {
+        false
+    }
+    fn reducible(&self) -> bool {
+        self.reducible
+    }
+}
+
+fn probe(reducible: bool) -> std::rc::Rc<Probe> {
+    let probe = std::rc::Rc::new(Probe {
+        reducible,
+        seen: std::cell::Cell::new(None),
+    });
+    register(
+        next_id(),
+        std::rc::Rc::downgrade(&probe) as Weak<dyn Tickable>,
+    );
+    probe
+}
+
+fn reduced_motion(reduced: Option<bool>) {
+    preferences_core::set_system_preferences(preferences_core::SystemPreferences {
+        reduced_motion: reduced,
+        ..Default::default()
+    });
+}
+
+fn scales_seen(reduced: Option<bool>) -> (Option<f32>, Option<f32>) {
+    fresh();
+    reduced_motion(reduced);
+    let decorative = probe(true);
+    let momentum = probe(false);
+    tick(Instant::now());
+    reduced_motion(None);
+    (decorative.seen.get(), momentum.seen.get())
+}
+
+#[test]
+fn reduced_motion_zeroes_the_scale_by_default() {
+    set_scale(0.5);
+    let (decorative, momentum) = scales_seen(Some(true));
+    assert_eq!(decorative, Some(0.0), "the user asked for less motion");
+    assert_eq!(
+        momentum,
+        Some(0.5),
+        "momentum keeps the application's scale"
+    );
+    assert_eq!(scale(), 0.5, "and the application's own scale survives");
+    set_scale(1.0);
+}
+
+#[test]
+fn an_unknown_or_declined_preference_changes_nothing() {
+    assert_eq!(scales_seen(None), (Some(1.0), Some(1.0)));
+    assert_eq!(scales_seen(Some(false)), (Some(1.0), Some(1.0)));
+}
+
+#[test]
+fn an_application_can_decline_to_follow_it() {
+    follow_reduced_motion(false);
+    assert!(!follows_reduced_motion());
+    let seen = scales_seen(Some(true));
+    follow_reduced_motion(true);
+    assert_eq!(seen, (Some(1.0), Some(1.0)));
+}

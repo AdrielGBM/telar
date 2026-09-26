@@ -1,0 +1,15 @@
+[package]
+name = "telar-preferences-core"
+version = { workspace = true }
+edition = { workspace = true }
+rust-version = { workspace = true }
+description = "The user's system preferences as reactive state for Telar: colour scheme, reduced motion, contrast and preferred locales."
+keywords = ["telar", "preferences", "dark-mode", "accessibility", "reactive"]
+categories = ["gui", "accessibility"]
+readme = "README.md"
+license = { workspace = true }
+repository = { workspace = true }
+
+[dependencies]
+platform-core = { workspace = true }
+reactive-core = { workspace = true }

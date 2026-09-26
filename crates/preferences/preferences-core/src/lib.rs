@@ -1,8 +1,12 @@
-//! The user's system preferences as reactive state: written by the runner from [`Event::SystemPreferencesChanged`](crate::Event::SystemPreferencesChanged), read by anything that should follow them.
+//! The user's system preferences as reactive state: written by the runner from `Event::SystemPreferencesChanged`, read by anything that should follow them.
 //!
 //! One signal per field, so a view that reads only the locales does not re-render when the colour scheme flips.
+//!
+//! Its own crate so the consumers below the facade can follow it without the facade: `theme-core` drives `follow_system` from the colour scheme, `motion-core` reads reduced motion on every frame, and `telar-plugin` writes a guest's copy across the plugin boundary. It sits on `platform-core` for the snapshot type and on `reactive-core` for the signals; `platform-core` stays clear of the reactive runtime, so the store cannot live there.
 
-use platform_core::{ColorScheme, SystemPreferences};
+#![warn(rustdoc::broken_intra_doc_links)]
+
+pub use platform_core::{ColorScheme, SystemPreferences};
 use reactive_core::{RwSignal, detached, signal};
 
 thread_local! {
@@ -69,6 +73,11 @@ pub fn use_reduced_motion() -> Option<bool> {
     REDUCED_MOTION.with(|s| s.get())
 }
 
+/// Non-reactive [`use_reduced_motion`], for the frame clock: it asks on every tick and must neither subscribe whatever happens to be running nor clone the locale list to answer.
+pub fn reduced_motion() -> Option<bool> {
+    REDUCED_MOTION.with(|s| s.peek())
+}
+
 /// `Some(true)` when the user asked for more contrast; `None` where the platform cannot say.
 pub fn use_high_contrast() -> Option<bool> {
     HIGH_CONTRAST.with(|s| s.get())
@@ -80,5 +89,5 @@ pub fn use_preferred_locales() -> Vec<String> {
 }
 
 #[cfg(test)]
-#[path = "system_preferences_test.rs"]
+#[path = "lib_test.rs"]
 mod tests;

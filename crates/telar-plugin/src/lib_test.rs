@@ -57,6 +57,18 @@ fn the_export_macro_builds_a_vtable_at_the_current_abi() {
     let inst = unsafe { (_rsx_plugin_vtable.create)(&[]) };
     assert!(!inst.is_null(), "the exported vtable built an instance");
     assert_eq!(unsafe { (_rsx_plugin_vtable.id)(inst) }, "stub");
+    let dark = SystemPreferences {
+        color_scheme: Some(platform_core::ColorScheme::Dark),
+        reduced_motion: Some(true),
+        ..SystemPreferences::default()
+    };
+    unsafe { (_rsx_plugin_vtable.set_system_preferences)(inst, &dark) };
+    assert_eq!(
+        preferences_core::system_preferences(),
+        dark,
+        "the whole snapshot crosses, not only the scheme"
+    );
+    preferences_core::set_system_preferences(SystemPreferences::default());
     unsafe { (_rsx_plugin_vtable.destroy)(inst) };
 }
 
@@ -160,4 +172,35 @@ fn composite_translates_into_the_sub_rect_and_clips_to_it() {
         }
         _ => panic!("expected the plugin's frame to be wrapped in a clip"),
     }
+}
+
+// What a plugin built before ABI 2 exports: a shorter table whose only field the host may read is the version at offset 0.
+#[cfg(feature = "host")]
+#[repr(C)]
+struct AbiOneTable {
+    abi: u32,
+    _create: usize,
+}
+
+#[cfg(feature = "host")]
+static ABI_ONE: AbiOneTable = AbiOneTable { abi: 1, _create: 0 };
+
+#[cfg(feature = "host")]
+#[test]
+fn a_plugin_built_for_abi_one_is_refused_before_its_table_is_read() {
+    let refused = unsafe { crate::host::read_vtable((&raw const ABI_ONE).cast::<PluginVTable>()) };
+    let mismatch = refused.err().expect("an ABI 1 table must not load");
+    assert_eq!(mismatch.plugin, 1);
+    assert_eq!(
+        mismatch.to_string(),
+        format!("plugin built for ABI 1, host is ABI {TELAR_PLUGIN_ABI}")
+    );
+}
+
+#[cfg(feature = "host")]
+#[test]
+fn a_plugin_built_for_this_abi_is_read_whole() {
+    let read = unsafe { crate::host::read_vtable(&raw const _rsx_plugin_vtable) }
+        .expect("the current table loads");
+    assert_eq!(read.abi, TELAR_PLUGIN_ABI);
 }

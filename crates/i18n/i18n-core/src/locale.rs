@@ -26,26 +26,6 @@ pub fn current_locale() -> Option<String> {
     LOCALE.with(|s| s.peek())
 }
 
-/// The language subtag of the OS locale, from `$LC_ALL` / `$LC_MESSAGES` / `$LANG` (in POSIX precedence), lowercased and stripped of any territory/encoding suffix — e.g. `es_ES.UTF-8` → `"es"`. `None` when unset or the C/POSIX locale. An app can seed the initial language by passing this to [`set_locale`] at startup.
-pub fn detect_system_locale() -> Option<String> {
-    let raw = ["LC_ALL", "LC_MESSAGES", "LANG"]
-        .into_iter()
-        .find_map(|var| std::env::var(var).ok())
-        .filter(|v| !v.is_empty())?;
-    let lang = raw
-        .split(['.', '@'])
-        .next()
-        .unwrap_or(&raw)
-        .split('_')
-        .next()
-        .unwrap_or(&raw)
-        .to_ascii_lowercase();
-    if lang.is_empty() || lang == "c" || lang == "posix" {
-        return None;
-    }
-    Some(lang)
-}
-
 #[cfg(test)]
 #[path = "locale_test.rs"]
 mod tests;

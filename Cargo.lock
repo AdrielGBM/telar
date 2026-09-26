@@ -5448,6 +5448,7 @@ dependencies = [
  "telar-platform-headless",
  "telar-platform-tui",
  "telar-platform-web",
+ "telar-preferences-core",
  "telar-reactive-core",
  "telar-renderer-assets",
  "telar-renderer-core",
@@ -5604,6 +5605,7 @@ name = "telar-motion-core"
 version = "0.2.1"
 dependencies = [
  "telar-geometry-core",
+ "telar-preferences-core",
  "telar-reactive-core",
  "web-time",
 ]
@@ -5734,12 +5736,20 @@ dependencies = [
  "telar-layout-core",
  "telar-motion-core",
  "telar-platform-core",
+ "telar-preferences-core",
  "telar-reactive-core",
  "telar-renderer-core",
- "telar-theme-core",
  "telar-ui-core",
  "telar-ui-tree",
  "web-time",
+]
+
+[[package]]
+name = "telar-preferences-core"
+version = "0.2.1"
+dependencies = [
+ "telar-platform-core",
+ "telar-reactive-core",
 ]
 
 [[package]]
@@ -5951,6 +5961,7 @@ name = "telar-theme-core"
 version = "0.2.1"
 dependencies = [
  "telar-geometry-core",
+ "telar-preferences-core",
  "telar-reactive-core",
  "telar-renderer-core",
 ]

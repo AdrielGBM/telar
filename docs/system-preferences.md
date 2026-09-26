@@ -46,15 +46,52 @@ call it too.
 
 A platform sends `Event::SystemPreferencesChanged { preferences }` with the **whole** snapshot. It sends one
 before a surface first resumes, and another whenever any field changes. The runner consumes the event, so
-the widget tree never sees it. The runner writes the store, drives the theme's `follow_system` when the
-scheme changes, and calls the application's hooks:
+the widget tree never sees it. It writes the store, which everything below follows on its own, and then calls
+`App::on_system_preferences(&preferences)`.
 
-- `App::on_color_scheme(dark)` runs when the scheme changes. It does not run while the scheme stays unknown.
-- `App::on_system_preferences(&preferences)` runs on every snapshot.
+That hook is for a host that draws other applications' trees: each tree it loads from a dylib has its own
+copy of the store, and only the host's is written. A `telar-plugin` host forwards the snapshot with
+`LoadedPlugin::set_system_preferences` (`load_plugin` already seeds a new plugin with the host's current
+snapshot). Under `cargo telar dev` the runner forwards the snapshot into the hot-reloaded library, and hands
+it over again after every reload, before the reloaded state is restored so a mode picked by hand survives.
 
-A host that draws other applications' trees uses these hooks to carry the change across its own boundary.
-Under `cargo telar dev` the runner forwards the snapshot into the hot-reloaded library, and hands it over
-again after every reload.
+The store lives in `telar-preferences-core`, below the facade, so the crates that follow it do not need the
+facade to do so.
+
+## What follows them
+
+| Preference | Follower | Behaviour |
+| --- | --- | --- |
+| Colour scheme | `follow_system(light, dark)` (theme) | Selects `light` or `dark` as the scheme changes. An unknown scheme leaves an active mode alone and selects `light` only if no mode is active yet. A manual `set_mode` wins until the scheme next changes. |
+| Reduced motion | the motion ticker, by default | Every animation jumps to its end; scroll momentum keeps moving. `motion::follow_reduced_motion(false)` opts out. See [animations.md](animations.md#d5-one-time-scale-and-reduced-motion-zeroes-it). |
+| Locales | `follow_system_locale(available, fallback)` | Sets the active locale to `negotiate_locale(&use_preferred_locales(), available, fallback)`, again whenever the list changes. An empty list leaves an active locale alone. |
+| High contrast | nothing built in | An application reads `use_high_contrast()` and picks its own palette. |
+
+Each follower is opt-in except motion: an application calls `follow_system` and `follow_system_locale` once at
+start, in its setup. Setup runs before the first snapshot arrives, which is why these are followers rather
+than one-off reads: they settle as soon as it does, and the tree is built after that.
+
+### Negotiating a locale
+
+`negotiate_locale(preferred, available, fallback)` picks what to show from the locales an application ships.
+It is three rules, kept that small on purpose so the same answer can be computed where Rust does not run (a
+page choosing its language before any wasm loads):
+
+1. For each preferred tag, most preferred first: an available tag equal to it, ignoring ASCII case.
+2. Otherwise, the first available tag, in `available`'s order, with the same primary language subtag
+   (`es-CL` picks `es`, and `es` picks `es-MX`).
+3. Otherwise the next preferred tag; when none match, `fallback`.
+
+A match comes back spelled as `available` spells it. Order of preference beats quality of match:
+`["en-US", "es"]` against `["es", "en-GB"]` picks `en-GB`.
+
+```rust
+use telar::{follow_system_locale, negotiate_locale, system_preferences};
+
+follow_system_locale(["es", "en"], "es");
+// or, where the locale is chosen somewhere else and only needs a default:
+let locale = negotiate_locale(&system_preferences().locales, &["es", "en"], "es");
+```
 
 ## Where each target reads them
 
@@ -91,6 +128,8 @@ Notes on the less obvious rows:
 - **Android.** Reduced motion, high contrast and the full locale list come over JNI through the activity's
   `ContentResolver` and `Resources`. `high_text_contrast_enabled` is a secure setting outside the public
   SDK, and `Settings.Secure` reads it by name. If a JNI call fails, only that field is unknown.
+- **Not yet run on a device.** The Windows, macOS and Android readers compile and pass CI, but none has been
+  exercised on real hardware yet; treat those rows as expected rather than confirmed behaviour.
 - **Terminal.** A terminal emulator keeps motion and contrast settings to itself; no program inside it can
   see them.
 - **Headless.** No user is present, so the caller declares the snapshot:

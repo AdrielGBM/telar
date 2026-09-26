@@ -1,4 +1,12 @@
 use super::*;
+use preferences_core::{ColorScheme, SystemPreferences, set_system_preferences};
+
+fn scheme(color_scheme: ColorScheme) {
+    set_system_preferences(SystemPreferences {
+        color_scheme: Some(color_scheme),
+        ..SystemPreferences::default()
+    });
+}
 
 /// The whole reason this is not an `Option`: every caller that had to handle a missing theme wrote its own flat constant, and none of them followed the mode — so the careful mode-following default was unreachable on exactly the path that runs when nobody has configured anything.
 #[test]
@@ -7,9 +15,9 @@ fn an_unregistered_theme_still_follows_the_mode() {
     crate::register_mode("dark", || {});
     crate::follow_system("light", "dark");
 
-    crate::set_system_dark(false);
+    scheme(ColorScheme::Light);
     let light_ink = use_theme_tokens().ink();
-    crate::set_system_dark(true);
+    scheme(ColorScheme::Dark);
     let dark_ink = use_theme_tokens().ink();
 
     assert!(
@@ -20,7 +28,7 @@ fn an_unregistered_theme_still_follows_the_mode() {
         dark_ink.r > 0.5,
         "light ink on a dark page, got {dark_ink:?}"
     );
-    crate::set_system_dark(false);
+    set_system_preferences(SystemPreferences::default());
 }
 
 #[derive(Clone)]

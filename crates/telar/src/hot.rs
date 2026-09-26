@@ -214,19 +214,9 @@ impl crate::app_runtime::AppRuntime for HotApp {
         unsafe { drain() }
     }
 
-    // The `follow_system` effect lives in the dylib's theme runtime. A missing symbol degrades to a no-op.
-    fn set_system_dark(&self, dark: bool) {
-        if let Ok(set) = unsafe {
-            self._lib
-                .get::<unsafe extern "Rust" fn(bool)>(b"_rsx_hot_set_system_dark\0")
-        } {
-            unsafe { set(dark) }
-        }
-    }
-
-    // The dylib reads its own copy of the store, so it is written across the boundary; the host's copy is kept too, for the devtools that live on this side. A missing symbol leaves the dylib's preferences unknown until it is rebuilt.
+    // The dylib reads its own copy of the store, so it is written across the boundary, and its theme and motion follow that copy; the host's copy is kept too, for the devtools that live on this side. A missing symbol leaves the dylib's preferences unknown until it is rebuilt.
     fn set_system_preferences(&self, preferences: &platform_core::SystemPreferences) {
-        crate::system_preferences::set_system_preferences(preferences.clone());
+        preferences_core::set_system_preferences(preferences.clone());
         if let Ok(set) = unsafe {
             self._lib
                 .get::<unsafe extern "Rust" fn(&platform_core::SystemPreferences)>(

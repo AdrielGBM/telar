@@ -114,6 +114,10 @@ impl motion_core::Tickable for Fling {
         if self.stopped.get() {
             return;
         }
+        if scale <= 0.0 {
+            self.finish();
+            return;
+        }
         let Some(last) = self.last.replace(Some(now)) else {
             // The first tick only establishes when "now" is; there is no elapsed time to integrate yet.
             return;
@@ -140,6 +144,21 @@ impl motion_core::Tickable for Fling {
 
     fn is_settled(&self) -> bool {
         self.stopped.get()
+    }
+
+    fn reducible(&self) -> bool {
+        false
+    }
+}
+
+impl Fling {
+    /// Lands where the decay would have stopped it, for a zero time scale: the distance a velocity decaying by `RETAINED_PER_SECOND` covers before it falls to `STOP_VELOCITY`.
+    fn finish(&self) {
+        let velocity = self.velocity.get();
+        let travel = (velocity - STOP_VELOCITY.copysign(velocity)) / -RETAINED_PER_SECOND.ln();
+        let rest = (self.offset.peek() + travel).clamp(self.bounds.0, self.bounds.1);
+        self.offset.set(rest);
+        self.stopped.set(true);
     }
 }
 
@@ -210,6 +229,11 @@ impl Glide {
 impl motion_core::Tickable for Glide {
     fn tick(&self, now: Instant, scale: f32) {
         if self.stopped.get() {
+            return;
+        }
+        if scale <= 0.0 {
+            self.offset.set(self.target.get());
+            self.stopped.set(true);
             return;
         }
         // The first tick only establishes when "now" is; there is no elapsed time to ease over yet.

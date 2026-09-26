@@ -80,3 +80,17 @@ fn a_whole_snapshot_is_one_notification() {
     assert_eq!(use_color_scheme(), Some(ColorScheme::Dark));
     assert_eq!(use_high_contrast(), None);
 }
+
+#[test]
+fn the_frame_clock_read_answers_without_subscribing() {
+    set_system_preferences(SystemPreferences::default());
+    let (runs, _effect) = count_runs(|| {
+        reduced_motion();
+    });
+    set_system_preferences(SystemPreferences {
+        reduced_motion: Some(true),
+        ..SystemPreferences::default()
+    });
+    assert_eq!(reduced_motion(), Some(true));
+    assert_eq!(runs.get(), 1, "a peek must not re-run its caller");
+}

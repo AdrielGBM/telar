@@ -1,13 +1,21 @@
 use super::*;
-use std::cell::Cell;
+use preferences_core::{SystemPreferences, set_system_preferences};
 
 fn reset() {
+    if let Some(previous) = FOLLOW.take() {
+        reactive_core::dispose_owner(previous);
+    }
     ACTIVE_MODE.with(|s| s.set(None));
     MODES.with(|m| m.borrow_mut().clear());
     SCHEME_PAIR.with(|p| *p.borrow_mut() = None);
-    // Drop any prior follow_system effect first, so it stops reacting to SYSTEM_DARK in later tests.
-    FOLLOW.with(|f| *f.borrow_mut() = None);
-    SYSTEM_DARK.with(|s| s.set(false));
+    set_system_preferences(SystemPreferences::default());
+}
+
+fn scheme(color_scheme: Option<ColorScheme>) {
+    set_system_preferences(SystemPreferences {
+        color_scheme,
+        ..SystemPreferences::default()
+    });
 }
 
 #[test]
@@ -29,7 +37,7 @@ fn set_mode_publishes_even_without_registration() {
 }
 
 #[test]
-fn follow_system_drives_mode_from_os_scheme() {
+fn follow_system_drives_mode_from_the_color_scheme() {
     reset();
     register_mode("day", || {});
     register_mode("night", || {});
@@ -37,12 +45,58 @@ fn follow_system_drives_mode_from_os_scheme() {
     assert_eq!(
         active_mode().as_deref(),
         Some("day"),
-        "effect runs once with default SYSTEM_DARK=false → light"
+        "nothing active and nothing known opens on the light mode"
     );
-    set_system_dark(true);
+    scheme(Some(ColorScheme::Dark));
     assert_eq!(active_mode().as_deref(), Some("night"));
-    set_system_dark(false);
+    scheme(Some(ColorScheme::Light));
     assert_eq!(active_mode().as_deref(), Some("day"));
+}
+
+#[test]
+fn an_unknown_scheme_leaves_an_active_mode_alone() {
+    reset();
+    set_mode("pastel");
+    follow_system("day", "night");
+    assert_eq!(active_mode().as_deref(), Some("pastel"));
+    scheme(Some(ColorScheme::Dark));
+    assert_eq!(active_mode().as_deref(), Some("night"));
+    scheme(None);
+    assert_eq!(
+        active_mode().as_deref(),
+        Some("night"),
+        "losing the answer is not the user asking for light"
+    );
+}
+
+#[test]
+fn a_manual_mode_wins_until_the_scheme_changes() {
+    reset();
+    follow_system("day", "night");
+    set_mode("pastel");
+    scheme(None);
+    assert_eq!(active_mode().as_deref(), Some("pastel"));
+    scheme(Some(ColorScheme::Dark));
+    assert_eq!(active_mode().as_deref(), Some("night"));
+}
+
+#[test]
+fn re_calling_follow_system_replaces_the_previous_follower() {
+    reset();
+    follow_system("day", "night");
+    let one_follower = reactive_core::live_effect_count();
+    follow_system("light", "dark");
+    assert_eq!(
+        reactive_core::live_effect_count(),
+        one_follower,
+        "a leftover follower would keep setting the old pair's modes"
+    );
+    let old_pair = Rc::new(Cell::new(0));
+    let counter = old_pair.clone();
+    register_mode("night", move || counter.set(counter.get() + 1));
+    scheme(Some(ColorScheme::Dark));
+    assert_eq!(active_mode().as_deref(), Some("dark"));
+    assert_eq!(old_pair.get(), 0);
 }
 
 #[test]

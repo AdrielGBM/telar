@@ -44,7 +44,7 @@ pub mod runner;
 #[cfg(feature = "runtime")]
 pub mod surface;
 #[cfg(feature = "runtime")]
-pub mod system_preferences;
+mod system_locale;
 #[cfg(all(feature = "runtime", feature = "testing"))]
 pub mod testing;
 #[cfg(feature = "hardware")]
@@ -109,7 +109,7 @@ pub use direction::follow_locale_direction;
 pub use i18n_core as i18n;
 // App lifecycle, like `set_locale`, so it belongs at the root. Its lookup `i18n::t` is deliberately not re-exported: `t` here is already the `t!` macro, and a second `t` resolving at runtime would be unreadable.
 pub use i18n_core::set_catalog;
-pub use i18n_core::{current_locale, detect_system_locale, set_locale, use_locale};
+pub use i18n_core::{current_locale, negotiate_locale, set_locale, use_locale};
 #[cfg(feature = "runtime")]
 pub use platform_core::{
     ConsumedKeys, Cursor, Event, FullscreenMode, Key, NamedKey, ScrollDelta, WindowCommand,
@@ -196,6 +196,11 @@ pub use services_core::{Clipboard, clipboard, clipboard_text, set_clipboard, set
 #[cfg(feature = "runtime")]
 pub use platform_core::{ColorScheme, SystemPreferences};
 #[cfg(feature = "runtime")]
+pub use preferences_core::{
+    set_system_preferences, system_preferences, use_color_scheme, use_high_contrast,
+    use_preferred_locales, use_reduced_motion, use_system_preferences,
+};
+#[cfg(feature = "runtime")]
 pub use services_core::{Scope, context, provide, set_context, try_inject, with_service};
 #[cfg(feature = "runtime")]
 pub use surface::{
@@ -203,15 +208,12 @@ pub use surface::{
     surface_content,
 };
 #[cfg(feature = "runtime")]
-pub use system_preferences::{
-    set_system_preferences, system_preferences, use_color_scheme, use_high_contrast,
-    use_preferred_locales, use_reduced_motion, use_system_preferences,
-};
+pub use system_locale::follow_system_locale;
 #[cfg(feature = "runtime")]
 pub use theme_core::{
     ControlSize, ScopedTheme, Theme, ThemeTokens, active_mode, control_scale, follow_system,
-    nearest_theme, register_mode, set_control_size, set_mode, set_system_dark, set_theme,
-    use_control_size, use_theme, use_theme_tokens,
+    nearest_theme, register_mode, set_control_size, set_mode, set_theme, use_control_size,
+    use_theme, use_theme_tokens,
 };
 #[cfg(all(feature = "runtime", feature = "svg"))]
 pub use ui_core::Svg;

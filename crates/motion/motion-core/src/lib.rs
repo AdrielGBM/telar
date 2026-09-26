@@ -15,6 +15,6 @@ pub use easing::{Easing, StepPosition};
 pub use keyframes::{Keyframes, KeyframesBuilder, Repeat, Timeline, TimelineBuilder};
 pub use lerp::Lerp;
 pub use ticker::{
-    Continuous, Tickable, has_active, has_continuous, next_id, register, reset, scale, set_scale,
-    tick,
+    Continuous, Tickable, follow_reduced_motion, follows_reduced_motion, has_active,
+    has_continuous, next_id, register, reset, scale, set_scale, tick,
 };

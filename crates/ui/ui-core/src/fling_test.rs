@@ -101,3 +101,41 @@ fn a_pause_mid_gesture_is_not_a_fling() {
         "a gesture that paused was let go of, not thrown"
     );
 }
+
+#[test]
+fn a_zero_time_scale_lands_where_the_decay_would_have_stopped() {
+    let stepped = reactive_core::signal(0.0);
+    let reference = Fling::start(stepped, 1200.0, (0.0, 10_000.0)).expect("fast enough to carry");
+    advance(&reference, Instant::now(), 5000, Duration::from_millis(1));
+    assert!(reference.is_settled());
+
+    let offset = reactive_core::signal(0.0);
+    let fling = Fling::start(offset, 1200.0, (0.0, 10_000.0)).expect("fast enough to carry");
+    fling.tick(Instant::now(), 0.0);
+    assert!(
+        fling.is_settled(),
+        "a zero scale must end it, not freeze it"
+    );
+    assert!(
+        (offset.peek() - stepped.peek()).abs() < 2.0,
+        "{} against {}",
+        offset.peek(),
+        stepped.peek()
+    );
+}
+
+#[test]
+fn a_zero_time_scale_still_stops_at_the_end_of_the_content() {
+    let offset = reactive_core::signal(90.0);
+    let fling = Fling::start(offset, 2000.0, (0.0, 100.0)).expect("fast enough to carry");
+    fling.tick(Instant::now(), 0.0);
+    assert_eq!(offset.peek(), 100.0);
+    assert!(fling.is_settled());
+}
+
+#[test]
+fn momentum_is_not_cut_short_by_reduced_motion() {
+    let offset = reactive_core::signal(0.0);
+    let fling = Fling::start(offset, 1200.0, (0.0, 10_000.0)).expect("fast enough to carry");
+    assert!(!fling.reducible());
+}

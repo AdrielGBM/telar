@@ -3,10 +3,25 @@
 //! The claim the whole theme design rests on: a widget reads a token inside its own `view`, so switching the theme re-runs exactly the segments that read it. Checked on both shapes of backend, because only one of them was ever exercised — a document wraps every box in an element, and an element subscribes to more than a rasterised box does.
 
 use telar::{
-    Color, Component, DrawCommand, EventResult, LayoutItem, LayoutStyle, LocalTree, RectStyle,
-    Rectangle, RenderNode, ShapeStyle, ThemeTokens, UiTree, box_item, reset_layout_runtime,
-    set_system_dark, use_theme_tokens,
+    Color, ColorScheme, Component, DrawCommand, EventResult, LayoutItem, LayoutStyle, LocalTree,
+    RectStyle, Rectangle, RenderNode, ShapeStyle, SystemPreferences, ThemeTokens, UiTree, box_item,
+    reset_layout_runtime, use_theme_tokens,
 };
+
+fn dark(dark: bool) -> SystemPreferences {
+    SystemPreferences {
+        color_scheme: Some(if dark {
+            ColorScheme::Dark
+        } else {
+            ColorScheme::Light
+        }),
+        ..SystemPreferences::default()
+    }
+}
+
+fn set_system_dark(is_dark: bool) {
+    telar::set_system_preferences(dark(is_dark));
+}
 
 struct Root(Box<dyn LayoutItem>);
 impl Component for Root {
@@ -136,15 +151,15 @@ fn a_tree_mounted_before_the_flush_still_takes_the_theme_the_flush_installs() {
     );
 }
 
-/// And whether the *application* is told, which a host that draws other applications' trees is the whole reason for: it has one theme runtime per loaded dylib, and `set_system_dark` reaches only its own. `Event::SystemPreferencesChanged` is consumed by the runner and never reaches the tree, so this hook is the only place such a host can hear the change and carry it across the boundary.
+/// And whether the *application* is told, which a host that draws other applications' trees is the whole reason for: it has one runtime per loaded dylib, and the store it writes reaches only its own. `Event::SystemPreferencesChanged` is consumed by the runner and never reaches the tree, so this hook is the only place such a host can hear the change and carry it across the boundary.
 #[test]
-fn an_application_hosting_other_trees_is_told_the_scheme_changed() {
+fn an_application_hosting_other_trees_is_told_the_preferences_changed() {
     use std::cell::Cell;
     use std::rc::Rc;
 
     use telar::{App, AppRuntime, LocalApp};
 
-    struct Host(Rc<Cell<Option<bool>>>);
+    struct Host(Rc<Cell<Option<ColorScheme>>>);
     impl App for Host {
         fn root(&self) -> Box<dyn Component> {
             Box::new(Root(box_item(
@@ -154,8 +169,8 @@ fn an_application_hosting_other_trees_is_told_the_scheme_changed() {
                 .unwrap(),
             )))
         }
-        fn on_color_scheme(&self, dark: bool) {
-            self.0.set(Some(dark));
+        fn on_system_preferences(&self, preferences: &SystemPreferences) {
+            self.0.set(preferences.color_scheme);
         }
     }
 
@@ -165,13 +180,13 @@ fn an_application_hosting_other_trees_is_told_the_scheme_changed() {
 
     let told = Rc::new(Cell::new(None));
     let app = LocalApp(Host(Rc::clone(&told)));
-    app.set_system_dark(true);
+    app.set_system_preferences(&dark(true));
 
     let repainted = drawn_fill(&a_themed_box());
     set_system_dark(false);
     assert_eq!(
         told.get(),
-        Some(true),
+        Some(ColorScheme::Dark),
         "the application was never told, so a host could not fan the change out to its plugins"
     );
     assert_eq!(

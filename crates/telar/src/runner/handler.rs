@@ -1,6 +1,6 @@
 //! The frame loop: one surface's [`EventHandler`](platform_core::EventHandler), from resume to teardown.
 
-use platform_core::{ColorScheme, Event, EventHandler, SystemPreferences, Window, WindowCommand};
+use platform_core::{Event, EventHandler, SystemPreferences, Window, WindowCommand};
 use reactive_core::{FlushNotifyHandle, begin_batch, end_batch, set_flush_notify};
 use renderer_core::RenderBackend;
 use services_core::AppPathsProvider;
@@ -209,18 +209,10 @@ where
         applied
     }
 
-    /// Writes a snapshot into the app's runtime, batched so the effects it drives re-render once across the hot-reload boundary. The theme's `follow_system` hears only a changed scheme, and only once there has been one to hear: an unknown scheme that stays unknown is not a vote for light.
+    /// Writes a snapshot into the app's runtime, batched so the effects it drives — the theme's `follow_system` among them — re-render once across the hot-reload boundary.
     fn apply_system_preferences(&mut self, preferences: SystemPreferences) {
-        let scheme_changed = match &self.system_preferences {
-            Some(last) => last.color_scheme != preferences.color_scheme,
-            None => preferences.color_scheme.is_some(),
-        };
         self.app.begin_event_batch();
         self.app.set_system_preferences(&preferences);
-        if scheme_changed {
-            self.app
-                .set_system_dark(preferences.color_scheme == Some(ColorScheme::Dark));
-        }
         self.app.end_event_batch();
         self.system_preferences = Some(preferences);
     }
@@ -304,14 +296,16 @@ where
             }
             crate::hot::HotEvent::Reload(new_path) => match crate::hot::load_hot_app(&new_path) {
                 Ok(new_app) => {
-                    // Carried into the incoming dylib while the old tree and its signals are still alive.
-                    if let Some(blob) = self.app.hot_snapshot() {
-                        new_app.hot_restore(&blob);
-                    }
+                    // Taken while the old tree and its signals are still alive.
+                    let snapshot = self.app.hot_snapshot();
                     // Dropped first, so effect closures holding old-dylib code are destroyed while that lib is still mapped; only then does replacing `self.app` dlclose it.
                     self.tree = None;
                     self.app = Box::new(new_app);
+                    // Preferences before the snapshot: the incoming `follow_system` re-drives the mode as its scheme goes from unknown to known, and a mode the user picked by hand must land after that to survive the reload.
                     self.replay_system_preferences();
+                    if let Some(blob) = snapshot {
+                        self.app.hot_restore(&blob);
+                    }
                     self.mount_tree(window);
                     self.dev.set_build_error(None);
                     tracing::info!("hot reloaded: {}", new_path.display());

@@ -51,6 +51,30 @@ let tl = motion::Timeline::builder(0.0f32)
 tl.sample(0.5); // the value halfway through the sequence, no clock involved
 ```
 
+### D5. One time scale, and reduced motion zeroes it
+
+`motion::set_scale` is the global time scale every registered animation advances by: `1.0` is normal, values in
+between are slow motion, and `0.0` makes every animation jump straight to its end. A looping `Keyframes` jumps to
+the end of the step in flight instead of freezing.
+
+When the user asks their system for less motion (`use_reduced_motion() == Some(true)`, see
+[system-preferences.md](system-preferences.md)), the ticker hands every animation a scale of `0.0` without
+touching the one the application set, so turning the preference off restores it. It is read on every tick, so
+the change applies from the next frame on every target that reports the preference. Where the preference is
+unknown (a terminal, a headless run that did not declare it) nothing changes.
+
+Two things are exempt:
+
+- **Momentum.** A scroll that carries on after the finger lifts is the content following the hand, and every
+  platform keeps it when motion is reduced. It answers `false` to `Tickable::reducible`. A wheel notch's easing
+  is an animation and does jump.
+- **An application that opts out.** `motion::follow_reduced_motion(false)` stops the ticker applying the
+  preference. Use it only when the application tones its motion down itself, by reading `use_reduced_motion()`
+  and choosing gentler animations; an application that simply prefers its animations is overriding the user.
+
+The switch belongs to each runtime: a hot-reloaded library or a plugin reads its own copy of the preferences and
+keeps its own switch.
+
 ## The `.rsx` transition syntax
 
 ```
@@ -126,7 +150,5 @@ Two consequences worth knowing:
 
 - **Declarative keyframes.** Today a multi-stage animation is the Rust API; there is no `.rsx` spelling, and how
   it would compose with the existing single-property `transition(…)` is unresolved.
-- **Reduced motion.** `motion::set_scale` exists as the lever; nothing reads an OS accessibility preference to
-  pull it. Ties into AccessKit.
 - **A changed `PushLayer` forces a full software repaint**, so an animated layer costs more on the CPU backend
   than the same animation without one.

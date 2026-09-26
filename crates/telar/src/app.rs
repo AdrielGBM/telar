@@ -24,12 +24,9 @@ pub trait App: 'static {
     /// Called once per frame before rendering. Use `ctx` to request a redraw, or to take a [`RedrawWaker`](crate::RedrawWaker) for a background thread.
     fn on_frame(&mut self, _ctx: &mut AppCtx) {}
 
-    /// The OS light/dark preference changed. The theme runtime `follow_system` reads is already updated when this runs; override it to carry the change somewhere that runtime does not reach.
+    /// The user's system preferences changed; [`use_system_preferences`](crate::use_system_preferences) already answers the new ones when this runs, and this runtime's theme and motion already follow them. Override it to carry the snapshot somewhere this runtime does not reach.
     ///
-    /// Which in practice means across a process or an FFI boundary: a host that draws other applications' trees out of dylibs has one theme runtime per loaded library, and only the host's own is updated for it. `Event::SystemPreferencesChanged` is consumed by the runner and never reaches the tree, so this is the only place an application hears about it.
-    fn on_color_scheme(&self, _dark: bool) {}
-
-    /// The user's system preferences changed; [`use_system_preferences`](crate::use_system_preferences) already answers the new ones when this runs. The counterpart of [`on_color_scheme`](Self::on_color_scheme) for everything else, for the same kind of host.
+    /// Which in practice means across a process or an FFI boundary: a host that draws other applications' trees out of dylibs has one runtime per loaded library, and only the host's own is updated for it — a `telar-plugin` host hands each plugin the snapshot with `LoadedPlugin::set_system_preferences`. `Event::SystemPreferencesChanged` is consumed by the runner and never reaches the tree, so this is the only place an application hears about it.
     fn on_system_preferences(&self, _preferences: &SystemPreferences) {}
 }
 
@@ -46,9 +43,6 @@ impl<A: App + ?Sized> App for Box<A> {
     }
     fn on_frame(&mut self, ctx: &mut AppCtx) {
         (**self).on_frame(ctx)
-    }
-    fn on_color_scheme(&self, dark: bool) {
-        (**self).on_color_scheme(dark)
     }
     fn on_system_preferences(&self, preferences: &SystemPreferences) {
         (**self).on_system_preferences(preferences)

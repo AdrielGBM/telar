@@ -324,12 +324,14 @@ android-bare = ["runtime", "dep:platform-android"]
 geometry-core = { workspace = true, optional = true }
 i18n-core = { workspace = true }
 layout-core = { workspace = true, optional = true }
-# Always-on (D2): the motion engine is small and dependency-free, and the facade must expose `motion::*` for transpiler codegen whatever else is off.
+# Always-on (D2): the motion engine is small, and the facade must expose `motion::*` for transpiler codegen whatever else is off.
 motion-core = { workspace = true }
 navigate-core = { workspace = true, optional = true }
 platform-core = { workspace = true, optional = true }
 platform-headless = { workspace = true, optional = true }
 platform-tui = { workspace = true, optional = true }
+# Always on: `motion-core` reads it on every frame whatever else is off, so gating it would gate nothing.
+preferences-core = { workspace = true }
 reactive-core = { workspace = true, optional = true }
 renderer-assets = { workspace = true, optional = true }
 renderer-core = { workspace = true, optional = true }

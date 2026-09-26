@@ -2,11 +2,12 @@
 //!
 //! An app registers each variant once (`register_mode`) and switches by id (`set_mode`) instead of scattering `set_theme(...)` calls across the setup closure and every switch button. The active id lives in a reactive signal, so a label like `"Active · {mode}"` re-renders on switch without a hand-written memo, and the id is what the rsx crate bridges through hot-reload snapshot/restore so the selected variant survives a dylib swap.
 
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
 use std::collections::HashMap;
 use std::mem::ManuallyDrop;
 use std::rc::Rc;
 
+use preferences_core::ColorScheme;
 use reactive_core::{RwSignal, detached, signal};
 
 // Installs a concrete theme (typically via `set_theme`). Type-erased so variants of any concrete theme type register under one string-keyed table.
@@ -66,32 +67,31 @@ pub(crate) fn is_dark() -> bool {
 }
 
 thread_local! {
-    // OS light/dark preference, fed by set_system_dark from the platform layer and read reactively by the follow_system effect.
-    static SYSTEM_DARK: RwSignal<bool> = detached(|| signal(false));
-    // Keeps the follow_system effect alive for the app's lifetime; replaced (old dropped) on re-call, since a hot reload re-runs the app's setup.
-    static FOLLOW: ManuallyDrop<RefCell<Option<reactive_core::Effect>>> =
-        const { ManuallyDrop::new(RefCell::new(None)) };
+    // An `Effect` handle is inert, so the effect gets a scope of its own that a re-call disposes; otherwise two followers would race to set the mode.
+    static FOLLOW: Cell<Option<reactive_core::OwnerId>> = const { Cell::new(None) };
 }
 
-/// Reports the OS light/dark preference into the reactive graph. Called by the runner at window creation and whenever the OS scheme changes; drives [`follow_system`].
-pub fn set_system_dark(dark: bool) {
-    SYSTEM_DARK.with(|s| s.set(dark));
-}
-
-/// Drives the active mode from the OS light/dark preference — light → `light`, dark → `dark` — updating live as the OS scheme changes. Installs a reactive effect (kept alive internally) and designates the pair so `is_dark` stays consistent. Re-calling replaces the effect (hot reload re-runs setup). A manual [`set_mode`] still wins until the next OS change re-drives it.
+/// Drives the active mode from the user's colour scheme ([`preferences_core::use_color_scheme`]) — light → `light`, dark → `dark` — updating live as it changes. Also designates the pair so `is_dark` stays consistent. Re-calling replaces the previous follower.
+///
+/// An unknown scheme is not a vote for light: it leaves an active mode alone, and selects `light` only when no mode is active yet. A manual [`set_mode`] still wins until the next change of scheme re-drives it.
 pub fn follow_system(light: impl Into<String>, dark: impl Into<String>) {
     let light = light.into();
     let dark = dark.into();
     set_light_dark(light.clone(), dark.clone());
-    let eff = reactive_core::effect(move || {
-        let want = if SYSTEM_DARK.with(|s| s.get()) {
-            &dark
-        } else {
-            &light
+    if let Some(previous) = FOLLOW.take() {
+        reactive_core::dispose_owner(previous);
+    }
+    let scope = detached(reactive_core::owner_scope);
+    reactive_core::effect(move || {
+        let want = match preferences_core::use_color_scheme() {
+            Some(ColorScheme::Dark) => &dark,
+            Some(ColorScheme::Light) => &light,
+            None if active_mode().is_some() => return,
+            None => &light,
         };
         set_mode(want.clone());
     });
-    FOLLOW.with(|f| *f.borrow_mut() = Some(eff));
+    FOLLOW.set(Some(scope.id()));
 }
 
 #[cfg(test)]

@@ -14,6 +14,10 @@ pub trait Tickable {
     fn tick(&self, now: Instant, scale: f32);
     /// Whether there is nothing left to advance, at which point the registry lets go of it.
     fn is_settled(&self) -> bool;
+    /// Whether the user's reduced-motion preference may cut this short. Momentum a gesture set going answers `false`: it is the content following the hand, and every platform keeps it when motion is reduced.
+    fn reducible(&self) -> bool {
+        true
+    }
 }
 
 struct Registry {
@@ -22,6 +26,7 @@ struct Registry {
     next_id: u64,
     // Global time scale (D5): 1.0 normal, 0.0 = jump instantly to targets, in-between = slow motion.
     scale: f32,
+    follow_reduced_motion: bool,
     // Here rather than in their own registry: the runner asks the same question of both, and this one already crosses the hot-reload FFI boundary a second registry would have to duplicate.
     continuous: u32,
 }
@@ -32,6 +37,7 @@ impl Registry {
             entries: HashMap::new(),
             next_id: 0,
             scale: 1.0,
+            follow_reduced_motion: true,
             continuous: 0,
         }
     }
@@ -69,12 +75,18 @@ fn is_live(weak: &Weak<dyn Tickable>) -> bool {
 /// Integrate every active animation to `now`, publishing changed values and deregistering settled ones.
 pub fn tick(now: Instant) {
     // Snapshot live handles under a short borrow, then integrate without holding the registry borrow: each `.set()` may flush effects that re-enter the registry (register new animations).
-    let (scale, live): (f32, Vec<std::rc::Rc<dyn Tickable>>) = REGISTRY.with(|r| {
+    let (scale, follow, live): (f32, bool, Vec<std::rc::Rc<dyn Tickable>>) = REGISTRY.with(|r| {
         let reg = r.borrow();
         let live = reg.entries.values().filter_map(Weak::upgrade).collect();
-        (reg.scale, live)
+        (reg.scale, reg.follow_reduced_motion, live)
     });
+    let reduce = follow && preferences_core::reduced_motion() == Some(true);
     for anim in &live {
+        let scale = if reduce && anim.reducible() {
+            0.0
+        } else {
+            scale
+        };
         anim.tick(now, scale);
     }
     // Prune dead (dropped) and settled animations so has_active() returns false at rest.
@@ -137,8 +149,21 @@ pub fn set_scale(scale: f32) {
     REGISTRY.with(|r| r.borrow_mut().scale = scale.max(0.0));
 }
 
+/// The time scale [`set_scale`] last set. Reduced motion does not change it: it zeroes the scale [`tick`] hands each animation instead, so an application's own scale is still there when the user turns the preference off.
 pub fn scale() -> f32 {
     REGISTRY.with(|r| r.borrow().scale)
+}
+
+/// Whether the user's reduced-motion preference zeroes the time scale, which it does unless an application says otherwise.
+///
+/// With it on and the preference set, every animation jumps to its end as a zero [`set_scale`] would, while momentum a gesture set going (see [`Tickable::reducible`]) keeps moving. Turn it off only for an application that tones its motion down itself, by reading `use_reduced_motion` and choosing gentler animations: an application that simply prefers its animations is overriding the user.
+pub fn follow_reduced_motion(follow: bool) {
+    REGISTRY.with(|r| r.borrow_mut().follow_reduced_motion = follow);
+}
+
+/// Whether [`follow_reduced_motion`] is on.
+pub fn follows_reduced_motion() -> bool {
+    REGISTRY.with(|r| r.borrow().follow_reduced_motion)
 }
 
 #[cfg(test)]

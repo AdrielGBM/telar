@@ -16,7 +16,7 @@ use telar::{
 
 struct Recorder {
     fill: FillApp,
-    schemes: Rc<RefCell<Vec<bool>>>,
+    mode_in_frame: Rc<RefCell<Option<String>>>,
     snapshots: Rc<RefCell<Vec<SystemPreferences>>>,
     seen_at_build: Rc<RefCell<Option<SystemPreferences>>>,
 }
@@ -27,8 +27,8 @@ impl App for Recorder {
         self.fill.root()
     }
 
-    fn on_color_scheme(&self, dark: bool) {
-        self.schemes.borrow_mut().push(dark);
+    fn on_frame(&mut self, _ctx: &mut telar::AppCtx) {
+        *self.mode_in_frame.borrow_mut() = telar::active_mode();
     }
 
     fn on_system_preferences(&self, preferences: &SystemPreferences) {
@@ -41,7 +41,7 @@ fn run(preferences: SystemPreferences) -> Recorder {
         fill: FillApp {
             color: Color::from_rgb_u8(1, 2, 3),
         },
-        schemes: Rc::default(),
+        mode_in_frame: Rc::default(),
         snapshots: Rc::default(),
         seen_at_build: Rc::default(),
     };
@@ -49,10 +49,13 @@ fn run(preferences: SystemPreferences) -> Recorder {
         fill: FillApp {
             color: Color::from_rgb_u8(1, 2, 3),
         },
-        schemes: recorder.schemes.clone(),
+        mode_in_frame: recorder.mode_in_frame.clone(),
         snapshots: recorder.snapshots.clone(),
         seen_at_build: recorder.seen_at_build.clone(),
     };
+    telar::register_mode("day", || {});
+    telar::register_mode("night", || {});
+    telar::follow_system("day", "night");
     run_with_platform::<_, _, ()>(
         HeadlessPlatform::new(8, 8).with_system_preferences(preferences),
         AppConfig::default(),
@@ -75,15 +78,19 @@ fn the_tree_is_built_already_knowing_the_preferences() {
     let observed = run(declared.clone());
     assert_eq!(observed.seen_at_build.borrow().as_ref(), Some(&declared));
     assert_eq!(*observed.snapshots.borrow(), [declared]);
-    assert_eq!(*observed.schemes.borrow(), [true]);
+    assert_eq!(
+        observed.mode_in_frame.borrow().as_deref(),
+        Some("night"),
+        "the theme followed the scheme by the first frame"
+    );
 }
 
 #[test]
-fn an_unknown_scheme_is_not_reported_as_light() {
+fn an_unknown_scheme_leaves_the_theme_on_its_default() {
     let observed = run(SystemPreferences {
         locales: vec!["fr".into()],
         ..SystemPreferences::default()
     });
-    assert!(observed.schemes.borrow().is_empty());
+    assert_eq!(observed.mode_in_frame.borrow().as_deref(), Some("day"));
     assert_eq!(observed.snapshots.borrow().len(), 1);
 }
