@@ -257,8 +257,34 @@ pub(crate) struct ScrollCore {
     ///
     /// There the offset travels the other way almost always: the compositor scrolls, and `BoxScrolled` tells this widget where the content ended up. Moving the signal alone would be overruled by the very next offset the surface reports — which is why the bar could not be dragged there at all. So it is published instead, on the element, and the backend puts the box where this says it should be.
     ///
-    /// A `Cell`, because `view` is where it is handed over and `view` takes `&self`.
-    commanded: std::cell::Cell<Option<(f32, f32)>>,
+    /// Shared with every [`ScrollViewport`] handed out for this area, so a reveal asked for from the content reaches the surface the same way a dragged bar does.
+    commanded: Commanded,
+    /// Whether this is the surface's primary scroll. See [`LayoutScrollArea::into_primary`].
+    primary: bool,
+}
+
+/// The offset a scroll area is asking a surface that holds its content for. See [`ScrollCore::commanded`].
+type Commanded = Rc<std::cell::Cell<Option<(f32, f32)>>>;
+
+/// Puts an offset where a scroll area wants it, wherever the content actually is.
+///
+/// The signals are the whole of it on a target that draws the content at the offset. Where the surface holds the content instead, the signals only *record* where the surface put it, so the surface has to be asked as well.
+fn command_offset(
+    scroll_x: RwSignal<f32>,
+    scroll_y: RwSignal<f32>,
+    commanded: &Commanded,
+    x: f32,
+    y: f32,
+) {
+    if scroll_x.peek() != x {
+        scroll_x.set(x);
+    }
+    if scroll_y.peek() != y {
+        scroll_y.set(y);
+    }
+    if ui_tree::element_capture() {
+        commanded.set(Some((x, y)));
+    }
 }
 
 /// Accumulated finger travel (logical px) within a gesture past which the scroll area treats it as a scroll and cancels any pending tap on its content.
@@ -271,6 +297,7 @@ impl ScrollCore {
         content: Box<dyn LayoutItem>,
         scroll_x: RwSignal<f32>,
         scroll_y: RwSignal<f32>,
+        commanded: Commanded,
     ) -> Self {
         let content = Rc::new(RefCell::new(content));
         let content_segment = mount_item_segment(Rc::clone(&content));
@@ -287,23 +314,18 @@ impl ScrollCore {
             fling: None,
             motion: Motion::default(),
             bar_drag: None,
-            commanded: std::cell::Cell::new(None),
+            commanded,
+            primary: false,
         }
     }
 
-    /// Puts an offset where this widget wants it, wherever the content actually is.
-    ///
-    /// The signal is the whole of it on a target that draws the content at the offset. Where the surface holds the content instead, the signal only *records* where the surface put it, so the surface has to be asked as well — see [`ScrollCore::commanded`].
     fn command(&self, x: f32, y: f32) {
-        if self.scroll_x.peek() != x {
-            self.scroll_x.set(x);
-        }
-        if self.scroll_y.peek() != y {
-            self.scroll_y.set(y);
-        }
-        if ui_tree::element_capture() {
-            self.commanded.set(Some((x, y)));
-        }
+        command_offset(self.scroll_x, self.scroll_y, &self.commanded, x, y);
+    }
+
+    /// Where the surface shows its own bar for this scroll, and Telar's would be a second one: the primary scroll on a surface that holds the content is the page's own scroll.
+    fn draws_bars(&self) -> bool {
+        !(self.primary && ui_tree::element_capture())
     }
 
     /// The offset this widget is asking the surface for, taken by the frame that carries it.
@@ -357,7 +379,7 @@ impl ScrollCore {
 
     /// Takes hold of a bar under `(x, y)`, or pages towards a press on its track. `false` when the press landed somewhere else and belongs to the content.
     fn grab_bar(&mut self, viewport: Rect, x: f32, y: f32) -> bool {
-        if !viewport.contains(x, y) {
+        if !self.draws_bars() || !viewport.contains(x, y) {
             return false;
         }
         let content = self.content_rect_signal.get();
@@ -470,6 +492,9 @@ impl ScrollCore {
                 [self.content_segment.boundary()],
             )],
         );
+        if !self.draws_bars() {
+            return scrollable;
+        }
         // Telar's bar on every target: a native one takes width out of the box and layout never reserved it. Where the surface scrolls, the content moves under a bar that must not, so it is drawn at the content's offset and comes out standing still.
         let bar_viewport = if owns_scroll {
             Rect::new(scroll_x, scroll_y, viewport.width, viewport.height)
@@ -557,7 +582,13 @@ impl ScrollArea {
             track_layout(content.layout_node()).expect("content node not registered in ctx");
         Self {
             viewport: Box::new(viewport),
-            core: ScrollCore::with_offsets(content_rect_signal, content, signal(0.0), signal(0.0)),
+            core: ScrollCore::with_offsets(
+                content_rect_signal,
+                content,
+                signal(0.0),
+                signal(0.0),
+                Rc::default(),
+            ),
         }
     }
 }
@@ -579,9 +610,9 @@ pub struct ScrollViewport {
     offset_x: ReadSignal<f32>,
     offset_y: ReadSignal<f32>,
     rect: ReadSignal<Rect>,
-    // The writable side of the same offsets, so `reveal` can move the view. Private: callers should say what they want visible, not compute a scroll position.
     set_x: RwSignal<f32>,
     set_y: RwSignal<f32>,
+    commanded: Commanded,
 }
 
 impl ScrollViewport {
@@ -611,13 +642,11 @@ impl ScrollViewport {
         };
 
         // `peek` is load-bearing here: the natural caller is an effect ("keep the selected row in view"), and a reactive read of the offset would subscribe it to the signal it writes, dragging the view back on every manual scroll. The item and viewport rects are inputs, so re-running when those move is correct.
-        let y = reveal_axis(self.set_y.peek(), viewport.height, item.y, item.height);
-        if y != self.set_y.peek() {
-            self.set_y.set(y);
-        }
-        let x = reveal_axis(self.set_x.peek(), viewport.width, item.x, item.width);
-        if x != self.set_x.peek() {
-            self.set_x.set(x);
+        let (at_x, at_y) = (self.set_x.peek(), self.set_y.peek());
+        let x = reveal_axis(at_x, viewport.width, item.x, item.width);
+        let y = reveal_axis(at_y, viewport.height, item.y, item.height);
+        if (x, y) != (at_x, at_y) {
+            self.scroll_to(x, y);
         }
     }
 
@@ -632,11 +661,34 @@ impl ScrollViewport {
     ///
     /// `peek` for the same reason as [`reveal`](Self::reveal), and this is where it bites hardest: "the page changed" is noticed by an effect, so a reactive read of the offset would make every wheel tick re-run the effect that puts the offset back — the viewport pinned to the top for good.
     pub fn scroll_to_top(&self) {
-        if self.set_x.peek() != 0.0 {
-            self.set_x.set(0.0);
-        }
-        if self.set_y.peek() != 0.0 {
-            self.set_y.set(0.0);
+        self.scroll_to(0.0, 0.0);
+    }
+
+    /// Scrolls to `(x, y)` in content-local px, clamped to the content like any other scroll.
+    ///
+    /// Prefer [`reveal`](Self::reveal) when what matters is that something is on screen; this is for a position that was saved and is being given back, such as the page offset a history entry kept. It `peek`s for the same reason `reveal` does.
+    pub fn scroll_to(&self, x: f32, y: f32) {
+        command_offset(
+            self.set_x,
+            self.set_y,
+            &self.commanded,
+            x.max(0.0),
+            y.max(0.0),
+        );
+    }
+}
+
+/// The page as a platform sees it: what a location adapter reads and moves when it keeps a scroll position per history entry.
+impl platform_core::PrimaryScroll for ScrollViewport {
+    fn offset(&self) -> (f32, f32) {
+        (self.set_x.peek(), self.set_y.peek())
+    }
+
+    // Asked from outside any dispatch (a history traversal, a restored entry), so no event is on its way to draw the frame that carries it.
+    fn scroll_to(&self, x: f32, y: f32) {
+        ScrollViewport::scroll_to(self, x, y);
+        if let Some(wake) = platform_core::loop_waker() {
+            wake();
         }
     }
 }
@@ -699,12 +751,14 @@ impl LayoutScrollArea {
     {
         let leaf = LayoutLeaf::register(layout_style)?;
         let (scroll_x, scroll_y) = offset;
+        let commanded = Commanded::default();
         let content = build(ScrollViewport {
             offset_x: scroll_x.read_only(),
             offset_y: scroll_y.read_only(),
             rect: leaf.rect.read_only(),
             set_x: scroll_x,
             set_y: scroll_y,
+            commanded: commanded.clone(),
         })?;
         let content_node = content.layout_node();
         let content_rect_signal =
@@ -773,7 +827,13 @@ impl LayoutScrollArea {
 
         Ok(Self {
             leaf,
-            core: ScrollCore::with_offsets(content_rect_signal, content, scroll_x, scroll_y),
+            core: ScrollCore::with_offsets(
+                content_rect_signal,
+                content,
+                scroll_x,
+                scroll_y,
+                commanded,
+            ),
             _input: input,
             _layout_effect: layout_effect,
             _clamp_effect: clamp_effect,
@@ -793,6 +853,16 @@ impl LayoutScrollArea {
     pub fn viewport_rect(&self) -> Rect {
         self.leaf.rect.get()
     }
+
+    /// Makes this the surface's primary scroll: the one that stands for the whole page. [`ScrollPage`](crate::ScrollPage) is the way in; a document maps this scroll onto its own and shows its own bar for it, and every other target is unchanged.
+    pub(crate) fn into_primary(mut self) -> Self {
+        self.core.primary = true;
+        self
+    }
+
+    pub(crate) fn content_node(&self) -> NodeId {
+        self.core.content.borrow().layout_node()
+    }
 }
 
 impl_leaf_widget!(LayoutScrollArea);
@@ -806,6 +876,7 @@ impl Component for LayoutScrollArea {
                 self.leaf.node,
                 renderer_core::Semantics::of(renderer_core::Role::ScrollArea),
                 self.core.take_command(),
+                self.core.primary,
             )
         });
         RenderNode::element(element, [content])

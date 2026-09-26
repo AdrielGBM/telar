@@ -16,7 +16,7 @@ const STATE_KEY: &str = "telar";
 
 /// The browser's session history, as the app's address.
 ///
-/// Every entry carries the app's whole history in its `history.state`, so a reload or a traversal restores the stack the entry was made from rather than a single page, and the document's scroll position, so back and forward return to where the reader was. The browser's own scroll restoration is turned off, since it would restore before the app has drawn the page it belongs to.
+/// Every entry carries the app's whole history in its `history.state`, so a reload or a traversal restores the stack the entry was made from rather than a single page, and the page's scroll position (the surface's primary scroll), so back and forward return to where the reader was. The browser's own scroll restoration is turned off, since it would restore before the app has drawn the page it belongs to.
 ///
 /// `?telar-*` page settings are kept out of the locations the app sees and written back onto every address it pushes, so a setting made by a link survives navigating.
 pub struct WebLocation {
@@ -105,7 +105,7 @@ impl LocationSource for WebLocation {
         let _ = browser_history().push_state_with_url(&state, "", Some(&shared.href(top)));
         *shared.history.borrow_mut() = history.to_vec();
         if top.fragment().is_none() {
-            dom::window().scroll_to_with_x_and_y(0.0, 0.0);
+            scroll_page_to(0.0, 0.0);
         }
     }
 
@@ -190,25 +190,49 @@ fn browser_history() -> web_sys::History {
         .expect("a browser window has a history")
 }
 
+/// Where the page is scrolled to: the surface's primary scroll, read where it lives. The document's own scroll holds it on a document backend, and is read directly there because the app hears of a scroll a frame late; a canvas draws it, so only the app knows it.
 fn scroll_position() -> (f64, f64) {
     let window = dom::window();
-    (
+    let document = (
         window.scroll_x().unwrap_or_default(),
         window.scroll_y().unwrap_or_default(),
-    )
+    );
+    if document_scrolls_the_page() {
+        return document;
+    }
+    platform_core::primary_scroll_offset()
+        .map(|(x, y)| (x as f64, y as f64))
+        .unwrap_or(document)
+}
+
+fn scroll_page_to(x: f64, y: f64) {
+    if document_scrolls_the_page() || !platform_core::scroll_primary_to(x as f32, y as f32) {
+        dom::window().scroll_to_with_x_and_y(x, y);
+    }
+}
+
+fn document_scrolls_the_page() -> bool {
+    let selector = format!(
+        "[{}]",
+        platform_core::primary_scroll::DOCUMENT_SCROLL_ATTRIBUTE
+    );
+    dom::document()
+        .query_selector(&selector)
+        .ok()
+        .flatten()
+        .is_some()
 }
 
 type FrameLoop = Rc<RefCell<Option<Closure<dyn FnMut()>>>>;
 
-/// Scrolls the document back to where an entry was left, once the app has drawn enough of the page to reach it: a page adopted from history is laid out over the next frames, and a position past its current end would be clamped short.
+/// Scrolls the page back to where an entry was left, once the app has drawn enough of the page to reach it: a page adopted from history is laid out over the next frames, and a position past its current end would be clamped short.
 fn restore_scroll((x, y): (f64, f64)) {
     const FRAMES: u32 = 30;
     let attempt: FrameLoop = Rc::new(RefCell::new(None));
     let again = attempt.clone();
     let mut left = FRAMES;
     *attempt.borrow_mut() = Some(Closure::new(move || {
-        let window = dom::window();
-        window.scroll_to_with_x_and_y(x, y);
+        scroll_page_to(x, y);
         let (at_x, at_y) = scroll_position();
         left -= 1;
         if ((at_x - x).abs() < 1.0 && (at_y - y).abs() < 1.0) || left == 0 {
@@ -216,7 +240,7 @@ fn restore_scroll((x, y): (f64, f64)) {
             return;
         }
         if let Some(callback) = again.borrow().as_ref() {
-            let _ = window.request_animation_frame(callback.as_ref().unchecked_ref());
+            let _ = dom::window().request_animation_frame(callback.as_ref().unchecked_ref());
         }
     }));
     if let Some(callback) = attempt.borrow().as_ref() {

@@ -50,7 +50,13 @@ impl WebWindow {
         // A host with no height of its own — a bare `<body>` — would lay out to nothing, so it takes the viewport instead. Width is safe to read as-is: a block element always has one.
         let viewport = dom::window();
         let width = rect.width().max(1.0).round() as u32;
-        let height = if rect.height() >= 1.0 {
+        // While the document scrolls the page the host is as tall as the content, and the surface is the part of it the viewport shows: its layout viewport, which unlike `innerHeight` holds still while a mobile address bar slides away, so scrolling never relays the page out.
+        let height = if self.scrolls_the_document() {
+            dom::document()
+                .document_element()
+                .map_or(0, |root| root.client_height())
+                .max(1) as u32
+        } else if rect.height() >= 1.0 {
             rect.height().round() as u32
         } else {
             viewport
@@ -72,10 +78,31 @@ impl WebWindow {
         measured
     }
 
-    /// Where a client-space point sits inside the host, in the logical pixels layout uses.
+    /// Where a client-space point sits on the surface, in the logical pixels layout uses.
+    ///
+    /// While the document scrolls the page, the app already adds the page's offset to find the content under a point, so the document's own scroll is taken back out here.
     pub fn to_local(&self, client_x: f64, client_y: f64) -> (f64, f64) {
         let rect = self.inner.host.get_bounding_client_rect();
-        (client_x - rect.left(), client_y - rect.top())
+        let (scroll_x, scroll_y) = if self.scrolls_the_document() {
+            let window = dom::window();
+            (
+                window.scroll_x().unwrap_or_default(),
+                window.scroll_y().unwrap_or_default(),
+            )
+        } else {
+            (0.0, 0.0)
+        };
+        (
+            client_x - rect.left() - scroll_x,
+            client_y - rect.top() - scroll_y,
+        )
+    }
+
+    /// Whether the surface's primary scroll is the document's own scroll, which the document backend says on the host.
+    fn scrolls_the_document(&self) -> bool {
+        self.inner
+            .host
+            .has_attribute(platform_core::primary_scroll::DOCUMENT_SCROLL_ATTRIBUTE)
     }
 
     /// The host's size in CSS pixels — what lays out.

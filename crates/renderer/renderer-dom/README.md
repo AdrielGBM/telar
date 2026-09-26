@@ -33,6 +33,12 @@ and that a focus move the browser made is reported as `Event::BoxFocused`. Each 
 `data-telar-keys` (the keys it keeps), `data-telar-focus` (its identity) and a `tabindex`. See
 [docs/keyboard.md](https://github.com/AdrielGBM/telar/blob/main/docs/keyboard.md).
 
+`src/document_scroll_test.rs` checks the surface's primary scroll as the document's own scroll: the host
+grows with the content, a `window` scroll is reported as the page's `Event::BoxScrolled`, a request to move
+the page scrolls the document, a scroll made before the app loaded is kept, and the surface is still measured
+against the viewport. See
+[docs/primary-scroll.md](https://github.com/AdrielGBM/telar/blob/main/docs/primary-scroll.md).
+
 The dev shell's chromedriver may not match its Chromium. In that case run the tests in Firefox:
 
 ```sh

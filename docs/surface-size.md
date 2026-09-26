@@ -21,7 +21,9 @@ col pad:$gutter
 
 The size is in the logical units the app's layout is written in, the same units as `width:120`. Each side is
 its own signal, so code that reads only the width does not re-run when only the height changes. On a phone
-the browser toolbar changes the height while you scroll, and the width stays the same.
+the browser toolbar can change the height while you scroll, and the width stays the same. A page whose
+document scrolls (see [docs/primary-scroll.md](primary-scroll.md)) keeps its height while the toolbar
+moves.
 
 | Function | Reactive | Returns |
 | --- | --- | --- |
@@ -97,7 +99,7 @@ crossed, and none for each pixel of the resize.
 
 | Target | Source | Units |
 | --- | --- | --- |
-| Web, both renderers | the host element's bounding box, measured on every frame. A window `resize` requests a frame | CSS pixels, rounded |
+| Web, both renderers | the host element's bounding box, measured on every frame. A window `resize` requests a frame. While a root `ScrollPage` is the document's scroll on web-dom, the host is as tall as the content, so the height is the layout viewport's (`documentElement.clientHeight`) instead | CSS pixels, rounded |
 | Desktop | the winit window's `Resized`, divided by its scale factor | logical pixels |
 | Android | the same winit path | logical pixels |
 | Terminal | the terminal's `Resize`, as columns × rows | whole cells × the cell size the layout uses (8 × 16 by default). `width / layout_grid().x` is the column count |

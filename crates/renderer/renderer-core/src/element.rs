@@ -32,6 +32,8 @@ pub struct Element {
     ///
     /// Not part of [`Semantics`], which is what the box *means* and is compared and hashed as such. This is a fact about one frame, like [`rect`](Self::rect) beside it, and it is `None` on almost every one: only the frame in which the widget asks carries it.
     pub scroll_to: Option<(f32, f32)>,
+    /// Whether this box is the surface's primary scroll: the one scroll that stands for the whole page. A backend with a scroll of its own for the page maps this box onto it; every other backend treats it as any other box that scrolls.
+    pub primary_scroll: bool,
 }
 
 impl Element {
@@ -47,12 +49,19 @@ impl Element {
             layout: layout.into(),
             rect,
             scroll_to: None,
+            primary_scroll: false,
         }
     }
 
     /// Asks the backend to put this box's own scroll at `offset`. See [`Element::scroll_to`].
     pub fn asking_to_scroll(mut self, offset: Option<(f32, f32)>) -> Self {
         self.scroll_to = offset;
+        self
+    }
+
+    /// Marks this box as the surface's primary scroll, or not. See [`Element::primary_scroll`].
+    pub fn as_primary_scroll(mut self, primary: bool) -> Self {
+        self.primary_scroll = primary;
         self
     }
 }

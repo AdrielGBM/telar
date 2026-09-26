@@ -17,6 +17,7 @@ pub mod location;
 pub mod location_format;
 pub mod location_source;
 pub mod loop_waker;
+pub mod primary_scroll;
 pub mod system_preferences;
 pub mod window;
 pub mod window_command;
@@ -38,6 +39,10 @@ pub use location_source::{
     ArgumentLocation, FixedLocation, HistorySink, HistoryStep, HistoryUpdate, LocationSource,
 };
 pub use loop_waker::{loop_waker, set_loop_waker};
+pub use primary_scroll::{
+    PrimaryScroll, PrimaryScrollClaim, claim_primary_scroll, primary_scroll_offset,
+    scroll_primary_to,
+};
 pub use system_preferences::{
     ColorScheme, SystemPreferences, locales_from_env, posix_locale_to_bcp47,
     system_locales_from_env,

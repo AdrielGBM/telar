@@ -107,6 +107,10 @@ The two also share the keyboard differently. A document keeps the browser's own 
 scrolling, and prevents only the keys the focused control declares. A canvas keeps Tab, Space, the arrows and
 the paging keys for the app. See [docs/keyboard.md](keyboard.md).
 
+They scroll the page differently too. On `web-dom` a root `ScrollPage` is the document's own scroll: the page
+grows with the content and the browser scrolls it. On `web` the canvas stays the viewport's size and the app
+scrolls by drawing. See [docs/primary-scroll.md](primary-scroll.md).
+
 Both read the OS theme, reduced motion, high contrast and `navigator.languages` through media queries and
 `languagechange` (see [docs/system-preferences.md](system-preferences.md)), and both measure the host
 element's own box for surface size rather than the browser viewport (see

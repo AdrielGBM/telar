@@ -157,6 +157,8 @@ struct Open {
     moved: Option<[f32; 6]>,
     /// Whether this box scrolls its own content, which is what makes its clip an overflow rather than a cut.
     scrolls: bool,
+    /// Whether this box is the surface's primary scroll, which the document scrolls for it: it neither cuts nor scrolls what it holds.
+    primary: bool,
 }
 
 impl Open {
@@ -172,6 +174,7 @@ impl Open {
             pieces: Vec::new(),
             moved: None,
             scrolls: false,
+            primary: false,
         }
     }
 
@@ -205,6 +208,12 @@ pub struct Reconciler {
     /// The box that holds the keyboard this frame, when it is not a field; focused once it is in the document.
     focus_target: Option<web_sys::HtmlElement>,
     _follows_focus: Option<FocusFollower>,
+    /// The document's own scroll, while a box that is the surface's primary scroll holds it.
+    document_scroll: Option<crate::document_scroll::DocumentScroll>,
+    /// The box that took the document scroll this frame; only the first primary scroll at the top level can.
+    primary_this_frame: Option<u64>,
+    /// Where the surface's origin is in the viewport this frame, read once and only when something is placed against it.
+    surface_origin: Option<(f32, f32)>,
 }
 
 impl Reconciler {
@@ -220,6 +229,9 @@ impl Reconciler {
         let follows_focus = follow_focus(&host);
         Ok(Self {
             _follows_focus: follows_focus,
+            document_scroll: None,
+            primary_this_frame: None,
+            surface_origin: None,
             audit: audit_requested(&host),
             background: String::new(),
             root_paint: Vec::new(),
@@ -241,6 +253,8 @@ impl Reconciler {
         self.seen.clear();
         self.open.clear();
         self.root_painted = 0;
+        self.primary_this_frame = None;
+        self.surface_origin = None;
         // The host is the outermost frame, so a top-level element is placed in it by the same code that places every other child.
         self.open.push(Open::root());
 
@@ -266,7 +280,46 @@ impl Reconciler {
             }
         }
         self.retire();
+        if self.primary_this_frame.is_none() {
+            self.document_scroll = None;
+        }
+        if let Some(held) = self.document_scroll.as_ref() {
+            held.keep_arrival();
+        }
         self.keep_the_keyboard();
+    }
+
+    /// Gives the document scroll to box `id`, or moves it there from the box that held it.
+    fn hold_document_scroll(&mut self, id: u64) {
+        self.primary_this_frame = Some(id);
+        match self.document_scroll.as_ref() {
+            Some(held) => held.follow(id),
+            None => {
+                self.document_scroll =
+                    Some(crate::document_scroll::DocumentScroll::hold(&self.host, id));
+            }
+        }
+    }
+
+    /// Where a box placed against the surface goes in the viewport, while the document scrolls the page; `None` while it does not, and such a box is placed inside the host.
+    fn fixed_origin(&mut self) -> Option<(f32, f32)> {
+        let held = self.document_scroll.as_ref()?;
+        Some(
+            *self
+                .surface_origin
+                .get_or_insert_with(|| held.surface_origin()),
+        )
+    }
+
+    /// Places a box against the surface: inside the host, or against the viewport while the document scrolls the page, so what stands over the page stays put as it scrolls.
+    fn place_on_surface(&mut self, style: &mut String, rect: Rect) {
+        let (position, x, y) = match self.fixed_origin() {
+            Some((x, y)) => ("fixed", rect.x + x, rect.y + y),
+            None => ("absolute", rect.x, rect.y),
+        };
+        paint::declare(style, "position", position);
+        paint::declare(style, "left", &paint::px(x));
+        paint::declare(style, "top", &paint::px(y));
     }
 
     /// The surface's own background, as a property of the element the app fills.
@@ -316,9 +369,7 @@ impl Reconciler {
             });
         }
         let mut style = String::new();
-        paint::declare(&mut style, "position", "absolute");
-        paint::declare(&mut style, "left", &paint::px(rect.x));
-        paint::declare(&mut style, "top", &paint::px(rect.y));
+        self.place_on_surface(&mut style, rect);
         paint::declare(&mut style, "width", &paint::px(rect.width.max(0.0)));
         paint::declare(&mut style, "height", &paint::px(rect.height.max(0.0)));
         // This answers no pointer: the boxes do, and a pane of paint across them would swallow every press meant for what is underneath.
@@ -447,6 +498,7 @@ impl Reconciler {
                     self.isolate_parent();
                 }
             }
+            DrawCommand::PushClip { .. } if open.primary => {}
             DrawCommand::PushClip { radius, .. } => {
                 // A scroll area clips the same way, and the difference is the whole point: `hidden` cuts what does not fit, `auto` lets the compositor move it — and with it find-in-page, the keyboard, `scrollIntoView` and every anchor, none of which a transform can give back.
                 // `clip` rather than `hidden` for a cut: `hidden` makes the box a scroll container, and a sticky box inside it would stick to that box, which never scrolls, instead of to the scroll viewport Telar sticks it to.
@@ -478,7 +530,12 @@ impl Reconciler {
 
     fn push(&mut self, element: &Element) {
         let tag = tag_of(&element.semantics.role);
-        let scrolls = element.semantics.role == Role::ScrollArea;
+        let primary =
+            element.primary_scroll && self.open.len() == 1 && self.primary_this_frame.is_none();
+        if primary {
+            self.hold_document_scroll(element.id.0);
+        }
+        let scrolls = element.semantics.role == Role::ScrollArea && !primary;
         let node = self.element_for(element.id.0, tag, scrolls);
         let drawing = matches!(element.semantics.role, Role::Drawing);
         let mut style = String::new();
@@ -491,11 +548,12 @@ impl Reconciler {
         }
         style.push_str(&element.layout);
         // A box whose parent is the host is a layout root: the application computed and placed it itself, so there is no parent expressing where it goes and the declarations alone would stack them. The one place the computed rect is used instead of what the box asked for.
-        if self.open.len() == 1 {
+        // The primary scroll is the exception: it stays in the flow and grows with its content, which is what makes the document tall enough to scroll, and it is at least the surface's height so a short page still fills it.
+        if primary {
+            paint::declare(&mut style, "min-height", &paint::px(element.rect.height));
+        } else if self.open.len() == 1 {
             let rect = element.rect;
-            paint::declare(&mut style, "position", "absolute");
-            paint::declare(&mut style, "left", &paint::px(rect.x));
-            paint::declare(&mut style, "top", &paint::px(rect.y));
+            self.place_on_surface(&mut style, rect);
             paint::declare(&mut style, "width", &paint::px(rect.width));
             paint::declare(&mut style, "height", &paint::px(rect.height));
         }
@@ -515,7 +573,10 @@ impl Reconciler {
             paint::declare(&mut style, "transform", &paint::matrix(matrix, at.x, at.y));
         }
         self.describe(&node, element, tag);
-        settle_scroll(&node, element);
+        match self.document_scroll.as_ref() {
+            Some(held) if primary => held.scroll_as_asked(element.scroll_to),
+            _ => settle_scroll(&node, element),
+        }
         if self.audit {
             let rect = element.rect;
             let _ = node.set_attribute(
@@ -534,6 +595,7 @@ impl Reconciler {
             pieces: Vec::new(),
             moved: None,
             scrolls,
+            primary,
         });
     }
 

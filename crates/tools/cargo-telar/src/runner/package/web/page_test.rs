@@ -32,10 +32,11 @@ fn the_built_in_page_expands_with_nothing_fed_but_the_bootstrap() {
     assert!(!html.contains("telar-state"), "no state, no script");
 }
 
-/// The page keeps the fixed-viewport layout until the document itself becomes the primary scroller.
+/// Under the document renderer the page's primary scroll is the document's own, so the page must leave the document free to scroll, including before the app has loaded.
 #[test]
-fn the_built_in_page_keeps_the_document_from_scrolling() {
-    assert!(DEFAULT_TEMPLATE.contains("html, body { margin: 0; height: 100%; overflow: hidden; }"));
+fn the_built_in_page_lets_the_document_scroll() {
+    assert!(DEFAULT_TEMPLATE.contains("html, body { margin: 0; height: 100%; }"));
+    assert!(!DEFAULT_TEMPLATE.contains("overflow"));
 }
 
 #[test]

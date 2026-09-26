@@ -70,6 +70,10 @@ The rules:
 - The app mounts on the element with `id="telar-root"`, or on `<body>` when there is none. The built-in page
   gives that element `data-telar-renderer="%telar.renderer%"`, which lets `--renderer` choose the renderer
   without a rebuild; `?telar-renderer=` on the URL still overrides it.
+- The built-in page leaves the document free to scroll (no `overflow: hidden` on `html` or `body`). Under
+  the document renderer a root `ScrollPage` is the document's own scroll and the host grows with it, and a
+  page scrolled before the module loads keeps its position. A template that fixes the document in place
+  takes that away. See [docs/primary-scroll.md](primary-scroll.md).
 
 URLs the page writes for output files start with `./`, which resolves against a page at the output root.
 

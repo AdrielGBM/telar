@@ -37,13 +37,18 @@ pub(crate) fn identity(node: NodeId) -> Arc<Element> {
     ))
 }
 
-/// The element for a node that means something more than a box, asking the backend to put its own scroll at `scroll_to`. See [`renderer_core::Element::scroll_to`]; every box but a scroll area that is being moved passes `None`.
+/// The element for a node that means something more than a box, asking the backend to put its own scroll at `scroll_to`, and saying whether it is the surface's primary scroll. See [`renderer_core::Element::scroll_to`] and [`renderer_core::Element::primary_scroll`].
 pub(crate) fn with_semantics_scrolled(
     node: NodeId,
     semantics: Semantics,
     scroll_to: Option<(f32, f32)>,
+    primary: bool,
 ) -> Arc<Element> {
-    Arc::new(element_of(node, semantics).asking_to_scroll(scroll_to))
+    Arc::new(
+        element_of(node, semantics)
+            .asking_to_scroll(scroll_to)
+            .as_primary_scroll(primary),
+    )
 }
 
 /// The element for a node that means something more than a box.

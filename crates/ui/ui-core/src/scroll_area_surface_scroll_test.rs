@@ -105,3 +105,24 @@ fn a_target_that_draws_the_offset_asks_for_nothing() {
     assert_eq!(sa.core.scroll_y.get(), 350.0);
     assert_eq!(sa.core.commanded.get(), None);
 }
+
+/// The page's own scroll comes with the page's own bar, so the primary scroll on a surface that holds the content draws none of Telar's and leaves a press where the bar would be to the content.
+#[test]
+fn the_primary_scroll_leaves_the_bar_to_the_surface() {
+    let _document = AsADocument::new();
+    let mut sa = make_scroll_area();
+    sa.core.primary = true;
+    assert!(matches!(sa.view(), RenderNode::Clip { .. }));
+    assert!(!sa.core.draws_bars());
+    assert!(
+        !sa.core
+            .grab_bar(Rect::new(0.0, 0.0, 400.0, 300.0), 396.0, 45.0)
+    );
+}
+
+#[test]
+fn the_primary_scroll_keeps_its_bar_where_the_content_is_drawn_at_the_offset() {
+    let mut sa = make_scroll_area();
+    sa.core.primary = true;
+    assert!(sa.core.draws_bars());
+}

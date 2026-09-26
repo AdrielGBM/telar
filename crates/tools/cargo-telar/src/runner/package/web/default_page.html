@@ -9,7 +9,8 @@
     <style>
       /* What the page is before the app has drawn anything, and what shows through an overscroll once it has: without it both are white on a system asking for dark. */
       html { color-scheme: light dark; }
-      html, body { margin: 0; height: 100%; overflow: hidden; }
+      /* The document is free to scroll: under the document renderer a root `ScrollPage` is the page's own scroll, and the host grows with it. A canvas fills the host exactly, so nothing spills past it there. */
+      html, body { margin: 0; height: 100%; }
       /* `100%` rather than `100vw`, which includes a reserved scrollbar; `dvh` rather than `vh`, which on mobile is the viewport with the URL bar retracted, which it is not on arrival. */
       #telar-root { width: 100%; height: 100dvh; }
     </style>

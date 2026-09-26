@@ -17,6 +17,8 @@ mod wrap;
 #[cfg(target_arch = "wasm32")]
 mod bitmap;
 #[cfg(target_arch = "wasm32")]
+mod document_scroll;
+#[cfg(target_arch = "wasm32")]
 mod entry;
 #[cfg(target_arch = "wasm32")]
 mod metrics;

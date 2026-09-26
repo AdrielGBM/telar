@@ -73,8 +73,8 @@ Notes on the less obvious cases:
   `?telar-*` page settings are removed from the locations the app sees, and added back to every address it
   pushes, so a setting made by a link survives navigation.
 - **Web scroll.** The browser's own scroll restoration is turned off (`history.scrollRestoration =
-  "manual"`), because it would run before the app has drawn the page. Each entry stores the document's
-  scroll position when it is left (on push, back and `pagehide`), and that position is restored over the
+  "manual"`), because it would run before the app has drawn the page. Each entry stores the page's
+  scroll position (the surface's primary scroll, see [docs/primary-scroll.md](primary-scroll.md)) when it is left (on push, back and `pagehide`), and that position is restored over the
   next frames when the entry comes back. In-app scroll areas keep their own offsets while `NavHost` keeps
   their pages.
 - **Web popping.** A pop becomes `history.go(-n)`, which the browser completes asynchronously. A push made
