@@ -4,7 +4,9 @@ use std::cell::RefCell;
 use std::mem::ManuallyDrop;
 
 use geometry_core::Rect;
-use layout_core::{AvailableSpace, LayoutEngine, LayoutError, LayoutStyle, MeasureFn, NodeId};
+use layout_core::{
+    AvailableSpace, LayoutEngine, LayoutError, LayoutStyle, MeasureFn, NodeId, StickyAnchor,
+};
 use reactive_core::{OwnerId, RwSignal, SurfaceHandle, batch, signal};
 use rustc_hash::{FxHashMap, FxHashSet};
 
@@ -183,6 +185,23 @@ pub fn compute_layout(
         rt.engine.set_surface_size(surface);
     });
     let updates = with_runtime(|rt| rt.compute_layout(root, width, height))?;
+    publish(updates);
+    Ok(())
+}
+
+/// Sets what `root`'s sticky nodes stick against: the part of its tree a viewport shows, in the root's own coordinates — for a scroll's content, the offset and the size of its visible window.
+///
+/// A scroll area calls this for its content on every scroll, and the sticky subtrees under that root are placed again for it without a layout pass. A root never given a view sticks against its own box, which does not scroll.
+pub fn set_sticky_view(root: NodeId, view: Rect) {
+    let updates = with_runtime(|rt| rt.set_sticky_view(root, view));
+    publish(updates);
+}
+
+/// Applies what a walk collected under the runtime borrow, after it is released: a `set` can flush effects, and one of those may itself touch the layout runtime (a reactive list), which would re-enter the borrow.
+fn publish(updates: Vec<Update>) {
+    if updates.is_empty() {
+        return;
+    }
     batch(|| {
         for update in updates {
             match update {
@@ -195,7 +214,6 @@ pub fn compute_layout(
             }
         }
     });
-    Ok(())
 }
 
 /// Re-lays out every root that has been computed at least once, picking up any nodes a reactive change dirtied since the last frame. Each `compute_layout` early-returns when its root is clean and the space is unchanged, so this is cheap on a still frame. The runtime calls it once per redraw (after flushing reactive effects, before rendering) so a data change deep in the tree — e.g. a reactive list adding an item — is reflected in layout without the app shell knowing about it. Node dirtiness propagates up to the root through taffy, so a dirtied list container makes its root recompute.
@@ -221,6 +239,43 @@ enum Update {
     Rect(RwSignal<Rect>, Rect),
     /// Window-absolute top-left, for the nodes something anchors to. See `LayoutRuntime::abs_pos_signals`.
     Position(RwSignal<(f32, f32)>, (f32, f32)),
+}
+
+/// What a walk placed, as the rect writes it calls for and — when the walk ran from the window's origin — the window-absolute positions it found.
+struct Placed<'a> {
+    registry: &'a FxHashMap<NodeId, RwSignal<Rect>>,
+    updates: Vec<Update>,
+    positions: Option<Vec<(NodeId, f32, f32)>>,
+}
+
+type PlacedParts = (Vec<Update>, Option<Vec<(NodeId, f32, f32)>>);
+
+impl<'a> Placed<'a> {
+    fn new(registry: &'a FxHashMap<NodeId, RwSignal<Rect>>, root: NodeId) -> Self {
+        // Only a parent-less root runs from the window origin, so only then are the walked rects window-absolute.
+        let is_window_walk = with_parents_ref(|p| !p.contains_key(&root));
+        Self {
+            registry,
+            updates: Vec::new(),
+            positions: is_window_walk.then(Vec::new),
+        }
+    }
+
+    fn visit(&mut self, node: NodeId, rect: Rect) -> bool {
+        if let Some(sig) = self.registry.get(&node)
+            && sig.peek() != rect
+        {
+            self.updates.push(Update::Rect(*sig, rect));
+        }
+        if let Some(positions) = self.positions.as_mut() {
+            positions.push((node, rect.x, rect.y));
+        }
+        true
+    }
+
+    fn finish(self) -> PlacedParts {
+        (self.updates, self.positions)
+    }
 }
 
 /// The signal a node's laid-out rect is published through, or `None` if the node is gone.
@@ -467,6 +522,10 @@ struct LayoutRuntime {
     abs_pos_signals: FxHashMap<NodeId, RwSignal<(f32, f32)>>,
     /// How many times the engine has laid anything out, for [`layout_passes`].
     passes: u64,
+    /// What each root's sticky nodes stick against, for the roots something has said it for. See [`set_sticky_view`].
+    sticky_views: FxHashMap<NodeId, Rect>,
+    /// The outermost sticky nodes each root's last walk met, so a new view places only their subtrees again.
+    sticky_anchors: FxHashMap<NodeId, Vec<StickyAnchor>>,
     // Guards against a recursive `compute()`: an effect that reads a layout signal and calls `compute_layout`.
     #[cfg(debug_assertions)]
     is_computing: bool,
@@ -483,6 +542,8 @@ impl LayoutRuntime {
             abs_pos: FxHashMap::default(),
             abs_pos_signals: FxHashMap::default(),
             passes: 0,
+            sticky_views: FxHashMap::default(),
+            sticky_anchors: FxHashMap::default(),
             #[cfg(debug_assertions)]
             is_computing: false,
         }
@@ -586,37 +647,60 @@ impl LayoutRuntime {
         }
         self.engine.compute_layout(root, width, height)?;
         self.passes += 1;
-        // Collected under the runtime borrow but applied only after the caller releases it: a `set` flushes effects, one of which may re-enter the runtime.
-        let mut updates: Vec<Update> = Vec::new();
-        // Only a parent-less root runs from the window origin, so only then are the walked rects window-absolute.
-        let is_window_walk = with_parents_ref(|p| !p.contains_key(&root));
-        let mut abs_updates: Vec<(NodeId, f32, f32)> = Vec::new();
-        let registry = &self.registry;
-        let walk_result = self.engine.walk(root, &mut |node_id, rect| {
-            if let Some(sig) = registry.get(&node_id)
-                && sig.peek() != rect
-            {
-                updates.push(Update::Rect(*sig, rect));
-            }
-            if is_window_walk {
-                abs_updates.push((node_id, rect.x, rect.y));
-            }
-            true
+        let view = match self.sticky_views.get(&root) {
+            Some(view) => Ok(*view),
+            None => self.engine.layout(root),
+        };
+        let mut placed = Placed::new(&self.registry, root);
+        let walked = view.and_then(|view| {
+            self.engine
+                .walk_in_view(root, view, &mut |node, rect| placed.visit(node, rect))
         });
-        for (n, x, y) in abs_updates {
-            self.abs_pos.insert(n, (x, y));
+        let placed = placed.finish();
+        #[cfg(debug_assertions)]
+        {
+            self.is_computing = false;
+        }
+        let anchors = walked?;
+        if anchors.is_empty() {
+            self.sticky_anchors.remove(&root);
+        } else {
+            self.sticky_anchors.insert(root, anchors);
+        }
+        Ok(self.settle(placed))
+    }
+
+    /// Places `root`'s sticky subtrees again for a new view, from the layout it already has.
+    fn set_sticky_view(&mut self, root: NodeId, view: Rect) -> Vec<Update> {
+        if self.sticky_views.insert(root, view) == Some(view) {
+            return Vec::new();
+        }
+        let Some(anchors) = self.sticky_anchors.get(&root) else {
+            return Vec::new();
+        };
+        let mut placed = Placed::new(&self.registry, root);
+        for anchor in anchors {
+            // An anchor whose node has gone since the walk that found it has nothing left to place.
+            let _ = self
+                .engine
+                .walk_anchor(anchor, view, &mut |node, rect| placed.visit(node, rect));
+        }
+        let placed = placed.finish();
+        self.settle(placed)
+    }
+
+    /// The signal writes a walk calls for, recording the window-absolute positions it found on the way.
+    fn settle(&mut self, (mut updates, positions): PlacedParts) -> Vec<Update> {
+        for (node, x, y) in positions.into_iter().flatten() {
+            self.abs_pos.insert(node, (x, y));
             // Only where somebody asked: a node nobody anchors to has no signal and never gets one.
-            if let Some(sig) = self.abs_pos_signals.get(&n)
+            if let Some(sig) = self.abs_pos_signals.get(&node)
                 && sig.peek() != (x, y)
             {
                 updates.push(Update::Position(*sig, (x, y)));
             }
         }
-        #[cfg(debug_assertions)]
-        {
-            self.is_computing = false;
-        }
-        walk_result.map(|()| updates)
+        updates
     }
 
     fn is_hidden_by_display(&self, node: NodeId) -> bool {
@@ -655,6 +739,12 @@ impl LayoutRuntime {
             self.root_auto.remove(&at);
             self.abs_pos.remove(&at);
             self.abs_pos_signals.remove(&at);
+            self.sticky_views.remove(&at);
+            self.sticky_anchors.remove(&at);
+        }
+        // A freed id is handed out again, so an anchor left naming one would place whatever reuses it.
+        for anchors in self.sticky_anchors.values_mut() {
+            anchors.retain(|anchor| !freed.contains(&anchor.node()));
         }
         // Every link naming a freed node goes with it, not only the one it owned: taffy hands a freed index back out.
         with_parents(|p| p.retain(|below, above| !freed.contains(below) && !freed.contains(above)));
@@ -686,3 +776,7 @@ pub fn declared_css(node: NodeId) -> Option<layout_core::Css> {
     }
     Some(css)
 }
+
+#[cfg(test)]
+#[path = "context_sticky_test.rs"]
+mod sticky_tests;

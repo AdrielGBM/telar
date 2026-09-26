@@ -179,3 +179,47 @@ fn a_logical_edge_follows_the_direction() {
         style.to_css(Direction::Rtl, Size::ZERO)
     );
 }
+
+#[test]
+fn a_sticky_box_is_sticky_by_its_insets_and_nothing_else() {
+    let written = css(LayoutStyle::new().sticky().inset_top(12.0));
+    assert!(
+        written.contains("position:sticky;top:12px;"),
+        "got {written}"
+    );
+    assert_eq!(written.matches("top:").count(), 1, "said once: {written}");
+}
+
+/// A percentage stays one, so the browser resolves it against the scrollport exactly as the engine resolves it against the view.
+#[test]
+fn a_sticky_percentage_is_left_for_the_scrollport() {
+    let written = css(LayoutStyle::new()
+        .sticky()
+        .inset_bottom(SizeDimension::Percent(0.1)));
+    assert!(written.contains("bottom:10%;"), "got {written}");
+}
+
+#[test]
+fn a_sticky_start_inset_follows_the_writing_direction() {
+    let style = LayoutStyle::new()
+        .sticky()
+        .inset_start(SizeDimension::Px(8.0));
+    assert!(css(style.clone()).contains("left:8px;"));
+    assert!(
+        style
+            .to_css(Direction::Rtl, Size::ZERO)
+            .as_str()
+            .contains("right:8px;")
+    );
+}
+
+#[test]
+fn the_last_position_given_is_the_one_written() {
+    let written = css(LayoutStyle::new().sticky().absolute().inset_top(4.0));
+    assert!(
+        written.contains("position:absolute;top:4px;"),
+        "got {written}"
+    );
+    let written = css(LayoutStyle::new().absolute_fill().sticky());
+    assert!(written.contains("position:sticky;"), "got {written}");
+}

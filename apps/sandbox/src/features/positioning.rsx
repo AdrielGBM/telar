@@ -22,7 +22,7 @@ let caption: Option<&'static str> = Some("read from a plain Option, decided once
 
 [view]
 col gap:20
-    doc_header kicker:"FOUNDATIONS" title:"Positioning" desc:"absolute takes a child out of the flex flow and pins it by the insets it names. Insets and margins are logical — start and end follow the reading direction, so a layout mirrors under RTL without a second rule."
+    doc_header kicker:"FOUNDATIONS" title:"Positioning" desc:"absolute takes a child out of the flex flow and pins it by the insets it names; sticky keeps it in the flow and holds it at those insets while its scroll viewport scrolls. Insets and margins are logical — start and end follow the reading direction, so a layout mirrors under RTL without a second rule."
     example title:"absolute — a child out of flow, pinned by the edges it names"
         card gap:12
             box fill:$theme.surface_alt radius:10 height:120 width:100% pad:14
@@ -36,6 +36,31 @@ col gap:20
                 text "under the scrim" font_size:13 color:$theme.ink
                 box fill:$theme.primary radius:10 absolute:fill opacity:0.35
         code_line code:"box absolute:fill      (what overlay uses; name three edges instead for a floating panel)"
+    example title:"sticky — in the flow until the scroll reaches it, then held inside its parent"
+        card gap:12
+            scroll height:220 width:100%
+                col width:100%
+                    for section in 0..3
+                        col width:100%
+                            box fill:$theme.primary pad_x:12 pad_y:8 sticky inset_top:0
+                                text "Section {section}" font_size:13 color:$theme.on_primary
+                            for i in 0..6
+                                box pad_x:12 pad_y:8
+                                    text "Row {i} of section {section}" font_size:12 color:$theme.ink
+                    box fill:$theme.surface_alt stroke:$theme.border pad_x:12 pad_y:8 sticky inset_bottom:0
+                        text "A footer held at the bottom edge until its own place scrolls into view" font_size:12 color:$theme.muted
+        code_line code:"box sticky inset_top:0     ·   a header stops at the end of its section; inset_bottom holds the lower edge"
+    example title:"A scene — a tall track with a sticky stage"
+        card gap:12
+            scroll height:200 width:100%
+                col width:100% gap:12
+                    text "Scroll: the stage holds still while its track passes under it." font_size:12 color:$theme.muted
+                    col height:600 width:100%
+                        box fill:$theme.purple radius:10 height:120 width:100% sticky inset_top:40 align:center justify:center
+                            text "stage" font_size:14 color:$theme.on_primary
+                    text "The track ended, and the stage left with it." font_size:12 color:$theme.muted
+                    box height:120 width:100%
+        code_line code:"col height:600 > box sticky inset_top:40     (the track is the containing block the stage stays inside)"
     example title:"An inset is an ordinary layout value, so it can be reactive"
         card gap:12
             box fill:$theme.surface_alt radius:10 height:120 width:220
@@ -88,8 +113,9 @@ col gap:20
     example title:"Attributes"
         col gap:6
             prop_row name:"absolute" values:"flag · fill" about:"Out of flow. Bare pins only the edges you name; fill pins all four at zero."
+            prop_row name:"sticky" values:"flag" about:"In the flow, but held at the insets you name while the nearest scroll viewport scrolls; never leaves its parent."
             prop_row name:"inset_start / _end" values:"number · %" about:"Distance from the leading and trailing edge — mirrors under RTL."
-            prop_row name:"inset_top / _bottom" values:"number · %" about:"Distance from the top and bottom edge."
+            prop_row name:"inset_top / _bottom" values:"number · %" about:"Distance from the top and bottom edge. On a sticky box a % is of the viewport."
             prop_row name:"margin_start / _end" values:"number · %" about:"Logical outer spacing, in the flow rather than out of it."
             prop_row name:"min_height" values:"number · %" about:"A floor the box keeps even when its content is smaller."
             prop_row name:"text_wrap" values:"wrap · nowrap" about:"Whether a line may break at the box edge."

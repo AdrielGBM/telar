@@ -65,6 +65,9 @@ const LAYOUT_ATTRS: &[AttrSpec] = &[
     AttrSpec::num("inset_top"),
     AttrSpec::num("inset_bottom"),
     AttrSpec::keywords("absolute", ABSOLUTE_VALUES),
+    AttrSpec::keywords("sticky", STICKY_VALUES).doc(
+        "Stays in the flow but sticks to the edges its insets name while the nearest scroll viewport scrolls, never leaving its parent. `sticky inset_top:0` pins a header.",
+    ),
     AttrSpec::boolean("shown").doc(
         "Whether the node is in flow, re-resolved from what it reads — unlike `display:none`, which could not undo itself.",
     ),
@@ -237,6 +240,9 @@ pub const AXIS_VALUES: &[(&str, &str)] = &[
 
 /// `absolute` — out of flow, pinned by the insets the author names; `absolute:fill` is the all-four-at-zero shorthand. The empty spelling is the bare flag.
 pub const ABSOLUTE_VALUES: &[(&str, &str)] = &[("", "absolute"), ("fill", "absolute_fill")];
+
+/// `sticky` — a flag: in the flow, displaced by the insets the author names while its scroll viewport scrolls.
+pub const STICKY_VALUES: &[(&str, &str)] = &[("", "sticky")];
 
 /// `wrap` — a flag, spelled bare or as its own name.
 pub const WRAP_VALUES: &[(&str, &str)] = &[("", "flex_wrap")];

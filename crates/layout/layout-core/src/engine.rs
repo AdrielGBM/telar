@@ -7,6 +7,7 @@ use geometry_core::Size;
 
 use crate::direction::Direction;
 use crate::error::LayoutError;
+use crate::sticky::StickyInsets;
 use crate::style::{AvailableSpace, LayoutStyle};
 
 /// A node in the layout tree. Ids are reused after a node is freed, so a stale one may name a live node.
@@ -24,6 +25,8 @@ pub struct LayoutEngine {
     styles: FxHashMap<NodeId, LayoutStyle>,
     /// Every node this engine currently owns. Kept because taffy has no total way to ask: `style()` indexes its slot map and panics on a freed key rather than answering, so there is nothing to guard with. See [`alive`](Self::alive) for why anything asks at all.
     live: FxHashSet<NodeId>,
+    /// The insets of every sticky node as last resolved, which taffy never sees.
+    sticky: FxHashMap<NodeId, StickyInsets>,
 }
 
 impl LayoutEngine {
@@ -34,6 +37,7 @@ impl LayoutEngine {
             surface: Size::ZERO,
             styles: FxHashMap::default(),
             live: FxHashSet::default(),
+            sticky: FxHashMap::default(),
         }
     }
 
@@ -103,6 +107,7 @@ impl LayoutEngine {
     /// Resolves `style` and pushes it to taffy, placing the leading margin — `resolve` cannot, since that needs the parent's axis to know which physical edge is "leading".
     fn push_style(&mut self, node: NodeId, style: &LayoutStyle) {
         let mut resolved = style.resolve(self.direction, self.surface);
+        self.note_sticky(node, style);
         if let Some((is_row, px)) = style.logical.leading_margin {
             let leading_right = is_row && self.leads_from_right(node);
             let m = taffy::LengthPercentageAuto::length(px);
@@ -133,12 +138,21 @@ impl LayoutEngine {
     fn forget(&mut self, node: NodeId) {
         self.live.remove(&node);
         self.styles.remove(&node);
+        self.sticky.remove(&node);
+    }
+
+    fn note_sticky(&mut self, node: NodeId, style: &LayoutStyle) {
+        match style.sticky_insets(self.direction, self.surface) {
+            Some(insets) => self.sticky.insert(node, insets),
+            None => self.sticky.remove(&node),
+        };
     }
 
     pub fn new_leaf(&mut self, style: LayoutStyle) -> Result<NodeId, LayoutError> {
         let node = self
             .tree
             .new_leaf(style.resolve(self.direction, self.surface))?;
+        self.note_sticky(node, &style);
         self.track(node, style);
         Ok(node)
     }
@@ -151,6 +165,7 @@ impl LayoutEngine {
         let node = self
             .tree
             .new_leaf_with_context(style.resolve(self.direction, self.surface), measure)?;
+        self.note_sticky(node, &style);
         self.track(node, style);
         Ok(node)
     }
@@ -163,6 +178,7 @@ impl LayoutEngine {
         let node = self
             .tree
             .new_with_children(style.resolve(self.direction, self.surface), children)?;
+        self.note_sticky(node, &style);
         self.track(node, style);
         Ok(node)
     }
@@ -408,35 +424,73 @@ impl LayoutEngine {
         ))
     }
 
+    /// Every node under `root`, top-down, at the root-relative rect layout gave it; `f` returns whether to descend. Sticky nodes are left where layout put them — see [`walk_in_view`](Self::walk_in_view).
     pub fn walk<F>(&self, root: NodeId, f: &mut F) -> Result<(), LayoutError>
     where
         F: FnMut(NodeId, geometry_core::Rect) -> bool,
     {
         self.alive(root)?;
-        struct StackEntry {
-            node: NodeId,
-            offset_x: f32,
-            offset_y: f32,
-            // Taffy stops laying out the subtree under a `display:none` ancestor, leaving stale layouts, so widgets drawing at fixed coordinates would still paint. Force the whole subtree to a zero size instead.
-            hidden: bool,
-        }
+        self.visit(Visit::root(root), None, f, &mut Vec::new())
+    }
 
-        let mut stack = Vec::with_capacity(64);
-        stack.push(StackEntry {
-            node: root,
-            offset_x: 0.0,
-            offset_y: 0.0,
+    /// [`walk`](Self::walk), with every sticky node displaced for `view` — the root-relative rect the tree is seen through, such as a scroll viewport's visible window over its content — and its subtree displaced with it.
+    ///
+    /// Returns the outermost sticky nodes it met, so that when only the view moves [`walk_anchor`](Self::walk_anchor) can place their subtrees again without walking the rest of the tree, which does not move. A layout root is never sticky itself: it has no containing block to stick within.
+    pub fn walk_in_view<F>(
+        &self,
+        root: NodeId,
+        view: geometry_core::Rect,
+        f: &mut F,
+    ) -> Result<Vec<StickyAnchor>, LayoutError>
+    where
+        F: FnMut(NodeId, geometry_core::Rect) -> bool,
+    {
+        self.alive(root)?;
+        let mut anchors = Vec::new();
+        self.visit(Visit::root(root), Some(view), f, &mut anchors)?;
+        Ok(anchors)
+    }
+
+    /// Places the subtree `anchor` names for a new `view`, as [`walk_in_view`](Self::walk_in_view) would have. Only valid while the layout it came from is: a relayout can move what stands above the anchor.
+    pub fn walk_anchor<F>(
+        &self,
+        anchor: &StickyAnchor,
+        view: geometry_core::Rect,
+        f: &mut F,
+    ) -> Result<(), LayoutError>
+    where
+        F: FnMut(NodeId, geometry_core::Rect) -> bool,
+    {
+        self.alive(anchor.node)?;
+        let first = Visit {
+            node: anchor.node,
+            origin: anchor.origin,
+            container: Some(anchor.container),
             hidden: false,
-        });
+            inside_sticky: false,
+        };
+        self.visit(first, Some(view), f, &mut Vec::new())
+    }
 
-        while let Some(entry) = stack.pop() {
-            let layout = self.tree.layout(entry.node).map_err(LayoutError::from)?;
-            let abs_x = entry.offset_x + layout.location.x;
-            let abs_y = entry.offset_y + layout.location.y;
-            let hidden = entry.hidden
+    fn visit<F>(
+        &self,
+        first: Visit,
+        view: Option<geometry_core::Rect>,
+        f: &mut F,
+        anchors: &mut Vec<StickyAnchor>,
+    ) -> Result<(), LayoutError>
+    where
+        F: FnMut(NodeId, geometry_core::Rect) -> bool,
+    {
+        let mut stack = Vec::with_capacity(64);
+        stack.push(first);
+
+        while let Some(visit) = stack.pop() {
+            let layout = self.tree.layout(visit.node).map_err(LayoutError::from)?;
+            let hidden = visit.hidden
                 || self
                     .tree
-                    .style(entry.node)
+                    .style(visit.node)
                     .map(|s| s.display == taffy::Display::None)
                     .unwrap_or(false);
             let (w, h) = if hidden {
@@ -444,23 +498,97 @@ impl LayoutEngine {
             } else {
                 (layout.size.width, layout.size.height)
             };
+            let mut x = visit.origin.0 + layout.location.x;
+            let mut y = visit.origin.1 + layout.location.y;
 
-            let descend = f(entry.node, geometry_core::Rect::new(abs_x, abs_y, w, h));
+            let sticky = match (view, visit.container, self.sticky.get(&visit.node)) {
+                (Some(view), Some(container), Some(insets)) if !hidden => {
+                    Some((view, container, insets))
+                }
+                _ => None,
+            };
+            if let Some((view, container, insets)) = sticky {
+                if !visit.inside_sticky {
+                    anchors.push(StickyAnchor {
+                        node: visit.node,
+                        origin: visit.origin,
+                        container,
+                    });
+                }
+                let (dx, dy) = crate::sticky::displacement(
+                    insets,
+                    geometry_core::Rect::new(x, y, w, h),
+                    layout.margin,
+                    container,
+                    view,
+                );
+                x += dx;
+                y += dy;
+            }
 
-            if descend {
+            if f(visit.node, geometry_core::Rect::new(x, y, w, h)) {
+                let inset_x = layout.border.left + layout.padding.left;
+                let inset_y = layout.border.top + layout.padding.top;
+                let content = geometry_core::Rect::new(
+                    x + inset_x,
+                    y + inset_y,
+                    (w - inset_x - layout.border.right - layout.padding.right).max(0.0),
+                    (h - inset_y - layout.border.bottom - layout.padding.bottom).max(0.0),
+                );
                 let base = stack.len();
-                for child in self.tree.child_ids(entry.node) {
-                    stack.push(StackEntry {
+                for child in self.tree.child_ids(visit.node) {
+                    stack.push(Visit {
                         node: child,
-                        offset_x: abs_x,
-                        offset_y: abs_y,
+                        origin: (x, y),
+                        container: Some(content),
                         hidden,
+                        inside_sticky: visit.inside_sticky || sticky.is_some(),
                     });
                 }
                 stack[base..].reverse();
             }
         }
         Ok(())
+    }
+}
+
+/// One node a walk has still to reach, with what it has worked out above it.
+struct Visit {
+    node: NodeId,
+    /// Where the parent's border box ended up, which the node's layout location is relative to.
+    origin: (f32, f32),
+    /// The parent's content box: a sticky node's containing block. `None` at a layout root.
+    container: Option<geometry_core::Rect>,
+    /// Taffy stops laying out the subtree under a `display:none` ancestor, leaving stale layouts, so widgets drawing at fixed coordinates would still paint. The whole subtree is forced to a zero size instead.
+    hidden: bool,
+    /// Under a sticky node, whose displacement this node already carries.
+    inside_sticky: bool,
+}
+
+impl Visit {
+    fn root(node: NodeId) -> Self {
+        Self {
+            node,
+            origin: (0.0, 0.0),
+            container: None,
+            hidden: false,
+            inside_sticky: false,
+        }
+    }
+}
+
+/// A sticky node no other sticky node contains, with what a walk had worked out above it: enough to place its subtree again for another view.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct StickyAnchor {
+    node: NodeId,
+    origin: (f32, f32),
+    container: geometry_core::Rect,
+}
+
+impl StickyAnchor {
+    /// The sticky node itself.
+    pub fn node(&self) -> NodeId {
+        self.node
     }
 }
 
@@ -473,3 +601,7 @@ impl Default for LayoutEngine {
 #[cfg(test)]
 #[path = "engine_test.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "engine_sticky_test.rs"]
+mod sticky_tests;

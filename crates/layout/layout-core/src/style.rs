@@ -10,6 +10,7 @@ pub use taffy::{AlignItems, AvailableSpace, JustifyContent};
 use geometry_core::{LayoutGrid, Size};
 
 use crate::direction::Direction;
+use crate::sticky::StickyInsets;
 use crate::track::TemplateTrack;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -276,6 +277,8 @@ pub(crate) struct LogicalStyle {
     pub(crate) leading_margin: Option<(bool, f32)>,
     /// Set by [`LayoutStyle::bordered`] on a surface that draws strokes in whole cells: the cell its frame needs, reserved at resolution from the padding the box actually resolved to.
     pub(crate) stroke_cell: Option<LayoutGrid>,
+    /// Set by [`LayoutStyle::sticky`]. Taffy has no sticky position and would read the insets as a relative offset, so they are taken out of what it is handed.
+    pub(crate) sticky: bool,
 }
 
 impl LogicalStyle {
@@ -446,6 +449,7 @@ impl LayoutStyle {
     /// Takes the node out of normal flow (`position: absolute`) with all four insets pinned to 0, so it fills its containing block without affecting sibling layout — used by `overlay` to cover the viewport. Combine with `flex_column`/alignment to position the overlay's content within the layer.
     pub fn absolute_fill(mut self) -> Self {
         self.inner.position = taffy::Position::Absolute;
+        self.logical.sticky = false;
         let zero = LengthPercentageAuto::length(0.0);
         self.inner.inset = taffy::Rect {
             left: zero,
@@ -461,16 +465,31 @@ impl LayoutStyle {
     /// Takes the node out of normal flow (`position: absolute`) leaving every inset at `auto`, so the edges it is pinned by are exactly the ones the caller names. [`absolute_fill`](Self::absolute_fill) is this plus all four insets at 0; a floating panel wants three of them and its own size on the fourth axis, which pinning everything would override.
     pub fn absolute(mut self) -> Self {
         self.inner.position = taffy::Position::Absolute;
+        self.logical.sticky = false;
         self
     }
 
-    /// Inset from the top edge, for a node already taken out of flow. Physical, not logical: `top` does not swap under RTL the way [`inset_start`](Self::inset_start) does.
+    /// Keeps the node in the flow but sticks it to the edges its insets name while its nearest scroll viewport scrolls, as CSS `position: sticky` does: it keeps that distance from the viewport's edge and never leaves its parent's content box.
+    ///
+    /// Layout places it exactly as it would an ordinary box. The displacement is a pass run after layout against the part of the tree the viewport shows (see [`LayoutEngine::walk_in_view`](crate::LayoutEngine::walk_in_view)), so a scroll moves it without laying anything out again. A percentage inset is a fraction of the viewport.
+    pub fn sticky(mut self) -> Self {
+        self.inner.position = taffy::Position::Relative;
+        self.logical.sticky = true;
+        self
+    }
+
+    /// Whether [`sticky`](Self::sticky) was the last position this style was given.
+    pub fn is_sticky(&self) -> bool {
+        self.logical.sticky
+    }
+
+    /// Inset from the top edge, for a node taken out of flow or made [`sticky`](Self::sticky). Physical, not logical: `top` does not swap under RTL the way [`inset_start`](Self::inset_start) does.
     pub fn inset_top(mut self, size: impl Into<SizeDimension>) -> Self {
         self.put(Slot::InsetTop, size.into());
         self
     }
 
-    /// Inset from the bottom edge, for a node already taken out of flow.
+    /// Inset from the bottom edge, for a node taken out of flow or made [`sticky`](Self::sticky).
     pub fn inset_bottom(mut self, size: impl Into<SizeDimension>) -> Self {
         self.put(Slot::InsetBottom, size.into());
         self
@@ -642,13 +661,13 @@ impl LayoutStyle {
         self
     }
 
-    /// Inset from the edge the text starts from, for a node already taken out of flow (see [`absolute_fill`](Self::absolute_fill)); ignored on an in-flow node, as `inset` is in CSS.
+    /// Inset from the edge the text starts from, for a node taken out of flow (see [`absolute_fill`](Self::absolute_fill)) or made [`sticky`](Self::sticky).
     pub fn inset_start(mut self, size: impl Into<SizeDimension>) -> Self {
         self.logical.inset_start = Some(pos_x(size));
         self
     }
 
-    /// Inset from the edge the text runs towards, for a node already taken out of flow.
+    /// Inset from the edge the text runs towards, for a node taken out of flow or made [`sticky`](Self::sticky).
     pub fn inset_end(mut self, size: impl Into<SizeDimension>) -> Self {
         self.logical.inset_end = Some(pos_x(size));
         self
@@ -792,7 +811,33 @@ impl LayoutStyle {
     /// The physical `taffy::Style` this describes under `direction`, on a surface of `surface` size. Called by the engine at every point a style reaches a node, and again for each affected node when the direction flips or the surface is resized.
     ///
     /// Does not place the leading margin ([`LogicalStyle::leading_margin`]) — the engine does that afterwards, since it needs the parent's axis to know which physical edge "leading" means.
+    ///
+    /// A sticky node's insets are left out: taffy would read them as a relative offset. [`sticky_insets`](Self::sticky_insets) is where they go instead.
     pub(crate) fn resolve(&self, direction: Direction, surface: Size) -> Style {
+        let mut style = self.resolve_all(direction, surface);
+        if self.logical.sticky {
+            style.inset = taffy::Rect {
+                left: LengthPercentageAuto::auto(),
+                right: LengthPercentageAuto::auto(),
+                top: LengthPercentageAuto::auto(),
+                bottom: LengthPercentageAuto::auto(),
+            };
+        }
+        style
+    }
+
+    /// The physical edges a sticky node sticks by, resolved as [`resolve`](Self::resolve) would have resolved its insets; `None` for a node that does not stick.
+    pub(crate) fn sticky_insets(
+        &self,
+        direction: Direction,
+        surface: Size,
+    ) -> Option<StickyInsets> {
+        self.logical
+            .sticky
+            .then(|| StickyInsets::of(self.resolve_all(direction, surface).inset))
+    }
+
+    fn resolve_all(&self, direction: Direction, surface: Size) -> Style {
         let mut style = self.inner.clone();
         for &(slot, d) in &self.surface {
             slot.write(&mut style, slot.snap(d.against(surface)));

@@ -215,3 +215,39 @@ fn a_margin_from_the_left_stays_left_under_rtl() {
     assert_eq!(ltr.margin.left, LengthPercentageAuto::length(20.0));
     assert_eq!(rtl.margin.left, LengthPercentageAuto::length(20.0));
 }
+
+/// Taffy has no sticky position, and an inset on a box it lays out in the flow is a relative offset — the one thing a sticky box must not be given.
+#[test]
+fn a_sticky_inset_never_reaches_taffy() {
+    let style = LayoutStyle::new()
+        .sticky()
+        .inset_top(10.0)
+        .inset_start(SizeDimension::Px(4.0));
+    let resolved = style.resolve(Direction::Ltr, Size::ZERO);
+    assert_eq!(resolved.position, taffy::Position::Relative);
+    assert!(resolved.inset.top.is_auto() && resolved.inset.left.is_auto());
+    let insets = style
+        .sticky_insets(Direction::Ltr, Size::ZERO)
+        .expect("it sticks");
+    assert_eq!(insets.top, Some(SizeDimension::Px(10.0)));
+    assert_eq!(insets.left, Some(SizeDimension::Px(4.0)));
+    assert_eq!(insets.bottom, None);
+}
+
+#[test]
+fn a_sticky_inset_can_be_a_fraction_of_the_surface() {
+    let style = LayoutStyle::new()
+        .sticky()
+        .inset_top(SizeDimension::SurfaceHeight(0.1));
+    let insets = style
+        .sticky_insets(Direction::Ltr, Size::new(800.0, 600.0))
+        .expect("it sticks");
+    assert_eq!(insets.top, Some(SizeDimension::Px(60.0)));
+}
+
+#[test]
+fn going_absolute_stops_sticking() {
+    assert!(LayoutStyle::new().sticky().is_sticky());
+    assert!(!LayoutStyle::new().sticky().absolute().is_sticky());
+    assert!(!LayoutStyle::new().sticky().absolute_fill().is_sticky());
+}

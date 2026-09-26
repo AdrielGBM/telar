@@ -127,6 +127,7 @@ fn layout_call(key: &str, value: &str) -> Result<Option<String>, String> {
         "inset_bottom" => format!(".inset_bottom({})", format_number(value)?),
         // `absolute_fill` is the all-four-at-zero shorthand `overlay` uses; a floating panel wants three edges and its own size on the fourth.
         "absolute" => format!(".{}()", keyword(key, value, registry::ABSOLUTE_VALUES)?),
+        "sticky" => format!(".{}()", keyword(key, value, registry::STICKY_VALUES)?),
         // `shown:$open` keeps the subtree it hides — its scroll, its measurements — where an `if` rebuilds it.
         "shown" => match value.is_empty() {
             true => ".shown(true)".to_string(),

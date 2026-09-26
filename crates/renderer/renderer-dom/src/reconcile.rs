@@ -429,7 +429,8 @@ impl Reconciler {
             }
             DrawCommand::PushClip { radius, .. } => {
                 // A scroll area clips the same way, and the difference is the whole point: `hidden` cuts what does not fit, `auto` lets the compositor move it — and with it find-in-page, the keyboard, `scrollIntoView` and every anchor, none of which a transform can give back.
-                let overflow = if open.scrolls { "auto" } else { "hidden" };
+                // `clip` rather than `hidden` for a cut: `hidden` makes the box a scroll container, and a sticky box inside it would stick to that box, which never scrolls, instead of to the scroll viewport Telar sticks it to.
+                let overflow = if open.scrolls { "auto" } else { "clip" };
                 paint::declare(&mut open.style, "overflow", overflow);
                 if !radius.is_zero() {
                     paint::declare(

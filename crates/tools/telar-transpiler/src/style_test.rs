@@ -217,6 +217,15 @@ fn a_flag_key_keeps_its_bare_form() {
     assert!(message.contains("the bare flag"), "{message}");
 }
 
+#[test]
+fn sticky_is_a_bare_flag_that_keeps_its_insets() {
+    assert_eq!(call("sticky", "").as_deref(), Some(".sticky()"));
+    assert!(
+        invalid("sticky", "top").is_some(),
+        "the edge is named by an inset, not by the flag"
+    );
+}
+
 /// A class property is written where no element is, so it has no attribute line — but it is the same misspelling, and it used to be dropped just as silently.
 #[test]
 fn a_class_property_reports_its_own_bad_value() {

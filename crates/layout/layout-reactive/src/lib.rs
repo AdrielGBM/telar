@@ -19,9 +19,9 @@ pub use context::{
     new_container, new_leaf, new_measured_leaf, overlay_viewport, parent, record_nodes,
     relayout_if_dirty, remove_node, reset_layout_runtime, set_children, set_container_row,
     set_display, set_layout_style, set_leading_margin, set_min_height, set_overlay_host,
-    track_layout,
+    set_sticky_view, track_layout,
 };
 pub use layout_core::{
     AlignItems, AvailableSpace, Css, Direction, JustifyContent, LayoutError, LayoutStyle,
-    MeasureFn, NodeId, SizeDimension, TemplateTrack,
+    MeasureFn, NodeId, SizeDimension, StickyAnchor, TemplateTrack,
 };

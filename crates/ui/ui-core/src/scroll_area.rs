@@ -651,6 +651,8 @@ pub struct LayoutScrollArea {
     _layout_effect: Effect,
     // Keeps the offset inside the range the content and viewport currently allow.
     _clamp_effect: Effect,
+    // Tells the content's sticky boxes what part of it the viewport shows, so a scroll moves them without a relayout.
+    _sticky_effect: Effect,
 }
 
 impl LayoutScrollArea {
@@ -745,6 +747,16 @@ impl LayoutScrollArea {
             })
         };
 
+        // The snapped offset, as the content is drawn at, so a sticky box on a quantised surface is pinned exactly where the viewport's edge is.
+        let sticky_effect = effect(move || {
+            let vp = viewport.get();
+            if vp.width <= 0.0 || vp.height <= 0.0 {
+                return;
+            }
+            let (x, y) = snapped_offset(scroll_x.get(), scroll_y.get());
+            crate::context::set_sticky_view(content_node, Rect::new(x, y, vp.width, vp.height));
+        });
+
         let mut input = InputHandle::new();
         input.answer(leaf.node, leaf.rect.read_only());
         input.link(content_node, leaf.node, false);
@@ -765,6 +777,7 @@ impl LayoutScrollArea {
             _input: input,
             _layout_effect: layout_effect,
             _clamp_effect: clamp_effect,
+            _sticky_effect: sticky_effect,
         })
     }
 
@@ -830,3 +843,7 @@ mod touchpad_tests;
 #[cfg(test)]
 #[path = "scroll_area_surface_scroll_test.rs"]
 mod surface_scroll_tests;
+
+#[cfg(test)]
+#[path = "scroll_area_sticky_test.rs"]
+mod sticky_tests;

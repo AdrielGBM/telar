@@ -15,7 +15,9 @@ use layout_core::{
     AlignItems, AvailableSpace, Direction, JustifyContent, LayoutEngine, LayoutStyle, NodeId,
     SizeDimension, TemplateTrack,
 };
-use renderer_core::{DrawCommand, Element, ElementId, RenderBackend, Semantics};
+use renderer_core::{
+    BorderRadius, DrawCommand, Element, ElementId, RenderBackend, Role, Semantics,
+};
 use telar_renderer_dom::DomRenderer;
 use wasm_bindgen::JsCast;
 use wasm_bindgen_test::{wasm_bindgen_test, wasm_bindgen_test_configure};
@@ -579,4 +581,225 @@ fn a_reused_element_stays_where_it_was_put() {
         ),
         3,
     );
+}
+
+/// The viewport a sticky case is scrolled in, which is not the surface: sticking is relative to the nearest scroll container, and the surface's own box never scrolls.
+const VIEWPORT: (f32, f32) = (400.0, 300.0);
+
+/// An id no layout node is given, for the scroll viewport the content is shown through.
+const VIEWPORT_ID: u64 = u64::MAX - 1;
+
+/// A box whose paint is clipped to it, as `clip` asks.
+struct Clipped(Vec<NodeId>);
+
+/// The frame for scroll content: the rects are the ones the engine placed for `view`, sticky displacement included, and each box in `clipped` cuts its content as a `clip` does.
+fn content_frame(
+    engine: &LayoutEngine,
+    built: &Built,
+    rects: &rustc_hash::FxHashMap<NodeId, Rect>,
+    clipped: &Clipped,
+    out: &mut Vec<DrawCommand>,
+) {
+    let rect = rects[&built.node];
+    let css = engine
+        .declared_style(built.node)
+        .expect("the node kept its style")
+        .to_css(engine.direction(), engine.surface_size());
+    out.push(DrawCommand::PushElement {
+        element: Arc::new(Element::new(
+            ElementId(built.node.into()),
+            Semantics::group(),
+            css.into_string(),
+            rect,
+        )),
+    });
+    let clips = clipped.0.contains(&built.node);
+    if clips {
+        out.push(DrawCommand::PushClip {
+            rect,
+            radius: BorderRadius::zero(),
+        });
+    }
+    for child in &built.children {
+        content_frame(engine, child, rects, clipped, out);
+    }
+    if clips {
+        out.push(DrawCommand::PopClip);
+    }
+    out.push(DrawCommand::PopElement);
+}
+
+async fn settled() {
+    let promise = js_sys::Promise::new(&mut |resolve, _| {
+        let _ = web_sys::window()
+            .expect("a window")
+            .request_animation_frame(&resolve);
+    });
+    let _ = wasm_bindgen_futures::JsFuture::from(promise).await;
+}
+
+/// Lays `content` out as a scroll's content, scrolls it to `scrolled` both ways — the engine through its sticky view, the browser through `scrollTop` on the native `position: sticky` the CSS asked for — and asserts every box is shown in the same place.
+async fn sticky_parity(
+    case: &str,
+    content: Spec,
+    clipped: impl Fn(&Built) -> Clipped,
+    scrolled: f32,
+) {
+    let mut engine = LayoutEngine::new();
+    engine.set_surface_size(Size::new(SURFACE.0, SURFACE.1));
+    let built = build(&mut engine, content);
+    engine
+        .compute_layout(
+            built.node,
+            AvailableSpace::Definite(VIEWPORT.0),
+            AvailableSpace::MaxContent,
+        )
+        .expect("the content laid out");
+    let mut rects = rustc_hash::FxHashMap::default();
+    engine
+        .walk_in_view(
+            built.node,
+            Rect::new(0.0, scrolled, VIEWPORT.0, VIEWPORT.1),
+            &mut |node, rect| {
+                rects.insert(node, rect);
+                true
+            },
+        )
+        .expect("the content was walked");
+
+    let viewport = Rect::new(0.0, 0.0, VIEWPORT.0, VIEWPORT.1);
+    let mut commands = vec![
+        DrawCommand::PushElement {
+            element: Arc::new(Element::new(
+                ElementId(VIEWPORT_ID),
+                Semantics::of(Role::ScrollArea),
+                format!("width:{}px;height:{}px;", VIEWPORT.0, VIEWPORT.1),
+                viewport,
+            )),
+        },
+        DrawCommand::PushClip {
+            rect: viewport,
+            radius: BorderRadius::zero(),
+        },
+    ];
+    content_frame(&engine, &built, &rects, &clipped(&built), &mut commands);
+    commands.push(DrawCommand::PopClip);
+    commands.push(DrawCommand::PopElement);
+
+    let host = host();
+    let mut renderer = DomRenderer::new(host.clone()).expect("a renderer on the host");
+    renderer
+        .render_frame(&commands, None)
+        .expect("the frame reconciled");
+    let scroller = host
+        .query_selector("[data-telar-rect]")
+        .ok()
+        .flatten()
+        .expect("the viewport is in the document");
+    scroller.set_scroll_top(scrolled as i32);
+    settled().await;
+    assert_eq!(
+        scroller.scroll_top() as f32,
+        scrolled,
+        "{case}: the browser scrolled as far as the engine did"
+    );
+
+    let shown: Vec<(Rect, Rect)> = placements(&host)
+        .into_iter()
+        .skip(1)
+        .map(|(computed, shown)| {
+            let on_screen = Rect::new(
+                computed.x,
+                computed.y - scrolled,
+                computed.width,
+                computed.height,
+            );
+            (on_screen, shown)
+        })
+        .collect();
+    agree(&format!("{case} (scrolled {scrolled})"), &shown);
+    host.remove();
+}
+
+/// A 100px header, a 600px section whose padded content holds a 40px `bar` `before` px down, and 1000px after it.
+fn sectioned(bar: LayoutStyle, before: f32) -> Spec {
+    holding(
+        LayoutStyle::new().flex_column().width(VIEWPORT.0),
+        vec![
+            sized(VIEWPORT.0, 100.0),
+            holding(
+                LayoutStyle::new()
+                    .flex_column()
+                    .height(600.0)
+                    .padding_top(20.0)
+                    .padding_bottom(10.0),
+                vec![
+                    sized(VIEWPORT.0, before),
+                    holding(bar.height(40.0).padding_all(6.0), vec![sized(60.0, 20.0)]),
+                    sized(VIEWPORT.0, 60.0),
+                ],
+            ),
+            sized(VIEWPORT.0, 1000.0),
+        ],
+    )
+}
+
+fn nothing_clipped(_: &Built) -> Clipped {
+    Clipped(Vec::new())
+}
+
+/// Before the viewport reaches it, while it is pinned, and once its section has scrolled away and taken it along.
+#[wasm_bindgen_test]
+async fn a_sticky_header_is_held_where_the_browser_holds_it() {
+    for scrolled in [0.0, 250.0, 700.0] {
+        sticky_parity(
+            "a header stuck to the top",
+            sectioned(LayoutStyle::new().sticky().inset_top(12.0), 0.0),
+            nothing_clipped,
+            scrolled,
+        )
+        .await;
+    }
+}
+
+#[wasm_bindgen_test]
+async fn a_sticky_footer_is_lifted_to_the_bottom_edge() {
+    for scrolled in [0.0, 200.0, 500.0] {
+        sticky_parity(
+            "a box stuck to the bottom",
+            sectioned(LayoutStyle::new().sticky().inset_bottom(8.0), 400.0),
+            nothing_clipped,
+            scrolled,
+        )
+        .await;
+    }
+}
+
+/// A percentage inset is a fraction of the scrollport in CSS and of the view in the engine, which are the same box.
+#[wasm_bindgen_test]
+async fn a_percentage_inset_is_of_the_viewport_in_both() {
+    sticky_parity(
+        "a header stuck a tenth of the way down",
+        sectioned(
+            LayoutStyle::new()
+                .sticky()
+                .inset_top(SizeDimension::Percent(0.1)),
+            0.0,
+        ),
+        nothing_clipped,
+        300.0,
+    )
+    .await;
+}
+
+/// A clip between the sticky box and the viewport: written as `overflow: hidden` it would be the scroll container the box sticks to, and it never scrolls.
+#[wasm_bindgen_test]
+async fn a_clip_above_a_sticky_box_does_not_capture_it() {
+    sticky_parity(
+        "a header inside a clipped section",
+        sectioned(LayoutStyle::new().sticky().inset_top(0.0), 0.0),
+        |built| Clipped(vec![built.children[1].node]),
+        250.0,
+    )
+    .await;
 }

@@ -10,6 +10,7 @@ use taffy::{
 use geometry_core::Size;
 
 use crate::direction::Direction;
+use crate::sticky::StickyInsets;
 use crate::style::LayoutStyle;
 
 /// Declarations, in the order a stylesheet would read best. Kept as one string rather than a map because what consumes it writes one `style` attribute: a per-property call into the DOM for each of twenty declarations costs more than the string it avoids.
@@ -48,11 +49,14 @@ impl LayoutStyle {
     ///
     /// Resolved rather than logical: the same `resolve` every layout pass runs, so what a browser is told and what Taffy computed came from one function and cannot drift apart in an RTL locale. A fraction of the surface is written as the pixels it resolved to rather than as `vw`/`vh`: the viewport those name is not always the surface (an embedded host, a scrollbar, a mobile toolbar), and pixels are the one spelling guaranteed to agree with Taffy.
     pub fn to_css(&self, direction: Direction, surface: Size) -> Css {
-        css_of(&self.resolve(direction, surface))
+        css_of(
+            &self.resolve(direction, surface),
+            self.sticky_insets(direction, surface).as_ref(),
+        )
     }
 }
 
-fn css_of(style: &Style) -> Css {
+fn css_of(style: &Style, sticky: Option<&StickyInsets>) -> Css {
     let mut css = Css::default();
 
     css.push("display", display_of(style.display));
@@ -67,12 +71,27 @@ fn css_of(style: &Style) -> Css {
     // Every box is a containing block, because in Taffy every box is: an absolutely positioned child resolves its inset against its parent node. A document resolves it against the nearest positioned ancestor, and a `static` box is not one — so a slider's fill escaped to the layout root and came out window-height.
     css.push(
         "position",
-        if style.position == Position::Absolute {
-            "absolute"
-        } else {
-            "relative"
+        match (sticky, style.position) {
+            (Some(_), _) => "sticky",
+            (None, Position::Absolute) => "absolute",
+            (None, Position::Relative) => "relative",
         },
     );
+    // A sticky box's insets never reach taffy, which would read them as a relative offset.
+    if let Some(sticky) = sticky {
+        for (property, value) in [
+            ("top", sticky.top),
+            ("right", sticky.right),
+            ("bottom", sticky.bottom),
+            ("left", sticky.left),
+        ] {
+            if let Some(value) =
+                value.and_then(|value| length_of(LengthPercentageAuto::from(value).into_raw()))
+            {
+                css.push(property, &value);
+            }
+        }
+    }
     for (property, value) in [
         ("top", style.inset.top),
         ("right", style.inset.right),

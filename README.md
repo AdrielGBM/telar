@@ -184,6 +184,7 @@ Everything here is either always present or one word away. Nothing is bundled.
 
 - **Reactive signals** — a fine-grained graph of signals, memos and effects; no virtual DOM, no diffing.
 - **Flexbox and grid layout** on top of Taffy, with reactive writing direction (LTR/RTL), lengths relative to the surface, and width breakpoints that re-resolve only across a threshold. → [docs/surface-size.md](docs/surface-size.md)
+- **Sticky positioning** — `sticky inset_top:0` holds a box at a scroll viewport's edge inside its parent, placed by Telar on every target and by native `position: sticky` on web-dom. → [docs/sticky.md](docs/sticky.md)
 - **Motion** — tweens and springs driven by one frame ticker, with colors interpolated in Oklch.
 - **Theming** — theme tokens plus light/dark mode, reduced motion and high contrast that can follow the OS, and the user's preferred locales, read the same way on every target. → [docs/system-preferences.md](docs/system-preferences.md)
 - **Keyboard** — each focusable control declares the keys it keeps, so a browser build shares Tab and scrolling with the host page instead of fighting it for them. → [docs/keyboard.md](docs/keyboard.md)

@@ -19,6 +19,6 @@ pub use layout_reactive::{
     detach_overlay, live_node_count, mark_dirty, new_container, new_leaf, new_measured_leaf,
     record_nodes, relayout_if_dirty, remove_node, set_children, set_container_row, set_direction,
     set_display, set_layout_style, set_leading_margin, set_min_height, set_overlay_host,
-    set_surface_size, surface_size, track_layout, use_direction, use_surface_height,
-    use_surface_size, use_surface_width,
+    set_sticky_view, set_surface_size, surface_size, track_layout, use_direction,
+    use_surface_height, use_surface_size, use_surface_width,
 };
