@@ -151,6 +151,11 @@ impl TextMetrics for CanvasTextMetrics {
         (width, lines as f32 * line_height(style))
     }
 
+    fn min_content(&self, text: &str, spans: Option<&[Span]>, style: &TextStyle) -> (f32, f32) {
+        let widest = crate::wrap::widest_word(text, |word| width_of(word, style));
+        self.measure(text, spans, widest, style)
+    }
+
     fn ink_bounds(&self, text: &str, max_width: f32, style: &TextStyle) -> (f32, f32) {
         self.measure(text, None, max_width, style)
     }

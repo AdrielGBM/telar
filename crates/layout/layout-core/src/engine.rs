@@ -13,8 +13,8 @@ use crate::style::{AvailableSpace, LayoutStyle};
 /// A node in the layout tree. Ids are reused after a node is freed, so a stale one may name a live node.
 pub type NodeId = taffy::NodeId;
 
-/// Per-node measure callback: given the available main-axis width, returns the node's intrinsic (width, height). Used for text nodes whose height depends on how many lines the content wraps into at the resolved width.
-pub type MeasureFn = Box<dyn FnMut(f32) -> (f32, f32)>;
+/// Per-node measure callback: given the width the node is laid out in — a definite width, or a request for its min-content or max-content size — returns its intrinsic (width, height). Used for text, whose height depends on how many lines it wraps into, and whose min-content width is its longest word rather than zero.
+pub type MeasureFn = Box<dyn FnMut(AvailableSpace) -> (f32, f32)>;
 
 /// The layout tree: nodes, their styles, and the measure hooks for the leaves that size themselves.
 pub struct LayoutEngine {
@@ -404,12 +404,10 @@ impl LayoutEngine {
                             let Some(measure) = context else {
                                 return taffy::geometry::Size::ZERO;
                             };
-                            // Width to wrap against: a resolved width wins, else the definite available width, else a large bound so MaxContent stays single-line.
-                            let width = known.width.unwrap_or(match available.width {
-                                taffy::AvailableSpace::Definite(w) => w,
-                                taffy::AvailableSpace::MaxContent => 1.0e6,
-                                taffy::AvailableSpace::MinContent => 0.0,
-                            });
+                            let width = known
+                                .width
+                                .map(AvailableSpace::Definite)
+                                .unwrap_or(available.width);
                             let (mw, mh) = measure(width);
                             taffy::geometry::Size {
                                 width: known.width.unwrap_or(mw),

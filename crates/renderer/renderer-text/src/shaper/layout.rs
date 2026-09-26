@@ -4,8 +4,9 @@ use super::TextShaper;
 use super::cache::{ShapingCacheKey, hash_text, text_style_bits};
 use super::{
     effective_line_height, from_cosmic_color, make_buffer, physical_glyph, resolve_coverage,
+    shape_buffer,
 };
-use cosmic_text::{CacheKey, SwashContent};
+use cosmic_text::{CacheKey, SwashContent, Wrap};
 use geometry_core::{Color, Rect};
 use renderer_core::{Raster, Span, TextStyle, TextWrap};
 
@@ -343,6 +344,41 @@ impl TextShaper {
             self.measure_cache.insert(cache_key, result);
         }
         result
+    }
+
+    /// The narrowest `(width, height)` `text` lays out in without breaking inside a word: the widest run between the break opportunities cosmic-text finds (UAX #14, so between CJK ideographs too), and the height [`measure_text`](Self::measure_text) gives at that width, which is the width a box sized by this answer is drawn at.
+    pub fn measure_min_content(
+        &mut self,
+        text: &str,
+        spans: Option<&[Span]>,
+        style: &TextStyle,
+    ) -> (f32, f32) {
+        self.sync_fonts();
+        if text.is_empty() || style.text_wrap == TextWrap::NoWrap {
+            return self.measure_text(text, spans, 0.0, style);
+        }
+        let spans = spans.filter(|s| !s.is_empty());
+        let rect = Rect {
+            x: 0.0,
+            y: 0.0,
+            width: 0.0,
+            height: 100000.0,
+        };
+        let mut buffer = shape_buffer(
+            &mut self.font_system,
+            &mut self.family_availability,
+            text,
+            spans,
+            rect,
+            style,
+        );
+        buffer.set_wrap(Wrap::Word);
+        buffer.shape_until_scroll(&mut self.font_system, false);
+        let widest = buffer
+            .layout_runs()
+            .map(|run| run.line_w)
+            .fold(0.0_f32, f32::max);
+        self.measure_text(text, spans, widest.ceil(), style)
     }
 
     /// The text's ink bounding box measured from the top of a `[0, max_width] × [0, ∞]` layout rect, at scale 1.0: `(ink_top, ink_height)`. Unlike [`measure_text`](Self::measure_text) (which returns the full line-box height) this is the actual drawn glyph extent, so a caller can *optically* center text — the font's line box reserves ascent room for accents/descenders that short runs like "72%" leave empty, which makes line-box-centered text sit visibly high next to an icon. Empty text or a run with no inked glyphs returns `(0.0, 0.0)`.

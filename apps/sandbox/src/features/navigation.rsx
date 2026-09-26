@@ -67,7 +67,7 @@ col gap:20
         code_line code:"accordion title:'Shipping details' open:$open  >  …body…"
     example title:"follow_location — a page stack that is the app's address"
         card gap:10
-            row gap:8
+            row gap:8 wrap
                 button label:"Overview" on_press:(|| { panes.push(Pane::Overview) })
                 button label:"Pricing" on_press:(|| { panes.push(Pane::Pricing) })
                 button label:"Team" on_press:(|| { panes.push(Pane::Team) })

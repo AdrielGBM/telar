@@ -2,7 +2,7 @@
 
 use renderer_core::{Span, TextMetrics, TextStyle, TextWrap};
 
-use crate::wrap::{WrapConfig, WrappedLine, wrap};
+use crate::wrap::{WrapConfig, WrappedLine, line_cols, wrap};
 
 /// How many logical pixels one terminal cell stands for.
 ///
@@ -92,6 +92,11 @@ impl TextMetrics for CellMetrics {
         style: &TextStyle,
     ) -> (f32, f32) {
         self.extent(text, max_width, style)
+    }
+
+    fn min_content(&self, text: &str, _spans: Option<&[Span]>, style: &TextStyle) -> (f32, f32) {
+        let widest = text.split_whitespace().map(line_cols).max().unwrap_or(0);
+        self.extent(text, f32::from(widest) * self.cell.width, style)
     }
 
     fn ink_bounds(&self, text: &str, max_width: f32, style: &TextStyle) -> (f32, f32) {

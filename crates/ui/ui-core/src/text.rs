@@ -117,11 +117,11 @@ impl Text {
         let measure_content = Rc::clone(&content_fn);
         let measure_style = Rc::clone(&style);
         let measure_spans = spans_fn.clone();
-        let measure = Box::new(move |max_width: f32| {
+        let measure = Box::new(move |width: layout_core::AvailableSpace| {
             let s = (measure_style)();
             // Spans change the extent, so a box measured without them wraps differently from the text drawn into it.
             let spans = measure_spans.as_ref().map(|f| f());
-            crate::text_metrics::measure_text(&(measure_content)(), spans.as_deref(), max_width, &s)
+            crate::text_metrics::measure_in(&(measure_content)(), spans.as_deref(), width, &s)
         });
 
         // Stretch overrides any parent align-items, so text fills the cross axis instead of collapsing to 0.

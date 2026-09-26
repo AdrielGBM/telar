@@ -49,3 +49,10 @@ fn edges_round_so_neighbours_touch() {
     let second = (cell.col_at(37.5), cell.col_at(75.0));
     assert_eq!(first.1, second.0, "a shared edge must land on one column");
 }
+
+#[test]
+fn min_content_is_the_widest_word_never_a_piece_of_one() {
+    let (w, h) = metrics().min_content("go pricing now", None, &style());
+    assert_eq!(w, 7.0 * 8.0);
+    assert_eq!(h, 3.0 * 16.0);
+}

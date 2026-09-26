@@ -2,6 +2,7 @@
 //!
 //! The indirection exists for the test-time install below: `renderer-text` is a dev-dependency now, so without it every test that lays out a label would have to name a shaper itself.
 
+use layout_core::AvailableSpace;
 use renderer_core::{Span, TextStyle};
 
 // Idempotent and yielding, so a test that installed its own stub keeps it.
@@ -20,6 +21,27 @@ pub(crate) fn measure_text(
     ensure_installed();
     renderer_core::measure_text(text, spans, max_width, style)
 }
+
+/// The `(width, height)` a text takes in the width layout offers it: wrapped to a definite width, on one line for its max-content size, and at its longest word for its min-content size.
+pub(crate) fn measure_in(
+    text: &str,
+    spans: Option<&[Span]>,
+    width: AvailableSpace,
+    style: &TextStyle,
+) -> (f32, f32) {
+    match width {
+        AvailableSpace::Definite(width) => measure_text(text, spans, width, style),
+        AvailableSpace::MaxContent => measure_text(text, spans, MAX_CONTENT_WIDTH, style),
+        AvailableSpace::MinContent => {
+            #[cfg(test)]
+            ensure_installed();
+            renderer_core::measure_min_content(text, spans, style)
+        }
+    }
+}
+
+/// Wide enough that nothing wraps, and finite, since a measurer turns the width into whole pixels or cells.
+const MAX_CONTENT_WIDTH: f32 = 1.0e6;
 
 pub(crate) fn measure_ink_bounds(text: &str, max_width: f32, style: &TextStyle) -> (f32, f32) {
     #[cfg(test)]

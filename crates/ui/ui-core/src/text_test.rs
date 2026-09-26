@@ -298,3 +298,40 @@ fn text_measured_in_a_fallback_is_measured_again_when_its_face_arrives() {
         "the text must be measured again in the face that arrived"
     );
 }
+
+/// A row too narrow for its labels squeezes them, but never below their longest word: that is a text's min-content width, and a label squeezed past it is drawn broken mid-word ("Pricin / g") in a box that looked like it had room.
+#[test]
+fn a_squeezed_row_never_narrows_a_label_below_its_longest_word() {
+    reset_layout_runtime();
+    let style = || TextStyle::new(16.0, Color::BLACK);
+    let labels: [&'static str; 3] = ["Overview", "Pricing", "Team"];
+    let texts: Vec<Text> = labels
+        .iter()
+        .map(|&label| Text::new(move || label.to_string(), LayoutStyle::new(), style).unwrap())
+        .collect();
+    let tabs: Vec<_> = texts
+        .iter()
+        .map(|text| {
+            new_container(
+                LayoutStyle::new().flex_row().padding_horizontal(24.0),
+                &[text.layout_node()],
+            )
+            .unwrap()
+        })
+        .collect();
+    let root = new_container(LayoutStyle::new().flex_row().width(240.0), &tabs).unwrap();
+    compute_layout(
+        root,
+        AvailableSpace::Definite(240.0),
+        AvailableSpace::MaxContent,
+    )
+    .unwrap();
+    for (label, text) in labels.iter().zip(&texts) {
+        let (word, _) = crate::text_metrics::measure_text(label, None, f32::MAX, &style());
+        let laid_out = track_layout(text.layout_node()).unwrap().get().width;
+        assert!(
+            laid_out >= word,
+            "{label:?} needs {word}px unbroken and was squeezed to {laid_out}px"
+        );
+    }
+}

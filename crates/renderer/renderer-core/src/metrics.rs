@@ -18,6 +18,9 @@ pub trait TextMetrics: Send + Sync + 'static {
         style: &TextStyle,
     ) -> (f32, f32);
 
+    /// The narrowest `(width, height)` `text` lays out in without breaking inside a word — its widest unbreakable run, and the height it wraps to at that width, as CSS's min-content size — which [`measure`](Self::measure) at a width of zero is not: that breaks a word wherever it must, a last resort for drawing into a box already too narrow rather than a reason to make the box narrow.
+    fn min_content(&self, text: &str, spans: Option<&[Span]>, style: &TextStyle) -> (f32, f32);
+
     /// The drawn glyph extent `(ink_top, ink_height)` from the top of the layout rect, so a widget can optically centre a short run against something that is not text.
     fn ink_bounds(&self, text: &str, max_width: f32, style: &TextStyle) -> (f32, f32);
 
@@ -65,6 +68,11 @@ pub fn measure_text(
     style: &TextStyle,
 ) -> (f32, f32) {
     metrics().measure(text, spans, max_width, style)
+}
+
+/// The narrowest `(width, height)` `text` lays out in without breaking inside a word. See [`TextMetrics::min_content`].
+pub fn measure_min_content(text: &str, spans: Option<&[Span]>, style: &TextStyle) -> (f32, f32) {
+    metrics().min_content(text, spans, style)
 }
 
 /// The text's drawn glyph extent `(ink_top, ink_height)`. See [`TextMetrics::ink_bounds`].

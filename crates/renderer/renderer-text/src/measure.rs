@@ -43,6 +43,10 @@ impl renderer_core::TextMetrics for ShaperMetrics {
         measure_text(text, spans, max_width, style)
     }
 
+    fn min_content(&self, text: &str, spans: Option<&[Span]>, style: &TextStyle) -> (f32, f32) {
+        measure_min_content(text, spans, style)
+    }
+
     fn ink_bounds(&self, text: &str, max_width: f32, style: &TextStyle) -> (f32, f32) {
         measure_ink_bounds(text, max_width, style)
     }
@@ -60,6 +64,11 @@ pub fn measure_text(
     style: &TextStyle,
 ) -> (f32, f32) {
     with_shaper(|shaper| shaper.measure_text(text, spans, max_width, style))
+}
+
+/// The narrowest `(width, height)` `text` lays out in without breaking inside a word — see [`TextShaper::measure_min_content`].
+pub fn measure_min_content(text: &str, spans: Option<&[Span]>, style: &TextStyle) -> (f32, f32) {
+    with_shaper(|shaper| shaper.measure_min_content(text, spans, style))
 }
 
 /// The text's ink bounding box `(ink_top, ink_height)` from the top of its layout rect — the actual drawn glyph extent, not the full line box (see [`TextShaper::measure_ink_bounds`]). Lets a widget optically center text vertically so a short run doesn't sit high next to an icon.

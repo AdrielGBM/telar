@@ -272,7 +272,7 @@ pub fn navigation(props: NavigationProps, children: Children) -> Result<Box<dyn 
                                     let __node_15 = button(ButtonProps::props().label("Pricing").on_press(std::rc::Rc::new(move || { panes.push(Pane::Pricing) })).build(), Children::default())?;
                                     let __node_16 = button(ButtonProps::props().label("Team").on_press(std::rc::Rc::new(move || { panes.push(Pane::Team) })).build(), Children::default())?;
                                     let __node_17 = button(ButtonProps::props().label("Back").ghost(true).on_press(std::rc::Rc::new(move || { navigate_back(); })).build(), Children::default())?;
-                                    Container::new(LayoutStyle::new().flex_row().gap(8.0), children![__node_14, __node_15, __node_16, __node_17])?
+                                    Container::new(LayoutStyle::new().flex_row().gap(8.0).flex_wrap(), children![__node_14, __node_15, __node_16, __node_17])?
                                 };
                                 __children.push(box_item(__row_0));
                                 let __text_5 = {

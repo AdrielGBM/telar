@@ -657,3 +657,29 @@ fn marking_measured_leaves_stale_measures_them_again_and_leaves_the_rest_cached(
     lay_out(&mut engine, root);
     assert_eq!(engine.layout(text).unwrap().width, 70.0);
 }
+
+/// A row too narrow for its measured leaves squeezes each to its min-content width and no further — for text, its longest word — which a measure can only answer when it is told that min-content is the question.
+#[test]
+fn a_squeezed_row_stops_each_measured_leaf_at_its_min_content_width() {
+    let word = || -> MeasureFn {
+        Box::new(|width| match width {
+            AvailableSpace::MinContent => (60.0, 20.0),
+            AvailableSpace::MaxContent => (120.0, 10.0),
+            AvailableSpace::Definite(w) if w >= 120.0 => (120.0, 10.0),
+            AvailableSpace::Definite(w) => (w.max(60.0), 20.0),
+        })
+    };
+    let mut engine = LayoutEngine::new();
+    let first = engine
+        .new_measured_leaf(LayoutStyle::new(), word())
+        .unwrap();
+    let second = engine
+        .new_measured_leaf(LayoutStyle::new(), word())
+        .unwrap();
+    let root = engine
+        .new_container(LayoutStyle::new().flex_row().width(100.0), &[first, second])
+        .unwrap();
+    lay_out(&mut engine, root);
+    assert_eq!(engine.layout(first).unwrap().width, 60.0);
+    assert_eq!(engine.layout(second).unwrap().width, 60.0);
+}

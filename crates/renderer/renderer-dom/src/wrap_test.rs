@@ -63,3 +63,11 @@ fn a_multibyte_word_breaks_on_a_character_boundary() {
     // Four two-byte characters: a cut taken on bytes rather than characters would split one in half.
     assert_eq!(greedy("ñññññ", 20.0, monospace), (20.0, 3));
 }
+
+#[test]
+fn the_widest_word_wraps_every_word_whole() {
+    let text = "go pricing now";
+    let widest = widest_word(text, monospace);
+    assert_eq!(widest, 70.0);
+    assert_eq!(greedy(text, widest, monospace), (70.0, 3));
+}

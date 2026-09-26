@@ -61,7 +61,7 @@ impl TextArea {
         // Width is left to the parent, so a long line overflows to the right rather than widening the layout.
         let measure_value = value;
         let measure_style = Rc::clone(&style);
-        let measure = Box::new(move |_max_width: f32| {
+        let measure = Box::new(move |_width: layout_core::AvailableSpace| {
             let s = (measure_style)();
             let line_h = crate::text_metrics::line_box(&s);
             let lines = measure_value.with(|t| t.matches('\n').count() + 1);

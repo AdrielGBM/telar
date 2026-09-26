@@ -36,7 +36,7 @@ impl LineGutter {
 
         let measure_count = Rc::clone(&line_count);
         let measure_style = Rc::clone(&style);
-        let measure = Box::new(move |_max_width: f32| {
+        let measure = Box::new(move |_width: layout_core::AvailableSpace| {
             let s = (measure_style)();
             let line_h = crate::text_metrics::line_height(s.font_size);
             let n = (measure_count)().max(1);

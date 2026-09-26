@@ -196,7 +196,7 @@ pub use services_core::{AppPathsProvider, NoPaths};
 pub use services_core::{Clipboard, clipboard, clipboard_text, set_clipboard, set_clipboard_text};
 // Available in every GUI build rather than opt-in: `ui_core::Surface` composes the per-surface service scope, so `runtime` turns on services-core/di. A non-GUI build has no ui-core and nothing to re-export.
 #[cfg(feature = "runtime")]
-pub use platform_core::{ColorScheme, SystemPreferences};
+pub use platform_core::{ColorScheme, SystemPreferences, system_locales_from_env};
 // The app's address: always on, because every target has one to report even where no navigator follows it.
 #[cfg(feature = "runtime")]
 pub use location::navigate_back;

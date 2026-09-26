@@ -67,8 +67,11 @@ fn a_maxwidth_box_measures_its_content_at_the_capped_width() {
     reset_layout_runtime();
     const TOTAL: f32 = 1200.0;
     const LINE: f32 = 20.0;
-    let measure: layout_core::MeasureFn = Box::new(|available: f32| {
-        let width = if available > 0.0 { available } else { TOTAL };
+    let measure: layout_core::MeasureFn = Box::new(|available| {
+        let width = match available {
+            AvailableSpace::Definite(width) if width > 0.0 => width,
+            _ => TOTAL,
+        };
         (width, (TOTAL / width).ceil() * LINE)
     });
     let (text, text_rect) = new_measured_leaf(LayoutStyle::new(), measure).unwrap();

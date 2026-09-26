@@ -12,6 +12,9 @@ impl TextMetrics for Fixed {
     ) -> (f32, f32) {
         (text.chars().count() as f32 * self.0, self.0)
     }
+    fn min_content(&self, text: &str, spans: Option<&[Span]>, style: &TextStyle) -> (f32, f32) {
+        self.measure(text, spans, 0.0, style)
+    }
     fn ink_bounds(&self, _text: &str, _max_width: f32, _style: &TextStyle) -> (f32, f32) {
         (0.0, self.0)
     }

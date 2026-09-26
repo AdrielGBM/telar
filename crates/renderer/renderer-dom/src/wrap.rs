@@ -47,6 +47,11 @@ pub fn greedy(text: &str, max_width: f32, width_of: impl Fn(&str) -> f32) -> (f3
     (widest, lines)
 }
 
+/// The widest run `text` has between spaces: the narrowest column [`greedy`] wraps it into without breaking inside a word.
+pub fn widest_word(text: &str, width_of: impl Fn(&str) -> f32) -> f32 {
+    text.split_whitespace().map(width_of).fold(0.0, f32::max)
+}
+
 #[cfg(test)]
 #[path = "wrap_test.rs"]
 mod tests;

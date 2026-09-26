@@ -37,6 +37,11 @@ impl TextMetrics for CountingMetrics {
         renderer_text::ShaperMetrics.measure(text, spans, max_width, style)
     }
 
+    fn min_content(&self, text: &str, spans: Option<&[Span]>, style: &TextStyle) -> (f32, f32) {
+        MEASURES.fetch_add(1, Ordering::Relaxed);
+        renderer_text::ShaperMetrics.min_content(text, spans, style)
+    }
+
     fn ink_bounds(&self, text: &str, max_width: f32, style: &TextStyle) -> (f32, f32) {
         renderer_text::ShaperMetrics.ink_bounds(text, max_width, style)
     }
