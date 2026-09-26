@@ -76,6 +76,7 @@ fn mount() {
         owns_scroll: true,
         owns_context_menu: false,
         owns_keyboard: false,
+        location: None,
     };
     WebPlatform::with_host(host.clone(), config)
         .run(WindowConfig::default(), Recorder)

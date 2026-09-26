@@ -1,13 +1,13 @@
 //! [`Route`]: a typed app route that knows how to become, and come back from, a [`Location`].
 
-use crate::location::Location;
+use platform_core::Location;
 
 /// A typed navigation destination that serializes to and from a platform-neutral [`Location`].
 ///
 /// Implement this on the route enum an app already pushes onto a [`Navigator`](crate::Navigator) to make
 /// that history addressable outside the process: [`Navigator::location`](crate::Navigator::location) and
 /// [`Navigator::locations`](crate::Navigator::locations) then read the stack as `Location`s for whichever
-/// [`LocationSource`] a target adapts them to (web history, a desktop deep link, an Android intent, a TUI
+/// [`LocationSource`](platform_core::LocationSource) a target adapts them to (web history, a desktop deep link, an Android intent, a TUI
 /// argument, or a fixed headless location).
 ///
 /// `Navigator<R>` does not require `Route` — a route type that never leaves the process can stay a plain
@@ -16,9 +16,8 @@ use crate::location::Location;
 /// # Unknown locations
 ///
 /// [`from_location`](Self::from_location) returns `None` for a `Location` the route type does not
-/// recognize — a stale link, a hand-edited deep link, or one from a future app version. Callers (a
-/// `LocationSource` adapter, a prerender step) fall back to the app's own not-found route rather than
-/// panicking.
+/// recognize — a stale link, a hand-edited deep link, or one from a future app version. [`Navigator::follow_location`](crate::Navigator::follow_location)
+/// leaves such an entry out; an app that wants a not-found page instead answers with one from here.
 pub trait Route: Clone {
     /// Serializes this route to its neutral location.
     fn to_location(&self) -> Location;

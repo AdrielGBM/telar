@@ -13,6 +13,7 @@ use crate::prefs::UserPrefs;
 
 use super::handler::build_app_handler;
 use super::host::{SurfaceRenderer, SurfaceWindow};
+use super::location::LocationBinding;
 
 /// Drive a full rsx app on an arbitrary [`Platform`] backend. This is the backend-agnostic entry point: an out-of-tree backend (e.g. a Wayland layer-shell `Platform`) constructs its own platform and paths provider and calls this, with no winit dependency. [`crate::run_app_with_name`] is the winit-defaulting convenience wrapper over it.
 ///
@@ -39,6 +40,7 @@ where
         app,
         app_name,
         SurfaceRenderer::builtin(),
+        None,
     )
 }
 
@@ -69,16 +71,20 @@ where
         app,
         app_name,
         SurfaceRenderer::installed(factory),
+        None,
     )
 }
 
-fn run_on_platform<P, A, D>(
-    platform: P,
+/// The boot every runner shares. `location` is the address the caller keeps for this platform; `None` asks the platform for its own.
+#[allow(clippy::too_many_arguments)]
+pub(super) fn run_on_platform<P, A, D>(
+    mut platform: P,
     config: AppConfig,
     paths: Arc<dyn AppPathsProvider>,
     app: A,
     app_name: &str,
     renderer: SurfaceRenderer<P::Window>,
+    location: Option<LocationBinding>,
 ) -> Result<(), PlatformError>
 where
     P: Platform,
@@ -97,7 +103,8 @@ where
         font_family,
     } = config;
     let window = super::resolved_window(window, &app);
-    let handler = build_app_handler::<P::Window, D>(
+    let location = location.or_else(|| platform.location_source().map(LocationBinding::new));
+    let mut handler = build_app_handler::<P::Window, D>(
         Box::new(crate::app_runtime::LocalApp(app)),
         paths,
         crate::runner::font_config::FontSetup {
@@ -110,5 +117,6 @@ where
         app_name.to_owned(),
         renderer,
     );
+    handler.location = location;
     platform.run(window, handler)
 }

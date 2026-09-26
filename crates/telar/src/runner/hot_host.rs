@@ -70,6 +70,9 @@ pub fn run_hot_reload_host(
         super::host::SurfaceRenderer::builtin(),
     );
     handler.hot_reload_rx = Some(hot_rx);
+    handler.location = Some(super::location::LocationBinding::remembered(Box::new(
+        platform_core::ArgumentLocation::from_env(),
+    )));
     if let Err(e) = platform.run(window, handler) {
         tracing::error!("Event loop error: {e}");
         std::process::exit(1);

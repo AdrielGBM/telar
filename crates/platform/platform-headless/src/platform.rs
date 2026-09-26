@@ -5,8 +5,9 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use platform_core::{
-    Event, EventHandler, MultiSurfacePlatform, Platform, PlatformError, SurfaceId,
-    SystemPreferences, Window, WindowConfig,
+    Event, EventHandler, FixedLocation, HistorySink, Location, LocationSource,
+    MultiSurfacePlatform, Platform, PlatformError, SurfaceId, SystemPreferences, Window,
+    WindowConfig,
 };
 
 use crate::window::HeadlessWindow;
@@ -31,6 +32,9 @@ pub struct HeadlessPlatform {
     surface_sink: Option<SurfaceFrameSink>,
     system_preferences: SystemPreferences,
     resizes: Vec<(u32, u32)>,
+    location: Vec<Location>,
+    location_sink: Option<HistorySink>,
+    location_changes: Vec<Vec<Location>>,
 }
 
 impl HeadlessPlatform {
@@ -44,6 +48,9 @@ impl HeadlessPlatform {
             surface_sink: None,
             system_preferences: SystemPreferences::default(),
             resizes: Vec::new(),
+            location: Vec::new(),
+            location_sink: None,
+            location_changes: Vec::new(),
         }
     }
 
@@ -56,6 +63,27 @@ impl HeadlessPlatform {
     /// Sizes the window is dragged to, one before each frame in order, delivered as the resize a windowing system would send. The run drives at least one frame per resize. Only the single-surface run follows them.
     pub fn with_resizes(mut self, sizes: impl IntoIterator<Item = (u32, u32)>) -> Self {
         self.resizes = sizes.into_iter().collect();
+        self
+    }
+
+    /// The history the app opens on, root-first — the fixed location a test or a prerender of one page declares. Left alone, the platform names none and the app opens at its own root.
+    pub fn with_location(mut self, history: impl IntoIterator<Item = Location>) -> Self {
+        self.location = history.into_iter().collect();
+        self
+    }
+
+    /// Writes the app's history into `sink` as it opens and after every move it makes, for a caller that asserts on where the app went.
+    pub fn record_location_into(mut self, sink: HistorySink) -> Self {
+        self.location_sink = Some(sink);
+        self
+    }
+
+    /// Histories the platform moves to by itself, one before each frame in order — what a browser's back and forward look like to the app. The run drives at least one frame per change. Only the single-surface run follows them.
+    pub fn with_location_changes(
+        mut self,
+        changes: impl IntoIterator<Item = Vec<Location>>,
+    ) -> Self {
+        self.location_changes = changes.into_iter().collect();
         self
     }
 
@@ -81,6 +109,14 @@ impl HeadlessPlatform {
 impl Platform for HeadlessPlatform {
     type Window = HeadlessWindow;
 
+    fn location_source(&mut self) -> Option<Box<dyn LocationSource>> {
+        let location = FixedLocation::new(std::mem::take(&mut self.location));
+        Some(Box::new(match self.location_sink.take() {
+            Some(sink) => location.recording_into(sink),
+            None => location,
+        }))
+    }
+
     fn run<H: EventHandler<HeadlessWindow>>(
         self,
         _config: WindowConfig,
@@ -104,7 +140,11 @@ impl Platform for HeadlessPlatform {
             ));
         }
 
-        let frames = self.frames.max(1).max(self.resizes.len() as u32);
+        let frames = self
+            .frames
+            .max(1)
+            .max(self.resizes.len() as u32)
+            .max(self.location_changes.len() as u32);
         for frame in 0..frames {
             handler.new_events();
             if let Some(&(width, height)) = self.resizes.get(frame as usize) {
@@ -114,6 +154,14 @@ impl Platform for HeadlessPlatform {
                     Event::WindowResized {
                         width: (width as f64 / scale).round() as u32,
                         height: (height as f64 / scale).round() as u32,
+                    },
+                    &window,
+                );
+            }
+            if let Some(history) = self.location_changes.get(frame as usize) {
+                handler.on_event(
+                    Event::LocationChanged {
+                        history: history.clone(),
                     },
                     &window,
                 );

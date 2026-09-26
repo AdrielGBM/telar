@@ -33,6 +33,7 @@ mod host;
     not(target_arch = "wasm32")
 ))]
 mod hot_host;
+mod location;
 mod multi;
 #[cfg(feature = "tui")]
 mod tui;

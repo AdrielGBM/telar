@@ -43,6 +43,10 @@ name = "installed_renderer"
 path = "src/installed_renderer_test.rs"
 
 [[test]]
+name = "location_flow"
+path = "src/location_flow_test.rs"
+
+[[test]]
 name = "local_tree_repaints"
 path = "src/local_tree_repaints_test.rs"
 

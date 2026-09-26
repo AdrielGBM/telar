@@ -7,6 +7,8 @@ mod adpf;
 #[cfg(target_os = "android")]
 pub mod fonts;
 #[cfg(target_os = "android")]
+mod intent;
+#[cfg(target_os = "android")]
 mod paths;
 #[cfg(target_os = "android")]
 pub mod platform;
@@ -21,6 +23,8 @@ mod sys_prop;
 pub use adpf::AdpfSession;
 #[cfg(target_os = "android")]
 pub use android_activity::AndroidApp;
+#[cfg(target_os = "android")]
+pub use intent::IntentLocation;
 #[cfg(target_os = "android")]
 pub use paths::AndroidPathsProvider;
 #[cfg(target_os = "android")]

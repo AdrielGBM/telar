@@ -32,7 +32,7 @@ struct App {
 }
 
 /// One registered DOM listener, removed when dropped.
-struct Listener {
+pub(crate) struct Listener {
     target: web_sys::EventTarget,
     event: &'static str,
     closure: Closure<dyn FnMut(web_sys::Event)>,
@@ -67,7 +67,7 @@ pub fn request_frame() {
     });
 }
 
-fn push(events: impl IntoIterator<Item = Event>) {
+pub(crate) fn push(events: impl IntoIterator<Item = Event>) {
     QUEUE.with(|queue| queue.borrow_mut().extend(events));
     request_frame();
 }
@@ -93,6 +93,8 @@ pub struct WebPlatformConfig {
     ///
     /// Set where the app draws pixels: nothing on a canvas is a native control, so Tab and the arrows are never the page's. A document is the other case: the browser walks its own Tab order through the boxes and scrolls with the arrows, and the focused box's declared [`ConsumedKeys`](platform_core::ConsumedKeys) decide which keys it keeps.
     pub owns_keyboard: bool,
+    /// How the app's locations are written as addresses on this page. `None` takes the base path from the page's `<base href>`, and `/` where it has none.
+    pub location: Option<platform_core::LocationFormat>,
 }
 
 impl Default for WebPlatformConfig {
@@ -104,6 +106,7 @@ impl Default for WebPlatformConfig {
             owns_scroll: false,
             owns_context_menu: true,
             owns_keyboard: true,
+            location: None,
         }
     }
 }
@@ -136,6 +139,12 @@ impl Default for WebPlatform {
 
 impl Platform for WebPlatform {
     type Window = WebWindow;
+
+    fn location_source(&mut self) -> Option<Box<dyn platform_core::LocationSource>> {
+        Some(Box::new(crate::location::WebLocation::new(
+            self.config.location.clone(),
+        )))
+    }
 
     /// Mounts the app and returns, leaving it running on the browser's loop.
     ///
@@ -207,7 +216,7 @@ fn prepare_host(host: &web_sys::HtmlElement, config: &WebPlatformConfig) {
     }
 }
 
-fn listen(
+pub(crate) fn listen(
     target: &web_sys::EventTarget,
     event: &'static str,
     passive: bool,

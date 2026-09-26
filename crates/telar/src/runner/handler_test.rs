@@ -899,3 +899,49 @@ fn focus_the_surface_took_out_of_every_box_leaves_none_focused() {
     handler.on_event(Event::FocusLeftBoxes, &window);
     assert_eq!(ui_core::focus::current(), None);
 }
+
+/// Back is answered by the app's own history first, and handed back to the platform only when there is nothing left: at the first entry, Android sends the task away.
+#[test]
+fn back_steps_the_history_until_there_is_none_left_to_step() {
+    let at = |path: &str| platform_core::LocationFormat::root().parse(path).unwrap();
+    let sink = platform_core::HistorySink::default();
+    let mut handler = handler();
+    handler.location = Some(super::super::location::LocationBinding::new(Box::new(
+        platform_core::FixedLocation::new([at("/"), at("/a")]).recording_into(sink.clone()),
+    )));
+    handler.hand_over_location();
+    let window = HeadlessWindow::new(4, 4);
+    handler.new_events();
+
+    assert!(handler.on_back(&window));
+    assert_eq!(*sink.lock().unwrap(), [at("/")]);
+    assert!(!handler.on_back(&window));
+    handler.about_to_wait();
+    assert_eq!(*sink.lock().unwrap(), [at("/")]);
+}
+
+/// The platform moving by itself is followed and never reported straight back to it.
+#[test]
+fn a_history_the_platform_reports_is_not_echoed_to_it() {
+    let at = |path: &str| platform_core::LocationFormat::root().parse(path).unwrap();
+    let sink = platform_core::HistorySink::default();
+    let mut handler = handler();
+    handler.location = Some(super::super::location::LocationBinding::new(Box::new(
+        platform_core::FixedLocation::new([at("/")]).recording_into(sink.clone()),
+    )));
+    handler.hand_over_location();
+    let window = HeadlessWindow::new(4, 4);
+
+    handler.on_event(
+        Event::LocationChanged {
+            history: vec![at("/"), at("/b")],
+        },
+        &window,
+    );
+    assert_eq!(platform_core::location_history(), [at("/"), at("/b")]);
+    assert_eq!(
+        *sink.lock().unwrap(),
+        [at("/")],
+        "the platform already stands there"
+    );
+}

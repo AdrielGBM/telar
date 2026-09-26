@@ -115,7 +115,7 @@ fn build(transition: NavTransition) -> (NavHost<u8>, Navigator<u8>, Harness) {
             }) as Box<dyn NavPage>)
         }
     };
-    let mut host = NavHost::new(nav.clone(), factory).unwrap();
+    let mut host = NavHost::new(nav, factory).unwrap();
     host.set_transition(transition);
     (host, nav, Harness { built, nodes, log })
 }
@@ -219,7 +219,7 @@ fn transient_gives_each_stack_entry_its_own_page() {
             }) as Box<dyn NavPage>)
         }
     };
-    let mut host = NavHost::new(nav.clone(), factory).unwrap();
+    let mut host = NavHost::new(nav, factory).unwrap();
     host.set_policy_for(|_| PagePolicy::Transient);
 
     nav.push(1);
@@ -266,7 +266,7 @@ fn transient_releases_a_replaced_entry() {
             }) as Box<dyn NavPage>)
         }
     };
-    let mut host = NavHost::new(nav.clone(), factory).unwrap();
+    let mut host = NavHost::new(nav, factory).unwrap();
     host.set_policy_for(|_| PagePolicy::Transient);
 
     nav.push(1);
@@ -297,7 +297,7 @@ fn a_persistent_destination_and_a_pushed_detail_coexist() {
         }
     };
     // Even routes are rail destinations, odd routes are pushed details.
-    let mut host = NavHost::new(nav.clone(), factory).unwrap();
+    let mut host = NavHost::new(nav, factory).unwrap();
     host.set_policy_for(|route: &u8| {
         if route.is_multiple_of(2) {
             PagePolicy::KeepAlive
@@ -354,7 +354,7 @@ fn transient_drops_pages_popped_past_but_keeps_the_stack() {
             }) as Box<dyn NavPage>)
         }
     };
-    let mut host = NavHost::new(nav.clone(), factory).unwrap();
+    let mut host = NavHost::new(nav, factory).unwrap();
     host.set_policy_for(|_| PagePolicy::Transient);
 
     nav.push(1);
@@ -400,7 +400,7 @@ fn transient_teardown_releases_the_pages_effects() {
             Ok(Box::new(EffectPage { node, _held: held }) as Box<dyn NavPage>)
         }
     };
-    let mut host = NavHost::new(nav.clone(), factory).unwrap();
+    let mut host = NavHost::new(nav, factory).unwrap();
     host.set_policy_for(|_| PagePolicy::Transient);
 
     nav.push(1);
@@ -468,11 +468,11 @@ fn replacing_a_page_keeps_its_effects(nesting: Nesting) {
     let mut host = match nesting {
         Nesting::UnderAnOwner => {
             let held = owner_scope();
-            let host = NavHost::new(nav.clone(), factory).unwrap();
+            let host = NavHost::new(nav, factory).unwrap();
             drop(held);
             host
         }
-        Nesting::UnderNone => NavHost::new(nav.clone(), factory).unwrap(),
+        Nesting::UnderNone => NavHost::new(nav, factory).unwrap(),
     };
     host.set_policy_for(|_| PagePolicy::Transient);
 

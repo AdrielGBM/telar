@@ -351,6 +351,18 @@ pub fn app(input: TokenStream) -> TokenStream {
             -> ::std::vec::Vec<::telar::WindowCommand> {
                 ::telar::take_window_commands()
             }
+            // The dylib's own copy of the app's history, which its navigator follows.
+            #[unsafe(no_mangle)]
+            pub unsafe extern "Rust" fn _rsx_hot_set_location_history(
+                history: &[::telar::Location],
+            ) {
+                ::telar::receive_location_history(history.to_vec());
+            }
+            // Back closes the dylib's dialogs and steps the dylib's history, neither of which the host can reach.
+            #[unsafe(no_mangle)]
+            pub unsafe extern "Rust" fn _rsx_hot_navigate_back() -> bool {
+                ::telar::navigate_back()
+            }
             // Run the completions of tasks spawned inside this dylib: `spawn_task` registers its callback in this dylib's reactive-core thread-local, so the host must drain it across this boundary — its own copy is empty.
             #[unsafe(no_mangle)]
             pub unsafe extern "Rust" fn _rsx_hot_drain_tasks() {

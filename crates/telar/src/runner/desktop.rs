@@ -29,7 +29,17 @@ fn run_desktop_with_plugin<A: App, D: DevPlugin>(config: AppConfig, app: A, app_
         }
     };
     let config = super::dev_window::with_dev_overrides(config);
-    if let Err(e) = super::run_with_platform::<_, A, D>(platform, config, paths, app, app_name) {
+    if let Err(e) = super::generic::run_on_platform::<_, A, D>(
+        platform,
+        config,
+        paths,
+        app,
+        app_name,
+        super::host::SurfaceRenderer::builtin(),
+        Some(super::location::LocationBinding::remembered(Box::new(
+            platform_core::ArgumentLocation::from_env(),
+        ))),
+    ) {
         tracing::error!("Event loop exited with error: {e}");
         std::process::exit(1);
     }

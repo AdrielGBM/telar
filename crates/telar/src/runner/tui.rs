@@ -65,8 +65,16 @@ pub fn run_tui_app_with_name<A: App>(
         ..TuiConfig::default()
     });
 
-    if let Err(e) = super::run_with_platform_and_renderer::<_, _, A, ()>(
-        platform, factory, config, paths, app, app_name,
+    if let Err(e) = super::generic::run_on_platform::<_, A, ()>(
+        platform,
+        config,
+        paths,
+        app,
+        app_name,
+        super::host::SurfaceRenderer::installed(factory),
+        Some(super::location::LocationBinding::remembered(Box::new(
+            platform_core::ArgumentLocation::from_env(),
+        ))),
     ) {
         // The terminal is restored by the platform's own teardown and by its panic hook, so by the time this prints, the message lands on a shell the user can read it in.
         eprintln!("telar: {e}");

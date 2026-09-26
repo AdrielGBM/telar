@@ -38,6 +38,7 @@ web-sys = { workspace = true, features = [
     "FocusEvent",
     "HtmlCanvasElement",
     "HtmlElement",
+    "History",
     "Location",
     "HtmlInputElement",
     "InputEvent",
@@ -49,9 +50,12 @@ web-sys = { workspace = true, features = [
     "Node",
     "Performance",
     "PointerEvent",
+    "PopStateEvent",
     "ResizeObserver",
     "ResizeObserverEntry",
     "ResizeObserverSize",
+    "ScrollRestoration",
+    "Url",
     "WheelEvent",
     "Window",
     "console",
@@ -63,3 +67,7 @@ wasm-bindgen-test = "=0.3.77"
 [[test]]
 name = "preferences"
 path = "src/preferences_test.rs"
+
+[[test]]
+name = "location"
+path = "src/location_test.rs"

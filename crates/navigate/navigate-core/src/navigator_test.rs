@@ -1,5 +1,4 @@
 use super::*;
-use crate::location::Location;
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 enum Route {
@@ -162,7 +161,7 @@ fn current_is_reactive() {
     let nav = Navigator::new(Route::Home);
     let seen = std::rc::Rc::new(std::cell::RefCell::new(Vec::<Route>::new()));
     let s = seen.clone();
-    let n = nav.clone();
+    let n = nav;
     let _e = reactive_core::effect(move || s.borrow_mut().push(n.current()));
     nav.push(Route::Settings);
     nav.pop();
@@ -170,5 +169,141 @@ fn current_is_reactive() {
         *seen.borrow(),
         vec![Route::Home, Route::Settings, Route::Home],
         "the effect re-ran on each navigation"
+    );
+}
+
+fn at(path: &str) -> Location {
+    platform_core::LocationFormat::root().parse(path).unwrap()
+}
+
+fn steps() -> Vec<(platform_core::HistoryStep, usize)> {
+    platform_core::take_window_commands()
+        .into_iter()
+        .filter_map(|command| match command {
+            platform_core::WindowCommand::Navigate(update) => {
+                Some((update.step, update.history.len()))
+            }
+            _ => None,
+        })
+        .collect()
+}
+
+#[test]
+fn a_following_navigator_opens_on_the_address_it_was_launched_at() {
+    platform_core::receive_location_history(vec![at("/"), at("/settings")]);
+    let nav = Navigator::new(Route::Home).follow_location();
+    assert_eq!(
+        nav.peek_stack(<[Route]>::to_vec),
+        [Route::Home, Route::Settings]
+    );
+    assert!(
+        steps().is_empty(),
+        "the platform already shows this history"
+    );
+}
+
+#[test]
+fn every_move_of_the_stack_reaches_the_platform_as_one_step() {
+    use platform_core::HistoryStep;
+    platform_core::receive_location_history(vec![at("/")]);
+    let nav = Navigator::new(Route::Home).follow_location();
+    nav.push(Route::Settings);
+    nav.push(Route::Detail);
+    nav.replace(Route::Settings);
+    nav.pop_to_root();
+    nav.reset(Route::Detail);
+    assert_eq!(
+        steps(),
+        [
+            (HistoryStep::Push(1), 2),
+            (HistoryStep::Push(1), 3),
+            (HistoryStep::Replace, 3),
+            (HistoryStep::Back(2), 1),
+            (HistoryStep::Replace, 1),
+        ]
+    );
+    assert_eq!(platform_core::location_history(), [at("/detail")]);
+}
+
+#[test]
+fn a_platform_that_names_nothing_is_given_the_current_page() {
+    let nav = Navigator::new(Route::Home).follow_location();
+    assert_eq!(nav.current(), Route::Home);
+    assert_eq!(steps(), [(platform_core::HistoryStep::Replace, 1)]);
+}
+
+#[test]
+fn the_platform_moving_by_itself_moves_the_stack_without_an_echo() {
+    platform_core::receive_location_history(vec![at("/")]);
+    let nav = Navigator::new(Route::Home).follow_location();
+    nav.push(Route::Settings);
+    nav.push(Route::Detail);
+    steps();
+
+    platform_core::receive_location_history(vec![at("/"), at("/settings")]);
+    assert_eq!(nav.current(), Route::Settings);
+    platform_core::receive_location_history(vec![at("/"), at("/settings"), at("/detail")]);
+    assert_eq!(nav.depth(), 3);
+    assert!(
+        steps().is_empty(),
+        "back and forward are already the platform's own"
+    );
+}
+
+#[test]
+fn an_unknown_entry_is_dropped_and_the_current_entry_rewritten_rather_than_stepped_back() {
+    platform_core::receive_location_history(vec![at("/"), at("/settings"), at("/gone")]);
+    let nav = Navigator::new(Route::Home).follow_location();
+    assert_eq!(
+        nav.peek_stack(<[Route]>::to_vec),
+        [Route::Home, Route::Settings]
+    );
+    assert_eq!(steps(), [(platform_core::HistoryStep::Replace, 2)]);
+
+    platform_core::receive_location_history(vec![at("/nowhere")]);
+    assert_eq!(
+        nav.depth(),
+        2,
+        "nothing recognised leaves the stack where it was"
+    );
+    assert_eq!(steps(), [(platform_core::HistoryStep::Replace, 2)]);
+}
+
+#[test]
+fn locations_asked_for_by_address_open_through_the_following_navigator() {
+    platform_core::receive_location_history(vec![at("/")]);
+    let nav = Navigator::new(Route::Home).follow_location();
+    assert!(platform_core::push_location(at("/settings")));
+    assert!(
+        !platform_core::push_location(at("/gone")),
+        "no page, no entry"
+    );
+    assert!(platform_core::replace_location(at("/detail")));
+    assert_eq!(
+        nav.peek_stack(<[Route]>::to_vec),
+        [Route::Home, Route::Detail]
+    );
+    assert!(platform_core::history_back());
+    assert!(
+        !platform_core::history_back(),
+        "the root is the platform's to leave"
+    );
+    assert_eq!(nav.current(), Route::Home);
+}
+
+#[test]
+fn a_binding_made_under_an_owner_ends_with_it() {
+    platform_core::receive_location_history(vec![at("/")]);
+    let owner = {
+        let scope = reactive_core::owner_scope();
+        Navigator::new(Route::Home).follow_location();
+        scope.id()
+    };
+    reactive_core::dispose_owner(owner);
+    assert!(platform_core::push_location(at("/settings")));
+    assert_eq!(
+        platform_core::location_history(),
+        [at("/"), at("/settings")],
+        "with nothing following, the request moves the history itself"
     );
 }

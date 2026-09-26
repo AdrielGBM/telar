@@ -142,6 +142,8 @@ pub enum SurfaceIntent {
     Dragged(Event, Event),
     // The OS reported a changed appearance. The backend owns the whole `SystemPreferences` snapshot, so it re-reads and delivers that rather than a lone colour scheme.
     RereadPreferences,
+    // The user asked to go back: Android's back button or gesture, a mouse's back button, a keyboard's `BrowserBack`. Delivered through `EventHandler::on_back`, whose answer decides whether the platform does anything of its own.
+    Back,
     // State-only (e.g. `ModifiersChanged`) or an unmapped event — nothing to deliver.
     Ignore,
 }
@@ -195,6 +197,11 @@ pub fn map_window_event(
                 source: PointerSource::Mouse,
             })
         }
+        WindowEvent::MouseInput {
+            state,
+            button: WinitMouseButton::Back,
+            ..
+        } => back_on_press(state),
         WindowEvent::MouseInput { state, button, .. } => {
             let Some(btn) = crate::map_mouse_button(button) else {
                 return SurfaceIntent::Ignore;
@@ -301,6 +308,11 @@ pub fn map_window_event(
                 modifiers: *modifiers,
             })
         }
+        WindowEvent::KeyboardInput { event, .. }
+            if event.logical_key == WinitKey::Named(WinitNamedKey::BrowserBack) =>
+        {
+            back_on_press(event.state)
+        }
         WindowEvent::KeyboardInput { event, .. } => {
             let Some(key) = crate::map_key(&event.logical_key, event.location) else {
                 return SurfaceIntent::Ignore;
@@ -319,6 +331,14 @@ pub fn map_window_event(
         }
         WindowEvent::ThemeChanged(_) => SurfaceIntent::RereadPreferences,
         _ => SurfaceIntent::Ignore,
+    }
+}
+
+// On the press, so it answers as soon as the button goes down; the release carries nothing.
+fn back_on_press(state: ElementState) -> SurfaceIntent {
+    match state {
+        ElementState::Pressed => SurfaceIntent::Back,
+        ElementState::Released => SurfaceIntent::Ignore,
     }
 }
 

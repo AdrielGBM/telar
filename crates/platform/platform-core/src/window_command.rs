@@ -19,6 +19,8 @@ pub enum WindowCommand {
     Focus,
     /// Set the pointer shape. Pushed from a hover handler, which is why it is a command rather than a property: the widget under the pointer decides, and it changes many times per second.
     SetCursor(crate::Cursor),
+    /// Move the platform's history: the step the app took, and where it now stands. Queued by [`report_location_history`](crate::report_location_history) and carried out by the surface's [`LocationSource`](crate::LocationSource), which is why it travels with the other window commands: the app moves inside a widget closure, and only the runner holds the source.
+    Navigate(crate::HistoryUpdate),
 }
 
 reactive_local::surface_local! {

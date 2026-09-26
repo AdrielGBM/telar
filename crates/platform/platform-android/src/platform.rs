@@ -338,6 +338,11 @@ impl<H: EventHandler<AndroidWindow>> ApplicationHandler<()> for AndroidRunner<H>
                 event_loop.exit();
             }
             SurfaceIntent::RereadPreferences => self.reread_preferences(),
+            SurfaceIntent::Back => {
+                if !self.handler.on_back(&window) {
+                    crate::intent::leave(&self.app);
+                }
+            }
             SurfaceIntent::Ignore => {}
         }
     }
@@ -345,6 +350,12 @@ impl<H: EventHandler<AndroidWindow>> ApplicationHandler<()> for AndroidRunner<H>
 
 impl Platform for AndroidPlatform {
     type Window = AndroidWindow;
+
+    fn location_source(&mut self) -> Option<Box<dyn platform_core::LocationSource>> {
+        Some(Box::new(crate::intent::IntentLocation::new(
+            self.app.clone(),
+        )))
+    }
 
     fn run<H: EventHandler<Self::Window>>(
         self,

@@ -90,6 +90,16 @@ pub trait AppRuntime: 'static {
         ui_core::set_surface_size(size);
     }
 
+    /// Hands over the history the platform stands on, in the store [`location_history`](crate::location_history) reads and a following navigator adopts.
+    fn set_location_history(&self, history: &[platform_core::Location]) {
+        platform_core::receive_location_history(history.to_vec());
+    }
+
+    /// One back as the user means it; see [`navigate_back`](crate::navigate_back).
+    fn navigate_back(&self) -> bool {
+        crate::location::navigate_back()
+    }
+
     /// Runs the completion callbacks of `spawn_task` work that finished since the last frame, on the UI thread.
     fn drain_tasks(&self) {
         reactive_core::drain_tasks();

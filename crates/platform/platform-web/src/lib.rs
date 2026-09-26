@@ -9,6 +9,7 @@
 
 mod clipboard;
 mod dom;
+mod location;
 mod log;
 mod map;
 mod platform;
@@ -17,6 +18,7 @@ mod window;
 
 pub use clipboard::WebClipboard;
 pub use dom::{host as host_element, page_setting};
+pub use location::WebLocation;
 pub use log::install_console_logging;
 pub use platform::{WebPlatform, WebPlatformConfig};
 pub use preferences::{MediaAnswers, read as read_system_preferences};

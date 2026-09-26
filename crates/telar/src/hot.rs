@@ -237,6 +237,29 @@ impl crate::app_runtime::AppRuntime for HotApp {
         }
     }
 
+    // The navigator following the address lives in the dylib's store. A missing symbol leaves the dylib at its own root until it is rebuilt.
+    fn set_location_history(&self, history: &[platform_core::Location]) {
+        if let Ok(set) = unsafe {
+            self._lib
+                .get::<unsafe extern "Rust" fn(&[platform_core::Location])>(
+                    b"_rsx_hot_set_location_history\0",
+                )
+        } {
+            unsafe { set(history) }
+        }
+    }
+
+    // Its dialogs and its history are the dylib's. A missing symbol answers that nothing went back.
+    fn navigate_back(&self) -> bool {
+        let Ok(back) = (unsafe {
+            self._lib
+                .get::<unsafe extern "Rust" fn() -> bool>(b"_rsx_hot_navigate_back\0")
+        }) else {
+            return false;
+        };
+        unsafe { back() }
+    }
+
     // `spawn_task` registered their callbacks in the dylib's own reactive-core thread-local, so the host must drain it across this boundary; its own copy is empty. A missing symbol degrades to a no-op.
     fn drain_tasks(&self) {
         if let Ok(drain) = unsafe {

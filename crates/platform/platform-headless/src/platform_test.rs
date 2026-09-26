@@ -151,3 +151,60 @@ fn each_scripted_resize_lands_before_its_frame_and_the_window_agrees() {
         ]
     );
 }
+
+fn at(path: &str) -> platform_core::Location {
+    platform_core::LocationFormat::root().parse(path).unwrap()
+}
+
+#[test]
+fn a_declared_location_is_what_the_app_opens_on_and_moves_are_recorded() {
+    let sink = platform_core::HistorySink::default();
+    let mut platform = HeadlessPlatform::new(4, 4)
+        .record_location_into(sink.clone())
+        .with_location([at("/"), at("/es")]);
+    let mut source = platform
+        .location_source()
+        .expect("headless always has an address");
+    assert_eq!(source.initial(), [at("/"), at("/es")]);
+    source.push(&[at("/"), at("/es"), at("/es/a")]);
+    assert_eq!(sink.lock().unwrap().len(), 3);
+}
+
+#[test]
+fn an_undeclared_location_opens_the_app_at_its_root() {
+    let mut source = HeadlessPlatform::new(4, 4).location_source().unwrap();
+    assert!(source.initial().is_empty());
+}
+
+struct HistoryLog(Rc<RefCell<Vec<String>>>);
+
+impl EventHandler<HeadlessWindow> for HistoryLog {
+    fn on_resume(&mut self, _window: &HeadlessWindow) -> bool {
+        true
+    }
+
+    fn on_event(&mut self, event: Event, _window: &HeadlessWindow) {
+        if let Event::LocationChanged { history } = event {
+            self.0
+                .borrow_mut()
+                .push(format!("moved to {}", history.len()));
+        }
+    }
+
+    fn on_redraw(&mut self, _window: &HeadlessWindow) {
+        self.0.borrow_mut().push("drawn".into());
+    }
+}
+
+#[test]
+fn each_scripted_location_change_lands_before_its_frame() {
+    let log = Rc::new(RefCell::new(Vec::new()));
+    HeadlessPlatform::new(4, 4)
+        .with_location_changes([vec![at("/")], vec![at("/"), at("/a")]])
+        .run(WindowConfig::default(), HistoryLog(log.clone()))
+        .unwrap();
+    assert_eq!(
+        *log.borrow(),
+        ["moved to 1", "drawn", "moved to 2", "drawn"]
+    );
+}

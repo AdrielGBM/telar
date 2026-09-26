@@ -36,6 +36,8 @@ pub mod hot;
 #[cfg(feature = "dev")]
 pub mod hot_state;
 #[cfg(feature = "runtime")]
+mod location;
+#[cfg(feature = "runtime")]
 pub mod prefs;
 #[cfg(feature = "headless")]
 mod raster;
@@ -195,6 +197,15 @@ pub use services_core::{Clipboard, clipboard, clipboard_text, set_clipboard, set
 // Available in every GUI build rather than opt-in: `ui_core::Surface` composes the per-surface service scope, so `runtime` turns on services-core/di. A non-GUI build has no ui-core and nothing to re-export.
 #[cfg(feature = "runtime")]
 pub use platform_core::{ColorScheme, SystemPreferences};
+// The app's address: always on, because every target has one to report even where no navigator follows it.
+#[cfg(feature = "runtime")]
+pub use location::navigate_back;
+#[cfg(feature = "runtime")]
+pub use platform_core::{
+    ArgumentLocation, FixedLocation, HistorySink, HistoryStep, HistoryUpdate, Location,
+    LocationFormat, LocationSource, history_back, location_format, location_history, push_location,
+    receive_location_history, replace_location,
+};
 #[cfg(feature = "runtime")]
 pub use preferences_core::{
     set_system_preferences, system_preferences, use_color_scheme, use_high_contrast,
@@ -261,8 +272,7 @@ pub fn reset_layout_runtime() {
 
 #[cfg(feature = "navigate")]
 pub use navigate_core::{
-    Location, NavHost, NavPage, NavTransition, Navigator, PagePolicy, Route, SimplePage, TabHost,
-    TabStacks,
+    NavHost, NavPage, NavTransition, Navigator, PagePolicy, Route, SimplePage, TabHost, TabStacks,
 };
 
 #[cfg(feature = "components-advanced")]

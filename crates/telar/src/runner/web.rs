@@ -23,6 +23,8 @@ pub struct WebOptions {
     ///
     /// `None`, the default, lets the way the app draws decide. Pixels on a canvas give the browser's menu nothing to act on — no text to copy, no link to open, no image to save — so there the app takes it. A document has all three, and an app that swallowed the menu there would be a page missing the one thing every other page has. An application that draws its own menus over a document says so here.
     pub owns_context_menu: Option<bool>,
+    /// How the app's locations are written as this page's addresses — the base path the site is served under, and whether a location ends in `/`. `None` takes the base from the page's `<base href>`, and `/` where it has none.
+    pub location: Option<platform_core::LocationFormat>,
 }
 
 /// How a browser app draws.
@@ -141,6 +143,7 @@ fn start<A: App>(
         owns_scroll: document,
         owns_context_menu: options.owns_context_menu.unwrap_or(!document),
         owns_keyboard: !document,
+        location: options.location,
     };
     let platform = WebPlatform::with_host(host.clone(), platform_config);
 

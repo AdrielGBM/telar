@@ -189,6 +189,12 @@ pub enum Event {
     SystemPreferencesChanged {
         preferences: crate::SystemPreferences,
     },
+    /// The platform moved the app's history by itself — back or forward in a browser, a link opened into the running app, an address edited by hand — and this is the whole of it now, root-first.
+    ///
+    /// A fact, like [`BoxScrolled`](Self::BoxScrolled): the address has already changed, and the app's pages are what need to follow. The runner consumes it; the tree never sees it.
+    LocationChanged {
+        history: Vec<crate::Location>,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq)]

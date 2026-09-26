@@ -12,6 +12,10 @@ pub mod event;
 pub mod event_sink;
 #[cfg(feature = "dylib")]
 pub mod guest;
+pub mod history;
+pub mod location;
+pub mod location_format;
+pub mod location_source;
 pub mod loop_waker;
 pub mod system_preferences;
 pub mod window;
@@ -23,6 +27,16 @@ pub use consumed_keys::{ConsumedKeys, consumes, key_member};
 pub use error::PlatformError;
 pub use event::{Event, Key, ModifiersState, NamedKey, PointerButton, PointerSource, ScrollDelta};
 pub use event_sink::{post_event, set_event_sink};
+pub use history::{
+    HistoryFollower, HistoryFollowerId, follow_location_history, history_back, location_history,
+    push_location, receive_location_history, replace_location, report_location_history,
+    rewrite_location_history, unfollow_location_history,
+};
+pub use location::Location;
+pub use location_format::{LocationFormat, location_format, set_location_format};
+pub use location_source::{
+    ArgumentLocation, FixedLocation, HistorySink, HistoryStep, HistoryUpdate, LocationSource,
+};
 pub use loop_waker::{loop_waker, set_loop_waker};
 pub use system_preferences::{
     ColorScheme, SystemPreferences, locales_from_env, posix_locale_to_bcp47,

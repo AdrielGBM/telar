@@ -20,8 +20,47 @@ pub fn navigation(props: NavigationProps, children: Children) -> Result<Box<dyn 
     let tab = signal(0u32);
     let open = signal(true);
 
+    #[derive(Clone, Copy, PartialEq, Eq, Debug)]
+    enum Pane {
+        Overview,
+        Pricing,
+        Team,
+    }
+
+    impl Pane {
+        const ALL: [Pane; 3] = [Pane::Overview, Pane::Pricing, Pane::Team];
+
+        fn slug(self) -> &'static str {
+            match self {
+                Pane::Overview => "overview",
+                Pane::Pricing => "pricing",
+                Pane::Team => "team",
+            }
+        }
+    }
+
+    impl Route for Pane {
+        fn to_location(&self) -> Location {
+            Location::from_segments(["navigation", self.slug()])
+        }
+
+        fn from_location(location: &Location) -> Option<Self> {
+            match location.segments() {
+                [section, slug] if section == "navigation" => {
+                    Pane::ALL.into_iter().find(|pane| pane.slug() == slug)
+                }
+                _ => None,
+            }
+        }
+    }
+
+    // Following the address makes this stack the app's history: the browser's back and forward, a `--location` argument and an Android link all land on a pane.
+    let panes = Navigator::new(Pane::Overview).follow_location();
+    let address = memo(move || location_format().format(&panes.location()));
+    let depth = memo(move || panes.depth());
+
     let __col_0 = {
-        let __node_0 = doc_header(DocHeaderProps::props().kicker("NAVIGATION").title("Tabs & accordion").desc("tabs is a bound selected-index bar; pair it with reactive ifs to swap panels. accordion is an inline collapsible section that pushes its siblings as it opens. Both are components.").build(), Children::default())?;
+        let __node_0 = doc_header(DocHeaderProps::props().kicker("NAVIGATION").title("Tabs, accordion & address").desc("tabs is a bound selected-index bar; pair it with reactive ifs to swap panels. accordion is an inline collapsible section that pushes its siblings as it opens. Both are components.").build(), Children::default())?;
         let __node_1 = {
             let __deferred = Children::new(
                 {
@@ -202,15 +241,88 @@ pub fn navigation(props: NavigationProps, children: Children) -> Result<Box<dyn 
         };
         let __node_12 = {
             let __deferred = Children::new(
+                {
+                    let address = address.clone();
+                    let depth = depth.clone();
+                    let theme = theme.clone();
+                    let panes = panes.clone();
+                move || {
+                    let address = address.clone();
+                    let depth = depth.clone();
+                    let theme = theme.clone();
+                    let panes = panes.clone();
+                    let mut __slots = Slots::new();
+                    let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
+                    let __node_13 = {
+                        let __deferred = Children::new(
+                            {
+                                let address = address.clone();
+                                let depth = depth.clone();
+                                let theme = theme.clone();
+                                let panes = panes.clone();
+                            move || {
+                                let address = address.clone();
+                                let depth = depth.clone();
+                                let theme = theme.clone();
+                                let panes = panes.clone();
+                                let mut __slots = Slots::new();
+                                let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
+                                let __row_0 = {
+                                    let __node_14 = button(ButtonProps::props().label("Overview").on_press(std::rc::Rc::new(move || { panes.push(Pane::Overview) })).build(), Children::default())?;
+                                    let __node_15 = button(ButtonProps::props().label("Pricing").on_press(std::rc::Rc::new(move || { panes.push(Pane::Pricing) })).build(), Children::default())?;
+                                    let __node_16 = button(ButtonProps::props().label("Team").on_press(std::rc::Rc::new(move || { panes.push(Pane::Team) })).build(), Children::default())?;
+                                    let __node_17 = button(ButtonProps::props().label("Back").ghost(true).on_press(std::rc::Rc::new(move || { navigate_back(); })).build(), Children::default())?;
+                                    Container::new(LayoutStyle::new().flex_row().gap(8.0), children![__node_14, __node_15, __node_16, __node_17])?
+                                };
+                                __children.push(box_item(__row_0));
+                                let __text_5 = {
+                                    let address = address.clone();
+                                    let depth = depth.clone();
+                                    Text::declaring(
+                                        move || format!("{} · {} deep", { address.get() }, { depth.get() }),
+                                        LayoutStyle::new(),
+                                        { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(14.0).with_color(theme.get().ink) },
+                                    )?
+                                };
+                                __children.push(box_item(__text_5));
+                                let __text_6 = {
+                                    let address = address.clone();
+                                    Text::declaring(
+                                        move || format!("Open it again with --location {} on desktop or in a terminal, or reload the page on the web.", { address.get() }),
+                                        LayoutStyle::new(),
+                                        { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(13.0).with_color(theme.get().muted) },
+                                    )?
+                                };
+                                __children.push(box_item(__text_6));
+                                __slots.extend_default(__children);
+                                Ok(__slots)
+                            }
+                            }
+                        );
+                        card(CardProps::props().gap(10.0).build(), __deferred)?
+                    };
+                    __children.push(box_item(__node_13));
+                    let __node_18 = code_line(CodeLineProps::props().code("let panes = Navigator::new(Pane::Overview).follow_location();").build(), Children::default())?;
+                    __children.push(box_item(__node_18));
+                    __slots.extend_default(__children);
+                    Ok(__slots)
+                }
+                }
+            );
+            example(ExampleProps::props().title("follow_location — a page stack that is the app's address").build(), __deferred)?
+        };
+        let __node_19 = {
+            let __deferred = Children::new(
                 move || {
                     let mut __slots = Slots::new();
                     let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
                     let __col_1 = {
-                        let __node_13 = prop_row(PropRowProps::props().name("items").values("vec![..]").about("tabs labels, one button each.").build(), Children::default())?;
-                        let __node_14 = prop_row(PropRowProps::props().name("selected").values("signal").about("tabs active index (u32), two-way.").build(), Children::default())?;
-                        let __node_15 = prop_row(PropRowProps::props().name("title").values("text").about("accordion header label.").build(), Children::default())?;
-                        let __node_16 = prop_row(PropRowProps::props().name("open").values("signal").about("accordion expanded bool, two-way.").build(), Children::default())?;
-                        Container::new(LayoutStyle::new().flex_column().gap(6.0), children![__node_13, __node_14, __node_15, __node_16])?
+                        let __node_20 = prop_row(PropRowProps::props().name("items").values("vec![..]").about("tabs labels, one button each.").build(), Children::default())?;
+                        let __node_21 = prop_row(PropRowProps::props().name("selected").values("signal").about("tabs active index (u32), two-way.").build(), Children::default())?;
+                        let __node_22 = prop_row(PropRowProps::props().name("title").values("text").about("accordion header label.").build(), Children::default())?;
+                        let __node_23 = prop_row(PropRowProps::props().name("open").values("signal").about("accordion expanded bool, two-way.").build(), Children::default())?;
+                        let __node_24 = prop_row(PropRowProps::props().name("follow_location").values("Navigator<R: Route>").about("the stack becomes the app's history on every target.").build(), Children::default())?;
+                        Container::new(LayoutStyle::new().flex_column().gap(6.0), children![__node_20, __node_21, __node_22, __node_23, __node_24])?
                     };
                     __children.push(box_item(__col_1));
                     __slots.extend_default(__children);
@@ -219,7 +331,7 @@ pub fn navigation(props: NavigationProps, children: Children) -> Result<Box<dyn 
             );
             example(ExampleProps::props().title("Attributes").build(), __deferred)?
         };
-        Container::new(LayoutStyle::new().flex_column().gap(20.0), children![__node_0, __node_1, __node_8, __node_12])?
+        Container::new(LayoutStyle::new().flex_column().gap(20.0), children![__node_0, __node_1, __node_8, __node_12, __node_19])?
     };
     Ok(Box::new(__col_0))
 }

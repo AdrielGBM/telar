@@ -9,7 +9,6 @@
 #![warn(rustdoc::broken_intra_doc_links)]
 
 mod host;
-mod location;
 mod navigator;
 mod page;
 mod route;
@@ -17,9 +16,9 @@ mod tabs;
 mod transition;
 
 pub use host::NavHost;
-pub use location::Location;
 pub use navigator::Navigator;
 pub use page::{NavPage, PagePolicy, SimplePage};
+pub use platform_core::Location;
 pub use route::Route;
 pub use tabs::{TabHost, TabStacks};
 pub use transition::NavTransition;

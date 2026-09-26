@@ -192,6 +192,7 @@ Everything here is either always present or one word away. Nothing is bundled.
 - **Two renderers** — a CPU rasterizer on `tiny-skia` and a GPU one on `wgpu`, behind the same drawing vocabulary. `desktop` and `android` bring both, and `backend = "auto"` picks per machine.
 - **A widget catalogue** — buttons, fields, selects, menus, modals, tabs, sliders, and the rest. → `components`
 - **Navigation** — a reactive page stack with animated transitions. → `navigate`
+- **Location** — one address per app on every target: browser history with scroll restoration, `--location` deep links remembered between runs, Android `ACTION_VIEW` and the back button. → [docs/location.md](docs/location.md)
 - **Images and SVG** — baked into the binary at build time out of `src:"…"`, with no parser in the binary. → `svg`
 - **Translation catalogs** baked the same way, with `t!` validating keys and arguments at compile time.
 

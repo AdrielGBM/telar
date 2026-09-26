@@ -61,6 +61,8 @@ where
     pub(super) frame_text: Vec<renderer_core::DrawCommand>,
     // The snapshot last applied, so the theme hears only a changed scheme and a hot swap can hand the new runtime what the old one knew.
     pub(super) system_preferences: Option<SystemPreferences>,
+    // Only the surface that owns the app's address has one; a window opened beside it moves no history.
+    pub(super) location: Option<super::location::LocationBinding>,
     #[cfg(all(
         feature = "dev",
         not(target_os = "android"),
@@ -146,6 +148,7 @@ where
         command_buf_pool: Vec::new(),
         frame_text: Vec::new(),
         system_preferences: None,
+        location: None,
         #[cfg(all(
             feature = "dev",
             not(target_os = "android"),
@@ -204,9 +207,39 @@ where
                 WindowCommand::Focus => window.focus_window(),
                 WindowCommand::SetCursor(cursor) => window.set_cursor(cursor),
                 WindowCommand::Close => self.exit_requested = true,
+                WindowCommand::Navigate(update) => {
+                    if let Some(location) = &mut self.location
+                        && location.apply(&update, &mut self.env.prefs)
+                    {
+                        self.env.save_prefs();
+                    }
+                }
             }
         }
         applied
+    }
+
+    /// Gives the app's runtime the history this surface's platform stands on, before a tree is built from it. A surface with no address of its own leaves the app's alone.
+    fn hand_over_location(&mut self) {
+        if let Some(location) = &mut self.location {
+            let history = location.open(&self.env.prefs).to_vec();
+            self.app.set_location_history(&history);
+        }
+    }
+
+    /// The platform moved the history by itself; the app's pages follow inside one batch, and whatever they could not show as given is rewritten on the platform straight after.
+    fn follow_location(&mut self, history: Vec<platform_core::Location>, window: &W) {
+        let Some(location) = &mut self.location else {
+            return;
+        };
+        if location.follow(history.clone(), &mut self.env.prefs) {
+            self.env.save_prefs();
+        }
+        self.app.begin_event_batch();
+        self.app.set_location_history(&history);
+        self.app.end_event_batch();
+        self.apply_window_commands(window);
+        window.request_redraw();
     }
 
     /// Writes a snapshot into the app's runtime, batched so the effects it drives — the theme's `follow_system` among them — re-render once across the hot-reload boundary.
@@ -235,6 +268,7 @@ where
         self.tree = None;
         let (width, height) = self.logical_size(window);
         self.report_surface_size(width, height);
+        self.hand_over_location();
         self.tree = Some(self.app.mount());
         self.fit_tree_to(window);
     }
@@ -792,6 +826,10 @@ where
                 window.request_redraw();
                 return;
             }
+            Event::LocationChanged { history } => {
+                self.follow_location(history.clone(), window);
+                return;
+            }
             Event::BoxFocused { box_id } => {
                 if ui_core::focus::follow_box(*box_id) {
                     window.request_redraw();
@@ -852,6 +890,20 @@ where
             begin_batch();
             window.request_redraw();
         }
+    }
+
+    fn on_back(&mut self, window: &W) -> bool {
+        let _surface = self.enter_surface();
+        self.app.begin_event_batch();
+        let went_back = self.app.navigate_back();
+        self.app.end_event_batch();
+        self.apply_window_commands(window);
+        if went_back {
+            end_batch();
+            begin_batch();
+            window.request_redraw();
+        }
+        went_back
     }
 
     fn on_redraw(&mut self, window: &W) {

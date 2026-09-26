@@ -161,14 +161,14 @@ impl<T: Clone + Eq + 'static, R: Clone + 'static> TabStacks<T, R> {
         self.navs
             .iter()
             .find(|(t, _)| t == tab)
-            .map(|(_, nav)| nav.clone())
+            .map(|(_, nav)| *nav)
     }
 
     /// The active tab's stack — what a control inside a page pushes onto.
     pub fn navigator(&self) -> Navigator<R> {
         let active = self.active.peek();
         self.navigator_for(&active)
-            .unwrap_or_else(|| self.navs[0].1.clone())
+            .unwrap_or_else(|| self.navs[0].1)
     }
 
     /// Pushes a screen onto the active tab's stack.

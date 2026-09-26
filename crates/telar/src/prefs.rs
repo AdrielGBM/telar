@@ -1,4 +1,4 @@
-//! User preferences persisted between runs: the chosen renderer, and the window's last geometry.
+//! User preferences persisted between runs: the chosen renderer, and where the app last was.
 
 use serde::{Deserialize, Serialize};
 use services_core::AppPathsProvider;
@@ -7,10 +7,13 @@ use std::path::PathBuf;
 use crate::config::RendererBackend;
 
 #[derive(Serialize, Deserialize, Clone, Default)]
-/// What is remembered between runs: the chosen renderer, and the window's last geometry.
+/// What is remembered between runs: the chosen renderer, and where the app last was.
 pub struct UserPrefs {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub backend: Option<RendererBackend>,
+    /// The app's history when it last moved, root-first, each entry as `LocationFormat::root` writes it. Kept by the desktop and terminal runners, which reopen it when launched without `--location`.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub history: Vec<String>,
 }
 
 impl UserPrefs {

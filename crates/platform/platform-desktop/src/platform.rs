@@ -298,6 +298,10 @@ fn dispatch_window_event<H: EventHandler<WinitWindow>>(
             handler.on_event(e, window);
             return WindowEventOutcome::CloseRequested;
         }
+        // A desktop window has nothing of its own to do with a back nobody took.
+        SurfaceIntent::Back => {
+            handler.on_back(window);
+        }
         SurfaceIntent::Ignore => {}
     }
     WindowEventOutcome::Continue

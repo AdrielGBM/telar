@@ -1,12 +1,12 @@
 //! [`Location`]: a platform-neutral address for a piece of navigation state — not a URL.
 
-/// Where a [`Route`](crate::Route) points, in terms every Telar target understands: a path of segments, an
-/// optional fragment naming an in-page anchor (see `anchor:` in `ui-core`), and query-style parameters.
+/// Where a route points, in terms every Telar target understands: a path of segments, an optional fragment
+/// naming an in-page anchor (see `anchor:` in `ui-core`), and query-style parameters.
 ///
 /// This is deliberately not a URL. There is no scheme, host, or percent-encoding here — a `Location` is a
 /// value a desktop deep link, an Android intent, a TUI argument, or a web `history.pushState` path can each
-/// encode in their own native way. That encoding is the web adapter's job (and the other targets' own
-/// `LocationSource`), never this type's.
+/// carry in their own way. Spelling one as text is [`LocationFormat`](crate::LocationFormat)'s job, never
+/// this type's.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct Location {
     segments: Vec<String>,

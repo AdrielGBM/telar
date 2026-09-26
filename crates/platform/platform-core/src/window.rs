@@ -160,6 +160,12 @@ pub trait EventHandler<W: Window> {
     ///
     /// Routed to the same focus and press the keyboard reaches, deliberately: a second activation path is a second thing to keep correct, and it is always the one nobody is testing that rots.
     fn on_accessibility_action(&mut self, _id: u64, _activate: bool) {}
+    /// The user asked to go back — Android's back button or gesture, a mouse's back button — and whether anything went back.
+    ///
+    /// `false` hands the gesture back to the platform, to do what back means there for an app with nowhere left to go: Android sends the task to the background. Defaults to `false`.
+    fn on_back(&mut self, _window: &W) -> bool {
+        false
+    }
     /// Rebuilds this handler's UI from its app, on the surface it is already running on.
     ///
     /// For a backend whose surfaces outlive the state they were built from — a shell whose bars are described by a config file the user edits — this is the difference between a reload and a restart: the window, its renderer and its place on screen are kept, and only the tree is built again. A handler with no tree to rebuild leaves it a no-op.
@@ -208,6 +214,9 @@ impl<W: Window> EventHandler<W> for Box<dyn EventHandler<W>> {
     fn on_accessibility_action(&mut self, id: u64, activate: bool) {
         (**self).on_accessibility_action(id, activate)
     }
+    fn on_back(&mut self, window: &W) -> bool {
+        (**self).on_back(window)
+    }
     fn remount(&mut self, window: &W) {
         (**self).remount(window)
     }
@@ -232,6 +241,10 @@ impl<W: Window> EventHandler<W> for Box<dyn EventHandler<W>> {
 pub trait Platform {
     /// The window this backend hands to each handler.
     type Window: Window;
+    /// Where this platform keeps the app's address: a browser's session history, the intent an activity was started with, a history declared for a headless run. `None` where it keeps none. Asked once, before [`run`](Self::run).
+    fn location_source(&mut self) -> Option<Box<dyn crate::LocationSource>> {
+        None
+    }
     /// Runs `handler` until the app closes.
     ///
     /// `'static` because a platform is allowed to *keep* the handler rather than drive it to completion before returning: a browser owns its own loop, so the run there mounts the app onto it and returns while the app carries on inside callbacks the platform registered.
