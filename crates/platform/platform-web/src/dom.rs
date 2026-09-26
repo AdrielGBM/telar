@@ -37,6 +37,16 @@ pub fn host(selector: Option<&str>) -> Result<web_sys::HtmlElement, String> {
     }
 }
 
+/// Keeps `<html lang>` and `<html dir>` matching the active locale. `is_rtl` is the caller's, since this
+/// crate knows nothing about locales — `layout_core::Direction::for_locale` is the rule to compute it with.
+pub fn set_document_language(lang: &str, is_rtl: bool) {
+    let Some(root) = document().document_element() else {
+        return;
+    };
+    let _ = root.set_attribute("lang", lang);
+    let _ = root.set_attribute("dir", if is_rtl { "rtl" } else { "ltr" });
+}
+
 /// A setting the *page* makes rather than the application: `?telar-<name>=<value>` in the URL, or `data-telar-<name>` on the host element.
 ///
 /// The browser's answer to `TELAR_TARGET`. A build carries every frontend it was compiled with, and which one runs should not need a rebuild to change — here the page says, and a link can say over it, which is why the query wins over the attribute.

@@ -71,3 +71,7 @@ path = "src/preferences_test.rs"
 [[test]]
 name = "location"
 path = "src/location_test.rs"
+
+[[test]]
+name = "language"
+path = "src/language_test.rs"

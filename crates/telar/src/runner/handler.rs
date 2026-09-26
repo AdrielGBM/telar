@@ -716,6 +716,11 @@ where
         ui_core::accessibility::snapshot(&self.frame_text)
     }
 
+    fn root_language(&self) -> Option<String> {
+        let _surface = self.enter_surface();
+        i18n_core::use_locale()
+    }
+
     fn on_accessibility_action(&mut self, id: u64, activate: bool) {
         let _surface = self.enter_surface();
         ui_core::focus::request(id);

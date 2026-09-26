@@ -156,6 +156,11 @@ pub trait EventHandler<W: Window> {
         Vec::new()
     }
 
+    /// The surface's own language, as a BCP 47 tag — what [`AccessNode::lang`](crate::AccessNode) means by "the surface's own" when a node carries none. `None` where nothing has said, which leaves the platform's accessibility root with no language claim at all rather than a wrong one.
+    fn root_language(&self) -> Option<String> {
+        None
+    }
+
     /// A screen reader asked to move to a control, or to activate it — `id` being the one the handler put in [`AccessNode::id`](crate::AccessNode::id).
     ///
     /// Routed to the same focus and press the keyboard reaches, deliberately: a second activation path is a second thing to keep correct, and it is always the one nobody is testing that rots.
@@ -210,6 +215,9 @@ impl<W: Window> EventHandler<W> for Box<dyn EventHandler<W>> {
     }
     fn accessibility(&self) -> Vec<crate::AccessNode> {
         (**self).accessibility()
+    }
+    fn root_language(&self) -> Option<String> {
+        (**self).root_language()
     }
     fn on_accessibility_action(&mut self, id: u64, activate: bool) {
         (**self).on_accessibility_action(id, activate)

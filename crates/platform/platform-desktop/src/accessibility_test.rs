@@ -23,7 +23,7 @@ fn the_window_is_the_root_and_everything_hangs_from_it() {
         node(Some(7), Role::Button, "Save"),
         node(None, Role::Label, "Unsaved changes"),
     ];
-    let update = tree_update(&nodes, "Editor");
+    let update = tree_update(&nodes, "Editor", None);
 
     assert_eq!(update.nodes.len(), 3, "two nodes plus the window");
     let (root_id, root) = update.nodes.last().unwrap();
@@ -37,13 +37,14 @@ fn the_window_is_the_root_and_everything_hangs_from_it() {
 /// A control keeps its identity across frames, so a reader is not told the button appeared anew every time anything else on screen moved. The label beside it has no identity to keep and does not need one.
 #[test]
 fn a_control_keeps_the_same_node_id_between_updates() {
-    let first = tree_update(&[node(Some(7), Role::Button, "Save")], "Editor");
+    let first = tree_update(&[node(Some(7), Role::Button, "Save")], "Editor", None);
     let with_extra = tree_update(
         &[
             node(None, Role::Label, "Heading"),
             node(Some(7), Role::Button, "Save"),
         ],
         "Editor",
+        None,
     );
     let button = |u: &TreeUpdate| {
         u.nodes
@@ -58,11 +59,11 @@ fn a_control_keeps_the_same_node_id_between_updates() {
 /// The focused control is what the reader is told about first, and the window stands in when nothing is.
 #[test]
 fn focus_points_at_the_focused_control_or_at_the_window() {
-    assert_eq!(tree_update(&[], "Editor").focus, ROOT);
+    assert_eq!(tree_update(&[], "Editor", None).focus, ROOT);
 
     let mut focused = node(Some(7), Role::Button, "Save");
     focused.focused = true;
-    let update = tree_update(&[focused], "Editor");
+    let update = tree_update(&[focused], "Editor", None);
     assert_ne!(update.focus, ROOT);
     assert_eq!(update.focus, update.nodes[0].0);
 }
@@ -71,7 +72,7 @@ fn focus_points_at_the_focused_control_or_at_the_window() {
 #[test]
 fn a_request_maps_back_to_the_control_that_claimed_it() {
     let nodes = vec![node(Some(7), Role::Button, "Save")];
-    let update = tree_update(&nodes, "Editor");
+    let update = tree_update(&nodes, "Editor", None);
     let target = update.nodes[0].0;
 
     let request = ActionRequest {
@@ -109,7 +110,25 @@ fn a_request_maps_back_to_the_control_that_claimed_it() {
 fn a_node_in_another_language_says_which() {
     let mut quote = node(None, Role::Label, "Bonjour");
     quote.lang = Some("fr".to_string());
-    let update = tree_update(&[quote, node(None, Role::Label, "Hello")], "Editor");
+    let update = tree_update(&[quote, node(None, Role::Label, "Hello")], "Editor", None);
+    assert_eq!(update.nodes[0].1.language(), Some("fr"));
+    assert_eq!(update.nodes[1].1.language(), None);
+}
+
+/// The root carries the surface's own language, and a node saying nothing about its own inherits it —
+/// the nearest one wins, so a quotation still overrides it for its own subtree.
+#[test]
+fn the_root_language_is_the_surfaces_own_and_a_node_can_still_override_it() {
+    let mut quote = node(None, Role::Label, "Bonjour");
+    quote.lang = Some("fr".to_string());
+    let update = tree_update(
+        &[quote, node(None, Role::Label, "Hello")],
+        "Editor",
+        Some("es"),
+    );
+    let (root_id, root) = update.nodes.last().unwrap();
+    assert_eq!(*root_id, ROOT);
+    assert_eq!(root.language(), Some("es"));
     assert_eq!(update.nodes[0].1.language(), Some("fr"));
     assert_eq!(update.nodes[1].1.language(), None);
 }
@@ -117,7 +136,7 @@ fn a_node_in_another_language_says_which() {
 /// A named picture is an image to the reader, which is what AccessKit calls it.
 #[test]
 fn a_named_drawing_is_an_image() {
-    let update = tree_update(&[node(None, Role::Drawing, "Company logo")], "Editor");
+    let update = tree_update(&[node(None, Role::Drawing, "Company logo")], "Editor", None);
     assert_eq!(update.nodes[0].1.role(), AkRole::Image);
     assert_eq!(update.nodes[0].1.label(), Some("Company logo"));
 }

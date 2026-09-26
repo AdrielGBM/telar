@@ -4,6 +4,8 @@
 
 use std::fmt;
 
+use layout_core::Direction;
+
 use crate::runner::cli::WebRenderer;
 
 /// The page a project gets when it brings no template of its own.
@@ -101,24 +103,8 @@ impl fmt::Display for TemplateError {
     }
 }
 
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub(crate) enum Direction {
-    #[default]
-    Ltr,
-    #[cfg_attr(
-        not(test),
-        expect(dead_code, reason = "nothing derives the direction from a locale yet")
-    )]
-    Rtl,
-}
-
-impl Direction {
-    fn as_str(self) -> &'static str {
-        match self {
-            Self::Ltr => "ltr",
-            Self::Rtl => "rtl",
-        }
-    }
+fn direction_str(direction: Direction) -> &'static str {
+    if direction.is_rtl() { "rtl" } else { "ltr" }
 }
 
 /// A void element for `<head>`: `<meta>` or `<link>`, with every attribute value escaped when written.
@@ -297,7 +283,7 @@ impl Page {
     fn expand(&self, marker: Marker) -> String {
         match marker {
             Marker::Lang => escape(&self.lang),
-            Marker::Dir => self.dir.as_str().to_string(),
+            Marker::Dir => direction_str(self.dir).to_string(),
             Marker::Title => escape(&self.title),
             Marker::Renderer => self
                 .renderer

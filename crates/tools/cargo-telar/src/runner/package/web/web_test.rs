@@ -28,7 +28,16 @@ fn cleanup(package: &Path) {
 #[test]
 fn a_project_with_nothing_under_web_gets_the_built_in_page_and_hashed_bootstrap() {
     let (package, out) = project("defaults");
-    assemble(&out, &package, &WebSection::default(), &[], "demo", None).unwrap();
+    assemble(
+        &out,
+        &package,
+        &WebSection::default(),
+        &[],
+        "demo",
+        None,
+        "en",
+    )
+    .unwrap();
 
     let manifest = manifest(&out);
     let glue = &manifest["app.js"];
@@ -54,15 +63,68 @@ fn a_project_with_nothing_under_web_gets_the_built_in_page_and_hashed_bootstrap(
 }
 
 #[test]
+fn the_page_lang_and_dir_follow_the_locale_passed_in() {
+    let (package, out) = project("locale_ltr");
+    assemble(
+        &out,
+        &package,
+        &WebSection::default(),
+        &[],
+        "demo",
+        None,
+        "es",
+    )
+    .unwrap();
+    let page = std::fs::read_to_string(out.join(PAGE_FILE)).unwrap();
+    assert!(page.contains(r#"lang="es""#), "{page}");
+    assert!(page.contains(r#"dir="ltr""#), "{page}");
+    cleanup(&package);
+
+    let (package, out) = project("locale_rtl");
+    assemble(
+        &out,
+        &package,
+        &WebSection::default(),
+        &[],
+        "demo",
+        None,
+        "ar",
+    )
+    .unwrap();
+    let page = std::fs::read_to_string(out.join(PAGE_FILE)).unwrap();
+    assert!(page.contains(r#"lang="ar""#), "{page}");
+    assert!(page.contains(r#"dir="rtl""#), "{page}");
+    cleanup(&package);
+}
+
+#[test]
 fn a_new_module_gives_the_glue_a_new_name_too() {
     let (package, out) = project("chain_a");
-    assemble(&out, &package, &WebSection::default(), &[], "demo", None).unwrap();
+    assemble(
+        &out,
+        &package,
+        &WebSection::default(),
+        &[],
+        "demo",
+        None,
+        "en",
+    )
+    .unwrap();
     let first = manifest(&out);
     cleanup(&package);
 
     let (package, out) = project("chain_b");
     std::fs::write(out.join("app_bg.wasm"), b"\0asm another module").unwrap();
-    assemble(&out, &package, &WebSection::default(), &[], "demo", None).unwrap();
+    assemble(
+        &out,
+        &package,
+        &WebSection::default(),
+        &[],
+        "demo",
+        None,
+        "en",
+    )
+    .unwrap();
     let second = manifest(&out);
     cleanup(&package);
 
@@ -89,6 +151,7 @@ fn the_project_template_and_public_directory_are_used() {
         &[],
         "demo",
         Some(WebRenderer::Dom),
+        "en",
     )
     .unwrap();
     let page = std::fs::read_to_string(out.join(PAGE_FILE)).unwrap();
@@ -117,7 +180,7 @@ fn the_web_table_can_move_the_template_and_the_public_directory() {
         template: Some("site/page.html".to_string()),
         public: Some("site/static".to_string()),
     };
-    assemble(&out, &package, &web, &[], "demo", None).unwrap();
+    assemble(&out, &package, &web, &[], "demo", None, "en").unwrap();
     assert!(
         std::fs::read_to_string(out.join(PAGE_FILE))
             .unwrap()
@@ -134,7 +197,7 @@ fn a_named_template_or_public_directory_that_is_not_there_is_an_error() {
         template: Some("site/page.html".to_string()),
         public: None,
     };
-    let error = assemble(&out, &package, &web, &[], "demo", None).unwrap_err();
+    let error = assemble(&out, &package, &web, &[], "demo", None, "en").unwrap_err();
     assert!(error.contains("site/page.html"), "{error}");
     cleanup(&package);
 
@@ -143,7 +206,7 @@ fn a_named_template_or_public_directory_that_is_not_there_is_an_error() {
         template: None,
         public: Some("static".to_string()),
     };
-    let error = assemble(&out, &package, &web, &[], "demo", None).unwrap_err();
+    let error = assemble(&out, &package, &web, &[], "demo", None, "en").unwrap_err();
     assert!(error.contains("[telar.web] public"), "{error}");
     cleanup(&package);
 }
@@ -157,7 +220,16 @@ fn a_template_error_names_the_template() {
         "<script src=\"./app.js\"></script>\n",
     )
     .unwrap();
-    let error = assemble(&out, &package, &WebSection::default(), &[], "demo", None).unwrap_err();
+    let error = assemble(
+        &out,
+        &package,
+        &WebSection::default(),
+        &[],
+        "demo",
+        None,
+        "en",
+    )
+    .unwrap_err();
     assert!(error.contains("web/index.html"), "{error}");
     assert!(error.contains("%telar.bootstrap%"), "{error}");
     cleanup(&package);
@@ -167,7 +239,16 @@ fn a_template_error_names_the_template() {
 fn glue_that_does_not_name_the_module_is_an_error() {
     let (package, out) = project("foreign_glue");
     std::fs::write(out.join("app.js"), "export default function init() {}\n").unwrap();
-    let error = assemble(&out, &package, &WebSection::default(), &[], "demo", None).unwrap_err();
+    let error = assemble(
+        &out,
+        &package,
+        &WebSection::default(),
+        &[],
+        "demo",
+        None,
+        "en",
+    )
+    .unwrap_err();
     assert!(error.contains("'app_bg.wasm'"), "{error}");
     cleanup(&package);
 }
@@ -211,7 +292,16 @@ fn a_declared_font_ships_hashed_with_its_face_rule_and_preload() {
         style = "oblique"
         "#,
     );
-    assemble(&out, &package, &WebSection::default(), &fonts, "demo", None).unwrap();
+    assemble(
+        &out,
+        &package,
+        &WebSection::default(),
+        &fonts,
+        "demo",
+        None,
+        "en",
+    )
+    .unwrap();
 
     let hashed = manifest(&out)["fonts/Display.ttf"].clone();
     assert!(
@@ -248,7 +338,16 @@ fn a_template_without_a_place_for_declared_fonts_is_refused() {
     std::fs::write(package.join("web/index.html"), "%telar.bootstrap%\n").unwrap();
     std::fs::write(package.join("a.ttf"), b"face").unwrap();
     let fonts = declared("[[telar.fonts]]\nfamily = \"A\"\nsrc = \"a.ttf\"\n");
-    let error = assemble(&out, &package, &WebSection::default(), &fonts, "demo", None).unwrap_err();
+    let error = assemble(
+        &out,
+        &package,
+        &WebSection::default(),
+        &fonts,
+        "demo",
+        None,
+        "en",
+    )
+    .unwrap_err();
     assert!(error.contains("%telar.fonts%"), "{error}");
     cleanup(&package);
 }
@@ -257,7 +356,16 @@ fn a_template_without_a_place_for_declared_fonts_is_refused() {
 fn a_declared_font_that_is_not_there_is_an_error_naming_it() {
     let (package, out) = project("fonts_missing");
     let fonts = declared("[[telar.fonts]]\nfamily = \"Gone\"\nsrc = \"gone.woff2\"\n");
-    let error = assemble(&out, &package, &WebSection::default(), &fonts, "demo", None).unwrap_err();
+    let error = assemble(
+        &out,
+        &package,
+        &WebSection::default(),
+        &fonts,
+        "demo",
+        None,
+        "en",
+    )
+    .unwrap_err();
     assert!(
         error.contains("Gone") && error.contains("gone.woff2"),
         "{error}"

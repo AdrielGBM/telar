@@ -52,7 +52,15 @@ there, which is why the letters are hidden rather than left for the name to cove
 | Browser, canvas (`web`) and headless | The canvas has no accessibility tree to hand them to; headless has no reader. The snapshot (`ui_core::accessibility::snapshot`) still resolves them, which is what the tests read. | — | — |
 
 `lang:` is per subtree. The surface's own language — the root the subtrees differ from — is the active
-locale's, which is a separate concern.
+locale's (`use_locale()`), and each target says it in its own idiom:
+
+| Target | The surface's own language |
+| --- | --- |
+| Browser, document and canvas (`web-dom`, `web`) | `<html lang>`, kept in sync with the active locale at runtime; `<html dir>` follows it the same way `layout_core::Direction::for_locale` resolves the writing direction, and both start from `[telar.web]`'s packaged page (see [web-packaging.md](web-packaging.md)). |
+| Desktop | The AccessKit root node's language. A node under it that carries no `lang:` of its own inherits this — the nearest one wins, root included. |
+| Terminal | Nothing to set: the reading is plain text, and a reading has no voice to switch (as above). |
+| Android | Not yet: same as `lang:` itself, there is no accessibility bridge to carry it. The intended target is the view's own locale (`Configuration.locale` via JNI) once one exists. |
+| Headless | No reader, so nothing to carry it to. |
 
 ## The terminal's plain-text reading
 

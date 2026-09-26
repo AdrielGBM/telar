@@ -125,6 +125,24 @@ async fn draws_as_document(wanted: WebRenderer) -> bool {
     true
 }
 
+thread_local! {
+    // Replaced on re-call (hot reload re-runs setup), same reasoning as `direction::FOLLOW`.
+    static FOLLOW_LANGUAGE: std::cell::RefCell<Option<reactive_core::Effect>> =
+        const { std::cell::RefCell::new(None) };
+}
+
+/// Keeps `<html lang>`/`<html dir>` matching the active locale, so switching locale relabels the whole
+/// document the way `follow_locale_direction` relabels the layout — the same rule, `layout_core::Direction::for_locale`, applied to the page's own root rather than to a widget's.
+fn follow_locale_language() {
+    let effect = reactive_core::effect(|| {
+        let locale = i18n_core::use_locale();
+        let lang = locale.as_deref().unwrap_or("en");
+        let is_rtl = layout_core::Direction::for_locale(lang).is_rtl();
+        platform_web::set_document_language(lang, is_rtl);
+    });
+    FOLLOW_LANGUAGE.with(|f| *f.borrow_mut() = Some(effect));
+}
+
 fn start<A: App>(
     config: AppConfig,
     options: WebOptions,
@@ -133,6 +151,7 @@ fn start<A: App>(
     app: A,
     app_name: &str,
 ) {
+    follow_locale_language();
     let (autofocus, owns_gestures) = options.focus_and_gestures.unwrap_or((true, true));
     let paths: Arc<dyn AppPathsProvider> = Arc::new(NoPaths);
     let platform_config = WebPlatformConfig {

@@ -118,6 +118,7 @@ pub(crate) fn build_web_bundle(
     let staging = dist.join("web.staging");
     recreate_dir(&staging)?;
 
+    let locale = config.default_locale().unwrap_or_else(|| "en".to_string());
     run_wasm_bindgen(&module, &staging)?;
     optimise(&staging.join(format!("{BUNDLE}_bg.wasm")), release);
     assemble(
@@ -127,6 +128,7 @@ pub(crate) fn build_web_bundle(
         &config.fonts,
         &resolved.name(),
         renderer,
+        &locale,
     )?;
     if release {
         assets::precompress(&staging)?;
@@ -145,6 +147,7 @@ fn assemble(
     fonts: &[FontDeclaration],
     app_name: &str,
     renderer: Option<WebRenderer>,
+    locale: &str,
 ) -> Result<(), String> {
     let mut assets = Assets::new(out);
     let module = assets.adopt(&format!("{BUNDLE}_bg.wasm"))?;
@@ -162,6 +165,8 @@ fn assemble(
     }
 
     let mut page = Page::new(app_name, Bootstrap { glue, module });
+    page.lang = locale.to_string();
+    page.dir = layout_core::Direction::for_locale(locale);
     page.renderer = renderer;
     page.meta.push(HeadTag::meta(
         "description",

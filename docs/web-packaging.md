@@ -45,8 +45,8 @@ starting point to copy into `web/index.html`.
 
 | Marker | Kind | Expands to | Default |
 | --- | --- | --- | --- |
-| `%telar.lang%` | value | the document language, escaped | `en` |
-| `%telar.dir%` | value | `ltr` or `rtl` | `ltr` |
+| `%telar.lang%` | value | the document language, escaped | `[telar.i18n] default`, or `en` |
+| `%telar.dir%` | value | `ltr` or `rtl`, derived from `%telar.lang%` the same way [`Direction::for_locale`](https://docs.rs/telar-layout-core) resolves it at runtime | derived from the default above |
 | `%telar.title%` | value | the page title, escaped | the package name |
 | `%telar.renderer%` | value | the `--renderer` choice, for `data-telar-renderer` | `auto` |
 | `%telar.meta%` | block | `<meta>`/`<link>` tags for the document | a `description` |
@@ -54,6 +54,12 @@ starting point to copy into `web/index.html`.
 | `%telar.bootstrap%` | block | the preloads and the module script that start the app | always present |
 | `%telar.prerendered%` | block | prerendered markup for the host element | nothing |
 | `%telar.state%` | block | `<script type="application/json" id="telar-state">` | nothing |
+
+`%telar.lang%` and `%telar.dir%` are a build-time default: the page a browser first sees, before the wasm
+module has run. Once it has, `<html lang>` and `<html dir>` follow the active locale instead — the app can
+call `set_locale` with anything, and both attributes move with it, mirroring the writing direction
+`follow_locale_direction` already resolves for layout. `[telar.i18n] default` only decides the default this
+page opens with.
 
 The rules:
 

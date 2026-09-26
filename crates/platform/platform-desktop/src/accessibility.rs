@@ -16,9 +16,12 @@ const ROOT: NodeId = NodeId(0);
 /// Turns Telar's flat description of the window into the tree AccessKit publishes.
 ///
 /// Flat under one root rather than mirroring the widget hierarchy, and deliberately: the nesting a screen reader wants is the nesting of *meaning* — a control, the text explaining it — not the nesting of boxes a layout happened to need. Reading order carries that, and the nodes arrive in it.
-pub(crate) fn tree_update(nodes: &[AccessNode], title: &str) -> TreeUpdate {
+pub(crate) fn tree_update(nodes: &[AccessNode], title: &str, lang: Option<&str>) -> TreeUpdate {
     let mut root = Node::new(AkRole::Window);
     root.set_label(title.to_string());
+    if let Some(lang) = lang {
+        root.set_language(lang);
+    }
 
     let mut updates: Vec<(NodeId, Node)> = Vec::with_capacity(nodes.len() + 1);
     let mut children = Vec::with_capacity(nodes.len());
