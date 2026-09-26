@@ -55,6 +55,7 @@ const SECTIONS: &[SectionDef] = sections![
     ("Layout", crate::features::layout::layout, crate::features::layout::LayoutProps, "layout.rsx"),
     ("Sizing & grid", crate::features::sizing::sizing, crate::features::sizing::SizingProps, "sizing.rsx"),
     ("Responsive", crate::features::responsive::responsive, crate::features::responsive::ResponsiveProps, "responsive.rsx"),
+    ("System preferences", crate::features::system::system, crate::features::system::SystemProps, "system.rsx"),
     ("Typography", crate::features::typography::typography, crate::features::typography::TypographyProps, "typography.rsx"),
     ("Color & theme", crate::features::color::color, crate::features::color::ColorProps, "color.rsx"),
     ("Boxes & borders", crate::features::boxes::boxes, crate::features::boxes::BoxesProps, "boxes.rsx"),
