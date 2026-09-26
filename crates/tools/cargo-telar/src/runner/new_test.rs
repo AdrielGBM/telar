@@ -12,6 +12,19 @@ fn generated_manifest(target: Target) -> toml::Table {
 }
 
 #[test]
+fn the_gitignore_covers_the_generated_telar_directory_at_any_depth() {
+    let files = scaffold_files("my-app", Target::Web, None);
+    let (_, gitignore) = files
+        .iter()
+        .find(|(path, _)| *path == ".gitignore")
+        .expect("a .gitignore is scaffolded");
+    assert!(
+        gitignore.lines().any(|line| line == ".telar/"),
+        "`app!` also writes `src/.telar/`, which a root-anchored `/.telar` leaves tracked: {gitignore:?}"
+    );
+}
+
+#[test]
 fn every_target_writes_itself_as_the_default_feature() {
     for target in [Target::Desktop, Target::Tui, Target::Web, Target::Android] {
         let manifest = generated_manifest(target);

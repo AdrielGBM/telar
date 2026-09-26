@@ -86,7 +86,7 @@ fn scaffold_files(
     vec![
         ("Cargo.toml", manifest(crate_name, target, renderer)),
         ("telar.toml", config(crate_name, target)),
-        (".gitignore", "/target\n/.telar\n".to_string()),
+        (".gitignore", "/target\n.telar/\n".to_string()),
         ("src/main.rs", main_rs(&module)),
         ("src/lib.rs", LIB_RS.to_string()),
         ("src/app.rs", APP_RS.to_string()),
