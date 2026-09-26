@@ -61,6 +61,7 @@ const SECTIONS: &[SectionDef] = sections![
     ("Gradients", crate::features::gradients::gradients, crate::features::gradients::GradientsProps, "gradients.rsx"),
     ("Shadows", crate::features::shadows::shadows, crate::features::shadows::ShadowsProps, "shadows.rsx"),
     ("Opacity & layers", crate::features::opacity::opacity, crate::features::opacity::OpacityProps, "opacity.rsx"),
+    ("Blend modes", crate::features::blend::blend, crate::features::blend::BlendProps, "blend.rsx"),
     ("Images", crate::features::images::images, crate::features::images::ImagesProps, "images.rsx"),
     ("SVG", crate::features::svg::svg, crate::features::svg::SvgProps, "svg.rsx"),
     ("Paths", crate::features::paths::paths, crate::features::paths::PathsProps, "paths.rsx"),

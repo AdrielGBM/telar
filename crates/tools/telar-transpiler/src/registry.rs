@@ -152,6 +152,9 @@ const CONTAINER_PAINT: &[AttrSpec] = &[
     AttrSpec::free("shadow_blur"),
     AttrSpec::color("shadow_color"),
     AttrSpec::free("opacity"),
+    AttrSpec::keywords("blend", BLEND_VALUES).doc(
+        "Composites the box and everything inside it onto what is beneath it through a blend mode, as CSS `mix-blend-mode` does: `multiply`/`screen` for a texture over a wallpaper, `normal` (the default) to cover it plainly. Ignored in TUI, which has no notion of a backdrop to blend against.",
+    ),
     AttrSpec::free("on_press"),
     AttrSpec::free("on_alt_press").doc(
         "Separate from `on_press`, or every pressable box would swallow right- and middle-clicks too.",
@@ -195,6 +198,28 @@ const CONTAINER_PAINT: &[AttrSpec] = &[
     AttrSpec::free("transition").doc(
         "Animates a property on change: `transition(prop dur [easing|spring(k,c)])`, comma-separated for several. Easing is linear|ease-in|ease-out|ease-in-out|cubic-bezier(a,b,c,d)|steps(n[, position]); see docs/animations.md.",
     ),
+];
+
+/// `blend:` on a styled container: the `BlendMode` variant each spelling is. Mirrors `renderer_core::BlendMode::css_name`, plus `plus` as the bare form of CSS's `plus-lighter`.
+pub const BLEND_VALUES: &[(&str, &str)] = &[
+    ("normal", "BlendMode::Normal"),
+    ("multiply", "BlendMode::Multiply"),
+    ("screen", "BlendMode::Screen"),
+    ("overlay", "BlendMode::Overlay"),
+    ("darken", "BlendMode::Darken"),
+    ("lighten", "BlendMode::Lighten"),
+    ("color-dodge", "BlendMode::ColorDodge"),
+    ("color-burn", "BlendMode::ColorBurn"),
+    ("hard-light", "BlendMode::HardLight"),
+    ("soft-light", "BlendMode::SoftLight"),
+    ("difference", "BlendMode::Difference"),
+    ("exclusion", "BlendMode::Exclusion"),
+    ("hue", "BlendMode::Hue"),
+    ("saturation", "BlendMode::Saturation"),
+    ("color", "BlendMode::Color"),
+    ("luminosity", "BlendMode::Luminosity"),
+    ("plus-lighter", "BlendMode::Plus"),
+    ("plus", "BlendMode::Plus"),
 ];
 
 /// `align:` on a container: where children sit across the axis they are not laid along.

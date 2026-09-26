@@ -525,7 +525,7 @@ pub(super) fn has_paint(pattrs: &[Attr]) -> bool {
     pattrs.iter().any(|a| {
         matches!(
             a.key.as_str(),
-            "fill" | "stroke" | "radius" | "opacity"
+            "fill" | "stroke" | "radius" | "opacity" | "blend"
         ) || a.key.starts_with("shadow")
             // A corner counts the way `radius` does; a side does not, the way `stroke_width` does not.
             || is_corner_key(&a.key)

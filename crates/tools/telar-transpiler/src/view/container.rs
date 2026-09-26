@@ -131,6 +131,16 @@ impl ViewGen<'_> {
             .and_then(|a| crate::registry::role_variant(a.value.text().trim()))
             .map(|variant| format!(".role(::telar::Role::{variant})"))
             .unwrap_or_default();
+        // Only meaningful on a `StyledContainer`, so a plain `col`/`row` this promotes still gets it: `has_paint` (see `signals.rs`) counts `blend` among what forces the upgrade.
+        let blend = el
+            .attributes
+            .iter()
+            .find(|a| a.key == "blend")
+            .and_then(|a| {
+                crate::registry::keyword(crate::registry::BLEND_VALUES, a.value.text().trim())
+            })
+            .map(|variant| format!(".with_blend(|| {variant})"))
+            .unwrap_or_default();
         let input = ["input_opaque", "input_transparent"]
             .into_iter()
             .filter(|key| el.attributes.iter().any(|a| a.key == *key))
@@ -222,7 +232,7 @@ impl ViewGen<'_> {
             Some((closure, opacity_call)) => {
                 let _ = writeln!(
                     code,
-                    "{inner_pad}{bind}StyledContainer::{ctor}({style}, {closure}, {children})?{opacity_call}{hover_call}{active_call}{disabled_call}{focus_ring}{disabled}{on_press}{transform_call}{on_hover}{on_pointer_move}{on_key}{on_drag}{on_drag_end}{on_scroll}{on_focus}{on_long_press}{on_alt_press}{cursor}{drag_button}{drag_threshold}{input}{inert}{consumes_keys}{holds_stroke}{role}{styled_by}{declaring}{terminator}"
+                    "{inner_pad}{bind}StyledContainer::{ctor}({style}, {closure}, {children})?{opacity_call}{blend}{hover_call}{active_call}{disabled_call}{focus_ring}{disabled}{on_press}{transform_call}{on_hover}{on_pointer_move}{on_key}{on_drag}{on_drag_end}{on_scroll}{on_focus}{on_long_press}{on_alt_press}{cursor}{drag_button}{drag_threshold}{input}{inert}{consumes_keys}{holds_stroke}{role}{styled_by}{declaring}{terminator}"
                 );
             }
             None => {

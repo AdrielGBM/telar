@@ -2396,3 +2396,63 @@ fn every_shadow_the_clone_pass_writes_names_the_binding_it_stands_for() {
         );
     }
 }
+
+/// A box nested inside another box: the inner one's `blend` must not be mistaken for an unknown attribute of the outer box, which carries no `blend` of its own.
+#[test]
+fn blend_on_a_nested_box_stays_the_inner_boxs_own() {
+    let src = "[view]\nbox\n    box fill:#123456 blend:multiply\n        text \"x\"\n";
+    let code = transpile_source(src, "demo", None, None).unwrap().rust_code;
+    assert!(
+        !code.contains("compile_error!"),
+        "a valid nested blend should not error:\n{code}"
+    );
+    assert!(
+        code.contains(".with_blend(|| BlendMode::Multiply)"),
+        "the inner box should carry its own blend call:\n{code}"
+    );
+}
+
+#[test]
+fn blend_emits_with_blend_of_the_named_mode() {
+    let src = "[view]\nbox fill:#3d78fa blend:multiply\n";
+    let code = transpile_source(src, "demo", None, None).unwrap().rust_code;
+    assert!(
+        code.contains(".with_blend(|| BlendMode::Multiply)"),
+        "blend:multiply should emit a static closure naming the mode:\n{code}"
+    );
+}
+
+/// `blend:` alone, with no other paint attribute, still forces the `col`/`row` upgrade to a `StyledContainer` — `with_blend` is not a `Container` method.
+#[test]
+fn blend_alone_upgrades_a_plain_row_to_a_styled_container() {
+    let src = "[view]\nrow blend:screen\n    text \"x\"\n";
+    let code = transpile_source(src, "demo", None, None).unwrap().rust_code;
+    assert!(
+        code.contains("StyledContainer::"),
+        "blend with no other paint attr should still upgrade the row:\n{code}"
+    );
+    assert!(
+        code.contains(".with_blend(|| BlendMode::Screen)"),
+        "and the mode should still be wired:\n{code}"
+    );
+}
+
+#[test]
+fn blend_normal_is_the_default_and_still_emits_the_call() {
+    let src = "[view]\nbox fill:#3d78fa blend:normal\n";
+    let code = transpile_source(src, "demo", None, None).unwrap().rust_code;
+    assert!(
+        code.contains(".with_blend(|| BlendMode::Normal)"),
+        "an explicit `normal` still wires the call; the runtime treats it as a no-op composite:\n{code}"
+    );
+}
+
+#[test]
+fn an_unknown_blend_mode_is_a_compile_error_not_a_silent_drop() {
+    let src = "[view]\nbox fill:#3d78fa blend:duplicate\n";
+    let code = transpile_source(src, "demo", None, None).unwrap().rust_code;
+    assert!(
+        code.contains("compile_error!"),
+        "an unrecognised blend keyword should be refused, not silently dropped:\n{code}"
+    );
+}

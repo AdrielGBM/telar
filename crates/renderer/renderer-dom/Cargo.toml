@@ -39,3 +39,7 @@ path = "src/layout_parity_test.rs"
 [[test]]
 name = "keyboard"
 path = "src/keyboard_test.rs"
+
+[[test]]
+name = "blend"
+path = "src/blend_test.rs"

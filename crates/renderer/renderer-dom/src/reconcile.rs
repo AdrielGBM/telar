@@ -346,6 +346,23 @@ impl Reconciler {
         self.place(node);
     }
 
+    /// Confines a blended box's `mix-blend-mode` to its own siblings. Left alone, the blend reaches past its parent to whatever stacking context is nearest — for an otherwise plain tree, the page itself — so a texture meant to multiply against its neighbour would also ghost into content several levels up. `isolation: isolate` on the parent starts a stacking context there, which is what confines the backdrop a blended child sees to that parent's own children.
+    fn isolate_parent(&mut self) {
+        match self.open.len() {
+            0 | 1 => {}
+            // The blended box is itself a layout root, so its backdrop is the page behind the host; isolating the host confines it to what the app itself drew.
+            2 => {
+                let _ = self.host.style().set_property("isolation", "isolate");
+            }
+            len => {
+                let parent = &mut self.open[len - 2];
+                if !parent.style.contains("isolation:") {
+                    paint::declare(&mut parent.style, "isolation", "isolate");
+                }
+            }
+        }
+    }
+
     /// Everything that is not an element boundary: what the open box paints.
     fn paint(&mut self, command: &DrawCommand) {
         // Before the borrow the rest of this needs: the frame's paint is placed as it is drawn, and placing reaches the host.
@@ -425,6 +442,8 @@ impl Reconciler {
                 }
                 if *blend != BlendMode::Normal {
                     paint::declare(&mut open.style, "mix-blend-mode", blend.css_name());
+                    // `mix-blend-mode` reaches past the parent to whatever stacking context is nearest, which without this is the page: a wallpaper tile under a sibling three levels up would ghost into a texture meant to blend with just its neighbour. Isolating the parent confines the backdrop to this box's own siblings, so the blend affects only what it composites against here.
+                    self.isolate_parent();
                 }
             }
             DrawCommand::PushClip { radius, .. } => {

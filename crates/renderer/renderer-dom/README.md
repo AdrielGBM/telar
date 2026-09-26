@@ -39,3 +39,14 @@ The dev shell's chromedriver may not match its Chromium. In that case run the te
 nix shell nixpkgs#firefox nixpkgs#geckodriver --command bash -c \
   'unset CHROMEDRIVER; GECKODRIVER=$(which geckodriver) cargo test -p telar-renderer-dom --target wasm32-unknown-unknown'
 ```
+
+## Blend modes (`StyledContainer::with_blend`)
+
+`src/blend_test.rs` checks how a box's `blend` composites into the document: `mix-blend-mode` on the box
+itself, and `isolation: isolate` on its parent (or the host, when the blended box is itself a layout root).
+Without the isolation, `mix-blend-mode` reaches past the parent to whatever stacking context is nearest —
+for an otherwise plain tree, the page itself — so a texture meant to multiply against its neighbor would
+also ghost into content several levels up (see [`reconcile.rs`](src/reconcile.rs)'s `isolate_parent`). GPU
+and software already render each layer through its own compositing pass, so they need no such fix; the
+artwork path (`vector.rs`'s `Drawing::open_layer`) draws inside an `<svg>`, which isolates on its own. TUI
+has no notion of a backdrop to blend against and ignores the attribute.
