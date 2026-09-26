@@ -152,8 +152,9 @@ pub(crate) struct KeyframesInner<T: Lerp + 'static> {
     // Position along the `[0, total_duration]` timeline; for PingPong this itself moves back and forth.
     elapsed_secs: f32,
     current: T,
-    // Doubles as Tickable::is_settled: true once Once completes naturally OR `stop()` was called.
     settled: bool,
+    // Unlike `settled`, cleared by the next tick with a positive scale.
+    paused: bool,
     // True only when Repeat::Once ran its sequence to completion (never set by `stop()`).
     completed_once: bool,
     last: Option<Instant>,
@@ -165,8 +166,18 @@ impl<T: Lerp + 'static> KeyframesInner<T> {
             return None;
         }
         if scale <= 0.0 {
-            return Some(self.snap_scale_zero());
+            if matches!(self.repeat, Repeat::Once) {
+                return Some(self.finish_once());
+            }
+            if self.paused {
+                return None;
+            }
+            self.paused = true;
+            // Dropping the clock keeps the paused gap from counting as elapsed time on resume.
+            self.last = None;
+            return Some(self.snap_paused());
         }
+        self.paused = false;
         let last = match self.last {
             Some(last) => last,
             None => {
@@ -247,11 +258,8 @@ impl<T: Lerp + 'static> KeyframesInner<T> {
         self.current.clone()
     }
 
-    // Reduced-motion "instant": `Once` jumps to the sequence end, `Loop`/`PingPong` to the end of whichever step is in flight — coherent with `Animated`'s snap-to-target without freezing an indefinite repeat.
-    fn snap_scale_zero(&mut self) -> T {
-        if matches!(self.repeat, Repeat::Once) {
-            return self.finish_once();
-        }
+    // A repeat with no end of its own holds at the edge of the step in flight rather than staying active forever.
+    fn snap_paused(&mut self) -> T {
         let (_, start_cum, end_cum) = locate(&self.timeline.steps, self.elapsed_secs);
         self.elapsed_secs = match self.direction {
             Direction::Forward => end_cum,
@@ -276,7 +284,13 @@ impl<T: Lerp + 'static> Tickable for RefCell<KeyframesInner<T>> {
     }
 
     fn is_settled(&self) -> bool {
-        self.borrow().settled
+        let inner = self.borrow();
+        inner.settled || inner.paused
+    }
+
+    // A paused loop must survive pruning, or the tick that brings the scale back would find nothing to resume.
+    fn resumable(&self) -> bool {
+        !matches!(self.borrow().repeat, Repeat::Once)
     }
 }
 
@@ -325,6 +339,7 @@ impl<T: Lerp + 'static> Keyframes<T> {
             inner.direction = Direction::Forward;
             inner.current = inner.initial.clone();
             inner.settled = false;
+            inner.paused = false;
             inner.completed_once = false;
             // Re-establish t0 on the next tick, same reasoning as Animated::retarget.
             inner.last = None;
@@ -382,6 +397,7 @@ impl<T: Lerp + 'static> KeyframesBuilder<T> {
             elapsed_secs: 0.0,
             current: self.initial,
             settled: false,
+            paused: false,
             completed_once: false,
             last: None,
         }));

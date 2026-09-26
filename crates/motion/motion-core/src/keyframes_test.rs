@@ -136,6 +136,96 @@ fn stop_deregisters_and_freezes_without_marking_finished() {
 }
 
 #[test]
+fn zero_scale_settles_a_loop_instead_of_ticking_forever() {
+    let base = fresh();
+    let kf = Keyframes::new(0.0f32)
+        .then(1.0, Duration::from_millis(100), Easing::Linear)
+        .start(Repeat::Loop);
+    tick(base);
+    tick(base + Duration::from_millis(40));
+    assert!(has_active(), "still playing at full scale");
+
+    set_scale(0.0);
+    tick(base + Duration::from_millis(50));
+    assert_eq!(kf.get(), 1.0, "holds at the end of the step in flight");
+    assert!(
+        !has_active(),
+        "a paused loop must not keep the ticker active forever"
+    );
+
+    // Further ticks at scale 0 are no-ops, not a growing backlog of redundant snaps.
+    tick(base + Duration::from_millis(200));
+    assert_eq!(kf.get(), 1.0);
+    assert!(!has_active());
+    set_scale(1.0);
+}
+
+#[test]
+fn zero_scale_settles_pingpong_at_the_edge_in_flight() {
+    let base = fresh();
+    let kf = Keyframes::new(0.0f32)
+        .then(1.0, Duration::from_millis(100), Easing::Linear)
+        .start(Repeat::PingPong);
+    tick(base);
+    tick(base + Duration::from_millis(120)); // past the forward edge, now heading back
+    assert!(kf.get() < 1.0, "already reversing: {}", kf.get());
+
+    set_scale(0.0);
+    tick(base + Duration::from_millis(130));
+    assert_eq!(
+        kf.get(),
+        0.0,
+        "holds at the start of the step it is retreating through"
+    );
+    assert!(!has_active(), "paused PingPong must not stay active");
+    set_scale(1.0);
+}
+
+#[test]
+fn a_paused_loop_resumes_when_the_scale_moves_again() {
+    let base = fresh();
+    let kf = Keyframes::new(0.0f32)
+        .then(1.0, Duration::from_millis(100), Easing::Linear)
+        .start(Repeat::Loop);
+    tick(base);
+    tick(base + Duration::from_millis(40));
+
+    set_scale(0.0);
+    tick(base + Duration::from_millis(50));
+    assert!(!has_active(), "paused under a zero scale");
+
+    set_scale(1.0);
+    tick(base + Duration::from_millis(200)); // re-establishes t0, no jump
+    assert_eq!(
+        kf.get(),
+        1.0,
+        "still holding on the tick that re-establishes t0"
+    );
+    assert!(has_active(), "resumed: a paused loop is not a dead one");
+
+    tick(base + Duration::from_millis(230));
+    assert!(
+        kf.get() < 1.0,
+        "advancing again from where it paused: {}",
+        kf.get()
+    );
+}
+
+#[test]
+fn zero_scale_still_finishes_once_for_good() {
+    let base = fresh();
+    let kf = Keyframes::new(0.0f32)
+        .then(1.0, Duration::from_millis(100), Easing::Linear)
+        .start(Repeat::Once);
+    tick(base);
+    set_scale(0.0);
+    tick(base + Duration::from_millis(10));
+    assert!(kf.is_finished(), "Once still jumps straight to its end");
+    assert!(!has_active(), "and stays gone, same as before this fix");
+    set_scale(1.0);
+}
+
+#[test]
 fn spring_presets_build_expected_values() {
     assert_eq!(crate::Spring::gentle(), spring(120.0, 14.0));
     assert_eq!(crate::Spring::snappy(), spring(210.0, 20.0));

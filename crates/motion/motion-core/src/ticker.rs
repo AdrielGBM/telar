@@ -18,6 +18,15 @@ pub trait Tickable {
     fn reducible(&self) -> bool {
         true
     }
+    /// Whether a settled registration should stay in the registry rather than be pruned outright.
+    ///
+    /// Almost everything that settles has reached a permanent end (a tween at its target, a fling at rest) and
+    /// is correctly forgotten. An indefinite repeat paused by a zero time scale is different: it has not ended,
+    /// only paused, and must still be there to notice the scale move again — see `Keyframes`'s `Repeat::Loop`/
+    /// `Repeat::PingPong`.
+    fn resumable(&self) -> bool {
+        false
+    }
 }
 
 struct Registry {
@@ -72,6 +81,16 @@ fn is_live(weak: &Weak<dyn Tickable>) -> bool {
     matches!(weak.upgrade(), Some(anim) if !anim.is_settled())
 }
 
+/// Whether an entry should be dropped from the registry outright: its owner let it go, or it reached a
+/// permanent end nothing will revive. A settled-but-resumable one (a paused indefinite repeat) stays, so a
+/// later tick can find it again if the scale that paused it moves.
+fn should_prune(weak: &Weak<dyn Tickable>) -> bool {
+    match weak.upgrade() {
+        None => true,
+        Some(anim) => anim.is_settled() && !anim.resumable(),
+    }
+}
+
 /// Integrate every active animation to `now`, publishing changed values and deregistering settled ones.
 pub fn tick(now: Instant) {
     // Snapshot live handles under a short borrow, then integrate without holding the registry borrow: each `.set()` may flush effects that re-enter the registry (register new animations).
@@ -89,9 +108,9 @@ pub fn tick(now: Instant) {
         };
         anim.tick(now, scale);
     }
-    // Prune dead (dropped) and settled animations so has_active() returns false at rest.
+    // A settled but resumable animation stays registered so a later positive scale can wake it.
     REGISTRY.with(|r| {
-        r.borrow_mut().entries.retain(|_, weak| is_live(weak));
+        r.borrow_mut().entries.retain(|_, weak| !should_prune(weak));
     });
 }
 

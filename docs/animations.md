@@ -54,8 +54,29 @@ tl.sample(0.5); // the value halfway through the sequence, no clock involved
 ### D5. One time scale, and reduced motion zeroes it
 
 `motion::set_scale` is the global time scale every registered animation advances by: `1.0` is normal, values in
-between are slow motion, and `0.0` makes every animation jump straight to its end. A looping `Keyframes` jumps to
-the end of the step in flight instead of freezing.
+between are slow motion, and `0.0` makes every animation jump straight to its end. A looping `Keyframes` has no
+end to jump to, so it holds instead: `Repeat::Loop` and `Repeat::PingPong` snap to the end of whichever step is
+in flight (the start of it, if `PingPong` is on its way back) and go quiet there, rather than freezing an
+indefinite repeat that keeps reporting itself active forever — which used to spin the frame loop at zero scale
+for nothing. That pause is not permanent: it clears the moment a tick sees a positive scale again, and playback
+picks back up from exactly where it paused (re-establishing its own clock first, same as a fresh start, so the
+paused gap is never integrated as elapsed time). `Repeat::Once` is unaffected — it already has an end, and
+`0.0` simply jumps it there for good, same as `Animated` snapping to target.
+
+The registry reflects this: something that is merely paused, not permanently done, stays registered through it
+(`Tickable::resumable`) instead of being pruned like a settled `Animated` or a finished `Once`. `has_active()`
+still reports it inactive while paused — nothing schedules frames on its account — but it is still there to
+notice the scale move again, on whatever later frame happens for some other reason (an OS preference flipping
+back, for instance, always forces one via `Event::SystemPreferencesChanged`).
+
+**An indeterminate spinner is a `Repeat::Loop` too** (`telar_ui_components::spinner`, driven by
+`motion_core::Keyframes` under `Repeat::Loop`), and it gets the same pause: reduced motion holds it at rest rather than spinning it
+forever off-screen-invisible-but-costly. This is a deliberate choice, not an oversight — unlike momentum, an
+indeterminate spinner's motion is decorative *as motion* (its job is "work is happening," which a still ring
+still says, just less insistently), so it does not opt out of the preference the way momentum (below) does.
+An application that finds a frozen spinner reads as hung is free to build its own with
+`Tickable::reducible() -> false`, the same escape hatch a fling and a glide use; the default stays reducible
+because most spinners are decorative enough that "less motion" should mean less motion.
 
 When the user asks their system for less motion (`use_reduced_motion() == Some(true)`, see
 [system-preferences.md](system-preferences.md)), the ticker hands every animation a scale of `0.0` without
