@@ -46,8 +46,7 @@ pub fn run_hot_reload_host(
     };
     let crate::app_config::AppConfig {
         mut window,
-        font_paths,
-        font_data,
+        fonts: faces,
         font_family,
     } = config;
     #[cfg(feature = "hot-reload")]
@@ -60,8 +59,7 @@ pub fn run_hot_reload_host(
         Box::new(initial_app),
         paths,
         crate::runner::font_config::FontSetup {
-            paths: font_paths,
-            data: font_data,
+            faces,
             family: font_family,
         },
         backend,

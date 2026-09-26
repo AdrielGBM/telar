@@ -14,15 +14,13 @@ pub(super) fn with_dev_overrides(config: AppConfig) -> AppConfig {
     {
         let AppConfig {
             mut window,
-            font_paths,
-            font_data,
+            fonts: faces,
             font_family,
         } = config;
         apply_dev_window_overrides(&mut window);
         AppConfig {
             window,
-            font_paths,
-            font_data,
+            fonts: faces,
             font_family,
         }
     }

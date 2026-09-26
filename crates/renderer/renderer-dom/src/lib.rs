@@ -28,6 +28,6 @@ mod reconcile;
 mod renderer;
 
 #[cfg(target_arch = "wasm32")]
-pub use metrics::CanvasTextMetrics;
+pub use metrics::{CanvasTextMetrics, remeasure_on_font_load};
 #[cfg(target_arch = "wasm32")]
 pub use renderer::{DomRenderer, DomRendererFactory};

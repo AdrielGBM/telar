@@ -3,7 +3,7 @@
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-use telar_project::WebSection;
+use telar_project::{FontDeclaration, WebSection};
 
 use super::{dist_dir, tool_missing};
 use crate::runner::cli::{Target, WebRenderer};
@@ -13,6 +13,7 @@ use crate::runner::config::{
 };
 
 mod assets;
+mod fonts;
 mod media;
 mod page;
 
@@ -123,6 +124,7 @@ pub(crate) fn build_web_bundle(
         &staging,
         &package_root,
         &config.web,
+        &config.fonts,
         &resolved.name(),
         renderer,
     )?;
@@ -140,6 +142,7 @@ fn assemble(
     out: &Path,
     package_root: &Path,
     web: &WebSection,
+    fonts: &[FontDeclaration],
     app_name: &str,
     renderer: Option<WebRenderer>,
 ) -> Result<(), String> {
@@ -164,6 +167,7 @@ fn assemble(
         "description",
         format!("{app_name}, a Telar application."),
     ));
+    fonts::declare_fonts(&mut page, &mut assets, package_root, fonts)?;
     let (template, origin) = read_template(web, package_root)?;
     let html = page
         .render(&template)

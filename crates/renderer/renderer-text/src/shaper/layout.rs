@@ -24,6 +24,7 @@ impl TextShaper {
         scale_factor: f32,
         out: &mut Vec<GlyphInfo>,
     ) {
+        self.sync_fonts();
         out.clear();
 
         let font_size = style.font_size;
@@ -284,6 +285,7 @@ impl TextShaper {
         max_width: f32,
         style: &TextStyle,
     ) -> (f32, f32) {
+        self.sync_fonts();
         if text.is_empty() {
             return (0.0, 0.0);
         }
@@ -350,6 +352,7 @@ impl TextShaper {
         max_width: f32,
         style: &TextStyle,
     ) -> (f32, f32) {
+        self.sync_fonts();
         if text.is_empty() || max_width.ceil() as u32 == 0 {
             return (0.0, 0.0);
         }

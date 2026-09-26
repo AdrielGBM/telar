@@ -39,16 +39,14 @@ where
     for (id, cfg) in surfaces {
         let AppConfig {
             window,
-            font_paths,
-            font_data,
+            fonts: faces,
             font_family,
         } = cfg;
         window_configs.push((id, window));
         fonts.insert(
             id,
             FontSetup {
-                paths: font_paths,
-                data: font_data,
+                faces,
                 family: font_family,
             },
         );
@@ -95,13 +93,11 @@ where
     // A surface opened at runtime carries its own font configuration like any other. It used to be handed none, which was survivable only while a process-wide global named the family behind its back.
     let AppConfig {
         window: _,
-        font_paths,
-        font_data,
+        fonts: faces,
         font_family,
     } = fonts;
     let fonts = FontSetup {
-        paths: font_paths,
-        data: font_data,
+        faces,
         family: font_family,
     };
     let mut handler = build_app_handler::<W, ()>(

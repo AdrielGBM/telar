@@ -24,13 +24,4 @@ js-sys = { workspace = true }
 raw-window-handle = { workspace = true }
 wasm-bindgen = { workspace = true }
 wasm-bindgen-futures = { workspace = true }
-web-sys = { workspace = true, features = [
-    "CssStyleDeclaration",
-    "Document",
-    "Element",
-    "HtmlCanvasElement",
-    "HtmlElement",
-    "Navigator",
-    "Node",
-    "Window",
-] }
+web-sys = { workspace = true, features = ["CssStyleDeclaration", "Document", "Element", "HtmlCanvasElement", "HtmlElement", "HtmlLinkElement", "Navigator", "Node", "NodeList", "Response", "Window"] }

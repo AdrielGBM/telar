@@ -369,6 +369,18 @@ pub fn is_hidden(node: NodeId) -> bool {
     with_runtime(|rt| rt.is_hidden_by_display(node))
 }
 
+/// Marks every measured leaf stale unless the active surface already measured at `generation`, so the next compute sizes its content again — once per generation, however many roots and frames follow.
+///
+/// The generation is the caller's: whatever measures content says when its answers may have changed, and this only remembers the last one it was told. What moves it for text is `renderer_core::text_metrics_generation`.
+pub fn remeasure_since(generation: u64) {
+    with_runtime(|rt| {
+        if rt.measured_at != generation {
+            rt.measured_at = generation;
+            rt.engine.mark_measured_dirty();
+        }
+    });
+}
+
 /// Marks a node's layout stale, so the next compute re-runs the root it belongs to.
 pub fn mark_dirty(node: NodeId) -> Result<(), LayoutError> {
     with_runtime(|rt| rt.engine.mark_dirty(node))
@@ -522,6 +534,8 @@ struct LayoutRuntime {
     abs_pos_signals: FxHashMap<NodeId, RwSignal<(f32, f32)>>,
     /// How many times the engine has laid anything out, for [`layout_passes`].
     passes: u64,
+    /// The measurement generation its measured leaves were last sized at. See [`remeasure_since`].
+    measured_at: u64,
     /// What each root's sticky nodes stick against, for the roots something has said it for. See [`set_sticky_view`].
     sticky_views: FxHashMap<NodeId, Rect>,
     /// The outermost sticky nodes each root's last walk met, so a new view places only their subtrees again.
@@ -542,6 +556,7 @@ impl LayoutRuntime {
             abs_pos: FxHashMap::default(),
             abs_pos_signals: FxHashMap::default(),
             passes: 0,
+            measured_at: 0,
             sticky_views: FxHashMap::default(),
             sticky_anchors: FxHashMap::default(),
             #[cfg(debug_assertions)]

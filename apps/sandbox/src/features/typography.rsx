@@ -40,6 +40,12 @@ col gap:20
             text "serif" font_size:16 color:$theme.ink font_family:serif
             text "\"Iosevka, monospace\" — a named face, falling back to the generic" font_size:16 color:$theme.ink font_family:"Iosevka, monospace"
         code_line code:"text 'code' font_family:monospace   ·   text 'set' font_family:'Iosevka, monospace'"
+    example title:"A face the app ships — declared once in telar.toml, loaded on every target"
+        card gap:6
+            text "Telar Test at 400 — a variable face from [[telar.fonts]]" font_size:18 color:$theme.ink font_family:"Telar Test, sans_serif"
+            text "Telar Test at 800" font_size:18 color:$theme.ink font_weight:800 font_family:"Telar Test, sans_serif"
+            text "The page does not wait for it: text shows in the fallback and is measured again once, when the face lands." font_size:13 color:$theme.muted
+        code_line code:"[[telar.fonts]]   family = 'Telar Test'   src = 'assets/fonts/TelarTest.ttf'"
     example title:"Line clamp & ellipsis"
         card gap:8
             text "This paragraph is clamped to two lines with lines:2, so however long the copy gets the box never grows past two lines and the overflow is simply dropped." font_size:14 color:$theme.muted lines:2

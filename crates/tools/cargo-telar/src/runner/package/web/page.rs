@@ -142,10 +142,6 @@ impl HeadTag {
     }
 
     /// A font the page will need, fetched with the page rather than once CSS asks for it. `crossorigin` is required even on the same origin: fonts are always fetched in CORS mode, and a preload in any other mode is fetched twice.
-    #[cfg_attr(
-        not(test),
-        expect(dead_code, reason = "no build declares a font asset yet")
-    )]
     pub(crate) fn font_preload(href: impl Into<String>, media_type: impl Into<String>) -> Self {
         Self::link("preload", href)
             .attr("as", "font")

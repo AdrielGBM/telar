@@ -161,13 +161,13 @@ pub use renderer_core::{
 pub use geometry_core::{LayoutGrid, layout_grid, set_layout_grid};
 #[cfg(feature = "runtime")]
 pub use renderer_core::{
-    FontConfig, RenderBackend, RendererBuild, RendererFactory, TextMetrics,
-    set_default_text_metrics, set_text_metrics,
+    FontAsset, FontAxis, FontConfig, FontSource, FontWeight, RenderBackend, RendererBuild,
+    RendererFactory, TextMetrics, set_default_text_metrics, set_text_metrics,
 };
 
 /// Whether this build turns font files into glyphs itself.
 ///
-/// The question an application asks before supplying [`AppConfig::font_data`](crate::AppConfig::font_data): a shaper on a target with no font directory behind it — a browser — finds nothing and measures every string to zero, so the app has to carry a face. A build that draws as a document has no shaper to feed. Its text is laid out and drawn by the browser in the browser's own fonts, and a face baked into the module would be bytes nothing reads.
+/// The question an application asks before embedding a face in [`AppConfig::fonts`](crate::AppConfig::fonts): a shaper on a target with no font directory behind it — a browser — finds nothing and measures every string to zero, so the app has to carry a face. A build that draws as a document has no shaper to feed. Its text is laid out and drawn by the browser in the browser's own fonts, and a face baked into the module would be bytes nothing reads.
 ///
 /// A `const` rather than a function so the branch that answers it is folded away, and the faces behind an `include_bytes!` in the arm not taken never reach the binary.
 pub const SHAPES_TEXT: bool = cfg!(feature = "shaper");

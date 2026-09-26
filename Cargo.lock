@@ -5911,6 +5911,7 @@ dependencies = [
  "telar-renderer-cache",
  "telar-renderer-core",
  "tiny-skia 0.12.0",
+ "tracing",
 ]
 
 [[package]]

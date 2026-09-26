@@ -23,9 +23,9 @@ fn app_config() -> telar::AppConfig {
     let mut config = telar::AppConfig::default();
     #[cfg(target_arch = "wasm32")]
     if telar::SHAPES_TEXT {
-        config
-            .font_data
-            .push(include_bytes!("../assets/fonts/DejaVuSans.ttf").to_vec());
+        config.fonts.push(telar::FontAsset::embedded(include_bytes!(
+            "../assets/fonts/DejaVuSans.ttf"
+        )));
         config.font_family = Some("DejaVu Sans".to_string());
     }
     config

@@ -112,11 +112,11 @@ impl TextureUi {
         )
     }
 
-    /// [`new`](Self::new) carrying fonts of its own — `font_paths` on disk, `font_data` embedded, and `font_family` naming which of them its text shapes in — in the same shape [`AppConfig`](crate::AppConfig) takes them. The reason to reach for it is a face drawn on a pixel grid, to pair with [`Raster::Pixel`](crate::Raster::Pixel).
+    /// [`new`](Self::new) carrying fonts of its own — `faces` embedded or on disk, and `family` naming which of them its text shapes in — in the same shape [`AppConfig`](crate::AppConfig) takes them. The reason to reach for it is a face drawn on a pixel grid, to pair with [`Raster::Pixel`](crate::Raster::Pixel).
     ///
     /// **Loading a face is not choosing it**, which is what `font_family` is for: without it the face is loaded and the platform's own is drawn, which looks like the file failed to load and did not.
     ///
-    /// The faces join the one font database every shaper is built from, so they stay loaded for the rest of the process — but a window already drawing keeps the shaper it built before they arrived, so a face meant for both still belongs in the app config. The *family*, though, is this surface's own: a pixel face here and a different one in the window around it are now two configurations rather than one process-wide setting they would have to share.
+    /// The faces join the one font database every shaper is built from, so they stay loaded for the rest of the process and a window already drawing takes them too. The *family*, though, is this surface's own: a pixel face here and a different one in the window around it are now two configurations rather than one process-wide setting they would have to share.
     pub fn with_fonts(
         target: wgpu::Texture,
         scale: f32,

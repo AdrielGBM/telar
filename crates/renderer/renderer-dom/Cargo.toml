@@ -20,7 +20,7 @@ tracing = { workspace = true }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 wasm-bindgen = { workspace = true }
-web-sys = { workspace = true, features = ["CanvasRenderingContext2d", "HtmlCanvasElement", "ImageData", "NodeList", "TextMetrics", "CssStyleDeclaration", "Document", "DomRect", "Element", "AddEventListenerOptions", "EventTarget", "HtmlElement", "HtmlTextAreaElement", "InputEvent", "KeyboardEvent", "HtmlHeadElement", "Node", "Text", "Window", "Location", "FocusEvent"] }
+web-sys = { workspace = true, features = ["CanvasRenderingContext2d", "HtmlCanvasElement", "ImageData", "NodeList", "TextMetrics", "CssStyleDeclaration", "Document", "DomRect", "Element", "AddEventListenerOptions", "EventTarget", "HtmlElement", "HtmlTextAreaElement", "InputEvent", "KeyboardEvent", "HtmlHeadElement", "Node", "Text", "Window", "Location", "FocusEvent", "FontFaceSet"] }
 
 [target.'cfg(target_arch = "wasm32")'.dev-dependencies]
 js-sys.workspace = true
@@ -30,7 +30,7 @@ wasm-bindgen-futures.workspace = true
 
 # Pinned to the release whose glue and `wasm-bindgen-test-runner` match the `wasm-bindgen` pin in [workspace.dependencies]. The two move together.
 wasm-bindgen-test = "=0.3.77"
-web-sys = { workspace = true, features = ["KeyboardEventInit", "EventInit", "NodeList", "FocusEvent"] }
+web-sys = { workspace = true, features = ["KeyboardEventInit", "EventInit", "NodeList", "FocusEvent", "FontFace", "FontFaceSet", "Blob", "BlobPropertyBag", "Url"] }
 
 [[test]]
 name = "layout_parity"
@@ -51,3 +51,7 @@ path = "src/semantics_test.rs"
 [[test]]
 name = "document_scroll"
 path = "src/document_scroll_test.rs"
+
+[[test]]
+name = "font_load"
+path = "src/font_load_test.rs"

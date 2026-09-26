@@ -1,10 +1,11 @@
 //! The one font database, which only ever grows: loading a face is cheap and additive, where a face that vanishes from under a shaper already built from it is exactly the disagreement this module exists to prevent.
 
 use std::path::PathBuf;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, RwLock};
 
 use cosmic_text::{FontSystem, fontdb};
-use renderer_core::FontConfig;
+use renderer_core::{FontAsset, FontConfig, FontSource, FontStyle};
 
 use crate::measure::ShaperMetrics;
 
@@ -18,14 +19,22 @@ pub struct Fonts {
     /// Everything every configuration so far has named, not the last one alone: what is already here is what a later one does not have to load.
     sources: FaceSources,
     families: Vec<String>,
+    /// Which [`faces_generation`] this database holds.
+    faces: u64,
 }
 
 impl Fonts {
-    /// A `FontSystem` over these faces — a clone of the loaded database rather than a second scan, because `fontdb` holds every face as a path or a shared buffer, so what is copied is the index and not the fonts.
+    /// A `FontSystem` over these faces, routing the default face to the first of the families the configuration that installed them named.
     pub(crate) fn font_system(&self) -> FontSystem {
+        self.font_system_routed(&self.families)
+    }
+
+    /// A `FontSystem` over these faces with the default face routed to the first of `families` that resolves — how a shaper built for one surface takes a face another surface loaded without taking that surface's default family too.
+    ///
+    /// A clone of the loaded database rather than a second scan, because `fontdb` holds every face as a path or a shared buffer, so what is copied is the index and not the fonts. Routed in the copy rather than the stored database, so a configuration naming a family nothing has falls back to what a fresh load would leave rather than to whichever family the configuration before it chose.
+    pub(crate) fn font_system_routed(&self, families: &[String]) -> FontSystem {
         let mut db = self.db.clone();
-        // Routes the default face to the first candidate that resolves. Into the copy rather than the stored database, so a configuration naming a family nothing has falls back to what a fresh load would leave rather than to whichever family the configuration before it chose.
-        for name in &self.families {
+        for name in families {
             if db
                 .query(&fontdb::Query {
                     families: &[fontdb::Family::Name(name)],
@@ -39,9 +48,24 @@ impl Fonts {
         }
         FontSystem::new_with_locale_and_db(self.locale.clone(), db)
     }
+
+    pub(crate) fn families(&self) -> &[String] {
+        &self.families
+    }
+
+    pub(crate) fn faces(&self) -> u64 {
+        self.faces
+    }
 }
 
 static INSTALLED: RwLock<Option<Arc<Fonts>>> = RwLock::new(None);
+
+static FACES_GENERATION: AtomicU64 = AtomicU64::new(0);
+
+/// Moves every time a face is added to a database a shaper may already have been built from. A shaper compares it against the one it was built at, which is one atomic load where asking for the installed fonts is a lock.
+pub(crate) fn faces_generation() -> u64 {
+    FACES_GENERATION.load(Ordering::Acquire)
+}
 
 /// Loads the faces `config` names and makes them the ones every shaper in this process uses.
 ///
@@ -50,15 +74,32 @@ pub fn install(config: FontConfig) -> Arc<Fonts> {
     // Configuring the fonts a raster surface measures in says which measurer you want, so it is installed here rather than left to every runtime to remember. It yields to a frontend that installed its own.
     renderer_core::set_default_text_metrics(ShaperMetrics);
     let FontConfig {
-        extra_font_paths,
-        font_data,
+        faces,
         system_fonts_dir,
         sans_serif_family_candidates: families,
     } = config;
-    let wanted = FaceSources::of(system_fonts_dir, extra_font_paths, font_data);
+    let wanted = FaceSources::of(system_fonts_dir, faces);
     if families.is_empty() && wanted == FaceSources::platform() {
         return installed();
     }
+    add(wanted, Some(families))
+}
+
+/// Adds `faces` to the database every shaper uses, keeping whichever family the installed configuration routes the default face to.
+///
+/// The seam a face that *arrives* needs — fetched by a page, downloaded, picked by the user — as opposed to one a surface is configured with. Every shaper takes it on its next use, a `Stack` naming its family re-resolves, and layout measures its text again once.
+pub fn add_faces(faces: Vec<FontAsset>) -> Arc<Fonts> {
+    add(
+        FaceSources {
+            system_scan: false,
+            dirs: Vec::new(),
+            faces,
+        },
+        None,
+    )
+}
+
+fn add(wanted: FaceSources, families: Option<Vec<String>>) -> Arc<Fonts> {
     let mut slot = INSTALLED.write().expect("font database lock");
     let Some(loaded) = slot.as_ref().cloned() else {
         let (locale, db) = wanted.load();
@@ -68,18 +109,35 @@ pub fn install(config: FontConfig) -> Arc<Fonts> {
                 locale,
                 db,
                 sources: wanted,
-                families,
+                families: families.unwrap_or_default(),
+                faces: faces_generation(),
             },
         );
     };
+    let families = families.unwrap_or_else(|| loaded.families.clone());
     let missing = loaded.sources.missing(wanted);
-    if missing.is_empty() && loaded.families == families {
-        return loaded;
+    if missing.is_empty() {
+        if loaded.families == families {
+            return loaded;
+        }
+        return replace(
+            &mut slot,
+            Fonts {
+                locale: loaded.locale.clone(),
+                db: loaded.db.clone(),
+                sources: loaded.sources.clone(),
+                families,
+                faces: loaded.faces,
+            },
+        );
     }
     let mut db = loaded.db.clone();
     missing.load_into(&mut db);
     let mut sources = loaded.sources.clone();
     sources.absorb(missing);
+    let faces = FACES_GENERATION.fetch_add(1, Ordering::AcqRel) + 1;
+    // Text measured before this may have been measured in a fallback for a family that has a face now.
+    renderer_core::invalidate_text_metrics();
     replace(
         &mut slot,
         Fonts {
@@ -87,6 +145,7 @@ pub fn install(config: FontConfig) -> Arc<Fonts> {
             db,
             sources,
             families,
+            faces,
         },
     )
 }
@@ -111,6 +170,7 @@ pub fn installed() -> Arc<Fonts> {
             db,
             sources,
             families: Vec::new(),
+            faces: faces_generation(),
         },
     )
 }
@@ -127,25 +187,18 @@ struct FaceSources {
     /// Whether the platform's own font directories have been walked. At most once in a process: it is the only one of these that costs a scan.
     system_scan: bool,
     dirs: Vec<PathBuf>,
-    files: Vec<PathBuf>,
-    // Shared with the database rather than copied into it: an embedded face is megabytes, and this outlives every shaper built from it.
-    data: Vec<Arc<Vec<u8>>>,
+    faces: Vec<FontAsset>,
 }
 
 impl FaceSources {
-    fn of(
-        system_fonts_dir: Option<PathBuf>,
-        extra_font_paths: Vec<PathBuf>,
-        font_data: Vec<Vec<u8>>,
-    ) -> Self {
-        if system_fonts_dir.is_none() && extra_font_paths.is_empty() && font_data.is_empty() {
+    fn of(system_fonts_dir: Option<PathBuf>, faces: Vec<FontAsset>) -> Self {
+        if system_fonts_dir.is_none() && faces.is_empty() {
             return Self::platform();
         }
         Self {
             system_scan: system_fonts_dir.is_none(),
             dirs: system_fonts_dir.into_iter().collect(),
-            files: extra_font_paths,
-            data: font_data.into_iter().map(Arc::new).collect(),
+            faces,
         }
     }
 
@@ -154,8 +207,7 @@ impl FaceSources {
         let mut sources = Self {
             system_scan: true,
             dirs: Vec::new(),
-            files: Vec::new(),
-            data: Vec::new(),
+            faces: Vec::new(),
         };
         if cfg!(target_os = "android") {
             // Android keeps its faces outside every directory `load_system_fonts` looks in, and a database with no faces aborts cosmic-text the first time anything is measured.
@@ -174,33 +226,26 @@ impl FaceSources {
                 .into_iter()
                 .filter(|dir| !self.dirs.contains(dir))
                 .collect(),
-            files: wanted
-                .files
+            faces: wanted
+                .faces
                 .into_iter()
-                .filter(|file| !self.files.contains(file))
-                .collect(),
-            data: wanted
-                .data
-                .into_iter()
-                .filter(|data| !self.data.contains(data))
+                .filter(|face| !self.faces.contains(face))
                 .collect(),
         }
     }
 
     fn is_empty(&self) -> bool {
-        !self.system_scan && self.dirs.is_empty() && self.files.is_empty() && self.data.is_empty()
+        !self.system_scan && self.dirs.is_empty() && self.faces.is_empty()
     }
 
     fn absorb(&mut self, more: Self) {
         self.system_scan |= more.system_scan;
         self.dirs.extend(more.dirs);
-        self.files.extend(more.files);
-        self.data.extend(more.data);
+        self.faces.extend(more.faces);
     }
 
     fn load(&self) -> (String, fontdb::Database) {
-        if self.system_scan && self.dirs.is_empty() && self.files.is_empty() && self.data.is_empty()
-        {
+        if self.system_scan && self.dirs.is_empty() && self.faces.is_empty() {
             // cosmic-text's own default database, taken from a `FontSystem` rather than rebuilt here: a hand-rolled copy of its system scan and generic-family choices would drift from every other consumer's.
             return FontSystem::new().into_locale_and_db();
         }
@@ -217,13 +262,58 @@ impl FaceSources {
         for dir in &self.dirs {
             db.load_fonts_dir(dir);
         }
-        for file in &self.files {
-            db.load_font_file(file).ok();
-        }
-        for data in &self.data {
-            db.load_font_source(fontdb::Source::Binary(data.clone()));
+        for face in &self.faces {
+            load_asset(db, face);
         }
     }
+}
+
+fn load_asset(db: &mut fontdb::Database, asset: &FontAsset) -> Vec<fontdb::ID> {
+    let source = match &asset.source {
+        FontSource::Static(bytes) => fontdb::Source::Binary(Arc::new(*bytes)),
+        FontSource::Shared(bytes) => fontdb::Source::Binary(Arc::new(bytes.clone())),
+        FontSource::File(_) => {
+            let executable_dir = std::env::current_exe()
+                .ok()
+                .and_then(|exe| exe.parent().map(PathBuf::from));
+            let path = asset
+                .source
+                .resolved_path(executable_dir.as_deref())
+                .expect("a file source resolves to a path");
+            if !path.is_file() {
+                tracing::warn!("font file {} does not exist", path.display());
+                return Vec::new();
+            }
+            fontdb::Source::File(path)
+        }
+    };
+    let ids = db.load_font_source(source).to_vec();
+    let Some(family) = &asset.family else {
+        return ids;
+    };
+    ids.into_iter()
+        .filter_map(|id| {
+            let mut info = db.face(id)?.clone();
+            db.remove_face(id);
+            declare(&mut info, asset, family);
+            Some(db.push_face_info(info))
+        })
+        .collect()
+}
+
+/// Makes the face answer to what its declaration says, the way an `@font-face` rule does: its family first, its own names after it so nothing asking for those loses it, and the declared slant and weight as what a query matches against.
+fn declare(info: &mut fontdb::FaceInfo, asset: &FontAsset, family: &str) {
+    info.families.retain(|(name, _)| name != family);
+    info.families.insert(
+        0,
+        (family.to_string(), fontdb::Language::English_UnitedStates),
+    );
+    info.style = match asset.style {
+        FontStyle::Normal => fontdb::Style::Normal,
+        FontStyle::Italic => fontdb::Style::Italic,
+        FontStyle::Oblique => fontdb::Style::Oblique,
+    };
+    info.weight = fontdb::Weight(info.weight.0.clamp(asset.weight.min, asset.weight.max));
 }
 
 #[cfg(test)]
@@ -232,7 +322,7 @@ mod tests;
 
 /// Loads one face from bytes and reports the families it declares, or `None` when the bytes are not a font.
 ///
-/// The seam a face that *arrives* needs: a downloaded or user-supplied file has no path to name in a [`FontConfig`], and the caller cannot ask for it by family until it knows what family it turned out to be. Loading is additive like every other path here, so a shaper already built keeps everything it had.
+/// A downloaded or user-supplied file has no family the caller knows until it has been read, which is what this answers; [`add_faces`] is the same load for a face whose family is already known. Loading is additive like every other path here, so a shaper already built keeps everything it had.
 ///
 /// The families are the face's own, read out of its name table — not a name the caller chose. A file carrying several faces reports each.
 pub fn install_face(data: Vec<u8>) -> Option<Vec<String>> {
@@ -245,9 +335,6 @@ pub fn install_face(data: Vec<u8>) -> Option<Vec<String>> {
     if families.is_empty() {
         return None;
     }
-    install(FontConfig {
-        font_data: vec![data],
-        ..FontConfig::default()
-    });
+    add_faces(vec![FontAsset::bytes(data)]);
     Some(families)
 }

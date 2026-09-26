@@ -68,6 +68,10 @@ pub struct TextShaper {
     font_metrics_cache: Option<renderer_core::FontMetrics>,
     // Whether a `Named` family in a `Stack` has an installed face — a `fontdb::Database::query` per distinct name rather than per shape call. Unbounded like `blank_glyphs`, for the same reason: the set is bounded by the family names an application actually names, not by how often it shapes.
     family_availability: rustc_hash::FxHashMap<Arc<str>, bool>,
+    /// The [`fonts::faces_generation`] this shaper's database was cloned at.
+    faces: u64,
+    /// The families its default face is routed to: its own configuration's, kept when it takes faces another configuration loaded.
+    families: Vec<String>,
 }
 
 /// The buffer line height in pixels for `style`: `line_height` (a multiple of font size) when set, else the natural `LINE_HEIGHT_FACTOR`. Shared by shaping and measuring so both reserve the same vertical space.
@@ -431,6 +435,8 @@ impl TextShaper {
     fn in_fonts(fonts: &Fonts, raster: Policy, shaping: Policy) -> Self {
         Self {
             font_system: fonts.font_system(),
+            faces: fonts.faces(),
+            families: fonts.families().to_vec(),
             swash_cache: SwashCache::new(),
             atlas: GlyphAtlas::new(),
             raster_cache: Cache::new(raster, |pixels| pixels.len()),
@@ -520,10 +526,32 @@ impl Default for TextShaper {
 }
 
 impl TextShaper {
+    /// Takes every face added to the process's database since this shaper was built, and forgets whatever it worked out without them.
+    ///
+    /// A `Stack` resolved to its second member because the first had no face must resolve again once the first has one, and a string shaped or rasterized in the fallback must be shaped again, so every cache keyed by text and style goes. Glyph rasters and the atlas stay: they are keyed by face id, and a face already loaded keeps its id.
+    pub fn sync_fonts(&mut self) {
+        if fonts::faces_generation() == self.faces {
+            return;
+        }
+        let fonts = fonts::installed();
+        self.faces = fonts.faces();
+        self.font_system = fonts.font_system_routed(&self.families);
+        self.raster_cache.clear();
+        self.shaping_cache.clear();
+        self.measure_cache.clear();
+        self.has_colr_cache.clear();
+        self.blank_glyphs.clear();
+        self.font_metrics_cache = None;
+        self.family_availability.clear();
+    }
+}
+
+impl TextShaper {
     /// Whether `family` resolves to an installed face, asked of the database this shaper already loaded.
     ///
     /// The same query the sans-serif routing above makes. Exposed because the alternative an application reaches for is a second `fontdb::Database::load_system_fonts()`, which is a full font scan to answer a question this one can answer for free — and a second database that can disagree with the one the text is actually shaped in.
     pub fn family_available(&mut self, family: &str) -> bool {
+        self.sync_fonts();
         self.font_system
             .db_mut()
             .query(&fontdb::Query {

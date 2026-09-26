@@ -432,11 +432,10 @@ fn text_shaper_with_empty_config() {
 }
 
 #[test]
-fn text_shaper_with_font_data_empty_vec() {
+fn text_shaper_with_no_faces_of_its_own() {
     let config = TextShaperConfig {
         font: renderer_core::FontConfig {
-            font_data: vec![],
-            extra_font_paths: vec![],
+            faces: vec![],
             system_fonts_dir: None,
             sans_serif_family_candidates: Vec::new(),
         },

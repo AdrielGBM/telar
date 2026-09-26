@@ -160,3 +160,35 @@ impl TextMetrics for CanvasTextMetrics {
         natural(&TextStyle::new(font_size, renderer_core::Color::BLACK))
     }
 }
+
+/// Measures every text again, once, each time the page finishes loading fonts.
+///
+/// A face the page declares with `@font-face` arrives after the first layout — nothing waits for it, which is what `font-display: swap` promises — so text was measured in whatever the browser fell back to. The browser re-flows its own boxes when the face lands; Telar's layout, which hit-testing and scrolling read, has to be told. `loadingdone` fires once per batch of faces that finished together, so one batch is one relayout however many faces it held.
+pub fn remeasure_on_font_load() {
+    thread_local! {
+        static LISTENING: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+    }
+    if LISTENING.with(|listening| listening.replace(true)) {
+        return;
+    }
+    let Some(document) = web_sys::window().and_then(|window| window.document()) else {
+        return;
+    };
+    let on_loaded =
+        wasm_bindgen::closure::Closure::<dyn FnMut(web_sys::Event)>::new(|_: web_sys::Event| {
+            fonts_loaded()
+        });
+    let _ = document
+        .fonts()
+        .add_event_listener_with_callback("loadingdone", on_loaded.as_ref().unchecked_ref());
+    // Listening for the life of the page, which is the life of the app.
+    on_loaded.forget();
+}
+
+fn fonts_loaded() {
+    LINE_BOXES.with(|cache| cache.borrow_mut().clear());
+    renderer_core::invalidate_text_metrics();
+    if let Some(wake) = platform_core::loop_waker() {
+        wake();
+    }
+}

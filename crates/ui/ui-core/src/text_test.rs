@@ -259,3 +259,42 @@ fn a_measured_label_re_measures_when_its_content_changes() {
          it will be wrapped into a box built for the old text"
     );
 }
+
+/// A face that arrives after a text was measured in its fallback — a page's font finishing its download, a face the user picked — has to resize that text on the next layout without anything touching it.
+#[test]
+fn text_measured_in_a_fallback_is_measured_again_when_its_face_arrives() {
+    reset_layout_runtime();
+    let text = Text::new(
+        || "Wide Words".to_string(),
+        LayoutStyle::new(),
+        || {
+            TextStyle::new(16.0, Color::BLACK).with_font_family(renderer_core::FontFamily::stack([
+                renderer_core::FontFamily::Named("Telar Late Arrival".into()),
+                renderer_core::FontFamily::Monospace,
+            ]))
+        },
+    )
+    .unwrap();
+    let node = text.layout_node();
+    let root = new_container(LayoutStyle::new().flex_row(), &[node]).unwrap();
+    compute_layout(
+        root,
+        AvailableSpace::Definite(800.0),
+        AvailableSpace::Definite(100.0),
+    )
+    .unwrap();
+    let fallback = track_layout(node).unwrap().get().width;
+
+    renderer_text::fonts::add_faces(vec![
+        renderer_core::FontAsset::embedded(include_bytes!(
+            "../../../renderer/renderer-text/test-fonts/TelarTest.ttf"
+        ))
+        .named("Telar Late Arrival"),
+    ]);
+    relayout_if_dirty();
+    let arrived = track_layout(node).unwrap().get().width;
+    assert_ne!(
+        arrived, fallback,
+        "the text must be measured again in the face that arrived"
+    );
+}

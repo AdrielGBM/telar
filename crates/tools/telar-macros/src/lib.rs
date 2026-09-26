@@ -126,6 +126,11 @@ pub fn app(input: TokenStream) -> TokenStream {
         Err(err) => return err.into(),
     };
 
+    let declared_fonts = match declared_fonts() {
+        Ok(fonts) => fonts,
+        Err(err) => return err.into(),
+    };
+
     // Decided at macro expansion time by the features cargo-telar names on the build, which cargo tracks — unlike the environment variables these were, which it does not.
     let is_hot_reload = build_flavour().is_hot();
     let is_preview = cfg!(feature = "preview");
@@ -139,7 +144,7 @@ pub fn app(input: TokenStream) -> TokenStream {
         true => quote! {
             if ::telar::dev_entry(
                 telar_all_preview_entries,
-                ::telar::AppConfig::from(#config),
+                ::telar::AppConfig::from(#config).with_fonts(#declared_fonts),
                 || #setup,
             ) {
                 return;
@@ -151,7 +156,7 @@ pub fn app(input: TokenStream) -> TokenStream {
         #dev_entry_call
         #setup
         ::telar::run_app_with_name(
-            ::telar::AppConfig::from(#config),
+            ::telar::AppConfig::from(#config).with_fonts(#declared_fonts),
             #app_expr,
             env!("CARGO_PKG_NAME"),
         )
@@ -167,7 +172,7 @@ pub fn app(input: TokenStream) -> TokenStream {
                 ::telar::run_hot_reload_host(
                     &lib_path,
                     &hot_port,
-                    ::telar::AppConfig::from(#config),
+                    ::telar::AppConfig::from(#config).with_fonts(#declared_fonts),
                     env!("CARGO_PKG_NAME"),
                 );
                 return;
@@ -384,7 +389,7 @@ pub fn app(input: TokenStream) -> TokenStream {
         fn android_main(android_app: ::telar::AndroidApp) {
             #setup
             ::telar::run_android_app_with_name(
-                ::telar::AppConfig::from(#config),
+                ::telar::AppConfig::from(#config).with_fonts(#declared_fonts),
                 #app_expr,
                 env!("CARGO_PKG_NAME"),
                 android_app,
@@ -749,5 +754,66 @@ fn preview_entries_fn(previews: bool, consts: &[TokenStream2]) -> TokenStream2 {
             #( entries.extend_from_slice(#consts); )*
             entries
         }
+    }
+}
+
+/// The faces `[[telar.fonts]]` declares, as the `Vec<FontAsset>` a shaper loads: embedded, so a binary finds its faces wherever it is run from, and `include_bytes!` is also what makes cargo rebuild when a face changes.
+///
+/// Empty where nothing shapes glyphs. A browser build gets its faces from the page — a document through `@font-face`, a canvas by fetching the ones the page preloads — so embedding them there would ship each twice; a terminal has no typeface to choose. WOFF files are skipped for the same reason a shaper would skip them: only a browser can unpack one.
+fn declared_fonts() -> Result<TokenStream2, TokenStream2> {
+    let manifest_dir = std::env::var("CARGO_MANIFEST_DIR")
+        .map(PathBuf::from)
+        .map_err(|_| quote! { compile_error!("CARGO_MANIFEST_DIR not set"); })?;
+    let manifest = telar_project::TelarManifest::load(&manifest_dir).map_err(|e| {
+        let msg = format!("rsx: {e}");
+        quote! { compile_error!(#msg); }
+    })?;
+    let mut assets = Vec::new();
+    for font in manifest.telar.fonts.iter().filter(|f| f.format().is_sfnt()) {
+        let path = font.path(&manifest_dir);
+        if !path.is_file() {
+            let msg = format!(
+                "rsx: telar.toml declares the font {:?} at {}, which is not a file",
+                font.family,
+                path.display()
+            );
+            return Err(quote! { compile_error!(#msg); });
+        }
+        assets.push(font_asset_tokens(font, &path));
+    }
+    Ok(quote! {{
+        #[cfg(not(target_arch = "wasm32"))]
+        let fonts: ::std::vec::Vec<::telar::FontAsset> = if ::telar::SHAPES_TEXT {
+            ::std::vec![#(#assets),*]
+        } else {
+            ::std::vec::Vec::new()
+        };
+        #[cfg(target_arch = "wasm32")]
+        let fonts: ::std::vec::Vec<::telar::FontAsset> = ::std::vec::Vec::new();
+        fonts
+    }})
+}
+
+fn font_asset_tokens(font: &telar_project::FontDeclaration, path: &Path) -> TokenStream2 {
+    let path = path.to_string_lossy().to_string();
+    let family = &font.family;
+    let (min, max) = font.weight_range();
+    let style = Ident::new(
+        match font.style {
+            telar_project::FontStyleDeclaration::Normal => "Normal",
+            telar_project::FontStyleDeclaration::Italic => "Italic",
+            telar_project::FontStyleDeclaration::Oblique => "Oblique",
+        },
+        Span::call_site(),
+    );
+    let axes = font.axis_tags().map(|([a, b, c, d], min, max)| {
+        quote! { .with_axis(::telar::FontAxis::new([#a, #b, #c, #d], #min, #max)) }
+    });
+    quote! {
+        ::telar::FontAsset::embedded(include_bytes!(#path))
+            .named(#family)
+            .with_weight(::telar::FontWeight::range(#min, #max))
+            .with_style(::telar::FontStyle::#style)
+            #(#axes)*
     }
 }

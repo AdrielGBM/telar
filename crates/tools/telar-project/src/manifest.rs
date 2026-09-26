@@ -10,6 +10,8 @@ use std::path::{Path, PathBuf};
 
 use serde::Deserialize;
 
+use crate::fonts::FontDeclaration;
+
 /// The file this describes, in the package root.
 pub const MANIFEST_FILENAME: &str = "telar.toml";
 
@@ -123,6 +125,9 @@ pub struct TelarSection {
     pub i18n: I18nSection,
     #[serde(default)]
     pub web: WebSection,
+    /// The faces this project ships, one entry per file. See [`FontDeclaration`].
+    #[serde(default)]
+    pub fonts: Vec<FontDeclaration>,
     /// The pre-`[telar.i18n]` spelling of [`I18nSection::root`].
     pub locales: Option<String>,
     /// The pre-`[telar.i18n]` spelling of [`I18nSection::default`].
@@ -180,12 +185,23 @@ impl TelarManifest {
         let Ok(content) = std::fs::read_to_string(&path) else {
             return Ok(None);
         };
-        toml::from_str(&content)
-            .map(Some)
-            .map_err(|e| ManifestError::Invalid {
+        let manifest: Self = toml::from_str(&content).map_err(|e| ManifestError::Invalid {
+            path: path.clone(),
+            message: e.to_string(),
+        })?;
+        let problems: Vec<String> = manifest
+            .telar
+            .fonts
+            .iter()
+            .flat_map(FontDeclaration::problems)
+            .collect();
+        if !problems.is_empty() {
+            return Err(ManifestError::Invalid {
                 path,
-                message: e.to_string(),
-            })
+                message: problems.join("; "),
+            });
+        }
+        Ok(Some(manifest))
     }
 
     /// The same, for a caller with nowhere to report: an unreadable manifest yields the defaults.
@@ -215,6 +231,12 @@ impl TelarSection {
             web: WebSection {
                 template: self.web.template.or(base.web.template),
                 public: self.web.public.or(base.web.public),
+            },
+            // Whole rather than merged: a package naming any face of its own is declaring the set it ships.
+            fonts: if self.fonts.is_empty() {
+                base.fonts
+            } else {
+                self.fonts
             },
             locales: self.locales.or(base.locales),
             default_locale: self.default_locale.or(base.default_locale),

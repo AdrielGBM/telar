@@ -619,3 +619,41 @@ fn a_grid_column_sized_by_the_surface_follows_a_resize() {
     assert_eq!(engine.layout(first).unwrap().width, 50.0);
     assert_eq!(engine.layout(second).unwrap().width, 250.0);
 }
+
+/// A face arriving changes what text measures to without changing anything taffy can see, so its cached sizes have to be thrown away by hand — for the leaves that measure, and only those.
+#[test]
+fn marking_measured_leaves_stale_measures_them_again_and_leaves_the_rest_cached() {
+    use std::cell::Cell;
+    use std::rc::Rc;
+
+    let width = Rc::new(Cell::new(40.0_f32));
+    let measured_width = width.clone();
+    let mut engine = LayoutEngine::new();
+    let text = engine
+        .new_measured_leaf(
+            LayoutStyle::new(),
+            Box::new(move |_| (measured_width.get(), 10.0)),
+        )
+        .unwrap();
+    let fixed = engine
+        .new_leaf(LayoutStyle::new().width(50.0).height(10.0))
+        .unwrap();
+    let root = engine
+        .new_container(LayoutStyle::new().flex_row(), &[text, fixed])
+        .unwrap();
+    lay_out(&mut engine, root);
+    assert_eq!(engine.layout(text).unwrap().width, 40.0);
+
+    width.set(70.0);
+    lay_out(&mut engine, root);
+    assert_eq!(
+        engine.layout(text).unwrap().width,
+        40.0,
+        "nothing said the measurement changed"
+    );
+
+    engine.mark_measured_dirty();
+    assert!(engine.is_dirty(text) && !engine.is_dirty(fixed));
+    lay_out(&mut engine, root);
+    assert_eq!(engine.layout(text).unwrap().width, 70.0);
+}

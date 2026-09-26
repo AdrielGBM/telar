@@ -44,3 +44,10 @@ fn a_frontends_own_metrics_survive_the_runtimes_default() {
         "an explicit install replaces, so a frontend can change its mind"
     );
 }
+
+#[test]
+fn invalidating_moves_the_generation_forward() {
+    let before = text_metrics_generation();
+    invalidate_text_metrics();
+    assert!(text_metrics_generation() > before);
+}

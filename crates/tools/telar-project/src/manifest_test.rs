@@ -171,3 +171,27 @@ fn the_web_table_names_its_template_and_public_directory() {
     );
     assert_eq!(web.public_dir(&root), (root.join("static"), true));
 }
+
+#[test]
+fn a_package_naming_any_face_replaces_the_workspace_set_whole() {
+    let root = std::env::temp_dir().join(format!("telar_inherit_fonts_{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&root);
+    let package_root = root.join("crates/ui");
+    std::fs::create_dir_all(&package_root).unwrap();
+    std::fs::write(root.join("Cargo.toml"), "[workspace]\nmembers = []\n").unwrap();
+    let face = |family: &str| format!("[[telar.fonts]]\nfamily = \"{family}\"\nsrc = \"f.ttf\"\n");
+    std::fs::write(
+        root.join(MANIFEST_FILENAME),
+        format!("{}{}", face("Shared"), face("Mono")),
+    )
+    .unwrap();
+    std::fs::write(package_root.join(MANIFEST_FILENAME), "[telar]\n").unwrap();
+    let inherited = TelarManifest::load(&package_root).unwrap().telar.fonts;
+    assert_eq!(inherited.len(), 2);
+
+    std::fs::write(package_root.join(MANIFEST_FILENAME), face("Own")).unwrap();
+    let own = TelarManifest::load(&package_root).unwrap().telar.fonts;
+    let _ = std::fs::remove_dir_all(&root);
+    assert_eq!(own.len(), 1);
+    assert_eq!(own[0].family, "Own");
+}

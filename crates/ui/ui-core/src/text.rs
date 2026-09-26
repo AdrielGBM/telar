@@ -21,13 +21,15 @@ const REFERENCE: &str = "Hxg";
 const REFERENCE_WIDTH: f32 = 1_000.0;
 
 /// The measured text leaf, optically centred in the box its parent gave it.
+type InkKey = (u32, u64);
+
 pub struct Text {
     content: Rc<dyn Fn() -> String>,
     // The byte ranges that restyle themselves, or `None` for a paragraph without any.
     spans: Option<Rc<dyn Fn() -> Vec<Span>>>,
     cached_content: RefCell<(String, Arc<str>)>,
-    // font_size bits -> (ink_top, ink_height, line_height). Keyed on size and not on text, because the band is measured from a reference run.
-    cached_ink: RefCell<Option<(u32, f32, f32, f32)>>,
+    // (font_size bits, text metrics generation) -> (ink_top, ink_height, line_height). Keyed on size and not on text, because the band is measured from a reference run.
+    cached_ink: RefCell<Option<(InkKey, f32, f32, f32)>>,
     style: Rc<dyn Fn() -> TextStyle>,
     leaf: LayoutLeaf,
     // Held for its subscription: without it a measured leaf keeps the width the previous string wanted, and a label that grew soft-wraps into a slot built for the old text.
@@ -175,7 +177,10 @@ impl Component for Text {
         let style = (self.style)();
         // A text leaf stretches to fill its parent's cross axis, and the font's line box reserves ascent room a run never uses, so line-box-centred text sits visibly high next to an icon. The band is measured from a fixed reference run, which makes the offset a property of the font at this size and shared by every label in the style — centring each string on its own ink moved it by whether it held a descender.
         let (ink_top, ink_height, reference_line) = {
-            let key = style.font_size.to_bits();
+            let key = (
+                style.font_size.to_bits(),
+                renderer_core::text_metrics_generation(),
+            );
             let mut cache = self.cached_ink.borrow_mut();
             match cache.as_ref() {
                 Some((k, top, h, line)) if *k == key => (*top, *h, *line),

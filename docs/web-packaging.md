@@ -29,6 +29,7 @@ that does not exist is an error. So is a misspelled key, as everywhere else in `
 | `index.html` | The page, expanded from the template. |
 | `app-<hash>.js` | The `wasm-bindgen` glue, pointed at the hashed module. |
 | `app_bg-<hash>.wasm` | The module. |
+| `fonts/<name>-<hash>.<ext>` | Each face `[[telar.fonts]]` declares; see [Fonts as assets](fonts.md). |
 | `asset-manifest.json` | Logical path → hashed path for every hashed file. |
 | everything from `web/public/` | Copied as is, at the same relative path. |
 | `*.br`, `*.gz` | Release builds only: precompressed copies (see below). |
@@ -49,7 +50,7 @@ starting point to copy into `web/index.html`.
 | `%telar.title%` | value | the page title, escaped | the package name |
 | `%telar.renderer%` | value | the `--renderer` choice, for `data-telar-renderer` | `auto` |
 | `%telar.meta%` | block | `<meta>`/`<link>` tags for the document | a `description` |
-| `%telar.fonts%` | block | font preloads and `@font-face` rules | nothing |
+| `%telar.fonts%` | block | a preload and an `@font-face` rule per declared face ([fonts](fonts.md)) | nothing |
 | `%telar.bootstrap%` | block | the preloads and the module script that start the app | always present |
 | `%telar.prerendered%` | block | prerendered markup for the host element | nothing |
 | `%telar.state%` | block | `<script type="application/json" id="telar-state">` | nothing |

@@ -6,6 +6,7 @@ use cosmic_text::fontdb;
 impl TextShaper {
     /// Returns real ascender/line-height metrics for the default sans-serif face, expressed as ratios relative to `font_size`. Reads the font's metrics via skrifa once and caches the result; falls back to conservative defaults if the default font cannot be resolved.
     pub fn font_metrics(&mut self) -> renderer_core::FontMetrics {
+        self.sync_fonts();
         if let Some(cached) = self.font_metrics_cache {
             return cached;
         }

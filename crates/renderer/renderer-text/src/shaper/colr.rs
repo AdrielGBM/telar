@@ -27,6 +27,7 @@ impl TextShaper {
         style: &TextStyle,
         out: &mut Vec<ColrGlyph>,
     ) {
+        self.sync_fonts();
         if text.is_empty() {
             return;
         }

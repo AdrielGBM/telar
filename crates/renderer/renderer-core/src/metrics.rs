@@ -1,5 +1,6 @@
 //! The installed text measurer: how wide a string is, asked without naming a shaper.
 
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, RwLock};
 
 use crate::{Span, TextStyle};
@@ -74,6 +75,18 @@ pub fn measure_ink_bounds(text: &str, max_width: f32, style: &TextStyle) -> (f32
 /// The height of one line of text at `font_size`. See [`TextMetrics::line_height`].
 pub fn line_height(font_size: f32) -> f32 {
     metrics().line_height(font_size)
+}
+
+static TEXT_METRICS_GENERATION: AtomicU64 = AtomicU64::new(0);
+
+/// How many times the installed measurer may have started answering differently for the same text and style. Layout compares it against the one it last measured at, and measures every text again when the two differ.
+pub fn text_metrics_generation() -> u64 {
+    TEXT_METRICS_GENERATION.load(Ordering::Acquire)
+}
+
+/// Says that a measurement taken before now may be wrong: a face arrived, so a family that was falling back resolves to a face of its own. The next layout measures every text again, once, however many faces arrived in between.
+pub fn invalidate_text_metrics() {
+    TEXT_METRICS_GENERATION.fetch_add(1, Ordering::AcqRel);
 }
 
 #[cfg(test)]

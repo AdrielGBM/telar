@@ -286,6 +286,19 @@ impl LayoutEngine {
         self.tree.mark_dirty(node).map_err(LayoutError::from)
     }
 
+    /// Marks every leaf that sizes itself by measuring its content stale, for when what measures it has started answering differently — a face arrived, so text that was measured in a fallback measures in the face now.
+    pub fn mark_measured_dirty(&mut self) {
+        let measured: Vec<NodeId> = self
+            .live
+            .iter()
+            .copied()
+            .filter(|&node| self.tree.get_node_context(node).is_some())
+            .collect();
+        for node in measured {
+            let _ = self.tree.mark_dirty(node);
+        }
+    }
+
     /// Whether the node's `width`/`height` are `auto` (i.e. content-sized).
     pub fn is_size_auto(&self, node: NodeId) -> (bool, bool) {
         match self.style_of(node) {

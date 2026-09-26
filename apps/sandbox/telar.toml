@@ -15,3 +15,10 @@ resizable = true
 transparent = false
 fullscreen = "disabled"
 position = "centered"
+
+# A face the app ships: embedded for a native shaper, hashed with an `@font-face` and a preload on the web.
+[[telar.fonts]]
+family = "Telar Test"
+src = "assets/fonts/TelarTest.ttf"
+axes = { wght = [100, 900], opsz = [14, 32] }
+size_adjust = 1.0

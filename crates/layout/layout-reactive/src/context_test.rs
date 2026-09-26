@@ -997,3 +997,38 @@ fn a_document_hears_a_surface_fraction_as_the_pixels_it_resolved_to() {
     let css = declared_css(node).unwrap();
     assert!(css.as_str().contains("width:250px;"), "{css}");
 }
+
+#[test]
+fn a_new_measurement_generation_relays_measured_text_once() {
+    use std::cell::Cell;
+    use std::rc::Rc;
+
+    reset_layout_runtime();
+    let width = Rc::new(Cell::new(40.0_f32));
+    let measured = width.clone();
+    let calls = Rc::new(Cell::new(0));
+    let counted = calls.clone();
+    let measure: layout_core::MeasureFn = Box::new(move |_| {
+        counted.set(counted.get() + 1);
+        (measured.get(), 10.0)
+    });
+    let (text, text_rect) = new_measured_leaf(LayoutStyle::new(), measure).unwrap();
+    let root = new_container(LayoutStyle::new().flex_row(), &[text]).unwrap();
+    let space = AvailableSpace::Definite(500.0);
+    compute_layout(root, space, space).unwrap();
+    assert_eq!(text_rect.get().width, 40.0);
+
+    width.set(90.0);
+    remeasure_since(1);
+    relayout_if_dirty();
+    assert_eq!(text_rect.get().width, 90.0);
+
+    let after = calls.get();
+    remeasure_since(1);
+    relayout_if_dirty();
+    assert_eq!(
+        calls.get(),
+        after,
+        "the same generation twice measures nothing again"
+    );
+}

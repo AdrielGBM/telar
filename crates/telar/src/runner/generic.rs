@@ -98,8 +98,7 @@ where
     let backend = prefs.backend.unwrap_or_else(config::compile_time_backend);
     let AppConfig {
         window,
-        font_paths,
-        font_data,
+        fonts: faces,
         font_family,
     } = config;
     let window = super::resolved_window(window, &app);
@@ -108,8 +107,7 @@ where
         Box::new(crate::app_runtime::LocalApp(app)),
         paths,
         crate::runner::font_config::FontSetup {
-            paths: font_paths,
-            data: font_data,
+            faces,
             family: font_family,
         },
         backend,

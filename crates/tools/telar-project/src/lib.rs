@@ -10,6 +10,7 @@ mod assets;
 mod build;
 mod catalog;
 mod discovery;
+mod fonts;
 mod manifest;
 pub mod naming;
 mod paths;
@@ -36,6 +37,9 @@ pub use discovery::{
     is_generated_output, is_module_root, placement_sites, prune_stale_generated, prune_stale_sites,
     relative_output_path, site_include_path, source_for_generated, stray_placement_files,
     write_placement_sites,
+};
+pub use fonts::{
+    FontDeclaration, FontDisplay, FontFormat, FontStyleDeclaration, WeightDeclaration,
 };
 pub use manifest::{
     DevSection, I18nSection, MANIFEST_FILENAME, ManifestError, RendererBackend, TelarManifest,

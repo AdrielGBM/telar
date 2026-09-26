@@ -68,6 +68,7 @@ impl TextShaper {
         rect: Rect,
         style: &TextStyle,
     ) -> (Arc<[u8]>, u32, u32) {
+        self.sync_fonts();
         let spans = spans.filter(|s| !s.is_empty());
         let font_size = style.font_size;
         let color = style.color.solid_color();
@@ -154,6 +155,7 @@ impl TextShaper {
         rect: Rect,
         style: &TextStyle,
     ) -> (Arc<[u8]>, u32, u32) {
+        self.sync_fonts();
         let width = rect.width.ceil() as u32;
         let height = rect.height.ceil() as u32;
 

@@ -7,9 +7,7 @@ use services_core::AppPathsProvider;
 /// One value because the three always travel together: they arrive from an [`AppConfig`](crate::AppConfig), cross the handler, and reach four builders that each took them as three positional arguments. `multi.rs` had already given the triple a name — as a tuple alias — which is the shape asking to be a struct.
 #[derive(Clone, Default)]
 pub struct FontSetup {
-    pub paths: Vec<std::path::PathBuf>,
-    /// Faces carried in the binary, for a target with no font directory behind it.
-    pub data: Vec<Vec<u8>>,
+    pub faces: Vec<renderer_core::FontAsset>,
     /// The family this surface's unstyled text shapes in. A property of *this* surface, so a second one built later renders in its own rather than in whichever was configured last.
     pub family: Option<String>,
 }
@@ -76,8 +74,7 @@ pub(super) fn build_font_config(
         .chain(system.sans_serif.iter().cloned())
         .collect();
     renderer_core::FontConfig {
-        extra_font_paths: fonts.paths,
-        font_data: fonts.data,
+        faces: fonts.faces,
         system_fonts_dir: system.dir.clone(),
         sans_serif_family_candidates,
     }
