@@ -83,7 +83,8 @@ pub use context::{
 };
 pub use cursor::requested_cursor;
 pub use dismiss::{
-    confirm_top, dismiss_depth, dismiss_top, register_transaction, use_dismiss_depth,
+    DismissRegistration, confirm_top, dismiss_depth, dismiss_top, register_transaction,
+    use_dismiss_depth,
 };
 pub use drag::{DragAxis, DragStart, drag_start, drag_travel};
 pub use error_boundary::{BuildFailure, ErrorBoundary};
