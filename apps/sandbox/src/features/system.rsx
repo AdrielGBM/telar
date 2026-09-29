@@ -17,6 +17,8 @@ let locales = memo(|| {
 });
 let negotiated = memo(|| telar::negotiate_locale(&telar::use_preferred_locales(), &["es", "en"], "es").to_string());
 let pulse = signal(0.0f32);
+let chosen = memo(|| telar::use_scheme_preference().as_str().to_string());
+let resolved = memo(|| format!("{:?}", telar::use_resolved_scheme()));
 
 [view]
 col gap:20
@@ -29,6 +31,15 @@ col gap:20
             text "languages · {$locales}" font_size:15 color:$theme.ink
             text "negotiated against es, en · {$negotiated}" font_size:15 color:$theme.primary
         code_line code:"use_color_scheme()   ·   use_reduced_motion()   ·   use_high_contrast()   ·   use_preferred_locales()"
+    example title:"A scheme the person chooses, kept between runs"
+        card gap:8
+            text "Chosen: {$chosen} · in use: {$resolved}" font_size:13 color:$theme.ink
+            row gap:8
+                button label:"System" ghost on_press:(|| telar::set_scheme_preference(telar::SchemePreference::System))
+                button label:"Light" ghost on_press:(|| telar::set_scheme_preference(telar::SchemePreference::Light))
+                button label:"Dark" ghost on_press:(|| telar::set_scheme_preference(telar::SchemePreference::Dark))
+            text "A fixed choice holds whatever the system does until it is changed here, and is kept in the target's preference store: a file beside prefs.toml, or localStorage on the web." font_size:12 color:$theme.muted
+        code_line code:"set_scheme_preference(SchemePreference::Dark)   ·   use_resolved_scheme()   ·   store_preference(key, value)"
     example title:"Reduced motion — the bar slides, or jumps straight to its end"
         card gap:12
             button label:"Slide" fill:$theme.primary on_press:(|| $pulse.set(if $pulse.get() < 0.5 { 1.0 } else { 0.0 }))

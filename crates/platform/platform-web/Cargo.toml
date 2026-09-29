@@ -55,6 +55,7 @@ web-sys = { workspace = true, features = [
     "ResizeObserverEntry",
     "ResizeObserverSize",
     "ScrollRestoration",
+    "Storage",
     "Url",
     "WheelEvent",
     "Window",

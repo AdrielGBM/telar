@@ -36,7 +36,7 @@ pub fn set_mode(id: impl Into<String>) {
 }
 
 /// Reactive read of the active mode id — subscribes the caller so a label re-renders on switch. `None` before any mode is set.
-fn use_mode() -> Option<String> {
+pub fn use_mode() -> Option<String> {
     ACTIVE_MODE.with(|s| s.get())
 }
 
@@ -57,7 +57,9 @@ fn set_light_dark(light: impl Into<String>, dark: impl Into<String>) {
 }
 
 /// Reactive: `true` when the active mode is the designated dark mode. `false` when it is the light mode, no pair has been set, or a third (unpaired) mode is active. Backs [`ThemeTokens`](crate::ThemeTokens)'s mode-following `ink`/`surface` defaults.
-pub(crate) fn is_dark() -> bool {
+///
+/// Under [`follow_system`] that is the resolved scheme, preference included (see [`use_resolved_scheme`]).
+pub fn is_dark() -> bool {
     let active = use_mode();
     SCHEME_PAIR.with(|p| {
         p.borrow()
@@ -66,14 +68,80 @@ pub(crate) fn is_dark() -> bool {
     })
 }
 
+/// How the app chooses its colour scheme: after the system, or fixed by the person using it.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
+pub enum SchemePreference {
+    #[default]
+    System,
+    Light,
+    Dark,
+}
+
+impl SchemePreference {
+    /// The scheme this preference comes to while the system reports `system`. A system that reports none is taken as light.
+    pub fn resolve(self, system: Option<ColorScheme>) -> ColorScheme {
+        match self {
+            SchemePreference::Light => ColorScheme::Light,
+            SchemePreference::Dark => ColorScheme::Dark,
+            SchemePreference::System => system.unwrap_or(ColorScheme::Light),
+        }
+    }
+
+    /// The word a preference is stored and carried under.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            SchemePreference::System => "system",
+            SchemePreference::Light => "light",
+            SchemePreference::Dark => "dark",
+        }
+    }
+
+    pub fn parse(word: &str) -> Option<Self> {
+        Some(match word {
+            "system" => SchemePreference::System,
+            "light" => SchemePreference::Light,
+            "dark" => SchemePreference::Dark,
+            _ => return None,
+        })
+    }
+}
+
+thread_local! {
+    static PREFERENCE: RwSignal<SchemePreference> = detached(|| signal(SchemePreference::default()));
+}
+
+/// Sets how the app chooses its colour scheme. A fixed choice holds until the app changes it again, whatever the system does meanwhile; `System` hands the choice back.
+pub fn set_scheme_preference(preference: SchemePreference) {
+    PREFERENCE.with(|p| {
+        if p.peek() != preference {
+            p.set(preference);
+        }
+    });
+}
+
+/// The preference now, without subscribing.
+pub fn scheme_preference() -> SchemePreference {
+    PREFERENCE.with(|p| p.peek())
+}
+
+/// The preference, read reactively.
+pub fn use_scheme_preference() -> SchemePreference {
+    PREFERENCE.with(|p| p.get())
+}
+
+/// The scheme the app is in: the preference resolved against the system's, read reactively.
+pub fn use_resolved_scheme() -> ColorScheme {
+    use_scheme_preference().resolve(preferences_core::use_color_scheme())
+}
+
 thread_local! {
     // An `Effect` handle is inert, so the effect gets a scope of its own that a re-call disposes; otherwise two followers would race to set the mode.
     static FOLLOW: Cell<Option<reactive_core::OwnerId>> = const { Cell::new(None) };
 }
 
-/// Drives the active mode from the user's colour scheme ([`preferences_core::use_color_scheme`]) — light → `light`, dark → `dark` — updating live as it changes. Also designates the pair so `is_dark` stays consistent. Re-calling replaces the previous follower.
+/// Drives the active mode from the resolved scheme ([`use_resolved_scheme`]) — light → `light`, dark → `dark` — updating live as the system's scheme or the [`SchemePreference`] changes. Also designates the pair so `is_dark` stays consistent. Re-calling replaces the previous follower.
 ///
-/// An unknown scheme is not a vote for light: it leaves an active mode alone, and selects `light` only when no mode is active yet. A manual [`set_mode`] still wins until the next change of scheme re-drives it.
+/// Under `System`, an unknown scheme is not a vote for light: it leaves an active mode alone, and selects `light` only when no mode is active yet. A manual [`set_mode`] of another mode still wins until the next change re-drives it; a person choosing light or dark is [`set_scheme_preference`], which holds.
 pub fn follow_system(light: impl Into<String>, dark: impl Into<String>) {
     let light = light.into();
     let dark = dark.into();
@@ -83,11 +151,14 @@ pub fn follow_system(light: impl Into<String>, dark: impl Into<String>) {
     }
     let scope = detached(reactive_core::owner_scope);
     reactive_core::effect(move || {
-        let want = match preferences_core::use_color_scheme() {
-            Some(ColorScheme::Dark) => &dark,
-            Some(ColorScheme::Light) => &light,
-            None if active_mode().is_some() => return,
-            None => &light,
+        let preference = use_scheme_preference();
+        let system = preferences_core::use_color_scheme();
+        if preference == SchemePreference::System && system.is_none() && active_mode().is_some() {
+            return;
+        }
+        let want = match preference.resolve(system) {
+            ColorScheme::Dark => &dark,
+            ColorScheme::Light => &light,
         };
         set_mode(want.clone());
     });

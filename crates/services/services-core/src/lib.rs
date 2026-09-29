@@ -6,6 +6,7 @@ pub mod app_paths;
 pub mod clipboard;
 pub mod dialogs;
 pub mod paths;
+pub mod preferences;
 #[cfg(feature = "di")]
 mod registry;
 #[cfg(feature = "di")]
@@ -17,6 +18,10 @@ pub use dialogs::{FileDialog, FileDialogs, FileFilter, file_dialogs, set_file_di
 #[cfg(feature = "system-paths")]
 pub use paths::SystemPaths;
 pub use paths::{AppPathsProvider, NoPaths};
+pub use preferences::{
+    FileStore, MemoryStore, PreferenceStore, set_preference_store, store_preference,
+    stored_preference,
+};
 #[cfg(feature = "di")]
 pub use registry::ServiceError;
 #[cfg(feature = "di")]

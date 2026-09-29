@@ -53,6 +53,8 @@ pub mod testing;
 mod texture_ui;
 #[cfg(feature = "runtime")]
 pub mod tree;
+#[cfg(feature = "runtime")]
+pub mod user_preferences;
 #[cfg(feature = "watch")]
 pub mod watch;
 #[cfg(feature = "runtime")]
@@ -194,6 +196,10 @@ pub use renderer_software::{CacheStat, cache_stats, sweep_idle as sweep_renderer
 pub use services_core::app_paths as paths;
 pub use services_core::{AppPathsProvider, NoPaths};
 pub use services_core::{Clipboard, clipboard, clipboard_text, set_clipboard, set_clipboard_text};
+pub use services_core::{
+    FileStore, MemoryStore, PreferenceStore, set_preference_store, store_preference,
+    stored_preference,
+};
 pub use services_core::{UriOpener, open_beside, open_uri, set_uri_opener};
 // Available in every GUI build rather than opt-in: `ui_core::Surface` composes the per-surface service scope, so `runtime` turns on services-core/di. A non-GUI build has no ui-core and nothing to re-export.
 #[cfg(feature = "runtime")]
@@ -225,9 +231,10 @@ pub use surface::{
 pub use system_locale::follow_system_locale;
 #[cfg(feature = "runtime")]
 pub use theme_core::{
-    ControlSize, ScopedTheme, Theme, ThemeTokens, active_mode, control_scale, follow_system,
-    nearest_theme, register_mode, set_control_size, set_mode, set_theme, use_control_size,
-    use_theme, use_theme_tokens,
+    ControlSize, SchemePreference, ScopedTheme, Theme, ThemeTokens, active_mode, control_scale,
+    follow_system, is_dark, nearest_theme, register_mode, scheme_preference, set_control_size,
+    set_mode, set_scheme_preference, set_theme, use_control_size, use_mode, use_resolved_scheme,
+    use_scheme_preference, use_theme, use_theme_tokens,
 };
 #[cfg(all(feature = "runtime", feature = "svg"))]
 pub use ui_core::Svg;

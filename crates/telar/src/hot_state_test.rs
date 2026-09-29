@@ -51,3 +51,15 @@ fn auto_macro_falls_back_for_non_serde_types() {
         hot_snapshot_json()
     );
 }
+
+#[test]
+fn a_chosen_scheme_survives_snapshot_restore() {
+    theme_core::set_scheme_preference(theme_core::SchemePreference::Dark);
+    let blob = hot_snapshot_json();
+    theme_core::set_scheme_preference(theme_core::SchemePreference::System);
+    hot_restore_json(&blob);
+    assert_eq!(
+        theme_core::scheme_preference(),
+        theme_core::SchemePreference::Dark
+    );
+}

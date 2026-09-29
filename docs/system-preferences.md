@@ -62,7 +62,7 @@ facade to do so.
 
 | Preference | Follower | Behaviour |
 | --- | --- | --- |
-| Colour scheme | `follow_system(light, dark)` (theme) | Selects `light` or `dark` as the scheme changes. An unknown scheme leaves an active mode alone and selects `light` only if no mode is active yet. A manual `set_mode` wins until the scheme next changes. |
+| Colour scheme | `follow_system(light, dark)` (theme) | Selects `light` or `dark` as the resolved scheme changes: the system's, or the person's choice (see [Choosing a scheme](#choosing-a-scheme)). Under `System`, an unknown scheme leaves an active mode alone and selects `light` only if no mode is active yet. A manual `set_mode` of another mode wins until the next change. |
 | Reduced motion | the motion ticker, by default | Every animation jumps to its end; scroll momentum keeps moving. `motion::follow_reduced_motion(false)` opts out. See [animations.md](animations.md#d5-one-time-scale-and-reduced-motion-zeroes-it). |
 | Locales | `follow_system_locale(available, fallback)` | Sets the active locale to `negotiate_locale(&use_preferred_locales(), available, fallback)`, again whenever the list changes. An empty list leaves an active locale alone. |
 | High contrast | nothing built in | An application reads `use_high_contrast()` and picks its own palette. |
@@ -70,6 +70,15 @@ facade to do so.
 Each follower is opt-in except motion: an application calls `follow_system` and `follow_system_locale` once at
 start, in its setup. Setup runs before the first snapshot arrives, which is why these are followers rather
 than one-off reads: they settle as soon as it does, and the tree is built after that.
+
+### Choosing a scheme
+
+A person can fix the scheme whatever the system says: `set_scheme_preference(SchemePreference::Dark)`. The
+choice holds until the app changes it again, not until the system next changes; `SchemePreference::System`
+hands it back. `use_resolved_scheme()` is the scheme the app is in (the preference resolved against
+`use_color_scheme()`, a system that reports none taken as light), `use_scheme_preference()` the choice itself,
+and `is_dark()` and `use_mode()` read the active mode reactively. The choice is app state: it is the same on
+every target, survives a hot reload, and persists between sessions where the target keeps preferences.
 
 ### Negotiating a locale
 

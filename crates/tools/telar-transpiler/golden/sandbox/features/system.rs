@@ -30,6 +30,8 @@ pub fn system(props: SystemProps, children: Children) -> Result<Box<dyn LayoutIt
     });
     let negotiated = memo(|| telar::negotiate_locale(&telar::use_preferred_locales(), &["es", "en"], "es").to_string());
     let pulse = signal(0.0f32);
+    let chosen = memo(|| telar::use_scheme_preference().as_str().to_string());
+    let resolved = memo(|| format!("{:?}", telar::use_resolved_scheme()));
 
     let __col_0 = {
         let __node_0 = doc_header(DocHeaderProps::props().kicker("FOUNDATIONS").title("System preferences").desc("What the platform says the user prefers — colour scheme, reduced motion, more contrast and languages — read live. Change them in the system settings and this page follows without a restart; the theme follows the scheme and every animation stops under reduced motion.").build(), Children::default())?;
@@ -134,6 +136,72 @@ pub fn system(props: SystemProps, children: Children) -> Result<Box<dyn LayoutIt
         let __node_4 = {
             let __deferred = Children::new(
                 {
+                    let chosen = chosen.clone();
+                    let resolved = resolved.clone();
+                    let theme = theme.clone();
+                move || {
+                    let chosen = chosen.clone();
+                    let resolved = resolved.clone();
+                    let theme = theme.clone();
+                    let mut __slots = Slots::new();
+                    let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
+                    let __node_5 = {
+                        let __deferred = Children::new(
+                            {
+                                let chosen = chosen.clone();
+                                let resolved = resolved.clone();
+                                let theme = theme.clone();
+                            move || {
+                                let chosen = chosen.clone();
+                                let resolved = resolved.clone();
+                                let theme = theme.clone();
+                                let mut __slots = Slots::new();
+                                let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
+                                let __text_5 = {
+                                    let chosen = chosen.clone();
+                                    let resolved = resolved.clone();
+                                    Text::declaring(
+                                        move || format!("Chosen: {} · in use: {}", { chosen.get() }, { resolved.get() }),
+                                        LayoutStyle::new(),
+                                        { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(13.0).with_color(theme.get().ink) },
+                                    )?
+                                };
+                                __children.push(box_item(__text_5));
+                                let __row_0 = {
+                                    let __node_6 = button(ButtonProps::props().label("System").ghost(true).on_press(std::rc::Rc::new(move || telar::set_scheme_preference(telar::SchemePreference::System))).build(), Children::default())?;
+                                    let __node_7 = button(ButtonProps::props().label("Light").ghost(true).on_press(std::rc::Rc::new(move || telar::set_scheme_preference(telar::SchemePreference::Light))).build(), Children::default())?;
+                                    let __node_8 = button(ButtonProps::props().label("Dark").ghost(true).on_press(std::rc::Rc::new(move || telar::set_scheme_preference(telar::SchemePreference::Dark))).build(), Children::default())?;
+                                    Container::new(LayoutStyle::new().flex_row().gap(8.0), children![__node_6, __node_7, __node_8])?
+                                };
+                                __children.push(box_item(__row_0));
+                                let __text_6 = {
+                                    Text::declaring(
+                                        || "A fixed choice holds whatever the system does until it is changed here, and is kept in the target's preference store: a file beside prefs.toml, or localStorage on the web.".to_string(),
+                                        LayoutStyle::new(),
+                                        { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(12.0).with_color(theme.get().muted) },
+                                    )?
+                                };
+                                __children.push(box_item(__text_6));
+                                __slots.extend_default(__children);
+                                Ok(__slots)
+                            }
+                            }
+                        );
+                        card(CardProps::props().gap(8.0).build(), __deferred)?
+                    };
+                    __children.push(box_item(__node_5));
+                    let __node_9 = code_line(CodeLineProps::props().code("set_scheme_preference(SchemePreference::Dark)   ·   use_resolved_scheme()   ·   store_preference(key, value)").build(), Children::default())?;
+                    __children.push(box_item(__node_9));
+                    __slots.extend_default(__children);
+                    Ok(__slots)
+                }
+                }
+            );
+            example(ExampleProps::props().title("A scheme the person chooses, kept between runs").build(), __deferred)?
+        };
+        let __node_10 = {
+            let __deferred = Children::new(
+                {
                     let theme = theme.clone();
                     let pulse = pulse.clone();
                 move || {
@@ -141,7 +209,7 @@ pub fn system(props: SystemProps, children: Children) -> Result<Box<dyn LayoutIt
                     let pulse = pulse.clone();
                     let mut __slots = Slots::new();
                     let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-                    let __node_5 = {
+                    let __node_11 = {
                         let __deferred = Children::new(
                             {
                                 let theme = theme.clone();
@@ -151,8 +219,8 @@ pub fn system(props: SystemProps, children: Children) -> Result<Box<dyn LayoutIt
                                 let pulse = pulse.clone();
                                 let mut __slots = Slots::new();
                                 let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-                                let __node_6 = button(ButtonProps::props().label("Slide").fill(Reactive::of({ let theme = theme.clone(); move || theme.get().primary })).on_press(std::rc::Rc::new({ let pulse = pulse.clone(); move || pulse.set(if pulse.get() < 0.5 { 1.0 } else { 0.0 }) })).build(), Children::default())?;
-                                __children.push(box_item(__node_6));
+                                let __node_12 = button(ButtonProps::props().label("Slide").fill(Reactive::of({ let theme = theme.clone(); move || theme.get().primary })).on_press(std::rc::Rc::new({ let pulse = pulse.clone(); move || pulse.set(if pulse.get() < 0.5 { 1.0 } else { 0.0 }) })).build(), Children::default())?;
+                                __children.push(box_item(__node_12));
                                 let __sbox_0 = {
                                     let __sbox_1 = {
                                         let __transition_0 = motion::Animated::new(((pulse.get() * 220.0)) as f32, motion::tween(std::time::Duration::from_millis(1200), motion::Easing::EaseInOut));
@@ -168,9 +236,9 @@ pub fn system(props: SystemProps, children: Children) -> Result<Box<dyn LayoutIt
                         );
                         card(CardProps::props().gap(12.0).build(), __deferred)?
                     };
-                    __children.push(box_item(__node_5));
-                    let __node_7 = code_line(CodeLineProps::props().code("follow_reduced_motion(false)   // opt out").build(), Children::default())?;
-                    __children.push(box_item(__node_7));
+                    __children.push(box_item(__node_11));
+                    let __node_13 = code_line(CodeLineProps::props().code("follow_reduced_motion(false)   // opt out").build(), Children::default())?;
+                    __children.push(box_item(__node_13));
                     __slots.extend_default(__children);
                     Ok(__slots)
                 }
@@ -178,7 +246,7 @@ pub fn system(props: SystemProps, children: Children) -> Result<Box<dyn LayoutIt
             );
             example(ExampleProps::props().title("Reduced motion — the bar slides, or jumps straight to its end").build(), __deferred)?
         };
-        Container::new(LayoutStyle::new().flex_column().gap(20.0), children![__node_0, __node_1, __node_4])?
+        Container::new(LayoutStyle::new().flex_column().gap(20.0), children![__node_0, __node_1, __node_4, __node_10])?
     };
     Ok(Box::new(__col_0))
 }

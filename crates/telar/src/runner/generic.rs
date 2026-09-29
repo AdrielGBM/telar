@@ -94,6 +94,7 @@ where
 {
     // The one place every runner passes through, so app code can ask `telar::paths::cache()` instead of resolving XDG for itself and landing somewhere other than the runtime it is embedded in.
     services_core::app_paths::install(app_name, paths.clone());
+    crate::user_preferences::install(app_name);
     let prefs = UserPrefs::load(app_name, paths.as_ref());
     let backend = prefs.backend.unwrap_or_else(config::compile_time_backend);
     let AppConfig {

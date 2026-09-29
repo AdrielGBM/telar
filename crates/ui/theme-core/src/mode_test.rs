@@ -8,6 +8,7 @@ fn reset() {
     ACTIVE_MODE.with(|s| s.set(None));
     MODES.with(|m| m.borrow_mut().clear());
     SCHEME_PAIR.with(|p| *p.borrow_mut() = None);
+    PREFERENCE.with(|p| p.set(SchemePreference::System));
     set_system_preferences(SystemPreferences::default());
 }
 
@@ -123,5 +124,51 @@ fn use_mode_is_reactive() {
         got,
         vec![None, Some("a".into()), Some("b".into())],
         "effect re-ran on each mode switch"
+    );
+}
+
+#[test]
+fn a_chosen_scheme_holds_whatever_the_system_does_until_the_app_changes_it() {
+    reset();
+    follow_system("day", "night");
+    set_scheme_preference(SchemePreference::Dark);
+    assert_eq!(active_mode().as_deref(), Some("night"));
+    assert!(is_dark());
+    scheme(Some(ColorScheme::Light));
+    scheme(Some(ColorScheme::Dark));
+    scheme(Some(ColorScheme::Light));
+    assert_eq!(
+        active_mode().as_deref(),
+        Some("night"),
+        "the system changing is not the person changing their mind"
+    );
+    set_scheme_preference(SchemePreference::System);
+    assert_eq!(active_mode().as_deref(), Some("day"));
+    assert!(!is_dark());
+}
+
+#[test]
+fn the_resolved_scheme_follows_the_preference_and_takes_an_unknown_system_as_light() {
+    reset();
+    let seen = Rc::new(RefCell::new(Vec::new()));
+    let s = seen.clone();
+    let _e = reactive_core::effect(move || s.borrow_mut().push(use_resolved_scheme()));
+    scheme(Some(ColorScheme::Dark));
+    set_scheme_preference(SchemePreference::Light);
+    set_scheme_preference(SchemePreference::System);
+    scheme(None);
+    assert_eq!(
+        *seen.borrow(),
+        [
+            ColorScheme::Light,
+            ColorScheme::Dark,
+            ColorScheme::Light,
+            ColorScheme::Dark,
+            ColorScheme::Light
+        ]
+    );
+    assert_eq!(
+        SchemePreference::parse(SchemePreference::Dark.as_str()),
+        Some(SchemePreference::Dark)
     );
 }

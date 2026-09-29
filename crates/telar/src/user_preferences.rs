@@ -1,0 +1,41 @@
+//! What a person chose, kept between runs in the store of the target the app runs on, and the choices Telar keeps for itself.
+
+use theme_core::SchemePreference;
+
+/// The key the colour scheme a person chose is kept under.
+pub const SCHEME_KEY: &str = "telar.scheme";
+
+/// Installs the target's preference store for `app_name` and brings back what Telar keeps in it. Every runner calls it once, where it installs the app's paths.
+pub(crate) fn install(app_name: &str) {
+    #[cfg(all(feature = "web-dom", target_arch = "wasm32"))]
+    services_core::set_preference_store(std::sync::Arc::new(platform_web::WebStorage::new(
+        app_name,
+    )));
+    #[cfg(not(target_arch = "wasm32"))]
+    if let Some(dir) = services_core::app_paths::config() {
+        services_core::set_preference_store(std::sync::Arc::new(services_core::FileStore::open(
+            dir.join("preferences"),
+        )));
+    }
+    #[cfg(not(all(feature = "web-dom", target_arch = "wasm32")))]
+    let _ = app_name;
+    follow_stored_scheme();
+}
+
+/// Restores the scheme a person chose, then keeps it as they change it.
+pub(crate) fn follow_stored_scheme() {
+    if let Some(preference) =
+        services_core::stored_preference(SCHEME_KEY).and_then(|word| SchemePreference::parse(&word))
+    {
+        theme_core::set_scheme_preference(preference);
+    }
+    let _scope = reactive_core::detached(reactive_core::owner_scope);
+    reactive_core::effect(|| {
+        let preference = theme_core::use_scheme_preference();
+        services_core::store_preference(SCHEME_KEY, Some(preference.as_str()));
+    });
+}
+
+#[cfg(test)]
+#[path = "user_preferences_test.rs"]
+mod tests;

@@ -41,6 +41,7 @@ where
 
 // Unlike a hot signal, which is consumed passively when its component remounts, this lives in another crate's thread-local and is set during `setup` — which the incoming dylib re-runs before restore — so it must be captured and actively pushed back. Keys are `@telar/`-namespaced to avoid colliding with a user's `[logic]` signal key.
 const THEME_MODE_KEY: &str = "@telar/theme.mode";
+const SCHEME_PREFERENCE_KEY: &str = "@telar/theme.scheme";
 
 /// Serializes every registered hot signal into a JSON map. Runs inside the outgoing dylib via its `_rsx_hot_snapshot` export, while the old tree (and thus its signals) is still alive.
 pub fn hot_snapshot_json() -> String {
@@ -53,6 +54,10 @@ pub fn hot_snapshot_json() -> String {
     if let Some(mode) = theme_core::active_mode() {
         map.insert(THEME_MODE_KEY.to_string(), mode);
     }
+    map.insert(
+        SCHEME_PREFERENCE_KEY.to_string(),
+        theme_core::scheme_preference().as_str().to_string(),
+    );
     serde_json::to_string(&map).unwrap_or_default()
 }
 
@@ -60,6 +65,12 @@ pub fn hot_snapshot_json() -> String {
 pub fn hot_restore_json(blob: &str) {
     if let Ok(mut map) = serde_json::from_str::<HashMap<String, String>>(blob) {
         // Overrides the default mode this dylib's `setup` just selected, so the user's last selection survives the swap. Removed from the map so it never lingers in `PENDING`.
+        if let Some(preference) = map
+            .remove(SCHEME_PREFERENCE_KEY)
+            .and_then(|word| theme_core::SchemePreference::parse(&word))
+        {
+            theme_core::set_scheme_preference(preference);
+        }
         if let Some(mode) = map.remove(THEME_MODE_KEY) {
             theme_core::set_mode(mode);
         }
