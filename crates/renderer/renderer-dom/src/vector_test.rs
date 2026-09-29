@@ -182,7 +182,7 @@ fn text_carries_the_css_a_box_would_have_given_it() {
 #[test]
 fn groups_close_in_the_order_they_opened() {
     let mut d = drawing();
-    d.open_layer(0.5, BlendMode::Normal);
+    d.open_layer(0.5, BlendMode::Normal, renderer_core::LayerMask::None);
     d.open_matrix([2.0, 0.0, 0.0, 2.0, 4.0, 4.0]);
     d.line(
         Point::new(0.0, 0.0),
@@ -327,10 +327,50 @@ fn a_nine_slice_is_one_viewport_per_piece() {
 #[test]
 fn a_blended_layer_names_its_mode_in_css() {
     let mut d = drawing();
-    d.open_layer(1.0, BlendMode::ColorDodge);
+    d.open_layer(1.0, BlendMode::ColorDodge, renderer_core::LayerMask::None);
     d.close_group();
     assert_eq!(
         d.finish(),
         "<g opacity=\"1\" style=\"mix-blend-mode:color-dodge\"></g>"
+    );
+}
+
+/// A mask source goes into a `<mask>` definition drawn as SVG, alpha-driven and unbounded, and the next layer is a group shown through it.
+#[test]
+fn a_mask_source_is_a_definition_and_its_content_is_shown_through_it() {
+    let mut d = Drawing::new(7);
+    d.open_layer(1.0, BlendMode::Normal, renderer_core::LayerMask::Source);
+    assert!(d.in_mask());
+    d.mask_text(
+        "SIMULACION",
+        Rect::new(10.0, 20.0, 300.0, 80.0),
+        &renderer_core::TextStyle::new(64.0, renderer_core::Color::WHITE),
+        60.0,
+    );
+    d.close_group();
+    assert!(!d.in_mask());
+    d.open_layer(1.0, BlendMode::Normal, renderer_core::LayerMask::Apply);
+    d.rect(
+        Rect::new(0.0, 0.0, 400.0, 200.0),
+        &renderer_core::RectStyle::filled(renderer_core::Color::rgb(0.0, 0.0, 1.0), 0.0),
+    );
+    let markup = d.finish();
+    let (defs, body) = markup
+        .split_once("</defs>")
+        .expect("the mask is a definition");
+    assert!(
+        defs.contains("<mask id=\"t7-1\" maskUnits=\"userSpaceOnUse\"")
+            && defs.contains("mask-type:alpha")
+            && defs.contains("<text x=\"10\" y=\"80\"")
+            && defs.contains(">SIMULACION</text>"),
+        "{defs}"
+    );
+    assert!(
+        body.starts_with("<g opacity=\"1\" mask=\"url(#t7-1)\">"),
+        "{body}"
+    );
+    assert!(
+        !body.contains("SIMULACION"),
+        "the source is never drawn itself: {body}"
     );
 }

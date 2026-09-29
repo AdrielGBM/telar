@@ -112,6 +112,7 @@ fn layer(opacity: f32, blend: BlendMode) -> DrawCommand {
         opacity,
         backdrop_blur: 0.0,
         blend,
+        mask: renderer_core::LayerMask::None,
     }
 }
 
@@ -369,5 +370,80 @@ fn every_blend_mode_matches_the_software_backend() {
     assert!(
         off.is_empty(),
         "modes the two backends draw differently (mode, nested, worst channel difference): {off:?}"
+    );
+}
+
+fn masked(source: Vec<DrawCommand>, content: Vec<DrawCommand>) -> Vec<DrawCommand> {
+    let layer = |mask| DrawCommand::PushLayer {
+        opacity: 1.0,
+        backdrop_blur: 0.0,
+        blend: BlendMode::Normal,
+        mask,
+    };
+    std::iter::once(layer(renderer_core::LayerMask::Source))
+        .chain(source)
+        .chain([
+            DrawCommand::PopLayer,
+            layer(renderer_core::LayerMask::Apply),
+        ])
+        .chain(content)
+        .chain([DrawCommand::PopLayer])
+        .collect()
+}
+
+/// A mask shows its content only where its source drew, by the source's alpha, and never shows the source itself — the same pixels the software backend draws.
+#[test]
+fn a_mask_shows_its_content_through_its_source_as_the_software_backend_does() {
+    let frame = masked(
+        vec![
+            filled(
+                Rect::new(10.0, 10.0, 20.0, 20.0),
+                Color::from_rgb_u8(220, 40, 40),
+            ),
+            filled(
+                Rect::new(40.0, 10.0, 20.0, 20.0),
+                Color::rgba(1.0, 1.0, 1.0, 0.5),
+            ),
+        ],
+        vec![filled(
+            Rect::new(0.0, 0.0, 80.0, 60.0),
+            Color::from_rgb_u8(40, 60, 220),
+        )],
+    );
+    let Some(drawn) = gpu(80, 60, &frame, "a_mask_shows_its_content") else {
+        return;
+    };
+    let software = cpu(80, 60, &frame);
+    assert_eq!(
+        drawn.at(20, 20),
+        BLUE,
+        "the content where the source is opaque"
+    );
+    assert_eq!(
+        drawn.at(70, 50),
+        BLACK,
+        "nothing where the source drew nothing"
+    );
+    for (x, y) in [(20, 20), (50, 20), (70, 50), (5, 5)] {
+        let (g, c) = (drawn.at(x, y), software.at(x, y));
+        assert!(
+            g.iter().zip(c).all(|(a, b)| a.abs_diff(b) <= 3),
+            "({x}, {y}): gpu {g:?}, software {c:?}"
+        );
+    }
+    let empty = masked(
+        Vec::new(),
+        vec![filled(
+            Rect::new(0.0, 0.0, 80.0, 60.0),
+            Color::from_rgb_u8(40, 60, 220),
+        )],
+    );
+    let Some(hidden) = gpu(80, 60, &empty, "a_mask_that_draws_nothing") else {
+        return;
+    };
+    assert_eq!(
+        hidden.at(40, 30),
+        BLACK,
+        "a source that draws nothing hides everything"
     );
 }

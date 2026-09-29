@@ -1451,3 +1451,26 @@ fn text_lengths_take_the_units_a_box_does() {
         "pixels stay pixels:\n{code}"
     );
 }
+
+/// A mask is its box, then the source its content is seen through, then the content.
+#[test]
+fn a_mask_is_a_source_and_a_content_in_one_box() {
+    let src = "[view]\nmask width:100% height:200 label:\"SIMULACION\"\n    text \"SIMULACION\" font_size:18sw\n    canvas paint:(|_rect| RenderNode::Empty)\n";
+    let code = crate::transpile_source(src, "demo", None, None)
+        .unwrap()
+        .rust_code;
+    assert!(!code.contains("compile_error!"), "{code}");
+    assert!(code.contains("Mask::new(LayoutStyle::new()"), "{code}");
+    assert!(
+        code.contains("box_item(__text_0), box_item(__canvas_0))?"),
+        "{code}"
+    );
+    assert!(
+        code.contains(".a11y_label(|| \"SIMULACION\")"),
+        "a reader is told what it says:\n{code}"
+    );
+    let one = crate::transpile_source("[view]\nmask\n    text \"x\"\n", "demo", None, None)
+        .unwrap()
+        .rust_code;
+    assert!(one.contains("a `mask` holds two children"), "{one}");
+}

@@ -7,6 +7,7 @@ mod control_flow;
 mod input;
 mod interp;
 mod lazy;
+mod mask;
 mod media;
 mod path;
 mod scroll;
@@ -655,6 +656,7 @@ impl<'a> ViewGen<'a> {
             "box" => self.emit_box(el),
             "overlay" => self.emit_overlay(el),
             "lazy" => self.emit_lazy(el),
+            "mask" => self.emit_mask(el),
             "input" => self.emit_input(el),
             "path" => self.emit_path(el),
             "canvas" => self.emit_canvas(el),

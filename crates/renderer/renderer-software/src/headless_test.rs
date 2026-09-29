@@ -183,6 +183,7 @@ fn dense_ui() -> Vec<DrawCommand> {
         opacity: 0.96,
         backdrop_blur: 0.0,
         blend: BlendMode::Normal,
+        mask: renderer_core::LayerMask::None,
     });
     cmds.push(DrawCommand::Rect {
         rect: Rect::new(0.0, 0.0, GOLDEN_WIDTH as f32, 48.0),
@@ -230,6 +231,7 @@ fn dense_ui() -> Vec<DrawCommand> {
                     opacity: 0.85,
                     backdrop_blur: 0.0,
                     blend: BlendMode::Normal,
+                    mask: renderer_core::LayerMask::None,
                 });
             }
             cmds.push(DrawCommand::Rect {

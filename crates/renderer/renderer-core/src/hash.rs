@@ -95,11 +95,13 @@ pub fn hash_draw_commands_into<H: Hasher>(cmds: &[DrawCommand], h: &mut H) {
                 opacity,
                 backdrop_blur,
                 blend,
+                mask,
             } => {
                 9u8.hash(h);
                 opacity.to_bits().hash(h);
                 backdrop_blur.to_bits().hash(h);
                 blend.hash(h);
+                mask.hash(h);
             }
             DrawCommand::PopLayer => 11u8.hash(h),
             DrawCommand::PushElement { element } => {

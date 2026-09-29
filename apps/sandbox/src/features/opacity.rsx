@@ -36,3 +36,9 @@ col gap:20
                 box @center fill:$theme.danger radius:8 grow:1 opacity:0.6
                     text "inner · 0.6" font_size:14 color:$theme.on_primary
         code_line code:"box opacity:0.6   >   box opacity:0.6   (layers multiply)"
+    example title:"Mask — a word as a window onto what is behind it"
+        card
+            mask width:100% height:120 label:"FIELD"
+                text "FIELD" font_size:96 font_weight:900 text_align:center color:$theme.ink
+                box fill:linear(horizontal, $theme.primary, $theme.purple, $theme.danger) width:100% height:120
+        code_line code:"mask  >  text \"FIELD\" (the source, never shown)  +  box fill:linear(…) (seen through it)"

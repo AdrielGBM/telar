@@ -203,6 +203,7 @@ impl DevPlugin for DevTools {
             opacity: 1.0,
             backdrop_blur: BACKDROP_BLUR_RADIUS,
             blend: BlendMode::Normal,
+            mask: renderer_core::LayerMask::None,
         });
 
         cmds.push(rect_command(
@@ -239,6 +240,7 @@ impl DevPlugin for DevTools {
                 opacity: 1.0,
                 backdrop_blur: BACKDROP_BLUR_RADIUS,
                 blend: BlendMode::Normal,
+                mask: renderer_core::LayerMask::None,
             });
 
             cmds.push(rect_command(

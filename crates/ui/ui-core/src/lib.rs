@@ -34,6 +34,7 @@ mod layout_transition;
 mod lazy;
 mod line_gutter;
 mod link;
+mod mask;
 mod named_overlay;
 pub mod overlay;
 mod page_anchor;
@@ -109,6 +110,7 @@ pub use link::{
     AnchorRegistration, activate_box, activate_run, follow, follow_beside, follow_pressed,
     has_anchor, reader_moved, register_anchor, reveal_anchor,
 };
+pub use mask::Mask;
 pub use named_overlay::{close as close_overlay, open as open_overlay, state as overlay_state};
 pub use overlay::{Overlay, Placement, anchor_rect};
 pub use page_anchor::PageAnchor;

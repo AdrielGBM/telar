@@ -6,18 +6,34 @@
 
 use geometry_core::{Point, Rect};
 use renderer_core::{
-    BlendMode, BorderRadius, Gradient, GradientKind, ImageFill, Paint, PathData, PathStyle,
-    PathVerb, Raster, RectStyle, Stroke, TextStyle,
+    BlendMode, BorderRadius, Gradient, GradientKind, ImageFill, LayerMask, Paint, PathData,
+    PathStyle, PathVerb, Raster, RectStyle, Stroke, TextStyle,
 };
 
 use crate::paint::{color, round};
+
+/// A group open in the markup.
+enum Group {
+    Plain,
+    /// A box inside the drawing, placed where layout put it relative to the box around it.
+    Placed,
+    /// A mask source: its markup goes into a `<mask>`, and `drawn` is the picture it was taken out of.
+    MaskSource {
+        drawn: String,
+        id: String,
+    },
+}
 
 /// The content of one drawing element, as markup.
 pub struct Drawing {
     defs: String,
     body: String,
     /// Groups opened and not yet closed, so a stray `Pop` cannot close the document.
-    depth: usize,
+    groups: Vec<Group>,
+    /// The id of the mask a source just defined, for the layer it applies to.
+    pending_mask: Option<String>,
+    /// Where each box open inside the drawing lies in layout, innermost last, the drawing's own box first.
+    origins: Vec<(f32, f32)>,
     next_def: u32,
     /// Namespaces this element's definition ids, since every drawing in the page shares one id space.
     prefix: u64,
@@ -28,10 +44,32 @@ impl Drawing {
         Self {
             defs: String::new(),
             body: String::new(),
-            depth: 0,
+            groups: Vec::new(),
+            pending_mask: None,
+            origins: vec![(0.0, 0.0)],
             next_def: 0,
             prefix,
         }
+    }
+
+    /// A drawing of the box laid out at `origin`, whose boxes inside it are placed relative to it: see [`open_box`](Self::open_box).
+    pub fn at(prefix: u64, origin: (f32, f32)) -> Self {
+        Self {
+            origins: vec![origin],
+            ..Self::new(prefix)
+        }
+    }
+
+    /// A box inside the drawing, laid out at `origin`: what it draws is in its own coordinates, as a document's box is, so it is moved to where it lies inside the box around it.
+    pub fn open_box(&mut self, origin: (f32, f32)) {
+        let (x, y) = self.origins.last().copied().unwrap_or_default();
+        self.body.push_str(&format!(
+            "<g transform=\"translate({},{})\">",
+            round(origin.0 - x),
+            round(origin.1 - y)
+        ));
+        self.groups.push(Group::Placed);
+        self.origins.push(origin);
     }
 
     pub fn rect(&mut self, rect: Rect, style: &RectStyle) {
@@ -246,25 +284,92 @@ impl Drawing {
     }
 
     /// A layer in an SVG blends with what the same drawing put beneath it: the `<svg>` isolates its content from the page behind.
-    pub fn open_layer(&mut self, opacity: f32, blend: BlendMode) {
+    ///
+    /// A mask source is drawn into a `<mask>` definition rather than the picture, and the layer it applies to is a group shown through it: what the source covers, by its alpha, and nothing where it drew nothing.
+    pub fn open_layer(&mut self, opacity: f32, blend: BlendMode, mask: LayerMask) {
         let blending = match blend {
             BlendMode::Normal => String::new(),
             other => format!(" style=\"mix-blend-mode:{}\"", other.css_name()),
         };
-        self.open(&format!("<g opacity=\"{}\"{blending}>", round(opacity)));
+        match mask {
+            LayerMask::Source => {
+                let id = self.def_id();
+                let drawn = std::mem::take(&mut self.body);
+                self.body
+                    .push_str(&format!("<g opacity=\"{}\">", round(opacity)));
+                self.groups.push(Group::MaskSource { drawn, id });
+            }
+            LayerMask::Apply => {
+                let masked = match self.pending_mask.take() {
+                    Some(id) => format!(" mask=\"url(#{id})\""),
+                    None => String::new(),
+                };
+                self.open(&format!(
+                    "<g opacity=\"{}\"{masked}{blending}>",
+                    round(opacity)
+                ));
+            }
+            LayerMask::None => {
+                self.open(&format!("<g opacity=\"{}\"{blending}>", round(opacity)));
+            }
+        }
+    }
+
+    /// Whether what is drawn now is a mask source, where a browser draws SVG shapes and not a document.
+    pub fn in_mask(&self) -> bool {
+        self.groups
+            .iter()
+            .any(|group| matches!(group, Group::MaskSource { .. }))
+    }
+
+    /// A one-line text as an SVG `<text>`, for a mask source: a browser does not draw a document inside a mask, so the `foreignObject` [`text`](Self::text) writes would cover nothing. `baseline` is how far below the top of its line box the text sits on its baseline.
+    pub fn mask_text(&mut self, text: &str, rect: Rect, style: &TextStyle, baseline: f32) {
+        if text.is_empty() {
+            return;
+        }
+        let (x, anchor) = match style.text_align {
+            renderer_core::TextAlign::Center => (rect.x + rect.width / 2.0, "middle"),
+            renderer_core::TextAlign::End => (rect.x + rect.width, "end"),
+            renderer_core::TextAlign::Start | renderer_core::TextAlign::Justify => {
+                (rect.x, "start")
+            }
+        };
+        let mut css = String::new();
+        crate::paint::text_style(style, &mut css);
+        let fill = match style.color {
+            Paint::Solid(ink) => color(ink),
+            Paint::Gradient(_) => "#fff".to_string(),
+        };
+        self.body.push_str(&format!(
+            "<text x=\"{}\" y=\"{}\" text-anchor=\"{anchor}\" fill=\"{fill}\" style=\"{}\">{}</text>",
+            round(x),
+            round(rect.y + baseline),
+            escape(&css),
+            escape(text.lines().next().unwrap_or_default()),
+        ));
     }
 
     pub fn close_group(&mut self) {
-        if self.depth == 0 {
+        let Some(group) = self.groups.pop() else {
             return;
-        }
-        self.depth -= 1;
+        };
         self.body.push_str("</g>");
+        if matches!(group, Group::Placed) {
+            self.origins.pop();
+        }
+        if let Group::MaskSource { drawn, id } = group {
+            let source = std::mem::replace(&mut self.body, drawn);
+            // The region is the whole plane rather than the default box around the masked group, which would cut off whatever of the source lies outside it.
+            self.defs.push_str(&format!(
+                "<mask id=\"{id}\" maskUnits=\"userSpaceOnUse\" x=\"-100000\" y=\"-100000\" width=\"200000\" height=\"200000\" style=\"mask-type:alpha\">{source}</mask>"
+            ));
+            self.pending_mask = Some(id);
+        }
     }
 
     /// The markup for this element's children, with everything still open closed.
     pub fn finish(mut self) -> String {
-        while self.depth > 0 {
+        while !self.groups.is_empty() {
             self.close_group();
         }
         if self.defs.is_empty() {
@@ -275,7 +380,7 @@ impl Drawing {
 
     fn open(&mut self, tag: &str) {
         self.body.push_str(tag);
-        self.depth += 1;
+        self.groups.push(Group::Plain);
     }
 
     fn stroke(&mut self, attrs: &mut String, stroke: &Stroke) {

@@ -200,6 +200,7 @@ fn a_layer_fades_what_it_holds() {
                 opacity: 0.5,
                 backdrop_blur: 0.0,
                 blend: BlendMode::Normal,
+                mask: renderer_core::LayerMask::None,
             },
             rect_cmd(
                 Rect::new(0.0, 0.0, 8.0 * 4.0, 16.0),
@@ -322,4 +323,29 @@ fn a_route_link_has_nothing_a_terminal_can_open() {
     let mut out = Vec::new();
     buf.diff_into(&grid(0, 0), crate::ColorDepth::TrueColor, &mut out);
     assert!(!String::from_utf8(out).unwrap().contains("\x1b]8"));
+}
+
+/// A terminal has no alpha to show content through, so a mask draws its content whole and its source not at all.
+#[test]
+fn a_mask_source_is_never_drawn_and_its_content_is() {
+    let layer = |mask| DrawCommand::PushLayer {
+        opacity: 1.0,
+        backdrop_blur: 0.0,
+        blend: BlendMode::Normal,
+        mask,
+    };
+    let mut buf = grid(12, 2);
+    paint(
+        &mut buf,
+        &[
+            layer(renderer_core::LayerMask::Source),
+            text_cmd("SOURCE", Rect::new(0.0, 0.0, 96.0, 16.0)),
+            DrawCommand::PopLayer,
+            layer(renderer_core::LayerMask::Apply),
+            text_cmd("content", Rect::new(0.0, 16.0, 96.0, 16.0)),
+            DrawCommand::PopLayer,
+        ],
+    );
+    assert!(!row(&buf, 0).contains("SOURCE"), "{:?}", row(&buf, 0));
+    assert!(row(&buf, 1).starts_with("content"), "{:?}", row(&buf, 1));
 }

@@ -52,6 +52,7 @@ fn layer(opacity: f32, backdrop_blur: f32) -> DrawCommand {
         opacity,
         backdrop_blur,
         blend: BlendMode::Normal,
+        mask: crate::LayerMask::None,
     }
 }
 
@@ -199,6 +200,7 @@ fn an_unchanged_fill_and_blend_dirty_nothing() {
             opacity: 1.0,
             backdrop_blur: 0.0,
             blend: BlendMode::Multiply,
+            mask: crate::LayerMask::None,
         },
         tiled,
         DrawCommand::PopLayer,

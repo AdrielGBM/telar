@@ -202,7 +202,55 @@ pub fn opacity(props: OpacityProps, children: Children) -> Result<Box<dyn Layout
             );
             example(ExampleProps::props().title("Nested — outer 0.6 × inner 0.6 combine to about 0.36").build(), __deferred)?
         };
-        Container::new(LayoutStyle::new().flex_column().gap(20.0), children![__node_0, __node_1, __node_4, __node_7])?
+        let __node_10 = {
+            let __deferred = Children::new(
+                {
+                    let theme = theme.clone();
+                move || {
+                    let theme = theme.clone();
+                    let mut __slots = Slots::new();
+                    let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
+                    let __node_11 = {
+                        let __deferred = Children::new(
+                            {
+                                let theme = theme.clone();
+                            move || {
+                                let theme = theme.clone();
+                                let mut __slots = Slots::new();
+                                let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
+                                let __node_12 = {
+                                    let __text_7 = {
+                                        Text::declaring(
+                                            || "FIELD".to_string(),
+                                            LayoutStyle::new(),
+                                            { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(96.0).with_color(theme.get().ink).with_font_weight(900).with_text_align(TextAlign::Center) },
+                                        )?
+                                    };
+                                    let __sbox_7 = {
+                                        StyledContainer::new(LayoutStyle::new().flex_column().width(SizeDimension::Percent(1.0)).height(120.0), { let theme = theme.clone(); move |r| RectStyle { fill: Some(Paint::Gradient(Gradient::linear(Point::new(r.x, r.y + r.height * 0.5), Point::new(r.x + r.width, r.y + r.height * 0.5), &[(0.0, theme.get().primary), (0.5, theme.get().purple), (1.0, theme.get().danger)]))), border: None, shadow: None, radius: BorderRadius::zero() } }, children![])?
+                                    };
+                                    Mask::new(LayoutStyle::new().width(SizeDimension::Percent(1.0)).height(120.0), box_item(__text_7), box_item(__sbox_7))?
+                                };
+                                let __node_12 = __node_12.a11y_label(|| "FIELD");
+                                __children.push(box_item(__node_12));
+                                __slots.extend_default(__children);
+                                Ok(__slots)
+                            }
+                            }
+                        );
+                        card(CardProps::props().build(), __deferred)?
+                    };
+                    __children.push(box_item(__node_11));
+                    let __node_13 = code_line(CodeLineProps::props().code("mask  >  text \"FIELD\" (the source, never shown)  +  box fill:linear(…) (seen through it)").build(), Children::default())?;
+                    __children.push(box_item(__node_13));
+                    __slots.extend_default(__children);
+                    Ok(__slots)
+                }
+                }
+            );
+            example(ExampleProps::props().title("Mask — a word as a window onto what is behind it").build(), __deferred)?
+        };
+        Container::new(LayoutStyle::new().flex_column().gap(20.0), children![__node_0, __node_1, __node_4, __node_7, __node_10])?
     };
     Ok(Box::new(__col_0))
 }

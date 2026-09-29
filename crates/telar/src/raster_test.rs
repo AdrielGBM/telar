@@ -163,6 +163,7 @@ fn a_blended_layer_lands_the_formula_on_known_pixels() {
                 opacity: 1.0,
                 backdrop_blur: 0.0,
                 blend,
+                mask: renderer_core::LayerMask::None,
             },
             DrawCommand::Rect {
                 rect: Rect::new(4.0, 4.0, 8.0, 8.0),

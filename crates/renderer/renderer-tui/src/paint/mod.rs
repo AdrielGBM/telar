@@ -52,7 +52,25 @@ impl<'a> Painter<'a> {
     }
 
     pub fn paint(&mut self, commands: &[DrawCommand]) {
+        // A mask source is never shown, and a terminal has no alpha to show its content through: the content is drawn whole and the source not at all.
+        let mut in_source = 0usize;
         for command in commands {
+            if in_source > 0 {
+                match command {
+                    DrawCommand::PushLayer { .. } => in_source += 1,
+                    DrawCommand::PopLayer => in_source -= 1,
+                    _ => {}
+                }
+                continue;
+            }
+            if let DrawCommand::PushLayer {
+                mask: renderer_core::LayerMask::Source,
+                ..
+            } = command
+            {
+                in_source = 1;
+                continue;
+            }
             self.one(command);
         }
     }

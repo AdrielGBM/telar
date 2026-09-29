@@ -27,6 +27,7 @@ pub fn builtin_tags() -> &'static [(&'static str, &'static str)] {
         ("scroll", "LayoutScrollArea::new"),
         ("overlay", "Overlay::new"),
         ("lazy", "Lazy::new"),
+        ("mask", "Mask::new"),
         ("children", TAG_SLOT_PLACEHOLDER),
     ]
 }
@@ -686,6 +687,7 @@ pub fn tag_attr_specs(tag: &str) -> Vec<AttrSpec> {
             AttrSpec::keywords("fit", FIT_VALUES),
         ]),
         "lazy" => with(&[AttrSpec::free("when")]),
+        "mask" => with(&[]),
         // A `path`'s stroke is one plain width, not the four `crate::edges` collects for a box, and `fill_rule` is a keyword rather than paint.
         "path" => with(&[
             AttrSpec::free("d"),

@@ -62,6 +62,8 @@ pub struct SoftwareRenderer<D: HasDisplayHandle, W: HasWindowHandle> {
     // Each open clip as it was pushed, since `draw_state` keeps only the rects and only intersected.
     clip_shapes: Vec<ClipShape>,
     layer_stack: Vec<Layer>,
+    /// A mask source drawn and closed, waiting for the layer it applies to. See [`LayerMask`](renderer_core::LayerMask).
+    pending_mask: Option<frame::MaskSource>,
     frame_diff: FrameDiff,
     // Previous frame state for skip-if-identical and dirty-rect optimizations.
     prev_commands: Vec<DrawCommand>,
@@ -174,6 +176,7 @@ where
             draw_state: renderer_core::DrawState::new(),
             clip_shapes: Vec::new(),
             layer_stack: Vec::new(),
+            pending_mask: None,
             frame_diff: FrameDiff::default(),
             prev_commands: Vec::with_capacity(256),
             prev_commands_hash: 0,
@@ -228,6 +231,7 @@ where
             draw_state: renderer_core::DrawState::new(),
             clip_shapes: Vec::new(),
             layer_stack: Vec::new(),
+            pending_mask: None,
             frame_diff: FrameDiff::default(),
             prev_commands: Vec::with_capacity(256),
             prev_commands_hash: 0,

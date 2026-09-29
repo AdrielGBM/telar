@@ -32,7 +32,7 @@ mod style_pool;
 pub const BEZIER_CIRCLE_K: f32 = 0.552_284_8;
 
 pub use blend::BlendMode;
-pub use command::DrawCommand;
+pub use command::{DrawCommand, LayerMask};
 pub use culling::{FontMetrics, extend_bounds};
 #[doc(hidden)]
 pub use dirty::ScrollBlit;

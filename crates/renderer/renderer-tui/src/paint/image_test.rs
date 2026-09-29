@@ -188,6 +188,7 @@ fn a_layer_fades_the_picture() {
                 opacity: 0.5,
                 backdrop_blur: 0.0,
                 blend: BlendMode::Normal,
+                mask: renderer_core::LayerMask::None,
             },
             picture(
                 image(&[[255, 255, 255, 255]], 1, 1),

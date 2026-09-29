@@ -71,16 +71,35 @@ impl From<CompositeParams> for CompositeParamsRaw {
     }
 }
 
+/// Where a mask source's texture lies, for a layer composited through it.
+#[derive(Clone, Copy)]
+pub(crate) struct MaskParams {
+    /// The source's rect, in the logical space [`CompositeParams::rect`] is in.
+    pub(crate) rect: [f32; 4],
+    pub(crate) uv_scale: [f32; 2],
+}
+
+#[repr(C)]
+#[derive(bytemuck::Pod, bytemuck::Zeroable, Clone, Copy)]
+struct MaskParamsRaw {
+    rect: [f32; 4],
+    uv_scale: [f32; 2],
+    _pad: [f32; 2],
+}
+
 pub(crate) struct CompositePipeline {
     pub(crate) pipeline: wgpu::RenderPipeline,
     shader: wgpu::ShaderModule,
     sampler: wgpu::Sampler,
     pub(crate) bind_group_layout: wgpu::BindGroupLayout,
     backdrop_bind_group_layout: wgpu::BindGroupLayout,
+    mask_bind_group_layout: wgpu::BindGroupLayout,
     viewport_bind_group_layout: wgpu::BindGroupLayout,
     target: Target,
     // Built the first time a layer composites through its mode: most surfaces never blend, and each variant is a pipeline compile.
     blend_variants: HashMap<BlendMode, wgpu::RenderPipeline>,
+    // Built the first time a layer composites through a mask with that blend, for the same reason.
+    mask_variants: HashMap<BlendMode, wgpu::RenderPipeline>,
     // Popped by `create_bind_group`, which pushes the used buffer into `params_buffer_in_use`.
     params_buffer_pool: Vec<wgpu::Buffer>,
     // Kept alive until the frame's GPU work is submitted, then recycled at the next `begin_frame`.
@@ -206,6 +225,35 @@ impl CompositePipeline {
                 }],
             });
 
+        let mask_bind_group_layout =
+            device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+                label: Some("telar-composite-mask-bgl"),
+                entries: &[
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 0,
+                        visibility: wgpu::ShaderStages::FRAGMENT,
+                        ty: wgpu::BindingType::Texture {
+                            multisampled: false,
+                            view_dimension: wgpu::TextureViewDimension::D2,
+                            sample_type: wgpu::TextureSampleType::Float { filterable: true },
+                        },
+                        count: None,
+                    },
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 1,
+                        visibility: wgpu::ShaderStages::FRAGMENT,
+                        ty: wgpu::BindingType::Buffer {
+                            ty: wgpu::BufferBindingType::Uniform,
+                            has_dynamic_offset: false,
+                            min_binding_size: wgpu::BufferSize::new(
+                                std::mem::size_of::<MaskParamsRaw>() as u64,
+                            ),
+                        },
+                        count: None,
+                    },
+                ],
+            });
+
         let target = Target {
             format,
             msaa_samples,
@@ -225,9 +273,11 @@ impl CompositePipeline {
             sampler,
             bind_group_layout,
             backdrop_bind_group_layout,
+            mask_bind_group_layout,
             viewport_bind_group_layout: viewport_bgl.clone(),
             target,
             blend_variants: HashMap::new(),
+            mask_variants: HashMap::new(),
             params_buffer_pool: Vec::new(),
             params_buffer_in_use: Vec::new(),
         }
@@ -285,6 +335,80 @@ impl CompositePipeline {
                 .get(&blend)
                 .expect("prepare_blend runs before a blended composite"),
         }
+    }
+
+    /// Builds the pipeline a layer composites through a mask with, once per blend. A mode that blends in shader reads its backdrop at the group the mask takes, so a masked layer blends as `Normal` does in that case.
+    pub(crate) fn prepare_mask(&mut self, device: &wgpu::Device, blend: BlendMode) {
+        let blend = masked_blend(blend);
+        if self.mask_variants.contains_key(&blend) {
+            return;
+        }
+        let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
+            label: Some("telar-composite-mask-shader"),
+            source: wgpu::ShaderSource::Wgsl(
+                [
+                    include_str!("composite.wgsl"),
+                    include_str!("composite_mask.wgsl"),
+                ]
+                .concat()
+                .into(),
+            ),
+        });
+        let pipeline = build_pipeline(
+            device,
+            &shader,
+            &[
+                &self.viewport_bind_group_layout,
+                &self.bind_group_layout,
+                &self.mask_bind_group_layout,
+            ],
+            &self.target,
+            Fragment {
+                entry_point: "fs_mask",
+                blend: fixed_function(blend),
+                mode: None,
+            },
+        );
+        self.mask_variants.insert(blend, pipeline);
+    }
+
+    pub(crate) fn mask_pipeline(&self, blend: BlendMode) -> &wgpu::RenderPipeline {
+        self.mask_variants
+            .get(&masked_blend(blend))
+            .expect("prepare_mask runs before a masked composite")
+    }
+
+    /// Binds a mask source's texture and where it lies, at group 2, for a layer shown through it.
+    pub(crate) fn mask_bind_group(
+        &self,
+        device: &wgpu::Device,
+        source: &wgpu::TextureView,
+        params: MaskParams,
+    ) -> wgpu::BindGroup {
+        let raw = MaskParamsRaw {
+            rect: params.rect,
+            uv_scale: params.uv_scale,
+            _pad: [0.0; 2],
+        };
+        let buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("telar-composite-mask-params"),
+            contents: bytemuck::bytes_of(&raw),
+            usage: wgpu::BufferUsages::UNIFORM,
+        });
+        device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("telar-composite-mask-bg"),
+            layout: &self.mask_bind_group_layout,
+            entries: &[
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: wgpu::BindingResource::TextureView(source),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: buffer.as_entire_binding(),
+                },
+            ],
+        })
     }
 
     /// Binds the copy of the target that a mode blending in shader reads the backdrop from, at group 2.
@@ -350,6 +474,14 @@ impl CompositePipeline {
         // Retained for the frame; returned to the pool by `recycle_params_buffers` next frame.
         self.params_buffer_in_use.push(params_buf);
         bind_group
+    }
+}
+
+/// The blend a masked composite uses: its own when fixed-function blending computes it, `Normal` when it would need the group the mask takes.
+fn masked_blend(blend: BlendMode) -> BlendMode {
+    match blend_shader_mode(blend) {
+        Some(_) => BlendMode::Normal,
+        None => blend,
     }
 }
 

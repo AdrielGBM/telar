@@ -393,6 +393,7 @@ fn opacity_layer_scene(indicator: Color) -> Vec<DrawCommand> {
             opacity: 0.6,
             backdrop_blur: 0.0,
             blend: BlendMode::Normal,
+            mask: renderer_core::LayerMask::None,
         },
         DrawCommand::Rect {
             rect: Rect::new(100.0, 80.0, 600.0, 440.0),
@@ -559,6 +560,7 @@ fn golden_scene() -> Vec<DrawCommand> {
         opacity: 0.85,
         backdrop_blur: 12.0,
         blend: BlendMode::Normal,
+        mask: renderer_core::LayerMask::None,
     });
     cmds.push(DrawCommand::Rect {
         rect: Rect::new(320.0, 240.0, 640.0, 320.0),
@@ -655,6 +657,7 @@ fn clip_below_a_layers_bounds_stays_in_the_attachment() {
             opacity: 0.5,
             backdrop_blur: 0.0,
             blend: BlendMode::Normal,
+            mask: renderer_core::LayerMask::None,
         },
         DrawCommand::Rect {
             rect: Rect::new(0.0, 0.0, 640.0, 192.0),
@@ -875,6 +878,7 @@ fn a_rounded_clip_cuts_the_corners_of_a_layer_composited_inside_it() {
             opacity: 1.0,
             backdrop_blur: 0.0,
             blend: BlendMode::Normal,
+            mask: renderer_core::LayerMask::None,
         },
         filled(
             clip.x,
@@ -925,6 +929,7 @@ fn a_backdrop_blur_spreads_by_its_radius_converted_to_a_sigma() {
             opacity: 1.0,
             backdrop_blur: 24.0,
             blend: BlendMode::Normal,
+            mask: renderer_core::LayerMask::None,
         },
         DrawCommand::PopLayer,
     ];

@@ -75,6 +75,7 @@ pub enum RenderNode {
         opacity: f32,
         backdrop_blur: f32,
         blend: BlendMode,
+        mask: renderer_core::LayerMask,
         children: NodeVec,
     },
     /// A rasteriser draws straight through it, since the commands inside are already positioned, and pairs one frame with the last by its identity.
@@ -177,6 +178,7 @@ impl RenderNode {
             opacity,
             backdrop_blur,
             blend: BlendMode::Normal,
+            mask: renderer_core::LayerMask::None,
             children: NodeVec::collect(children),
         }
     }
@@ -191,8 +193,24 @@ impl RenderNode {
             opacity,
             backdrop_blur: 0.0,
             blend,
+            mask: renderer_core::LayerMask::None,
             children: NodeVec::collect(children),
         }
+    }
+
+    /// `content` shown only as far as `mask` covers it: see [`LayerMask`](renderer_core::LayerMask). What `mask` draws is never shown itself.
+    pub fn masked(mask: RenderNode, content: RenderNode) -> Self {
+        let layer = |role, child| Self::Layer {
+            opacity: 1.0,
+            backdrop_blur: 0.0,
+            blend: BlendMode::Normal,
+            mask: role,
+            children: NodeVec::collect([child]),
+        };
+        Self::group([
+            layer(renderer_core::LayerMask::Source, mask),
+            layer(renderer_core::LayerMask::Apply, content),
+        ])
     }
 
     pub fn element(

@@ -7,7 +7,8 @@ use geometry_core::Rect;
 use raw_window_handle::{HasDisplayHandle, HasWindowHandle};
 use renderer_core::perf::{self, Phase};
 use renderer_core::{
-    BlendMode, BorderRadius, Color, DrawCommand, RenderBackend, RendererError, expand_fill_layers,
+    BlendMode, BorderRadius, Color, DrawCommand, LayerMask, RenderBackend, RendererError,
+    expand_fill_layers,
 };
 use smallvec::SmallVec;
 use tiny_skia::{Mask, Pixmap, PixmapMut, PixmapRef};
@@ -61,9 +62,18 @@ pub(super) struct Layer {
     opacity: f32,
     blend: tiny_skia::BlendMode,
     origin: (i32, i32),
+    role: LayerMask,
+    /// For a layer a mask applies to, the source it is shown through.
+    source: Option<(Pixmap, (i32, i32))>,
     // The clips already open when the layer was pushed mask its composite, so only those opened inside it mask its content.
     clip_depth: usize,
     mask: Option<ClipMask>,
+}
+
+/// A mask source once it has been drawn: what it covered, or nothing at all, which hides the layer it applies to.
+pub(super) enum MaskSource {
+    Empty,
+    Drawn(Pixmap, (i32, i32)),
 }
 
 fn skia_blend(blend: BlendMode) -> tiny_skia::BlendMode {
@@ -222,6 +232,7 @@ where
         self.draw_state.reset();
         self.clip_shapes.clear();
         self.layer_stack.clear();
+        self.pending_mask = None;
 
         match &self.expanded_commands_cache {
             Some((cached_hash, _)) if *cached_hash == input_hash => {}
@@ -419,7 +430,38 @@ where
             origin: (x, y),
             clip_depth: self.clip_shapes.len(),
             mask: None,
+            role: LayerMask::None,
+            source: None,
         })
+    }
+
+    /// Keeps only as much of `layer` as `source`, placed at `origin`, covers: multiplied by its alpha where the two overlap, cleared where it drew nothing.
+    fn show_through(&mut self, layer: &mut Layer, source: &Pixmap, origin: (i32, i32)) {
+        let (width, height) = (layer.pixmap.width(), layer.pixmap.height());
+        let Some(mut placed) = self
+            .pixmap_pool
+            .pop()
+            .filter(|p| p.width() == width && p.height() == height)
+            .or_else(|| Pixmap::new(width, height))
+        else {
+            return;
+        };
+        placed.fill(tiny_skia::Color::TRANSPARENT);
+        placed.draw_pixmap(
+            origin.0 - layer.origin.0,
+            origin.1 - layer.origin.1,
+            source.as_ref(),
+            &tiny_skia::PixmapPaint {
+                opacity: 1.0,
+                blend_mode: tiny_skia::BlendMode::Source,
+                quality: tiny_skia::FilterQuality::Nearest,
+            },
+            tiny_skia::Transform::identity(),
+            None,
+        );
+        let coverage = tiny_skia::Mask::from_pixmap(placed.as_ref(), tiny_skia::MaskType::Alpha);
+        layer.pixmap.apply_mask(&coverage);
+        self.pixmap_pool.push(placed);
     }
 
     fn run_commands(
@@ -588,7 +630,16 @@ where
                     opacity,
                     backdrop_blur,
                     blend,
+                    mask,
                 } => {
+                    let source = match mask {
+                        LayerMask::Apply => self.pending_mask.take(),
+                        _ => None,
+                    };
+                    if matches!(source, Some(MaskSource::Empty)) {
+                        skipped_layers = 1;
+                        continue;
+                    }
                     let opened = layer_boxes[index]
                         .filter(|&(x, y, width, height)| {
                             !self.layer_stack.is_empty()
@@ -601,14 +652,38 @@ where
                             self.open_layer(layer_box, *opacity, *backdrop_blur, *blend)
                         });
                     match opened {
-                        Some(layer) => self.layer_stack.push(layer),
-                        None => skipped_layers = 1,
+                        Some(mut layer) => {
+                            layer.role = *mask;
+                            layer.source = match source {
+                                Some(MaskSource::Drawn(pixmap, origin)) => Some((pixmap, origin)),
+                                _ => None,
+                            };
+                            self.layer_stack.push(layer);
+                        }
+                        None => {
+                            if *mask == LayerMask::Source {
+                                self.pending_mask = Some(MaskSource::Empty);
+                            }
+                            if let Some(MaskSource::Drawn(pixmap, _)) = source {
+                                self.pixmap_pool.push(pixmap);
+                            }
+                            skipped_layers = 1;
+                        }
                     }
                 }
                 DrawCommand::PopLayer => {
-                    let Some(layer) = self.layer_stack.pop() else {
+                    let Some(mut layer) = self.layer_stack.pop() else {
                         continue;
                     };
+                    if layer.role == LayerMask::Source {
+                        self.mask_pool.extend(layer.mask);
+                        self.pending_mask = Some(MaskSource::Drawn(layer.pixmap, layer.origin));
+                        continue;
+                    }
+                    if let Some((source, origin)) = layer.source.take() {
+                        self.show_through(&mut layer, &source, origin);
+                        self.pixmap_pool.push(source);
+                    }
                     if let Some(mut canvas) = self.canvas(damage) {
                         canvas.pixmap.draw_pixmap(
                             layer.origin.0 - canvas.origin.0,

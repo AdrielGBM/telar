@@ -9,6 +9,17 @@ use crate::{
     Span, Stroke, TextStyle,
 };
 
+/// How a layer takes part in a mask: one subtree deciding how much of another shows.
+///
+/// A mask is two layers side by side. The [`Source`](Self::Source) layer is drawn and never shown: what it covers, and how opaquely, is kept. The [`Apply`](Self::Apply) layer right after it is shown only as far as the source covered it — multiplied by the source's alpha where they overlap, and gone where the source drew nothing. Text drawn as a source over a field drawn as its application is a word that is a window onto the field.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
+pub enum LayerMask {
+    #[default]
+    None,
+    Source,
+    Apply,
+}
+
 #[derive(Debug, Clone)]
 /// One instruction in a frame: something painted, or a change to the clip, matrix or layer stack.
 pub enum DrawCommand {
@@ -56,6 +67,8 @@ pub enum DrawCommand {
         /// How far what is drawn behind this layer is blurred before it shows through, as a radius in the same units as [`Shadow::blur_radius`](crate::Shadow::blur_radius): a backend turns it into a deviation with [`blur_sigma`](crate::blur_sigma), and the dirty margin around the layer is measured from that same conversion. Spelled out because nothing said so, and a number read as a radius in one place and as the deviation itself in another is two different blurs.
         backdrop_blur: f32,
         blend: BlendMode,
+        /// Whether this layer is a mask: see [`LayerMask`].
+        mask: LayerMask,
     },
     PopLayer,
     /// A marker, like [`PushClip`](Self::PushClip): everything until the matching [`PopElement`](Self::PopElement) belongs to this box. A rasteriser draws nothing for either — the commands between them are already positioned — and pairs one frame's commands with the last's by the box that drew them, so a box that appears shifts nothing drawn after it. What a document backend gets is the structure the flattening would otherwise have thrown away, and the identity that lets it move an element instead of rebuilding it.
@@ -150,13 +163,15 @@ impl PartialEq for DrawCommand {
                     opacity: o1,
                     backdrop_blur: b1,
                     blend: m1,
+                    mask: k1,
                 },
                 DrawCommand::PushLayer {
                     opacity: o2,
                     backdrop_blur: b2,
                     blend: m2,
+                    mask: k2,
                 },
-            ) => o1 == o2 && b1 == b2 && m1 == m2,
+            ) => o1 == o2 && b1 == b2 && m1 == m2 && k1 == k2,
             (DrawCommand::PopLayer, DrawCommand::PopLayer) => true,
             (
                 DrawCommand::PushElement { element: e1 },

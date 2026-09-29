@@ -151,10 +151,10 @@ pub use renderer_assets::{SvgData, SvgError, VectorCommand};
 pub use renderer_core::{
     BlendMode, Border, BorderRadius, Clamp, Color, Declared, DrawCommand, DrawState, FillRule,
     FontFamily, FontFeatures, FontStyle, FontTag, FontVariations, Gradient, GradientKind,
-    GradientStop, GradientStops, ImageData, ImageFill, ImageSlice, LineCap, LineHeight, LineJoin,
-    Paint, PathData, PathStyle, PathVerb, Raster, RectStyle, RendererError, Role, Scale, Semantics,
-    Shadow, ShapeStyle, Span, Stroke, TextAlign, TextLength, TextShadow, TextStyle, TextWrap,
-    for_each_with_matrix, hash_draw_commands, measure_text, transform_clip_rect,
+    GradientStop, GradientStops, ImageData, ImageFill, ImageSlice, LayerMask, LineCap, LineHeight,
+    LineJoin, Paint, PathData, PathStyle, PathVerb, Raster, RectStyle, RendererError, Role, Scale,
+    Semantics, Shadow, ShapeStyle, Span, Stroke, TextAlign, TextLength, TextShadow, TextStyle,
+    TextWrap, for_each_with_matrix, hash_draw_commands, measure_text, transform_clip_rect,
 };
 // The drawing half of the backend-author API: a frontend implements `RendererFactory` and installs a `TextMetrics` for whatever "how wide is this string" means on its surface.
 #[cfg(feature = "runtime")]
@@ -248,8 +248,8 @@ pub use ui_core::{
     Accessible, Axis, BuildFailure, COARSE_STEP, Canvas, ChildSlot, Children, Clip, ClipAxis,
     ClippedItem, Component, ComponentList, Container, DEFAULT_SCRIM, DismissRegistration, DragAxis,
     DragStart, Edge, ErrorBoundary, EventResult, FINE_STEP, Image, Inherited, Input, KeyAnswer,
-    KeyNav, KeyNavMove, LayoutItem, LayoutScrollArea, LayoutTransition, Lazy, LineGutter, NodeId,
-    NodeVec, Overlay, Path, PointerButtons, Presence, ReactiveList, Rectangle, RenderNode,
+    KeyNav, KeyNavMove, LayoutItem, LayoutScrollArea, LayoutTransition, Lazy, LineGutter, Mask,
+    NodeId, NodeVec, Overlay, Path, PointerButtons, Presence, ReactiveList, Rectangle, RenderNode,
     ScrollPage, ScrollViewport, ScrollbarStyle, Slots, StyledContainer, SurfaceScaffold,
     SurfaceTransition, Text, TextArea, TextRun, ThemeProvider, Transition, VirtualList, WindowRoot,
     anchor_rect, animate_layout, apply_move, box_item, box_transform, close_overlay,

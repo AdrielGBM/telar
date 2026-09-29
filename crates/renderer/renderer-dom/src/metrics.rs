@@ -146,6 +146,23 @@ fn natural(style: &TextStyle) -> f32 {
     measured
 }
 
+/// How far below the top of its line box a line in `style` sits on its baseline: half the leading the line box adds, then the face's ascent, as a document lays a line out.
+pub(crate) fn baseline(style: &TextStyle) -> f32 {
+    let (ascent, descent) = with_context(|ctx| {
+        ctx.set_font(&font_of(style));
+        ctx.measure_text("Hg")
+            .map(|m| {
+                (
+                    m.font_bounding_box_ascent() as f32,
+                    m.font_bounding_box_descent() as f32,
+                )
+            })
+            .unwrap_or((style.font_size * 0.8, style.font_size * 0.2))
+    })
+    .unwrap_or((style.font_size * 0.8, style.font_size * 0.2));
+    (line_height(style) - (ascent + descent)) / 2.0 + ascent
+}
+
 /// The paragraph as the browser would break it, in the style it will be drawn in.
 fn wrap(text: &str, max_width: f32, style: &TextStyle) -> (f32, usize) {
     // Text that must stay on one line, and a column nothing could overflow, are the same instruction to a wrap.

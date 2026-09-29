@@ -84,6 +84,7 @@ impl VectorCommand {
                 opacity: *opacity,
                 backdrop_blur: *backdrop_blur,
                 blend: BlendMode::Normal,
+                mask: renderer_core::LayerMask::None,
             },
             VectorCommand::PopLayer => DrawCommand::PopLayer,
         }

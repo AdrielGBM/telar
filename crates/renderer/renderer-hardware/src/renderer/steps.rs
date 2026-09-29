@@ -70,7 +70,10 @@ pub(super) enum Boundary {
         backdrop_blur: f32,
     },
     EndLayerComposite {
-        bind_group: wgpu::BindGroup,
+        /// `None` for a mask source, which is kept rather than composited: the layer it applies to reads it.
+        bind_group: Option<wgpu::BindGroup>,
+        /// For a layer shown through a mask, the source it is shown through, bound at group 2.
+        mask: Option<wgpu::BindGroup>,
         // `Some` when the resolved layer texture should be cached; `None` for layers that must not be (backdrop blur, round-clip).
         cache_hash: Option<u64>,
         // Applied during the composite blit so the layer respects parent clip rects. `None` is the full target.
@@ -83,6 +86,17 @@ pub(super) enum Boundary {
         // Applied during the composite blit so the layer respects parent clip rects. `None` is the full target.
         scissor: Option<Rect>,
         blend: BlendMode,
+    },
+}
+
+/// A mask source once it has been drawn, waiting for the layer it applies to.
+pub(super) enum MaskSource {
+    /// It covered nothing, so the layer it applies to shows nothing.
+    Empty,
+    Drawn {
+        view: wgpu::TextureView,
+        rect: [f32; 4],
+        uv_scale: [f32; 2],
     },
 }
 
@@ -99,6 +113,9 @@ pub(super) struct LayerAccum {
     pub(super) text_instance_start: u32,
     pub(super) line_instance_start: u32,
     pub(super) image_instance_start: u32,
+    pub(super) mask: renderer_core::LayerMask,
+    /// For a layer a mask applies to, the source it is shown through.
+    pub(super) source: Option<MaskSource>,
 }
 
 impl LayerAccum {

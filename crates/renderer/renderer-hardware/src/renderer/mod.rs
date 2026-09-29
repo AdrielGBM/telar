@@ -117,6 +117,8 @@ pub struct HardwareRenderer<W: HasWindowHandle + HasDisplayHandle + Send + Sync 
     batch_image_bind_group: Option<wgpu::BindGroup>,
     draw_state: renderer_core::DrawState,
     layer_texture_pool: Vec<PooledTexture>,
+    /// A mask source recorded and closed, waiting for the layer it applies to. See [`LayerMask`](renderer_core::LayerMask).
+    pending_mask: Option<steps::MaskSource>,
     shadow_capture_pool: Vec<PooledTexture>,
     // Keyed by a hash of all pending shadow instances, so unchanged shadows skip the per-frame create-and-bind.
     shadow_instances_cache: Option<(u64, wgpu::Buffer, wgpu::BindGroup)>,
@@ -740,6 +742,7 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
             batch_image_bind_group: None,
             draw_state: renderer_core::DrawState::new(),
             layer_texture_pool: Vec::new(),
+            pending_mask: None,
             shadow_capture_pool: Vec::new(),
             shadow_instances_cache: None,
             layer_resolved_cache: HashMap::new(),
@@ -972,6 +975,7 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
     }
 
     fn clear_pending(&mut self) {
+        self.pending_mask = None;
         self.pending_instances.clear();
         self.pending_text_instances.clear();
         self.pending_line_instances.clear();

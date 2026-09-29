@@ -354,6 +354,7 @@ fn a_change_beneath_a_backdrop_blur_repaints_the_whole_blur_exactly() {
                 opacity: 1.0,
                 backdrop_blur: 8.0,
                 blend: BlendMode::Normal,
+                mask: renderer_core::LayerMask::None,
             },
             boxed(
                 260.0,
@@ -567,6 +568,7 @@ fn a_backdrop_blur_spreads_by_the_sigma_its_radius_converts_to() {
             opacity: 1.0,
             backdrop_blur: RADIUS,
             blend: BlendMode::Normal,
+            mask: renderer_core::LayerMask::None,
         },
         // Neither filled nor framed, so it draws nothing and only sizes the layer: what lands in the box is the blurred backdrop alone.
         boxed(x as f32, y as f32, w as f32, h as f32, RectStyle::default()),
@@ -942,4 +944,62 @@ mod in_place {
             "a frame starts a new idle stretch, with its own retries"
         );
     }
+}
+
+fn masked(source: Vec<DrawCommand>, content: Vec<DrawCommand>) -> Vec<DrawCommand> {
+    let layer = |mask| DrawCommand::PushLayer {
+        opacity: 1.0,
+        backdrop_blur: 0.0,
+        blend: BlendMode::Normal,
+        mask,
+    };
+    iter::once(layer(renderer_core::LayerMask::Source))
+        .chain(source)
+        .chain([
+            DrawCommand::PopLayer,
+            layer(renderer_core::LayerMask::Apply),
+        ])
+        .chain(content)
+        .chain([DrawCommand::PopLayer])
+        .collect()
+}
+
+#[test]
+fn a_mask_shows_its_content_only_where_it_drew_and_is_never_shown_itself() {
+    let red = RectStyle::filled(Color::from_rgb_u8(255, 0, 0), 0.0);
+    let blue = RectStyle::filled(Color::from_rgb_u8(0, 0, 255), 0.0);
+    let half = RectStyle::filled(Color::rgba(1.0, 1.0, 1.0, 0.5), 0.0);
+    let frame = masked(
+        vec![
+            boxed(100.0, 100.0, 50.0, 50.0, red),
+            boxed(300.0, 100.0, 50.0, 50.0, half),
+        ],
+        vec![boxed(0.0, 0.0, 640.0, 400.0, blue)],
+    );
+    let drawn = draw(SMALL, &[&frame], false);
+    let at = |x, y| pixel(&drawn, SMALL.0, x, y);
+    assert_eq!(
+        at(120, 120),
+        [0, 0, 255, 255],
+        "the content, where the mask drew opaquely"
+    );
+    assert_eq!(
+        at(500, 300),
+        BACKGROUND,
+        "and none of it where the mask drew nothing"
+    );
+    let [r, _, b, _] = at(320, 120);
+    assert!(
+        (120..=135).contains(&b) && r < 20,
+        "half the content where the mask was half opaque, not the mask's own white: {:?}",
+        at(320, 120)
+    );
+}
+
+#[test]
+fn a_mask_that_draws_nothing_hides_everything() {
+    let blue = RectStyle::filled(Color::from_rgb_u8(0, 0, 255), 0.0);
+    let frame = masked(Vec::new(), vec![boxed(0.0, 0.0, 640.0, 400.0, blue)]);
+    let drawn = draw(SMALL, &[&frame], false);
+    assert_eq!(pixel(&drawn, SMALL.0, 320, 200), BACKGROUND);
 }

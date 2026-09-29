@@ -267,8 +267,19 @@ impl Reconciler {
         // The host is the outermost frame, so a top-level element is placed in it by the same code that places every other child.
         self.open.push(Open::root());
 
+        // Boxes inside a drawing are part of its picture, not elements of the page: it places them itself.
+        let mut boxes_in_drawing = 0usize;
         for command in commands {
+            let in_drawing = self.open.last().is_some_and(|open| open.drawing.is_some());
             match command {
+                DrawCommand::PushElement { .. } if in_drawing => {
+                    boxes_in_drawing += 1;
+                    self.paint(command);
+                }
+                DrawCommand::PopElement if boxes_in_drawing > 0 => {
+                    boxes_in_drawing -= 1;
+                    self.paint(command);
+                }
                 DrawCommand::PushElement { element } => self.push(element),
                 DrawCommand::PopElement => self.pop(),
                 other => self.paint(other),
@@ -604,7 +615,7 @@ impl Reconciler {
         self.open.push(Open {
             id: element.id.0,
             box_rect: element.rect,
-            drawing: drawing.then(|| Drawing::new(element.id.0)),
+            drawing: drawing.then(|| Drawing::at(element.id.0, (element.rect.x, element.rect.y))),
             style,
             painted: false,
             placed: 0,
@@ -1007,6 +1018,11 @@ fn draw(drawing: &mut Drawing, command: &DrawCommand) {
         DrawCommand::Rect { rect, style } => drawing.rect(*rect, style),
         DrawCommand::Text {
             text, rect, style, ..
+        } if drawing.in_mask() => {
+            drawing.mask_text(text, *rect, style, crate::metrics::baseline(style))
+        }
+        DrawCommand::Text {
+            text, rect, style, ..
         } => drawing.text(text, *rect, style),
         DrawCommand::Path { data, style } => drawing.path(data, style),
         DrawCommand::Line { p1, p2, style } => drawing.line(*p1, *p2, style),
@@ -1022,11 +1038,17 @@ fn draw(drawing: &mut Drawing, command: &DrawCommand) {
         }
         DrawCommand::PushClip { rect, radius } => drawing.open_clip(*rect, *radius),
         DrawCommand::PushMatrix { matrix } => drawing.open_matrix(*matrix),
-        DrawCommand::PushLayer { opacity, blend, .. } => drawing.open_layer(*opacity, *blend),
+        DrawCommand::PushLayer {
+            opacity,
+            blend,
+            mask,
+            ..
+        } => drawing.open_layer(*opacity, *blend, *mask),
         DrawCommand::PopClip | DrawCommand::PopMatrix | DrawCommand::PopLayer => {
             drawing.close_group()
         }
-        DrawCommand::PushElement { .. } | DrawCommand::PopElement => {}
+        DrawCommand::PushElement { element } => drawing.open_box((element.rect.x, element.rect.y)),
+        DrawCommand::PopElement => drawing.close_group(),
     }
 }
 

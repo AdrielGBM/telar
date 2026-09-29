@@ -110,6 +110,7 @@ fn minimal_use(tag: &str) -> String {
     match tag {
         "text" => "text \"x\"".to_string(),
         "span" => "text\n    span \"x\"".to_string(),
+        "mask" => "mask\n    text \"x\"\n    text \"y\"".to_string(),
         "path" => "path d:\"M0 0 L1 1\"".to_string(),
         "canvas" => "canvas paint:(|_rect| ())".to_string(),
         "lazy" => "lazy when:true\n    text \"x\"".to_string(),

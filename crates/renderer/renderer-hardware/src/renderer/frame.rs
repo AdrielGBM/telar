@@ -4,7 +4,9 @@ use super::*;
 
 use super::pool::{bucket_size, return_pooled_texture, take_layer_textures, take_pooled_texture};
 use super::shadow::{ShadowCacheKind, ShadowKind};
-use super::steps::{Boundary, LayerAccum};
+use super::steps::{Boundary, LayerAccum, MaskSource};
+use crate::composite::MaskParams;
+use renderer_core::LayerMask;
 
 // A run of draw steps, or the layer boundary that ended it. At module scope so it can appear in the phase-method signatures that build and execute segments.
 // Built from the steps every frame; boxing `Boundary` would put a heap allocation on every layer boundary in the hot path.
@@ -16,6 +18,8 @@ pub(super) enum Segment {
 
 struct Composite<'a> {
     bind_group: &'a wgpu::BindGroup,
+    /// The mask source this layer is shown through, bound at group 2.
+    mask: Option<&'a wgpu::BindGroup>,
     scissor: Option<Rect>,
     blend: BlendMode,
     label: &'static str,
@@ -602,7 +606,19 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
     ) -> Option<Rect> {
         self.flush_all();
         let current_scissor = scissor_layer_stack.pop().flatten();
-        if let Some(accum) = layer_accum_stack.pop() {
+        if let Some(mut accum) = layer_accum_stack.pop() {
+            if matches!(accum.source, Some(MaskSource::Empty)) {
+                self.pending_steps.truncate(accum.begin_step_index);
+                self.pending_instances
+                    .truncate(accum.instance_start as usize);
+                self.pending_text_instances
+                    .truncate(accum.text_instance_start as usize);
+                self.pending_line_instances
+                    .truncate(accum.line_instance_start as usize);
+                self.pending_image_instances
+                    .truncate(accum.image_instance_start as usize);
+                return current_scissor;
+            }
             // A fully culled opacity layer composites nothing, so emit no layer passes rather than an empty full-screen texture plus render, resolve and composite passes. Emptiness is judged by "produced no draw steps"; backdrop-blur layers are kept, since they sample the framebuffer without content of their own.
             if self.pending_steps.len() == accum.begin_step_index && accum.backdrop_blur == 0.0 {
                 self.pending_instances
@@ -613,6 +629,9 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
                     .truncate(accum.line_instance_start as usize);
                 self.pending_image_instances
                     .truncate(accum.image_instance_start as usize);
+                if accum.mask == LayerMask::Source {
+                    self.pending_mask = Some(MaskSource::Empty);
+                }
                 return current_scissor;
             }
             let (
@@ -635,8 +654,10 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
                 let hl = (self.height as f32 / self.scale_factor).ceil() as u32;
                 (0.0, 0.0, self.width.max(1), self.height.max(1), wl, hl)
             };
-            // So nested layers are included in the parent's bounds, and therefore its texture size.
-            if let Some(parent) = layer_accum_stack.last_mut() {
+            // So nested layers are included in the parent's bounds, and therefore its texture size. A mask source draws nothing into its parent.
+            if accum.mask != LayerMask::Source
+                && let Some(parent) = layer_accum_stack.last_mut()
+            {
                 let footprint = Rect::new(
                     offset_x,
                     offset_y,
@@ -646,27 +667,29 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
                 parent.bounds = Some(parent.bounds.map_or(footprint, |b| b.union(footprint)));
             }
             // Backdrop-blur layers read framebuffer content, so they are never cacheable.
-            let layer_hash: Option<u64> = if accum.backdrop_blur == 0.0 {
-                use std::hash::{Hash, Hasher};
-                let base =
-                    renderer_core::hash_draw_commands(&commands[accum.command_start..cmd_idx]);
-                let mut h = FxHasher::default();
-                base.hash(&mut h);
-                accum.opacity.to_bits().hash(&mut h);
-                // Unclamped floored world bounds, not the offsets max'd to 0, so different scroll positions with the same clamped offset do not alias to one cache entry and produce stale composites.
-                let (hash_bx, hash_by) = accum
-                    .bounds
-                    .map_or((0.0f32, 0.0f32), |b| (b.x.floor(), b.y.floor()));
-                hash_bx.to_bits().hash(&mut h);
-                hash_by.to_bits().hash(&mut h);
-                texture_width.hash(&mut h);
-                texture_height.hash(&mut h);
-                // Text shaping depends on the scale factor, so a scale change without a resize invalidates stale entries.
-                self.scale_factor.to_bits().hash(&mut h);
-                Some(h.finish())
-            } else {
-                None
-            };
+            // A mask's two layers are drawn each frame: what one shows depends on the other.
+            let layer_hash: Option<u64> =
+                if accum.backdrop_blur == 0.0 && accum.mask == LayerMask::None {
+                    use std::hash::{Hash, Hasher};
+                    let base =
+                        renderer_core::hash_draw_commands(&commands[accum.command_start..cmd_idx]);
+                    let mut h = FxHasher::default();
+                    base.hash(&mut h);
+                    accum.opacity.to_bits().hash(&mut h);
+                    // Unclamped floored world bounds, not the offsets max'd to 0, so different scroll positions with the same clamped offset do not alias to one cache entry and produce stale composites.
+                    let (hash_bx, hash_by) = accum
+                        .bounds
+                        .map_or((0.0f32, 0.0f32), |b| (b.x.floor(), b.y.floor()));
+                    hash_bx.to_bits().hash(&mut h);
+                    hash_by.to_bits().hash(&mut h);
+                    texture_width.hash(&mut h);
+                    texture_height.hash(&mut h);
+                    // Text shaping depends on the scale factor, so a scale change without a resize invalidates stale entries.
+                    self.scale_factor.to_bits().hash(&mut h);
+                    Some(h.finish())
+                } else {
+                    None
+                };
             let cache_hit = layer_hash.is_some_and(|h| self.layer_resolved_cache.contains_key(&h));
             let bucket_w = bucket_size(texture_width);
             let bucket_h = bucket_size(texture_height);
@@ -745,6 +768,7 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
                     texture_width as f32 / bucket_w as f32,
                     texture_height as f32 / bucket_h as f32,
                 ];
+                let kept = (accum.mask == LayerMask::Source).then(|| resolve_view.clone());
                 // The composite bind group uses a window-absolute dest rect in logical pixels; the parent viewport converts it to NDC.
                 let composite_bg = self.composite_pipeline.create_bind_group(
                     &self.device,
@@ -778,9 +802,38 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
                         backdrop_blur: accum.backdrop_blur,
                     }),
                 );
+                let mask = match accum.source.take() {
+                    Some(MaskSource::Drawn {
+                        view,
+                        rect,
+                        uv_scale,
+                    }) => {
+                        self.composite_pipeline
+                            .prepare_mask(&self.device, accum.blend);
+                        Some(self.composite_pipeline.mask_bind_group(
+                            &self.device,
+                            &view,
+                            MaskParams { rect, uv_scale },
+                        ))
+                    }
+                    _ => None,
+                };
+                if let Some(view) = kept {
+                    self.pending_mask = Some(MaskSource::Drawn {
+                        view,
+                        rect: [
+                            offset_x,
+                            offset_y,
+                            texture_width_logical as f32,
+                            texture_height_logical as f32,
+                        ],
+                        uv_scale,
+                    });
+                }
                 self.pending_steps
                     .push(DrawStep::Boundary(Boundary::EndLayerComposite {
-                        bind_group: composite_bg,
+                        bind_group: (accum.mask != LayerMask::Source).then_some(composite_bg),
+                        mask,
                         // Only when no dirty scissor is active; otherwise the layer's draws may be clipped to the dirty region, leaving a partially rendered texture.
                         cache_hash: if dirty_scissor.is_none() {
                             layer_hash
@@ -930,7 +983,8 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
                 self.draw_state.pop_clip();
                 self.pending_steps
                     .push(DrawStep::Boundary(Boundary::EndLayerComposite {
-                        bind_group: composite,
+                        bind_group: Some(composite),
+                        mask: None,
                         // Round-clip layers draw the clip mask into the texture, so their content is not safely cacheable by command hash.
                         cache_hash: None,
                         scissor: outer_scissor,
@@ -978,6 +1032,7 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
         damage_bg: Option<(Rect, Color)>,
     ) {
         let mut current_scissor: Option<Rect> = None;
+        self.pending_mask = None;
         let mut scissor_layer_stack: Vec<Option<Rect>> = Vec::new(); // saves/restores current_scissor across PushLayer/PopLayer; layers disable frustum culling inside their bounds
         let mut layer_accum_stack: Vec<LayerAccum> = Vec::new();
         // Parallel to the draw-state clip stack, and what each `PopClip` reads to know what it closes.
@@ -1373,8 +1428,13 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
                     opacity,
                     backdrop_blur,
                     blend,
+                    mask,
                 } => {
                     self.flush_all();
+                    let source = match mask {
+                        LayerMask::Apply => self.pending_mask.take(),
+                        _ => None,
+                    };
                     // Disable frustum culling inside the layer, to avoid incorrect culling by an outer `PushClip`.
                     scissor_layer_stack.push(current_scissor);
                     current_scissor = None;
@@ -1389,6 +1449,8 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
                         text_instance_start: self.pending_text_instances.len() as u32,
                         line_instance_start: self.pending_line_instances.len() as u32,
                         image_instance_start: self.pending_image_instances.len() as u32,
+                        mask: *mask,
+                        source,
                     });
                 }
                 DrawCommand::PopLayer => {
@@ -2207,7 +2269,9 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
         root_view: &wgpu::TextureView,
         composite: Composite<'_>,
     ) {
+        // A masked composite binds its source where a blend reads its backdrop, and blends fixed-function (see `CompositePipeline::prepare_mask`).
         let backdrop = crate::composite::blend_shader_mode(composite.blend)
+            .filter(|_| composite.mask.is_none())
             .map(|_| self.copy_of_target(ctx, encoder, parent, root_view));
         // At one sample, draws target the resolve view rather than the MSAA view; the wrong one lands composited content on a texture the outer layer never reads, making nested layers disappear.
         let (target_view, viewport_bind_group, (target_w, target_h)) = match parent {
@@ -2234,11 +2298,14 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
             None,
             crate::pass::load_store(),
         );
-        blit.set_pipeline(self.composite_pipeline.blend_pipeline(composite.blend));
+        match composite.mask {
+            Some(_) => blit.set_pipeline(self.composite_pipeline.mask_pipeline(composite.blend)),
+            None => blit.set_pipeline(self.composite_pipeline.blend_pipeline(composite.blend)),
+        }
         blit.set_bind_group(0, viewport_bind_group, &[]);
         blit.set_bind_group(1, composite.bind_group, &[]);
-        if let Some(backdrop) = &backdrop {
-            blit.set_bind_group(2, backdrop, &[]);
+        if let Some(group) = composite.mask.or(backdrop.as_ref()) {
+            blit.set_bind_group(2, group, &[]);
         }
         // Only a top-level composite: a nested one writes into a parent layer in that layer's coordinate space, where the window-space dirty rect does not apply.
         let scissor = match parent {
@@ -2603,6 +2670,7 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
 
                 Segment::Boundary(Boundary::EndLayerComposite {
                     bind_group,
+                    mask,
                     cache_hash,
                     scissor,
                     blend,
@@ -2625,18 +2693,22 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
                         );
                     }
 
-                    self.composite_into_parent(
-                        ctx,
-                        encoder,
-                        layer_stack.last(),
-                        &msaa_view,
-                        Composite {
-                            bind_group: &bind_group,
-                            scissor,
-                            blend,
-                            label: "telar-layer-blit",
-                        },
-                    );
+                    // A mask source is kept, not composited: the layer it applies to reads its texture, drawn by then in this same encoder.
+                    if let Some(bind_group) = &bind_group {
+                        self.composite_into_parent(
+                            ctx,
+                            encoder,
+                            layer_stack.last(),
+                            &msaa_view,
+                            Composite {
+                                bind_group,
+                                mask: mask.as_ref(),
+                                scissor,
+                                blend,
+                                label: "telar-layer-blit",
+                            },
+                        );
+                    }
 
                     if let Some(hash) = cache_hash {
                         // Retained so the next frame can composite it directly. The MSAA half is consumed by the resolve, so it drops rather than returning to the pool.
@@ -2692,6 +2764,7 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
                         &msaa_view,
                         Composite {
                             bind_group: &bind_group,
+                            mask: None,
                             scissor,
                             blend,
                             label: "telar-prerendered-layer-blit",

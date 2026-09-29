@@ -53,6 +53,7 @@ fn commands(blend: BlendMode) -> Vec<DrawCommand> {
             opacity: 1.0,
             backdrop_blur: 0.0,
             blend,
+            mask: renderer_core::LayerMask::None,
         },
         DrawCommand::Rect {
             rect: Rect::new(0.0, 0.0, 50.0, 50.0),
@@ -127,6 +128,7 @@ fn a_blended_layout_root_isolates_the_host() {
             opacity: 1.0,
             backdrop_blur: 0.0,
             blend: BlendMode::Screen,
+            mask: renderer_core::LayerMask::None,
         },
         DrawCommand::Rect {
             rect: Rect::new(0.0, 0.0, 50.0, 50.0),
