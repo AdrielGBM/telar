@@ -19,6 +19,8 @@ thread_local! {
     static FRAME: RefCell<Frame> = const { RefCell::new(Frame { scheduled: false, callback: None }) };
     // The pointer that went down and where, until it travels far enough to be a drag or comes back up.
     static PRESSED: std::cell::Cell<Option<(i32, f32, f32)>> = const { std::cell::Cell::new(None) };
+    // The safe area last reported, so a resize that leaves it where it was reports nothing.
+    static SAFE_AREA: std::cell::Cell<Option<geometry_core::Insets>> = const { std::cell::Cell::new(None) };
 }
 
 struct Frame {
@@ -490,6 +492,12 @@ fn turn() {
         let (width, height) = app.window.logical_size();
         app.handler
             .on_event(Event::WindowResized { width, height }, &app.window);
+        // A rotation moves the notch and a resize is the only word of it the page gets.
+        let insets = dom::safe_area_insets();
+        if SAFE_AREA.replace(Some(insets)) != Some(insets) {
+            app.handler
+                .on_event(Event::SafeAreaChanged { insets }, &app.window);
+        }
     }
 
     let events = QUEUE.with(|queue| std::mem::take(&mut *queue.borrow_mut()));

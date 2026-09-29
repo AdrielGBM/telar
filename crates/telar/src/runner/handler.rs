@@ -826,6 +826,11 @@ where
         match &event {
             Event::ScaleFactorChanged { scale_factor } => self.scale_factor = *scale_factor as f32,
             Event::WindowResized { width, height } => self.report_surface_size(*width, *height),
+            Event::SafeAreaChanged { insets } => {
+                self.app.set_safe_area_insets(*insets);
+                window.request_redraw();
+                return;
+            }
             Event::SystemPreferencesChanged { preferences } => {
                 self.apply_system_preferences(preferences.clone());
                 window.request_redraw();

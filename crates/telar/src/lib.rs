@@ -246,8 +246,8 @@ pub use ui_core::{
 };
 #[cfg(feature = "runtime")]
 pub use ui_core::{
-    Breakpoints, breakpoint, set_surface_size, surface_size, use_surface_height, use_surface_size,
-    use_surface_width,
+    Breakpoints, breakpoint, set_safe_area_insets, set_surface_size, surface_size,
+    use_safe_area_insets, use_surface_height, use_surface_size, use_surface_width,
 };
 // The seam and nothing behind it: `telar-dynamic` carries the decoders and transports that plug in here, and an application's own plug in exactly the same way.
 #[cfg(feature = "runtime")]

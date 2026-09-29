@@ -19,9 +19,9 @@ pub use layout_reactive::{
     NodeId, absolute_rect, attach_overlay, container_is_row, current_direction, detach_overlay,
     live_node_count, mark_dirty, new_container, new_leaf, new_measured_leaf, record_nodes,
     remove_node, set_children, set_container_row, set_direction, set_display, set_layout_style,
-    set_leading_margin, set_min_height, set_overlay_host, set_sticky_view, set_surface_size,
-    surface_size, track_layout, use_direction, use_surface_height, use_surface_size,
-    use_surface_width,
+    set_leading_margin, set_min_height, set_overlay_host, set_safe_area_insets, set_sticky_view,
+    set_surface_size, surface_size, track_layout, use_direction, use_safe_area_insets,
+    use_surface_height, use_surface_size, use_surface_width,
 };
 
 /// Lays out `root` in the given space, measuring its text again first if a face has arrived since it was last measured. See [`layout_reactive::compute_layout`].

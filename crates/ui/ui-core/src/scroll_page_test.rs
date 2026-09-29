@@ -112,3 +112,16 @@ fn a_page_built_before_the_old_one_drops_keeps_the_claim() {
     new.viewport().scroll_to(0.0, 30.0);
     assert_eq!(platform_core::primary_scroll_offset(), Some((0.0, 30.0)));
 }
+
+#[test]
+fn a_page_kept_to_the_safe_area_is_padded_by_it_as_it_moves() {
+    reset_layout_runtime();
+    let mut page = ScrollPage::new(tall_box()).unwrap().keep_to_safe_area();
+    page.relayout(400.0, 300.0);
+    let rect = crate::context::track_layout(page.viewport().area()).unwrap();
+    let area = || rect.get();
+    assert_eq!((area().y, area().height), (0.0, 300.0));
+    crate::context::set_safe_area_insets(geometry_core::Insets::new(24.0, 0.0, 48.0, 0.0));
+    page.relayout(400.0, 300.0);
+    assert_eq!((area().y, area().height), (24.0, 228.0));
+}

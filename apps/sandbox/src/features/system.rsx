@@ -18,6 +18,10 @@ let locales = memo(|| {
 let negotiated = memo(|| telar::negotiate_locale(&telar::use_preferred_locales(), &["es", "en"], "es").to_string());
 let pulse = signal(0.0f32);
 let chosen = memo(|| telar::use_scheme_preference().as_str().to_string());
+let safe_area = memo(|| {
+    let insets = telar::use_safe_area_insets();
+    format!("top {} · right {} · bottom {} · left {}", insets.top, insets.right, insets.bottom, insets.left)
+});
 let resolved = memo(|| format!("{:?}", telar::use_resolved_scheme()));
 
 [view]
@@ -31,6 +35,11 @@ col gap:20
             text "languages · {$locales}" font_size:15 color:$theme.ink
             text "negotiated against es, en · {$negotiated}" font_size:15 color:$theme.primary
         code_line code:"use_color_scheme()   ·   use_reduced_motion()   ·   use_high_contrast()   ·   use_preferred_locales()"
+    example title:"The safe area — what the system keeps of the surface"
+        card gap:6
+            text "{$safe_area}" font_size:13 color:$theme.ink
+            text "Status and navigation bars, a notch, rounded corners: Android's window insets, a page's env(safe-area-inset-*) when drawn to the edges, zero on a desktop window and a terminal." font_size:12 color:$theme.muted
+        code_line code:"use_safe_area_insets()   ·   ScrollPage::new(content).keep_to_safe_area()"
     example title:"A scheme the person chooses, kept between runs"
         card gap:8
             text "Chosen: {$chosen} · in use: {$resolved}" font_size:13 color:$theme.ink

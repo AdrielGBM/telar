@@ -7,6 +7,8 @@ mod adpf;
 #[cfg(target_os = "android")]
 pub mod fonts;
 #[cfg(target_os = "android")]
+mod insets;
+#[cfg(target_os = "android")]
 mod intent;
 #[cfg(target_os = "android")]
 mod paths;

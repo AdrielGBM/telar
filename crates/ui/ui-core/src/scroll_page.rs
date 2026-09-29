@@ -24,6 +24,7 @@ pub struct ScrollPage {
     scroll_area: LayoutScrollArea,
     viewport: ScrollViewport,
     _primary: PrimaryScrollClaim,
+    _safe_area: Option<reactive_core::Effect>,
 }
 
 impl ScrollPage {
@@ -62,7 +63,26 @@ impl ScrollPage {
             scroll_area,
             viewport,
             _primary: primary,
+            _safe_area: None,
         })
+    }
+
+    /// Keeps the page out of the part of the surface the system keeps for itself — status and navigation bars, a notch — by padding it with [`use_safe_area_insets`](crate::use_safe_area_insets), following them as they move. Where nothing is kept they are zero and nothing changes.
+    pub fn keep_to_safe_area(mut self) -> Self {
+        let root = self.root;
+        self._safe_area = Some(reactive_core::effect(move || {
+            let insets = crate::context::use_safe_area_insets();
+            let style = LayoutStyle::new()
+                .flex_column()
+                .width(SizeDimension::Percent(1.0))
+                .height(SizeDimension::Percent(1.0))
+                .padding_top(insets.top)
+                .padding_bottom(insets.bottom)
+                .padding_left(insets.left)
+                .padding_right(insets.right);
+            let _ = crate::context::set_layout_style(root, style);
+        }));
+        self
     }
 
     /// The page's viewport: its offset, its visible rect, and the calls that scroll it.

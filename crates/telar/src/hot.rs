@@ -237,6 +237,18 @@ impl crate::app_runtime::AppRuntime for HotApp {
         }
     }
 
+    // The dylib reads its own copy of the safe area. A missing symbol leaves it at zero until the dylib is rebuilt.
+    fn set_safe_area_insets(&self, insets: geometry_core::Insets) {
+        if let Ok(set) = unsafe {
+            self._lib
+                .get::<unsafe extern "Rust" fn(f32, f32, f32, f32)>(
+                    b"_rsx_hot_set_safe_area_insets\0",
+                )
+        } {
+            unsafe { set(insets.top, insets.right, insets.bottom, insets.left) }
+        }
+    }
+
     // The navigator following the address lives in the dylib's store. A missing symbol leaves the dylib at its own root until it is rebuilt.
     fn set_location_history(&self, history: &[platform_core::Location]) {
         if let Ok(set) = unsafe {

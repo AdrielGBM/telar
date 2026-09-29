@@ -196,6 +196,10 @@ pub enum Event {
         box_id: u64,
         run: u32,
     },
+    /// The part of the surface the system keeps for itself changed: status and navigation bars, a notch, rounded corners, a browser's own chrome over a page drawn to its edges. Logical units, measured in from each edge. Sent before the first frame where the platform knows, and again whenever it moves.
+    SafeAreaChanged {
+        insets: geometry_core::Insets,
+    },
     /// The user's system preferences, whole: sent once before a surface's first resume, so its first layout already follows them, and again whenever any field changes.
     ///
     /// A snapshot rather than a delta, so a consumer never has to remember what came before to know where it stands.

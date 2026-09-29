@@ -90,6 +90,21 @@ Renderers only ever see pixels: a web document is told the resolved size, as it 
 because `vw` names the viewport and the surface is not always the viewport. A terminal draws a cell whatever the
 size, so there a size is only the band a heading reserves, rounded to cells like any length.
 
+## The safe area
+
+Part of a surface can belong to the system: a phone's status and navigation bars, a notch, rounded corners, a
+browser's own chrome over a page drawn to its edges. `use_safe_area_insets()` says how far in from each edge, in
+logical units, reactively, per surface; `ScrollPage::keep_to_safe_area()` pads the page by it as it moves, and
+anything else can pad or place itself by the value.
+
+| Target | The safe area is |
+| --- | --- |
+| Android | The decor view's root `WindowInsets`: the system bars and the display cutout (API 30), the system-window insets below that. Read on resume, on every resize and with the preferences poll, so bars that show or hide are followed. |
+| Web | CSS `env(safe-area-inset-*)`, read on each resize. Non-zero only where the page is drawn to the edges (`viewport-fit=cover`, which the built-in template asks for) on a device that keeps any. |
+| Desktop, terminal, headless | Zero: the window manager keeps its decorations outside the surface. |
+
+A platform reports it as `Event::SafeAreaChanged`, which the runner consumes.
+
 ## Breakpoints
 
 `breakpoint(base)` starts with the value used below every threshold. `.at(min_width, value)` adds a step that

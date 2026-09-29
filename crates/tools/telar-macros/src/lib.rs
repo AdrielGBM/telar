@@ -350,6 +350,11 @@ pub fn app(input: TokenStream) -> TokenStream {
             pub unsafe extern "Rust" fn _rsx_hot_set_surface_size(width: f32, height: f32) {
                 ::telar::set_surface_size(::telar::Size::new(width, height));
             }
+            // The dylib's own copy of the safe area, which its views read.
+            #[unsafe(no_mangle)]
+            pub unsafe extern "Rust" fn _rsx_hot_set_safe_area_insets(top: f32, right: f32, bottom: f32, left: f32) {
+                ::telar::set_safe_area_insets(::telar::Insets::new(top, right, bottom, left));
+            }
             // Drain the dylib's own window-command queue: a title bar's `on_press` pushes into this dylib's thread-local, so the host must drain it across this boundary to apply drag/minimize/maximize/ close — its own copy is empty.
             #[unsafe(no_mangle)]
             pub unsafe extern "Rust" fn _rsx_hot_drain_window_commands()

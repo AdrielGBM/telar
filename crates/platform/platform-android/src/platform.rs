@@ -195,6 +195,8 @@ struct AndroidRunner<H: EventHandler<AndroidWindow>> {
     app: AndroidApp,
     // The snapshot last reported to the app, so a poll only produces an event when something actually changed.
     preferences: Option<SystemPreferences>,
+    // The safe area last reported, for the same reason.
+    safe_area: Option<geometry_core::Insets>,
     last_preferences_poll: Option<std::time::Instant>,
     #[cfg(target_os = "android")]
     choreographer: Option<choreographer::Choreographer>,
@@ -203,12 +205,24 @@ struct AndroidRunner<H: EventHandler<AndroidWindow>> {
 }
 
 impl<H: EventHandler<AndroidWindow>> AndroidRunner<H> {
+    /// Reports the window's safe area when it moved: the bars show and hide, the device turns, a cutout comes round to another edge.
+    fn reread_safe_area(&mut self, window: &AndroidWindow) {
+        let Some(insets) = crate::insets::read(&self.app, self.scale_factor) else {
+            return;
+        };
+        if self.safe_area.replace(insets) != Some(insets) {
+            self.handler
+                .on_event(Event::SafeAreaChanged { insets }, window);
+        }
+    }
+
     fn reread_preferences(&mut self) {
         self.last_preferences_poll = Some(std::time::Instant::now());
         // Suspended means nothing to tell, and `resumed` reads and reports afresh.
         let Some(window) = self.window.clone() else {
             return;
         };
+        self.reread_safe_area(&window);
         let preferences = crate::preferences::read(&self.app);
         if self.preferences.as_ref() == Some(&preferences) {
             return;
@@ -298,6 +312,8 @@ impl<H: EventHandler<AndroidWindow>> ApplicationHandler<()> for AndroidRunner<H>
                 self.last_preferences_poll = Some(std::time::Instant::now());
                 self.handler
                     .on_event(Event::SystemPreferencesChanged { preferences }, &window);
+                self.safe_area = None;
+                self.reread_safe_area(&window);
                 if !self.handler.on_resume(&window) {
                     event_loop.exit();
                     return;
@@ -333,6 +349,7 @@ impl<H: EventHandler<AndroidWindow>> ApplicationHandler<()> for AndroidRunner<H>
             }
             SurfaceIntent::Resized(e) => {
                 self.handler.on_event(e, &window);
+                self.reread_safe_area(&window);
                 window.request_redraw();
             }
             SurfaceIntent::Redraw => self.handler.on_redraw(&window),
@@ -384,6 +401,7 @@ impl Platform for AndroidPlatform {
             touch: TouchDrag::default(),
             app: self.app,
             preferences: None,
+            safe_area: None,
             last_preferences_poll: None,
             #[cfg(target_os = "android")]
             choreographer,

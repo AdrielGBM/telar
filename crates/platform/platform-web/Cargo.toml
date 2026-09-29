@@ -76,3 +76,7 @@ path = "src/location_test.rs"
 [[test]]
 name = "language"
 path = "src/language_test.rs"
+
+[[test]]
+name = "safe_area"
+path = "src/safe_area_test.rs"

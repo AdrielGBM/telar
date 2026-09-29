@@ -2,18 +2,19 @@
 //!
 //! Per surface, because every window, page and terminal has its own, and a component reads the one it was built on. One signal per side, so what follows only the width is not woken by a height that moves on its own — a phone's toolbar sliding away does exactly that.
 
-use geometry_core::Size;
+use geometry_core::{Insets, Size};
 use reactive_core::{RwSignal, batch, signal};
 
 #[derive(Clone, Copy)]
 struct Sides {
     width: RwSignal<f32>,
     height: RwSignal<f32>,
+    safe_area: RwSignal<Insets>,
 }
 
 reactive_core::surface_local! {
     /// The active surface's size, in the logical units its layout is written in.
-    slot SIDES: Sides = Sides { width: signal(0.0), height: signal(0.0) };
+    slot SIDES: Sides = Sides { width: signal(0.0), height: signal(0.0), safe_area: signal(Insets::default()) };
     access with_sides, with_sides_ref;
     context SurfaceSizeContext, SurfaceSizeGuard;
 }
@@ -56,6 +57,19 @@ pub fn use_surface_width() -> f32 {
 /// Reactive read of the active surface's height alone.
 pub fn use_surface_height() -> f32 {
     sides().height.get()
+}
+
+/// Records how far in from each edge the system keeps the active surface for itself. The runner calls it when the platform reports a change.
+pub fn set_safe_area_insets(insets: Insets) {
+    let safe_area = sides().safe_area;
+    if safe_area.peek() != insets {
+        safe_area.set(insets);
+    }
+}
+
+/// Reactive read of how far in from each edge the system keeps the active surface for itself: bars, a notch, rounded corners. Zero where nothing is kept, which is a desktop window, a terminal and a headless surface.
+pub fn use_safe_area_insets() -> Insets {
+    sides().safe_area.get()
 }
 
 #[cfg(test)]

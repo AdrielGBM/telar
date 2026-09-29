@@ -8,8 +8,8 @@ mod surface_size;
 
 pub use direction::{current_direction, set_direction, use_direction};
 pub use surface_size::{
-    SurfaceSizeContext, SurfaceSizeGuard, set_surface_size, surface_size, use_surface_height,
-    use_surface_size, use_surface_width,
+    SurfaceSizeContext, SurfaceSizeGuard, set_safe_area_insets, set_surface_size, surface_size,
+    use_safe_area_insets, use_surface_height, use_surface_size, use_surface_width,
 };
 
 pub use context::{

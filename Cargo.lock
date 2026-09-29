@@ -5639,6 +5639,7 @@ dependencies = [
  "libc",
  "paranoid-android",
  "raw-window-handle",
+ "telar-geometry-core",
  "telar-platform-core",
  "telar-platform-winit",
  "telar-services-core",

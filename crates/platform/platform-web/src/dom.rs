@@ -67,3 +67,42 @@ fn query_value(name: &str) -> Option<String> {
             _ => None,
         })
 }
+
+/// How far in from each edge the browser keeps the page for itself — a notch, rounded corners, a home indicator — as CSS `env(safe-area-inset-*)` says. Zero unless the page is drawn to the edges (`viewport-fit=cover`) on a device that keeps any.
+///
+/// Read through an element that pads itself by the four values, since the values exist only inside CSS. The element stays in the page, out of sight and out of the way, so a read costs a style lookup.
+pub fn safe_area_insets() -> geometry_core::Insets {
+    const ID: &str = "telar-safe-area-probe";
+    let document = document();
+    let probe = document.get_element_by_id(ID).or_else(|| {
+        let probe = document.create_element("div").ok()?;
+        probe.set_id(ID);
+        probe
+            .set_attribute(
+                "style",
+                "position:fixed;top:0;left:0;width:0;height:0;visibility:hidden;pointer-events:none;\
+                 padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left)",
+            )
+            .ok()?;
+        probe.set_attribute("aria-hidden", "true").ok()?;
+        document.body()?.append_child(&probe).ok()?;
+        Some(probe)
+    });
+    let Some(style) = probe.and_then(|probe| window().get_computed_style(&probe).ok().flatten())
+    else {
+        return geometry_core::Insets::default();
+    };
+    let side = |name: &str| {
+        style
+            .get_property_value(name)
+            .ok()
+            .and_then(|value| value.trim_end_matches("px").trim().parse::<f32>().ok())
+            .unwrap_or(0.0)
+    };
+    geometry_core::Insets::new(
+        side("padding-top"),
+        side("padding-right"),
+        side("padding-bottom"),
+        side("padding-left"),
+    )
+}
