@@ -141,3 +141,57 @@ fn a_contained_picture_is_stretched_into_its_fitted_rect() {
     let image = picture_with(ObjectFit::Contain);
     assert_eq!(drawn_fill(&image.view()), Some(ImageFill::Stretch));
 }
+
+fn picture_of(fit: ObjectFit, data: ImageData, priority: bool) -> Option<Picture> {
+    reset_layout_runtime();
+    let data = Arc::new(data);
+    let image = Image::new(
+        LayoutStyle::new().width(100.0).height(50.0),
+        move || Arc::clone(&data),
+        || Raster::Smooth,
+        move || fit,
+    )
+    .unwrap();
+    let image = if priority {
+        image.with_priority()
+    } else {
+        image
+    };
+    let was = ui_tree::set_element_capture(true);
+    let view = image.view();
+    ui_tree::set_element_capture(was);
+    match view {
+        RenderNode::Element { element, .. } => element.picture.as_deref().cloned(),
+        _ => panic!("a document gets an element"),
+    }
+}
+
+fn hero() -> ImageData {
+    ImageData::linked("images/a.png", 1200, 600, &[(600, "images/a-600w.png")])
+}
+
+#[test]
+fn a_linked_picture_is_shown_by_its_address_in_a_document() {
+    let picture = picture_of(ObjectFit::Cover, hero(), true).expect("a picture");
+    assert_eq!(picture.source.url.as_ref(), "images/a.png");
+    assert_eq!((picture.width, picture.height), (1200, 600));
+    assert_eq!(picture.fit, "cover");
+    assert!(picture.priority);
+    assert!(
+        !picture_of(ObjectFit::Contain, hero(), false)
+            .unwrap()
+            .priority
+    );
+}
+
+#[test]
+fn a_fill_css_cannot_name_stays_a_drawing() {
+    assert!(picture_of(ObjectFit::Tile { scale: 1.0 }, hero(), false).is_none());
+    assert!(picture_of(ObjectFit::ContainInteger, hero(), false).is_none());
+}
+
+#[test]
+fn baked_pixels_stay_a_drawing() {
+    let pixels = ImageData::new(vec![0; 4], 1, 1);
+    assert!(picture_of(ObjectFit::Cover, pixels, false).is_none());
+}

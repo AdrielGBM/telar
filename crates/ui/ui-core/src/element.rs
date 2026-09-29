@@ -69,6 +69,14 @@ pub(crate) fn with_semantics(node: NodeId, semantics: Semantics) -> Arc<Element>
     Arc::new(element_of(node, semantics))
 }
 
+pub(crate) fn showing(
+    node: NodeId,
+    semantics: Semantics,
+    picture: renderer_core::Picture,
+) -> Arc<Element> {
+    Arc::new(element_of(node, semantics).showing(picture))
+}
+
 fn element_of(node: NodeId, semantics: Semantics) -> Element {
     let layout = layout_reactive::declared_css(node)
         .map(|css| css.into_string())

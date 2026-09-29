@@ -43,6 +43,10 @@ pub fn bake_package(package_dir: &Path, producer: &str, telar_version: &str) -> 
     let assets_root = assets_root(package_dir);
     let telar_dir = package_dir.join(".telar");
     let previous_index = telar_project::read_index(&telar_dir).ok().flatten();
+    // An entry baked in another format is not an expression this one can reuse, however unchanged its file.
+    let reusable = previous_index
+        .as_ref()
+        .filter(|index| index.format == telar_project::ASSET_ARTIFACT_FORMAT);
     let previous_source =
         std::fs::read_to_string(telar_dir.join(telar_project::ASSETS_SOURCE_FILENAME)).ok();
 
@@ -68,8 +72,7 @@ pub fn bake_package(package_dir: &Path, producer: &str, telar_version: &str) -> 
         };
         let hash = telar_project::content_hash(&bytes);
 
-        let cached_expr = previous_index
-            .as_ref()
+        let cached_expr = reusable
             .zip(previous_source.as_deref())
             .and_then(|(index, source)| {
                 let entry = index

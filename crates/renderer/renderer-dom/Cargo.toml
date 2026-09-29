@@ -63,3 +63,7 @@ path = "src/font_variation_test.rs"
 [[test]]
 name = "links"
 path = "src/links_test.rs"
+
+[[test]]
+name = "picture"
+path = "src/picture_test.rs"

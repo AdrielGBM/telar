@@ -5,7 +5,7 @@ use std::sync::Arc;
 use geometry_core::{ObjectFit, Rect};
 use layout_core::{LayoutError, LayoutStyle};
 use platform_core::Event;
-use renderer_core::{BorderRadius, DrawCommand, ImageData, ImageFill, ImageSlice, Raster};
+use renderer_core::{BorderRadius, DrawCommand, ImageData, ImageFill, ImageSlice, Picture, Raster};
 use ui_tree::{Component, EventResult, RenderNode};
 
 use crate::impl_leaf_widget;
@@ -19,6 +19,7 @@ pub struct Image {
     fit: Box<dyn Fn() -> ObjectFit>,
     slice: Option<Box<dyn Fn() -> ImageSlice>>,
     radius: BorderRadius,
+    priority: bool,
 }
 
 impl Image {
@@ -42,12 +43,19 @@ impl Image {
             fit: Box::new(fit_fn),
             slice: None,
             radius: BorderRadius::zero(),
+            priority: false,
         })
     }
 
     /// Draws the picture nine-sliced across the whole box: its corners at their own size, its edges stretched along the sides and its middle over the rest, the way a frame or a panel skin is drawn. Takes the place of the fit, which has nothing left to place.
     pub fn with_slice(mut self, slice_fn: impl Fn() -> ImageSlice + 'static) -> Self {
         self.slice = Some(Box::new(slice_fn));
+        self
+    }
+
+    /// Marks the picture as wanted with the page, the way a hero or a cover is: a document fetches it first and at once rather than when it nears the view. Elsewhere the picture is in the binary and already there.
+    pub fn with_priority(mut self) -> Self {
+        self.priority = true;
         self
     }
 
@@ -81,7 +89,25 @@ impl Component for Image {
             height: r.height,
         };
         let data = (self.data)();
-        let ((content, clip), fill) = match (&self.slice, (self.fit)()) {
+        let fit = (self.fit)();
+        let picture = || {
+            let source = data.linked_source()?.clone();
+            let fit = match (&self.slice, fit) {
+                (Some(_), _) => return None,
+                (None, ObjectFit::Fill) => "fill",
+                (None, ObjectFit::Contain) => "contain",
+                (None, ObjectFit::Cover) => "cover",
+                (None, ObjectFit::ContainInteger | ObjectFit::Tile { .. }) => return None,
+            };
+            Some(Picture {
+                source,
+                width: data.width,
+                height: data.height,
+                fit,
+                priority: self.priority,
+            })
+        };
+        let ((content, clip), fill) = match (&self.slice, fit) {
             (Some(slice), _) => ((r_local, false), ImageFill::Slice(slice())),
             (None, fit) => (
                 geometry_core::fit_rect((data.width as f32, data.height as f32), r_local, fit),
@@ -92,7 +118,7 @@ impl Component for Image {
             ),
         };
         let image = RenderNode::Primitive(DrawCommand::Image {
-            data,
+            data: data.clone(),
             rect: content,
             raster: (self.raster)(),
             fill,
@@ -104,7 +130,7 @@ impl Component for Image {
             image
         };
         self.leaf
-            .at_layout_position_as(renderer_core::Semantics::drawing, node)
+            .picture_at_layout_position(picture, renderer_core::Semantics::drawing, node)
     }
 
     fn on_event(&mut self, _event: &Event) -> EventResult {

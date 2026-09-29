@@ -6,6 +6,7 @@
 
 pub mod accessibility;
 pub mod app_ctx;
+pub mod asset_base;
 pub mod consumed_keys;
 pub mod destination;
 pub mod error;
@@ -25,6 +26,7 @@ pub mod window_command;
 
 pub use accessibility::{AccessNode, NumericValue, Role};
 pub use app_ctx::{AppCtx, RedrawWaker};
+pub use asset_base::{asset_url, set_asset_base};
 pub use consumed_keys::{ConsumedKeys, consumes, key_member};
 pub use destination::{Destination, IntoDestination, Uri, address_of, anchor, external};
 pub use error::PlatformError;

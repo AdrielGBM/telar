@@ -34,6 +34,21 @@ pub struct Element {
     pub scroll_to: Option<(f32, f32)>,
     /// Whether this box is the surface's primary scroll: the one scroll that stands for the whole page. A backend with a scroll of its own for the page maps this box onto it; every other backend treats it as any other box that scrolls.
     pub primary_scroll: bool,
+    /// Set when the box is a picture at an address and nothing more: a document shows it as an `<img>`, which fetches, decodes and chooses a size by itself. See [`Picture`].
+    pub picture: Option<std::sync::Arc<Picture>>,
+}
+
+/// A box that is a linked picture, as a document is told about it.
+#[derive(Clone, PartialEq, Debug)]
+pub struct Picture {
+    pub source: crate::Linked,
+    /// The picture's own size in pixels, which a document reserves before it has arrived.
+    pub width: u32,
+    pub height: u32,
+    /// How it fills its box, as CSS `object-fit` names it.
+    pub fit: &'static str,
+    /// Wanted as soon as the page is: fetched eagerly and first, rather than when it comes near the view.
+    pub priority: bool,
 }
 
 impl Element {
@@ -50,7 +65,14 @@ impl Element {
             rect,
             scroll_to: None,
             primary_scroll: false,
+            picture: None,
         }
+    }
+
+    /// Says the box is `picture`; see [`Element::picture`].
+    pub fn showing(mut self, picture: Picture) -> Self {
+        self.picture = Some(std::sync::Arc::new(picture));
+        self
     }
 
     /// Asks the backend to put this box's own scroll at `offset`. See [`Element::scroll_to`].

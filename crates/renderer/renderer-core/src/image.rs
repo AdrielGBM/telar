@@ -16,6 +16,18 @@ pub trait ExternalTexture: std::fmt::Debug + Send + Sync {
 enum ImageSource {
     Pixels(Vec<u8>),
     External(std::sync::Arc<dyn ExternalTexture>),
+    Linked(std::sync::Arc<Linked>),
+}
+
+/// A picture that lives at an address instead of in the binary: what a web build ships for `img src:"…"`.
+///
+/// The page fetches it and a canvas loads it; only the intrinsic size travels with the app, which is what layout needs before a byte has arrived.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct Linked {
+    /// The address of the picture at its full size, relative to the page.
+    pub url: std::sync::Arc<str>,
+    /// Smaller copies of the same picture, as `(width in pixels, address)`, narrowest first: what a document offers as `srcset` so a small box does not download a large picture.
+    pub variants: std::sync::Arc<[(u32, std::sync::Arc<str>)]>,
 }
 
 #[derive(Debug, Clone)]
@@ -71,20 +83,45 @@ impl ImageData {
         }
     }
 
+    /// A picture at `url`, `width`×`height` pixels, with `variants` smaller copies of it: see [`Linked`]. Addressed by its URL, which names the content: the build names each file by its hash.
+    pub fn linked(url: &str, width: u32, height: u32, variants: &[(u32, &str)]) -> Self {
+        let seed = ((width as u64) << 32) | height as u64;
+        Self {
+            id: xxh3_64_with_seed(url.as_bytes(), seed),
+            source: ImageSource::Linked(std::sync::Arc::new(Linked {
+                url: url.into(),
+                variants: variants
+                    .iter()
+                    .map(|(width, url)| (*width, std::sync::Arc::from(*url)))
+                    .collect(),
+            })),
+            width,
+            height,
+        }
+    }
+
+    /// Where the picture lives, for one that is not in the binary.
+    pub fn linked_source(&self) -> Option<&Linked> {
+        match &self.source {
+            ImageSource::Linked(linked) => Some(linked),
+            _ => None,
+        }
+    }
+
     /// The premultiplied RGBA8 bytes; empty when the picture lives in a texture Telar does not own.
     ///
     /// Empty rather than `Option` so a backend that cannot use an external texture needs no special case: every path that turns these bytes into a raster already has to reject a buffer too short for the dimensions, and an empty one takes that branch.
     pub fn pixels(&self) -> &[u8] {
         match &self.source {
             ImageSource::Pixels(p) => p,
-            ImageSource::External(_) => &[],
+            ImageSource::External(_) | ImageSource::Linked(_) => &[],
         }
     }
 
     pub fn external_texture(&self) -> Option<&std::sync::Arc<dyn ExternalTexture>> {
         match &self.source {
             ImageSource::External(t) => Some(t),
-            ImageSource::Pixels(_) => None,
+            ImageSource::Pixels(_) | ImageSource::Linked(_) => None,
         }
     }
 

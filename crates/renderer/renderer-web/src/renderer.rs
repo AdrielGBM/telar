@@ -25,6 +25,7 @@ enum Device {
 pub struct WebGpuRenderer {
     device: Rc<RefCell<Device>>,
     canvas: CanvasSurface,
+    pictures: crate::pictures::Pictures,
 }
 
 impl WebGpuRenderer {
@@ -66,7 +67,11 @@ impl WebGpuRenderer {
                 wake();
             }
         });
-        Self { device, canvas }
+        Self {
+            device,
+            canvas,
+            pictures: Default::default(),
+        }
     }
 }
 
@@ -92,7 +97,7 @@ impl RenderBackend for WebGpuRenderer {
         clear_color: Option<Color>,
     ) -> Result<(), RendererError> {
         match &mut *self.device.borrow_mut() {
-            Device::Ready(gpu) => gpu.render_frame(commands, clear_color),
+            Device::Ready(gpu) => gpu.render_frame(&self.pictures.resolve(commands), clear_color),
             Device::Building | Device::Failed => Ok(()),
         }
     }

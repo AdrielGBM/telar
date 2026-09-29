@@ -26,6 +26,8 @@ mod links;
 #[cfg(target_arch = "wasm32")]
 mod metrics;
 #[cfg(target_arch = "wasm32")]
+mod picture;
+#[cfg(target_arch = "wasm32")]
 mod reconcile;
 #[cfg(target_arch = "wasm32")]
 mod renderer;

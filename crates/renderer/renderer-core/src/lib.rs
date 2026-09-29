@@ -38,13 +38,13 @@ pub use culling::{FontMetrics, extend_bounds};
 pub use dirty::ScrollBlit;
 pub use draw_state::{DrawState, for_each_with_matrix, transform_clip_rect};
 pub use element::{
-    Annotation, ConsumedKeys, Destination, Element, ElementId, Focusable, Role, Semantics,
+    Annotation, ConsumedKeys, Destination, Element, ElementId, Focusable, Picture, Role, Semantics,
 };
 pub use error::RendererError;
 pub use font_config::{FontAsset, FontAxis, FontConfig, FontSource, FontWeight};
 pub use geometry_core::{BorderRadius, Color, Insets};
 pub use hash::{hash_draw_commands, hash_draw_commands_into, hash_pod_slice};
-pub use image::{ExternalTexture, ImageData, premultiply_rgba};
+pub use image::{ExternalTexture, ImageData, Linked, premultiply_rgba};
 pub use image_fill::{ImageFill, ImageSlice, SlicePiece};
 pub use metrics::{
     TextMetrics, invalidate_text_metrics, line_height, measure_ink_bounds, measure_min_content,

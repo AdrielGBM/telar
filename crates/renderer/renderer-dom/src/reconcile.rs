@@ -82,6 +82,8 @@ struct Live {
     pieces: Vec<Piece>,
     /// What was last said about what this box *is*, so an unchanged frame writes no attributes.
     described: Described,
+    /// What was last written to a picture's `<img>`.
+    shown: Option<crate::picture::Shown>,
     /// Kept alive for a box that scrolls itself: dropping the closure unregisters the listener behind it.
     _scrolls: Option<Closure<dyn FnMut(web_sys::Event)>>,
 }
@@ -166,6 +168,8 @@ struct Open {
     scrolls: bool,
     /// Whether this box is the surface's primary scroll, which the document scrolls for it: it neither cuts nor scrolls what it holds.
     primary: bool,
+    /// Whether the box is an `<img>`, whose picture the browser draws: what the widget painted for every other target is not wanted here.
+    picture: bool,
 }
 
 impl Open {
@@ -182,6 +186,7 @@ impl Open {
             moved: None,
             scrolls: false,
             primary: false,
+            picture: false,
         }
     }
 
@@ -547,6 +552,9 @@ impl Reconciler {
             }
             // Artwork reaches a document as an SVG, so one that arrives in a box means a widget drew geometry without saying its box was a drawing.
             DrawCommand::Image { .. } | DrawCommand::Path { .. } | DrawCommand::Line { .. } => {
+                if open.picture {
+                    return;
+                }
                 tracing::debug!("a box painted geometry it did not declare itself a drawing for");
             }
             DrawCommand::PopMatrix => open.moved = None,
@@ -556,7 +564,10 @@ impl Reconciler {
     }
 
     fn push(&mut self, element: &Element) {
-        let tag = tag_of(&element.semantics.role);
+        let tag = match element.picture {
+            Some(_) => "img",
+            None => tag_of(&element.semantics.role),
+        };
         let primary =
             element.primary_scroll && self.open.len() == 1 && self.primary_this_frame.is_none();
         if primary {
@@ -564,8 +575,12 @@ impl Reconciler {
         }
         let scrolls = element.semantics.role == Role::ScrollArea && !primary;
         let node = self.element_for(element.id.0, tag, scrolls);
-        let drawing = matches!(element.semantics.role, Role::Drawing);
+        let drawing = matches!(element.semantics.role, Role::Drawing) && element.picture.is_none();
         let mut style = String::new();
+        if let Some(picture) = &element.picture {
+            paint::declare(&mut style, "display", "block");
+            paint::declare(&mut style, "object-fit", picture.fit);
+        }
         if drawing {
             // An `<svg>` is inline by default, reserving a descender's worth of space under it that the box it stands in never asked for. The declarations follow, so a box that wants another display still gets it.
             paint::declare(&mut style, "display", "block");
@@ -600,6 +615,11 @@ impl Reconciler {
             paint::declare(&mut style, "transform", &paint::matrix(matrix, at.x, at.y));
         }
         self.describe(&node, element, tag);
+        if let Some(picture) = &element.picture
+            && let Some(live) = self.live.get_mut(&element.id.0)
+        {
+            crate::picture::show(&node, picture, element.rect.width, &mut live.shown);
+        }
         match self.document_scroll.as_ref() {
             Some(held) if primary => held.scroll_as_asked(element.scroll_to),
             _ => settle_scroll(&node, element),
@@ -623,6 +643,7 @@ impl Reconciler {
             moved: None,
             scrolls,
             primary,
+            picture: element.picture.is_some(),
         });
     }
 
@@ -707,7 +728,9 @@ impl Reconciler {
             role => role,
         };
         // Artwork nobody named is decoration, and a graphic with no accessible name is noise to read out.
-        let hidden = semantics.hidden || (semantics.role == Role::Drawing && label.is_none());
+        let picture = tag == "img";
+        let hidden =
+            semantics.hidden || (semantics.role == Role::Drawing && label.is_none() && !picture);
         // An `<a>` without an `href` is no link, which is what a disabled one has to be.
         let link = semantics.link.as_ref().filter(|_| !semantics.disabled);
         let focused = semantics.focused;
@@ -746,7 +769,16 @@ impl Reconciler {
             return;
         }
         set_or_clear(node, "role", described.role);
-        set_or_clear(node, "aria-label", described.label.as_deref());
+        if picture {
+            // An `<img>` is named by its `alt`, and an empty one is how it says it is decoration.
+            set_or_clear(
+                node,
+                "alt",
+                Some(described.label.as_deref().unwrap_or_default()),
+            );
+        } else {
+            set_or_clear(node, "aria-label", described.label.as_deref());
+        }
         set_or_clear(node, "href", described.link.as_deref());
         set_or_clear(node, "target", described.opens_beside.then_some("_blank"));
         set_or_clear(node, "rel", described.external.then_some("noopener"));
@@ -897,6 +929,7 @@ impl Reconciler {
                 drawn: String::new(),
                 pieces: Vec::new(),
                 described: Described::default(),
+                shown: None,
                 _scrolls: scrolls,
             },
         );
@@ -935,7 +968,12 @@ fn create(document: &web_sys::Document, tag: &'static str) -> Option<web_sys::El
     if tag == "svg" {
         return document.create_element_ns(Some(SVG_NS), tag).ok();
     }
-    document.create_element(tag).ok()
+    let element = document.create_element(tag).ok()?;
+    // Written here rather than by `describe`, which writes nothing for a box that says nothing: an `<img>` with no `alt` at all is one a reader announces by its address.
+    if tag == "img" {
+        let _ = element.set_attribute("alt", "");
+    }
+    Some(element)
 }
 
 /// Brings the element's positioned children in line with what it painted this frame.

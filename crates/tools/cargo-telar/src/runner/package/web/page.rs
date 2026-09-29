@@ -316,10 +316,13 @@ impl Page {
     }
 
     /// Both files are requested with the page rather than one after the other: the module is only reached through an import inside the glue, so without the preload the browser learns it exists after fetching and parsing the glue, two round trips in series on the largest file here.
+    ///
+    /// The meta says where the build's files are, relative to this page, for the app to resolve once at start: an address it resolved later would resolve against wherever it had navigated to.
     fn bootstrap(&self) -> String {
         let glue = self.url(&self.bootstrap.glue);
         let module = self.url(&self.bootstrap.module);
         let preloads = lines(&[
+            HeadTag::meta("telar-assets", self.base.clone()),
             HeadTag::link("modulepreload", glue.clone()),
             HeadTag::link("preload", module)
                 .attr("as", "fetch")

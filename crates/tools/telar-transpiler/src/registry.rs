@@ -656,6 +656,7 @@ pub fn tag_attr_specs(tag: &str) -> Vec<AttrSpec> {
                 AttrSpec::keywords("fit", FIT_VALUES),
                 AttrSpec::keywords("raster", RASTER_VALUES),
                 AttrSpec::edges("radius"),
+                AttrSpec::flag("priority"),
             ]);
             specs.extend(
                 CONTAINER_PAINT

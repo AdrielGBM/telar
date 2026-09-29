@@ -165,6 +165,9 @@ impl Platform for WebPlatform {
         prepare_host(&host, &self.config);
         dom::document().set_title(&config.title);
 
+        if let Some(base) = dom::asset_base() {
+            platform_core::set_asset_base(&base);
+        }
         let window = WebWindow::new(host.clone());
         let listeners = install_listeners(&host, &window, &self.config);
 

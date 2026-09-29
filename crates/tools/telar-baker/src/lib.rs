@@ -18,11 +18,13 @@ mod catalog;
 mod image;
 mod package;
 mod svg;
+mod web_image;
 
 pub use catalog::{
     CatalogReport, bake_catalog, catalog_files, locales_root, parse_catalog, to_source,
 };
 pub use package::{BakeReport, bake_package, collect_asset_refs};
+pub use web_image::{WEB_IMAGES_DIR, WebImage, WebImageFile, web_image};
 
 /// Converts one registered [`AssetKind`]'s raw file bytes into the Rust source expression that reconstructs
 /// the equivalent runtime data with no baking dependency left in the compiled app.

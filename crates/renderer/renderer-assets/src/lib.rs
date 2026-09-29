@@ -8,6 +8,8 @@
 
 mod image;
 mod svg;
+#[cfg(feature = "bake")]
+mod web_image;
 
 #[cfg(feature = "bake")]
 pub use image::ImageError;
@@ -16,3 +18,5 @@ pub use image::bake_image_to_source;
 #[cfg(feature = "bake")]
 pub use svg::bake_to_source;
 pub use svg::{SvgData, SvgError, VectorCommand};
+#[cfg(feature = "bake")]
+pub use web_image::{WebImage, WebImageFile, web_image};

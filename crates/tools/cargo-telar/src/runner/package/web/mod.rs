@@ -14,6 +14,7 @@ use crate::runner::config::{
 
 mod assets;
 mod fonts;
+mod images;
 mod media;
 mod page;
 
@@ -129,6 +130,10 @@ pub(crate) fn build_web_bundle(
         &resolved.name(),
         renderer,
         &locale,
+    )?;
+    images::ship_images(
+        &staging,
+        &images::local_crates(&resolved.workspace_root, &resolved.name())?,
     )?;
     if release {
         assets::precompress(&staging)?;

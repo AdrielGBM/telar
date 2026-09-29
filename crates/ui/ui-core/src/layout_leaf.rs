@@ -22,6 +22,22 @@ impl LayoutLeaf {
         self.at_layout_position_as(renderer_core::Semantics::group, content)
     }
 
+    /// As [`Self::at_layout_position_as`], for a picture a document can show by its address: there the box is the picture, and `content` is what every other target draws.
+    pub(crate) fn picture_at_layout_position(
+        &self,
+        picture: impl FnOnce() -> Option<renderer_core::Picture>,
+        semantics: impl FnOnce() -> renderer_core::Semantics,
+        content: RenderNode,
+    ) -> RenderNode {
+        if ui_tree::element_capture()
+            && let Some(picture) = picture()
+        {
+            let element = crate::element::showing(self.node, semantics(), picture);
+            return RenderNode::element(element, [content]);
+        }
+        self.at_layout_position_as(semantics, content)
+    }
+
     /// As [`Self::at_layout_position`], for a leaf that is more than a box — artwork, a bitmap — and has to say so where the box becomes an element. `semantics` is only called on that target.
     pub(crate) fn at_layout_position_as(
         &self,

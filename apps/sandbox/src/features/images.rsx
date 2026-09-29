@@ -50,11 +50,13 @@ col gap:20
     example title:"A PNG baked from disk at build time"
         card
             row gap:20 align:center
-                img src:"dot.png" width:64 height:64
+                img src:"dot.png" width:64 height:64 priority label:"A baked dot"
                 img src:"dot.png" raster:nearest width:96 height:96
         code_line code:"img src:'assets/dot.png'   (decoded + baked, no runtime loader)"
+        code_line code:"on the web: a file beside the page, fetched first with priority"
     example title:"Attributes"
         col gap:6
             prop_row name:"src" values:"Arc<ImageData> · 'path'" about:"Runtime bitmap, or a baked file path."
             prop_row name:"filter" values:"Linear · Nearest" about:"Sampling when scaled (default Linear)."
             prop_row name:"fit" values:"contain · cover · fill" about:"Aspect handling in the box (default contain)."
+            prop_row name:"priority" values:"flag" about:"On the web, fetched at once rather than lazily."

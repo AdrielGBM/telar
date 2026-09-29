@@ -9,6 +9,7 @@
 
 mod canvas;
 mod fonts;
+mod pictures;
 mod probe;
 mod renderer;
 

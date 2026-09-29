@@ -24,4 +24,8 @@ js-sys = { workspace = true }
 raw-window-handle = { workspace = true }
 wasm-bindgen = { workspace = true }
 wasm-bindgen-futures = { workspace = true }
-web-sys = { workspace = true, features = ["CssStyleDeclaration", "Document", "Element", "HtmlCanvasElement", "HtmlElement", "HtmlLinkElement", "Navigator", "Node", "NodeList", "Response", "Window"] }
+web-sys = { workspace = true, features = ["CanvasRenderingContext2d", "CssStyleDeclaration", "Document", "Element", "HtmlCanvasElement", "HtmlImageElement", "ImageData", "HtmlElement", "HtmlLinkElement", "Navigator", "Node", "NodeList", "Response", "Window"] }
+
+[target.'cfg(target_arch = "wasm32")'.dev-dependencies]
+geometry-core.workspace = true
+wasm-bindgen-test = "=0.3.77"

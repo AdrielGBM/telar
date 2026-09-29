@@ -156,7 +156,7 @@ fn the_project_template_and_public_directory_are_used() {
     .unwrap();
     let page = std::fs::read_to_string(out.join(PAGE_FILE)).unwrap();
     assert!(
-        page.starts_with("<html lang=\"en\"><head><link rel=\"modulepreload\""),
+        page.starts_with("<html lang=\"en\"><head><meta name=\"telar-assets\""),
         "{page}"
     );
     assert!(page.contains("<main id=\"telar-root\"></main>"));
@@ -184,7 +184,7 @@ fn the_web_table_can_move_the_template_and_the_public_directory() {
     assert!(
         std::fs::read_to_string(out.join(PAGE_FILE))
             .unwrap()
-            .starts_with("<link")
+            .starts_with("<meta name=\"telar-assets\"")
     );
     assert!(out.join("favicon.ico").is_file());
     cleanup(&package);
@@ -369,6 +369,40 @@ fn a_declared_font_that_is_not_there_is_an_error_naming_it() {
     assert!(
         error.contains("Gone") && error.contains("gone.woff2"),
         "{error}"
+    );
+    cleanup(&package);
+}
+
+#[test]
+fn a_baked_picture_ships_at_the_address_the_module_was_baked_with() {
+    let (package, out) = project("pictures");
+    let dot = include_bytes!("../../../../../telar-baker/fixtures/dot.png");
+    std::fs::create_dir_all(package.join("assets")).unwrap();
+    std::fs::create_dir_all(package.join("src")).unwrap();
+    std::fs::write(package.join("assets/dot.png"), dot).unwrap();
+    std::fs::write(package.join("src/app.rsx"), "[view]\nimg src:\"dot.png\"\n").unwrap();
+    telar_baker::bake_package(&package, "test", "0.0.0").expect("the package bakes");
+
+    assemble(
+        &out,
+        &package,
+        &WebSection::default(),
+        &[],
+        "demo",
+        None,
+        "en",
+    )
+    .unwrap();
+    images::ship_images(&out, std::slice::from_ref(&package)).unwrap();
+
+    let address = telar_baker::web_image(dot).unwrap().full.path;
+    let baked = std::fs::read_to_string(package.join(".telar/assets.rs")).unwrap();
+    assert!(baked.contains(&format!("{address:?}")), "{baked}");
+    assert_eq!(std::fs::read(out.join(&address)).unwrap(), dot);
+    let page = std::fs::read_to_string(out.join(PAGE_FILE)).unwrap();
+    assert!(
+        page.contains("<meta name=\"telar-assets\" content=\"./\" />"),
+        "{page}"
     );
     cleanup(&package);
 }

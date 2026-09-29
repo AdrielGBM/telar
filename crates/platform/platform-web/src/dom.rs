@@ -106,3 +106,21 @@ pub fn safe_area_insets() -> geometry_core::Insets {
         side("padding-left"),
     )
 }
+
+/// The meta tag a packaged page names the directory of its files with, relative to the page.
+pub const ASSETS_META: &str = "telar-assets";
+
+/// Where the build's files live, as an absolute address: the page's `telar-assets` meta resolved against the address the page was opened at, or that address's directory for a page without one.
+pub fn asset_base() -> Option<String> {
+    let document = document();
+    let page = document.base_uri().ok().flatten()?;
+    let relative = document
+        .query_selector(&format!("meta[name=\"{ASSETS_META}\"]"))
+        .ok()
+        .flatten()
+        .and_then(|meta| meta.get_attribute("content"))
+        .unwrap_or_else(|| "./".to_string());
+    web_sys::Url::new_with_base(&relative, &page)
+        .ok()
+        .map(|url| url.href())
+}

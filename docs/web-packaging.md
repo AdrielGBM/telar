@@ -30,6 +30,7 @@ that does not exist is an error. So is a misspelled key, as everywhere else in `
 | `app-<hash>.js` | The `wasm-bindgen` glue, pointed at the hashed module. |
 | `app_bg-<hash>.wasm` | The module. |
 | `fonts/<name>-<hash>.<ext>` | Each face `[[telar.fonts]]` declares; see [Fonts as assets](fonts.md). |
+| `images/<hash>.<ext>`, `images/<hash>-<width>w.<ext>` | Each picture an `img src:"…"` bakes, and its smaller copies; see [Pictures](#pictures). |
 | `asset-manifest.json` | Logical path → hashed path for every hashed file. |
 | everything from `web/public/` | Copied as is, at the same relative path. |
 | `*.br`, `*.gz` | Release builds only: precompressed copies (see below). |
@@ -82,7 +83,9 @@ The rules:
   page scrolled before the module loads keeps its position. A template that fixes the document in place
   takes that away. See [docs/primary-scroll.md](primary-scroll.md).
 
-URLs the page writes for output files start with `./`, which resolves against a page at the output root.
+URLs the page writes for output files start with `./`, which resolves against a page at the output root. The
+bootstrap also writes `<meta name="telar-assets" content="./">`: the app resolves it once, when it starts, and
+fetches every file the build shipped from there, so an address it pushes later does not move them.
 
 A `web/index.html` written before templates existed, loading `./app.js` directly, is refused with a message
 naming `%telar.bootstrap%`: the glue now has a hashed name, so a hand-written reference to it cannot work.
@@ -105,6 +108,36 @@ pointed at the module's hashed name before it is hashed itself, so a new module 
 
 Anything that needs to find a built file (a host profile writing cache headers, a script measuring the
 module) reads this file rather than guessing names. Debug and release builds are hashed the same way.
+
+## Pictures
+
+A browser build does not carry the pixels of an `img src:"…"`. The bake gives every target its own form of
+the picture: the decoded pixels on the desktop, a terminal and Android, and on the web an address and the
+picture's size, so the module is as heavy as its code and layout still knows the box before a byte arrives.
+The packager writes the file at that address, from the crates the app is built from.
+
+- **Names are the content hash** of the source file (`images/<16 hex digits>.<ext>`), so a changed picture is
+  a new URL and the files can be cached like the rest of the hashed output. They are not in
+  `asset-manifest.json`: the module already knows their names.
+- **A format a browser reads** (PNG, JPEG, GIF, WebP, AVIF, BMP, ICO) ships as it is. Any other is
+  re-encoded as PNG.
+- **Smaller copies** are made at half the width, and half again, while they stay at least 480 pixels wide,
+  in the same format (PNG for a converted one). A copy that would not be smaller than the file above it is
+  dropped, and GIF, AVIF and ICO get none.
+
+Under the document renderer a picture drawn with `fit:` `contain`, `cover` or `fill` becomes an `<img>`
+with `srcset` and `sizes`, so the browser picks the copy that fits the box and the screen's density,
+decodes it off the main thread and loads it lazily. `priority` on the `img` marks the picture the page is
+about (a hero, a cover): it is fetched at once and first (`fetchpriority="high"`, no `loading="lazy"`). An
+`img` with `label:` gets it as its `alt`; one without has `alt=""` and is decoration. Other fills and nine
+slices stay part of a drawing and draw the full-size file from its address.
+
+Under the canvas renderer the picture is fetched and decoded by the browser, then drawn like any other
+bitmap, choosing the narrowest copy that covers the box. It is left out of the frames before it arrives.
+
+```rsx
+img src:"hero.jpg" fit:cover width:100% height:60sh priority label:"The loom at work"
+```
 
 ## The public directory
 

@@ -16,8 +16,11 @@ thread_local! {
     static CACHE: RefCell<FxHashMap<u64, Rc<str>>> = RefCell::new(FxHashMap::default());
 }
 
-/// The `href` this picture is drawn from, or `None` for one this backend cannot read — a texture the application owns and fills on the GPU has no pixels on this side to encode.
+/// The `href` this picture is drawn from, a linked one's address, or `None` for one this backend cannot read — a texture the application owns and fills on the GPU has no pixels on this side to encode.
 pub fn href(data: &ImageData) -> Option<Rc<str>> {
+    if let Some(linked) = data.linked_source() {
+        return Some(platform_core::asset_url(&linked.url).into());
+    }
     if let Some(cached) = CACHE.with(|cache| cache.borrow().get(&data.id).cloned()) {
         return Some(cached);
     }

@@ -56,6 +56,12 @@ impl ViewGen<'_> {
             String::new()
         };
 
+        let priority = if el.attributes.iter().any(|a| a.key == "priority") {
+            ".with_priority()"
+        } else {
+            ""
+        };
+
         let code = format!(
             "{pad}let {var} = {{\n\
              {setup}\
@@ -64,7 +70,7 @@ impl ViewGen<'_> {
              {pad}        {data_fn},\n\
              {pad}        move || {raster},\n\
              {pad}        {fit},\n\
-             {pad}    )?{radius}\n\
+             {pad}    )?{radius}{priority}\n\
              {pad}}};"
         );
 
