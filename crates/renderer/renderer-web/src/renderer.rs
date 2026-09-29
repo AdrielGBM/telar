@@ -133,7 +133,7 @@ fn report_on_page(canvas: &CanvasSurface, message: &str) {
     let Some(host) = canvas.canvas().parent_element() else {
         return;
     };
-    let Ok(notice) = host.owner_document().map_or(Err(()), Ok) else {
+    let Some(notice) = host.owner_document() else {
         return;
     };
     let Ok(element) = notice.create_element("div") else {
