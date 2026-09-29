@@ -3,8 +3,8 @@
 use super::TextShaper;
 use super::cache::{ShapingCacheKey, hash_text, text_style_bits};
 use super::{
-    effective_line_height, from_cosmic_color, make_buffer, physical_glyph, resolve_coverage,
-    shape_buffer,
+    effective_line_height, from_cosmic_color, glyph_index_at, make_buffer, physical_glyph,
+    resolve_coverage, shape_buffer,
 };
 use cosmic_text::{CacheKey, SwashContent, Wrap};
 use geometry_core::{Color, Rect};
@@ -347,6 +347,36 @@ impl TextShaper {
     }
 
     /// The narrowest `(width, height)` `text` lays out in without breaking inside a word: the widest run between the break opportunities cosmic-text finds (UAX #14, so between CJK ideographs too), and the height [`measure_text`](Self::measure_text) gives at that width, which is the width a box sized by this answer is drawn at.
+    /// The byte of the glyph under `at` in `text` laid out at `max_width`, as [`measure_text`](Self::measure_text) lays it out. `None` between lines and past their ends.
+    pub fn index_at(
+        &mut self,
+        text: &str,
+        spans: Option<&[Span]>,
+        max_width: f32,
+        style: &TextStyle,
+        at: (f32, f32),
+    ) -> Option<usize> {
+        self.sync_fonts();
+        if text.is_empty() {
+            return None;
+        }
+        let rect = Rect {
+            x: 0.0,
+            y: 0.0,
+            width: max_width,
+            height: 100000.0,
+        };
+        let buffer = make_buffer(
+            &mut self.font_system,
+            &mut self.family_availability,
+            text,
+            spans.filter(|s| !s.is_empty()),
+            rect,
+            style,
+        );
+        glyph_index_at(&buffer, effective_line_height(style), at)
+    }
+
     pub fn measure_min_content(
         &mut self,
         text: &str,

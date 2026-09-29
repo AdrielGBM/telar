@@ -126,9 +126,9 @@ impl Scale for TextStyle {
 impl Scale for Declared {
     fn scale(self, sf: f32) -> Self {
         Declared {
-            font_size: self.font_size.map(|v| v * sf),
+            font_size: self.font_size.map(|v| scale_length(v, sf)),
             color: self.color.map(|c| c.scale(sf)),
-            letter_spacing: self.letter_spacing.map(|v| v * sf),
+            letter_spacing: self.letter_spacing.map(|v| scale_length(v, sf)),
             ..self
         }
     }
@@ -140,5 +140,13 @@ impl Scale for Span {
             over: self.over.scale(sf),
             ..self
         }
+    }
+}
+
+/// Pixels scale; `em` is relative to a size that scales itself. A fraction of the surface is resolved to pixels before it gets this far (see `Declared::on_surface`).
+fn scale_length(length: crate::TextLength, sf: f32) -> crate::TextLength {
+    match length {
+        crate::TextLength::Px(px) => crate::TextLength::Px(px * sf),
+        other => other,
     }
 }

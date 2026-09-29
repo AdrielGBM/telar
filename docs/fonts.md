@@ -25,8 +25,9 @@ size_adjust = 1.05                    # web only: scales the glyphs, written as 
   same name works on every target.
 - **Use `.ttf` or `.otf`** to reach every target. `.woff` and `.woff2` only reach a document: nothing but a
   browser unpacks them, so native builds skip them and a canvas build logs that it cannot use them.
-- **Axes are declared now and animated later.** They are carried to the runtime (`FontAsset::axes`) so text
-  can drive them; nothing uses them to choose a face yet.
+- **Axes are what the face offers.** They are carried to the runtime (`FontAsset::axes`); text places itself
+  on them with `font_variation:` (see [Variation axes and features](#variation-axes-and-features)). Nothing
+  uses them to choose a face.
 - Every key is checked when the manifest is read: an unknown key, a weight outside 1–1000 or backwards, an
   axis tag that is not four characters, a range that runs backwards, a non-positive `size_adjust` and an
   unknown file extension are all errors naming the entry.
@@ -44,6 +45,33 @@ size_adjust = 1.05                    # web only: scales the glyphs, written as 
 
 Nothing waits for a face. Text is laid out and drawn in its fallback until the face lands, then measured
 again once; hydration of a prerendered page does not wait for fonts either.
+
+## Variation axes and features
+
+```rsx
+text "ADRIEL" font_variation:(wght $w, wdth 125, opsz 72) transition(font_variation 400ms)
+col font_features:(tnum, liga 0)          // inherited by every text below
+```
+
+`font_variation:` places the face on its variation axes, each a four-letter tag and a value that may read
+state; `font_features:` turns OpenType features on or off, a tag named alone meaning on. Both are text
+properties that flow down the tree like `font_weight`, and like CSS a node that names either replaces what it
+inherited. `wght` wins over `font_weight`. In Rust they are `FontVariations` and `FontFeatures` on
+`TextStyle` and `Declared` (`FontVariations::new().with("wght", 650.0)`).
+
+An axis value animates: `transition(font_variation 400ms)` tweens axis by axis, and a `Timeline<FontVariations>`
+samples it from a scroll progress. A value that changes the text's extent (`wdth`, `wght` on most faces)
+measures the text again on each change, as any restyle that moves the box does; a colour change still only
+repaints.
+
+| Target | Axes | Features |
+| --- | --- | --- |
+| web-dom | `font-variation-settings`, every axis | `font-feature-settings` |
+| web canvas, desktop, Android, headless | `wght`, anywhere along its range. Other axes are not applied: cosmic-text instances a variable face on `wght` alone, for shaping and for the glyph cache. The text is measured and drawn at the face's default for them. | Applied by the shaper |
+| TUI | Ignored: a cell has no face | Ignored |
+
+On web-dom the text is measured by a hidden element carrying the same settings whenever it names an axis or a
+feature, because a canvas `font` carries only family, size, weight and slant; a canvas measures the rest.
 
 ## Faces that arrive later
 

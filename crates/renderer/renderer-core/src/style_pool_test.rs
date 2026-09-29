@@ -38,3 +38,26 @@ fn hash_path_style_agrees_with_itself() {
         hash_path_style(&solid_path(Some(shadow)))
     );
 }
+
+#[test]
+fn hash_text_style_changes_with_anything_that_changes_the_glyphs() {
+    use crate::{FontFeatures, FontVariations, TextStyle};
+    let base = TextStyle::new(16.0, Color::BLACK);
+    let variants = [
+        base.clone(),
+        base.clone().with_font_weight(700),
+        base.clone().with_font_family("Inter"),
+        base.clone()
+            .with_font_variations(FontVariations::new().with("wght", 420.0)),
+        base.clone()
+            .with_font_variations(FontVariations::new().with("wght", 421.0)),
+        base.clone()
+            .with_font_features(FontFeatures::new().with("liga", 0)),
+    ];
+    let hashes: Vec<u64> = variants.iter().map(hash_text_style).collect();
+    for (i, a) in hashes.iter().enumerate() {
+        for b in &hashes[i + 1..] {
+            assert_ne!(a, b, "a frame that only moved an axis is a new frame");
+        }
+    }
+}

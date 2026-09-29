@@ -18,6 +18,10 @@ pub fn typography(props: TypographyProps, children: Children) -> Result<Box<dyn 
     #[allow(unused_imports)] use telar::use_theme;
     #[allow(unused_variables)] let theme = telar::Theme::<core::theme::SandboxTheme>::default();
 
+    let heavy = signal(false);
+    let heavy_rsx_mv = heavy.clone();
+    let weight = move || if heavy_rsx_mv.get() { 850.0f32 } else { 250.0 };
+
     let __col_0 = {
         let __node_0 = doc_header(DocHeaderProps::props().kicker("FOUNDATIONS").title("Typography").desc("Text takes a size and a color token, measures its own height, and wraps to the available width automatically.").build(), Children::default())?;
         let __node_1 = {
@@ -387,28 +391,107 @@ pub fn typography(props: TypographyProps, children: Children) -> Result<Box<dyn 
                                 let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
                                 let __text_23 = {
                                     Text::declaring(
-                                        || "This paragraph is clamped to two lines with lines:2, so however long the copy gets the box never grows past two lines and the overflow is simply dropped.".to_string(),
+                                        || "Resize the window".to_string(),
                                         LayoutStyle::new(),
-                                        { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(14.0).with_color(theme.get().muted).with_clamp(2, false) },
+                                        { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size_in(TextLength::SurfaceWidth(0.05), use_surface_size()).with_color(theme.get().ink).with_letter_spacing_in(TextLength::Em(-0.03), Size::ZERO) },
                                     )?
                                 };
                                 __children.push(box_item(__text_23));
-                                let __text_24 = {
-                                    Text::declaring(
-                                        || "With ellipsis the truncated tail is replaced by a … so it reads as intentionally cut rather than abruptly clipped at the boundary.".to_string(),
-                                        LayoutStyle::new(),
-                                        { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(14.0).with_color(theme.get().ink).with_clamp(2, true) },
-                                    )?
+                                let __col_1 = {
+                                    let __text_24 = {
+                                        Text::declaring(
+                                            || "1.5em of the column's 14px".to_string(),
+                                            LayoutStyle::new(),
+                                            { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size_in(TextLength::Em(1.5), Size::ZERO).with_color(theme.get().ink) },
+                                        )?
+                                    };
+                                    Container::new(LayoutStyle::new().flex_column(), children![__text_24])?.declaring(move || Declared::default().with_font_size(14.0))
                                 };
-                                __children.push(box_item(__text_24));
+                                __children.push(box_item(__col_1));
+                                __slots.extend_default(__children);
+                                Ok(__slots)
+                            }
+                            }
+                        );
+                        card(CardProps::props().gap(6.0).build(), __deferred)?
+                    };
+                    __children.push(box_item(__node_17));
+                    let __node_18 = code_line(CodeLineProps::props().code("text font_size:5sw letter_spacing:-0.03em   ·   font_size:1.5em   ·   sw sh smin smax em").build(), Children::default())?;
+                    __children.push(box_item(__node_18));
+                    __slots.extend_default(__children);
+                    Ok(__slots)
+                }
+                }
+            );
+            example(ExampleProps::props().title("Sizes relative to the surface and to what is inherited").build(), __deferred)?
+        };
+        let __node_19 = {
+            let __deferred = Children::new(
+                {
+                    let theme = theme.clone();
+                    let heavy = heavy.clone();
+                    let weight = weight.clone();
+                move || {
+                    let theme = theme.clone();
+                    let heavy = heavy.clone();
+                    let weight = weight.clone();
+                    let mut __slots = Slots::new();
+                    let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
+                    let __node_20 = {
+                        let __deferred = Children::new(
+                            {
+                                let theme = theme.clone();
+                                let heavy = heavy.clone();
+                                let weight = weight.clone();
+                            move || {
+                                let theme = theme.clone();
+                                let heavy = heavy.clone();
+                                let weight = weight.clone();
+                                let mut __slots = Slots::new();
+                                let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
                                 let __text_25 = {
+                                    let __transition_0 = motion::Animated::new(FontVariations::new().with("wght", (weight()) as f32), motion::tween(std::time::Duration::from_millis(400), motion::Easing::EaseOut));
                                     Text::declaring(
-                                        || "A single-line label that ellipsizes when it runs out of room in its box.".to_string(),
-                                        LayoutStyle::new().max_width(300.0),
-                                        { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(14.0).with_color(theme.get().primary).with_clamp(1, true) },
+                                        || "Telar Test along its wght axis".to_string(),
+                                        LayoutStyle::new(),
+                                        { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(22.0).with_color(theme.get().ink).with_font_family(FontFamily::stack(["Telar Test".into(), FontFamily::SansSerif])).with_font_variations({ __transition_0.retarget(FontVariations::new().with("wght", (weight()) as f32)); __transition_0.get() }) },
                                     )?
                                 };
                                 __children.push(box_item(__text_25));
+                                let __text_26 = {
+                                    Text::declaring(
+                                        || "Optical size 14 against 32".to_string(),
+                                        LayoutStyle::new(),
+                                        { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(18.0).with_color(theme.get().ink).with_font_family(FontFamily::stack(["Telar Test".into(), FontFamily::SansSerif])).with_font_variations(FontVariations::new().with("opsz", (14) as f32)) },
+                                    )?
+                                };
+                                __children.push(box_item(__text_26));
+                                let __text_27 = {
+                                    Text::declaring(
+                                        || "Optical size 32".to_string(),
+                                        LayoutStyle::new(),
+                                        { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(18.0).with_color(theme.get().ink).with_font_family(FontFamily::stack(["Telar Test".into(), FontFamily::SansSerif])).with_font_variations(FontVariations::new().with("opsz", (32) as f32)) },
+                                    )?
+                                };
+                                __children.push(box_item(__text_27));
+                                let __text_28 = {
+                                    Text::declaring(
+                                        || "0123456789 with tabular figures".to_string(),
+                                        LayoutStyle::new(),
+                                        { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(16.0).with_color(theme.get().ink).with_font_features(FontFeatures::new().with("tnum", (1) as u32)) },
+                                    )?
+                                };
+                                __children.push(box_item(__text_28));
+                                let __node_21 = button(ButtonProps::props().label("Move the axis").ghost(true).on_press(std::rc::Rc::new({ let heavy = heavy.clone(); move || heavy.toggle() })).build(), Children::default())?;
+                                __children.push(box_item(__node_21));
+                                let __text_29 = {
+                                    Text::declaring(
+                                        || "A document sets every axis and feature. The GPU shaper places wght anywhere along its range and applies features; other axes are a document's alone for now.".to_string(),
+                                        LayoutStyle::new(),
+                                        { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(12.0).with_color(theme.get().muted) },
+                                    )?
+                                };
+                                __children.push(box_item(__text_29));
                                 __slots.extend_default(__children);
                                 Ok(__slots)
                             }
@@ -416,9 +499,66 @@ pub fn typography(props: TypographyProps, children: Children) -> Result<Box<dyn 
                         );
                         card(CardProps::props().gap(8.0).build(), __deferred)?
                     };
-                    __children.push(box_item(__node_17));
-                    let __node_18 = code_line(CodeLineProps::props().code("text '…' lines:2 ellipsis   ·   'label' lines:1 ellipsis").build(), Children::default())?;
-                    __children.push(box_item(__node_18));
+                    __children.push(box_item(__node_20));
+                    let __node_22 = code_line(CodeLineProps::props().code("text font_variation:(wght $w, opsz 32) transition(font_variation 400ms)   ·   font_features:(tnum, liga 0)").build(), Children::default())?;
+                    __children.push(box_item(__node_22));
+                    __slots.extend_default(__children);
+                    Ok(__slots)
+                }
+                }
+            );
+            example(ExampleProps::props().title("Variable axes and OpenType features").build(), __deferred)?
+        };
+        let __node_23 = {
+            let __deferred = Children::new(
+                {
+                    let theme = theme.clone();
+                move || {
+                    let theme = theme.clone();
+                    let mut __slots = Slots::new();
+                    let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
+                    let __node_24 = {
+                        let __deferred = Children::new(
+                            {
+                                let theme = theme.clone();
+                            move || {
+                                let theme = theme.clone();
+                                let mut __slots = Slots::new();
+                                let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
+                                let __text_30 = {
+                                    Text::declaring(
+                                        || "This paragraph is clamped to two lines with lines:2, so however long the copy gets the box never grows past two lines and the overflow is simply dropped.".to_string(),
+                                        LayoutStyle::new(),
+                                        { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(14.0).with_color(theme.get().muted).with_clamp(2, false) },
+                                    )?
+                                };
+                                __children.push(box_item(__text_30));
+                                let __text_31 = {
+                                    Text::declaring(
+                                        || "With ellipsis the truncated tail is replaced by a … so it reads as intentionally cut rather than abruptly clipped at the boundary.".to_string(),
+                                        LayoutStyle::new(),
+                                        { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(14.0).with_color(theme.get().ink).with_clamp(2, true) },
+                                    )?
+                                };
+                                __children.push(box_item(__text_31));
+                                let __text_32 = {
+                                    Text::declaring(
+                                        || "A single-line label that ellipsizes when it runs out of room in its box.".to_string(),
+                                        LayoutStyle::new().max_width(300.0),
+                                        { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(14.0).with_color(theme.get().primary).with_clamp(1, true) },
+                                    )?
+                                };
+                                __children.push(box_item(__text_32));
+                                __slots.extend_default(__children);
+                                Ok(__slots)
+                            }
+                            }
+                        );
+                        card(CardProps::props().gap(8.0).build(), __deferred)?
+                    };
+                    __children.push(box_item(__node_24));
+                    let __node_25 = code_line(CodeLineProps::props().code("text '…' lines:2 ellipsis   ·   'label' lines:1 ellipsis").build(), Children::default())?;
+                    __children.push(box_item(__node_25));
                     __slots.extend_default(__children);
                     Ok(__slots)
                 }
@@ -426,7 +566,7 @@ pub fn typography(props: TypographyProps, children: Children) -> Result<Box<dyn 
             );
             example(ExampleProps::props().title("Line clamp & ellipsis").build(), __deferred)?
         };
-        let __node_19 = {
+        let __node_26 = {
             let __deferred = Children::new(
                 {
                     let theme = theme.clone();
@@ -434,7 +574,7 @@ pub fn typography(props: TypographyProps, children: Children) -> Result<Box<dyn 
                     let theme = theme.clone();
                     let mut __slots = Slots::new();
                     let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-                    let __node_20 = {
+                    let __node_27 = {
                         let __deferred = Children::new(
                             {
                                 let theme = theme.clone();
@@ -442,14 +582,14 @@ pub fn typography(props: TypographyProps, children: Children) -> Result<Box<dyn 
                                 let theme = theme.clone();
                                 let mut __slots = Slots::new();
                                 let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-                                let __text_26 = {
+                                let __text_33 = {
                                     Text::declaring(
                                         || "Text nodes wrap to the width they are given and report the exact height the wrapped lines need, so the sibling below them is never overlapped — resize the window and watch this paragraph reflow while the box grows to fit it.".to_string(),
                                         LayoutStyle::new().max_width(520.0),
                                         { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(14.0).with_color(theme.get().muted) },
                                     )?
                                 };
-                                __children.push(box_item(__text_26));
+                                __children.push(box_item(__text_33));
                                 __slots.extend_default(__children);
                                 Ok(__slots)
                             }
@@ -457,9 +597,9 @@ pub fn typography(props: TypographyProps, children: Children) -> Result<Box<dyn 
                         );
                         card(CardProps::props().build(), __deferred)?
                     };
-                    __children.push(box_item(__node_20));
-                    let __node_21 = code_line(CodeLineProps::props().code("text '…long copy…' color:$theme.muted max_width:520").build(), Children::default())?;
-                    __children.push(box_item(__node_21));
+                    __children.push(box_item(__node_27));
+                    let __node_28 = code_line(CodeLineProps::props().code("text '…long copy…' color:$theme.muted max_width:520").build(), Children::default())?;
+                    __children.push(box_item(__node_28));
                     __slots.extend_default(__children);
                     Ok(__slots)
                 }
@@ -467,7 +607,7 @@ pub fn typography(props: TypographyProps, children: Children) -> Result<Box<dyn 
             );
             example(ExampleProps::props().title("Wrapping — a paragraph measures its own height at any width").build(), __deferred)?
         };
-        let __node_22 = {
+        let __node_29 = {
             let __deferred = Children::new(
                 {
                     let theme = theme.clone();
@@ -475,7 +615,7 @@ pub fn typography(props: TypographyProps, children: Children) -> Result<Box<dyn 
                     let theme = theme.clone();
                     let mut __slots = Slots::new();
                     let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-                    let __node_23 = {
+                    let __node_30 = {
                         let __deferred = Children::new(
                             {
                                 let theme = theme.clone();
@@ -483,14 +623,14 @@ pub fn typography(props: TypographyProps, children: Children) -> Result<Box<dyn 
                                 let theme = theme.clone();
                                 let mut __slots = Slots::new();
                                 let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-                                let __text_27 = {
+                                let __text_34 = {
                                     Text::declaring(
                                         || "Braces splice a signal or expression straight into the string.".to_string(),
                                         LayoutStyle::new(),
                                         { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(13.0).with_color(theme.get().muted) },
                                     )?
                                 };
-                                __children.push(box_item(__text_27));
+                                __children.push(box_item(__text_34));
                                 __slots.extend_default(__children);
                                 Ok(__slots)
                             }
@@ -498,9 +638,9 @@ pub fn typography(props: TypographyProps, children: Children) -> Result<Box<dyn 
                         );
                         card(CardProps::props().build(), __deferred)?
                     };
-                    __children.push(box_item(__node_23));
-                    let __node_24 = code_line(CodeLineProps::props().code("text 'Count: {$count}'      text '{props.title}'").build(), Children::default())?;
-                    __children.push(box_item(__node_24));
+                    __children.push(box_item(__node_30));
+                    let __node_31 = code_line(CodeLineProps::props().code("text 'Count: {$count}'      text '{props.title}'").build(), Children::default())?;
+                    __children.push(box_item(__node_31));
                     __slots.extend_default(__children);
                     Ok(__slots)
                 }
@@ -508,7 +648,7 @@ pub fn typography(props: TypographyProps, children: Children) -> Result<Box<dyn 
             );
             example(ExampleProps::props().title("Interpolation — embed values with { } (see the Reactivity section)").build(), __deferred)?
         };
-        let __node_25 = {
+        let __node_32 = {
             let __deferred = Children::new(
                 {
                     let theme = theme.clone();
@@ -516,7 +656,7 @@ pub fn typography(props: TypographyProps, children: Children) -> Result<Box<dyn 
                     let theme = theme.clone();
                     let mut __slots = Slots::new();
                     let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-                    let __node_26 = {
+                    let __node_33 = {
                         let __deferred = Children::new(
                             {
                                 let theme = theme.clone();
@@ -524,9 +664,9 @@ pub fn typography(props: TypographyProps, children: Children) -> Result<Box<dyn 
                                 let theme = theme.clone();
                                 let mut __slots = Slots::new();
                                 let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-                                let __node_27 = heading(HeadingProps::props().text("A heading is a real title").build(), Children::default())?;
-                                __children.push(box_item(__node_27));
-                                let __node_28 = {
+                                let __node_34 = heading(HeadingProps::props().text("A heading is a real title").build(), Children::default())?;
+                                __children.push(box_item(__node_34));
+                                let __node_35 = {
                                     let __deferred = Children::new(
                                         {
                                             let theme = theme.clone();
@@ -534,22 +674,22 @@ pub fn typography(props: TypographyProps, children: Children) -> Result<Box<dyn 
                                             let theme = theme.clone();
                                             let mut __slots = Slots::new();
                                             let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-                                            let __text_28 = {
+                                            let __text_35 = {
                                                 Text::declaring(
                                                     || "The heading sits above these children in a small-gap column.".to_string(),
                                                     LayoutStyle::new(),
                                                     { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(13.0).with_color(theme.get().muted) },
                                                 )?
                                             };
-                                            __children.push(box_item(__text_28));
-                                            let __text_29 = {
+                                            __children.push(box_item(__text_35));
+                                            let __text_36 = {
                                                 Text::declaring(
                                                     || "Use it to group a labelled block without hand-building the column.".to_string(),
                                                     LayoutStyle::new(),
                                                     { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(13.0).with_color(theme.get().muted) },
                                                 )?
                                             };
-                                            __children.push(box_item(__text_29));
+                                            __children.push(box_item(__text_36));
                                             __slots.extend_default(__children);
                                             Ok(__slots)
                                         }
@@ -557,7 +697,7 @@ pub fn typography(props: TypographyProps, children: Children) -> Result<Box<dyn 
                                     );
                                     section(SectionProps::props().title("A section wraps a heading above its own content").build(), __deferred)?
                                 };
-                                __children.push(box_item(__node_28));
+                                __children.push(box_item(__node_35));
                                 __slots.extend_default(__children);
                                 Ok(__slots)
                             }
@@ -565,9 +705,9 @@ pub fn typography(props: TypographyProps, children: Children) -> Result<Box<dyn 
                         );
                         card(CardProps::props().gap(12.0).build(), __deferred)?
                     };
-                    __children.push(box_item(__node_26));
-                    let __node_29 = code_line(CodeLineProps::props().code("heading 'Title'      section 'Title' > …children…").build(), Children::default())?;
-                    __children.push(box_item(__node_29));
+                    __children.push(box_item(__node_33));
+                    let __node_36 = code_line(CodeLineProps::props().code("heading 'Title'      section 'Title' > …children…").build(), Children::default())?;
+                    __children.push(box_item(__node_36));
                     __slots.extend_default(__children);
                     Ok(__slots)
                 }
@@ -575,7 +715,7 @@ pub fn typography(props: TypographyProps, children: Children) -> Result<Box<dyn 
             );
             example(ExampleProps::props().title("heading and section — an accent title, alone or above its content").build(), __deferred)?
         };
-        let __node_30 = {
+        let __node_37 = {
             let __deferred = Children::new(
                 {
                     let theme = theme.clone();
@@ -583,7 +723,7 @@ pub fn typography(props: TypographyProps, children: Children) -> Result<Box<dyn 
                     let theme = theme.clone();
                     let mut __slots = Slots::new();
                     let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-                    let __node_31 = {
+                    let __node_38 = {
                         let __deferred = Children::new(
                             {
                                 let theme = theme.clone();
@@ -592,25 +732,25 @@ pub fn typography(props: TypographyProps, children: Children) -> Result<Box<dyn 
                                 let mut __slots = Slots::new();
                                 let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
                                 let __row_0 = {
-                                    let __node_32 = button(ButtonProps::props().label(t!("nav.overview")).ghost(true).build(), Children::default())?;
-                                    let __text_30 = {
+                                    let __node_39 = button(ButtonProps::props().label(t!("nav.overview")).ghost(true).build(), Children::default())?;
+                                    let __text_37 = {
                                         Text::declaring(
                                             move || format!("{}", { t!("greeting", name = "Ada") }),
                                             LayoutStyle::new(),
                                             { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(13.0).with_color(theme.get().muted) },
                                         )?
                                     };
-                                    Container::new(LayoutStyle::new().flex_row().gap(12.0).align_items(AlignItems::CENTER), children![__node_32, __text_30])?
+                                    Container::new(LayoutStyle::new().flex_row().gap(12.0).align_items(AlignItems::CENTER), children![__node_39, __text_37])?
                                 };
                                 __children.push(box_item(__row_0));
-                                let __text_31 = {
+                                let __text_38 = {
                                     Text::declaring(
                                         || "The macro validates the key against locales/ at compile time and re-reads the locale, so a language switch re-renders both.".to_string(),
                                         LayoutStyle::new(),
                                         { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(12.0).with_color(theme.get().muted) },
                                     )?
                                 };
-                                __children.push(box_item(__text_31));
+                                __children.push(box_item(__text_38));
                                 __slots.extend_default(__children);
                                 Ok(__slots)
                             }
@@ -618,9 +758,9 @@ pub fn typography(props: TypographyProps, children: Children) -> Result<Box<dyn 
                         );
                         card(CardProps::props().gap(10.0).build(), __deferred)?
                     };
-                    __children.push(box_item(__node_31));
-                    let __node_33 = code_line(CodeLineProps::props().code("button label:t!('nav.overview')   ·   text '{t!(\\'greeting\\', name = n)}'").build(), Children::default())?;
-                    __children.push(box_item(__node_33));
+                    __children.push(box_item(__node_38));
+                    let __node_40 = code_line(CodeLineProps::props().code("button label:t!('nav.overview')   ·   text '{t!(\\'greeting\\', name = n)}'").build(), Children::default())?;
+                    __children.push(box_item(__node_40));
                     __slots.extend_default(__children);
                     Ok(__slots)
                 }
@@ -628,32 +768,32 @@ pub fn typography(props: TypographyProps, children: Children) -> Result<Box<dyn 
             );
             example(ExampleProps::props().title("t! — a catalogue lookup is Rust, so it goes where any value goes").build(), __deferred)?
         };
-        let __node_34 = {
+        let __node_41 = {
             let __deferred = Children::new(
                 move || {
                     let mut __slots = Slots::new();
                     let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-                    let __col_1 = {
-                        let __node_35 = prop_row(PropRowProps::props().name("font_size").values("number").about("Font size in px (default 14).").build(), Children::default())?;
-                        let __node_36 = prop_row(PropRowProps::props().name("font_family").values("generic·\"face\"·\"face, generic\"").about("A CSS generic (bare or quoted), a named face, or a quoted comma list for an ordered fallback (default sans_serif).").build(), Children::default())?;
-                        let __node_37 = prop_row(PropRowProps::props().name("color").values("token · #hex · $signal").about("Text color (default ink via a token).").build(), Children::default())?;
-                        let __node_38 = prop_row(PropRowProps::props().name("font_weight").values("thin…black · 100–900").about("Font weight, keyword or number (default 400).").build(), Children::default())?;
-                        let __node_39 = prop_row(PropRowProps::props().name("font_style").values("normal·italic·oblique").about("Slant the text.").build(), Children::default())?;
-                        let __node_40 = prop_row(PropRowProps::props().name("text_align").values("left·center·right·justify").about("Horizontal alignment within the box.").build(), Children::default())?;
-                        let __node_41 = prop_row(PropRowProps::props().name("lines").values("number").about("Clamp to at most N lines (extra dropped).").build(), Children::default())?;
-                        let __node_42 = prop_row(PropRowProps::props().name("ellipsis").values("flag").about("Replace the clamped tail with a … .").build(), Children::default())?;
-                        let __node_43 = prop_row(PropRowProps::props().name("max_width").values("number").about("Wrap boundary for long copy.").build(), Children::default())?;
-                        let __node_44 = prop_row(PropRowProps::props().name("height").values("number").about("Pin the box instead of auto-measuring.").build(), Children::default())?;
-                        Container::new(LayoutStyle::new().flex_column().gap(6.0), children![__node_35, __node_36, __node_37, __node_38, __node_39, __node_40, __node_41, __node_42, __node_43, __node_44])?
+                    let __col_2 = {
+                        let __node_42 = prop_row(PropRowProps::props().name("font_size").values("number").about("Font size in px (default 14).").build(), Children::default())?;
+                        let __node_43 = prop_row(PropRowProps::props().name("font_family").values("generic·\"face\"·\"face, generic\"").about("A CSS generic (bare or quoted), a named face, or a quoted comma list for an ordered fallback (default sans_serif).").build(), Children::default())?;
+                        let __node_44 = prop_row(PropRowProps::props().name("color").values("token · #hex · $signal").about("Text color (default ink via a token).").build(), Children::default())?;
+                        let __node_45 = prop_row(PropRowProps::props().name("font_weight").values("thin…black · 100–900").about("Font weight, keyword or number (default 400).").build(), Children::default())?;
+                        let __node_46 = prop_row(PropRowProps::props().name("font_style").values("normal·italic·oblique").about("Slant the text.").build(), Children::default())?;
+                        let __node_47 = prop_row(PropRowProps::props().name("text_align").values("left·center·right·justify").about("Horizontal alignment within the box.").build(), Children::default())?;
+                        let __node_48 = prop_row(PropRowProps::props().name("lines").values("number").about("Clamp to at most N lines (extra dropped).").build(), Children::default())?;
+                        let __node_49 = prop_row(PropRowProps::props().name("ellipsis").values("flag").about("Replace the clamped tail with a … .").build(), Children::default())?;
+                        let __node_50 = prop_row(PropRowProps::props().name("max_width").values("number").about("Wrap boundary for long copy.").build(), Children::default())?;
+                        let __node_51 = prop_row(PropRowProps::props().name("height").values("number").about("Pin the box instead of auto-measuring.").build(), Children::default())?;
+                        Container::new(LayoutStyle::new().flex_column().gap(6.0), children![__node_42, __node_43, __node_44, __node_45, __node_46, __node_47, __node_48, __node_49, __node_50, __node_51])?
                     };
-                    __children.push(box_item(__col_1));
+                    __children.push(box_item(__col_2));
                     __slots.extend_default(__children);
                     Ok(__slots)
                 }
             );
             example(ExampleProps::props().title("Attributes").build(), __deferred)?
         };
-        Container::new(LayoutStyle::new().flex_column().gap(20.0), children![__node_0, __node_1, __node_4, __node_7, __node_10, __node_13, __node_16, __node_19, __node_22, __node_25, __node_30, __node_34])?
+        Container::new(LayoutStyle::new().flex_column().gap(20.0), children![__node_0, __node_1, __node_4, __node_7, __node_10, __node_13, __node_16, __node_19, __node_23, __node_26, __node_29, __node_32, __node_37, __node_41])?
     };
     Ok(Box::new(__col_0))
 }

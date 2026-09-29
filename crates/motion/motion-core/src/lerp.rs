@@ -1,6 +1,7 @@
 //! [`Lerp`]: what it means to interpolate a value, and the implementations for the geometry types.
 
 use geometry_core::{BorderRadius, Color, Point, Rect, Transform};
+use renderer_core::FontVariations;
 
 /// Interpolation plus the minimal vector-space operations the engine needs.
 ///
@@ -289,3 +290,38 @@ impl Lerp for Color {
 #[cfg(test)]
 #[path = "lerp_test.rs"]
 mod tests;
+
+/// Axis by axis: an axis only one side names is taken as `0.0` on the other for the arithmetic a spring runs, and holds its value through a tween (see [`FontVariations::lerp`]).
+impl Lerp for FontVariations {
+    fn lerp(&self, other: &Self, t: f32) -> Self {
+        FontVariations::lerp(self, other, t)
+    }
+    fn add(&self, other: &Self) -> Self {
+        combine(self, other, |a, b| a + b)
+    }
+    fn sub(&self, other: &Self) -> Self {
+        combine(self, other, |a, b| a - b)
+    }
+    fn scale(&self, factor: f32) -> Self {
+        FontVariations::with_values_of(self, self.values().map(|value| value * factor))
+    }
+    fn zero() -> Self {
+        FontVariations::new()
+    }
+    fn magnitude_sq(&self) -> f32 {
+        self.values().map(|value| value * value).sum()
+    }
+}
+
+fn combine(a: &FontVariations, b: &FontVariations, op: impl Fn(f32, f32) -> f32) -> FontVariations {
+    let mut out = FontVariations::new();
+    for (tag, value) in a.iter() {
+        out = out.with(tag, op(value, b.get(tag).unwrap_or(0.0)));
+    }
+    for (tag, value) in b.iter() {
+        if a.get(tag).is_none() {
+            out = out.with(tag, op(0.0, value));
+        }
+    }
+    out
+}

@@ -16,11 +16,14 @@ pub(crate) struct TransitionSpec {
 /// Paint and transform, and deliberately not the layout box. Both halves are read per frame from a closure the renderer already re-runs, so animating them costs a repaint and nothing else — the "no relayout" invariant (F5 in `docs/animations.md`) that the whole design rests on. Animating `width`/`height`/`x`/`y` would put a layout pass in every frame of every transition, which is a different decision and needs its own.
 ///
 /// A transform is enough for the shape this was missing: an indicator that slides to the active item moves by `translate_x`, not by its box.
+///
+/// `font_variation` is the one text property let through, and knowingly: an axis that changes the text's extent measures it again on each step, which a variable display face animated on scroll pays for one text.
 const SUPPORTED_PROPS: &[&str] = &[
     "opacity",
     "fill",
     "stroke",
     "color",
+    "font_variation",
     "rotate",
     "scale",
     "scale_x",
@@ -223,7 +226,7 @@ fn split_top_level_by(
 }
 
 /// Splits `s` on `sep`, ignoring separators nested inside parentheses.
-fn split_top_level(s: &str, sep: char) -> Vec<String> {
+pub(crate) fn split_top_level(s: &str, sep: char) -> Vec<String> {
     split_top_level_by(s, |c| c == sep, true)
 }
 

@@ -78,6 +78,7 @@ pub fn snapshot(commands: &[DrawCommand]) -> Vec<AccessNode> {
                 rect,
                 role,
                 lang: named.lang.clone(),
+                url: None,
             })
         })
         .chain(reading.text.iter().cloned());
@@ -91,10 +92,10 @@ pub fn snapshot(commands: &[DrawCommand]) -> Vec<AccessNode> {
             .min_by(|(_, (_, a)), (_, (_, b))| area(*a).total_cmp(&area(*b)));
         match owner {
             // A control the application named is called that, whatever it draws.
-            Some((i, _)) if named_controls[i] => {}
-            Some((i, _)) => append(&mut nodes[i].name, &piece.text),
-            // Text belonging to no control is still content: a heading, a caption, the paragraph a dialog asks about.
-            None => nodes.push(AccessNode {
+            Some((i, _)) if named_controls[i] && piece.url.is_none() => {}
+            Some((i, _)) if piece.url.is_none() => append(&mut nodes[i].name, &piece.text),
+            // Text belonging to no control is still content: a heading, a caption, the paragraph a dialog asks about. A link run is its own node wherever it sits.
+            _ => nodes.push(AccessNode {
                 id: None,
                 role: piece.role,
                 name: piece.text,
@@ -104,7 +105,7 @@ pub fn snapshot(commands: &[DrawCommand]) -> Vec<AccessNode> {
                 toggled: None,
                 value: None,
                 lang: piece.lang.as_deref().map(str::to_string),
-                url: None,
+                url: piece.url,
             }),
         }
     }
@@ -127,6 +128,8 @@ struct Piece {
     rect: Rect,
     role: Role,
     lang: Option<Arc<str>>,
+    /// Where a link run of a paragraph goes, as the address a reader announces.
+    url: Option<String>,
 }
 
 /// What an element's ancestors said that reaches it.
@@ -192,7 +195,9 @@ impl Reading {
                     open.pop();
                 }
                 _ if scope.hidden => {}
-                DrawCommand::Text { text, rect, .. } if !text.trim().is_empty() => {
+                DrawCommand::Text {
+                    text, rect, spans, ..
+                } if !text.trim().is_empty() => {
                     if let Some(i) = named {
                         reading.named[i].drew_text = true;
                     }
@@ -200,8 +205,24 @@ impl Reading {
                         text: text.to_string(),
                         rect: *rect,
                         role: Role::Label,
-                        lang: scope.lang,
+                        lang: scope.lang.clone(),
+                        url: None,
                     });
+                    for span in spans.iter().flat_map(|spans| spans.iter()) {
+                        let (Some(link), Some(words)) = (
+                            &span.link,
+                            text.get(span.range.start as usize..span.range.end as usize),
+                        ) else {
+                            continue;
+                        };
+                        reading.text.push(Piece {
+                            text: words.to_string(),
+                            rect: *rect,
+                            role: Role::Link,
+                            lang: scope.lang.clone(),
+                            url: Some(platform_core::address_of(link)),
+                        });
+                    }
                 }
                 DrawCommand::Image { .. } | DrawCommand::Path { .. } => {
                     if let Some(i) = named {

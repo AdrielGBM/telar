@@ -5,6 +5,9 @@ use crate::shared::components::doc_header::{doc_header, DocHeaderProps};
 use crate::shared::components::example::{example, ExampleProps};
 use crate::shared::components::prop_row::{prop_row, PropRowProps};
 
+let heavy = signal(false);
+let weight = move || if heavy.get() { 850.0f32 } else { 250.0 };
+
 [view]
 col gap:20
     doc_header kicker:"FOUNDATIONS" title:"Typography" desc:"Text takes a size and a color token, measures its own height, and wraps to the available width automatically."
@@ -46,6 +49,21 @@ col gap:20
             text "Telar Test at 800" font_size:18 color:$theme.ink font_weight:800 font_family:"Telar Test, sans_serif"
             text "The page does not wait for it: text shows in the fallback and is measured again once, when the face lands." font_size:13 color:$theme.muted
         code_line code:"[[telar.fonts]]   family = 'Telar Test'   src = 'assets/fonts/TelarTest.ttf'"
+    example title:"Sizes relative to the surface and to what is inherited"
+        card gap:6
+            text "Resize the window" font_size:5sw letter_spacing:-0.03em color:$theme.ink
+            col font_size:14
+                text "1.5em of the column's 14px" font_size:1.5em color:$theme.ink
+        code_line code:"text font_size:5sw letter_spacing:-0.03em   ·   font_size:1.5em   ·   sw sh smin smax em"
+    example title:"Variable axes and OpenType features"
+        card gap:8
+            text "Telar Test along its wght axis" font_size:22 color:$theme.ink font_family:"Telar Test, sans_serif" font_variation:(wght weight()) transition(font_variation 400ms)
+            text "Optical size 14 against 32" font_size:18 color:$theme.ink font_family:"Telar Test, sans_serif" font_variation:(opsz 14)
+            text "Optical size 32" font_size:18 color:$theme.ink font_family:"Telar Test, sans_serif" font_variation:(opsz 32)
+            text "0123456789 with tabular figures" font_size:16 color:$theme.ink font_features:(tnum)
+            button label:"Move the axis" ghost on_press:(|| $heavy.toggle())
+            text "A document sets every axis and feature. The GPU shaper places wght anywhere along its range and applies features; other axes are a document's alone for now." font_size:12 color:$theme.muted
+        code_line code:"text font_variation:(wght $w, opsz 32) transition(font_variation 400ms)   ·   font_features:(tnum, liga 0)"
     example title:"Line clamp & ellipsis"
         card gap:8
             text "This paragraph is clamped to two lines with lines:2, so however long the copy gets the box never grows past two lines and the overflow is simply dropped." font_size:14 color:$theme.muted lines:2

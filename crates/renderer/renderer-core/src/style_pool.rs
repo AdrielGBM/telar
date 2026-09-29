@@ -34,12 +34,24 @@ fn hash_opt_border(b: Option<&Border>, h: &mut FxHasher) {
     }
 }
 
-/// The content hash of a text style.
+/// The content hash of a text style: everything that changes what the glyphs look like, so two frames that differ only in weight, face or an axis value do not pass for the same frame.
 pub fn hash_text_style(s: &TextStyle) -> u64 {
     let mut h = FxHasher::default();
     h.write_u32(s.font_size.to_bits());
     hash_paint(&s.color, &mut h);
     hash_opt_shadow(s.text_shadow.cast().as_ref(), &mut h);
+    hash_font_family(&s.font_family, &mut h);
+    h.write_u16(s.font_weight);
+    h.write_u8(s.font_style as u8);
+    h.write_u8(s.text_align as u8);
+    h.write_u32(s.clamp.max_lines().unwrap_or(0) as u32);
+    h.write_u8(u8::from(s.clamp.ellipsis()));
+    h.write_u32(s.line_height.factor().map_or(0, f32::to_bits));
+    h.write_u32(s.letter_spacing.to_bits());
+    h.write_u8(u8::from(s.raster == Raster::Pixel));
+    h.write_u8(u8::from(s.text_wrap == TextWrap::NoWrap));
+    h.write_u64(s.font_variations.key());
+    h.write_u64(s.font_features.key());
     h.finish()
 }
 
@@ -86,7 +98,7 @@ pub fn hash_declared(d: &Declared) -> u64 {
         None => h.write_u8(0),
         Some(family) => hash_font_family(family, &mut h),
     }
-    hash_opt_f32(d.font_size, &mut h);
+    hash_opt_length(d.font_size, &mut h);
     hash_opt_paint(d.color.as_ref(), &mut h);
     match d.font_weight {
         None => h.write_u8(0),
@@ -109,7 +121,7 @@ pub fn hash_declared(d: &Declared) -> u64 {
             h.write_u32(n.to_bits());
         }
     }
-    hash_opt_f32(d.letter_spacing, &mut h);
+    hash_opt_length(d.letter_spacing, &mut h);
     h.write_u8(match d.text_align {
         None => 0,
         Some(align) => 1 + align as u8,
@@ -132,15 +144,18 @@ pub fn hash_declared(d: &Declared) -> u64 {
         Some(Raster::Smooth) => 1,
         Some(Raster::Pixel) => 2,
     });
+    h.write_u64(d.font_variations.as_ref().map_or(0, |v| v.key() ^ 1));
+    h.write_u64(d.font_features.as_ref().map_or(0, |f| f.key() ^ 1));
     h.finish()
 }
 
-fn hash_opt_f32(v: Option<f32>, h: &mut FxHasher) {
+fn hash_opt_length(v: Option<crate::TextLength>, h: &mut FxHasher) {
     match v {
         None => h.write_u8(0),
-        Some(v) => {
-            h.write_u8(1);
-            h.write_u32(v.to_bits());
+        Some(length) => {
+            let (kind, bits) = length.key();
+            h.write_u8(1 + kind);
+            h.write_u32(bits);
         }
     }
 }

@@ -300,6 +300,16 @@ pub fn text_style(style: &TextStyle, out: &mut String) {
     if style.letter_spacing != 0.0 {
         declare(out, "letter-spacing", &px(style.letter_spacing));
     }
+    if !style.font_variations.is_empty() {
+        declare(
+            out,
+            "font-variation-settings",
+            &style.font_variations.to_css(),
+        );
+    }
+    if !style.font_features.is_empty() {
+        declare(out, "font-feature-settings", &style.font_features.to_css());
+    }
     // Always said, because the document's default is not Telar's. `normal` collapses a run of spaces to one and a newline to a space, so a source listing came out as a single line thousands of characters wide. What Telar means is `pre-wrap`. It is also what keeps the two engines agreeing on height: a document that collapsed newlines measured one line where layout had reserved twenty, and the scroll area went on believing there was content the browser no longer had.
     declare(
         out,
@@ -316,6 +326,54 @@ pub fn text_style(style: &TextStyle, out: &mut String) {
         declare(out, "-webkit-box-orient", "vertical");
         declare(out, "-webkit-line-clamp", &max.to_string());
         declare(out, "overflow", "hidden");
+    }
+}
+
+/// A text length as CSS writes it inside the paragraph: `em` is the paragraph's, as it is to Telar. A fraction of the surface reaches a renderer already in pixels.
+fn length(length: renderer_core::TextLength) -> String {
+    match length {
+        renderer_core::TextLength::Em(em) => format!("{}em", round(em)),
+        other => px(other.resolve(0.0, geometry_core::Size::ZERO)),
+    }
+}
+
+/// The declarations a run of a paragraph adds over the paragraph: only what its span says, since everything else it inherits from the element around it.
+pub fn span_style(over: &renderer_core::Declared, out: &mut String) {
+    if let Some(size) = over.font_size {
+        declare(out, "font-size", &length(size));
+    }
+    match &over.color {
+        Some(Paint::Solid(ink)) => declare(out, "color", &color(*ink)),
+        Some(Paint::Gradient(g)) => {
+            declare(out, "background-image", &gradient(g));
+            declare(out, "-webkit-background-clip", "text");
+            declare(out, "background-clip", "text");
+            declare(out, "color", "transparent");
+        }
+        None => {}
+    }
+    if let Some(weight) = over.font_weight {
+        declare(out, "font-weight", &weight.to_string());
+    }
+    if let Some(font_style) = over.font_style {
+        let slant = if font_style == renderer_core::FontStyle::Normal {
+            "normal"
+        } else {
+            "italic"
+        };
+        declare(out, "font-style", slant);
+    }
+    if let Some(family) = over.font_family.as_ref().and_then(font_family_list) {
+        declare(out, "font-family", &family);
+    }
+    if let Some(spacing) = over.letter_spacing {
+        declare(out, "letter-spacing", &length(spacing));
+    }
+    if let Some(axes) = &over.font_variations {
+        declare(out, "font-variation-settings", &axes.to_css());
+    }
+    if let Some(features) = &over.font_features {
+        declare(out, "font-feature-settings", &features.to_css());
     }
 }
 

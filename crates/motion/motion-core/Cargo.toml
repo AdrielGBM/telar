@@ -14,5 +14,6 @@ repository = { workspace = true }
 geometry-core = { workspace = true }
 preferences-core = { workspace = true }
 reactive-core = { workspace = true }
+renderer-core.workspace = true
 
 web-time = { workspace = true }

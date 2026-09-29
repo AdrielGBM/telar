@@ -52,7 +52,21 @@ impl Painter<'_> {
                 }
                 let at = line.range.start + offset;
                 let (paint, attrs) = resolved.at(at);
+                let link = spans
+                    .and_then(|spans| renderer_core::link_at(spans, at))
+                    .and_then(|(_, destination)| match destination {
+                        renderer_core::Destination::External(uri) => {
+                            Some(self.buf.link_id(uri.as_str()))
+                        }
+                        _ => None,
+                    });
+                if let Some(id) = link {
+                    self.links.push(id);
+                }
                 let advance = self.draw_grapheme(col, row, grapheme, &paint, attrs);
+                if link.is_some() {
+                    self.links.pop();
+                }
                 col += advance as i32;
             }
             if line.ellipsized && col < cells.col1 {
@@ -156,5 +170,5 @@ impl<'a> SpanCursor<'a> {
 }
 
 fn resolve(declared: &Declared, base: &TextStyle) -> TextStyle {
-    declared.clone().over(base)
+    declared.over(base, geometry_core::Size::ZERO)
 }

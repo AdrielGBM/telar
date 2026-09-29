@@ -52,7 +52,7 @@ fn input_contradictions(el: &Element) -> Vec<String> {
 }
 
 /// The string an `external("…")` destination is written with, when it is a plain literal.
-fn external_literal(value: &str) -> Option<&str> {
+pub(super) fn external_literal(value: &str) -> Option<&str> {
     value
         .strip_prefix("external(")?
         .strip_suffix(')')?

@@ -3,7 +3,7 @@
 use std::collections::HashMap;
 use std::fmt::Write;
 
-use telar_parser::{Attr, Element, Value};
+use telar_parser::{Attr, Element, Value, ViewNode};
 
 use crate::registry;
 use crate::style::{PropCall, layout_prop_call, number_or};
@@ -16,6 +16,9 @@ const DEFAULT_SIZE: &str = "14.0";
 
 impl ViewGen<'_> {
     pub(super) fn emit_text(&mut self, el: &Element) -> ChildEmit {
+        if !el.children.is_empty() {
+            return self.emit_text_runs(el);
+        }
         let var = self.next_variable_name(&el.tag);
         let pad = self.indent_str();
         let content = el.content.as_deref().unwrap_or("");
@@ -31,40 +34,7 @@ impl ViewGen<'_> {
         let attrs = self.effective_attrs(el);
         let style = self.text_style(&attrs, &transitions, &mut hoists);
 
-        let mut extra = String::new();
-        for a in &attrs {
-            if matches!(
-                a.key.as_str(),
-                "font_size"
-                    | "font_family"
-                    | "color"
-                    | "font_weight"
-                    | "font_style"
-                    | "text_align"
-                    | "lines"
-                    | "ellipsis"
-                    | "text_wrap"
-                    | "height"
-                    | "line_height"
-                    | "letter_spacing"
-                    | "raster"
-            ) {
-                continue;
-            }
-            if let PropCall::Call(call) = layout_prop_call(&a.key, a.value.text()) {
-                extra.push_str(&call);
-            }
-        }
-        // A leaf measures its own height from the wrapped content; an explicit `height:` pins the box over that.
-        let explicit_height = attrs
-            .iter()
-            .find(|a| a.key == "height")
-            .and_then(|a| match layout_prop_call("height", a.value.text()) {
-                PropCall::Call(call) => Some(call),
-                _ => None,
-            })
-            .unwrap_or_default();
-        let layout_style = format!("LayoutStyle::new(){explicit_height}{extra}");
+        let layout_style = text_layout_style(&attrs);
 
         // Each `move` closure consumes its captures, so clone into block locals. Scan the raw `content`, still carrying `$`, not the substituted `content_fn`.
         let clones = self.clone_bindings(&[content, style.as_str()], &pad, "    ");
@@ -87,6 +57,103 @@ impl ViewGen<'_> {
              {pad}}};"
         );
         ChildEmit::Simple { name: var, code }
+    }
+
+    /// A `text` whose children are `span`s: one paragraph written as runs, each its own string, restyled by the text properties it names and made a link by `to:`. The text's own quoted content, if any, is the first run.
+    fn emit_text_runs(&mut self, el: &Element) -> ChildEmit {
+        let var = self.next_variable_name(&el.tag);
+        let pad = self.indent_str();
+        let (specs, mut errors) = self.parse_transitions(el);
+        let transitions: HashMap<String, String> = specs.into_iter().collect();
+        let mut hoists: Vec<String> = Vec::new();
+        let attrs = self.effective_attrs(el);
+        let style = self.text_style(&attrs, &transitions, &mut hoists);
+        let layout_style = text_layout_style(&attrs);
+
+        let mut runs: Vec<String> = Vec::new();
+        if let Some(content) = el.content.as_deref().filter(|content| !content.is_empty()) {
+            runs.push(format!(
+                "TextRun::new({})",
+                self.run_content(content, el.content_start, el.content_i18n)
+            ));
+        }
+        for child in &el.children {
+            let span = match child {
+                ViewNode::Element(span) if span.tag == "span" => span,
+                ViewNode::Comment(_) => continue,
+                _ => {
+                    errors.push("a `text` holds `span`s and nothing else".to_string());
+                    continue;
+                }
+            };
+            let content = span.content.as_deref().unwrap_or("");
+            let mut run = format!(
+                "TextRun::new({})",
+                self.run_content(content, span.content_start, span.content_i18n)
+            );
+            let span_attrs = self.effective_attrs(span);
+            let modifiers = self.inheritable_modifiers(
+                &span_attrs,
+                &HashMap::new(),
+                &mut hoists,
+                StyleTarget::Declared,
+            );
+            if !modifiers.is_empty() {
+                let closure = format!("move || Declared::default(){modifiers}");
+                let _ = write!(
+                    run,
+                    ".declaring({})",
+                    wrap_signal_clones(&raw_reactive_values(&span_attrs), closure)
+                );
+            }
+            if let Some(to) = span_attrs.iter().find(|a| a.key == "to") {
+                let value = to.value.text().trim();
+                if let Some(literal) = super::container::external_literal(value)
+                    && semantics_core::Uri::parse(literal).is_none()
+                {
+                    errors.push(format!(
+                        "`to:external(\"{literal}\")` is not an absolute URI: it names no scheme (`https:`, `mailto:`…)"
+                    ));
+                }
+                let read = super::signals::substitute_reads(value);
+                let _ = write!(
+                    run,
+                    ".to({})",
+                    wrap_signal_clones(&[value], format!("move || {read}"))
+                );
+            }
+            runs.push(run);
+        }
+
+        let clones = self.clone_bindings(&[style.as_str()], &pad, "    ");
+        let inner_pad = format!("{pad}    ");
+        let mut prelude = String::new();
+        emit_transition_prelude(&mut prelude, &inner_pad, &errors, &hoists);
+        let runs = runs.join(&format!(",\n{pad}            "));
+        let code = format!(
+            "{pad}let {var} = {{\n\
+             {clones}\
+             {prelude}\
+             {pad}    Text::runs(\n\
+             {pad}        vec![\n\
+             {pad}            {runs},\n\
+             {pad}        ],\n\
+             {pad}        {layout_style},\n\
+             {pad}        {style},\n\
+             {pad}    )?\n\
+             {pad}}};"
+        );
+        ChildEmit::Simple { name: var, code }
+    }
+
+    /// A run's string as the closure `TextRun::new` takes, with the signals it interpolates cloned in, so runs reading the same signal each own their copy.
+    fn run_content(&self, content: &str, start: usize, i18n: bool) -> String {
+        let closure = if i18n {
+            format!("move || {}", self.i18n_lookup(content))
+        } else {
+            self.interpolate_content(content, start)
+        };
+        wrap_signal_clones(&[content], closure)
     }
 
     /// Emits the children of a container-like element into `code` and returns the expression to pass as the constructor's children argument. `seed` names are prepended (e.g. a `section`'s heading). The `mode` (from [`ViewGen::child_mode`]) picks the shape: [`ChildMode::Slots`] builds a `Vec<ChildSlot>` (`__slots`, for `from_slots`) when a reactive fragment is present, [`ChildMode::Vec`] a `Vec<Box<dyn LayoutItem>>` (`__children`, for `new`) for static control flow, and [`ChildMode::Literal`] a `children![...]`. The caller must have wrapped child emission in the matching [`ViewGen::with_child_sink`] so any `if`/`for` bodies pushed the same shape.
@@ -191,7 +258,8 @@ impl ViewGen<'_> {
         transitions: &HashMap<String, String>,
         hoists: &mut Vec<String>,
     ) -> String {
-        let mut modifiers = self.inheritable_modifiers(attrs, transitions, hoists);
+        let mut modifiers =
+            self.inheritable_modifiers(attrs, transitions, hoists, StyleTarget::Text);
         let asserted = |key: &str| attrs.iter().any(|a| a.key == key && a.value.is_flag());
         // One call, because they are one decision: `ellipsis` without `lines` did nothing, the clamp returning first. Not inheritable — clamping a subtree to two lines means nothing.
         if let Some(lines) = attrs
@@ -209,7 +277,7 @@ impl ViewGen<'_> {
 
         let closure = format!("move |__inherited: TextStyle| __inherited{modifiers}");
         // The raw value, not the substituted expression, so a signal-backed colour clones itself into this closure.
-        wrap_signal_clones(&[raw_color_value(attrs)], closure)
+        wrap_signal_clones(&raw_reactive_values(attrs), closure)
     }
 
     /// The builder calls for the text properties that flow down a tree, in the spelling both `TextStyle` and `Declared` answer to — which is what lets a `text` and the container above it be written the same way and mean the same thing at different reaches.
@@ -218,15 +286,17 @@ impl ViewGen<'_> {
         attrs: &[Attr],
         transitions: &HashMap<String, String>,
         hoists: &mut Vec<String>,
+        target: StyleTarget,
     ) -> String {
         // Amends what the tree declared rather than building a style from nothing; baking a literal here is why a theme could not say "make the body text 11px".
         let mut modifiers = String::new();
         if let Some(size) = attrs.iter().find(|a| a.key == "font_size") {
-            let _ = write!(
-                modifiers,
-                ".with_font_size({})",
-                crate::style::number_or(size.value.text(), DEFAULT_SIZE)
-            );
+            modifiers.push_str(&length_modifier(
+                "with_font_size",
+                size.value.text(),
+                DEFAULT_SIZE,
+                target,
+            ));
         }
         let color_attr = attrs.iter().find(|a| a.key == "color");
         if let Some(a) = color_attr {
@@ -281,7 +351,18 @@ impl ViewGen<'_> {
             .map(|a| a.value.text().trim().to_string())
             .filter(|value| !value.is_empty())
         {
-            modifiers.push_str(&format!(".with_letter_spacing({})", number_or(&ls, "0.0")));
+            modifiers.push_str(&length_modifier("with_letter_spacing", &ls, "0.0", target));
+        }
+        if let Some(attr) = attrs.iter().find(|a| a.key == "font_variation") {
+            let mut value = font_settings_expr(attr, FontSetting::Variations);
+            if let Some(curve) = transitions.get("font_variation") {
+                value = self.wrap_transition(curve, &value, hoists);
+            }
+            let _ = write!(modifiers, ".with_font_variations({value})");
+        }
+        if let Some(attr) = attrs.iter().find(|a| a.key == "font_features") {
+            let value = font_settings_expr(attr, FontSetting::Features);
+            let _ = write!(modifiers, ".with_font_features({value})");
         }
         if let Some(variant) = attrs
             .iter()
@@ -300,25 +381,77 @@ impl ViewGen<'_> {
         transitions: &HashMap<String, String>,
         hoists: &mut Vec<String>,
     ) -> String {
-        let modifiers = self.inheritable_modifiers(attrs, transitions, hoists);
+        let modifiers =
+            self.inheritable_modifiers(attrs, transitions, hoists, StyleTarget::Declared);
         if modifiers.is_empty() {
             return String::new();
         }
         let closure = format!("move || Declared::default(){modifiers}");
         format!(
             ".declaring({})",
-            wrap_signal_clones(&[raw_color_value(attrs)], closure)
+            wrap_signal_clones(&raw_reactive_values(attrs), closure)
         )
     }
 }
 
-/// A `color:`'s value as the author wrote it, before `color_expr` substitutes it — scanned for `$ident` so a signal-backed colour clones itself into the closure that reads it, leaving the outer binding usable by sibling widgets.
-pub(super) fn raw_color_value(attrs: &[Attr]) -> &str {
-    attrs
+/// The values of the inheritable properties that may read state, as the author wrote them: scanned for `$ident` so each signal they read clones itself into the style closure.
+pub(super) fn raw_reactive_values(attrs: &[Attr]) -> Vec<&str> {
+    ["color", "font_variation", "font_features"]
         .iter()
-        .find(|a| a.key == "color")
+        .filter_map(|key| attrs.iter().find(|a| a.key == *key))
         .map(|a| a.value.text())
-        .unwrap_or("")
+        .collect()
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub(super) enum FontSetting {
+    Variations,
+    Features,
+}
+
+/// `font_variation:(wght 650, wdth $w)` or `font_features:(liga 0, tnum)` as the `FontVariations` or `FontFeatures` it builds: each clause a four-letter tag, then its value, which may read state. A feature named alone is turned on. A tag that is not four letters, or an axis with no value, is a build error naming it.
+pub(super) fn font_settings_expr(attr: &Attr, kind: FontSetting) -> String {
+    let text = match &attr.value {
+        Value::Quoted(text) => text.as_str(),
+        value => value.text().trim(),
+    };
+    let inner = text
+        .strip_prefix('(')
+        .and_then(|inner| inner.strip_suffix(')'))
+        .unwrap_or(text);
+    let (ty, cast) = match kind {
+        FontSetting::Variations => ("FontVariations", "f32"),
+        FontSetting::Features => ("FontFeatures", "u32"),
+    };
+    let mut expr = format!("{ty}::new()");
+    for clause in crate::transition::split_top_level(inner, ',')
+        .iter()
+        .map(|clause| clause.trim())
+        .filter(|clause| !clause.is_empty())
+    {
+        let (tag, value) = clause
+            .split_once(char::is_whitespace)
+            .unwrap_or((clause, ""));
+        let tag = tag.trim_matches(|c| c == '"' || c == '\'');
+        let value = value.trim();
+        if tag.len() != 4 || !tag.bytes().all(|b| b.is_ascii_graphic()) {
+            return format!(
+                "::core::compile_error!(\"`{}:` names `{tag}`, which is not a four-letter tag\")",
+                attr.key
+            );
+        }
+        let value = match (value.is_empty(), kind) {
+            (true, FontSetting::Features) => "1".to_string(),
+            (true, FontSetting::Variations) => {
+                return format!(
+                    "::core::compile_error!(\"`font_variation:` gives the axis `{tag}` no value\")"
+                );
+            }
+            (false, _) => super::signals::substitute_reads(value),
+        };
+        let _ = write!(expr, ".with(\"{tag}\", ({value}) as {cast})");
+    }
+    expr
 }
 
 /// The family a `font_family:` names, as an expression `TextStyle::with_font_family` accepts.
@@ -373,4 +506,81 @@ fn parse_weight(value: &str) -> Option<String> {
         return Some(n.to_string());
     }
     registry::keyword(registry::FONT_WEIGHT_VALUES, v).map(str::to_string)
+}
+
+/// The layout a `text` asks for: the keys that place it among its siblings, and a `height:` that pins the box over what it measures. Everything that styles the glyphs is the text style's, not the box's.
+fn text_layout_style(attrs: &[Attr]) -> String {
+    let mut extra = String::new();
+    for a in attrs {
+        if matches!(
+            a.key.as_str(),
+            "font_size"
+                | "font_family"
+                | "color"
+                | "font_weight"
+                | "font_style"
+                | "text_align"
+                | "lines"
+                | "ellipsis"
+                | "text_wrap"
+                | "height"
+                | "line_height"
+                | "letter_spacing"
+                | "raster"
+                | "font_variation"
+                | "font_features"
+        ) {
+            continue;
+        }
+        if let PropCall::Call(call) = layout_prop_call(&a.key, a.value.text()) {
+            extra.push_str(&call);
+        }
+    }
+    // A leaf measures its own height from the wrapped content; an explicit `height:` pins the box over that.
+    let explicit_height = attrs
+        .iter()
+        .find(|a| a.key == "height")
+        .and_then(|a| match layout_prop_call("height", a.value.text()) {
+            PropCall::Call(call) => Some(call),
+            _ => None,
+        })
+        .unwrap_or_default();
+    format!("LayoutStyle::new(){explicit_height}{extra}")
+}
+
+/// Which of the two style types a run of text-property modifiers is chained onto: a `text`'s own `TextStyle`, which resolves a length where it stands, or the `Declared` a container or a span says for what lies beneath it, which the tree resolves.
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub(super) enum StyleTarget {
+    Text,
+    Declared,
+}
+
+/// A `font_size:` or `letter_spacing:` value written with a unit (`22sw`, `1.5em`), as the `TextLength` it names, and whether it is a fraction of the surface.
+fn text_length(value: &str) -> Option<(String, bool)> {
+    let value = value.trim();
+    if let Some((variant, n)) = crate::style::surface_fraction(value) {
+        let fraction = crate::style::format_f32(n / 100.0);
+        return Some((format!("TextLength::{variant}({fraction})"), true));
+    }
+    let em = value.strip_suffix("em")?.trim().parse::<f32>().ok()?;
+    Some((
+        format!("TextLength::Em({})", crate::style::format_f32(em)),
+        false,
+    ))
+}
+
+/// `.{method}(…)` for a length: pixels as they always were, a length with a unit resolved where the target resolves it. A `text` reads the surface reactively only for a fraction of it, so a resize re-styles just the text that depends on it.
+fn length_modifier(method: &str, value: &str, fallback: &str, target: StyleTarget) -> String {
+    match (text_length(value), target) {
+        (Some((length, _)), StyleTarget::Declared) => format!(".{method}({length})"),
+        (Some((length, surface)), StyleTarget::Text) => {
+            let on = if surface {
+                "use_surface_size()"
+            } else {
+                "Size::ZERO"
+            };
+            format!(".{method}_in({length}, {on})")
+        }
+        (None, _) => format!(".{method}({})", number_or(value, fallback)),
+    }
 }

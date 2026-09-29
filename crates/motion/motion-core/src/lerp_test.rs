@@ -70,3 +70,21 @@ fn color_lerp_achromatic_endpoint_carries_the_other_hue() {
         "hue {hue} != red hue {red_hue}"
     );
 }
+
+#[test]
+fn font_axes_tween_and_spring_axis_by_axis() {
+    use renderer_core::FontVariations;
+    let from = FontVariations::new()
+        .with("wght", 400.0)
+        .with("wdth", 100.0);
+    let to = FontVariations::new().with("wght", 800.0).with("wdth", 50.0);
+    let half = Lerp::lerp(&from, &to, 0.5);
+    assert_eq!(half.get("wght"), Some(600.0));
+    assert_eq!(half.get("wdth"), Some(75.0));
+    let delta = to.sub(&from);
+    assert_eq!(delta.get("wght"), Some(400.0));
+    assert_eq!(from.add(&delta), to);
+    assert_eq!(delta.scale(0.5).get("wdth"), Some(-25.0));
+    assert_eq!(FontVariations::zero().add(&from), from);
+    assert_eq!(delta.magnitude_sq(), 400.0 * 400.0 + 50.0 * 50.0);
+}

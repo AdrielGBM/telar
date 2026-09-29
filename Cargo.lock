@@ -5608,6 +5608,7 @@ dependencies = [
  "telar-geometry-core",
  "telar-preferences-core",
  "telar-reactive-core",
+ "telar-renderer-core",
  "web-time",
 ]
 

@@ -16,9 +16,10 @@ use layout_core::{
     SizeDimension, TemplateTrack,
 };
 use renderer_core::{
-    BorderRadius, DrawCommand, Element, ElementId, RenderBackend, Role, Semantics,
+    BorderRadius, Color, DrawCommand, Element, ElementId, RenderBackend, Role, Semantics,
+    TextMetrics, TextStyle, TextWrap,
 };
-use telar_renderer_dom::DomRenderer;
+use telar_renderer_dom::{CanvasTextMetrics, DomRenderer};
 use wasm_bindgen::JsCast;
 use wasm_bindgen_test::{wasm_bindgen_test, wasm_bindgen_test_configure};
 
@@ -35,17 +36,32 @@ const SURFACE: (f32, f32) = (800.0, 600.0);
 struct Spec {
     style: LayoutStyle,
     children: Vec<Spec>,
+    /// A leaf that measures a string, as a `text` does: Taffy asks the document's measurer, the browser lays the glyphs out itself.
+    text: Option<(String, TextStyle)>,
 }
 
 fn a_box(style: LayoutStyle) -> Spec {
     Spec {
         style,
         children: Vec::new(),
+        text: None,
     }
 }
 
 fn holding(style: LayoutStyle, children: Vec<Spec>) -> Spec {
-    Spec { style, children }
+    Spec {
+        style,
+        children,
+        text: None,
+    }
+}
+
+fn text_leaf(text: &str, style: TextStyle) -> Spec {
+    Spec {
+        style: LayoutStyle::new(),
+        children: Vec::new(),
+        text: Some((text.to_owned(), style)),
+    }
 }
 
 fn sized(width: f32, height: f32) -> Spec {
@@ -56,9 +72,34 @@ fn sized(width: f32, height: f32) -> Spec {
 struct Built {
     node: NodeId,
     children: Vec<Built>,
+    text: Option<(String, TextStyle)>,
 }
 
 fn build(engine: &mut LayoutEngine, spec: Spec) -> Built {
+    if let Some((text, style)) = spec.text {
+        let (measured, with) = (text.clone(), style.clone());
+        let node = engine
+            .new_measured_leaf(
+                spec.style,
+                Box::new(move |space| match space {
+                    AvailableSpace::Definite(width) => {
+                        CanvasTextMetrics.measure(&measured, None, width, &with)
+                    }
+                    AvailableSpace::MaxContent => {
+                        CanvasTextMetrics.measure(&measured, None, 1.0e6, &with)
+                    }
+                    AvailableSpace::MinContent => {
+                        CanvasTextMetrics.min_content(&measured, None, &with)
+                    }
+                }),
+            )
+            .expect("the engine took the leaf");
+        return Built {
+            node,
+            children: Vec::new(),
+            text: Some((text, style)),
+        };
+    }
     let children: Vec<Built> = spec
         .children
         .into_iter()
@@ -68,7 +109,11 @@ fn build(engine: &mut LayoutEngine, spec: Spec) -> Built {
     let node = engine
         .new_container(spec.style, &ids)
         .expect("the engine took the style");
-    Built { node, children }
+    Built {
+        node,
+        children,
+        text: None,
+    }
 }
 
 /// The frame a widget tree would have emitted for these boxes: an element apiece, carrying the CSS it asked for and the rect Taffy gave it.
@@ -92,6 +137,14 @@ fn frame(engine: &LayoutEngine, built: &Built, origin: (f32, f32), out: &mut Vec
             rect,
         )),
     });
+    if let Some((text, style)) = &built.text {
+        out.push(DrawCommand::Text {
+            text: Arc::from(text.as_str()),
+            spans: None,
+            rect: Rect::new(0.0, 0.0, rect.width, rect.height),
+            style: Arc::new(style.clone()),
+        });
+    }
     for child in &built.children {
         frame(engine, child, (rect.x, rect.y), out);
     }
@@ -802,4 +855,65 @@ async fn a_clip_above_a_sticky_box_does_not_capture_it() {
         250.0,
     )
     .await;
+}
+
+/// A display line: one word at a size that fills the width, on one line, with a line box shorter than the glyphs and tracking pulled in. Where a heading of this kind sits is what every box under it is laid out from, so the two engines must agree on its box at every size a page uses.
+fn display(size: f32, line_height: f32, tracking_em: f32) -> TextStyle {
+    TextStyle::new(size, Color::BLACK)
+        .with_text_wrap(TextWrap::NoWrap)
+        .with_line_height(line_height)
+        .with_letter_spacing(tracking_em * size)
+}
+
+#[wasm_bindgen_test]
+fn a_display_line_takes_the_same_box_in_both_at_every_size() {
+    for size in [120.0, 200.0, 280.0, 400.0] {
+        parity(
+            &format!("a {size}px display line"),
+            Direction::Ltr,
+            surface(
+                LayoutStyle::new()
+                    .flex_column()
+                    .align_items(AlignItems::START),
+                vec![text_leaf("ADRIEL", display(size, 0.85, -0.04))],
+            ),
+        );
+    }
+}
+
+#[wasm_bindgen_test]
+fn a_line_box_shorter_than_its_glyphs_stacks_by_the_line_box() {
+    parity(
+        "two display lines under a tight line box",
+        Direction::Ltr,
+        surface(
+            LayoutStyle::new()
+                .flex_column()
+                .align_items(AlignItems::START),
+            vec![
+                text_leaf("ADRIEL", display(160.0, 0.8, -0.02)),
+                text_leaf("BARRIENTOS", display(96.0, 0.9, 0.0)),
+                sized(200.0, 20.0),
+            ],
+        ),
+    );
+}
+
+#[wasm_bindgen_test]
+fn tracking_opened_wide_moves_what_follows_by_the_same_amount() {
+    parity(
+        "a row of tracked display words",
+        Direction::Ltr,
+        surface(
+            LayoutStyle::new()
+                .flex_row()
+                .align_items(AlignItems::START)
+                .gap(12.0),
+            vec![
+                text_leaf("A", display(200.0, 1.0, 0.2)),
+                text_leaf("IB", display(200.0, 1.0, -0.06)),
+                sized(40.0, 40.0),
+            ],
+        ),
+    );
 }

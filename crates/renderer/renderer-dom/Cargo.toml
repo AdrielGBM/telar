@@ -57,5 +57,9 @@ name = "font_load"
 path = "src/font_load_test.rs"
 
 [[test]]
+name = "font_variation"
+path = "src/font_variation_test.rs"
+
+[[test]]
 name = "links"
 path = "src/links_test.rs"

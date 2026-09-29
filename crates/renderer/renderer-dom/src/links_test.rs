@@ -309,3 +309,98 @@ async fn a_modified_click_an_external_one_and_a_disabled_one_are_the_browser_s()
     next_frames().await;
     assert_eq!(activated(), Vec::<u64>::new());
 }
+
+const PARAGRAPH: u64 = 206;
+
+fn render_paragraph() {
+    mount();
+    let spans: Arc<[renderer_core::Span]> = Arc::from(vec![
+        renderer_core::Span::new(
+            9..13,
+            renderer_core::Declared::default().with_font_weight(700),
+        )
+        .linking_to(Destination::Route(Location::root().segment("team"))),
+        renderer_core::Span::new(14..19, renderer_core::Declared::default())
+            .linking_to(external("https://example.com/").expect("a scheme")),
+    ]);
+    let commands = [
+        DrawCommand::PushElement {
+            element: Arc::new(Element::new(
+                ElementId(PARAGRAPH),
+                Semantics::group(),
+                "width:300px;height:20px",
+                Rect::new(0.0, 0.0, 300.0, 20.0),
+            )),
+        },
+        DrawCommand::Text {
+            text: Arc::from("Meet the team today"),
+            spans: Some(spans),
+            rect: Rect::new(0.0, 0.0, 300.0, 20.0),
+            style: Arc::new(renderer_core::TextStyle::new(
+                14.0,
+                renderer_core::Color::BLACK,
+            )),
+        },
+        DrawCommand::PopElement,
+    ];
+    SURFACE.with(|surface| {
+        let mut surface = surface.borrow_mut();
+        let surface = surface.as_mut().expect("mounted");
+        surface
+            .renderer
+            .render_frame(&commands, None)
+            .expect("the frame reconciled");
+    });
+}
+
+fn run_anchor(run: u32) -> web_sys::HtmlElement {
+    host()
+        .query_selector(&format!(
+            "[data-telar-run-box=\"{PARAGRAPH}\"][data-telar-run=\"{run}\"]"
+        ))
+        .expect("a valid selector")
+        .unwrap_or_else(|| panic!("run {run} is in the document"))
+        .dyn_into()
+        .expect("an HTML element")
+}
+
+#[wasm_bindgen_test]
+async fn a_link_inside_a_paragraph_is_an_anchor_and_a_plain_click_comes_back_as_its_run() {
+    render_paragraph();
+    let team = run_anchor(0);
+    assert_eq!(team.tag_name(), "A");
+    assert_eq!(team.get_attribute("href").as_deref(), Some("/team"));
+    assert_eq!(team.text_content().as_deref(), Some("team"));
+    assert!(
+        team.get_attribute("style")
+            .unwrap_or_default()
+            .contains("font-weight:700")
+    );
+    let paragraph = team.parent_element().expect("the paragraph holds it");
+    assert_eq!(
+        paragraph.text_content().as_deref(),
+        Some("Meet the team today")
+    );
+    assert_eq!(
+        run_anchor(1).get_attribute("target").as_deref(),
+        Some("_blank")
+    );
+
+    RECORDED.with(|recorded| recorded.borrow_mut().clear());
+    assert!(click(&team, &web_sys::MouseEventInit::new()));
+    next_frames().await;
+    let runs: Vec<(u64, u32)> = RECORDED.with(|recorded| {
+        std::mem::take(&mut *recorded.borrow_mut())
+            .into_iter()
+            .filter_map(|event| match event {
+                Event::RunActivated { box_id, run } => Some((box_id, run)),
+                _ => None,
+            })
+            .collect()
+    });
+    assert_eq!(runs, vec![(PARAGRAPH, 0)]);
+    assert!(
+        !click(&run_anchor(1), &web_sys::MouseEventInit::new()),
+        "a page opened beside this one is the browser's"
+    );
+}

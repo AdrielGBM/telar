@@ -335,3 +335,134 @@ fn a_squeezed_row_never_narrows_a_label_below_its_longest_word() {
         );
     }
 }
+
+/// A style that follows state is measured again when it changes, the way new content is: a size, a weight or an axis read from a signal moves the box, not only the glyphs.
+#[test]
+fn a_restyled_text_is_measured_again() {
+    reset_layout_runtime();
+    let size = signal(12.0f32);
+    let text = Text::new(
+        || "Measured".to_string(),
+        LayoutStyle::new(),
+        move || TextStyle::new(size.get(), Color::BLACK),
+    )
+    .unwrap();
+    let root = new_container(LayoutStyle::new().flex_row(), &[text.layout_node()]).unwrap();
+    let width = || {
+        relayout_if_dirty();
+        compute_layout(root, AvailableSpace::MaxContent, AvailableSpace::MaxContent).unwrap();
+        track_layout(text.layout_node()).unwrap().get().width
+    };
+    let small = width();
+    size.set(48.0);
+    let large = width();
+    assert!(large > small * 2.0, "small={small} large={large}");
+}
+
+/// A tap on a link run follows it, a tap beside it does nothing, and a drag that starts on it is no tap.
+#[test]
+fn a_tap_on_a_link_run_follows_it() {
+    use platform_core::{
+        Destination, Location, PointerButton, PointerSource, location_history,
+        receive_location_history,
+    };
+    use renderer_core::{Declared, Span};
+    reset_layout_runtime();
+    receive_location_history(vec![Location::root()]);
+    let team = Location::root().segment("team");
+    let link = Destination::Route(team.clone());
+    let mut text = Text::spanned(
+        || "Meet the team today".to_string(),
+        move || vec![Span::new(9..13, Declared::default()).linking_to(link.clone())],
+        LayoutStyle::new(),
+        || TextStyle::new(16.0, Color::BLACK),
+    )
+    .unwrap();
+    let root = new_container(LayoutStyle::new().flex_row(), &[text.layout_node()]).unwrap();
+    compute_layout(
+        root,
+        AvailableSpace::Definite(600.0),
+        AvailableSpace::MaxContent,
+    )
+    .unwrap();
+    let rect = track_layout(text.layout_node()).unwrap().get();
+    let style = TextStyle::new(16.0, Color::BLACK);
+    let before = crate::text_metrics::measure_text("Meet the ", None, 600.0, &style).0;
+    let (x, y) = (
+        (rect.x + before + 4.0) as f64,
+        (rect.y + rect.height / 2.0) as f64,
+    );
+    let tap = |text: &mut Text, x: f64| {
+        text.on_event(&Event::PointerPressed {
+            x,
+            y,
+            button: PointerButton::Primary,
+            source: PointerSource::Mouse,
+        });
+        text.on_event(&Event::PointerReleased {
+            x,
+            y,
+            button: PointerButton::Primary,
+            source: PointerSource::Mouse,
+        })
+    };
+    assert_eq!(tap(&mut text, (rect.x + 2.0) as f64), EventResult::Ignored);
+    assert_eq!(location_history(), vec![Location::root()]);
+    assert_eq!(tap(&mut text, x), EventResult::Handled);
+    assert_eq!(location_history(), vec![Location::root(), team.clone()]);
+    assert!(crate::link::activate_run(text.layout_node().into(), 0));
+}
+
+/// A size written as a fraction of the surface follows the surface, and the text is measured again at the new size.
+#[test]
+fn a_size_relative_to_the_surface_follows_it() {
+    use renderer_core::TextLength;
+    reset_layout_runtime();
+    crate::context::set_surface_size(geometry_core::Size::new(1000.0, 600.0));
+    let text = Text::declaring(
+        || "Name".to_string(),
+        LayoutStyle::new(),
+        |inherited| {
+            inherited.with_font_size_in(
+                TextLength::SurfaceWidth(0.1),
+                crate::context::use_surface_size(),
+            )
+        },
+    )
+    .unwrap();
+    let root = new_container(LayoutStyle::new().flex_row(), &[text.layout_node()]).unwrap();
+    let width = || {
+        relayout_if_dirty();
+        compute_layout(root, AvailableSpace::MaxContent, AvailableSpace::MaxContent).unwrap();
+        track_layout(text.layout_node()).unwrap().get().width
+    };
+    let wide = width();
+    crate::context::set_surface_size(geometry_core::Size::new(500.0, 600.0));
+    let narrow = width();
+    assert!(
+        (wide / narrow - 2.0).abs() < 0.2,
+        "half the surface, half the name: {wide} -> {narrow}"
+    );
+}
+
+/// A container that says `em` means the size it inherits, and a text beneath it takes the result.
+#[test]
+fn em_declared_above_is_of_the_size_it_inherits() {
+    use renderer_core::{Declared, TextLength};
+    reset_layout_runtime();
+    let text = Text::declaring(
+        || "x".to_string(),
+        LayoutStyle::new(),
+        |inherited| inherited,
+    )
+    .unwrap();
+    let node = text.layout_node();
+    let middle = new_container(LayoutStyle::new(), &[node]).unwrap();
+    let outer = new_container(LayoutStyle::new(), &[middle]).unwrap();
+    crate::inherit::declare(outer, Declared::default().with_font_size(20.0));
+    crate::inherit::declare(
+        middle,
+        Declared::default().with_font_size(TextLength::Em(1.5)),
+    );
+    assert_eq!(crate::inherit::inherited_text_style(node).font_size, 30.0);
+}

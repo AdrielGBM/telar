@@ -106,8 +106,8 @@ pub use layout_transition::{LayoutTransition, animate_layout};
 pub use lazy::Lazy;
 pub use line_gutter::LineGutter;
 pub use link::{
-    AnchorRegistration, activate_box, follow, follow_beside, follow_pressed, has_anchor,
-    reader_moved, register_anchor, reveal_anchor,
+    AnchorRegistration, activate_box, activate_run, follow, follow_beside, follow_pressed,
+    has_anchor, reader_moved, register_anchor, reveal_anchor,
 };
 pub use named_overlay::{close as close_overlay, open as open_overlay, state as overlay_state};
 pub use overlay::{Overlay, Placement, anchor_rect};
@@ -134,7 +134,7 @@ pub use surface::{DEFAULT_SCRIM, Edge, SurfaceScaffold, SurfaceTransition};
 pub use surface_context::{Surface, SurfaceGuard};
 #[cfg(feature = "svg")]
 pub use svg::Svg;
-pub use text::Text;
+pub use text::{Text, TextRun};
 pub use text_area::TextArea;
 pub use theme_provider::{ThemeProvider, provide_theme};
 pub use ui_tree::{Component, ComponentList, EventResult, NodeVec, RenderNode};

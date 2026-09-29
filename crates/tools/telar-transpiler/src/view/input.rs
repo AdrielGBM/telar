@@ -23,9 +23,14 @@ impl ViewGen<'_> {
 
         let mut hoists = Vec::new();
         let transitions = std::collections::HashMap::new();
-        let modifiers = self.inheritable_modifiers(&el.attributes, &transitions, &mut hoists);
+        let modifiers = self.inheritable_modifiers(
+            &el.attributes,
+            &transitions,
+            &mut hoists,
+            super::text::StyleTarget::Text,
+        );
         let style = wrap_signal_clones(
-            &[super::text::raw_color_value(&el.attributes)],
+            &super::text::raw_reactive_values(&el.attributes),
             format!("move |__inherited: TextStyle| __inherited{modifiers}"),
         );
         let size = el

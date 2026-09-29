@@ -26,6 +26,18 @@ pub trait TextMetrics: Send + Sync + 'static {
 
     /// The height of one line at `font_size`. A question rather than a constant because a terminal's line height is a cell, not a multiple of a font size.
     fn line_height(&self, font_size: f32) -> f32;
+
+    /// The byte offset of the character under `(x, y)` in `text` laid out at `max_width` the way [`measure`](Self::measure) lays it out, from the top-left of the text. `None` off the text, and on a surface that cannot tell: a document answers a press on a run itself.
+    fn index_at(
+        &self,
+        _text: &str,
+        _spans: Option<&[Span]>,
+        _max_width: f32,
+        _style: &TextStyle,
+        _at: (f32, f32),
+    ) -> Option<usize> {
+        None
+    }
 }
 
 static TEXT_METRICS: RwLock<Option<Arc<dyn TextMetrics>>> = RwLock::new(None);
@@ -78,6 +90,17 @@ pub fn measure_min_content(text: &str, spans: Option<&[Span]>, style: &TextStyle
 /// The text's drawn glyph extent `(ink_top, ink_height)`. See [`TextMetrics::ink_bounds`].
 pub fn measure_ink_bounds(text: &str, max_width: f32, style: &TextStyle) -> (f32, f32) {
     metrics().ink_bounds(text, max_width, style)
+}
+
+/// The byte offset of the character under `at` in `text`. See [`TextMetrics::index_at`].
+pub fn text_index_at(
+    text: &str,
+    spans: Option<&[Span]>,
+    max_width: f32,
+    style: &TextStyle,
+    at: (f32, f32),
+) -> Option<usize> {
+    metrics().index_at(text, spans, max_width, style, at)
 }
 
 /// The height of one line of text at `font_size`. See [`TextMetrics::line_height`].

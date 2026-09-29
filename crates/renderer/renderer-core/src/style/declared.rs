@@ -1,7 +1,10 @@
 //! [`Declared`]: a partial style — every field optional — which is what a node saying "bold from here down" needs, and what a byte range of a paragraph restyles itself with.
 
+use geometry_core::Size;
+
 use super::{
-    FontFamily, FontStyle, LineHeight, Paint, Raster, TextAlign, TextShadow, TextStyle, TextWrap,
+    FontFamily, FontFeatures, FontStyle, FontVariations, LineHeight, Paint, Raster, TextAlign,
+    TextLength, TextShadow, TextStyle, TextWrap,
 };
 
 /// What one place says about the text style around it, each field `None` where it says nothing.
@@ -12,27 +15,31 @@ use super::{
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct Declared {
     pub font_family: Option<FontFamily>,
-    pub font_size: Option<f32>,
+    pub font_size: Option<TextLength>,
     pub color: Option<Paint>,
     pub font_weight: Option<u16>,
     pub font_style: Option<FontStyle>,
     pub line_height: Option<LineHeight>,
-    pub letter_spacing: Option<f32>,
+    pub letter_spacing: Option<TextLength>,
     pub text_align: Option<TextAlign>,
     pub text_wrap: Option<TextWrap>,
     pub text_shadow: Option<TextShadow>,
     pub raster: Option<Raster>,
+    pub font_variations: Option<FontVariations>,
+    pub font_features: Option<FontFeatures>,
 }
 
 impl Declared {
-    /// `base` with everything this declares applied over it.
-    pub fn over(&self, base: &TextStyle) -> TextStyle {
+    /// `base` with everything this declares applied over it, on a surface of `surface`: a size in `em` is of `base`'s, a spacing in `em` of the size this resolves to, and a fraction of the surface of `surface`.
+    ///
+    /// A renderer is handed spans already resolved against their surface (see [`on_surface`](Self::on_surface)), so it passes `Size::ZERO`: pixels and `em` are all it can meet.
+    pub fn over(&self, base: &TextStyle, surface: Size) -> TextStyle {
         let mut out = base.clone();
         if let Some(family) = &self.font_family {
             out.font_family = family.clone();
         }
         if let Some(size) = self.font_size {
-            out.font_size = size;
+            out.font_size = size.resolve(base.font_size, surface);
         }
         if let Some(color) = self.color {
             out.color = color;
@@ -47,7 +54,7 @@ impl Declared {
             out.line_height = line_height;
         }
         if let Some(letter_spacing) = self.letter_spacing {
-            out.letter_spacing = letter_spacing;
+            out.letter_spacing = letter_spacing.resolve(out.font_size, surface);
         }
         if let Some(text_align) = self.text_align {
             out.text_align = text_align;
@@ -61,11 +68,36 @@ impl Declared {
         if let Some(raster) = self.raster {
             out.raster = raster;
         }
+        if let Some(font_variations) = &self.font_variations {
+            out.font_variations = font_variations.clone();
+        }
+        if let Some(font_features) = &self.font_features {
+            out.font_features = font_features.clone();
+        }
         out
     }
 
     pub fn is_empty(&self) -> bool {
         *self == Self::default()
+    }
+
+    /// Whether anything here is a fraction of the surface, and so has to be resolved again when the surface changes size.
+    pub fn uses_surface(&self) -> bool {
+        self.font_size.is_some_and(TextLength::is_surface_relative)
+            || self
+                .letter_spacing
+                .is_some_and(TextLength::is_surface_relative)
+    }
+
+    /// This declaration with every fraction of the surface turned into the pixels it comes to on `surface`: what a span is before a renderer, which knows no surface, reads it.
+    pub fn on_surface(&self, surface: Size) -> Self {
+        Self {
+            font_size: self.font_size.map(|size| size.on_surface(surface)),
+            letter_spacing: self
+                .letter_spacing
+                .map(|spacing| spacing.on_surface(surface)),
+            ..self.clone()
+        }
     }
 
     pub fn with_font_weight(mut self, font_weight: u16) -> Self {
@@ -88,13 +120,13 @@ impl Declared {
         self
     }
 
-    pub fn with_font_size(mut self, font_size: f32) -> Self {
-        self.font_size = Some(font_size);
+    pub fn with_font_size(mut self, font_size: impl Into<TextLength>) -> Self {
+        self.font_size = Some(font_size.into());
         self
     }
 
-    pub fn with_letter_spacing(mut self, letter_spacing: f32) -> Self {
-        self.letter_spacing = Some(letter_spacing);
+    pub fn with_letter_spacing(mut self, letter_spacing: impl Into<TextLength>) -> Self {
+        self.letter_spacing = Some(letter_spacing.into());
         self
     }
 
@@ -117,6 +149,16 @@ impl Declared {
         self.text_wrap = Some(text_wrap);
         self
     }
+
+    pub fn with_font_variations(mut self, font_variations: FontVariations) -> Self {
+        self.font_variations = Some(font_variations);
+        self
+    }
+
+    pub fn with_font_features(mut self, font_features: FontFeatures) -> Self {
+        self.font_features = Some(font_features);
+        self
+    }
 }
 
 /// A byte range of a paragraph that styles itself differently from the paragraph.
@@ -126,10 +168,30 @@ impl Declared {
 pub struct Span {
     pub range: std::ops::Range<u32>,
     pub over: Declared,
+    /// Where the range takes the reader when activated: a link inside a paragraph. Each target makes it one its own way, as it does for a box (see `Destination`).
+    pub link: Option<semantics_core::Destination>,
 }
 
 impl Span {
     pub fn new(range: std::ops::Range<u32>, over: Declared) -> Self {
-        Self { range, over }
+        Self {
+            range,
+            over,
+            link: None,
+        }
     }
+
+    /// This range as a link to `destination`.
+    pub fn linking_to(mut self, destination: semantics_core::Destination) -> Self {
+        self.link = Some(destination);
+        self
+    }
+}
+
+/// The span in `spans` whose range holds byte `index` and that links somewhere, with its position among the spans.
+pub fn link_at(spans: &[Span], index: usize) -> Option<(usize, &semantics_core::Destination)> {
+    spans.iter().enumerate().find_map(|(at, span)| {
+        let holds = (span.range.start as usize..span.range.end as usize).contains(&index);
+        span.link.as_ref().filter(|_| holds).map(|link| (at, link))
+    })
 }

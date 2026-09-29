@@ -135,3 +135,24 @@ fn a_stack_is_emitted_in_order_with_no_extra_fallback() {
     let css = css_of(&style);
     assert!(css.contains(r#"font-family:"Iosevka",monospace;"#), "{css}");
 }
+
+#[test]
+fn axes_and_features_are_the_settings_a_browser_reads() {
+    let style = TextStyle::new(16.0, Color::BLACK)
+        .with_font_variations(
+            renderer_core::FontVariations::new()
+                .with("wght", 650.0)
+                .with("wdth", 87.5),
+        )
+        .with_font_features(renderer_core::FontFeatures::new().with("tnum", 1));
+    let css = css_of(&style);
+    assert!(
+        css.contains("font-variation-settings:\"wdth\" 87.5, \"wght\" 650"),
+        "{css}"
+    );
+    assert!(css.contains("font-feature-settings:\"tnum\" 1"), "{css}");
+    assert!(
+        !css_of(&TextStyle::new(16.0, Color::BLACK)).contains("font-variation-settings"),
+        "a face left alone says nothing"
+    );
+}

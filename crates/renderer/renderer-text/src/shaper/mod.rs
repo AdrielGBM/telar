@@ -137,6 +137,16 @@ fn cosmic_align(align: TextAlign) -> Option<Align> {
     }
 }
 
+/// The weight a face is shaped and drawn at. A `wght` setting wins over `font_weight`, as it does in a document; cosmic-text instances a variable face on `wght` alone, so this is the one axis the shaper can place anywhere along its range.
+pub(crate) fn drawn_weight(style: &TextStyle) -> u16 {
+    style
+        .font_variations
+        .get("wght")
+        .map_or(style.font_weight, |wght| {
+            wght.round().clamp(1.0, 1000.0) as u16
+        })
+}
+
 /// The cosmic-text attributes one resolved style asks for.
 fn text_attrs<'a>(
     style: &'a TextStyle,
@@ -149,11 +159,18 @@ fn text_attrs<'a>(
             font_system,
             family_availability,
         ))
-        .weight(Weight(style.font_weight))
+        .weight(Weight(drawn_weight(style)))
         .style(cosmic_style(style.font_style));
-    // Only when non-default, so unspaced text keeps cosmic-text's exact default shaping and the byte-golden.
-    if style.letter_spacing != 0.0 {
-        attrs = attrs.letter_spacing(style.letter_spacing);
+    if !style.font_features.is_empty() {
+        let mut features = cosmic_text::FontFeatures::new();
+        for (tag, value) in style.font_features.iter() {
+            features.set(cosmic_text::FeatureTag::new(&tag.bytes()), value);
+        }
+        attrs = attrs.font_features(features);
+    }
+    // Only when non-default, so unspaced text keeps cosmic-text's exact default shaping and the byte-golden. cosmic-text takes tracking in em and Telar gives it in pixels, so it is divided by the size it is shaped at.
+    if style.letter_spacing != 0.0 && style.font_size > 0.0 {
+        attrs = attrs.letter_spacing(style.letter_spacing / style.font_size);
     }
     if style.raster != Raster::Smooth {
         attrs = attrs.cache_key_flags(raster_flags(style.raster));
@@ -175,7 +192,10 @@ fn styled_runs<'a>(text: &'a str, spans: &[Span], style: &TextStyle) -> Vec<(&'a
             runs.push((&text[at..start], style.clone()));
         }
         if end > start {
-            runs.push((&text[start..end], span.over.over(style)));
+            runs.push((
+                &text[start..end],
+                span.over.over(style, geometry_core::Size::ZERO),
+            ));
         }
         at = end;
     }
@@ -193,6 +213,11 @@ fn shape_buffer(
     rect: Rect,
     style: &TextStyle,
 ) -> Buffer {
+    // `>` rather than `<=` negated, so a NaN size is refused too.
+    if !(style.font_size > 0.0 && effective_line_height(style) > 0.0) {
+        // cosmic-text refuses to lay a line out at no height. A size of nothing — a fraction of a surface not measured yet, a line height of zero — is text that takes no room and draws nothing, so the buffer is left empty.
+        return Buffer::new(font_system, Metrics::new(1.0, 1.0));
+    }
     let font_size = style.font_size;
     let metrics = Metrics::new(font_size, effective_line_height(style));
     let mut buffer = Buffer::new(font_system, metrics);
@@ -209,7 +234,10 @@ fn shape_buffer(
             let mut resolved: Vec<(&str, Attrs<'_>)> = Vec::with_capacity(runs.len());
             for (slice, run_style) in runs.iter() {
                 let mut run_attrs = text_attrs(run_style, font_system, family_availability);
-                if run_style.font_size != style.font_size {
+                if run_style.font_size != style.font_size
+                    && run_style.font_size > 0.0
+                    && effective_line_height(run_style) > 0.0
+                {
                     run_attrs = run_attrs.metrics(Metrics::new(
                         run_style.font_size,
                         effective_line_height(run_style),
@@ -243,14 +271,15 @@ fn clip_spans(spans: Option<&[Span]>, len: usize) -> Option<Vec<Span>> {
             .map(|s| Span {
                 range: s.range.start..s.range.end.min(len as u32),
                 over: s.over.clone(),
+                link: s.link.clone(),
             })
             .collect(),
     )
 }
 
-/// cosmic-text reports glyph offsets within each logical line, so every visual line's start is shifted past the lines and line endings before it.
-fn visual_line_starts(buffer: &Buffer) -> Vec<usize> {
-    let line_offsets: Vec<usize> = buffer
+/// Where each logical line of `buffer` starts in the text it was shaped from.
+fn line_offsets(buffer: &Buffer) -> Vec<usize> {
+    buffer
         .lines
         .iter()
         .scan(0, |offset, line| {
@@ -258,7 +287,29 @@ fn visual_line_starts(buffer: &Buffer) -> Vec<usize> {
             *offset += line.text().len() + line.ending().as_str().len();
             Some(start)
         })
-        .collect();
+        .collect()
+}
+
+/// The byte in the text `buffer` was shaped from of the glyph under `(x, y)`, lines stacked `line_height` apart from the top.
+pub(super) fn glyph_index_at(
+    buffer: &Buffer,
+    line_height: f32,
+    (x, y): (f32, f32),
+) -> Option<usize> {
+    let offsets = line_offsets(buffer);
+    let run = buffer
+        .layout_runs()
+        .find(|run| y >= run.line_top && y < run.line_top + line_height)?;
+    let glyph = run
+        .glyphs
+        .iter()
+        .find(|glyph| x >= glyph.x && x < glyph.x + glyph.w)?;
+    Some(offsets[run.line_i] + glyph.start)
+}
+
+/// cosmic-text reports glyph offsets within each logical line, so every visual line's start is shifted past the lines and line endings before it.
+fn visual_line_starts(buffer: &Buffer) -> Vec<usize> {
+    let line_offsets = line_offsets(buffer);
     buffer
         .layout_runs()
         .map(|run| {

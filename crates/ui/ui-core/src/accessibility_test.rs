@@ -370,3 +370,30 @@ fn a_named_picture_is_read_as_an_image() {
         "Company logo, image"
     );
 }
+
+/// A link run inside a paragraph is announced as a link of its own, named by its words and carrying where it goes, after the paragraph that holds it.
+#[test]
+fn a_link_run_is_a_link_after_its_paragraph() {
+    reset_layout_runtime();
+    let spans: Arc<[renderer_core::Span]> = Arc::from(vec![
+        renderer_core::Span::new(9..13, renderer_core::Declared::default())
+            .linking_to(platform_core::Destination::external("https://example.com").unwrap()),
+    ]);
+    let nodes = snapshot(&[DrawCommand::Text {
+        spans: Some(spans),
+        text: Arc::from("Meet the team today"),
+        rect: rect(0.0, 0.0, 200.0, 20.0),
+        style: Arc::new(TextStyle::new(12.0, renderer_core::Color::BLACK)),
+    }]);
+    let described: Vec<(Role, &str, Option<&str>)> = nodes
+        .iter()
+        .map(|node| (node.role, node.name.as_str(), node.url.as_deref()))
+        .collect();
+    assert_eq!(
+        described,
+        [
+            (Role::Label, "Meet the team today", None),
+            (Role::Link, "team", Some("https://example.com")),
+        ]
+    );
+}

@@ -157,6 +157,9 @@ is an error, not a no-op, because the alternative is an animation that silently 
 
 **Paint** — `opacity`, `fill`, `stroke`, `color`.
 **Transform** — `rotate`, `scale`, `scale_x`, `scale_y`, `translate_x`, `translate_y`.
+**Text** — `font_variation`, the one text property allowed through: an axis animated on scroll or on hover is
+what a variable display face is for. A value that changes the text's extent measures it again on each change,
+which is the cost this line otherwise keeps out, paid knowingly for one text rather than for every box.
 
 Both halves are read per frame from a closure the renderer already re-runs, so animating them costs a repaint
 and nothing else.

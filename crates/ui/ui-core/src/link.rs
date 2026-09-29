@@ -10,10 +10,12 @@ use rustc_hash::FxHashMap;
 
 type Reveal = Rc<dyn Fn() -> bool>;
 type ReadDestination = Rc<dyn Fn() -> Option<Destination>>;
+pub(crate) type ReadRun = Rc<dyn Fn(usize) -> Option<Destination>>;
 
 thread_local! {
     static ANCHORS: RefCell<FxHashMap<Arc<str>, Reveal>> = RefCell::default();
     static LINKS: RefCell<FxHashMap<NodeId, ReadDestination>> = RefCell::default();
+    static RUNS: RefCell<FxHashMap<NodeId, ReadRun>> = RefCell::default();
     static PENDING: RefCell<Option<Arc<str>>> = const { RefCell::new(None) };
     static REVEALER_INSTALLED: Cell<bool> = const { Cell::new(false) };
 }
@@ -132,6 +134,21 @@ pub fn activate_box(box_id: u64) -> bool {
     let read = LINKS.with(|links| links.borrow().get(&NodeId::from(box_id)).cloned());
     read.and_then(|read| read())
         .is_some_and(|destination| follow(&destination))
+}
+
+/// Follows the link on span `run` of the text whose box is `box_id`, for a surface that activated it by itself (see [`Event::RunActivated`](platform_core::Event::RunActivated)). `false` when the text is gone or that span links nowhere.
+pub fn activate_run(box_id: u64, run: u32) -> bool {
+    let read = RUNS.with(|runs| runs.borrow().get(&NodeId::from(box_id)).cloned());
+    read.and_then(|read| read(run as usize))
+        .is_some_and(|destination| follow(&destination))
+}
+
+pub(crate) fn register_runs(node: NodeId, read: ReadRun) {
+    RUNS.with(|runs| runs.borrow_mut().insert(node, read));
+}
+
+pub(crate) fn unregister_runs(node: NodeId) {
+    RUNS.with(|runs| runs.borrow_mut().remove(&node));
 }
 
 pub(crate) fn register_link(node: NodeId, read: ReadDestination) {

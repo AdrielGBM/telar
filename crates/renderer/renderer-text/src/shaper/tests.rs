@@ -774,3 +774,59 @@ fn a_span_can_change_the_size_mid_paragraph() {
         "a span at 32px must measure wider than the same text at 12px: {plain_w} vs {spanned_w}"
     );
 }
+
+// A variable face placed along `wght` shapes at that weight, and every other axis or feature keys its own cache entry even where the shaper cannot apply it.
+#[test]
+fn text_style_bits_follow_axes_and_features() {
+    use renderer_core::{FontFeatures, FontVariations};
+    let base = TextStyle::new(16.0, Color::BLACK);
+    let heavier = base
+        .clone()
+        .with_font_variations(FontVariations::new().with("wght", 650.0));
+    assert_eq!(
+        super::drawn_weight(&heavier),
+        650,
+        "wght wins over font_weight"
+    );
+    let wider = base
+        .clone()
+        .with_font_variations(FontVariations::new().with("wdth", 110.0));
+    let tabular = base
+        .clone()
+        .with_font_features(FontFeatures::new().with("tnum", 1));
+    let bits = [&base, &heavier, &wider, &tabular].map(text_style_bits);
+    for (i, a) in bits.iter().enumerate() {
+        for b in &bits[i + 1..] {
+            assert_ne!(a, b, "each setting keys its own shaping");
+        }
+    }
+}
+
+// Tracking follows every glyph, the last one too, as CSS applies it: the document's measurer counts it the same way, which is what keeps a tracked display line the same width on every target.
+#[test]
+fn tracking_widens_a_line_by_one_step_per_glyph() {
+    let mut shaper = TextShaper::new();
+    let plain = TextStyle::new(40.0, Color::BLACK).with_text_wrap(TextWrap::NoWrap);
+    let tracked = plain.clone().with_letter_spacing(10.0);
+    let (untracked, _) = shaper.measure_text("ABCD", None, 10_000.0, &plain);
+    let (wide, _) = shaper.measure_text("ABCD", None, 10_000.0, &tracked);
+    assert!(
+        (wide - untracked - 40.0).abs() <= 1.0,
+        "four glyphs, four steps: {untracked} -> {wide}"
+    );
+}
+
+// A size of nothing is text that takes no room, not a shaper that falls over: a size given as a fraction of a surface not measured yet comes to zero.
+#[test]
+fn text_of_no_size_takes_no_room() {
+    let mut shaper = TextShaper::new();
+    let none = TextStyle::new(0.0, Color::BLACK);
+    assert_eq!(shaper.measure_text("Name", None, 400.0, &none), (0.0, 0.0));
+    let flat = TextStyle::new(16.0, Color::BLACK).with_line_height(0.0);
+    assert_eq!(shaper.measure_text("Name", None, 400.0, &flat), (0.0, 0.0));
+    assert!(
+        shaper
+            .index_at("Name", None, 400.0, &none, (1.0, 1.0))
+            .is_none()
+    );
+}

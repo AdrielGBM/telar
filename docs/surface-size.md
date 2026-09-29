@@ -67,6 +67,29 @@ padding written in surface units counts as the cells it resolves to. When the su
 them out on the next pass. Nothing in the view re-runs: `width:50sw` is a literal, so the transpiler does not
 wrap it in an effect.
 
+### Text sizes and tracking
+
+`font_size:` and `letter_spacing:` take the same surface units, and `em` as well:
+
+```rsx
+col font_size:1.5em               // half again the size this column inherits
+    text "ADRIEL" font_size:22sw letter_spacing:-0.04em
+```
+
+| `.rsx` | Rust | Is |
+| --- | --- | --- |
+| `24` | `TextLength::Px(24.0)` | pixels, as before |
+| `1.5em` | `TextLength::Em(1.5)` | for a size, a multiple of the size inherited; for tracking, of the text's own size |
+| `22sw`, `10sh`, `5smin`, `5smax` | `TextLength::SurfaceWidth(0.22)`… | a fraction of the surface, as for a box |
+
+A container's declaration (`Declared::with_font_size(TextLength::…)`) is resolved by the tree for each text
+below it, against the size it inherits and the surface it is on; a `text` resolves its own with
+`TextStyle::with_font_size_in(length, use_surface_size())`. Either way the surface is read only for a fraction of
+it, so a resize re-styles just the text that depends on it, and the text is measured again at its new size.
+Renderers only ever see pixels: a web document is told the resolved size, as it is for a box's surface units,
+because `vw` names the viewport and the surface is not always the viewport. A terminal draws a cell whatever the
+size, so there a size is only the band a heading reserves, rounded to cells like any length.
+
 ## Breakpoints
 
 `breakpoint(base)` starts with the value used below every threshold. `.at(min_width, value)` adds a step that

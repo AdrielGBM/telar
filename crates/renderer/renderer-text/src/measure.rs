@@ -54,6 +54,17 @@ impl renderer_core::TextMetrics for ShaperMetrics {
     fn line_height(&self, font_size: f32) -> f32 {
         font_size * crate::LINE_HEIGHT_FACTOR
     }
+
+    fn index_at(
+        &self,
+        text: &str,
+        spans: Option<&[Span]>,
+        max_width: f32,
+        style: &TextStyle,
+        at: (f32, f32),
+    ) -> Option<usize> {
+        with_shaper(|shaper| shaper.index_at(text, spans, max_width, style, at))
+    }
 }
 
 /// Measures the logical (width, height) of `text` wrapped to `max_width` for `style` — weight/italic change glyph advances and `max_lines`/`ellipsis` clamp the extent, so measure and draw must agree by using the same style. Intended for layout-time text sizing on the UI thread so a text node reserves the height its lines actually need.

@@ -13,6 +13,7 @@ pub const TAG_SLOT_PLACEHOLDER: &str = "<slot placeholder>";
 pub fn builtin_tags() -> &'static [(&'static str, &'static str)] {
     &[
         ("text", "Text::new"),
+        ("span", "TextRun::new"),
         ("col", "Container::new"),
         ("row", "Container::new"),
         ("grid", "Container::new"),
@@ -570,6 +571,12 @@ const INHERITABLE_TEXT_ATTRS: &[AttrSpec] = &[
     AttrSpec::num("line_height"),
     AttrSpec::num("letter_spacing"),
     AttrSpec::keywords("raster", RASTER_VALUES),
+    AttrSpec::free("font_variation").doc(
+        "Where the face sits on its variation axes: `font_variation:(wght 650, wdth $w)`, each a four-letter tag and a value that may read state. Replaces what it inherits, and `wght` wins over `font_weight`. Animates with `transition(font_variation 300ms)`.",
+    ),
+    AttrSpec::free("font_features").doc(
+        "Which OpenType features are on: `font_features:(tnum, liga 0, ss01)`; a tag named alone is turned on. Replaces what it inherits.",
+    ),
 ];
 
 /// The transform attributes, appended to every container's key set. See [`is_transform_attr`].
@@ -606,6 +613,14 @@ pub fn tag_attr_specs(tag: &str) -> Vec<AttrSpec> {
         "text" => {
             let mut specs = with(INHERITABLE_TEXT_ATTRS);
             specs.extend_from_slice(TEXT_ONLY_ATTRS);
+            specs
+        }
+        // A run of a paragraph: the text properties it restyles itself with, and where it links. It is laid out as part of its `text`, so it takes no layout keys.
+        "span" => {
+            let mut specs = INHERITABLE_TEXT_ATTRS.to_vec();
+            specs.push(AttrSpec::free("to").doc(
+                "Makes the run a link inside its paragraph: a typed route, `anchor(\"name\")` or `external(\"https://…\")`. An `<a href>` in a document; followed on a tap elsewhere.",
+            ));
             specs
         }
         // Spliced children own their own style, so the placeholder takes no layout or paint keys.

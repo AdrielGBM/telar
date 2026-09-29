@@ -109,6 +109,7 @@ fn every_tag_the_table_names_builds_the_type_it_promises() {
 fn minimal_use(tag: &str) -> String {
     match tag {
         "text" => "text \"x\"".to_string(),
+        "span" => "text\n    span \"x\"".to_string(),
         "path" => "path d:\"M0 0 L1 1\"".to_string(),
         "canvas" => "canvas paint:(|_rect| ())".to_string(),
         "lazy" => "lazy when:true\n    text \"x\"".to_string(),

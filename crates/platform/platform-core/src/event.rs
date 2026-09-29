@@ -189,6 +189,13 @@ pub enum Event {
     BoxActivated {
         box_id: u64,
     },
+    /// The surface followed a link inside a text by itself — a document whose `<a>` for a run of a paragraph was clicked — and this is the text's box and which of its spans (see `Span::link`) it was.
+    ///
+    /// The run's counterpart of [`BoxActivated`](Self::BoxActivated): the app follows that span's destination.
+    RunActivated {
+        box_id: u64,
+        run: u32,
+    },
     /// The user's system preferences, whole: sent once before a surface's first resume, so its first layout already follows them, and again whenever any field changes.
     ///
     /// A snapshot rather than a delta, so a consumer never has to remember what came before to know where it stands.

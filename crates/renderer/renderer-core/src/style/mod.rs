@@ -4,15 +4,19 @@ use std::num::NonZeroU16;
 use std::sync::Arc;
 
 mod declared;
+mod font_settings;
 mod gradient;
 mod paint;
 mod scale;
 mod shape;
+mod text_length;
 
-pub use declared::{Declared, Span};
+pub use declared::{Declared, Span, link_at};
+pub use font_settings::{FontFeatures, FontTag, FontVariations};
 pub use gradient::{Gradient, GradientKind, GradientStop, GradientStops};
 pub use paint::{FillRule, LineCap, LineJoin, Paint, Shadow, Stroke};
 pub use shape::{Border, PathStyle, RectStyle, ShapeStyle, border_inner_shape};
+pub use text_length::TextLength;
 
 /// Horizontal alignment of text within its box. `Start` is the writing-direction start (left in LTR).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -213,6 +217,10 @@ pub struct TextStyle {
     pub raster: Raster,
     /// Whether the text wraps into its box. See [`TextWrap`].
     pub text_wrap: TextWrap,
+    /// Where the face sits on its variation axes. See [`FontVariations`].
+    pub font_variations: FontVariations,
+    /// Which OpenType features are on. See [`FontFeatures`].
+    pub font_features: FontFeatures,
 }
 
 impl TextStyle {
@@ -230,6 +238,8 @@ impl TextStyle {
             letter_spacing: 0.0,
             raster: Raster::Smooth,
             text_wrap: TextWrap::Wrap,
+            font_variations: FontVariations::default(),
+            font_features: FontFeatures::default(),
         }
     }
 
@@ -244,6 +254,26 @@ impl TextStyle {
         self
     }
 
+    /// The size `font_size` names on a surface of `surface`: `em` of the size this style had, a fraction of the surface of `surface`.
+    pub fn with_font_size_in(
+        mut self,
+        font_size: TextLength,
+        surface: geometry_core::Size,
+    ) -> Self {
+        self.font_size = font_size.resolve(self.font_size, surface);
+        self
+    }
+
+    /// The tracking `letter_spacing` names on a surface of `surface`: `em` of this style's size.
+    pub fn with_letter_spacing_in(
+        mut self,
+        letter_spacing: TextLength,
+        surface: geometry_core::Size,
+    ) -> Self {
+        self.letter_spacing = letter_spacing.resolve(self.font_size, surface);
+        self
+    }
+
     pub fn with_color(mut self, color: impl Into<Paint>) -> Self {
         self.color = color.into();
         self
@@ -251,6 +281,32 @@ impl TextStyle {
 
     pub fn with_font_weight(mut self, font_weight: u16) -> Self {
         self.font_weight = font_weight;
+        self
+    }
+
+    /// Whether text in `self` and in `other` takes the same room: everything but the paint. A change that leaves this true costs a repaint; one that makes it false costs a measure.
+    pub fn same_extent(&self, other: &Self) -> bool {
+        self.font_size == other.font_size
+            && self.font_family == other.font_family
+            && self.font_weight == other.font_weight
+            && self.font_style == other.font_style
+            && self.text_align == other.text_align
+            && self.clamp == other.clamp
+            && self.line_height == other.line_height
+            && self.letter_spacing == other.letter_spacing
+            && self.raster == other.raster
+            && self.text_wrap == other.text_wrap
+            && self.font_variations == other.font_variations
+            && self.font_features == other.font_features
+    }
+
+    pub fn with_font_variations(mut self, font_variations: FontVariations) -> Self {
+        self.font_variations = font_variations;
+        self
+    }
+
+    pub fn with_font_features(mut self, font_features: FontFeatures) -> Self {
+        self.font_features = font_features;
         self
     }
 

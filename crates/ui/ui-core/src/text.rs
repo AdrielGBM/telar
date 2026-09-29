@@ -34,6 +34,40 @@ pub struct Text {
     leaf: LayoutLeaf,
     // Held for its subscription: without it a measured leaf keeps the width the previous string wanted, and a label that grew soft-wraps into a slot built for the old text.
     _remeasure: Option<Effect>,
+    pressed_run: Option<(usize, (f32, f32))>,
+    link_cursor: Option<crate::cursor::CursorClaim>,
+}
+
+/// One run of a paragraph built with [`Text::runs`]: its string, what it declares over the paragraph's style, and where it links.
+pub struct TextRun {
+    content: Rc<dyn Fn() -> String>,
+    over: Option<Rc<dyn Fn() -> renderer_core::Declared>>,
+    link: Option<Rc<dyn Fn() -> Option<platform_core::Destination>>>,
+}
+
+impl TextRun {
+    pub fn new(content: impl Fn() -> String + 'static) -> Self {
+        Self {
+            content: Rc::new(content),
+            over: None,
+            link: None,
+        }
+    }
+
+    /// Restyles the run: what `over` declares wins over the paragraph's style for its stretch, re-read when what it reads changes.
+    pub fn declaring(mut self, over: impl Fn() -> renderer_core::Declared + 'static) -> Self {
+        self.over = Some(Rc::new(over));
+        self
+    }
+
+    /// Makes the run a link, the way [`StyledContainer::to`](crate::StyledContainer::to) makes a box one: a route, an anchor or an external URI, or an `Option` of one for a link with nowhere to go right now.
+    pub fn to<D: platform_core::IntoDestination>(
+        mut self,
+        destination: impl Fn() -> D + 'static,
+    ) -> Self {
+        self.link = Some(Rc::new(move || destination().into_destination()));
+        self
+    }
 }
 
 /// Where a text gets its style: given whole, or derived from what the tree above it declared.
@@ -92,6 +126,41 @@ impl Text {
         )
     }
 
+    /// A paragraph written as runs, each its own string and each free to restyle itself or link somewhere: what `text` with `span` children builds. Shaped, wrapped and measured as one text, styled by what the tree above declared amended by `style_fn`, like [`declaring`](Self::declaring).
+    pub fn runs(
+        runs: Vec<TextRun>,
+        layout_style: LayoutStyle,
+        style_fn: impl Fn(TextStyle) -> TextStyle + 'static,
+    ) -> Result<Self, LayoutError> {
+        let runs: Rc<[TextRun]> = runs.into();
+        let content = {
+            let runs = runs.clone();
+            Rc::new(move || runs.iter().map(|run| (run.content)()).collect::<String>())
+        };
+        let spans = Rc::new(move || {
+            let mut at = 0u32;
+            let mut spans = Vec::new();
+            for run in runs.iter() {
+                let start = at;
+                at += (run.content)().len() as u32;
+                if run.over.is_none() && run.link.is_none() {
+                    continue;
+                }
+                let over = run.over.as_ref().map(|over| over()).unwrap_or_default();
+                let mut span = Span::new(start..at, over);
+                span.link = run.link.as_ref().and_then(|link| link());
+                spans.push(span);
+            }
+            spans
+        });
+        Self::build(
+            content,
+            Some(spans),
+            layout_style,
+            StyleSource::Inheriting(Rc::new(style_fn)),
+        )
+    }
+
     fn build(
         content_fn: Rc<dyn Fn() -> String>,
         spans_fn: Option<Rc<dyn Fn() -> Vec<Span>>>,
@@ -128,17 +197,28 @@ impl Text {
         let (node, rect) =
             crate::context::new_measured_leaf(layout_style.align_self_stretch(), measure)?;
         node_cell.set(Some(node));
-        // Read through the measure closure, so it subscribes to exactly what the measure depends on: a signal re-set to its own value would otherwise cost a shaping pass and a relayout for nothing.
+        // Reads what the measure reads, so it subscribes to exactly what the measure depends on, and compares before dirtying: a signal re-set to its own value, or a colour change, would otherwise cost a shaping pass and a relayout for nothing.
         let dirty_content = Rc::clone(&content_fn);
-        let measured = RefCell::new(Option::<String>::None);
+        let dirty_style = Rc::clone(&style);
+        let measured = RefCell::new(Option::<(String, TextStyle)>::None);
         let remeasure = effect(move || {
-            let next = (dirty_content)();
-            if measured.borrow().as_deref() == Some(next.as_str()) {
+            let next = ((dirty_content)(), (dirty_style)());
+            let unchanged = measured
+                .borrow()
+                .as_ref()
+                .is_some_and(|(content, style)| *content == next.0 && style.same_extent(&next.1));
+            if unchanged {
                 return;
             }
             *measured.borrow_mut() = Some(next);
             mark_dirty(node).ok();
         });
+        if let Some(spans) = spans_fn.clone() {
+            crate::link::register_runs(
+                node,
+                Rc::new(move |run| spans().get(run).and_then(|span| span.link.clone())),
+            );
+        }
         Ok(Self {
             content: content_fn,
             spans: spans_fn,
@@ -147,6 +227,8 @@ impl Text {
             style,
             leaf: LayoutLeaf { node, rect },
             _remeasure: Some(remeasure),
+            pressed_run: None,
+            link_cursor: None,
         })
     }
 
@@ -157,6 +239,131 @@ impl Text {
         // Asked of the installed measurer rather than multiplied out here: a terminal draws one glyph per cell whatever size the text claims, so its answer is a cell — and a title at 32px reserving 44.8px of box for a single row of glyphs is how a big letter used to push everything below it out of the grid.
         let height = crate::text_metrics::single_line_box(style_fn().font_size);
         Text::new(content_fn, LayoutStyle::new().height(height), style_fn)
+    }
+}
+
+impl Text {
+    /// Where the text sits inside a box `r`, as `(top, height)`: optically centred, see the comments inside.
+    fn placed(&self, r: Rect, text: &str, style: &TextStyle) -> (f32, f32) {
+        // A text leaf stretches to fill its parent's cross axis, and the font's line box reserves ascent room a run never uses, so line-box-centred text sits visibly high next to an icon. The band is measured from a fixed reference run, which makes the offset a property of the font at this size and shared by every label in the style — centring each string on its own ink moved it by whether it held a descender.
+        let (ink_top, ink_height, reference_line) = {
+            let key = (
+                style.font_size.to_bits(),
+                renderer_core::text_metrics_generation(),
+            );
+            let mut cache = self.cached_ink.borrow_mut();
+            match cache.as_ref() {
+                Some((k, top, h, line)) if *k == key => (*top, *h, *line),
+                _ => {
+                    let (top, h) =
+                        crate::text_metrics::measure_ink_bounds(REFERENCE, REFERENCE_WIDTH, style);
+                    let (_, line) =
+                        crate::text_metrics::measure_text(REFERENCE, None, REFERENCE_WIDTH, style);
+                    *cache = Some((key, top, h, line));
+                    (top, h, line)
+                }
+            }
+        };
+        // Centre the whole block, then nudge by how far the band sits off the middle of one line box. The nudge is a property of the font, so it applies once however many lines there are; centring against the band alone would push an N-line block down by (N-1)/2 lines.
+        let (_, text_height) = crate::text_metrics::measure_text(text, None, r.width, style);
+        let nudge = if ink_height > 0.0 {
+            reference_line / 2.0 - ink_top - ink_height / 2.0
+        } else {
+            0.0
+        };
+        // Snapped to the pixel grid: centring lands on a half pixel whenever box and text differ by an odd amount, and a glyph drawn half a row down is resampled across two rows and goes soft. Only the vertical axis — horizontal subpixel placement is what keeps letter spacing even. Clamped within the leaf, since a box no taller than one line has nothing to centre in and the nudge would walk glyphs out through its top.
+        let slack = (r.height - text_height).max(0.0);
+        let y = ((slack / 2.0 + nudge).clamp(0.0, slack)).round();
+        (y, text_height)
+    }
+
+    /// The link span under `(x, y)`, with its position among the spans, found where the text is drawn.
+    fn link_under(&self, x: f32, y: f32) -> Option<(usize, platform_core::Destination)> {
+        let spans = (self.spans.as_ref()?)();
+        if spans.iter().all(|span| span.link.is_none()) {
+            return None;
+        }
+        let r = self.leaf.rect.get();
+        if !r.contains(x, y) {
+            return None;
+        }
+        let text = (self.content)();
+        let style = (self.style)();
+        let (top, _) = self.placed(r, &text, &style);
+        let index = renderer_core::text_index_at(
+            &text,
+            Some(&spans),
+            r.width,
+            &style,
+            (x - r.x, y - r.y - top),
+        )?;
+        renderer_core::link_at(&spans, index).map(|(run, link)| (run, link.clone()))
+    }
+
+    /// A press, a drag and a release over the link spans: a tap on one follows it, and the pointer takes the link shape over one. A document answers its own `<a>` and reports it back instead (see [`Event::RunActivated`]).
+    fn follow_runs(&mut self, event: &Event) -> EventResult {
+        if self.spans.is_none() || crate::link::surface_follows_links() {
+            return EventResult::Ignored;
+        }
+        match event {
+            Event::PointerMoved { x, y, source, .. } => {
+                let (x, y) = (*x as f32, *y as f32);
+                if let Some((_, (ox, oy))) = self.pressed_run
+                    && (x - ox).powi(2) + (y - oy).powi(2) > platform_core::TAP_SLOP.powi(2)
+                {
+                    self.pressed_run = None;
+                }
+                if matches!(source, platform_core::PointerSource::Mouse) {
+                    let over = self.link_under(x, y).is_some();
+                    if over || self.link_cursor.is_some() {
+                        self.link_cursor
+                            .get_or_insert_with(|| {
+                                crate::cursor::CursorClaim::new(platform_core::Cursor::Pointer)
+                            })
+                            .hover(crate::cursor::depth(), over);
+                    }
+                }
+                EventResult::Ignored
+            }
+            Event::PointerPressed {
+                x,
+                y,
+                button: platform_core::PointerButton::Primary,
+                ..
+            } => match self.link_under(*x as f32, *y as f32) {
+                Some((run, _)) => {
+                    self.pressed_run = Some((run, (*x as f32, *y as f32)));
+                    EventResult::Handled
+                }
+                None => EventResult::Ignored,
+            },
+            Event::PointerReleased {
+                x,
+                y,
+                button: platform_core::PointerButton::Primary,
+                ..
+            } => {
+                let Some((pressed, _)) = self.pressed_run.take() else {
+                    return EventResult::Ignored;
+                };
+                match self.link_under(*x as f32, *y as f32) {
+                    Some((run, destination)) if run == pressed => {
+                        crate::link::follow_pressed(&destination, crate::modifiers());
+                        EventResult::Handled
+                    }
+                    _ => EventResult::Ignored,
+                }
+            }
+            _ => EventResult::Ignored,
+        }
+    }
+}
+
+impl Drop for Text {
+    fn drop(&mut self) {
+        if self.spans.is_some() {
+            crate::link::unregister_runs(self.leaf.node);
+        }
     }
 }
 
@@ -175,37 +382,7 @@ impl Component for Text {
             }
         };
         let style = (self.style)();
-        // A text leaf stretches to fill its parent's cross axis, and the font's line box reserves ascent room a run never uses, so line-box-centred text sits visibly high next to an icon. The band is measured from a fixed reference run, which makes the offset a property of the font at this size and shared by every label in the style — centring each string on its own ink moved it by whether it held a descender.
-        let (ink_top, ink_height, reference_line) = {
-            let key = (
-                style.font_size.to_bits(),
-                renderer_core::text_metrics_generation(),
-            );
-            let mut cache = self.cached_ink.borrow_mut();
-            match cache.as_ref() {
-                Some((k, top, h, line)) if *k == key => (*top, *h, *line),
-                _ => {
-                    let (top, h) =
-                        crate::text_metrics::measure_ink_bounds(REFERENCE, REFERENCE_WIDTH, &style);
-                    let (_, line) =
-                        crate::text_metrics::measure_text(REFERENCE, None, REFERENCE_WIDTH, &style);
-                    *cache = Some((key, top, h, line));
-                    (top, h, line)
-                }
-            }
-        };
-        // Centre the whole block, then nudge by how far the band sits off the middle of one line box. The nudge is a property of the font, so it applies once however many lines there are; centring against the band alone would push an N-line block down by (N-1)/2 lines.
-        let (_, text_height) = crate::text_metrics::measure_text(&text, None, r.width, &style);
-        let nudge = if ink_height > 0.0 {
-            reference_line / 2.0 - ink_top - ink_height / 2.0
-        } else {
-            0.0
-        };
-        // Snapped to the pixel grid: centring lands on a half pixel whenever box and text differ by an odd amount, and a glyph drawn half a row down is resampled across two rows and goes soft. Only the vertical axis — horizontal subpixel placement is what keeps letter spacing even. Clamped within the leaf, since a box no taller than one line has nothing to centre in and the nudge would walk glyphs out through its top.
-        let slack = (r.height - text_height).max(0.0);
-        let y = ((slack / 2.0 + nudge).clamp(0.0, slack)).round();
-        // The full line box, so nothing clips.
-        let line_height = text_height;
+        let (y, line_height) = self.placed(r, &text, &style);
         let spans: Option<std::sync::Arc<[Span]>> =
             self.spans.as_ref().map(|f| std::sync::Arc::from(f()));
         self.leaf.at_layout_position(RenderNode::spanned_text(
@@ -221,8 +398,8 @@ impl Component for Text {
         ))
     }
 
-    fn on_event(&mut self, _event: &Event) -> EventResult {
-        EventResult::Ignored
+    fn on_event(&mut self, event: &Event) -> EventResult {
+        self.follow_runs(event)
     }
 
     fn debug_name(&self) -> &'static str {

@@ -29,7 +29,10 @@ impl Inherited {
     pub fn from_tokens(tokens: &dyn ThemeTokens) -> Self {
         let base = TextStyle::new(Self::BASE_FONT_SIZE, tokens.ink());
         Self {
-            text: tokens.root().over(&base),
+            text: {
+                let root = tokens.root();
+                root.over(&base, surface_for(&root))
+            },
             cursor: Cursor::Default,
             direction: Direction::Ltr,
         }
@@ -37,13 +40,22 @@ impl Inherited {
 
     pub fn with(&self, declared: &Declared) -> Self {
         Self {
-            text: declared.over(&self.text),
+            text: declared.over(&self.text, surface_for(declared)),
             ..self.clone()
         }
     }
 
     pub fn text_style(&self) -> TextStyle {
         self.text.clone()
+    }
+}
+
+/// The surface a declaration resolves against: read reactively only by one that names a fraction of it, so a resize re-resolves exactly the text that depends on it.
+fn surface_for(declared: &Declared) -> geometry_core::Size {
+    if declared.uses_surface() {
+        crate::context::use_surface_size()
+    } else {
+        geometry_core::Size::ZERO
     }
 }
 

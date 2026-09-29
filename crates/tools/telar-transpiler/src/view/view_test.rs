@@ -1340,3 +1340,114 @@ fn a_canvas_without_paint_says_so() {
         .rust_code;
     assert!(code.contains("compile_error!"), "{code}");
 }
+
+/// Axes and features are a four-letter tag and a value each, the value free to read state, and an axis can be animated like a colour.
+#[test]
+fn font_settings_are_tags_and_values_that_may_read_state() {
+    let src = "[logic]\nlet w = signal(400.0f32);\n[view]\ncol font_features:(tnum, liga 0)\n    text \"Hola\" font_variation:(wght $w, wdth 110) transition(font_variation 300ms)\n";
+    let code = crate::transpile_source(src, "demo", None, None)
+        .unwrap()
+        .rust_code;
+    assert!(!code.contains("compile_error!"), "{code}");
+    assert!(
+        code.contains(".with_font_features(FontFeatures::new().with(\"tnum\", (1) as u32).with(\"liga\", (0) as u32))"),
+        "a container declares features its text inherits:\n{code}"
+    );
+    assert!(
+        code.contains(
+            "FontVariations::new().with(\"wght\", (w.get()) as f32).with(\"wdth\", (110) as f32)"
+        ),
+        "axes read state:\n{code}"
+    );
+    assert!(
+        code.contains("motion::Animated::new(FontVariations::new()"),
+        "the axes animate:\n{code}"
+    );
+}
+
+#[test]
+fn a_font_setting_that_is_not_a_tag_is_a_build_error() {
+    let src = "[view]\ntext \"Hola\" font_variation:(weight 700)\n";
+    let code = crate::transpile_source(src, "demo", None, None)
+        .unwrap()
+        .rust_code;
+    assert!(
+        code.contains(
+            "compile_error!(\"`font_variation:` names `weight`, which is not a four-letter tag\")"
+        ),
+        "{code}"
+    );
+}
+
+/// A paragraph written as runs: the text's own content first, then each span with what it restyles and where it links.
+#[test]
+fn a_text_with_spans_is_one_paragraph_of_runs() {
+    let src = "[logic]\nlet name = signal(String::from(\"Ada\"));\n[view]\ntext \"Hi \" font_size:14\n    span \"{$name}\" font_weight:700\n    span \", meet \"\n    span \"Telar\" to:external(\"https://example.com\") color:#3d78fa\n";
+    let code = crate::transpile_source(src, "demo", None, None)
+        .unwrap()
+        .rust_code;
+    assert!(!code.contains("compile_error!"), "{code}");
+    assert!(code.contains("Text::runs("), "{code}");
+    assert_eq!(code.matches("TextRun::new(").count(), 4, "{code}");
+    assert!(
+        code.contains(".declaring(move || Declared::default().with_font_weight(700))"),
+        "{code}"
+    );
+    assert!(
+        code.contains(".to(move || external(\"https://example.com\"))"),
+        "{code}"
+    );
+}
+
+#[test]
+fn a_span_outside_a_text_and_a_box_inside_one_are_build_errors() {
+    let stray = crate::transpile_source("[view]\ncol\n    span \"x\"\n", "demo", None, None)
+        .unwrap()
+        .rust_code;
+    assert!(
+        stray.contains("a `span` is a run of a paragraph"),
+        "{stray}"
+    );
+    let boxed = crate::transpile_source("[view]\ntext\n    box\n", "demo", None, None)
+        .unwrap()
+        .rust_code;
+    assert!(
+        boxed.contains("a `text` holds `span`s and nothing else"),
+        "{boxed}"
+    );
+    let bad = crate::transpile_source(
+        "[view]\ntext\n    span \"x\" to:external(\"nowhere\")\n",
+        "demo",
+        None,
+        None,
+    )
+    .unwrap()
+    .rust_code;
+    assert!(bad.contains("is not an absolute URI"), "{bad}");
+}
+
+/// A size or a tracking with a unit resolves where it stands: a `text` against the size it inherits and the surface it reads, a container's declaration in the tree below it.
+#[test]
+fn text_lengths_take_the_units_a_box_does() {
+    let src = "[view]\ncol font_size:1.5em letter_spacing:-0.04em\n    text \"ADRIEL\" font_size:22sw letter_spacing:-0.02em\n    text \"x\" font_size:18\n";
+    let code = crate::transpile_source(src, "demo", None, None)
+        .unwrap()
+        .rust_code;
+    assert!(!code.contains("compile_error!"), "{code}");
+    assert!(
+        code.contains(".with_font_size_in(TextLength::SurfaceWidth(0.22), use_surface_size())"),
+        "a text reads the surface for a fraction of it:\n{code}"
+    );
+    assert!(
+        code.contains(".with_letter_spacing_in(TextLength::Em(-0.02), Size::ZERO)"),
+        "and not for em:\n{code}"
+    );
+    assert!(
+        code.contains("Declared::default().with_font_size(TextLength::Em(1.5)).with_letter_spacing(TextLength::Em(-0.04))"),
+        "a container declares the unit for the tree to resolve:\n{code}"
+    );
+    assert!(
+        code.contains(".with_font_size(18.0)"),
+        "pixels stay pixels:\n{code}"
+    );
+}

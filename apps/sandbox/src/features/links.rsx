@@ -25,6 +25,16 @@ col gap:20 anchor:"top"
             box to:external("mailto:someone@example.com") fill:$theme.surface_alt radius:8 pad_x:14 pad_y:6 hover_style(fill:$theme.border)
                 text "Write an email" font_size:14 color:$theme.primary
         code_line code:"box to:external(\"https://…\")   ·   open_uri: the portal or xdg-open, ShellExecute, NSWorkspace, window.open"
+    example title:"Inside a paragraph"
+        card gap:10
+            text font_size:14 color:$theme.ink
+                span "A run of a paragraph can link too: read "
+                span "the Telar repository" to:external("https://github.com/AdrielGBM/telar") color:$theme.primary
+                span ", or "
+                span "go back to the top" to:anchor("top") color:$theme.primary font_weight:600
+                span " without leaving the sentence."
+            text "One text, shaped and wrapped as one. A document writes each link run as an <a href> inside the paragraph; elsewhere a tap on its glyphs follows it, and a reader hears it as a link." font_size:12 color:$theme.muted
+        code_line code:"text  >  span \"words\" to:external(\"https://…\") color:$theme.primary"
     example title:"On this page"
         card gap:10
             row gap:10 align:center

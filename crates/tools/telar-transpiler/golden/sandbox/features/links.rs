@@ -163,38 +163,28 @@ pub fn links(props: LinksProps, children: Children) -> Result<Box<dyn LayoutItem
                                 let theme = theme.clone();
                                 let mut __slots = Slots::new();
                                 let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-                                let __row_1 = {
-                                    let __sbox_4 = {
-                                        let __text_5 = {
-                                            Text::declaring(
-                                                || "Back to the top".to_string(),
-                                                LayoutStyle::new(),
-                                                { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(14.0).with_color(theme.get().primary) },
-                                            )?
-                                        };
-                                        StyledContainer::new(LayoutStyle::new().flex_column().padding_horizontal(14.0).padding_vertical(6.0), { let theme = theme.clone(); move |_| RectStyle::default().with_fill(theme.get().surface_alt).with_radius(BorderRadius::all(8.0)) }, children![__text_5])?.hover_style({ let theme = theme.clone(); move |_| RectStyle::default().with_fill(theme.get().border).with_radius(BorderRadius::all(8.0)) }).to(move || anchor("top"))
-                                    };
-                                    let __sbox_5 = {
-                                        let __text_6 = {
-                                            Text::declaring(
-                                                || "To the external links".to_string(),
-                                                LayoutStyle::new(),
-                                                { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(14.0).with_color(theme.get().primary) },
-                                            )?
-                                        };
-                                        StyledContainer::new(LayoutStyle::new().flex_column().padding_horizontal(14.0).padding_vertical(6.0), { let theme = theme.clone(); move |_| RectStyle::default().with_fill(theme.get().surface_alt).with_radius(BorderRadius::all(8.0)) }, children![__text_6])?.hover_style({ let theme = theme.clone(); move |_| RectStyle::default().with_fill(theme.get().border).with_radius(BorderRadius::all(8.0)) }).to(move || anchor("outside"))
-                                    };
-                                    Container::new(LayoutStyle::new().flex_row().gap(10.0).align_items(AlignItems::CENTER), children![__sbox_4, __sbox_5])?
+                                let __text_5 = {
+                                    Text::runs(
+                                        vec![
+                                            TextRun::new(|| "A run of a paragraph can link too: read ".to_string()),
+                                            TextRun::new(|| "the Telar repository".to_string()).declaring({ let theme = theme.clone(); move || Declared::default().with_color(theme.get().primary) }).to(move || external("https://github.com/AdrielGBM/telar")),
+                                            TextRun::new(|| ", or ".to_string()),
+                                            TextRun::new(|| "go back to the top".to_string()).declaring({ let theme = theme.clone(); move || Declared::default().with_color(theme.get().primary).with_font_weight(600) }).to(move || anchor("top")),
+                                            TextRun::new(|| " without leaving the sentence.".to_string()),
+                                        ],
+                                        LayoutStyle::new(),
+                                        { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(14.0).with_color(theme.get().ink) },
+                                    )?
                                 };
-                                __children.push(box_item(__row_1));
-                                let __text_7 = {
+                                __children.push(box_item(__text_5));
+                                let __text_6 = {
                                     Text::declaring(
-                                        || "A box named with anchor: is a place on the page. Following a link to it brings it to the top of every scroll it sits in and adds a history entry, so back returns to where you were. A document gives it that id, so #outside in the address opens there.".to_string(),
+                                        || "One text, shaped and wrapped as one. A document writes each link run as an <a href> inside the paragraph; elsewhere a tap on its glyphs follows it, and a reader hears it as a link.".to_string(),
                                         LayoutStyle::new(),
                                         { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(12.0).with_color(theme.get().muted) },
                                     )?
                                 };
-                                __children.push(box_item(__text_7));
+                                __children.push(box_item(__text_6));
                                 __slots.extend_default(__children);
                                 Ok(__slots)
                             }
@@ -203,8 +193,73 @@ pub fn links(props: LinksProps, children: Children) -> Result<Box<dyn LayoutItem
                         card(CardProps::props().gap(10.0).build(), __deferred)?
                     };
                     __children.push(box_item(__node_8));
-                    let __node_9 = code_line(CodeLineProps::props().code("box anchor:\"outside\"   ·   box to:anchor(\"outside\")").build(), Children::default())?;
+                    let __node_9 = code_line(CodeLineProps::props().code("text  >  span \"words\" to:external(\"https://…\") color:$theme.primary").build(), Children::default())?;
                     __children.push(box_item(__node_9));
+                    __slots.extend_default(__children);
+                    Ok(__slots)
+                }
+                }
+            );
+            example(ExampleProps::props().title("Inside a paragraph").build(), __deferred)?
+        };
+        let __node_10 = {
+            let __deferred = Children::new(
+                {
+                    let theme = theme.clone();
+                move || {
+                    let theme = theme.clone();
+                    let mut __slots = Slots::new();
+                    let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
+                    let __node_11 = {
+                        let __deferred = Children::new(
+                            {
+                                let theme = theme.clone();
+                            move || {
+                                let theme = theme.clone();
+                                let mut __slots = Slots::new();
+                                let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
+                                let __row_1 = {
+                                    let __sbox_4 = {
+                                        let __text_7 = {
+                                            Text::declaring(
+                                                || "Back to the top".to_string(),
+                                                LayoutStyle::new(),
+                                                { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(14.0).with_color(theme.get().primary) },
+                                            )?
+                                        };
+                                        StyledContainer::new(LayoutStyle::new().flex_column().padding_horizontal(14.0).padding_vertical(6.0), { let theme = theme.clone(); move |_| RectStyle::default().with_fill(theme.get().surface_alt).with_radius(BorderRadius::all(8.0)) }, children![__text_7])?.hover_style({ let theme = theme.clone(); move |_| RectStyle::default().with_fill(theme.get().border).with_radius(BorderRadius::all(8.0)) }).to(move || anchor("top"))
+                                    };
+                                    let __sbox_5 = {
+                                        let __text_8 = {
+                                            Text::declaring(
+                                                || "To the external links".to_string(),
+                                                LayoutStyle::new(),
+                                                { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(14.0).with_color(theme.get().primary) },
+                                            )?
+                                        };
+                                        StyledContainer::new(LayoutStyle::new().flex_column().padding_horizontal(14.0).padding_vertical(6.0), { let theme = theme.clone(); move |_| RectStyle::default().with_fill(theme.get().surface_alt).with_radius(BorderRadius::all(8.0)) }, children![__text_8])?.hover_style({ let theme = theme.clone(); move |_| RectStyle::default().with_fill(theme.get().border).with_radius(BorderRadius::all(8.0)) }).to(move || anchor("outside"))
+                                    };
+                                    Container::new(LayoutStyle::new().flex_row().gap(10.0).align_items(AlignItems::CENTER), children![__sbox_4, __sbox_5])?
+                                };
+                                __children.push(box_item(__row_1));
+                                let __text_9 = {
+                                    Text::declaring(
+                                        || "A box named with anchor: is a place on the page. Following a link to it brings it to the top of every scroll it sits in and adds a history entry, so back returns to where you were. A document gives it that id, so #outside in the address opens there.".to_string(),
+                                        LayoutStyle::new(),
+                                        { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(12.0).with_color(theme.get().muted) },
+                                    )?
+                                };
+                                __children.push(box_item(__text_9));
+                                __slots.extend_default(__children);
+                                Ok(__slots)
+                            }
+                            }
+                        );
+                        card(CardProps::props().gap(10.0).build(), __deferred)?
+                    };
+                    __children.push(box_item(__node_11));
+                    let __node_12 = code_line(CodeLineProps::props().code("box anchor:\"outside\"   ·   box to:anchor(\"outside\")").build(), Children::default())?;
+                    __children.push(box_item(__node_12));
                     __slots.extend_default(__children);
                     Ok(__slots)
                 }
@@ -212,7 +267,7 @@ pub fn links(props: LinksProps, children: Children) -> Result<Box<dyn LayoutItem
             );
             example(ExampleProps::props().title("On this page").build(), __deferred)?
         };
-        Container::new(LayoutStyle::new().flex_column().gap(20.0), children![__node_0, __node_1, __node_4, __node_7])?
+        Container::new(LayoutStyle::new().flex_column().gap(20.0), children![__node_0, __node_1, __node_4, __node_7, __node_10])?
     };
     let __col_0 = __col_0.page_anchor(|| "top");
     Ok(Box::new(__col_0))

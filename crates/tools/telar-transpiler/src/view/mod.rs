@@ -644,6 +644,13 @@ impl<'a> ViewGen<'a> {
         }
         match el.tag.as_str() {
             "text" => self.emit_text(el),
+            "span" => ChildEmit::Simple {
+                name: self.next_variable_name("span"),
+                code: format!(
+                    "{}::core::compile_error!(\"a `span` is a run of a paragraph, so it goes inside a `text`\");",
+                    self.indent_str()
+                ),
+            },
             "col" | "row" | "grid" => self.emit_container(el),
             "box" => self.emit_box(el),
             "overlay" => self.emit_overlay(el),

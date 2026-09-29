@@ -1,8 +1,9 @@
 //! What a string is worth to layout when a "pixel" is a fraction of a character cell.
 
-use renderer_core::{Span, TextMetrics, TextStyle, TextWrap};
+use renderer_core::{Span, TextAlign, TextMetrics, TextStyle, TextWrap};
+use unicode_segmentation::UnicodeSegmentation;
 
-use crate::wrap::{WrapConfig, WrappedLine, line_cols, wrap};
+use crate::wrap::{WrapConfig, WrappedLine, grapheme_cols, line_cols, wrap};
 
 /// How many logical pixels one terminal cell stands for.
 ///
@@ -105,6 +106,39 @@ impl TextMetrics for CellMetrics {
 
     fn line_height(&self, _font_size: f32) -> f32 {
         self.cell.height
+    }
+
+    /// The cell under the point, found the way the painter lays the paragraph out: the same wrap, the same alignment inside the columns it was given.
+    fn index_at(
+        &self,
+        text: &str,
+        _spans: Option<&[Span]>,
+        max_width: f32,
+        style: &TextStyle,
+        (x, y): (f32, f32),
+    ) -> Option<usize> {
+        if x < 0.0 || y < 0.0 {
+            return None;
+        }
+        let mut lines = Vec::new();
+        self.lines(text, max_width, style, &mut lines);
+        let line = lines.get((y / self.cell.height) as usize)?;
+        let cols = self.cell.cols_in(max_width);
+        let start = match style.text_align {
+            TextAlign::Center => cols.saturating_sub(line.cols) / 2,
+            TextAlign::End => cols.saturating_sub(line.cols),
+            TextAlign::Start | TextAlign::Justify => 0,
+        };
+        let target = (x / self.cell.width) as u16;
+        let mut col = start;
+        for (offset, grapheme) in text[line.range.clone()].grapheme_indices(true) {
+            let width = grapheme_cols(grapheme);
+            if (col..col + width).contains(&target) {
+                return Some(line.range.start + offset);
+            }
+            col += width;
+        }
+        None
     }
 }
 

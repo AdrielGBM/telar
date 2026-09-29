@@ -140,6 +140,8 @@ enum Painted {
         rect: Rect,
         style: String,
         text: String,
+        /// The paragraph cut at its spans, when it has any: written as inline elements rather than as one string.
+        runs: Option<Vec<crate::runs::Run>>,
         /// Whether its style takes the element's background, which keeps it out of a box that paints one.
         claims_background: bool,
     },
@@ -484,7 +486,10 @@ impl Reconciler {
                 });
             }
             DrawCommand::Text {
-                text, rect, style, ..
+                text,
+                rect,
+                style,
+                spans,
             } => {
                 let mut css = String::new();
                 paint::text_style(style, &mut css);
@@ -492,6 +497,10 @@ impl Reconciler {
                     rect: *rect,
                     style: css,
                     text: text.to_string(),
+                    runs: spans
+                        .as_deref()
+                        .filter(|spans| !spans.is_empty())
+                        .map(|spans| crate::runs::runs_of(text, spans)),
                     claims_background: paint::text_claims_background(style),
                 });
             }
@@ -798,19 +807,23 @@ impl Reconciler {
                 live.pieces.clear();
             }
         } else if inline_text {
-            let Painted::Text { text, .. } = &open.pieces[0] else {
+            let Painted::Text { text, runs, .. } = &open.pieces[0] else {
                 unreachable!("inline_text is exactly this shape")
             };
-            if live.text != *text {
+            let written = runs.as_deref().map(crate::runs::signature);
+            if live.text != *written.as_ref().unwrap_or(text) {
                 // Wipes the children with it, which is the point: the element carries the text itself now.
-                live.node.set_text_content(Some(text));
-                live.text = text.clone();
+                match runs {
+                    Some(runs) => crate::runs::write(&document, &live.node, runs, open.id),
+                    None => live.node.set_text_content(Some(text)),
+                }
+                live.text = written.unwrap_or_else(|| text.clone());
                 live.pieces.clear();
             }
         } else {
             // Paint the box carries that is not a box goes after the boxes, the order it was drawn in and therefore what it covers: a scroll area's bars are drawn over the content they scroll.
             live.text.clear();
-            fill_pieces(&document, live, open.placed, &open.pieces);
+            fill_pieces(&document, live, open.id, open.placed, &open.pieces);
         }
 
         let node = live.node.clone();
@@ -915,16 +928,27 @@ fn create(document: &web_sys::Document, tag: &'static str) -> Option<web_sys::El
 }
 
 /// Brings the element's positioned children in line with what it painted this frame.
-fn fill_pieces(document: &web_sys::Document, live: &mut Live, after: u32, pieces: &[Painted]) {
+fn fill_pieces(
+    document: &web_sys::Document,
+    live: &mut Live,
+    box_id: u64,
+    after: u32,
+    pieces: &[Painted],
+) {
     // Anything past the boxes and the pieces is a child from a frame that had more of either.
     truncate(live.node.as_ref(), after + live.pieces.len() as u32);
     for (index, painted) in pieces.iter().enumerate() {
-        let (rect, css, text) = match painted {
-            Painted::Rect { rect, style } => (rect, style, ""),
+        let (rect, css, text, runs) = match painted {
+            Painted::Rect { rect, style } => (rect, style, "", None),
             Painted::Text {
-                rect, style, text, ..
-            } => (rect, style, text.as_str()),
+                rect,
+                style,
+                text,
+                runs,
+                ..
+            } => (rect, style, text.as_str(), runs.as_deref()),
         };
+        let written = runs.map(crate::runs::signature);
         let mut style = String::new();
         paint::declare(&mut style, "position", "absolute");
         paint::declare(&mut style, "left", &paint::px(rect.x));
@@ -961,9 +985,13 @@ fn fill_pieces(document: &web_sys::Document, live: &mut Live, after: u32, pieces
             let _ = piece.node.set_attribute("style", &style);
             piece.style = style;
         }
-        if piece.text != text {
-            piece.node.set_text_content(Some(text));
-            piece.text = text.to_string();
+        let wanted = written.as_deref().unwrap_or(text);
+        if piece.text != wanted {
+            match runs {
+                Some(runs) => crate::runs::write(document, &piece.node, runs, box_id),
+                None => piece.node.set_text_content(Some(text)),
+            }
+            piece.text = wanted.to_string();
         }
     }
     while live.pieces.len() > pieces.len() {

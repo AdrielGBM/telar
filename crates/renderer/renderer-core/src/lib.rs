@@ -48,16 +48,17 @@ pub use image::{ExternalTexture, ImageData, premultiply_rgba};
 pub use image_fill::{ImageFill, ImageSlice, SlicePiece};
 pub use metrics::{
     TextMetrics, invalidate_text_metrics, line_height, measure_ink_bounds, measure_min_content,
-    measure_text, set_default_text_metrics, set_text_metrics, text_metrics_generation,
+    measure_text, set_default_text_metrics, set_text_metrics, text_index_at,
+    text_metrics_generation,
 };
 pub use path::{PathData, PathVerb};
 pub use preprocess::{ScaleScratch, blur_padding, blur_sigma, expand_fill_layers};
 pub use renderer::{BuiltRenderer, RenderBackend, RendererBuild, RendererFactory};
 pub use shadow::ShadowLayout;
 pub use style::{
-    Border, Clamp, Declared, FillRule, FontFamily, FontStyle, Gradient, GradientKind, GradientStop,
-    GradientStops, LineCap, LineHeight, LineJoin, Paint, PathStyle, Raster, RectStyle, Scale,
-    Shadow, ShapeStyle, Span, Stroke, TextAlign, TextShadow, TextStyle, TextWrap,
-    border_inner_shape,
+    Border, Clamp, Declared, FillRule, FontFamily, FontFeatures, FontStyle, FontTag,
+    FontVariations, Gradient, GradientKind, GradientStop, GradientStops, LineCap, LineHeight,
+    LineJoin, Paint, PathStyle, Raster, RectStyle, Scale, Shadow, ShapeStyle, Span, Stroke,
+    TextAlign, TextLength, TextShadow, TextStyle, TextWrap, border_inner_shape, link_at,
 };
 pub use style_pool::{hash_declared, hash_path_style};

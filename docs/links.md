@@ -70,6 +70,30 @@ history keeps the anchor entries around it (see [docs/location.md](location.md))
 | Web, document | The element's `id`, so `#name` is a native fragment. A plain click on its `<a>` is taken back and followed by Telar, which pushes the entry and reveals the box through the document's scroll. |
 | Web, canvas, desktop, Android, terminal, headless | Revealed by Telar in its scroll areas. A desktop or terminal `--location /page#name` and an Android link with a fragment open there. |
 
+## Links inside a paragraph
+
+```rsx
+text font_size:14
+    span "Read "
+    span "the repository" to:external("https://github.com/AdrielGBM/telar") color:$theme.accent
+    span " or go "
+    span "to the credits" to:anchor("creditos")
+```
+
+A `text` whose children are `span`s is one paragraph written as runs: shaped, wrapped and measured as one
+text, each run restyled by the text properties it names (`color`, `font_weight`, `font_variation`…) and made a
+link by `to:`, which takes the same destinations a box does. The text's own quoted content, if any, is the first
+run. A `span` belongs inside a `text`, and a `text` with children holds `span`s and nothing else; either mistake
+is a build error. In Rust it is `Text::runs(vec![TextRun::new(...).declaring(...).to(...)], ...)`, or
+`Span::linking_to` on the spans of `Text::spanned`.
+
+| Target | A link run is |
+| --- | --- |
+| Web, document | An `<a href>` inside the paragraph's element, the other runs `<span>`s with only what they declare. The browser answers it like any link: a plain click on this page's origin is taken back and reported as `Event::RunActivated { box_id, run }`, which the app follows. |
+| Web canvas, desktop, Android, headless | Followed on a tap on its glyphs, found with `TextMetrics::index_at`; the mouse pointer takes the link shape over it. Ctrl, Cmd or Shift ask for a view beside this one, as on a box. |
+| Terminal | Its style on its cells, and an OSC 8 hyperlink over them when it links outside the app. |
+| Accessibility (AccessKit) | A `Link` node after its paragraph, named by its words and carrying its URL. |
+
 ## Per target
 
 | Target | Route | Anchor | External | Modified press |
@@ -105,5 +129,8 @@ logical pixels), which is also the distance past which a press stops being a tap
   without them.
 - A route opened beside the app exists only on the web; elsewhere a modified press follows it in place.
 - Windows and macOS openers are compiled only on those systems and have not been exercised on a device.
+- A link run is reached by the pointer on every target and by Tab only in a document, whose `<a>` the browser
+  puts in its own order. Elsewhere a reader announces it, but it is not a focus stop: a link the keyboard must
+  reach on every target belongs on a box with `to:`.
 - A synthetic pointer event is untrusted, so the browser test checks that a press no longer captures the
   pointer and that a click is taken back, not that a real drag is captured past the slop.
