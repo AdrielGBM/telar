@@ -63,7 +63,7 @@ fn encode(data: &ImageData) -> Option<Rc<str>> {
 }
 
 fn unpremultiply(pixels: &mut [u8]) {
-    for chunk in pixels.chunks_exact_mut(4) {
+    for chunk in pixels.as_chunks_mut::<4>().0 {
         let alpha = chunk[3];
         if alpha == 0 || alpha == 255 {
             continue;

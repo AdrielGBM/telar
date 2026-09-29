@@ -54,8 +54,7 @@ pub fn source_of(event: &web_sys::PointerEvent) -> PointerSource {
     }
 }
 
-/// `WheelEvent.deltaMode`, whose values the web-sys binding does not name.
-const DELTA_PIXEL: u32 = 0;
+/// `WheelEvent.deltaMode`, whose values the web-sys binding does not name. Pixels (`0`) is the rest.
 const DELTA_LINE: u32 = 1;
 const DELTA_PAGE: u32 = 2;
 
@@ -69,7 +68,7 @@ pub fn scroll_delta(event: &web_sys::WheelEvent) -> ScrollDelta {
             x: x * PAGE_LINES,
             y: y * PAGE_LINES,
         },
-        DELTA_PIXEL | _ => ScrollDelta::Pixels { x, y },
+        _ => ScrollDelta::Pixels { x, y },
     }
 }
 
