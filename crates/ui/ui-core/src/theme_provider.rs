@@ -26,6 +26,15 @@ pub fn provide_theme(
     Ok(ThemeProvider { child })
 }
 
+/// A scoped theme that follows what `read` reads: the theme `theme:` with a value reading `$state` provides, re-read when that state changes, so switching it re-runs only the readers under it.
+pub fn follow_theme<T: theme_core::ThemeTokens + Clone + 'static>(
+    read: impl Fn() -> T + 'static,
+) -> ScopedTheme {
+    let scoped = ScopedTheme::new(read());
+    reactive_core::effect(move || scoped.set(read()));
+    scoped
+}
+
 /// What [`provide_theme`] returns. Adds no layout node: it lays out, draws and takes events exactly as its child does.
 pub struct ThemeProvider {
     child: Child,

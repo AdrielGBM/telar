@@ -138,7 +138,7 @@ pub use surface_context::{Surface, SurfaceGuard};
 pub use svg::Svg;
 pub use text::{Text, TextRun};
 pub use text_area::TextArea;
-pub use theme_provider::{ThemeProvider, provide_theme};
+pub use theme_provider::{ThemeProvider, follow_theme, provide_theme};
 pub use ui_tree::{Component, ComponentList, EventResult, NodeVec, RenderNode};
 pub use virtual_list::{VirtualList, visible_window};
 pub use window_root::WindowRoot;

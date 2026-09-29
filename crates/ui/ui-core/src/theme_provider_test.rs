@@ -247,3 +247,21 @@ fn a_failed_build_frees_what_it_built() {
         assert_eq!(live(), baseline);
     }
 }
+
+/// A theme read from state follows it: the subtree under it re-resolves when the state changes.
+#[test]
+fn a_followed_theme_switches_with_what_it_reads() {
+    reset_layout_runtime();
+    let red = reactive_core::signal(true);
+    let seen: Rc<RefCell<Vec<Color>>> = Rc::default();
+    let sink = seen.clone();
+    let scoped = follow_theme(move || Accent(if red.get() { RED } else { BLUE }));
+    let _provider = provide_theme(scoped, move || {
+        reactive_core::effect(move || sink.borrow_mut().push(use_theme_tokens().primary()));
+        Ok(Box::new(Container::new(LayoutStyle::new(), vec![])?) as Box<dyn LayoutItem>)
+    })
+    .unwrap();
+    red.set(false);
+    assert_eq!(seen.borrow().first(), Some(&RED));
+    assert_eq!(seen.borrow().last(), Some(&BLUE));
+}

@@ -82,3 +82,37 @@ impl ViewGen<'_> {
 #[cfg(test)]
 #[path = "accessible_test.rs"]
 mod tests;
+
+impl ViewGen<'_> {
+    /// `theme:` builds the element inside a scope that provides the theme it names, so the element's own `$theme` reads and everything under it resolve that theme. A value reading `$state` is followed with `follow_theme`.
+    pub(super) fn theme_scope(&self, el: &Element, emit: ChildEmit) -> ChildEmit {
+        if !crate::registry::is_builtin_tag(&el.tag) {
+            return emit;
+        }
+        let Some(theme) = el.attributes.iter().find(|a| a.key == "theme") else {
+            return emit;
+        };
+        let ChildEmit::Simple { name, code } = emit else {
+            return emit;
+        };
+        let raw = theme.value.text().trim();
+        let value = super::redundant_parens(raw).unwrap_or(raw);
+        let provided = if value.contains('$') {
+            let read = substitute_reads(value);
+            format!(
+                "follow_theme({})",
+                self.clone_captures(&[value], format!("move || {read}"))
+            )
+        } else {
+            value.to_string()
+        };
+        let pad = self.indent_str();
+        let code = format!(
+            "{pad}let {name} = provide_theme({provided}, || {{\n\
+             {code}\n\
+             {pad}    Ok(Box::new({name}) as Box<dyn LayoutItem>)\n\
+             {pad}}})?;"
+        );
+        ChildEmit::Simple { name, code }
+    }
+}

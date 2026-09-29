@@ -4,6 +4,8 @@ use crate::shared::components::code_line::{code_line, CodeLineProps};
 use crate::shared::components::doc_header::{doc_header, DocHeaderProps};
 use crate::shared::components::example::{example, ExampleProps};
 
+let night = signal(true);
+
 [style]
 @swatch
     gap: 6
@@ -73,3 +75,12 @@ col gap:20
             text "Because color:$theme.primary compiles to a theme lookup, swapping the theme struct at runtime updates every widget that reads it — no manual repaint." font_size:13 color:$theme.muted
             text "Try the Modern / Pastel / Midnight buttons in the sidebar." font_size:13 color:$theme.primary
         code_line code:"on_press:|| set_mode(\"midnight\")"
+    example title:"A theme for one subtree"
+        card gap:8
+            col theme:(if $night { crate::core::theme::SandboxTheme::midnight() } else { crate::core::theme::SandboxTheme::pastel() }) fill:$theme.surface pad:14 radius:10 gap:6
+                text "Everything under this column reads its own theme" font_size:14 color:$theme.ink
+                text "however many children it has, and the sidebar's switch does not reach it." font_size:12 color:$theme.muted
+                box fill:$theme.primary radius:8 pad_x:12 pad_y:6
+                    text "primary" font_size:12 color:$theme.on_primary
+            button label:"Switch this one" ghost on_press:(|| $night.toggle())
+        code_line code:"col theme:(if $night { Theme::midnight() } else { Theme::pastel() })"

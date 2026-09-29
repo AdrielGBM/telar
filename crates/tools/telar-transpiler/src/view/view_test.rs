@@ -1474,3 +1474,25 @@ fn a_mask_is_a_source_and_a_content_in_one_box() {
         .rust_code;
     assert!(one.contains("a `mask` holds two children"), "{one}");
 }
+
+/// A theme on a box is the theme of the box and of everything under it, however many children it has, and one read from state follows it.
+#[test]
+fn a_theme_is_provided_to_a_subtree() {
+    let src = "[logic]\nlet dark = signal(false);\n[view]\ncol\n    col theme:Palette::for_act($dark)\n        text \"a\"\n        text \"b\"\n    box theme:(Palette::default())\n";
+    let code = crate::transpile_source(src, "demo", None, None)
+        .unwrap()
+        .rust_code;
+    assert!(!code.contains("compile_error!"), "{code}");
+    assert!(
+        code.contains("provide_theme(follow_theme({ let dark = dark.clone(); move || Palette::for_act(dark.get()) }), || {"),
+        "a theme read from state is followed:\n{code}"
+    );
+    assert!(
+        code.contains("provide_theme(Palette::default(), || {"),
+        "{code}"
+    );
+    assert!(
+        code.contains("Ok(Box::new(__col_1) as Box<dyn LayoutItem>)"),
+        "{code}"
+    );
+}

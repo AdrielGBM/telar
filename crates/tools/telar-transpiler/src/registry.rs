@@ -100,6 +100,9 @@ const ACCESSIBILITY_ATTRS: &[AttrSpec] = &[
     AttrSpec::free("anchor").doc(
         "Names the box as a place on the page that `to:anchor(\"name\")` reaches: a quoted string, `t!(…)`, or an expression reading `$state`. Following it reveals the box at the top of its scroll and adds a history entry; a document gives the element that `id`, so `#name` in the address opens there.",
     ),
+    AttrSpec::free("theme").doc(
+        "Provides a theme to the box and everything under it, any number of children: a theme value, or a `ScopedTheme` to switch it later. A value reading `$state` is followed, re-running only the readers under it.",
+    ),
     AttrSpec::free("view_progress").doc(
         "Writes how far the box is through its passage through the view of the scroll it sits in into a signal of `f32`, `0.0..=1.0`: `view_progress:$p`. The range is `view_range:`, `cover` by default.",
     ),

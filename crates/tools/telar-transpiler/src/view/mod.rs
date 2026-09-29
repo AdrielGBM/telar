@@ -521,7 +521,8 @@ impl<'a> ViewGen<'a> {
         let emit = match node {
             ViewNode::Element(el) => {
                 let emit = self.accessible_tail(el, emit);
-                self.clip_tail(el, emit)
+                let emit = self.clip_tail(el, emit);
+                self.theme_scope(el, emit)
             }
             _ => emit,
         };

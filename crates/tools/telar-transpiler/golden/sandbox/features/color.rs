@@ -33,6 +33,8 @@ pub fn color(props: ColorProps, children: Children) -> Result<Box<dyn LayoutItem
     #[allow(unused_imports)] use telar::use_theme;
     #[allow(unused_variables)] let theme = telar::Theme::<core::theme::SandboxTheme>::default();
 
+    let night = signal(true);
+
     let __col_0 = {
         let __node_0 = doc_header(DocHeaderProps::props().kicker("FOUNDATIONS").title("Color & theme").desc("Colors are semantic tokens, not fixed values. Every token resolves through the active theme — switch it in the sidebar and the whole app recolors reactively.").build(), Children::default())?;
         let __node_1 = {
@@ -353,7 +355,77 @@ pub fn color(props: ColorProps, children: Children) -> Result<Box<dyn LayoutItem
             );
             example(ExampleProps::props().title("Reactive theming").build(), __deferred)?
         };
-        Container::new(LayoutStyle::new().flex_column().gap(20.0), children![__node_0, __node_1, __node_5, __node_9, __node_12])?
+        let __node_15 = {
+            let __deferred = Children::new(
+                {
+                    let night = night.clone();
+                    let theme = theme.clone();
+                move || {
+                    let night = night.clone();
+                    let theme = theme.clone();
+                    let mut __slots = Slots::new();
+                    let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
+                    let __node_16 = {
+                        let __deferred = Children::new(
+                            {
+                                let night = night.clone();
+                                let theme = theme.clone();
+                            move || {
+                                let night = night.clone();
+                                let theme = theme.clone();
+                                let mut __slots = Slots::new();
+                                let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
+                                let __col_13 = provide_theme(follow_theme({ let night = night.clone(); move || if night.get() { crate::core::theme::SandboxTheme::midnight() } else { crate::core::theme::SandboxTheme::pastel() } }), || {
+                                let __col_13 = {
+                                    let __text_14 = {
+                                        Text::declaring(
+                                            || "Everything under this column reads its own theme".to_string(),
+                                            LayoutStyle::new(),
+                                            { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(14.0).with_color(theme.get().ink) },
+                                        )?
+                                    };
+                                    let __text_15 = {
+                                        Text::declaring(
+                                            || "however many children it has, and the sidebar's switch does not reach it.".to_string(),
+                                            LayoutStyle::new(),
+                                            { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(12.0).with_color(theme.get().muted) },
+                                        )?
+                                    };
+                                    let __sbox_15 = {
+                                        let __text_16 = {
+                                            Text::declaring(
+                                                || "primary".to_string(),
+                                                LayoutStyle::new(),
+                                                { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(12.0).with_color(theme.get().on_primary) },
+                                            )?
+                                        };
+                                        StyledContainer::new(LayoutStyle::new().flex_column().padding_horizontal(12.0).padding_vertical(6.0), { let theme = theme.clone(); move |_| RectStyle::default().with_fill(theme.get().primary).with_radius(BorderRadius::all(8.0)) }, children![__text_16])?
+                                    };
+                                    StyledContainer::new(LayoutStyle::new().flex_column().padding_all(14.0).gap(6.0), { let theme = theme.clone(); move |_| RectStyle::default().with_fill(theme.get().surface).with_radius(BorderRadius::all(10.0)) }, children![__text_14, __text_15, __sbox_15])?
+                                };
+                                    Ok(Box::new(__col_13) as Box<dyn LayoutItem>)
+                                })?;
+                                __children.push(box_item(__col_13));
+                                let __node_17 = button(ButtonProps::props().label("Switch this one").ghost(true).on_press(std::rc::Rc::new({ let night = night.clone(); move || night.toggle() })).build(), Children::default())?;
+                                __children.push(box_item(__node_17));
+                                __slots.extend_default(__children);
+                                Ok(__slots)
+                            }
+                            }
+                        );
+                        card(CardProps::props().gap(8.0).build(), __deferred)?
+                    };
+                    __children.push(box_item(__node_16));
+                    let __node_18 = code_line(CodeLineProps::props().code("col theme:(if $night { Theme::midnight() } else { Theme::pastel() })").build(), Children::default())?;
+                    __children.push(box_item(__node_18));
+                    __slots.extend_default(__children);
+                    Ok(__slots)
+                }
+                }
+            );
+            example(ExampleProps::props().title("A theme for one subtree").build(), __deferred)?
+        };
+        Container::new(LayoutStyle::new().flex_column().gap(20.0), children![__node_0, __node_1, __node_5, __node_9, __node_12, __node_15])?
     };
     Ok(Box::new(__col_0))
 }

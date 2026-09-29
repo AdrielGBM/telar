@@ -254,7 +254,7 @@ pub use ui_core::{
     SurfaceTransition, Text, TextArea, TextRun, ThemeProvider, Transition, VirtualList, WindowRoot,
     anchor_rect, animate_layout, apply_move, box_item, box_transform, close_overlay,
     compute_layout, confirm_top, current_direction, declare, dismiss_depth, dismiss_top,
-    drag_start, drag_travel, exits_in_flight, focus, fragment, fragment_positional,
+    drag_start, drag_travel, exits_in_flight, focus, follow_theme, fragment, fragment_positional,
     inherited_text_style, insertion_index, interactive_rects, kept, key_held, key_nav_apply,
     key_nav_apply_grid, key_pressed, logical_border_radius, logical_border_widths, mark_dirty,
     modifiers, new_container, new_leaf, observe_keyboard, observe_pointer, open_overlay,
