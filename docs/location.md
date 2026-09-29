@@ -37,6 +37,12 @@ let pages = Navigator::new(Page::Home).follow_location();
 - when the platform moves on its own (back and forward in a browser, a hash edited by hand), the stack
   follows it, and the change is not sent back to the platform.
 
+A fragment names an anchor on a page, not a page (see [docs/links.md](links.md#anchors)). The navigator sees
+the pages a history shows, `pages_of(history)`: every entry without its fragment, and an entry naming an anchor on
+the page before it folded into that page. The history itself keeps those entries, so back from the next page
+returns to the anchor the reader left, and back from an anchor entry leaves the page where it is. Pushing a
+location with a fragment opens its page, if that is not the one shown, then adds the anchor entry and reveals it.
+
 If the platform names a location the route type does not recognize, that entry is dropped. The platform's
 current entry is then **rewritten** to what the stack shows, never stepped back, so the entries the user came
 from are kept. Only one navigator follows the location at a time, and the binding ends with the reactive
@@ -54,6 +60,8 @@ owner it was made under.
 | `WindowCommand::Navigate(HistoryUpdate)` | A move the app made, queued from widget code and applied by the runner to the source. |
 | `EventHandler::on_back` | The user pressed back (Android back, a mouse's back button, a `BrowserBack` key). `false` hands the gesture back to the platform. |
 | `push_location`, `replace_location`, `history_back`, `location_history` | App-side entry points that go through the following navigator, or move the history directly when none follows it. |
+| `push_anchor`, `pages_of` | Add an entry naming an anchor on the current page and reveal it; the pages a history shows. |
+| `set_anchor_revealer` | What reveals an anchor the history arrives at; installed by the tree's anchor registry, which is handed the one the app opened at once it exists. |
 | `navigate_back()` | Back as the user means it: close the top dialog or drawer, otherwise step the history back. |
 
 ## Per target

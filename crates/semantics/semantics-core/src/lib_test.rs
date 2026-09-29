@@ -85,11 +85,13 @@ fn an_annotation_names_a_box_over_what_the_widget_derived() {
         label: Some("Company logo".into()),
         lang: Some("es".into()),
         hidden: false,
+        anchor: Some("logo".into()),
     };
     let said = derived.annotated(&annotation);
     assert_eq!(said.role, Role::Drawing, "the role is still the widget's");
     assert_eq!(said.label.as_deref(), Some("Company logo"));
     assert_eq!(said.lang.as_deref(), Some("es"));
+    assert_eq!(said.anchor.as_deref(), Some("logo"));
     assert!(!said.hidden);
 }
 

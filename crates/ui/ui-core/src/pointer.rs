@@ -57,6 +57,9 @@ thread_local! {
 
 /// Records what `event` says about the buttons. The runner calls this for every event before dispatch, so a handler running on this very event already sees the state it establishes.
 pub fn observe_pointer(event: &Event) {
+    if matches!(event, Event::PointerPressed { .. } | Event::Scrolled { .. }) {
+        crate::link::reader_moved();
+    }
     BUTTONS.with(|b| {
         let mut held = b.get();
         match event {

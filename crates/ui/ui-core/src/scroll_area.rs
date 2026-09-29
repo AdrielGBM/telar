@@ -607,18 +607,71 @@ impl Component for ScrollArea {
 /// A handle to the enclosing scroll area's live viewport, handed to the content builder by [`LayoutScrollArea::new_with`]. Because a scroll area lays its content out as its OWN layout root, every descendant's tracked rect is already in the same content-local space the scroll offset indexes into — so `visible` is a plain rect overlap, no scroll-transform math.
 #[derive(Clone)]
 pub struct ScrollViewport {
+    area: NodeId,
     offset_x: ReadSignal<f32>,
     offset_y: ReadSignal<f32>,
     rect: ReadSignal<Rect>,
     set_x: RwSignal<f32>,
     set_y: RwSignal<f32>,
     commanded: Commanded,
+    /// The content's rect, known once the builder has returned it.
+    content: Rc<std::cell::Cell<Option<ReadSignal<Rect>>>>,
 }
 
 impl ScrollViewport {
     /// The live scroll offset `(x, y)` in content-local px.
     pub fn offset(&self) -> (ReadSignal<f32>, ReadSignal<f32>) {
         (self.offset_x, self.offset_y)
+    }
+
+    /// How far through its whole scroll range this viewport is along `axis`, from `0.0` at the start to `1.0` at the end, read reactively. `0.0` while the content fits and there is nothing to scroll.
+    ///
+    /// A scroll timeline: the progress that stands for the page as a whole, where [`scroll_progress`](crate::scroll_progress) is one box's passage through the view.
+    pub fn progress(&self, axis: crate::Axis) -> f32 {
+        let Some(content) = self.content.get() else {
+            return 0.0;
+        };
+        let (content, viewport) = (content.get(), self.rect.get());
+        let (offset, range) = match axis {
+            crate::Axis::Vertical => (self.offset_y.get(), content.height - viewport.height),
+            crate::Axis::Horizontal => (self.offset_x.get(), content.width - viewport.width),
+        };
+        if range <= 0.0 {
+            return 0.0;
+        }
+        (offset / range).clamp(0.0, 1.0)
+    }
+
+    /// The scroll area's own box, in the layout its parent lays out.
+    pub fn area(&self) -> NodeId {
+        self.area
+    }
+
+    /// Scrolls so `item` starts at the viewport's top edge, as far as the content allows, and brings it into view across. Where a link to a place on the page leaves the reader: at the start of that place, not at whichever edge is nearest.
+    ///
+    /// Returns the offset asked for, or `None` when `item` has not been laid out. `peek`s for the same reason as [`reveal`](Self::reveal).
+    pub fn reveal_at_start(&self, item: NodeId) -> Option<(f32, f32)> {
+        let item = track_layout(item)?.get();
+        let viewport = self.rect.get();
+        if viewport.height <= 0.0 {
+            return None;
+        }
+        let at_x = self.set_x.peek();
+        let x = if item.x < at_x {
+            item.x.max(0.0)
+        } else if item.x + item.width > at_x + viewport.width {
+            (item.x + item.width - viewport.width).min(item.x).max(0.0)
+        } else {
+            at_x
+        };
+        let target = (x, item.y.max(0.0));
+        self.scroll_to(target.0, target.1);
+        Some(target)
+    }
+
+    /// Where this viewport is scrolled to right now, without subscribing.
+    pub fn peek_offset(&self) -> (f32, f32) {
+        (self.set_x.peek(), self.set_y.peek())
     }
 
     /// Scrolls the minimum distance needed to bring `item` fully into view, leaving `margin` px of breathing room at whichever edge it entered from. A no-op when the item is already visible.
@@ -752,17 +805,26 @@ impl LayoutScrollArea {
         let leaf = LayoutLeaf::register(layout_style)?;
         let (scroll_x, scroll_y) = offset;
         let commanded = Commanded::default();
-        let content = build(ScrollViewport {
+        let handed = ScrollViewport {
+            area: leaf.node,
             offset_x: scroll_x.read_only(),
             offset_y: scroll_y.read_only(),
             rect: leaf.rect.read_only(),
             set_x: scroll_x,
             set_y: scroll_y,
             commanded: commanded.clone(),
-        })?;
+            content: Rc::default(),
+        };
+        let content = {
+            let _scope = reactive_core::owner_scope();
+            reactive_core::provide_context(handed.clone());
+            build(handed.clone())?
+        };
         let content_node = content.layout_node();
         let content_rect_signal =
             track_layout(content_node).expect("content node not registered in ctx");
+        handed.content.set(Some(content_rect_signal.read_only()));
+        crate::scroll_viewports::register(content_node, handed);
 
         // The viewport rect is set by the surrounding layout and this effect fires during that flush, after the runtime borrow is released, so computing here is re-entrancy safe.
         let viewport = leaf.rect;

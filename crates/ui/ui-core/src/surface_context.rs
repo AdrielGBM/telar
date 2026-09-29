@@ -24,6 +24,7 @@ use crate::focus::{FocusContext, FocusGuard};
 use crate::inherit::{CascadeContext, CascadeGuard};
 use crate::input_region::{InputRegionContext, InputRegionGuard};
 use crate::presence::{ExitsContext, ExitsGuard};
+use crate::scroll_viewports::{ViewportsContext, ViewportsGuard};
 
 /// The complete per-surface world plus its reactive [`SurfaceHandle`]. Build one per window/layer-surface with [`Surface::new`]; activate it with [`Surface::enter`].
 pub struct Surface {
@@ -39,6 +40,7 @@ pub struct Surface {
     cascade: CascadeContext,
     cursor: CursorContext,
     annotations: AnnotationsContext,
+    viewports: ViewportsContext,
     window_commands: WindowCommandContext,
 }
 
@@ -62,6 +64,7 @@ impl Surface {
                 cascade: CascadeContext::new_owned(),
                 cursor: CursorContext::new_owned(),
                 annotations: AnnotationsContext::new_owned(),
+                viewports: ViewportsContext::new_owned(),
                 window_commands: WindowCommandContext::new_owned(),
             })
         };
@@ -92,6 +95,7 @@ impl Surface {
             _window_commands: self.window_commands.enter(),
             _cursor: self.cursor.enter(),
             _annotations: self.annotations.enter(),
+            _viewports: self.viewports.enter(),
             _prev_surface: RestoreSurface(prev_surface),
         }
     }
@@ -116,6 +120,7 @@ impl Surface {
             _window_commands: WindowCommandContext::enter_ambient(),
             _cursor: CursorContext::enter_ambient(),
             _annotations: AnnotationsContext::enter_ambient(),
+            _viewports: ViewportsContext::enter_ambient(),
             _prev_surface: RestoreSurface(prev_surface),
         }
     }
@@ -148,6 +153,7 @@ pub struct SurfaceGuard {
     _window_commands: WindowCommandGuard,
     _cursor: CursorGuard,
     _annotations: AnnotationsGuard,
+    _viewports: ViewportsGuard,
     _prev_surface: RestoreSurface,
 }
 

@@ -96,6 +96,40 @@ Two things are exempt:
 The switch belongs to each runtime: a hot-reloaded library or a plugin reads its own copy of the preferences and
 keeps its own switch.
 
+### D6. Scroll and view timelines are progress, not time
+
+A scroll-driven animation is a [`Timeline`](#d4-timelinet-is-progress-driven-keyframest-is-time-driven-on-top-of-it)
+sampled by how far something has scrolled, so it needs no ticker, no clock and no reduced-motion scale: it moves
+exactly as far as the reader scrolls, and stops when they do.
+
+| Item | What it is |
+| --- | --- |
+| `scroll_progress(node, range)` | A `ReadSignal<f32>`, `0.0..=1.0`: how far `node` is through `range` of its passage through the view of the scroll it sits in. `scroll_progress_along` takes an `Axis`. |
+| `ViewRange` | `Cover` (start edge entering to end edge leaving), `Contain` (wholly in view, or filling it when taller), `Entry`, `Exit`: CSS's view-timeline ranges. `range_progress` is the arithmetic, for code that has the numbers already. |
+| `ScrollViewport::progress(axis)` | The scroll timeline: how far through its whole range a scroll is. |
+| `use_scroll_viewport()` | The scroll whose content is being built, by context. A node that already exists finds its scroll with `enclosing_scroll_viewport(node)`, whatever order the tree was built in. |
+| `view_progress:$p view_range:contain` | The `.rsx` spelling on any built-in tag: the box's progress written into a signal of `f32` the author owns, like `track_rect:`. `ScrollLinked::view_progress` in Rust. |
+
+The progress is computed from Telar's own layout and the scroll's offset, which every target keeps, so it is the
+same number everywhere: the document's scroll on web-dom, a scroll area drawn at its offset on a canvas, the
+desktop, Android and a terminal. Nothing here scroll-jacks: the scroll stays native and the progress follows it.
+
+A scene is a tall track with a sticky stage, the track's `contain` progress driving what the stage shows:
+
+```rsx
+[logic]
+let p = signal(0.0f32);
+let tint = memo(move || palette.sample(p.get()));
+
+[view]
+col height:800 view_progress:$p view_range:contain
+    box sticky inset_top:0 fill:$tint
+```
+
+On web-dom the page's offset reaches the app with the document's `scroll` event, so the progress trails the
+compositor by at most one frame. Handing a declarative timeline to the compositor (`animation-timeline`) is a
+separate optimisation, kept for when a measurement asks for it.
+
 ## The `.rsx` transition syntax
 
 ```

@@ -117,6 +117,7 @@ pub fn links(props: LinksProps, children: Children) -> Result<Box<dyn LayoutItem
                                     };
                                     StyledContainer::new(LayoutStyle::new().flex_column().padding_horizontal(14.0).padding_vertical(6.0), { let theme = theme.clone(); move |_| RectStyle::default().with_fill(theme.get().surface_alt).with_radius(BorderRadius::all(8.0)) }, children![__text_3])?.hover_style({ let theme = theme.clone(); move |_| RectStyle::default().with_fill(theme.get().border).with_radius(BorderRadius::all(8.0)) }).to(move || external("https://github.com/AdrielGBM/telar"))
                                 };
+                                let __sbox_2 = __sbox_2.page_anchor(|| "outside");
                                 __children.push(box_item(__sbox_2));
                                 let __sbox_3 = {
                                     let __text_4 = {
@@ -162,25 +163,38 @@ pub fn links(props: LinksProps, children: Children) -> Result<Box<dyn LayoutItem
                                 let theme = theme.clone();
                                 let mut __slots = Slots::new();
                                 let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-                                let __sbox_4 = {
-                                    let __text_5 = {
-                                        Text::declaring(
-                                            || "Back to the top".to_string(),
-                                            LayoutStyle::new(),
-                                            { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(14.0).with_color(theme.get().primary) },
-                                        )?
+                                let __row_1 = {
+                                    let __sbox_4 = {
+                                        let __text_5 = {
+                                            Text::declaring(
+                                                || "Back to the top".to_string(),
+                                                LayoutStyle::new(),
+                                                { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(14.0).with_color(theme.get().primary) },
+                                            )?
+                                        };
+                                        StyledContainer::new(LayoutStyle::new().flex_column().padding_horizontal(14.0).padding_vertical(6.0), { let theme = theme.clone(); move |_| RectStyle::default().with_fill(theme.get().surface_alt).with_radius(BorderRadius::all(8.0)) }, children![__text_5])?.hover_style({ let theme = theme.clone(); move |_| RectStyle::default().with_fill(theme.get().border).with_radius(BorderRadius::all(8.0)) }).to(move || anchor("top"))
                                     };
-                                    StyledContainer::new(LayoutStyle::new().flex_column().padding_horizontal(14.0).padding_vertical(6.0), { let theme = theme.clone(); move |_| RectStyle::default().with_fill(theme.get().surface_alt).with_radius(BorderRadius::all(8.0)) }, children![__text_5])?.hover_style({ let theme = theme.clone(); move |_| RectStyle::default().with_fill(theme.get().border).with_radius(BorderRadius::all(8.0)) }).to(move || anchor("top"))
+                                    let __sbox_5 = {
+                                        let __text_6 = {
+                                            Text::declaring(
+                                                || "To the external links".to_string(),
+                                                LayoutStyle::new(),
+                                                { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(14.0).with_color(theme.get().primary) },
+                                            )?
+                                        };
+                                        StyledContainer::new(LayoutStyle::new().flex_column().padding_horizontal(14.0).padding_vertical(6.0), { let theme = theme.clone(); move |_| RectStyle::default().with_fill(theme.get().surface_alt).with_radius(BorderRadius::all(8.0)) }, children![__text_6])?.hover_style({ let theme = theme.clone(); move |_| RectStyle::default().with_fill(theme.get().border).with_radius(BorderRadius::all(8.0)) }).to(move || anchor("outside"))
+                                    };
+                                    Container::new(LayoutStyle::new().flex_row().gap(10.0).align_items(AlignItems::CENTER), children![__sbox_4, __sbox_5])?
                                 };
-                                __children.push(box_item(__sbox_4));
-                                let __text_6 = {
+                                __children.push(box_item(__row_1));
+                                let __text_7 = {
                                     Text::declaring(
-                                        || "An anchor is revealed once a box names itself with anchor:, which is still to come; until then following one does nothing.".to_string(),
+                                        || "A box named with anchor: is a place on the page. Following a link to it brings it to the top of every scroll it sits in and adds a history entry, so back returns to where you were. A document gives it that id, so #outside in the address opens there.".to_string(),
                                         LayoutStyle::new(),
                                         { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(12.0).with_color(theme.get().muted) },
                                     )?
                                 };
-                                __children.push(box_item(__text_6));
+                                __children.push(box_item(__text_7));
                                 __slots.extend_default(__children);
                                 Ok(__slots)
                             }
@@ -189,7 +203,7 @@ pub fn links(props: LinksProps, children: Children) -> Result<Box<dyn LayoutItem
                         card(CardProps::props().gap(10.0).build(), __deferred)?
                     };
                     __children.push(box_item(__node_8));
-                    let __node_9 = code_line(CodeLineProps::props().code("box to:anchor(\"top\")").build(), Children::default())?;
+                    let __node_9 = code_line(CodeLineProps::props().code("box anchor:\"outside\"   ·   box to:anchor(\"outside\")").build(), Children::default())?;
                     __children.push(box_item(__node_9));
                     __slots.extend_default(__children);
                     Ok(__slots)
@@ -200,5 +214,6 @@ pub fn links(props: LinksProps, children: Children) -> Result<Box<dyn LayoutItem
         };
         Container::new(LayoutStyle::new().flex_column().gap(20.0), children![__node_0, __node_1, __node_4, __node_7])?
     };
+    let __col_0 = __col_0.page_anchor(|| "top");
     Ok(Box::new(__col_0))
 }

@@ -1,6 +1,6 @@
-//! Following a [`Destination`]: a route is pushed onto the app's history, an anchor is revealed where it is, and an external URI is handed to the system.
+//! Following a [`Destination`]: a route is pushed onto the app's history, an anchor is added to the history and revealed where it is, and an external URI is handed to the system.
 
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 use std::sync::Arc;
 
@@ -14,13 +14,21 @@ type ReadDestination = Rc<dyn Fn() -> Option<Destination>>;
 thread_local! {
     static ANCHORS: RefCell<FxHashMap<Arc<str>, Reveal>> = RefCell::default();
     static LINKS: RefCell<FxHashMap<NodeId, ReadDestination>> = RefCell::default();
+    static PENDING: RefCell<Option<Arc<str>>> = const { RefCell::new(None) };
+    static REVEALER_INSTALLED: Cell<bool> = const { Cell::new(false) };
 }
 
 /// Goes where `destination` points, in place: pushes the route, reveals the anchor or opens the URI. `false` when nothing went anywhere — a route with no page, an anchor no box answers to, a URI nothing opened.
 pub fn follow(destination: &Destination) -> bool {
     match destination {
         Destination::Route(location) => platform_core::push_location(location.clone()),
-        Destination::Anchor(name) => reveal_anchor(name),
+        Destination::Anchor(name) => {
+            if !has_anchor(name) {
+                return false;
+            }
+            platform_core::push_anchor(name);
+            true
+        }
         Destination::External(uri) => services_core::open_uri(uri.as_str()),
     }
 }
@@ -44,14 +52,19 @@ pub fn follow_pressed(destination: &Destination, modifiers: ModifiersState) -> b
     }
 }
 
-/// Makes `name` an anchor a link can reveal, until the returned registration drops. A later registration of the same name replaces an earlier one.
+/// Makes `name` an anchor a link can reveal, until the returned registration drops. A later registration of the same name replaces an earlier one, and says so: two places answering to one name is a mistake a link cannot show.
 ///
-/// The lookup `anchor:` (T-1.4) fills. Until a box registers under a name, following an anchor to it does nothing and reports `false`.
+/// What `anchor:` registers for its box; `reveal` scrolls the box into place and reports whether it could.
 #[must_use = "the anchor is withdrawn when the registration drops"]
 pub fn register_anchor(name: &str, reveal: impl Fn() -> bool + 'static) -> AnchorRegistration {
+    install_revealer();
     let name: Arc<str> = name.into();
     let reveal: Reveal = Rc::new(reveal);
-    ANCHORS.with(|anchors| anchors.borrow_mut().insert(name.clone(), reveal.clone()));
+    let replaced =
+        ANCHORS.with(|anchors| anchors.borrow_mut().insert(name.clone(), reveal.clone()));
+    if replaced.is_some() {
+        tracing::warn!("two boxes are anchors named \"{name}\"; a link to it reaches the last one");
+    }
     AnchorRegistration { name, reveal }
 }
 
@@ -59,6 +72,39 @@ pub fn register_anchor(name: &str, reveal: impl Fn() -> bool + 'static) -> Ancho
 pub fn reveal_anchor(name: &str) -> bool {
     let reveal = ANCHORS.with(|anchors| anchors.borrow().get(name).cloned());
     reveal.is_some_and(|reveal| reveal())
+}
+
+/// Whether a box answers to the anchor `name` right now.
+pub fn has_anchor(name: &str) -> bool {
+    ANCHORS.with(|anchors| anchors.borrow().contains_key(name))
+}
+
+fn install_revealer() {
+    if REVEALER_INSTALLED.replace(true) {
+        return;
+    }
+    platform_core::set_anchor_revealer(reveal_when_ready);
+}
+
+/// Reveals `name` now, and again whenever its box moves, until the reader moves the page themselves.
+///
+/// An address that names an anchor arrives before the page is laid out, and the place it names moves while the page finishes: a face arriving remeasures the text above it, an image takes its size. Revealing once would leave the reader wherever the anchor was at that moment.
+fn reveal_when_ready(name: &str) {
+    PENDING.with(|pending| *pending.borrow_mut() = Some(name.into()));
+    reveal_anchor(name);
+}
+
+/// The anchor `name`'s box moved: revealed again if it is the one still being arrived at.
+pub(crate) fn anchor_moved(name: &str) {
+    let arriving = PENDING.with(|pending| pending.borrow().as_deref() == Some(name));
+    if arriving {
+        reveal_anchor(name);
+    }
+}
+
+/// The reader pressed, scrolled or typed: wherever the page is now is theirs, and an anchor still being arrived at stops pulling it back.
+pub fn reader_moved() {
+    PENDING.with(|pending| pending.borrow_mut().take());
 }
 
 /// Keeps an anchor registered; see [`register_anchor`].

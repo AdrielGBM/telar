@@ -60,9 +60,7 @@ pub fn motion(props: MotionProps, children: Children) -> Result<Box<dyn LayoutIt
         RenderNode::group(render)
     };
 
-    // A Timeline<Color> sampled by a slider's progress rather than by the ticker — the same `value_at`
-    // interpolation Keyframes plays per frame, but driven by whatever already has a p in [0,1]. This is the
-    // shape a scroll or view progress (T-4.2) will sample once that lands.
+    // A Timeline<Color> sampled by a slider's progress rather than by the ticker, the way a scroll timeline samples one.
     let stops = motion::Timeline::<Color>::builder(theme.get().primary)
         .then(
             theme.get().purple,

@@ -162,3 +162,15 @@ fn an_annotation_withdrawn_is_an_attribute_removed() {
     assert_eq!(attribute(&node, "aria-hidden"), None);
     assert_eq!(attribute(&node, "lang"), None);
 }
+
+/// A place on the page is an element with that `id`, so `#name` in the address is a fragment the browser knows.
+#[wasm_bindgen_test]
+fn an_anchor_is_the_elements_id() {
+    let place = rendered(&[
+        open(40, Semantics::group().with_anchor("simulacion")),
+        DrawCommand::PopElement,
+    ]);
+    assert_eq!(attribute(&place, "id").as_deref(), Some("simulacion"));
+    let plain = rendered(&[open(41, Semantics::group()), DrawCommand::PopElement]);
+    assert_eq!(attribute(&plain, "id"), None);
+}

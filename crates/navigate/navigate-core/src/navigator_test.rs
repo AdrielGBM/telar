@@ -307,3 +307,32 @@ fn a_binding_made_under_an_owner_ends_with_it() {
         "with nothing following, the request moves the history itself"
     );
 }
+
+#[test]
+fn an_anchor_on_a_page_is_that_page_and_survives_the_next_one() {
+    use platform_core::HistoryStep;
+    platform_core::receive_location_history(vec![at("/"), at("/settings#privacy")]);
+    let nav = Navigator::new(Route::Home).follow_location();
+    assert_eq!(
+        nav.peek_stack(<[Route]>::to_vec),
+        [Route::Home, Route::Settings]
+    );
+    assert!(steps().is_empty(), "the anchor is not rewritten away");
+    assert!(platform_core::push_location(at("/detail#top")));
+    assert_eq!(nav.current(), Route::Detail);
+    assert_eq!(
+        platform_core::location_history(),
+        [
+            at("/"),
+            at("/settings#privacy"),
+            at("/detail"),
+            at("/detail#top")
+        ]
+    );
+    assert!(nav.pop());
+    assert_eq!(
+        steps().last(),
+        Some(&(HistoryStep::Back(2), 2)),
+        "back from the next page returns to the anchor the reader left"
+    );
+}

@@ -7,7 +7,7 @@ use crate::shared::components::example::{example, ExampleProps};
 let page = signal(1u32);
 
 [view]
-col gap:20
+col gap:20 anchor:"top"
     doc_header kicker:"NAVIGATION" title:"Links" desc:"to: makes a box a link: somewhere in the app, somewhere on the page, or somewhere outside it. It joins the tab order, follows on a tap or Enter, and is announced with where it goes. Each target goes there its own way: a real <a href> in a document, a new tab from a canvas, the system browser on the desktop, an ACTION_VIEW intent on Android, OSC 8 in a terminal."
     example title:"A route in the app"
         card gap:10
@@ -20,14 +20,17 @@ col gap:20
         code_line code:"box to:Page::Project(slug)   ·   any typed Route, or a Location"
     example title:"Outside the app"
         card gap:10
-            box to:external("https://github.com/AdrielGBM/telar") fill:$theme.surface_alt radius:8 pad_x:14 pad_y:6 hover_style(fill:$theme.border)
+            box anchor:"outside" to:external("https://github.com/AdrielGBM/telar") fill:$theme.surface_alt radius:8 pad_x:14 pad_y:6 hover_style(fill:$theme.border)
                 text "Telar on GitHub" font_size:14 color:$theme.primary
             box to:external("mailto:someone@example.com") fill:$theme.surface_alt radius:8 pad_x:14 pad_y:6 hover_style(fill:$theme.border)
                 text "Write an email" font_size:14 color:$theme.primary
         code_line code:"box to:external(\"https://…\")   ·   open_uri: the portal or xdg-open, ShellExecute, NSWorkspace, window.open"
     example title:"On this page"
         card gap:10
-            box to:anchor("top") fill:$theme.surface_alt radius:8 pad_x:14 pad_y:6 hover_style(fill:$theme.border)
-                text "Back to the top" font_size:14 color:$theme.primary
-            text "An anchor is revealed once a box names itself with anchor:, which is still to come; until then following one does nothing." font_size:12 color:$theme.muted
-        code_line code:"box to:anchor(\"top\")"
+            row gap:10 align:center
+                box to:anchor("top") fill:$theme.surface_alt radius:8 pad_x:14 pad_y:6 hover_style(fill:$theme.border)
+                    text "Back to the top" font_size:14 color:$theme.primary
+                box to:anchor("outside") fill:$theme.surface_alt radius:8 pad_x:14 pad_y:6 hover_style(fill:$theme.border)
+                    text "To the external links" font_size:14 color:$theme.primary
+            text "A box named with anchor: is a place on the page. Following a link to it brings it to the top of every scroll it sits in and adds a history entry, so back returns to where you were. A document gives it that id, so #outside in the address opens there." font_size:12 color:$theme.muted
+        code_line code:"box anchor:\"outside\"   ·   box to:anchor(\"outside\")"

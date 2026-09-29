@@ -36,6 +36,7 @@ mod line_gutter;
 mod link;
 mod named_overlay;
 pub mod overlay;
+mod page_anchor;
 mod path;
 mod pointer;
 mod presence;
@@ -46,6 +47,8 @@ mod reorder;
 mod row_keys;
 mod scroll_area;
 mod scroll_page;
+mod scroll_timeline;
+mod scroll_viewports;
 mod serial;
 mod slots;
 mod step;
@@ -103,11 +106,12 @@ pub use layout_transition::{LayoutTransition, animate_layout};
 pub use lazy::Lazy;
 pub use line_gutter::LineGutter;
 pub use link::{
-    AnchorRegistration, activate_box, follow, follow_beside, follow_pressed, register_anchor,
-    reveal_anchor,
+    AnchorRegistration, activate_box, follow, follow_beside, follow_pressed, has_anchor,
+    reader_moved, register_anchor, reveal_anchor,
 };
 pub use named_overlay::{close as close_overlay, open as open_overlay, state as overlay_state};
 pub use overlay::{Overlay, Placement, anchor_rect};
+pub use page_anchor::PageAnchor;
 pub use path::Path;
 pub use pointer::{
     PointerButtons, observe_pointer, pointer_buttons, reset_pointer, transform_pointer,
@@ -118,6 +122,11 @@ pub use rect::Rectangle;
 pub use reorder::{Axis, apply_move, insertion_index};
 pub use scroll_area::{LayoutScrollArea, ScrollViewport, ScrollbarStyle};
 pub use scroll_page::ScrollPage;
+pub use scroll_timeline::{
+    ScrollLinked, ViewRange, range_progress, scroll_progress, scroll_progress_along,
+    use_scroll_viewport,
+};
+pub use scroll_viewports::{enclosing_scroll_viewport, scroll_viewports_of};
 pub use slots::{Children, Slots, use_context};
 pub use step::{COARSE_STEP, FINE_STEP, step_factor};
 pub use styled_container::{KeyAnswer, StyledContainer, box_transform, style_follows};

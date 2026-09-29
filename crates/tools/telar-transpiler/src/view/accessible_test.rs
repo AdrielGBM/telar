@@ -54,3 +54,40 @@ fn a_component_keeps_its_label_prop() {
     assert!(code.contains(".label(\"Save\")"), "{code}");
     assert!(!code.contains("a11y_label"), "{code}");
 }
+
+/// Any built-in box can be a place on the page, named by a literal or by what it reads.
+#[test]
+fn an_anchor_names_a_place_a_link_reaches() {
+    let code = transpile("col anchor:\"contact\"\n    text \"Hi\"\n    box anchor:$name\n");
+    assert!(!code.contains("compile_error!"), "{code}");
+    assert!(
+        code.contains(".page_anchor(|| \"contact\")"),
+        "a literal name:\n{code}"
+    );
+    let call = code
+        .split(".page_anchor(")
+        .nth(1)
+        .expect("the box is named");
+    assert!(
+        call.contains("name.get()"),
+        "a name read from state follows it:\n{code}"
+    );
+}
+
+/// A box's passage through the view lands in a signal the author owns, over the range they name.
+#[test]
+fn view_progress_writes_a_boxs_passage_into_a_signal() {
+    let src = "[logic]\nlet p = signal(0.0f32);\nlet q = signal(0.0f32);\n[view]\ncol view_progress:$p view_range:contain\n    box view_progress:$q\n";
+    let code = crate::transpile_source(src, "demo", None, None)
+        .unwrap()
+        .rust_code;
+    assert!(!code.contains("compile_error!"), "{code}");
+    assert!(
+        code.contains(".view_progress(ViewRange::Contain, p.clone())"),
+        "the named range:\n{code}"
+    );
+    assert!(
+        code.contains(".view_progress(ViewRange::Cover, q.clone())"),
+        "cover when none is named:\n{code}"
+    );
+}

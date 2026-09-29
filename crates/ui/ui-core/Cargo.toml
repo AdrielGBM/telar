@@ -25,6 +25,7 @@ ui-tree = { workspace = true }
 
 rustc-hash = { workspace = true }
 web-time = { workspace = true }
+tracing.workspace = true
 
 [features]
 default = []

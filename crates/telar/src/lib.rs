@@ -204,8 +204,8 @@ pub use location::navigate_back;
 #[cfg(feature = "runtime")]
 pub use platform_core::{
     ArgumentLocation, FixedLocation, HistorySink, HistoryStep, HistoryUpdate, Location,
-    LocationFormat, LocationSource, history_back, location_format, location_history, push_location,
-    receive_location_history, replace_location,
+    LocationFormat, LocationSource, history_back, location_format, location_history, pages_of,
+    push_anchor, push_location, receive_location_history, replace_location,
 };
 #[cfg(feature = "runtime")]
 pub use platform_core::{Destination, IntoDestination, Route, Uri, address_of, anchor, external};
@@ -232,7 +232,11 @@ pub use theme_core::{
 #[cfg(all(feature = "runtime", feature = "svg"))]
 pub use ui_core::Svg;
 #[cfg(feature = "runtime")]
-pub use ui_core::{AnchorRegistration, follow, register_anchor, reveal_anchor};
+pub use ui_core::{
+    AnchorRegistration, PageAnchor, ScrollLinked, ViewRange, enclosing_scroll_viewport, follow,
+    has_anchor, range_progress, register_anchor, reveal_anchor, scroll_progress,
+    scroll_progress_along, scroll_viewports_of, use_scroll_viewport,
+};
 #[cfg(feature = "runtime")]
 pub use ui_core::{
     Breakpoints, breakpoint, set_surface_size, surface_size, use_surface_height, use_surface_size,

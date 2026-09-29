@@ -151,3 +151,101 @@ fn without_a_follower_requests_move_the_history_itself() {
     );
     assert_eq!(location_history(), [at("/")]);
 }
+
+fn revealed() -> Rc<RefCell<Vec<String>>> {
+    let revealed = Rc::new(RefCell::new(Vec::new()));
+    let sink = revealed.clone();
+    set_anchor_revealer(move |anchor| sink.borrow_mut().push(anchor.to_owned()));
+    revealed
+}
+
+#[test]
+fn a_followed_anchor_is_an_entry_of_its_own_on_the_same_page() {
+    let revealed = revealed();
+    let recorder = Rc::new(Recorder::default());
+    let id = follow_location_history(recorder.clone());
+    receive_location_history(vec![at("/"), at("/a")]);
+    navigations();
+    push_anchor("contact");
+    assert_eq!(location_history(), [at("/"), at("/a"), at("/a#contact")]);
+    assert_eq!(
+        navigations(),
+        [HistoryUpdate {
+            step: HistoryStep::Push(1),
+            history: vec![at("/"), at("/a"), at("/a#contact")],
+        }]
+    );
+    push_anchor("contact");
+    assert!(
+        navigations().is_empty(),
+        "the same anchor twice is one entry"
+    );
+    assert_eq!(*revealed.borrow(), ["contact", "contact"]);
+    assert_eq!(
+        *recorder.calls.borrow(),
+        ["adopt / /a"],
+        "the follower sees pages, and the page did not change"
+    );
+    unfollow_location_history(id);
+}
+
+#[test]
+fn the_follower_sees_the_pages_an_anchored_history_shows() {
+    let _revealed = revealed();
+    let recorder = Rc::new(Recorder::default());
+    let id = follow_location_history(recorder.clone());
+    receive_location_history(vec![at("/a#intro"), at("/a#contact"), at("/b")]);
+    assert_eq!(*recorder.calls.borrow(), ["adopt /a /b"]);
+    assert_eq!(pages_of(&[at("/a"), at("/a")]), [at("/a"), at("/a")]);
+    unfollow_location_history(id);
+}
+
+#[test]
+fn a_reported_page_keeps_the_anchor_entries_of_the_pages_that_stay() {
+    receive_location_history(vec![at("/a"), at("/a#contact"), at("/b")]);
+    report_location_history(vec![at("/a")]);
+    assert_eq!(
+        navigations(),
+        [HistoryUpdate {
+            step: HistoryStep::Back(1),
+            history: vec![at("/a"), at("/a#contact")],
+        }],
+        "back from the next page returns to where the reader was on this one"
+    );
+    report_location_history(vec![at("/a"), at("/c")]);
+    assert_eq!(location_history(), [at("/a"), at("/a#contact"), at("/c")]);
+}
+
+#[test]
+fn arriving_at_an_anchor_reveals_it_once_something_can() {
+    receive_location_history(vec![at("/a#simulation")]);
+    let revealed = revealed();
+    assert_eq!(*revealed.borrow(), ["simulation"]);
+    receive_location_history(vec![at("/a#simulation")]);
+    assert_eq!(
+        revealed.borrow().len(),
+        1,
+        "an entry the platform already showed is not arrived at again"
+    );
+}
+
+#[test]
+fn pushing_another_pages_anchor_opens_the_page_then_the_anchor() {
+    let revealed = revealed();
+    receive_location_history(vec![at("/")]);
+    navigations();
+    assert!(push_location(at("/b#team")));
+    assert_eq!(location_history(), [at("/"), at("/b"), at("/b#team")]);
+    assert_eq!(*revealed.borrow(), ["team"]);
+}
+
+#[test]
+fn back_over_an_anchor_leaves_the_page_where_it_is() {
+    let recorder = Rc::new(Recorder::default());
+    let id = follow_location_history(recorder.clone());
+    receive_location_history(vec![at("/a"), at("/a#contact")]);
+    assert!(history_back());
+    assert_eq!(location_history(), [at("/a")]);
+    assert_eq!(*recorder.calls.borrow(), ["adopt /a"]);
+    unfollow_location_history(id);
+}

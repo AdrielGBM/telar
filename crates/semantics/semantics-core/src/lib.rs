@@ -254,21 +254,24 @@ pub struct Semantics {
     pub lang: Option<Arc<str>>,
     /// Whether assistive technology skips the box and everything under it. Still drawn and still operable by pointer: this is what a reader is told, not what is on screen.
     pub hidden: bool,
+    /// The name a [`Destination::Anchor`] reaches this box by: a place on the page.
+    pub anchor: Option<Arc<str>>,
 }
 
-/// What an application said about a box for assistive technology, laid over what the widget derived.
+/// What an application said about a box, laid over what the widget derived.
 ///
-/// Apart from [`Semantics`] because it is authored rather than derived: a widget knows it is a checkbox and whether it is ticked, but only the application knows the word a row of drawn letters spells, or which paragraph is in another language.
+/// Apart from [`Semantics`] because it is authored rather than derived: a widget knows it is a checkbox and whether it is ticked, but only the application knows the word a row of drawn letters spells, which paragraph is in another language, or which box a link to "contact" means.
 #[derive(Clone, PartialEq, Eq, Hash, Debug, Default)]
 pub struct Annotation {
     pub label: Option<Arc<str>>,
     pub lang: Option<Arc<str>>,
     pub hidden: bool,
+    pub anchor: Option<Arc<str>>,
 }
 
 impl Annotation {
     pub fn is_empty(&self) -> bool {
-        self.label.is_none() && self.lang.is_none() && !self.hidden
+        self.label.is_none() && self.lang.is_none() && !self.hidden && self.anchor.is_none()
     }
 }
 
@@ -318,6 +321,11 @@ impl Semantics {
         self
     }
 
+    pub fn with_anchor(mut self, anchor: impl Into<Arc<str>>) -> Self {
+        self.anchor = Some(anchor.into());
+        self
+    }
+
     /// What the widget derived, with what the application said on top: its label and language win, and hiding can only be added.
     pub fn annotated(mut self, annotation: &Annotation) -> Self {
         if let Some(label) = &annotation.label {
@@ -327,6 +335,9 @@ impl Semantics {
             self.lang = Some(lang.clone());
         }
         self.hidden |= annotation.hidden;
+        if let Some(anchor) = &annotation.anchor {
+            self.anchor = Some(anchor.clone());
+        }
         self
     }
 

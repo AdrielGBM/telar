@@ -1,4 +1,4 @@
-//! `label:`, `lang:` and `a11y:` on any built-in tag: what the box is called, what language it is in, and whether a reader skips it.
+//! `label:`, `lang:`, `a11y:`, `anchor:` and `view_progress:` on any built-in tag: what the box is called, what language it is in, whether a reader skips it, the name a link reaches it by, and how far it has scrolled through the view.
 
 use telar_parser::{Attr, Element, Value};
 
@@ -23,6 +23,23 @@ impl ViewGen<'_> {
             crate::registry::keyword(crate::registry::A11Y_VALUES, a.value.text().trim())
         }) {
             calls.push_str(&format!(".{method}()"));
+        }
+        if let Some(anchor) = find("anchor") {
+            calls.push_str(&format!(".page_anchor({})", self.annotation_text(anchor)));
+        }
+        if let Some(progress) = find("view_progress") {
+            let target = progress.value.text().trim().trim_start_matches('$');
+            let range = find("view_range")
+                .and_then(|a| {
+                    crate::registry::keyword(
+                        crate::registry::VIEW_RANGE_VALUES,
+                        a.value.text().trim(),
+                    )
+                })
+                .unwrap_or("Cover");
+            calls.push_str(&format!(
+                ".view_progress(ViewRange::{range}, {target}.clone())"
+            ));
         }
         if calls.is_empty() {
             return emit;

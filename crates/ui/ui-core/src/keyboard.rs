@@ -24,6 +24,9 @@ thread_local! {
 
 /// Records what `event` says about the keyboard. The runner calls this for every event before dispatch.
 pub fn observe(event: &Event) {
+    if matches!(event, Event::KeyPressed { .. }) {
+        crate::link::reader_moved();
+    }
     KEYBOARD.with(|k| {
         let mut k = k.borrow_mut();
         match event {

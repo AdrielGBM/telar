@@ -102,6 +102,12 @@ const SECTIONS: &[SectionDef] = sections![
     ),
     ("Motion", crate::features::motion::motion, crate::features::motion::MotionProps, "motion.rsx"),
     (
+        "Scroll timelines",
+        crate::features::scroll_timeline::scroll_timeline,
+        crate::features::scroll_timeline::ScrollTimelineProps,
+        "scroll_timeline.rsx"
+    ),
+    (
         "Background work",
         crate::features::background::background,
         crate::features::background::BackgroundProps,

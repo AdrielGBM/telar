@@ -84,7 +84,7 @@ const LAYOUT_ATTRS: &[AttrSpec] = &[
     AttrSpec::keywords("justify", JUSTIFY_VALUES),
 ];
 
-/// What any built-in tag may say about itself to assistive technology. See [`A11Y_VALUES`].
+/// What any built-in tag may say about itself: to assistive technology (see [`A11Y_VALUES`]), and as a place on the page a link reaches.
 const ACCESSIBILITY_ATTRS: &[AttrSpec] = &[
     AttrSpec::free("label").doc(
         "The name assistive technology reads for the box: a quoted string, `t!(…)`, or an expression reading `$state`. An `img` or `svg` without one is decoration.",
@@ -95,6 +95,23 @@ const ACCESSIBILITY_ATTRS: &[AttrSpec] = &[
     AttrSpec::keywords("a11y", A11Y_VALUES).doc(
         "`a11y:hidden` takes the box and everything under it out of what assistive technology is told; it is still drawn and still answers the pointer.",
     ),
+    AttrSpec::free("anchor").doc(
+        "Names the box as a place on the page that `to:anchor(\"name\")` reaches: a quoted string, `t!(…)`, or an expression reading `$state`. Following it reveals the box at the top of its scroll and adds a history entry; a document gives the element that `id`, so `#name` in the address opens there.",
+    ),
+    AttrSpec::free("view_progress").doc(
+        "Writes how far the box is through its passage through the view of the scroll it sits in into a signal of `f32`, `0.0..=1.0`: `view_progress:$p`. The range is `view_range:`, `cover` by default.",
+    ),
+    AttrSpec::keywords("view_range", VIEW_RANGE_VALUES).doc(
+        "Which stretch of the passage `view_progress:` runs over: `cover` (entering to leaving), `contain` (wholly in view, or filling it), `entry` or `exit`.",
+    ),
+];
+
+/// `view_range:` — the stretch of a box's passage through the view, paired with the `ViewRange` variant it names.
+pub const VIEW_RANGE_VALUES: &[(&str, &str)] = &[
+    ("cover", "Cover"),
+    ("contain", "Contain"),
+    ("entry", "Entry"),
+    ("exit", "Exit"),
 ];
 
 /// `a11y:` — how assistive technology treats the box, paired with the `Accessible` method it calls.

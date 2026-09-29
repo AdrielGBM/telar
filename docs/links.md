@@ -27,7 +27,8 @@ name a scheme (`https:`, `mailto:`…): a literal without one is a build error o
 | `address_of` | A destination as the text a target writes where an address goes: a route in the app's `location_format()`, an anchor as the current location with that fragment, an external URI as itself. |
 | `follow`, `follow_beside`, `follow_pressed` | Going there from app code: push the route, reveal the anchor, open the URI. `follow_pressed` reads Ctrl, Cmd or Shift as a request for a view beside this one. |
 | `open_uri`, `UriOpener`, `set_uri_opener` | The `services-core` service that hands a URI to the system. Every runner installs its platform's; headless installs none, and a test installs its own. |
-| `register_anchor`, `reveal_anchor` | The lookup an anchor resolves through. `anchor:` (the attribute that names a box as an anchor) is still to come; until a box registers under a name, following an anchor to it does nothing. |
+| `anchor:`, `PageAnchor::page_anchor` | Names a box as a place on the page; see [Anchors](#anchors). |
+| `register_anchor`, `reveal_anchor`, `has_anchor` | The lookup an anchor resolves through, which `anchor:` fills. |
 | `Event::BoxActivated` | A surface that follows links itself reporting a plain activation back to the app. |
 
 A link is a control: it joins the tab order with the `link` role, follows on a tap and on **Enter** (not Space,
@@ -35,6 +36,39 @@ which scrolls the page a link sits on), keeps no keys from a host page, and is a
 `on_press` on the same box still runs, before the link is followed. A disabled link goes nowhere. Only `box` is a
 link host in Rust (`StyledContainer::to`); a `col`, `row` or `grid` with `to:` is built as one, since a link has
 to be focusable and show a focus ring.
+
+## Anchors
+
+```rsx
+col anchor:"contact"          // this box is the place called "contact"
+    …
+box to:anchor("contact")      // a link to it
+```
+
+`anchor:` works on any built-in tag and takes a literal, `t!(…)` or an expression reading `$state`, so a name
+can follow the locale (`#simulacion`, `#simulation`). In Rust it is `.page_anchor(|| "contact")`, which every
+widget with a layout node takes through `PageAnchor`. A name belongs to one box: a second box registered under
+it takes it over and a warning names it.
+
+Following an anchor:
+
+- **Reveals it at the start.** The box is brought to the top of the innermost scroll it sits in, and that scroll
+  to the top of the next one out, up to the page. Nearest-edge scrolling is `ScrollViewport::reveal`, for
+  keyboard selection; an anchor is a place, so it goes to the top the way a web fragment does. The scrolls are
+  found from the box itself (`scroll_viewports_of`), so the order the tree was built in does not matter.
+- **Adds a history entry.** The current page with that fragment (`/es/#contact`) is pushed, so back returns to
+  where the reader was and the address can be shared. Following the anchor already shown adds nothing.
+- **Keeps up with the page on arrival.** An address that names an anchor (a page loaded at `/es/#contact`, a
+  deep link, a hand-edited hash) is revealed once its box is laid out, and again whenever that box moves (a face
+  arriving, an image taking its size), until the reader presses, scrolls or types.
+
+A fragment names a place on a page, never a page: the navigator following the location sees the page, and the
+history keeps the anchor entries around it (see [docs/location.md](location.md)).
+
+| Target | An anchor is |
+| --- | --- |
+| Web, document | The element's `id`, so `#name` is a native fragment. A plain click on its `<a>` is taken back and followed by Telar, which pushes the entry and reveals the box through the document's scroll. |
+| Web, canvas, desktop, Android, terminal, headless | Revealed by Telar in its scroll areas. A desktop or terminal `--location /page#name` and an Android link with a fragment open there. |
 
 ## Per target
 
@@ -67,7 +101,6 @@ logical pixels), which is also the distance past which a press stops being a tap
 
 ## Limits
 
-- An anchor does nothing until `anchor:` lands and registers boxes under their names.
 - An `href` does not carry the `?telar-*` page settings a push carries, so a link opened in a new tab starts
   without them.
 - A route opened beside the app exists only on the web; elsewhere a modified press follows it in place.

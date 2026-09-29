@@ -45,6 +45,12 @@ impl Location {
         self
     }
 
+    /// The page this location shows: the same location without the anchor it names.
+    pub fn without_fragment(mut self) -> Self {
+        self.fragment = None;
+        self
+    }
+
     /// Appends a query-style parameter, builder-style. Repeated keys are kept in insertion order rather than
     /// overwritten, so a multi-value parameter round-trips.
     pub fn with_param(mut self, key: impl Into<String>, value: impl Into<String>) -> Self {

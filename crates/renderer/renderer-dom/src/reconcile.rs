@@ -96,6 +96,7 @@ struct Described {
     external: bool,
     opens_beside: bool,
     lang: Option<String>,
+    anchor: Option<String>,
     hidden: bool,
     checked: Option<bool>,
     disabled: bool,
@@ -697,6 +698,7 @@ impl Reconciler {
             external: matches!(link, Some(Destination::External(_))),
             opens_beside: matches!(link, Some(Destination::External(uri)) if uri.is_web()),
             lang: semantics.lang.as_deref().map(str::to_string),
+            anchor: semantics.anchor.as_deref().map(str::to_string),
             hidden,
             checked: semantics.toggled,
             disabled: semantics.disabled,
@@ -729,6 +731,7 @@ impl Reconciler {
         set_or_clear(node, "target", described.opens_beside.then_some("_blank"));
         set_or_clear(node, "rel", described.external.then_some("noopener"));
         set_or_clear(node, "lang", described.lang.as_deref());
+        set_or_clear(node, "id", described.anchor.as_deref());
         set_or_clear(node, "aria-hidden", described.hidden.then_some("true"));
         set_or_clear(
             node,

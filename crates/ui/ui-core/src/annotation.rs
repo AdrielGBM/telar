@@ -54,7 +54,7 @@ pub(crate) fn peek(node: NodeId) -> Option<Annotation> {
 }
 
 /// The signal `node`'s annotation lives in, made on first use and withdrawn with the owner that made it.
-fn slot(node: NodeId) -> RwSignal<Annotation> {
+pub(crate) fn slot(node: NodeId) -> RwSignal<Annotation> {
     if let Some(existing) = signal_of(node)
         && existing.is_alive()
     {
