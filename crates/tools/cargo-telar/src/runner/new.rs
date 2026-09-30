@@ -255,6 +255,7 @@ android = ["telar/android"]
 [profile.dev]
 opt-level = 1
 debug = "line-tables-only"
+lto = "off"
 
 # Dependencies compile once and are not what you are stepping through: optimising them buys a renderer and
 # a layout engine that run at a usable speed in dev, and dropping their debug info takes most of the weight

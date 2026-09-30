@@ -13,6 +13,7 @@ Copy these into your **workspace root** `Cargo.toml` — Cargo ignores `[profile
 [profile.dev]
 opt-level = 1
 debug = "line-tables-only"
+lto = "off"
 
 # Dependencies compile once and are not rebuilt as you edit, and they are not what you are stepping
 # through: optimising them is paid for on the first build and buys a renderer and a layout engine that
@@ -36,6 +37,8 @@ crates — a panic still names the line it came from, without carrying what only
 app: the rebuild drops ~14 % and the `cdylib` goes from 154 MB to 15 MB, with panics in the app's own code
 unchanged. Setting `debug = false` on `[profile.dev]` as well takes it to 0.7 MB and saves another 15 ms,
 which is inside the noise and not worth the panic locations.
+
+`lto = "off"` matters because `opt-level = 1` turns on rustc's default thin-local LTO across a crate's codegen units, and under incremental compilation that pass can reuse some units from an earlier build while re-optimising others, leaving the link with undefined `anon.*.llvm.*` symbols. It is a compiler fault, not the linker's: every linker reports the same missing symbols. Turning it off keeps the optimisation level and the incremental cache and gives up only that cross-unit pass.
 
 ## `[profile.web]`, for a release web build
 
