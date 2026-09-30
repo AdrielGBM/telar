@@ -177,3 +177,34 @@ fn the_commit_listener_subscribes_nothing() {
     other.set(1);
     assert_eq!(runs.get(), before);
 }
+
+#[test]
+fn a_revert_is_heard_with_the_snapshot_however_it_was_asked_for() {
+    let value = signal(1);
+    let heard = Rc::new(RefCell::new(Vec::new()));
+    let sink = heard.clone();
+    let scope = owner_scope();
+    let owner = scope.id();
+    let tx = Transaction::new(value).on_revert(move |before| sink.borrow_mut().push(*before));
+    drop(scope);
+
+    tx.begin().unwrap();
+    tx.preview(|v| *v = 5).unwrap();
+    tx.revert().unwrap();
+    assert_eq!(
+        value.peek(),
+        1,
+        "the signal is back before the listener hears it"
+    );
+
+    tx.begin().unwrap();
+    tx.preview(|v| *v = 7).unwrap();
+    tx.commit().unwrap();
+
+    tx.begin().unwrap();
+    tx.preview(|v| *v = 9).unwrap();
+    dispose_owner(owner);
+
+    assert_eq!(*heard.borrow(), vec![1, 7], "a commit is not a revert");
+    assert_eq!(value.peek(), 7);
+}

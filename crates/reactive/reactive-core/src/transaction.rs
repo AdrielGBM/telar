@@ -37,10 +37,12 @@ struct Open<T> {
 }
 
 type CommitListener<T> = Rc<dyn Fn(&T, &T)>;
+type RevertListener<T> = Rc<dyn Fn(&T)>;
 
 struct State<T: 'static> {
     open: Option<Open<T>>,
     on_commit: Option<CommitListener<T>>,
+    on_revert: Option<RevertListener<T>>,
 }
 
 /// A gesture's edit of an [`RwSignal`], previewed live via [`preview`](Self::preview) and closed by exactly one [`commit`](Self::commit) or [`revert`](Self::revert): only one may be open per signal at a time, a write from elsewhere while it's open moves the snapshot forward instead of being clobbered, and disposing the owner active at [`new`](Self::new) reverts it mid-gesture.
@@ -63,6 +65,7 @@ impl<T: Clone + 'static> Transaction<T> {
         let state = runtime::create_signal_storage(State::<T> {
             open: None,
             on_commit: None,
+            on_revert: None,
         });
         let transaction = Self {
             target,
@@ -79,6 +82,14 @@ impl<T: Clone + 'static> Transaction<T> {
     pub fn on_commit(self, f: impl Fn(&T, &T) + 'static) -> Self {
         let f: CommitListener<T> = Rc::new(f);
         let replaced = self.with_state(|s| s.on_commit.replace(f));
+        drop(replaced);
+        self
+    }
+
+    /// Called with the restored snapshot on every revert, whoever asked for it — Escape, another button mid-drag, a popover cancelled, the owner going away — once the signal is back. For a gesture that moves more than its own signal and has to put the rest back too. Untracked, like [`on_commit`](Self::on_commit).
+    pub fn on_revert(self, f: impl Fn(&T) + 'static) -> Self {
+        let f: RevertListener<T> = Rc::new(f);
+        let replaced = self.with_state(|s| s.on_revert.replace(f));
         drop(replaced);
         self
     }
@@ -146,8 +157,15 @@ impl<T: Clone + 'static> Transaction<T> {
     /// Closes the transaction putting the snapshot back.
     pub fn revert(&self) -> Result<(), TransactionError> {
         let open = self.close()?;
-        if open.touched {
-            self.target.set(open.before);
+        let listener = self.with_state(|s| s.on_revert.clone()).flatten();
+        match (open.touched, listener) {
+            (true, Some(listener)) => {
+                self.target.set(open.before.clone());
+                runtime::untracked(|| listener(&open.before));
+            }
+            (true, None) => self.target.set(open.before),
+            (false, Some(listener)) => runtime::untracked(|| listener(&open.before)),
+            (false, None) => {}
         }
         Ok(())
     }
