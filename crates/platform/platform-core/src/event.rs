@@ -43,6 +43,8 @@ pub enum NamedKey {
     Space,
     Insert,
     CapsLock,
+    /// The key that opens the context menu of whatever has the focus, beside the right-hand Ctrl; Shift+F10 is the chord a keyboard without one uses instead.
+    ContextMenu,
     /// The numeric keypad, kept apart from the row of digits above the letters because an application that binds it (a modeller's orthographic views, a till, a calculator) means *that* key and not the digit. Only reported while Num Lock is on: with it off the OS says the key is `End`/`ArrowDown`/…, and overriding that would steal the arrows from someone navigating a list with the keypad.
     Numpad0,
     Numpad1,

@@ -96,6 +96,7 @@ pub fn key_of(key: &str) -> Option<Key> {
         "ArrowRight" => named(NamedKey::ArrowRight),
         "Insert" => named(NamedKey::Insert),
         "CapsLock" => named(NamedKey::CapsLock),
+        "ContextMenu" => named(NamedKey::ContextMenu),
         " " => named(NamedKey::Space),
         _ => {
             if let Some(n) = key.strip_prefix('F').and_then(|n| n.parse::<u8>().ok()) {

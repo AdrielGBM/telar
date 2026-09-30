@@ -93,6 +93,7 @@ pub fn map_named_key(key: WinitNamedKey) -> Option<platform_core::NamedKey> {
         WinitNamedKey::Space => platform_core::NamedKey::Space,
         WinitNamedKey::Insert => platform_core::NamedKey::Insert,
         WinitNamedKey::CapsLock => platform_core::NamedKey::CapsLock,
+        WinitNamedKey::ContextMenu => platform_core::NamedKey::ContextMenu,
         _ => return None,
     };
     Some(nk)

@@ -66,3 +66,15 @@ fn the_back_button_asks_to_go_back_once_per_press() {
         SurfaceIntent::Event(Event::PointerPressed { .. })
     ));
 }
+
+/// The menu key is how a keyboard opens a context menu, so it arrives named rather than dropped.
+#[test]
+fn the_menu_key_maps() {
+    assert_eq!(
+        map_key(
+            &WinitKey::Named(WinitNamedKey::ContextMenu),
+            KeyLocation::Standard
+        ),
+        Some(Key::Named(NamedKey::ContextMenu))
+    );
+}

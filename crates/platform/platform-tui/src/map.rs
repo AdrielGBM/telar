@@ -46,6 +46,7 @@ pub fn map_key(code: KeyCode) -> Option<Key> {
         KeyCode::Right => named(NamedKey::ArrowRight),
         KeyCode::Insert => named(NamedKey::Insert),
         KeyCode::CapsLock => named(NamedKey::CapsLock),
+        KeyCode::Menu => named(NamedKey::ContextMenu),
         KeyCode::F(n) => function_key(n),
         _ => None,
     }

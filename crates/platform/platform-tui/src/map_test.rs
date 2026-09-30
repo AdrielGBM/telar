@@ -162,3 +162,12 @@ fn every_function_key_maps() {
     }
     assert!(map_key(KeyCode::F(25)).is_none(), "there is no F25 to map");
 }
+
+/// The menu key is how a keyboard opens a context menu, so it arrives named rather than dropped.
+#[test]
+fn the_menu_key_maps() {
+    assert_eq!(
+        map_key(KeyCode::Menu),
+        Some(Key::Named(NamedKey::ContextMenu))
+    );
+}
