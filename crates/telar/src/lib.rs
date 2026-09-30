@@ -301,9 +301,9 @@ pub use ui_components::{
 pub use ui_components::{
     BadgeProps, ButtonProps, CheckboxProps, ChipProps, GroupProps, HandleProps, HeadingProps,
     ItemProps, ProgressProps, RadioProps, ScrubFieldProps, SectionProps, SelectProps,
-    SeparatorProps, SliderProps, SpinnerProps, TabsProps, TextFieldProps, ToggleProps, badge,
-    button, checkbox, chip, group, handle, heading, item, progress, radio, scrub_field, section,
-    select, separator, slider, spinner, tabs, text_field, toggle,
+    SeparatorProps, SliderProps, SpinnerProps, SwatchesProps, TabsProps, TextFieldProps,
+    ToggleProps, badge, button, checkbox, chip, group, handle, heading, item, progress, radio,
+    scrub_field, section, select, separator, slider, spinner, swatches, tabs, text_field, toggle,
 };
 #[cfg(feature = "components-overlays")]
 pub use ui_components::{

@@ -39,6 +39,7 @@ mod slider;
 mod spinner;
 #[cfg(feature = "advanced")]
 mod stepper;
+mod swatches;
 mod tabs;
 #[cfg(test)]
 mod test_support;
@@ -82,6 +83,7 @@ pub use slider::{SliderProps, slider};
 pub use spinner::{SpinnerProps, spinner};
 #[cfg(feature = "advanced")]
 pub use stepper::{StepperProps, stepper};
+pub use swatches::{SwatchesProps, swatches};
 pub use tabs::{TabsProps, tabs};
 pub use text_field::{TextFieldProps, text_field};
 pub use toggle::{ToggleProps, toggle};
