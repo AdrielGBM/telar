@@ -429,6 +429,21 @@ pub fn text_entry_focused() -> bool {
     }
 }
 
+/// Whether the focused widget keeps `keys` for itself, as a control of its role uses them: a button acts on Enter, a slider on the arrows and nothing else. `false` with nothing focused. Reactive, like [`current`].
+///
+/// What decides whether a key may go past focus to whatever would take it otherwise, such as the dismiss stack's Enter.
+pub fn focused_keeps(keys: ConsumedKeys) -> bool {
+    let Some(id) = current() else {
+        return false;
+    };
+    with_focus_ref(|s| {
+        s.order
+            .iter()
+            .find(|entry| entry.id == id)
+            .is_some_and(|entry| entry.role.consumed_keys().contains(keys))
+    })
+}
+
 /// Whether a focused text entry would take this press as text — the guard for a global shortcut handler.
 ///
 /// Narrower than [`text_entry_focused`] on purpose: a field claims the letters and the caret keys, and nothing else. `⌘S` still saves while the caret sits in a field, and so do the function keys, because no editor here does anything with them. The list mirrors what [`crate::Input`] and [`crate::TextArea`] actually consume, and their own tests hold it to that.

@@ -160,11 +160,12 @@ pub fn dispatch_overlays(event: &platform_core::Event) -> EventResult {
     if cancelled_drag {
         return EventResult::Handled;
     }
-    // Only when nothing holds focus: a focused editor gets first refusal and blurs itself, so a second press closes the dialog. Dismissing first would make Escape unable to leave a field without tearing down its form.
-    let unfocused = || focus::current().is_none();
+    // A focused editor gets first refusal on Escape and blurs itself, so a second press closes the dialog: dismissing first would make Escape unable to leave a field without tearing down its form. No other control keeps Escape, so one holding focus — a slider just dragged — does not stand between it and the dialog. Enter goes past focus only where the focused control has no use for it: a button, a field or a spin button acts on it itself.
     let decided = match key {
-        Some(NamedKey::Escape) => unfocused() && dismiss::dismiss_top(),
-        Some(NamedKey::Enter) => unfocused() && dismiss::confirm_top(),
+        Some(NamedKey::Escape) => !focus::text_entry_focused() && dismiss::dismiss_top(),
+        Some(NamedKey::Enter) => {
+            !focus::focused_keeps(platform_core::ConsumedKeys::ENTER) && dismiss::confirm_top()
+        }
         _ => false,
     };
     if decided {

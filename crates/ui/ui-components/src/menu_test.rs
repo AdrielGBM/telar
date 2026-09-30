@@ -126,7 +126,7 @@ fn a_menu_can_be_opened_and_driven_from_the_keyboard() {
     assert_eq!(seen.get(), Some(1), "the highlighted row is what commits");
 }
 
-/// Escape closes it even though the trigger holds focus. `dispatch_overlays` only dismisses when nothing is focused — right for a field, which blurs itself first, and wrong here, where the focused thing *is* the control the menu belongs to.
+/// Escape closes it even though the trigger holds focus: only a focused field gets Escape before the dismiss stack, and a trigger is the control the menu belongs to.
 #[test]
 fn escape_closes_a_menu_whose_trigger_holds_focus() {
     use platform_core::NamedKey;

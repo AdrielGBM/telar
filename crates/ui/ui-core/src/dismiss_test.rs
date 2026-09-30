@@ -51,7 +51,7 @@ fn withdrawing_out_of_order_skips_that_entry() {
 }
 
 #[test]
-fn escape_dismisses_only_when_nothing_holds_focus() {
+fn escape_dismisses_only_past_a_focused_field() {
     use platform_core::{Event, Key, ModifiersState, NamedKey};
 
     reset();
@@ -67,7 +67,7 @@ fn escape_dismisses_only_when_nothing_holds_focus() {
     };
 
     let id = crate::focus::next_id();
-    crate::focus::register_as(id, crate::focus::FocusKind::Widget);
+    crate::focus::register_as(id, crate::focus::FocusKind::TextEntry);
     crate::focus::request(id);
     assert_eq!(crate::dispatch_overlays(&esc), crate::EventResult::Ignored);
     assert!(!closed.get(), "the focused field consumes the first Escape");
@@ -353,4 +353,58 @@ mod transactions {
         assert!(!p.open.get());
         assert_eq!(p.value.get(), 1);
     }
+}
+
+/// A control that keeps no Escape of its own does not stand between it and the dialog it sits in — a slider just dragged, a handle — and Enter reaches the dialog past a control with no use for it, but not past one that acts on it.
+#[test]
+fn escape_and_enter_go_past_a_focused_control_that_does_not_keep_them() {
+    use crate::focus::Role;
+    use platform_core::{Event, Key, ModifiersState, NamedKey};
+
+    let pressed = |named| Event::KeyPressed {
+        key: Key::Named(named),
+        modifiers: ModifiersState::default(),
+    };
+    let (node, _) = crate::new_leaf(layout_core::LayoutStyle::new()).unwrap();
+
+    reset();
+    crate::focus::clear();
+    let (closed, confirmed) = (Rc::new(Cell::new(false)), Rc::new(Cell::new(false)));
+    let _registration = {
+        let (closed, confirmed) = (closed.clone(), confirmed.clone());
+        DismissRegistration::confirmable(
+            Rc::new(move || closed.set(true)),
+            Rc::new(move || confirmed.set(true)),
+        )
+    };
+    let button = crate::focus::next_id();
+    crate::focus::register_with_role(button, crate::focus::FocusKind::Widget, node, Role::Button);
+    crate::focus::request(button);
+    assert_eq!(
+        crate::dispatch_overlays(&pressed(NamedKey::Enter)),
+        crate::EventResult::Ignored,
+        "a focused button presses itself on Enter"
+    );
+    assert!(!confirmed.get());
+
+    let slider = crate::focus::next_id();
+    crate::focus::register_with_role(slider, crate::focus::FocusKind::Widget, node, Role::Slider);
+    crate::focus::request(slider);
+    assert_eq!(
+        crate::dispatch_overlays(&pressed(NamedKey::Enter)),
+        crate::EventResult::Handled
+    );
+    assert!(confirmed.get(), "a focused slider has no use for Enter");
+
+    let _again = {
+        let closed = closed.clone();
+        DismissRegistration::new(Rc::new(move || closed.set(true)))
+    };
+    assert_eq!(
+        crate::dispatch_overlays(&pressed(NamedKey::Escape)),
+        crate::EventResult::Handled
+    );
+    assert!(closed.get(), "nor for Escape");
+    crate::focus::unregister(button);
+    crate::focus::unregister(slider);
 }
