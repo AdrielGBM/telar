@@ -2107,6 +2107,41 @@ fn a_normal_opaque_box_needs_no_layer() {
     assert_eq!(layer_of(&normal.view()), None);
 }
 
+fn backdrop_blur_of(node: &RenderNode) -> Option<f32> {
+    match node {
+        RenderNode::Layer { backdrop_blur, .. } => Some(*backdrop_blur),
+        RenderNode::Element { children, .. }
+        | RenderNode::Group { children }
+        | RenderNode::Transform { children, .. }
+        | RenderNode::Clip { children, .. }
+        | RenderNode::Overlay { children } => children.iter().find_map(backdrop_blur_of),
+        _ => None,
+    }
+}
+
+/// A frosted box is a layer over a blurred copy of what the surface drew beneath it, at the radius it reads now, keeping its opacity and blend; a radius of nothing asks for no layer at all.
+#[test]
+fn a_backdrop_blur_puts_the_box_in_a_layer_that_blurs_what_is_beneath_it() {
+    reset_layout_runtime();
+    let radius = reactive_core::signal(12.0_f32);
+    let frosted = plain_box()
+        .with_opacity(|| 0.8)
+        .with_blend(|| BlendMode::Screen)
+        .with_backdrop_blur(move || radius.get());
+    assert_eq!(backdrop_blur_of(&frosted.view()), Some(12.0));
+    assert_eq!(layer_of(&frosted.view()), Some((0.8, BlendMode::Screen)));
+
+    let clear = plain_box().with_backdrop_blur(move || radius.get());
+    radius.set(0.0);
+    assert_eq!(layer_of(&clear.view()), None);
+    radius.set(-3.0);
+    assert_eq!(
+        layer_of(&clear.view()),
+        None,
+        "a negative radius blurs nothing"
+    );
+}
+
 fn keyboard_of(card: &StyledContainer) -> Option<renderer_core::Focusable> {
     let was = ui_tree::set_element_capture(true);
     let view = card.view();

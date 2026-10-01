@@ -183,15 +183,16 @@ impl RenderNode {
         }
     }
 
-    /// A layer that combines with what is beneath it by `blend` as well as by `opacity`.
-    pub fn blended(
+    /// A layer that starts from what is beneath it blurred `backdrop_blur` px across (`0` blurs nothing), then combines with it by `blend` as well as by `opacity`.
+    pub fn composite(
         opacity: f32,
+        backdrop_blur: f32,
         blend: BlendMode,
         children: impl IntoIterator<Item = RenderNode>,
     ) -> Self {
         Self::Layer {
             opacity,
-            backdrop_blur: 0.0,
+            backdrop_blur,
             blend,
             mask: renderer_core::LayerMask::None,
             children: NodeVec::collect(children),

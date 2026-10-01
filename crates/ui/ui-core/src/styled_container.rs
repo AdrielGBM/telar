@@ -160,6 +160,8 @@ pub struct StyledContainer {
     opacity: Option<Rc<dyn Fn() -> f32>>,
     // Re-read by `view()` like the opacity. `None` composites normally.
     blend: Option<Box<dyn Fn() -> BlendMode>>,
+    // Re-read by `view()` like the opacity. `None` blurs nothing.
+    backdrop_blur: Option<Box<dyn Fn() -> f32>>,
     // Takes the laid-out `Rect` so rotate/scale can pivot on the box centre; `None` means identity.
     transform: Option<Rc<TransformFn>>,
     // The transform a stroke was pressed under, so a box whose transform follows its own drag is still measured in the frame the drag started in.
@@ -209,6 +211,7 @@ impl StyledContainer {
             disabled_source: None,
             opacity: None,
             blend: None,
+            backdrop_blur: None,
             transform: None,
             stroke_frame: None,
             children,
@@ -477,6 +480,12 @@ impl StyledContainer {
     /// Composites the box and everything inside it onto what is beneath through `blend`, as CSS `mix-blend-mode` does, for a texture overlay that multiplies or screens a wallpaper rather than covering it.
     pub fn with_blend(mut self, blend: impl Fn() -> BlendMode + 'static) -> Self {
         self.blend = Some(Box::new(blend));
+        self
+    }
+
+    /// Draws the box over a copy of what is beneath it in the same surface, blurred `radius` px across, as CSS `backdrop-filter: blur()` does: a frosted panel over a picture the same window draws. What lies beneath the surface itself is the compositor's to blur, not this.
+    pub fn with_backdrop_blur(mut self, radius: impl Fn() -> f32 + 'static) -> Self {
+        self.backdrop_blur = Some(Box::new(radius));
         self
     }
 
@@ -1005,8 +1014,9 @@ impl Component for StyledContainer {
         };
         let opacity = self.opacity.as_ref().map_or(1.0, |o| o());
         let blend = self.blend.as_ref().map_or(BlendMode::Normal, |b| b());
-        let composed = if opacity < 1.0 || blend != BlendMode::Normal {
-            RenderNode::blended(opacity, blend, [content])
+        let blur = self.backdrop_blur.as_ref().map_or(0.0, |b| b().max(0.0));
+        let composed = if opacity < 1.0 || blend != BlendMode::Normal || blur > 0.0 {
+            RenderNode::composite(opacity, blur, blend, [content])
         } else {
             content
         };
