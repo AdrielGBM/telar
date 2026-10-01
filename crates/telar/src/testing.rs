@@ -4,7 +4,27 @@
 
 use geometry_core::Rect;
 use renderer_core::DrawCommand;
+use renderer_core::culling::{FontMetrics, command_visual_rect};
+use renderer_core::dirty::FrameDiff;
 use ui_core::{Component, ComponentList};
+
+/// Where a surface is repainted going from the frame `old` to the frame `new`, in window space: the regions the renderers' shared diff damages, a scroll's whole clip where the change inside it only scrolled, and nothing where nothing visible changed. `None` where the change reaches the whole surface.
+///
+/// The same diff the software presenter reports to the compositor, before it is rounded out to whole pixels, so a test can say "this change repaints only that box" of a tree it built without a window.
+pub fn damage(new: &[DrawCommand], old: &[DrawCommand]) -> Option<Vec<Rect>> {
+    let metrics = FontMetrics::default();
+    let change = FrameDiff::default().compare(new, old, |command, matrix| {
+        command_visual_rect(command, matrix, &metrics)
+    });
+    match change.scroll {
+        Some(scroll) => Some(
+            std::iter::once(scroll.scroll_clip)
+                .chain(scroll.extra_dirty)
+                .collect(),
+        ),
+        None => change.damage.map(|rects| rects.into_vec()),
+    }
+}
 
 /// Mounts `root` and lays it out against a `width`×`height` window on a surface that size, which is what the runner's first `WindowResized` does — a percent-sized tree resolves to nothing until something hands it a definite space.
 pub fn mount<C: Component + 'static>(root: C, width: u32, height: u32) -> ComponentList {

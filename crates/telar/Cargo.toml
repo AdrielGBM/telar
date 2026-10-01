@@ -19,6 +19,10 @@ name = "component"
 path = "src/component_test.rs"
 
 [[test]]
+name = "damage"
+path = "src/damage_test.rs"
+
+[[test]]
 name = "devtools_seam"
 path = "src/devtools_seam_test.rs"
 
