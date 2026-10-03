@@ -61,6 +61,9 @@ pub fn transcript(nodes: &[AccessNode]) -> String {
         if !node.enabled {
             out.push_str(", unavailable");
         }
+        if node.focused {
+            out.push_str(", focused");
+        }
     }
     out
 }

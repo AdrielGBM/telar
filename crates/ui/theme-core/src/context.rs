@@ -16,11 +16,21 @@ use renderer_core::Declared;
 ///
 /// Nothing here answers what size the text is, and that is the point. Text size inherits, so it is not a question a component asks a theme — it is one it asks the region it is standing in. A theme that wants to move it declares it once, at [`root`](Self::root).
 pub trait ThemeTokens: 'static {
+    /// The accent a filled control, a link and the focus ring are drawn in. Mode-following, because one blue cannot carry white text at 4.5:1 and also read as text on a dark surface.
     fn primary(&self) -> Color {
-        Color::rgba(0.24, 0.47, 0.98, 1.0)
+        if crate::mode::is_dark() {
+            Color::rgba(0.42, 0.62, 1.0, 1.0)
+        } else {
+            Color::rgba(0.15, 0.39, 0.92, 1.0)
+        }
     }
+    /// Readable ink on [`primary`](Self::primary), at 4.5:1 or more in either mode.
     fn on_primary(&self) -> Color {
-        Color::rgba(1.0, 1.0, 1.0, 1.0)
+        if crate::mode::is_dark() {
+            Color::rgba(0.04, 0.06, 0.14, 1.0)
+        } else {
+            Color::rgba(1.0, 1.0, 1.0, 1.0)
+        }
     }
 
     /// Base corner radius in px. A component rounds by this, or by a step of the scale below where its shape asks for one (a pill is not a card).
@@ -77,8 +87,13 @@ pub trait ThemeTokens: 'static {
         self.spacing() * 2.0
     }
 
+    /// Secondary text: captions and hints. Opaque and mode-following so it still reads at 4.5:1 on [`surface`](Self::surface) and on [`surface_alt`](Self::surface_alt) over it.
     fn muted(&self) -> Color {
-        Color::rgba(0.5, 0.5, 0.6, 0.6)
+        if crate::mode::is_dark() {
+            Color::rgba(0.68, 0.68, 0.74, 1.0)
+        } else {
+            Color::rgba(0.36, 0.36, 0.42, 1.0)
+        }
     }
     fn scrollbar(&self) -> Color {
         Color::rgba(0.5, 0.5, 0.6, 0.6)

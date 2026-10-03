@@ -181,7 +181,7 @@ pub enum Event {
     BoxFocused {
         box_id: u64,
     },
-    /// The surface moved the keyboard out of every box on its own — a document tabbing past the app, or to content beside it — so no box holds it now.
+    /// The surface moved the keyboard out of every box on its own — a document tabbing past the app, to content beside it, or to something inside the app that is no box, such as a link inside a paragraph — so no box holds it now.
     ///
     /// Not a window losing focus ([`FocusChanged`](Self::FocusChanged)): there the box keeps the keyboard and gets it back on return. Here the person took it somewhere else.
     FocusLeftBoxes,

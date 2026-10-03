@@ -89,6 +89,8 @@ struct StateStyle {
     disabled: Option<Box<dyn Fn(Rect) -> RectStyle>>,
     // Laid *over* whichever state won, not instead of it.
     focus: Option<Box<dyn Fn(Rect) -> RectStyle>>,
+    // Whether `focus` is the theme's ring rather than one the caller drew.
+    default_ring: bool,
 }
 
 impl Default for StateStyle {
@@ -100,6 +102,7 @@ impl Default for StateStyle {
             is_active: signal(false),
             disabled: None,
             focus: None,
+            default_ring: false,
         }
     }
 }
@@ -175,6 +178,8 @@ pub struct StyledContainer {
     // A GLOBAL shortcut handler, not focused text input: key events carry no pointer position, so they are broadcast to every widget.
     on_key: Option<KeyTable>,
     focusable: Focusable,
+    // A focusable inside this box whose ring this box draws, for a frame around a control that is not one itself.
+    frames_focus_of: Option<FocusId>,
     input: InputMode,
     inert: Option<Rc<dyn Fn() -> bool>>,
     registration: InputHandle,
@@ -221,6 +226,7 @@ impl StyledContainer {
             pointer: PointerHooks::default(),
             on_key: None,
             focusable: Focusable::default(),
+            frames_focus_of: None,
             input: InputMode::Auto,
             inert: None,
             registration: InputHandle::new(),
@@ -558,9 +564,7 @@ impl StyledContainer {
         let id = *self.focusable.id.get_or_insert_with(focus::next_id);
         focus::register_with_role(id, focus::FocusKind::Widget, self.node, role);
         self.focusable.activates = true;
-        if self.state.focus.is_none() {
-            self.state.focus = Some(Box::new(|_r| default_focus_ring()));
-        }
+        self.ring_by_default();
         self.mark_interactive();
         self
     }
@@ -613,11 +617,29 @@ impl StyledContainer {
         self
     }
 
+    /// Draws the focus ring while `inner` — a focusable inside this box — shows focus, for a box that frames a control without being one: a field's border around the line it types into.
+    ///
+    /// The box joins no tab order and takes no keys; `inner` keeps both. The ring is the theme's unless [`focus_style`](Self::focus_style) names one, which makes this box focusable too.
+    pub fn frames_focus_of(mut self, inner: FocusId) -> Self {
+        self.frames_focus_of = Some(inner);
+        self.ring_by_default();
+        self
+    }
+
+    /// Supplies the theme's ring, unless the caller already named one.
+    fn ring_by_default(&mut self) {
+        if self.state.focus.is_none() {
+            self.state.focus = Some(Box::new(|_r| default_focus_ring()));
+            self.state.default_ring = true;
+        }
+    }
+
     pub fn focus_style(mut self, f: impl Fn(Rect) -> RectStyle + 'static) -> Self {
         // Declaring a ring declares the box focusable, or it would join no tab order and nothing could satisfy the style.
         let id = *self.focusable.id.get_or_insert_with(focus::next_id);
         focus::register_at(id, focus::FocusKind::Widget, self.node);
         self.state.focus = Some(Box::new(f));
+        self.state.default_ring = false;
         self.mark_interactive();
         self
     }
@@ -980,12 +1002,17 @@ impl Component for StyledContainer {
             .iter()
             .find_map(|&state| self.state_style(state))
             .unwrap_or(&*self.style);
-        let painted = match (&self.state.focus, self.focusable.id) {
-            (Some(ring), Some(id)) if focus::is_focus_visible(id) => {
+        let shows_focus = [self.focusable.id, self.frames_focus_of]
+            .into_iter()
+            .flatten()
+            .any(focus::is_focus_visible);
+        let painted = match &self.state.focus {
+            Some(ring) if shows_focus => {
                 let base = style(r);
                 let ring = ring(r);
+                let band = self.state.default_ring.then(cell_focus_band).flatten();
                 RectStyle {
-                    fill: ring.fill.or(base.fill),
+                    fill: ring.fill.or(base.fill).or(band),
                     border: ring.border.or(base.border),
                     shadow: ring.shadow.or(base.shadow),
                     // The ring sits on the box's shape rather than choosing one of its own.
@@ -1197,6 +1224,16 @@ impl Drop for StyledContainer {
 /// A ring and not a fill, because it answers a different question from hover or pressed — *where the keys are going*, not what the box is doing — and has to survive being layered over whichever of those won. Its radius is deliberately absent: the compositing path takes that from the box, since a ring sits on a shape it does not get to reshape.
 fn default_focus_ring() -> RectStyle {
     RectStyle::default().with_border(Border::uniform(use_theme_tokens().primary(), 2.0))
+}
+
+/// What the theme's ring adds on a surface drawn in whole cells, under a box that has no fill of its own.
+///
+/// A terminal draws the ring as box-drawing characters in the cells around the content, and a box its content fills, such as a link with no padding, has no such cells: the text is drawn over its own frame. A cell keeps its background under a glyph, so a tint is what still shows there.
+fn cell_focus_band() -> Option<renderer_core::Paint> {
+    if geometry_core::layout_grid().is_unit() {
+        return None;
+    }
+    Some(use_theme_tokens().primary().with_alpha(0.35).into())
 }
 
 /// Builds the affine matrix for a box's declarative `rotate`/`scale`/`translate` attributes, pivoting rotation and scale on the box centre. Returns `None` when every component is identity, so an untransformed box skips the extra transform node entirely.

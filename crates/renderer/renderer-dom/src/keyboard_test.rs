@@ -23,6 +23,7 @@ const MENU_ROW: u64 = 103;
 const FIELD: u64 = 104;
 const PLAIN: u64 = 105;
 const TRAPPED: u64 = 106;
+const PARAGRAPH: u64 = 107;
 
 thread_local! {
     static RECORDED: RefCell<Vec<Event>> = const { RefCell::new(Vec::new()) };
@@ -155,6 +156,7 @@ fn render(focused: u64) {
         });
         commands.push(DrawCommand::PopElement);
     }
+    commands.extend(paragraph());
     SURFACE.with(|surface| {
         let mut surface = surface.borrow_mut();
         let surface = surface.as_mut().expect("mounted");
@@ -163,6 +165,66 @@ fn render(focused: u64) {
             .render_frame(&commands, None)
             .expect("the frame reconciled");
     });
+}
+
+/// A paragraph with a link inside it, which the browser puts in its own Tab order and Telar does not.
+fn paragraph() -> [DrawCommand; 3] {
+    let spans: Arc<[renderer_core::Span]> = Arc::from(vec![
+        renderer_core::Span::new(5..9, renderer_core::Declared::default()).linking_to(
+            platform_core::Destination::Route(platform_core::Location::root().segment("docs")),
+        ),
+    ]);
+    [
+        DrawCommand::PushElement {
+            element: Arc::new(Element::new(
+                ElementId(PARAGRAPH),
+                Semantics::group(),
+                "width:300px;height:20px",
+                Rect::new(0.0, 0.0, 300.0, 20.0),
+            )),
+        },
+        DrawCommand::Text {
+            text: Arc::from("Read docs first"),
+            spans: Some(spans),
+            rect: Rect::new(0.0, 0.0, 300.0, 20.0),
+            style: Arc::new(renderer_core::TextStyle::new(
+                14.0,
+                renderer_core::Color::BLACK,
+            )),
+        },
+        DrawCommand::PopElement,
+    ]
+}
+
+fn link_run() -> web_sys::HtmlElement {
+    host()
+        .query_selector(&format!("[data-telar-run-box=\"{PARAGRAPH}\"]"))
+        .expect("a valid selector")
+        .expect("the link run is in the document")
+        .dyn_into()
+        .expect("an HTML element")
+}
+
+/// Focuses `element` as a keyboard would, so `:focus-visible` matches whatever the last input in the page was.
+fn focus_visibly(element: &web_sys::HtmlElement) {
+    let focus: js_sys::Function = js_sys::Reflect::get(element, &"focus".into())
+        .expect("an element has focus()")
+        .dyn_into()
+        .expect("focus is a function");
+    let options = js_sys::JSON::parse(r#"{"focusVisible":true}"#).expect("the options are JSON");
+    focus
+        .call1(element, &options)
+        .expect("the element takes focus");
+}
+
+fn outline_of(element: &web_sys::Element) -> String {
+    web_sys::window()
+        .expect("a window")
+        .get_computed_style(element)
+        .expect("a computed style")
+        .expect("styles for an element in the document")
+        .get_property_value("outline-style")
+        .expect("an outline style")
 }
 
 fn element(id: u64) -> web_sys::HtmlElement {
@@ -195,13 +257,16 @@ fn press_on_focus(key: &str) -> bool {
     press(&target, key)
 }
 
+/// Waits out the platform's next turn. Its turn is an animation frame requested when the event arrived, so it runs before the second frame requested here, however late a loaded machine delivers frames; a fixed delay did not.
 async fn next_frames() {
-    let promise = js_sys::Promise::new(&mut |resolve, _| {
-        let _ = web_sys::window()
-            .expect("a window")
-            .set_timeout_with_callback_and_timeout_and_arguments_0(&resolve, 50);
-    });
-    let _ = wasm_bindgen_futures::JsFuture::from(promise).await;
+    for _ in 0..2 {
+        let promise = js_sys::Promise::new(&mut |resolve, _| {
+            let _ = web_sys::window()
+                .expect("a window")
+                .request_animation_frame(&resolve);
+        });
+        let _ = wasm_bindgen_futures::JsFuture::from(promise).await;
+    }
 }
 
 fn recorded() -> Vec<Event> {
@@ -397,4 +462,53 @@ async fn focus_moved_between_boxes_stays_the_app_s() {
     let events = recorded();
     assert!(!events.contains(&Event::FocusLeftBoxes), "{events:?}");
     assert!(events.contains(&Event::BoxFocused { box_id: BUTTON }));
+}
+
+#[wasm_bindgen_test]
+async fn focus_on_a_link_inside_a_paragraph_leaves_no_box_holding_it() {
+    render(BUTTON);
+    next_frames().await;
+    recorded();
+    focus_visibly(&link_run());
+    next_frames().await;
+    let events = recorded();
+    assert!(
+        events.contains(&Event::FocusLeftBoxes),
+        "the button would keep its ring and its Enter: {events:?}"
+    );
+}
+
+#[wasm_bindgen_test]
+async fn the_entry_taking_the_keyboard_is_no_move_away_from_the_field() {
+    render(0);
+    next_frames().await;
+    recorded();
+    render(FIELD);
+    next_frames().await;
+    let entry = active().expect("the entry holds the keyboard");
+    assert_eq!(entry.tag_name().to_ascii_lowercase(), "textarea");
+    let events = recorded();
+    assert!(!events.contains(&Event::FocusLeftBoxes), "{events:?}");
+}
+
+#[wasm_bindgen_test]
+async fn what_telar_draws_no_ring_for_keeps_the_browser_s() {
+    render(0);
+    next_frames().await;
+    let link = link_run();
+    focus_visibly(&link);
+    assert_ne!(
+        outline_of(&link),
+        "none",
+        "nothing else would show the keyboard is on the link"
+    );
+    let button = element(BUTTON);
+    focus_visibly(&button);
+    assert_eq!(
+        outline_of(&button),
+        "none",
+        "a box wears Telar's ring, and only that one"
+    );
+    next_frames().await;
+    recorded();
 }

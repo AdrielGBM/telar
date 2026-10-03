@@ -244,8 +244,19 @@ pub fn scrub_field(
         true
     });
 
+    let typed = StyledContainer::new(
+        LayoutStyle::new(),
+        |_| RectStyle::default().with_radius(BorderRadius::all(shared::radius())),
+        vec![box_item(input)],
+    )?
+    .frames_focus_of(input_id);
+    style_follows(typed.layout_node(), move || match editing.get() {
+        true => LayoutStyle::new(),
+        false => LayoutStyle::new().display_none(),
+    });
+
     let row =
-        Container::new(row_box(), vec![box_item(handle), box_item(input)])?.styled_by(row_box);
+        Container::new(row_box(), vec![box_item(handle), box_item(typed)])?.styled_by(row_box);
     Ok(box_item(row))
 }
 

@@ -26,6 +26,9 @@ web-sys = { workspace = true, features = ["CanvasRenderingContext2d", "HtmlCanva
 js-sys.workspace = true
 layout-core = { workspace = true }
 platform-web.workspace = true
+ui-components.workspace = true
+ui-core.workspace = true
+ui-tree.workspace = true
 wasm-bindgen-futures.workspace = true
 
 # Pinned to the release whose glue and `wasm-bindgen-test-runner` match the `wasm-bindgen` pin in [workspace.dependencies]. The two move together.
@@ -67,3 +70,7 @@ path = "src/links_test.rs"
 [[test]]
 name = "picture"
 path = "src/picture_test.rs"
+
+[[test]]
+name = "audit"
+path = "src/audit_test.rs"

@@ -39,3 +39,7 @@ svg = []
 
 [dev-dependencies]
 renderer-text = { workspace = true }
+
+[[test]]
+name = "cell_focus"
+path = "src/cell_focus_test.rs"

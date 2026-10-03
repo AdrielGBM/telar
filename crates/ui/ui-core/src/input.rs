@@ -15,6 +15,9 @@ use crate::impl_leaf_widget;
 use crate::input_region::InputHandle;
 use crate::layout_leaf::LayoutLeaf;
 
+/// How much of the field's ink a hint keeps: enough that it still reads at 4.5:1 on a field's surface, which WCAG asks of placeholder text as of any other.
+pub(crate) const PLACEHOLDER_OPACITY: f32 = 0.7;
+
 /// Width of the caret, in logical px.
 const CARET_WIDTH: f32 = 1.5;
 
@@ -351,7 +354,7 @@ impl Component for Input {
         // The field itself stays live: the caret and hit-test still work, so it is typable from empty.
         let text_node = if text.is_empty() && !self.placeholder.is_empty() {
             let mut ph_style = style.clone();
-            ph_style.color = style.color.faded(0.5);
+            ph_style.color = style.color.faded(PLACEHOLDER_OPACITY);
             RenderNode::text(self.placeholder.clone(), full, ph_style)
         } else {
             RenderNode::text(self.shown(&text), full, style.clone())

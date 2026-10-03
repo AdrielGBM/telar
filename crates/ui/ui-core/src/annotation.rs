@@ -106,9 +106,12 @@ pub trait Accessible: LayoutItem + Sized {
     /// The name assistive technology reads for this box. Re-read when what `label` reads changes, so a translated name follows the locale.
     ///
     /// A name, not a replacement for the content: a reader that walks into the box still finds what is drawn there, which is what [`a11y_hidden`](Self::a11y_hidden) on the pieces is for.
+    ///
+    /// An empty name is no name: the box goes by what it draws, as if it had been given none. A control named `""` would otherwise be announced as nothing at all.
     fn a11y_label<S: Into<Arc<str>>>(self, label: impl Fn() -> S + 'static) -> Self {
         follow(self.layout_node(), move |annotation| {
-            annotation.label = Some(label().into());
+            let label: Arc<str> = label().into();
+            annotation.label = (!label.is_empty()).then_some(label);
         });
         self
     }

@@ -472,3 +472,23 @@ fn a_host_focus_move_to_no_known_box_changes_nothing() {
     assert!(!follow_box(u64::MAX));
     assert_eq!(current(), Some(id));
 }
+
+/// `:focus-visible` makes the same exception: a tap on a button needs no ring, but a tap on a field is the start of typing, and the caret alone blinks out half the time.
+#[test]
+fn a_text_entry_shows_focus_however_it_was_reached() {
+    clear();
+    let button = next_id();
+    register_as(button, FocusKind::Widget);
+    let field = next_id();
+    register_as(field, FocusKind::TextEntry);
+
+    request_from_pointer(button);
+    assert!(!is_focus_visible(button));
+    request_from_pointer(field);
+    assert!(is_focus_visible(field));
+    request(field);
+    assert!(is_focus_visible(field));
+
+    unregister(button);
+    unregister(field);
+}

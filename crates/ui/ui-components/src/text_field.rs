@@ -7,7 +7,7 @@ use layout_core::{LayoutError, LayoutStyle};
 use reactive_core::{Reactive, RwSignal, signal};
 use renderer_core::{Border, BorderRadius, Color, RectStyle, ShapeStyle};
 use telar_macros::Props;
-use ui_core::{Children, Input, LayoutItem, StyledContainer, box_item, style_follows};
+use ui_core::{Accessible, Children, Input, LayoutItem, StyledContainer, box_item, style_follows};
 
 fn box_radius() -> f32 {
     shared::radius() * 2.0
@@ -80,12 +80,20 @@ pub fn text_field(
             c => t.with_color(c),
         }
     })?
-    .placeholder(placeholder.get());
+    .placeholder(placeholder.get())
+    .a11y_label({
+        let label = label.clone();
+        move || match label.get() {
+            caption if caption.is_empty() => placeholder.get(),
+            caption => caption,
+        }
+    });
     if let Some(cb) = on_submit {
         input = input.on_submit(move || cb());
     }
     // The input is a leaf, so its node's style is followed from the box that outlives it.
     let line_node = input.layout_node();
+    let line_focus = input.focus_id();
     let field = box_item(input);
 
     let box_ = StyledContainer::new(
@@ -98,6 +106,7 @@ pub fn text_field(
         },
         vec![box_item(field)],
     )?
+    .frames_focus_of(line_focus)
     .styled_by(move || field_box(width));
     style_follows(line_node, move || {
         line_box(shared::control_text_size(line_node, 1.0))

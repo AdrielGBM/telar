@@ -153,3 +153,255 @@ fn a_link_is_announced_with_where_it_goes() {
     assert_eq!(ak.role(), AkRole::Link);
     assert_eq!(ak.url(), Some("https://example.com"));
 }
+
+mod from_a_screen {
+    use std::rc::Rc;
+
+    use accesskit::{Action, Node, Role as AkRole, Toggled};
+    use geometry_core::Size;
+    use layout_core::{LayoutError, LayoutStyle};
+    use platform_core::{Event, Location, external};
+    use renderer_core::{Color, RectStyle, TextStyle};
+    use ui_components::{ButtonProps, CheckboxProps, TextFieldProps, button, checkbox, text_field};
+    use ui_core::{
+        Accessible, Children, ComponentList, Container, LayoutItem, StyledContainer, Text, TextRun,
+        WindowRoot, box_item, focus,
+    };
+
+    use super::*;
+
+    const WIDTH: u32 = 640;
+    const HEIGHT: u32 = 900;
+
+    fn ink() -> TextStyle {
+        TextStyle::new(16.0, Color::BLACK)
+    }
+
+    fn words(content: &'static str) -> Result<Text, LayoutError> {
+        Text::new(move || content.to_string(), LayoutStyle::new(), ink)
+    }
+
+    fn link<D: platform_core::IntoDestination + 'static>(
+        content: &'static str,
+        to: impl Fn() -> D + 'static,
+    ) -> Result<Box<dyn LayoutItem>, LayoutError> {
+        let label = words(content)?;
+        let link = StyledContainer::new(
+            LayoutStyle::new().padding_horizontal(4.0),
+            |_| RectStyle::default(),
+            vec![box_item(label)],
+        )?
+        .to(to);
+        Ok(box_item(link))
+    }
+
+    /// The same screen the document's axe audit runs over (`renderer-dom/src/audit_test.rs`), so the two targets are held to one fixture.
+    fn screen() -> Result<Box<dyn LayoutItem>, LayoutError> {
+        let heading = StyledContainer::new(
+            LayoutStyle::new(),
+            |_| RectStyle::default(),
+            vec![box_item(words("Settings")?)],
+        )?
+        .role(platform_core::Role::Heading(1));
+        let save = button(
+            ButtonProps::props()
+                .label("Save")
+                .on_press(Rc::new(|| {}))
+                .build(),
+            Children::default(),
+        )?;
+        let source = link("Source code", || external("https://example.com/telar"))?;
+        let about = link("About", || Location::root().segment("about"))?;
+        let name = text_field(
+            TextFieldProps::props()
+                .label("Name")
+                .placeholder("Ada Lovelace")
+                .build(),
+            Children::default(),
+        )?;
+        let subscribe = checkbox(
+            CheckboxProps::props()
+                .label("Send me the newsletter")
+                .build(),
+            Children::default(),
+        )?;
+        let paragraph = Text::runs(
+            vec![
+                TextRun::new(|| "Read ".to_string()),
+                TextRun::new(|| "the guide".to_string()).to(|| Location::root().segment("guide")),
+                TextRun::new(|| " before you start.".to_string()),
+            ],
+            LayoutStyle::new(),
+            |_| ink(),
+        )?;
+        let letters: Vec<Box<dyn LayoutItem>> = ["T", "e", "l", "a", "r"]
+            .into_iter()
+            .map(|letter| words(letter).map(|text| box_item(text.a11y_hidden())))
+            .collect::<Result<_, _>>()?;
+        let word = Container::new(LayoutStyle::new().flex_row(), letters)?.a11y_label(|| "Telar");
+        let greeting = words("Bonjour tout le monde")?.a11y_lang(|| "fr");
+        let hidden =
+            Container::new(LayoutStyle::new(), vec![box_item(words("Decoration")?)])?.a11y_hidden();
+        let column = Container::new(
+            LayoutStyle::new().flex_column().gap(12.0).padding_all(16.0),
+            vec![
+                box_item(heading),
+                save,
+                source,
+                about,
+                name,
+                subscribe,
+                box_item(paragraph),
+                box_item(word),
+                box_item(greeting),
+                box_item(hidden),
+            ],
+        )?;
+        Ok(box_item(column))
+    }
+
+    fn mount() -> ComponentList {
+        renderer_core::set_default_text_metrics(renderer_text::ShaperMetrics);
+        ui_core::reset_layout_runtime();
+        focus::clear();
+        ui_core::set_surface_size(Size::new(WIDTH as f32, HEIGHT as f32));
+        let mut tree = ComponentList::new(WindowRoot::new(screen().expect("the screen builds")));
+        tree.on_event(&Event::WindowResized {
+            width: WIDTH,
+            height: HEIGHT,
+        });
+        tree
+    }
+
+    fn published(tree: &ComponentList) -> TreeUpdate {
+        ui_core::relayout_if_dirty();
+        let nodes = ui_core::accessibility::snapshot(&tree.commands());
+        tree_update(&nodes, "Settings", Some("en"))
+    }
+
+    fn named<'a>(update: &'a TreeUpdate, name: &str) -> &'a Node {
+        update
+            .nodes
+            .iter()
+            .map(|(_, node)| node)
+            .find(|node| node.label() == Some(name))
+            .unwrap_or_else(|| panic!("{name:?} is in the tree: {:#?}", labels(update)))
+    }
+
+    /// The control called `name`, where a caption beside it may carry the same words.
+    fn control<'a>(update: &'a TreeUpdate, name: &str) -> &'a Node {
+        update
+            .nodes
+            .iter()
+            .map(|(_, node)| node)
+            .find(|node| node.label() == Some(name) && focusable(node))
+            .unwrap_or_else(|| {
+                panic!(
+                    "a control called {name:?} is in the tree: {:#?}",
+                    labels(update)
+                )
+            })
+    }
+
+    fn labels(update: &TreeUpdate) -> Vec<(AkRole, String)> {
+        update
+            .nodes
+            .iter()
+            .map(|(_, node)| (node.role(), node.label().unwrap_or_default().to_string()))
+            .collect()
+    }
+
+    fn focusable(node: &Node) -> bool {
+        node.supports_action(Action::Focus) && node.supports_action(Action::Click)
+    }
+
+    #[test]
+    fn each_control_is_its_role_and_its_name_and_can_be_focused() {
+        let tree = mount();
+        let update = published(&tree);
+        for (name, role) in [
+            ("Save", AkRole::Button),
+            ("Source code", AkRole::Link),
+            ("About", AkRole::Link),
+            ("Name", AkRole::TextInput),
+            ("Send me the newsletter", AkRole::CheckBox),
+        ] {
+            assert_eq!(control(&update, name).role(), role, "{name}");
+        }
+        assert_eq!(
+            control(&update, "Send me the newsletter").toggled(),
+            Some(Toggled::False)
+        );
+    }
+
+    #[test]
+    fn a_link_is_announced_with_where_it_goes_and_a_link_run_is_one_too() {
+        let tree = mount();
+        let update = published(&tree);
+        assert_eq!(
+            control(&update, "Source code").url(),
+            Some("https://example.com/telar")
+        );
+        assert_eq!(control(&update, "About").url(), Some("/about"));
+        let run = named(&update, "the guide");
+        assert_eq!(run.role(), AkRole::Link);
+        assert_eq!(run.url(), Some("/guide"));
+        assert!(
+            !focusable(run),
+            "a link run is announced, but Tab reaches it only in a document"
+        );
+    }
+
+    #[test]
+    fn a_name_a_language_and_a_hidden_box_reach_the_reader_as_written() {
+        let tree = mount();
+        let update = published(&tree);
+        assert_eq!(named(&update, "Telar").role(), AkRole::Label);
+        assert_eq!(
+            named(&update, "Bonjour tout le monde").language(),
+            Some("fr")
+        );
+        let read: Vec<String> = labels(&update).into_iter().map(|(_, name)| name).collect();
+        for gone in ["T", "e", "Decoration"] {
+            assert!(
+                !read.iter().any(|name| name == gone),
+                "{gone:?} is hidden: {read:?}"
+            );
+        }
+        let (_, root) = update.nodes.last().expect("the window");
+        assert_eq!(root.language(), Some("en"));
+    }
+
+    /// Tab walks the controls in the order they were built, and the tree's focus follows each step, so a reader announces the control the keyboard is on.
+    #[test]
+    fn the_tree_s_focus_follows_the_tab_order() {
+        let tree = mount();
+        assert_eq!(
+            published(&tree).focus,
+            ROOT,
+            "nothing focused is the window"
+        );
+        let mut walked = Vec::new();
+        for _ in 0..6 {
+            focus::focus_next();
+            let update = published(&tree);
+            let (_, node) = update
+                .nodes
+                .iter()
+                .find(|(id, _)| *id == update.focus)
+                .expect("the focus names a node in the tree");
+            walked.push(node.label().unwrap_or_default().to_string());
+        }
+        assert_eq!(
+            walked,
+            [
+                "Save",
+                "Source code",
+                "About",
+                "Name",
+                "Send me the newsletter",
+                "Save"
+            ]
+        );
+    }
+}

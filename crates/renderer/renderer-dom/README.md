@@ -32,6 +32,14 @@ browser is started with are in `webdriver.json` beside this file. Set `NO_HEADLE
 and that a focus move the browser made is reported as `Event::BoxFocused`. Each focusable box carries
 `data-telar-keys` (the keys it keeps), `data-telar-focus` (its identity) and a `tabindex`. See
 [docs/keyboard.md](https://github.com/AdrielGBM/telar/blob/main/docs/keyboard.md).
+It also checks that focus landing on a link inside a paragraph clears the box Telar had focused, and that
+what Telar draws no ring for keeps the browser's `:focus-visible` outline.
+
+`src/audit_test.rs` renders real widgets (a button, links, a field, a checkbox, a paragraph with a link run,
+named, translated and hidden boxes) and runs [axe-core](https://github.com/dequelabs/axe-core) over the
+document; any WCAG 2.2 A/AA or best-practice violation fails it. The script comes from the dev shell, which
+names it in `TELAR_AXE_CORE` (a pinned npm tarball fetched by the flake), so run it inside `nix develop`. See
+[docs/accessibility.md](https://github.com/AdrielGBM/telar/blob/main/docs/accessibility.md#audits).
 
 `src/document_scroll_test.rs` checks the surface's primary scroll as the document's own scroll: the host
 grows with the content, a `window` scroll is reported as the page's `Event::BoxScrolled`, a request to move

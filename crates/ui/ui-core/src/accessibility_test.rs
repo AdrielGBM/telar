@@ -397,3 +397,45 @@ fn a_link_run_is_a_link_after_its_paragraph() {
         ]
     );
 }
+
+/// A raster target draws a label in its own box's space and moves it into place with a matrix, so the label is read where the matrix puts it. Read where it was drawn, every label sat at the window's corner and no control was named by its text.
+#[test]
+fn a_label_moved_into_place_by_a_matrix_names_its_control() {
+    reset_layout_runtime();
+    focus::clear();
+    let pad = Container::new(LayoutStyle::new().height(100.0), vec![]).unwrap();
+    let button = StyledContainer::new(
+        LayoutStyle::new().width(80.0).height(30.0),
+        |_r| RectStyle::default(),
+        vec![],
+    )
+    .unwrap()
+    .control(Role::Button)
+    .on_press(|| {});
+    let root = Container::new(
+        LayoutStyle::new().flex_column(),
+        vec![box_item(pad), box_item(button)],
+    )
+    .unwrap();
+    compute_layout(
+        root.layout_node(),
+        AvailableSpace::Definite(200.0),
+        AvailableSpace::Definite(200.0),
+    )
+    .unwrap();
+
+    let frame = [
+        DrawCommand::PushMatrix {
+            matrix: [1.0, 0.0, 0.0, 1.0, 10.0, 105.0],
+        },
+        text_at("Save", rect(0.0, 0.0, 40.0, 16.0)),
+        DrawCommand::PopMatrix,
+    ];
+    assert!(frame.iter().all(is_read), "the runner keeps the matrices");
+    let nodes = snapshot(&frame);
+    let button = nodes
+        .iter()
+        .find(|n| n.id.is_some())
+        .expect("the button is exposed");
+    assert_eq!(button.name, "Save");
+}

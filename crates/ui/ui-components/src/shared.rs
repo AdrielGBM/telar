@@ -3,7 +3,7 @@
 use std::rc::Rc;
 
 use layout_core::{AlignItems, LayoutError, LayoutStyle};
-use reactive_core::{Reactive, RwSignal};
+use reactive_core::Reactive;
 use renderer_core::{Color, RectStyle, TextStyle};
 use theme_core::use_theme_tokens;
 use ui_core::focus::Role;
@@ -144,9 +144,9 @@ pub(crate) fn resolve(color: &Reactive<Color>, fallback: impl FnOnce() -> Color)
 /// An explicit signal wins on purpose. Given both, the two would be independent states racing each other, and the one written next to the widget is the one the author most likely meant.
 #[cfg(feature = "overlays")]
 pub(crate) fn resolve_open(
-    open: Option<RwSignal<bool>>,
+    open: Option<reactive_core::RwSignal<bool>>,
     id: &'static str,
-) -> Option<RwSignal<bool>> {
+) -> Option<reactive_core::RwSignal<bool>> {
     open.or_else(|| (!id.is_empty()).then(|| ui_core::overlay_state(id)))
 }
 

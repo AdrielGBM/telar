@@ -40,3 +40,14 @@ fn a_transcript_reads_each_node_as_a_line() {
 fn nothing_to_read_is_an_empty_transcript() {
     assert_eq!(transcript(&[]), "");
 }
+
+/// A reading with no ring to look at has to say where the keyboard is, or a terminal reader following it cannot tell which line Enter would press.
+#[test]
+fn the_focused_node_says_so_last() {
+    let mut save = node(Role::Button, "Save");
+    save.focused = true;
+    assert_eq!(
+        transcript(&[node(Role::Button, "Cancel"), save]),
+        "Cancel, button\nSave, button, focused"
+    );
+}

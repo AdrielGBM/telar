@@ -47,10 +47,14 @@ fn audit_requested(host: &web_sys::HtmlElement) -> bool {
 /// `color-scheme` is what dresses everything the browser draws itself and Telar cannot reach — the selection band, an autofill panel, the overlay scrollbar a nested document keeps. Declared here it follows the system, which is what an app that named no background of its own is doing too; one that named a colour overrides it from that colour (see `paint_host`). `color` goes with it because the rule below makes every box inherit one: without it a box that draws no text of its own inherited the page's black, under a dark theme as much as a light one.
 ///
 /// The scrollbars go too, and not for looks: a native one takes width out of the box it is in, layout never reserved it, and the sidebar came out fifteen pixels narrower than every rect hit-testing reads — with a horizontal scrollbar underneath for the fifteen pixels that no longer fitted. The scrolling stays the browser's; only the bar is Telar's, as it is on every other target.
+///
+/// The outline goes only where Telar draws a ring of its own: a focusable box (`data-telar-focus`). Whatever else the browser walks Tab through — a link inside a paragraph, a scroll area Firefox makes focusable — keeps the browser's ring, since nothing else would show where the keyboard is. Forced colours drop the shadow Telar's ring is painted with, so there every focused element takes the browser's ring back, the field entry included.
 const RESET: &str = "[data-telar]{font:400 16px sans-serif;color-scheme:light dark;color:CanvasText}\
 [data-telar] *{margin:0;border:0;padding:0;background:none;font:inherit;color:inherit;\
 text-align:inherit;text-decoration:none;box-sizing:border-box;appearance:none;scrollbar-width:none;\
 -webkit-appearance:none;outline:none}\
+[data-telar] :focus-visible:not([data-telar-focus]){outline:revert}\
+@media (forced-colors:active){[data-telar] :focus-visible{outline:revert!important}}\
 [data-telar] *::-webkit-scrollbar{display:none}";
 
 fn install_reset(document: &web_sys::Document) {
@@ -1190,17 +1194,27 @@ fn watch_scroll(node: &web_sys::Element, id: u64) -> Option<Closure<dyn FnMut(we
 /// Reports where the document moves focus on its own — its own Tab order — so the app's focus follows it.
 ///
 /// A box the document focuses becomes the app's focused box; Telar's own focus comes back through here too, and is answered as a move to where focus already is. Focus leaving the app for content beside it, or for the browser's own interface, leaves no box holding it.
+///
+/// So does focus landing inside the app on something that is no box: a link inside a paragraph, a scroll area the browser made focusable. The box Telar had focused would otherwise keep its ring and keep answering keys, and Enter on the link would press it too.
 fn follow_focus(host: &web_sys::HtmlElement) -> Option<FocusFollower> {
+    let own_host = host.clone();
     let into = Closure::<dyn FnMut(web_sys::Event)>::new(move |event: web_sys::Event| {
-        let Some(box_id) = event
+        let Some(element) = event
             .target()
             .and_then(|target| target.dyn_into::<web_sys::Element>().ok())
-            .and_then(|element| element.get_attribute(FOCUS_BOX_ATTRIBUTE))
-            .and_then(|id| id.parse::<u64>().ok())
         else {
             return;
         };
-        platform_core::post_event(platform_core::Event::BoxFocused { box_id });
+        match element
+            .get_attribute(FOCUS_BOX_ATTRIBUTE)
+            .and_then(|id| id.parse::<u64>().ok())
+        {
+            Some(box_id) => platform_core::post_event(platform_core::Event::BoxFocused { box_id }),
+            None if !parks_telars_focus(&element, &own_host) => {
+                platform_core::post_event(platform_core::Event::FocusLeftBoxes)
+            }
+            None => {}
+        }
     });
     let watched = host.clone();
     let out = Closure::<dyn FnMut(web_sys::Event)>::new(move |event: web_sys::Event| {
@@ -1242,6 +1256,12 @@ fn follow_focus(host: &web_sys::HtmlElement) -> Option<FocusFollower> {
         into,
         out,
     })
+}
+
+/// Whether `element` is one of the two places Telar parks the document's focus itself: the host, while no box holds the keyboard, and the entry a field is typed through.
+fn parks_telars_focus(element: &web_sys::Element, host: &web_sys::HtmlElement) -> bool {
+    element.is_same_node(Some(host.as_ref()))
+        || element.has_attribute(crate::entry::ENTRY_ATTRIBUTE)
 }
 
 /// Whether focus that left the host with nowhere to go went to the browser's own interface: the document lost it, and the element that had it no longer does. A window that only lost focus keeps its focused element; a replaced element leaves the document focused.

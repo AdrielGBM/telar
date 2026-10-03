@@ -80,10 +80,44 @@ registers them in. It leaves the app past the last one. Telar's focus follows th
   `Event::FocusLeftBoxes`, and the runner clears Telar's focus. No box stays focused and no ring stays drawn.
   When Tab or Shift+Tab brings focus back, `BoxFocused` picks up the box it lands on. A window that only
   loses focus is different: the focused element stays focused, and nothing is cleared.
+- Focus that lands inside the app on something that is no box posts `Event::FocusLeftBoxes` too. That is a
+  link inside a paragraph, whose `<a>` the browser puts in its own Tab order, or a scroll area Firefox makes
+  focusable. Without it the box Telar had focused kept its ring and kept answering keys, and Enter on the link
+  also pressed that box. The host itself and the hidden entry a field types through are Telar's own places to
+  park focus, and focus on them changes nothing.
 - The reconciler only takes focus back when it is inside the app or has fallen to `<body>`. Focus a person
   moved elsewhere on the page stays there.
 
+## What shows where the keyboard is
+
+Every element that can hold focus shows it, on every target:
+
+| Target | Indicator |
+| --- | --- |
+| desktop, Android, web (canvas) | Telar's ring: the focused control's `focus_style`, or the theme's primary colour 2 px wide for a `control`/`to:` box that named none. It shows when the keyboard (Tab, an arrow, the app focusing something) reached the control, not after a tap, the way `:focus-visible` does. A text entry shows it however it was reached, since a tap on a field is the start of typing. |
+| web-dom | The same ring, painted as the box's inset shadow. The document's own outline is removed only from the boxes Telar rings (`data-telar-focus`), so there is one ring and not two. Anything else the browser focuses inside the app (a link inside a paragraph, a scroll area Firefox makes focusable) keeps the browser's `:focus-visible` outline. In forced-colours mode, which drops shadows, every focused element takes the browser's outline back. |
+| TUI | The ring becomes a box-drawing frame in the ring's colour, in the cells around the content: a box one row tall keeps only the uprights, and a box a cell or two wide recolours its mark. A box its content fills, such as a link with no padding, has no such cells and its words are drawn over the frame, so the theme's ring also tints the background of a box that has no fill of its own; a cell keeps its background under a glyph. The plain-text reading (`TELAR_TUI_READING`, see [accessibility.md](accessibility.md)) ends the focused line with `, focused`. |
+| headless | Nothing is shown. The snapshot's `AccessNode::focused` still says which node holds focus. |
+
+A box that frames a control without being one, such as a field's border around the line it types into,
+draws the ring for it with `StyledContainer::frames_focus_of(inner)`. `text_field` and the typed-entry half of
+`scrub_field` do. A bare `input` in `.rsx` is the unstyled kernel primitive and shows only its caret, so the
+box around it should frame it.
+
+## Tests
+
 `crates/renderer/renderer-dom/src/keyboard_test.rs` checks this contract in a browser: which keys are
-prevented where, which boxes are Tab stops, that an unconsumed Tab never reaches the app, and that a native
-focus move is reported, and that focus leaving for the page clears the app's. A synthetic key event is untrusted, so it cannot trigger the browser's own Tab walk or
-scroll. Checking those needs trusted input, for example WebDriver actions.
+prevented where, which boxes are Tab stops, that an unconsumed Tab never reaches the app, that a native focus
+move is reported, that focus leaving for the page or for a link inside a paragraph clears the app's, and which
+focused elements keep the browser's outline. `crates/renderer/renderer-dom/src/audit_test.rs` checks that a
+keyboard-focused control wears Telar's ring in the document (see [accessibility.md](accessibility.md#audits)).
+
+None of these press a real key. A synthetic `KeyboardEvent` is untrusted, so the browser runs no default
+action for it: no Tab walk, no scroll, no activation. Trusted input in an automated browser comes only from
+the WebDriver session (`POST /session/{id}/actions`), and `wasm-bindgen-test` gives a test no way to reach the
+session it runs in. The runner keeps the session id and the driver's port to itself, and geckodriver turns
+away a request that carries an `Origin` header, which every `fetch` from the test page does. Covering it needs
+a host-side test instead: build a small document fixture to wasm, serve it, start geckodriver, and drive the
+page with WebDriver key actions (Tab, Shift+Tab, Space, Page Down, Enter) through a WebDriver client, reading
+`document.activeElement`, `scrollY` and the app's own state back with `execute/sync`. That harness is not
+part of the workspace yet.

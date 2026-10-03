@@ -35,6 +35,18 @@
             targets = [ "aarch64-linux-android" "wasm32-unknown-unknown" ];
             extensions = [ "rust-src" "rust-analyzer" "rustfmt" "clippy" ];
           };
+          # The rules the browser tests audit the document with (MPL-2.0, `LICENSE` beside the script), fetched from npm by its published integrity so the version is pinned here and nowhere else.
+          axeCore = pkgs.runCommand "axe-core-4.13.0"
+            {
+              src = pkgs.fetchurl {
+                url = "https://registry.npmjs.org/axe-core/-/axe-core-4.13.0.tgz";
+                hash = "sha512-UzGt8zg7Ny8djbYMhxl2zuEevVa7r2gJjYY5Lwr1xM7+XU2nd6CkIWFTVcCIbAP63vSz71NaVyyuSk9lHKcy0A==";
+              };
+            }
+            ''
+              mkdir -p $out
+              tar -xzf $src --strip-components=1 -C $out package/axe.min.js package/LICENSE
+            '';
           # In buildInputs so pkg-config finds their .pc files at build time, and on LD_LIBRARY_PATH for the loaders winit and wgpu dlopen() at runtime.
           desktopDeps = [
             pkgs.wayland
@@ -74,6 +86,8 @@
             # Host-target-scoped rather than RUSTFLAGS so the aarch64-linux-android build keeps the NDK's own linker.
             "CARGO_TARGET_${pkgs.stdenv.hostPlatform.rust.cargoEnvVarTarget}_RUSTFLAGS" = "-C link-arg=-fuse-ld=mold";
             CHROMEDRIVER = "${pkgs.chromedriver}/bin/chromedriver";
+            # Read at compile time by the browser tests that audit with axe (`include_str!`), so the script reaches the page without a server.
+            TELAR_AXE_CORE = "${axeCore}/axe.min.js";
             LD_LIBRARY_PATH = pkgs.lib.makeLibraryPath desktopDeps;
           };
         });

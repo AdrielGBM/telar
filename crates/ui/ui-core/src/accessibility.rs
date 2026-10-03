@@ -15,10 +15,14 @@ use rustc_hash::FxHashMap;
 use crate::focus;
 
 /// Whether the snapshot reads `command`, for a runner that keeps the last frame's reading between frames rather than the whole frame.
+///
+/// The matrices are read too: a raster target draws a text in its own box's space and moves it into place with one, so without them every label sat at the window's corner and no control was named by what it draws.
 pub fn is_read(command: &DrawCommand) -> bool {
     matches!(
         command,
         DrawCommand::Text { .. }
+            | DrawCommand::PushMatrix { .. }
+            | DrawCommand::PopMatrix
             | DrawCommand::Image { .. }
             | DrawCommand::Path { .. }
             | DrawCommand::PushElement { .. }
@@ -162,7 +166,7 @@ impl Reading {
         let mut reading = Self::default();
         // The scope in force and the innermost named box, per open element.
         let mut open: Vec<(Scope, Option<usize>)> = Vec::new();
-        for command in commands {
+        renderer_core::for_each_with_matrix(commands, |command, matrix| {
             let (scope, named) = open.last().cloned().unwrap_or_default();
             match command {
                 DrawCommand::PushElement { element } => {
@@ -198,12 +202,13 @@ impl Reading {
                 DrawCommand::Text {
                     text, rect, spans, ..
                 } if !text.trim().is_empty() => {
+                    let placed = renderer_core::transform_clip_rect(matrix, *rect);
                     if let Some(i) = named {
                         reading.named[i].drew_text = true;
                     }
                     reading.text.push(Piece {
                         text: text.to_string(),
-                        rect: *rect,
+                        rect: placed,
                         role: Role::Label,
                         lang: scope.lang.clone(),
                         url: None,
@@ -217,7 +222,7 @@ impl Reading {
                         };
                         reading.text.push(Piece {
                             text: words.to_string(),
-                            rect: *rect,
+                            rect: placed,
                             role: Role::Link,
                             lang: scope.lang.clone(),
                             url: Some(platform_core::address_of(link)),
@@ -231,7 +236,7 @@ impl Reading {
                 }
                 _ => {}
             }
-        }
+        });
         reading
     }
 

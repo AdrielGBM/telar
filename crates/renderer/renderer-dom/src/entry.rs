@@ -22,6 +22,9 @@ color:transparent;caret-color:transparent;font:inherit;resize:none;overflow:hidd
 /// What the entry answers to while standing for a field that named nothing.
 const FALLBACK: &str = "Text field";
 
+/// Marks the entry, which holds the keyboard on behalf of a field box without being one.
+pub(crate) const ENTRY_ATTRIBUTE: &str = "data-telar-entry";
+
 /// The field an entry is parked over, as the reconcile found it in the document.
 pub struct Field<'a> {
     pub rect: geometry_core::Rect,
@@ -56,6 +59,7 @@ impl TextEntry {
             .dyn_into::<web_sys::HtmlElement>()
             .ok()?;
         let _ = node.set_attribute("style", HIDDEN);
+        let _ = node.set_attribute(ENTRY_ATTRIBUTE, "");
         let _ = node.set_attribute("autocapitalize", "off");
         let _ = node.set_attribute("autocorrect", "off");
         let _ = node.set_attribute("spellcheck", "false");

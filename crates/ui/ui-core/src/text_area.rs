@@ -309,7 +309,7 @@ impl Component for TextArea {
         };
         let text_node = if text.is_empty() && !self.placeholder.is_empty() {
             let mut ph_style = style.clone();
-            ph_style.color = style.color.faded(0.5);
+            ph_style.color = style.color.faded(crate::input::PLACEHOLDER_OPACITY);
             RenderNode::text(self.placeholder.clone(), full, ph_style)
         } else {
             RenderNode::text(Arc::<str>::from(text.as_str()), full, style.clone())

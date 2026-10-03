@@ -227,8 +227,11 @@ fn node_of(id: FocusId) -> Option<NodeId> {
 }
 
 /// Whether `id` holds focus *and* should show it. Reactive, like [`current`].
+///
+/// A text entry shows it however it was reached, as `:focus-visible` does for a field: the caret alone blinks out half the time, and a person who tapped a field is about to type into it.
 pub fn is_focus_visible(id: FocusId) -> bool {
-    is_focused(id) && !pointer_focus_signal().get()
+    is_focused(id)
+        && (!pointer_focus_signal().get() || with_focus_ref(|s| s.text_entries.contains(&id)))
 }
 
 fn pointer_focus_signal() -> RwSignal<bool> {

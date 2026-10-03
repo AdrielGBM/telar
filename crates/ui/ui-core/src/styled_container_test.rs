@@ -1034,6 +1034,34 @@ fn a_tap_takes_focus_without_drawing_a_ring() {
     focus::release(id);
 }
 
+/// A field's frame is where its focus shows, not the bare line it types into: the frame draws the ring for the entry inside it, and is not a Tab stop of its own.
+#[test]
+fn a_frame_draws_the_ring_of_the_focusable_it_frames() {
+    reset_layout_runtime();
+    focus::clear();
+    let inner = focus::next_id();
+    focus::register_as(inner, focus::FocusKind::TextEntry);
+    let frame = StyledContainer::new(
+        LayoutStyle::new().width(200.0).height(40.0),
+        |_r| RectStyle::default(),
+        vec![],
+    )
+    .unwrap()
+    .frames_focus_of(inner);
+    assert_eq!(frame.focusable.id, None, "the frame takes no focus itself");
+    assert_eq!(rect_style(&frame.view()).and_then(|s| s.border), None);
+
+    focus::request_from_pointer(inner);
+    let ring = rect_style(&frame.view())
+        .and_then(|s| s.border)
+        .expect("a field tapped into shows where the typing goes");
+    assert_eq!(ring.widths, [2.0; 4]);
+
+    focus::release(inner);
+    assert_eq!(rect_style(&frame.view()).and_then(|s| s.border), None);
+    focus::unregister(inner);
+}
+
 /// The bug this exists to make unwritable, taken from a real port: a control the application had already disabled still lit up with the accent under the pointer and still showed a hand cursor, because the author remembered to guard the callback and the tint but not the hover and the cursor. Three places to remember is three places to get wrong, so the box reads one flag and closes all of them.
 #[test]
 fn a_disabled_box_neither_lights_up_nor_fires() {
