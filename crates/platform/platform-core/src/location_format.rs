@@ -9,10 +9,13 @@ use crate::Location;
 /// One spelling for every target that carries a location as text — a browser's address bar, a `--location` argument, an Android `ACTION_VIEW` URI, the history a desktop build remembers between runs — so a link copied out of one opens the same place in another.
 ///
 /// Segments, parameters and the fragment are percent-encoded. A path cannot hold an empty segment, so one is dropped rather than written.
+///
+/// A location's locale is the first segment under the base (`/base/es/projects`), and the root in a locale is that segment's directory (`/base/es/`), so each locale reads as a site of its own. Reading one back needs the locales the app ships ([`with_locales`](Self::with_locales)): without them, `/es/projects` is two segments.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct LocationFormat {
     base: String,
     trailing_slash: bool,
+    locales: Vec<String>,
 }
 
 impl Default for LocationFormat {
@@ -27,6 +30,7 @@ impl LocationFormat {
         Self {
             base: "/".to_string(),
             trailing_slash: false,
+            locales: Vec::new(),
         }
     }
 
@@ -41,6 +45,7 @@ impl LocationFormat {
         Self {
             base,
             trailing_slash: false,
+            locales: Vec::new(),
         }
     }
 
@@ -59,9 +64,24 @@ impl LocationFormat {
         self.trailing_slash
     }
 
+    /// Reads a first segment that is one of `locales` as the location's locale, ignoring ASCII case and answering with the tag as `locales` spells it. Only an app whose addresses carry a locale names any.
+    pub fn with_locales(mut self, locales: impl IntoIterator<Item = impl Into<String>>) -> Self {
+        self.locales = locales.into_iter().map(Into::into).collect();
+        self
+    }
+
+    /// The locales a first segment is read as.
+    pub fn locales(&self) -> &[String] {
+        &self.locales
+    }
+
     /// `location` as a path reference under the base.
     pub fn format(&self, location: &Location) -> String {
         let mut out = self.base.clone();
+        if let Some(locale) = location.locale().filter(|locale| !locale.is_empty()) {
+            out.push_str(&encode(locale, SEGMENT));
+            out.push('/');
+        }
         let segments: Vec<String> = location
             .segments()
             .iter()
@@ -96,11 +116,19 @@ impl LocationFormat {
         let (rest, fragment) = split_off(reference, '#');
         let (path, query) = split_off(rest, '?');
         let path = self.below_base(path)?;
-        let mut location = Location::from_segments(
-            path.split('/')
-                .filter(|segment| !segment.is_empty())
-                .map(|segment| decode(segment, false)),
-        );
+        let mut segments: Vec<String> = path
+            .split('/')
+            .filter(|segment| !segment.is_empty())
+            .map(|segment| decode(segment, false))
+            .collect();
+        let locale = segments.first().and_then(|first| self.locale_named(first));
+        if locale.is_some() {
+            segments.remove(0);
+        }
+        let mut location = Location::from_segments(segments);
+        if let Some(locale) = locale {
+            location = location.with_locale(locale);
+        }
         for pair in query.unwrap_or_default().split('&') {
             if pair.is_empty() {
                 continue;
@@ -112,6 +140,13 @@ impl LocationFormat {
             location = location.with_fragment(decode(fragment, false));
         }
         Some(location)
+    }
+
+    fn locale_named(&self, segment: &str) -> Option<String> {
+        self.locales
+            .iter()
+            .find(|locale| locale.eq_ignore_ascii_case(segment))
+            .cloned()
     }
 
     fn below_base<'a>(&self, path: &'a str) -> Option<&'a str> {
@@ -127,9 +162,13 @@ impl LocationFormat {
 
 static CURRENT: RwLock<Option<LocationFormat>> = RwLock::new(None);
 
-/// The spelling the running app's addresses are written in, for code that has to write one without holding the platform's [`LocationSource`](crate::LocationSource) — a document renderer's `href`. [`LocationFormat::root`] until a platform installs its own.
+/// The spelling the running app's addresses are written in, for code that has to write one without holding the platform's [`LocationSource`](crate::LocationSource) — a document renderer's `href`, a `--location` argument. [`LocationFormat::root`] until a platform installs its own, reading the locales [`location_locales`](crate::location_locales) declares unless the installed format names its own.
 pub fn location_format() -> LocationFormat {
-    CURRENT.read().unwrap().clone().unwrap_or_default()
+    let format = CURRENT.read().unwrap().clone().unwrap_or_default();
+    if !format.locales.is_empty() {
+        return format;
+    }
+    format.with_locales(crate::location_locales())
 }
 
 /// Installs the spelling [`location_format`] answers with. Called by a platform whose addresses live under a base path.

@@ -10,3 +10,6 @@ two = "عنصران"
 few = "{count} عناصر"
 many = "{count} عنصرًا"
 other = "{count} عنصر"
+
+[locale_address]
+anchor = "اللغات"

@@ -28,17 +28,18 @@ pub use accessibility::{AccessNode, NumericValue, Role};
 pub use app_ctx::{AppCtx, RedrawWaker};
 pub use asset_base::{asset_url, set_asset_base};
 pub use consumed_keys::{ConsumedKeys, consumes, key_member};
-pub use destination::{Destination, IntoDestination, Uri, address_of, anchor, external};
+pub use destination::{Destination, IntoDestination, Uri, address_of, anchor, external, in_locale};
 pub use error::PlatformError;
 pub use event::{
     Event, Key, ModifiersState, NamedKey, PointerButton, PointerSource, ScrollDelta, TAP_SLOP,
 };
 pub use event_sink::{post_event, set_event_sink};
 pub use history::{
-    HistoryFollower, HistoryFollowerId, follow_location_history, history_back, location_history,
-    pages_of, push_anchor, push_location, receive_location_history, replace_location,
-    report_location_history, rewrite_location_history, set_anchor_revealer,
-    unfollow_location_history,
+    HistoryFollower, HistoryFollowerId, LocaleFollower, bind_location_locale,
+    follow_location_history, history_back, location_history, location_locale, location_locales,
+    pages_of, push_anchor, push_location, receive_location_history, rename_anchor,
+    replace_location, report_location_history, rewrite_location_history, set_anchor_revealer,
+    set_location_locale, unfollow_location_history,
 };
 pub use location_format::{LocationFormat, location_format, set_location_format};
 pub use location_source::{

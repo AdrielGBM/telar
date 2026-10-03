@@ -11,7 +11,7 @@ use crate::config::RendererBackend;
 pub struct UserPrefs {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub backend: Option<RendererBackend>,
-    /// The app's history when it last moved, root-first, each entry as `LocationFormat::root` writes it. Kept by the desktop and terminal runners, which reopen it when launched without `--location`.
+    /// The app's history when it last moved, root-first, each entry as `LocationFormat::root` writes it, its locale included. Kept by the desktop and terminal runners, which reopen it when launched without `--location`.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub history: Vec<String>,
 }

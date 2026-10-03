@@ -1,4 +1,5 @@
 use super::*;
+use crate::LocationFormat;
 
 fn at(path: &str) -> Location {
     LocationFormat::root().parse(path).unwrap()

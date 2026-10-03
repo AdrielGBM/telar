@@ -249,3 +249,140 @@ fn back_over_an_anchor_leaves_the_page_where_it_is() {
     assert_eq!(*recorder.calls.borrow(), ["adopt /a"]);
     unfollow_location_history(id);
 }
+
+fn in_locales(path: &str) -> Location {
+    LocationFormat::root()
+        .with_locales(["es", "en"])
+        .parse(path)
+        .unwrap()
+}
+
+#[derive(Default)]
+struct Language {
+    chooses: String,
+    adopted: RefCell<Vec<String>>,
+}
+
+impl LocaleFollower for Language {
+    fn choose(&self) -> String {
+        self.chooses.clone()
+    }
+
+    fn adopt(&self, locale: &str) {
+        self.adopted.borrow_mut().push(locale.to_owned());
+    }
+}
+
+fn bind(chooses: &str) -> Rc<Language> {
+    let language = Rc::new(Language {
+        chooses: chooses.to_owned(),
+        ..Language::default()
+    });
+    bind_location_locale(vec!["es".into(), "en".into()], language.clone());
+    language
+}
+
+#[test]
+fn the_address_opened_at_decides_the_locale_over_one_set_before() {
+    let language = bind("es");
+    set_location_locale("es");
+    receive_location_history(vec![in_locales("/en/a")]);
+    assert_eq!(location_locale().as_deref(), Some("en"));
+    assert_eq!(*language.adopted.borrow(), ["en"]);
+    assert!(navigations().is_empty());
+}
+
+#[test]
+fn an_address_naming_no_locale_is_written_in_the_one_chosen() {
+    let language = bind("en");
+    receive_location_history(vec![at("/"), at("/a")]);
+    assert_eq!(*language.adopted.borrow(), ["en"]);
+    assert_eq!(
+        navigations(),
+        [HistoryUpdate {
+            step: HistoryStep::Replace,
+            history: vec![in_locales("/en/"), in_locales("/en/a")],
+        }]
+    );
+}
+
+#[test]
+fn the_follower_never_sees_a_locale() {
+    let _language = bind("es");
+    let recorder = Rc::new(Recorder::default());
+    let id = follow_location_history(recorder.clone());
+    receive_location_history(vec![in_locales("/es/"), in_locales("/es/a#team")]);
+    assert_eq!(*recorder.calls.borrow(), ["adopt / /a"]);
+    report_location_history(vec![at("/"), at("/a"), at("/b")]);
+    assert_eq!(
+        location_history(),
+        [
+            in_locales("/es/"),
+            in_locales("/es/a#team"),
+            in_locales("/es/b")
+        ],
+        "a page the follower adds is written in the locale"
+    );
+    unfollow_location_history(id);
+}
+
+#[test]
+fn a_switch_rewrites_every_entry_in_place() {
+    let language = bind("es");
+    receive_location_history(vec![in_locales("/es/"), in_locales("/es/#contact")]);
+    navigations();
+    set_location_locale("en");
+    assert_eq!(
+        navigations(),
+        [HistoryUpdate {
+            step: HistoryStep::Replace,
+            history: vec![in_locales("/en/"), in_locales("/en/#contact")],
+        }]
+    );
+    set_location_locale("fr");
+    assert!(
+        navigations().is_empty(),
+        "a locale the address does not carry"
+    );
+    assert_eq!(
+        *language.adopted.borrow(),
+        ["es"],
+        "the app asked for the switch, so it is not told of it"
+    );
+}
+
+#[test]
+fn an_app_that_binds_no_locale_keeps_its_first_segments() {
+    receive_location_history(vec![at("/es/a")]);
+    assert_eq!(location_history(), [Location::from_segments(["es", "a"])]);
+    assert_eq!(location_locale(), None);
+    set_location_locale("en");
+    assert!(navigations().is_empty());
+}
+
+#[test]
+fn a_locale_bound_after_the_history_opened_settles_on_what_it_shows() {
+    receive_location_history(vec![at("/a")]);
+    navigations();
+    let language = bind("en");
+    assert_eq!(*language.adopted.borrow(), ["en"]);
+    assert_eq!(location_history(), [in_locales("/en/a")]);
+    assert_eq!(navigations().len(), 1);
+}
+
+#[test]
+fn a_renamed_anchor_is_renamed_in_every_entry_naming_it() {
+    receive_location_history(vec![at("/a#simulacion"), at("/b")]);
+    navigations();
+    rename_anchor("simulacion", "simulation");
+    assert_eq!(location_history(), [at("/a#simulation"), at("/b")]);
+    assert_eq!(
+        navigations(),
+        [HistoryUpdate {
+            step: HistoryStep::Replace,
+            history: vec![at("/a#simulation"), at("/b")],
+        }]
+    );
+    rename_anchor("elsewhere", "anywhere");
+    assert!(navigations().is_empty());
+}

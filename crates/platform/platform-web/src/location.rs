@@ -31,9 +31,12 @@ struct Shared {
 }
 
 impl WebLocation {
-    /// Addresses written in `format`; `None` takes the base from the page's `<base href>`, and `/` where it has none.
+    /// Addresses written in `format`; `None` takes the base from the page's `<base href>`, and `/` where it has none. A format that names no locales reads the ones the app's address carries ([`platform_core::location_locales`]), so `/es/` is a locale rather than a page.
     pub fn new(format: Option<LocationFormat>) -> Self {
-        let format = format.unwrap_or_else(base_from_document);
+        let mut format = format.unwrap_or_else(base_from_document);
+        if format.locales().is_empty() {
+            format = format.with_locales(platform_core::location_locales());
+        }
         platform_core::set_location_format(format.clone());
         let shared = Rc::new(Shared {
             format,

@@ -139,3 +139,59 @@ fn a_broken_escape_is_kept_as_written() {
         Some(Location::from_segments(["100%", "%zz"]))
     );
 }
+
+#[test]
+fn a_locale_is_the_first_segment_and_its_root_a_directory() {
+    let format = LocationFormat::new("/portfolio");
+    assert_eq!(
+        format.format(&Location::root().with_locale("es")),
+        "/portfolio/es/"
+    );
+    assert_eq!(
+        format.format(
+            &Location::from_segments(["projects"])
+                .with_locale("en")
+                .with_fragment("telar")
+        ),
+        "/portfolio/en/projects#telar"
+    );
+    assert_eq!(
+        format
+            .with_trailing_slash(true)
+            .format(&Location::from_segments(["projects"]).with_locale("en")),
+        "/portfolio/en/projects/"
+    );
+}
+
+#[test]
+fn a_locale_is_read_back_only_where_the_format_ships_it() {
+    let format = LocationFormat::new("/portfolio").with_locales(["es", "en"]);
+    for written in ["/portfolio/es/", "/portfolio/es", "/portfolio/ES/"] {
+        assert_eq!(
+            format.parse(written),
+            Some(Location::root().with_locale("es")),
+            "{written:?}"
+        );
+    }
+    let deep = Location::from_segments(["projects"])
+        .with_locale("en")
+        .with_param("tag", "rust")
+        .with_fragment("telar");
+    assert_eq!(format.parse(&format.format(&deep)), Some(deep));
+    assert_eq!(
+        format.parse("/portfolio/fr/projects"),
+        Some(Location::from_segments(["fr", "projects"])),
+        "a locale the app does not ship is a segment like any other"
+    );
+    assert_eq!(
+        LocationFormat::new("/portfolio").parse("/portfolio/es/projects"),
+        Some(Location::from_segments(["es", "projects"])),
+        "an app whose addresses carry no locale reads none"
+    );
+    assert_eq!(
+        LocationFormat::root()
+            .with_locales(["es", "en"])
+            .parse("myapp://open/en/projects"),
+        Some(Location::from_segments(["projects"]).with_locale("en"))
+    );
+}

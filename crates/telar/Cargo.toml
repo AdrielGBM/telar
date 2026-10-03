@@ -51,6 +51,14 @@ name = "location_flow"
 path = "src/location_flow_test.rs"
 
 [[test]]
+name = "location_locale_flow"
+path = "src/location_locale_flow_test.rs"
+
+[[test]]
+name = "location_locale_web"
+path = "src/location_locale_web_test.rs"
+
+[[test]]
 name = "local_tree_repaints"
 path = "src/local_tree_repaints_test.rs"
 
@@ -401,3 +409,9 @@ renderer-web = { workspace = true, optional = true }
 
 wasm-bindgen-futures = { workspace = true }
 web-sys = { workspace = true, features = ["HtmlElement"] }
+
+[target.'cfg(target_arch = "wasm32")'.dev-dependencies]
+js-sys.workspace = true
+wasm-bindgen.workspace = true
+wasm-bindgen-test = "=0.3.77"
+web-sys = { workspace = true, features = ["History", "Location", "Window"] }

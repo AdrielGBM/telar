@@ -140,7 +140,7 @@ impl<R: Route + 'static> Navigator<R> {
     /// One navigator follows the address at a time; a later call replaces an earlier one. The binding lasts as long as the reactive owner it was made under.
     pub fn follow_location(self) -> Self {
         let follower = Rc::new(Follower { nav: self });
-        follower.adopt(&platform_core::location_history());
+        follower.adopt(&platform_core::pages_of(&platform_core::location_history()));
         let id = platform_core::follow_location_history(follower);
         let nav = self;
         reactive_core::effect(move || platform_core::report_location_history(nav.locations()));

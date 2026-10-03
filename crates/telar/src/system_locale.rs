@@ -13,7 +13,7 @@ thread_local! {
 ///
 /// Call once at app start, in place of an initial [`set_locale`](crate::set_locale). An empty list is not a vote for `fallback`: it leaves an active locale alone, and selects `fallback` only when none is set yet. A manual [`set_locale`](crate::set_locale) still wins until the list changes.
 ///
-/// An application whose locale is part of where the user is (a URL prefix, a saved setting) owns that choice instead, and calls [`negotiate_locale`](crate::negotiate_locale) itself only when nothing chose one yet.
+/// An application whose locale is part of where the user is (`/es/`, `/en/`) calls [`follow_location_locale`](crate::follow_location_locale) instead, which negotiates only when nothing chose a locale yet.
 pub fn follow_system_locale(
     available: impl IntoIterator<Item = impl Into<String>>,
     fallback: impl Into<String>,

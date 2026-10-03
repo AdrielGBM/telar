@@ -5,6 +5,9 @@ use theme_core::SchemePreference;
 /// The key the colour scheme a person chose is kept under.
 pub const SCHEME_KEY: &str = "telar.scheme";
 
+/// The key the locale a person last read the app in is kept under, by an app whose address carries it (see [`follow_location_locale`](crate::follow_location_locale)).
+pub const LOCALE_KEY: &str = "telar.locale";
+
 /// Installs the target's preference store for `app_name` and brings back what Telar keeps in it. Every runner calls it once, where it installs the app's paths.
 pub(crate) fn install(app_name: &str) {
     #[cfg(all(feature = "web-dom", target_arch = "wasm32"))]

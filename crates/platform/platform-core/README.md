@@ -13,6 +13,12 @@ environment into ordered BCP 47 tags. See
 [docs/system-preferences.md](https://github.com/AdrielGBM/telar/blob/main/docs/system-preferences.md) for
 where each target reads them.
 
+It holds the app's address: `Location`, its text form `LocationFormat`, the per-target `LocationSource`, and
+the history store a navigator follows. A location can carry the locale the app is shown in as its first
+segment (`/es/projects`); `bind_location_locale` is the seam the facade's `follow_location_locale` keeps the
+active locale in step through. See
+[docs/location.md](https://github.com/AdrielGBM/telar/blob/main/docs/location.md#the-locale-in-the-location).
+
 It also defines how a key is matched against a focused box's declared `ConsumedKeys`: `key_member` and
 `consumes`, plus the two attributes a document backend writes for its platform to read. It also defines
 `Event::BoxFocused`, sent when the surface moved focus to a box on its own. See

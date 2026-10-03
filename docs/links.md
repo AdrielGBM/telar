@@ -20,11 +20,11 @@ name a scheme (`https:`, `mailto:`…): a literal without one is a build error o
 
 | Item | What it is |
 | --- | --- |
-| `Destination` | `Route(Location)`, `Anchor(name)` or `External(Uri)`. Lives in `semantics-core`, beside `Location`, because a renderer and a platform both read it. |
+| `Destination` | `Route(Location)`, `Anchor(name)`, `Locale(tag)` (the place being shown, in another language) or `External(Uri)`. Lives in `semantics-core`, beside `Location`, because a renderer and a platform both read it. |
 | `Semantics::link` | The destination a box's element carries. `Semantics::linking_to` sets it and the `link` role together. |
 | `IntoDestination` | What `to` accepts: a `Destination`, a `Location`, or any `Route`. `Route` now lives in `platform-core` (re-exported by `navigate-core` as before) so this works without the `navigate` feature. |
-| `anchor`, `external` | The two constructors `.rsx` names. |
-| `address_of` | A destination as the text a target writes where an address goes: a route in the app's `location_format()`, an anchor as the current location with that fragment, an external URI as itself. |
+| `anchor`, `in_locale`, `external` | The constructors `.rsx` names. `in_locale("en")` is a language switch that keeps the page and the anchor; see [docs/location.md](location.md#the-locale-in-the-location). |
+| `address_of` | A destination as the text a target writes where an address goes: a route in the app's `location_format()` and in the locale its address carries (`/en/projects`), an anchor as the current location with that fragment, an external URI as itself. |
 | `follow`, `follow_beside`, `follow_pressed` | Going there from app code: push the route, reveal the anchor, open the URI. `follow_pressed` reads Ctrl, Cmd or Shift as a request for a view beside this one. |
 | `open_uri`, `UriOpener`, `set_uri_opener` | The `services-core` service that hands a URI to the system. Every runner installs its platform's; headless installs none, and a test installs its own. |
 | `anchor:`, `PageAnchor::page_anchor` | Names a box as a place on the page; see [Anchors](#anchors). |
@@ -46,7 +46,7 @@ box to:anchor("contact")      // a link to it
 ```
 
 `anchor:` works on any built-in tag and takes a literal, `t!(…)` or an expression reading `$state`, so a name
-can follow the locale (`#simulacion`, `#simulation`). In Rust it is `.page_anchor(|| "contact")`, which every
+can follow the locale (`#simulacion`, `#simulation`). When it does, the history follows the rename: an entry naming the old name names the new one, so a language switch keeps the reader's anchor in the address. In Rust it is `.page_anchor(|| "contact")`, which every
 widget with a layout node takes through `PageAnchor`. A name belongs to one box: a second box registered under
 it takes it over and a warning names it.
 

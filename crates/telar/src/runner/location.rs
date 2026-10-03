@@ -73,7 +73,7 @@ impl LocationBinding {
 }
 
 fn restore(prefs: &UserPrefs) -> Vec<Location> {
-    let format = LocationFormat::root();
+    let format = LocationFormat::root().with_locales(platform_core::location_locales());
     prefs
         .history
         .iter()

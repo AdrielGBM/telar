@@ -55,3 +55,17 @@ fn fragment_only_location_is_not_root() {
     assert!(!loc.is_root());
     assert!(loc.segments().is_empty());
 }
+
+#[test]
+fn a_locale_is_kept_apart_from_the_path() {
+    let loc = Location::from_segments(["projects"]).with_locale("es");
+    assert_eq!(loc.locale(), Some("es"));
+    assert_eq!(loc.segments(), &["projects".to_string()]);
+    assert_ne!(loc, Location::from_segments(["projects"]));
+    assert_eq!(loc.without_locale(), Location::from_segments(["projects"]));
+}
+
+#[test]
+fn the_root_in_a_locale_is_still_the_root() {
+    assert!(Location::root().with_locale("en").is_root());
+}

@@ -26,6 +26,7 @@ not a broken one. An application or an embedding can install its own with `set_p
 | Key | What |
 | --- | --- |
 | `telar.scheme` | The `SchemePreference` a person chose (`system`, `light`, `dark`), restored when the app starts and kept as it changes. See [docs/system-preferences.md](system-preferences.md#choosing-a-scheme). |
+| `telar.locale` | The locale a person last read the app in, kept by an app whose address carries it (`follow_location_locale`). Opens an address that names no locale in it. See [docs/location.md](location.md#the-locale-in-the-location). |
 
 Under `cargo telar dev` the library that reloads carries the scheme across each reload, and keeps preferences for
 the session in memory.

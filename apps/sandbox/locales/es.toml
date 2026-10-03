@@ -6,3 +6,6 @@ overview = "Resumen"
 [items]
 one = "{count} elemento"
 other = "{count} elementos"
+
+[locale_address]
+anchor = "idiomas"

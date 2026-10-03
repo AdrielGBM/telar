@@ -1,26 +1,32 @@
 //! [`Location`]: a platform-neutral address for a piece of navigation state — not a URL.
 
-/// Where a route points, in terms every Telar target understands: a path of segments, an optional fragment
-/// naming an in-page anchor (see `anchor:` in `ui-core`), and query-style parameters.
+/// Where a route points, in terms every Telar target understands: a path of segments, an optional locale naming
+/// the language the place is shown in, an optional fragment naming an in-page anchor (see `anchor:` in
+/// `ui-core`), and query-style parameters.
 ///
 /// This is deliberately not a URL. There is no scheme, host, or percent-encoding here — a `Location` is a
 /// value a desktop deep link, an Android intent, a TUI argument, or a web `history.pushState` path can each
 /// carry in their own way. Spelling one as text is `platform_core::LocationFormat`'s job, never
 /// this type's.
+///
+/// The locale is not part of a route: a route writes its location without one, and the app's address adds the
+/// locale the app is shown in (see `follow_location_locale` in `telar`). An app whose addresses carry no locale
+/// never sees one here.
 #[derive(Clone, Debug, Default, PartialEq, Eq, Hash)]
 pub struct Location {
     segments: Vec<String>,
+    locale: Option<String>,
     fragment: Option<String>,
     params: Vec<(String, String)>,
 }
 
 impl Location {
-    /// The location with no segments, fragment, or params — the app's root.
+    /// The location with no segments, locale, fragment, or params — the app's root.
     pub fn root() -> Self {
         Self::default()
     }
 
-    /// Builds a location from a path's segments, in order, with no fragment or params.
+    /// Builds a location from a path's segments, in order, with no locale, fragment or params.
     pub fn from_segments<I, S>(segments: I) -> Self
     where
         I: IntoIterator<Item = S>,
@@ -28,6 +34,7 @@ impl Location {
     {
         Self {
             segments: segments.into_iter().map(Into::into).collect(),
+            locale: None,
             fragment: None,
             params: Vec::new(),
         }
@@ -36,6 +43,18 @@ impl Location {
     /// Appends a path segment, builder-style.
     pub fn segment(mut self, segment: impl Into<String>) -> Self {
         self.segments.push(segment.into());
+        self
+    }
+
+    /// Names the locale (a BCP-47 tag such as `"es"`) the place is shown in, builder-style. Replaces any locale already set.
+    pub fn with_locale(mut self, locale: impl Into<String>) -> Self {
+        self.locale = Some(locale.into());
+        self
+    }
+
+    /// The same place in no locale in particular, which is how a route reads and writes it.
+    pub fn without_locale(mut self) -> Self {
+        self.locale = None;
         self
     }
 
@@ -63,6 +82,11 @@ impl Location {
         &self.segments
     }
 
+    /// The locale this location is shown in, if it names one.
+    pub fn locale(&self) -> Option<&str> {
+        self.locale.as_deref()
+    }
+
     /// The in-page anchor this location targets, if any.
     pub fn fragment(&self) -> Option<&str> {
         self.fragment.as_deref()
@@ -81,7 +105,7 @@ impl Location {
             .map(|(_, v)| v.as_str())
     }
 
-    /// Whether this is the root location: no segments, fragment, or params.
+    /// Whether this is the root location: no segments, fragment, or params, in whichever locale.
     pub fn is_root(&self) -> bool {
         self.segments.is_empty() && self.fragment.is_none() && self.params.is_empty()
     }

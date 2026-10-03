@@ -8,12 +8,12 @@ use layout_core::NodeId;
 
 use crate::context::track_layout;
 use crate::layout_item::LayoutItem;
-use crate::link::{AnchorRegistration, anchor_moved, register_anchor};
+use crate::link::{AnchorRegistration, anchor_moved, anchor_renamed, register_anchor};
 use crate::scroll_viewports::scroll_viewports_of;
 
 /// Names a box as a place on the page, for [`anchor`](platform_core::anchor) links to reach. Every widget with a layout node takes it.
 pub trait PageAnchor: LayoutItem + Sized {
-    /// Makes this box the anchor `name`: a link to it reveals it at the top of every scroll it sits in, and adds an entry to the history the way a same-page link on the web does. Re-read when what `name` reads changes, so a name built from the locale follows it.
+    /// Makes this box the anchor `name`: a link to it reveals it at the top of every scroll it sits in, and adds an entry to the history the way a same-page link on the web does. Re-read when what `name` reads changes, so a name built from the locale follows it, and the history follows the rename: an address naming the anchor by its old name names it by the new one.
     ///
     /// A name belongs to one box. A second box registered under it takes it over, with a warning.
     ///
@@ -28,7 +28,8 @@ pub trait PageAnchor: LayoutItem + Sized {
             let registration = registration.clone();
             reactive_core::effect(move || {
                 let name: Arc<str> = name().into();
-                if current.borrow().as_ref() == Some(&name) {
+                let previous = current.borrow().clone();
+                if previous.as_ref() == Some(&name) {
                     return;
                 }
                 registration.borrow_mut().take();
@@ -36,7 +37,10 @@ pub trait PageAnchor: LayoutItem + Sized {
                 next.anchor = Some(name.clone());
                 annotation.set(next);
                 *registration.borrow_mut() = Some(register_anchor(&name, move || reveal(node)));
-                *current.borrow_mut() = Some(name);
+                *current.borrow_mut() = Some(name.clone());
+                if let Some(previous) = previous {
+                    anchor_renamed(&previous, &name);
+                }
             });
         }
         reactive_core::effect(move || {

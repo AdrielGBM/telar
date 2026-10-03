@@ -90,6 +90,12 @@ const SECTIONS: &[SectionDef] = sections![
         "navigation.rsx"
     ),
     ("Links", crate::features::links::links, crate::features::links::LinksProps, "links.rsx"),
+    (
+        "Locale in the address",
+        crate::features::locale_address::locale_address,
+        crate::features::locale_address::LocaleAddressProps,
+        "locale_address.rsx"
+    ),
     ("Badges & chips", crate::features::pills::pills, crate::features::pills::PillsProps, "pills.rsx"),
     ("Menus & select", crate::features::menus::menus, crate::features::menus::MenusProps, "menus.rsx"),
     ("Dialogs & overlays", crate::features::dialogs::dialogs, crate::features::dialogs::DialogsProps, "dialogs.rsx"),

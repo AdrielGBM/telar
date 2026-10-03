@@ -85,3 +85,20 @@ fn an_anchor_name_follows_what_it_reads_and_reaches_the_element() {
     assert!(crate::link::has_anchor("simulation"));
     drop(target);
 }
+
+#[test]
+fn a_renamed_anchor_takes_the_address_and_the_arrival_with_it() {
+    reset_layout_runtime();
+    receive_location_history(vec![at("/"), at("/#simulacion")]);
+    let name = signal(String::from("simulacion"));
+    let page = page_with(move || name.get());
+    name.set("simulation".into());
+    assert_eq!(location_history(), [at("/"), at("/#simulation")]);
+    page.viewport().scroll_to(0.0, 0.0);
+    crate::link::anchor_moved("simulation");
+    assert_eq!(
+        offset(&page),
+        (0.0, 1000.0),
+        "the arrival keeps pulling the page toward the anchor under its new name"
+    );
+}

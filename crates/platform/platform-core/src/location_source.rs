@@ -2,7 +2,7 @@
 
 use std::sync::{Arc, Mutex};
 
-use crate::{Location, LocationFormat};
+use crate::Location;
 
 /// One move of a history, as a platform history can take it.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -80,7 +80,7 @@ pub trait LocationSource {
 
 /// The location a process was started at, from a `--location <reference>` or `--location=<reference>` argument: the deep link of a desktop or terminal build.
 ///
-/// A dedicated flag rather than the first free argument, so an application that takes file paths on its command line never has one read as an address. The reference is anything [`LocationFormat::parse`] reads, a URI included. A command line is read once, so the moves the app makes afterwards go nowhere.
+/// A dedicated flag rather than the first free argument, so an application that takes file paths on its command line never has one read as an address. The reference is anything [`LocationFormat::parse`](crate::LocationFormat::parse) reads, a URI included, in the app's [`location_format`](crate::location_format), so a locale the app declared is read as one. A command line is read once, so the moves the app makes afterwards go nowhere.
 #[derive(Clone, Debug, Default)]
 pub struct ArgumentLocation {
     location: Option<Location>,
@@ -115,7 +115,7 @@ impl ArgumentLocation {
             }
         }
         Self {
-            location: reference.and_then(|reference| LocationFormat::root().parse(&reference)),
+            location: reference.and_then(|reference| crate::location_format().parse(&reference)),
         }
     }
 

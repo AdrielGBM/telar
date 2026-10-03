@@ -20,7 +20,7 @@ thread_local! {
     static REVEALER_INSTALLED: Cell<bool> = const { Cell::new(false) };
 }
 
-/// Goes where `destination` points, in place: pushes the route, reveals the anchor or opens the URI. `false` when nothing went anywhere — a route with no page, an anchor no box answers to, a URI nothing opened.
+/// Goes where `destination` points, in place: pushes the route, reveals the anchor, switches the locale or opens the URI. `false` when nothing went anywhere — a route with no page, an anchor no box answers to, a locale the address does not carry, a URI nothing opened.
 pub fn follow(destination: &Destination) -> bool {
     match destination {
         Destination::Route(location) => platform_core::push_location(location.clone()),
@@ -31,14 +31,24 @@ pub fn follow(destination: &Destination) -> bool {
             platform_core::push_anchor(name);
             true
         }
+        Destination::Locale(locale) => {
+            let carried = platform_core::location_locales()
+                .iter()
+                .any(|carried| carried.eq_ignore_ascii_case(locale));
+            if !carried {
+                return false;
+            }
+            let shown = platform_core::location_history().pop().unwrap_or_default();
+            platform_core::push_location(shown.with_locale(locale.as_ref()))
+        }
         Destination::External(uri) => services_core::open_uri(uri.as_str()),
     }
 }
 
 /// Goes where `destination` points in a view beside this one where the target has one — a new browser tab for a route — and in place where it does not.
 pub fn follow_beside(destination: &Destination) -> bool {
-    if let Destination::Route(location) = destination
-        && services_core::open_beside(&platform_core::location_format().format(location))
+    if matches!(destination, Destination::Route(_))
+        && services_core::open_beside(&platform_core::address_of(destination))
     {
         return true;
     }
@@ -102,6 +112,17 @@ pub(crate) fn anchor_moved(name: &str) {
     if arriving {
         reveal_anchor(name);
     }
+}
+
+/// The anchor `from` took the name `to`: an arrival still pulling the page toward it keeps doing so, and the history names it by its new name.
+pub(crate) fn anchor_renamed(from: &str, to: &str) {
+    PENDING.with(|pending| {
+        let mut pending = pending.borrow_mut();
+        if pending.as_deref() == Some(from) {
+            *pending = Some(to.into());
+        }
+    });
+    platform_core::rename_anchor(from, to);
 }
 
 /// The reader pressed, scrolled or typed: wherever the page is now is theirs, and an anchor still being arrived at stops pulling it back.

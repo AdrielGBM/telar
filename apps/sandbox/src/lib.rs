@@ -8,6 +8,7 @@ telar::app!(
         // Open following the OS light/dark preference (modern for light, midnight for dark); the sidebar buttons still override manually until the next OS change.
         telar::follow_system(core::theme::DEFAULT_MODE, "midnight");
         telar::follow_locale_direction();
+        telar::follow_location_locale(["en", "es", "ar"], "en");
     },
     app_config(),
     core::app::SandboxRoot

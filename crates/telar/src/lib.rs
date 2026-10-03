@@ -38,6 +38,8 @@ pub mod hot_state;
 #[cfg(feature = "runtime")]
 mod location;
 #[cfg(feature = "runtime")]
+mod location_locale;
+#[cfg(feature = "runtime")]
 pub mod prefs;
 #[cfg(feature = "headless")]
 mod raster;
@@ -208,13 +210,18 @@ pub use platform_core::{ColorScheme, SystemPreferences, system_locales_from_env}
 #[cfg(feature = "runtime")]
 pub use location::navigate_back;
 #[cfg(feature = "runtime")]
+pub use location_locale::follow_location_locale;
+#[cfg(feature = "runtime")]
 pub use platform_core::{
     ArgumentLocation, FixedLocation, HistorySink, HistoryStep, HistoryUpdate, Location,
-    LocationFormat, LocationSource, history_back, location_format, location_history, pages_of,
-    push_anchor, push_location, receive_location_history, replace_location,
+    LocationFormat, LocationSource, history_back, location_format, location_history,
+    location_locale, location_locales, pages_of, push_anchor, push_location,
+    receive_location_history, replace_location,
 };
 #[cfg(feature = "runtime")]
-pub use platform_core::{Destination, IntoDestination, Route, Uri, address_of, anchor, external};
+pub use platform_core::{
+    Destination, IntoDestination, Route, Uri, address_of, anchor, external, in_locale,
+};
 #[cfg(feature = "runtime")]
 pub use preferences_core::{
     set_system_preferences, system_preferences, use_color_scheme, use_high_contrast,

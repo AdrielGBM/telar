@@ -1,4 +1,4 @@
-//! [`Destination`]: where activating a box takes the person — a place in the app, a place on the page, or something outside the app.
+//! [`Destination`]: where activating a box takes the person — a place in the app, a place on the page, the same place in another language, or something outside the app.
 
 use std::fmt;
 use std::sync::Arc;
@@ -14,6 +14,8 @@ pub enum Destination {
     Route(Location),
     /// A named anchor on the page being shown, revealed where it is.
     Anchor(Arc<str>),
+    /// The place being shown, in the locale this names: a language switch that keeps the page and the anchor.
+    Locale(Arc<str>),
     /// Something outside the app, opened with whatever the system opens it with.
     External(Uri),
 }
@@ -21,6 +23,10 @@ pub enum Destination {
 impl Destination {
     pub fn anchor(name: impl Into<Arc<str>>) -> Self {
         Self::Anchor(name.into())
+    }
+
+    pub fn locale(locale: impl Into<Arc<str>>) -> Self {
+        Self::Locale(locale.into())
     }
 
     /// An external destination at `uri`, or `None` when `uri` names no scheme (`https:`, `mailto:`…) — a runtime

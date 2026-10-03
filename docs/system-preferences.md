@@ -65,6 +65,7 @@ facade to do so.
 | Colour scheme | `follow_system(light, dark)` (theme) | Selects `light` or `dark` as the resolved scheme changes: the system's, or the person's choice (see [Choosing a scheme](#choosing-a-scheme)). Under `System`, an unknown scheme leaves an active mode alone and selects `light` only if no mode is active yet. A manual `set_mode` of another mode wins until the next change. |
 | Reduced motion | the motion ticker, by default | Every animation jumps to its end; scroll momentum keeps moving. `motion::follow_reduced_motion(false)` opts out. See [animations.md](animations.md#d5-one-time-scale-and-reduced-motion-zeroes-it). |
 | Locales | `follow_system_locale(available, fallback)` | Sets the active locale to `negotiate_locale(&use_preferred_locales(), available, fallback)`, again whenever the list changes. An empty list leaves an active locale alone. |
+| Locales, once | `follow_location_locale(available, base)` | For an app whose address carries its locale: the system's list is negotiated only when the address the app opens at names none and the person never chose one, and is not followed after. See [docs/location.md](location.md#the-locale-in-the-location). |
 | High contrast | nothing built in | An application reads `use_high_contrast()` and picks its own palette. |
 
 Each follower is opt-in except motion: an application calls `follow_system` and `follow_system_locale` once at
@@ -95,9 +96,11 @@ A match comes back spelled as `available` spells it. Order of preference beats q
 `["en-US", "es"]` against `["es", "en-GB"]` picks `en-GB`.
 
 ```rust
-use telar::{follow_system_locale, negotiate_locale, system_preferences};
+use telar::{follow_location_locale, follow_system_locale, negotiate_locale, system_preferences};
 
 follow_system_locale(["es", "en"], "es");
+// or, where the locale is part of the address (`/es/`, `/en/`) and the system only picks the first one:
+follow_location_locale(["es", "en"], "es");
 // or, where the locale is chosen somewhere else and only needs a default:
 let locale = negotiate_locale(&system_preferences().locales, &["es", "en"], "es");
 ```
