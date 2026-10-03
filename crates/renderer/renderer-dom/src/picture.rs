@@ -20,49 +20,13 @@ pub fn show(
 ) {
     let now = Shown {
         picture: Arc::clone(picture),
-        slot: width.max(1.0).ceil() as u32,
+        slot: crate::document::picture_slot(width),
     };
     if shown.as_ref() == Some(&now) {
         return;
     }
-    let source = &picture.source;
-    let set = |name: &str, value: &str| {
-        let _ = node.set_attribute(name, value);
-    };
-    // Before `src`: a browser that sees the address first starts fetching the full-size copy before it has been told there are smaller ones.
-    if source.variants.is_empty() {
-        let _ = node.remove_attribute("srcset");
-        let _ = node.remove_attribute("sizes");
-    } else {
-        set("srcset", &srcset(picture));
-        set("sizes", &format!("{}px", now.slot));
+    for (name, value) in crate::document::picture_attributes(picture, width) {
+        crate::reconcile::set_or_clear(node, name, value.as_deref());
     }
-    set("width", &picture.width.to_string());
-    set("height", &picture.height.to_string());
-    set("decoding", "async");
-    if picture.priority {
-        let _ = node.remove_attribute("loading");
-        set("fetchpriority", "high");
-    } else {
-        set("loading", "lazy");
-        let _ = node.remove_attribute("fetchpriority");
-    }
-    set("src", &platform_core::asset_url(&source.url));
     *shown = Some(now);
-}
-
-/// Every copy with the width it was made at, the full-size one last, which is what lets the browser weigh them against the box and the screen's density.
-pub fn srcset(picture: &Picture) -> String {
-    picture
-        .source
-        .variants
-        .iter()
-        .map(|(width, url)| (*width, url.as_ref()))
-        .chain(std::iter::once((
-            picture.width,
-            picture.source.url.as_ref(),
-        )))
-        .map(|(width, url)| format!("{} {width}w", platform_core::asset_url(url)))
-        .collect::<Vec<_>>()
-        .join(", ")
 }

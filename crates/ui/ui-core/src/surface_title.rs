@@ -130,7 +130,9 @@ pub fn use_surface_title() -> String {
 
 /// Non-reactive read of [`use_surface_title`], for an event handler or a host that asks once — a prerender writing the page's `<title>`.
 pub fn surface_title() -> String {
-    existing().map(|title| title.shown.peek()).unwrap_or_default()
+    existing()
+        .map(|title| title.shown.peek())
+        .unwrap_or_default()
 }
 
 /// Tells the active surface's title what its platform opened it with: `app`, the title its window was configured with, and `showing`, what the platform shows right now. The runner calls this before it builds the surface's tree; a host or a test with no runner calls it to stand in for one.

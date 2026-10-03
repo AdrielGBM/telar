@@ -25,7 +25,7 @@ pub(crate) fn run_web_dev(
     port: u16,
     renderer: Option<WebRenderer>,
 ) -> ! {
-    let dist = match build_web_bundle(cargo_args.clone(), config.clone(), false, renderer) {
+    let dist = match build_web_bundle(cargo_args.clone(), config.clone(), false, renderer, false) {
         Ok(dist) => dist,
         Err(e) => {
             eprintln!("[cargo-telar] {e}");
@@ -99,7 +99,7 @@ fn watch_and_rebuild(
         while rx.recv_timeout(SETTLE).is_ok() {}
 
         eprintln!("[cargo-telar] Rebuilding...");
-        match build_web_bundle(cargo_args.clone(), config.clone(), false, renderer) {
+        match build_web_bundle(cargo_args.clone(), config.clone(), false, renderer, false) {
             Ok(_) => {
                 inject_reload_poll(dist);
                 BUILD.fetch_add(1, Ordering::Relaxed);

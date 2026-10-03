@@ -33,7 +33,7 @@ pub mod files;
     not(target_arch = "wasm32")
 ))]
 pub mod hot;
-#[cfg(feature = "dev")]
+#[cfg(any(feature = "dev", feature = "prerender"))]
 pub mod hot_state;
 #[cfg(feature = "runtime")]
 mod location;
@@ -215,7 +215,7 @@ pub use location_locale::follow_location_locale;
 pub use platform_core::{
     ArgumentLocation, FixedLocation, HistorySink, HistoryStep, HistoryUpdate, Location,
     LocationFormat, LocationSource, history_back, location_format, location_history,
-    location_locale, location_locales, pages_of, push_anchor, push_location,
+    location_locale, location_locales, location_pages, pages_of, push_anchor, push_location,
     receive_location_history, replace_location,
 };
 #[cfg(feature = "runtime")]
@@ -253,13 +253,13 @@ pub use ui_core::{
 };
 #[cfg(feature = "runtime")]
 pub use ui_core::{
-    TitleParts, compose_title, open_surface_title, set_page_title, set_title_format, surface_title,
-    use_surface_title,
+    Breakpoints, breakpoint, set_safe_area_insets, set_surface_size, surface_size,
+    use_safe_area_insets, use_surface_height, use_surface_size, use_surface_width,
 };
 #[cfg(feature = "runtime")]
 pub use ui_core::{
-    Breakpoints, breakpoint, set_safe_area_insets, set_surface_size, surface_size,
-    use_safe_area_insets, use_surface_height, use_surface_size, use_surface_width,
+    TitleParts, compose_title, open_surface_title, set_page_title, set_title_format, surface_title,
+    use_surface_title,
 };
 // The seam and nothing behind it: `telar-dynamic` carries the decoders and transports that plug in here, and an application's own plug in exactly the same way.
 #[cfg(feature = "runtime")]
@@ -347,11 +347,11 @@ pub use preview::run_preview_png;
 #[cfg(feature = "headless")]
 pub use raster::rasterize;
 
-#[cfg(feature = "dev")]
+#[cfg(any(feature = "dev", feature = "prerender"))]
 pub use hot_state::{hot_restore_json, hot_signal, hot_snapshot_json, probe};
 
-/// Without `dev` there is no dylib swap to survive, so the key is inert and this degrades to a plain signal. The bounds match the `dev` build's so a type that compiles here cannot fail once hot-reload is on — letting hand-written app state (a navigation stack, an active locale) be declared once instead of behind a `cfg`.
-#[cfg(all(feature = "runtime", not(feature = "dev")))]
+/// Without `dev` there is no dylib swap to survive, and without `prerender` no page to carry it in, so the key is inert and this degrades to a plain signal. The bounds match the keyed build's so a type that compiles here cannot fail once either is on — letting hand-written app state (a navigation stack, an active locale) be declared once instead of behind a `cfg`.
+#[cfg(all(feature = "runtime", not(any(feature = "dev", feature = "prerender"))))]
 pub fn hot_signal<T>(key: &str, init: T) -> reactive_core::RwSignal<T>
 where
     T: Clone + serde::Serialize + serde::de::DeserializeOwned + 'static,
@@ -363,6 +363,8 @@ where
 pub use platform_android::AndroidApp;
 #[cfg(all(feature = "runtime", not(target_os = "android")))]
 pub use runner::build_surface_handler;
+#[cfg(all(feature = "prerender", not(target_arch = "wasm32")))]
+pub use runner::prerender_page;
 #[cfg(all(feature = "android-bare", target_os = "android"))]
 pub use runner::run_android_app_with_name;
 #[cfg(all(

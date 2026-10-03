@@ -48,6 +48,10 @@ location](#the-locale-in-the-location).
 
 The current route's `Route::title` also names the page in the surface's title, `Credits — Portfolio`, in the active locale; see [docs/surface-title.md](surface-title.md).
 
+The pages a route type lists in `Route::pages` are the app's, read back with `location_pages()` while a
+navigator built on it follows the address: what a prerender writes one page for, per locale (see
+[docs/prerender.md](prerender.md)).
+
 If the platform names a location the route type does not recognize, that entry is dropped. The platform's
 current entry is then **rewritten** to what the stack shows, never stepped back, so the entries the user came
 from are kept. Only one navigator follows the location at a time, and the binding ends with the reactive

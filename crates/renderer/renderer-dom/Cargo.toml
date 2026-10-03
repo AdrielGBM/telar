@@ -72,5 +72,9 @@ name = "picture"
 path = "src/picture_test.rs"
 
 [[test]]
+name = "prerender_parity"
+path = "src/prerender_parity_test.rs"
+
+[[test]]
 name = "audit"
 path = "src/audit_test.rs"

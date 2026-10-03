@@ -33,6 +33,16 @@ pub trait Route: Clone {
     fn title(&self) -> Option<String> {
         None
     }
+
+    /// Every page of this route type that stands on an address of its own, root first: what a tool that visits each page reads while a navigator following the app's address is built on it — a prerender writing one page per location and locale (see `docs/prerender.md`), a sitemap.
+    ///
+    /// Leave out a route that needs something only the running app has, such as a search result or a record fetched at run time: it is still opened by its address, just not written ahead. Empty by default, which leaves the app's root as its only page.
+    fn pages() -> Vec<Self>
+    where
+        Self: Sized,
+    {
+        Vec::new()
+    }
 }
 
 #[cfg(test)]

@@ -20,10 +20,16 @@ fn parts<'a>(app: &'a str, page: Option<&'a str>) -> TitleParts<'a> {
 
 #[test]
 fn the_default_rule_puts_the_page_before_the_app() {
-    assert_eq!(compose_title(&parts("Portfolio", Some("Credits"))), "Credits — Portfolio");
+    assert_eq!(
+        compose_title(&parts("Portfolio", Some("Credits"))),
+        "Credits — Portfolio"
+    );
     assert_eq!(compose_title(&parts("Portfolio", None)), "Portfolio");
     assert_eq!(compose_title(&parts("", Some("Credits"))), "Credits");
-    assert_eq!(compose_title(&parts("Portfolio", Some("Portfolio"))), "Portfolio");
+    assert_eq!(
+        compose_title(&parts("Portfolio", Some("Portfolio"))),
+        "Portfolio"
+    );
 }
 
 #[test]
@@ -73,7 +79,11 @@ fn a_page_title_derived_from_a_signal_follows_it() {
     open_surface_title("Portfolio", "Portfolio");
     let locale = signal("es");
     effect(move || {
-        let page = if locale.get() == "es" { "Créditos" } else { "Credits" };
+        let page = if locale.get() == "es" {
+            "Créditos"
+        } else {
+            "Credits"
+        };
         set_page_title(Some(page.to_owned()));
     });
     assert_eq!(surface_title(), "Créditos — Portfolio");

@@ -179,6 +179,7 @@ fn the_web_table_can_move_the_template_and_the_public_directory() {
     let web = WebSection {
         template: Some("site/page.html".to_string()),
         public: Some("site/static".to_string()),
+        ..WebSection::default()
     };
     assemble(&out, &package, &web, &[], "demo", None, "en").unwrap();
     assert!(
@@ -196,6 +197,7 @@ fn a_named_template_or_public_directory_that_is_not_there_is_an_error() {
     let web = WebSection {
         template: Some("site/page.html".to_string()),
         public: None,
+        ..WebSection::default()
     };
     let error = assemble(&out, &package, &web, &[], "demo", None, "en").unwrap_err();
     assert!(error.contains("site/page.html"), "{error}");
@@ -205,6 +207,7 @@ fn a_named_template_or_public_directory_that_is_not_there_is_an_error() {
     let web = WebSection {
         template: None,
         public: Some("static".to_string()),
+        ..WebSection::default()
     };
     let error = assemble(&out, &package, &web, &[], "demo", None, "en").unwrap_err();
     assert!(error.contains("[telar.web] public"), "{error}");

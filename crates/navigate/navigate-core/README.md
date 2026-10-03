@@ -12,6 +12,10 @@ A navigator that follows the app's address also names the page: the current rout
 active locale, becomes the page's part of the surface's title. See
 [docs/surface-title.md](https://github.com/AdrielGBM/telar/blob/main/docs/surface-title.md).
 
+It also declares the app's pages: the ones its route type lists in `Route::pages`, which a tool that visits
+every page reads through `platform_core::location_pages` — `cargo telar build --prerender` writes one per
+location and locale. See [docs/prerender.md](https://github.com/AdrielGBM/telar/blob/main/docs/prerender.md).
+
 Part of [Telar](https://github.com/AdrielGBM/telar), a modular Rust UI framework with its own template
 language, reactive signals and a self-contained renderer.
 

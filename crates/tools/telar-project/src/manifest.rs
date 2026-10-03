@@ -85,6 +85,9 @@ pub struct WebSection {
     pub template: Option<String>,
     /// The directory copied verbatim into the output, joined onto the package root. Default `"web/public"`.
     pub public: Option<String>,
+    /// What `cargo telar build --target web --prerender` builds each page under.
+    #[serde(default)]
+    pub prerender: PrerenderSection,
 }
 
 impl WebSection {
@@ -107,6 +110,59 @@ impl WebSection {
 
     fn resolve(package_root: &Path, named: Option<&str>, default: &str) -> (PathBuf, bool) {
         (package_root.join(named.unwrap_or(default)), named.is_some())
+    }
+}
+
+/// `[telar.web.prerender]`: the reader a page written ahead of time is written for, before anybody has asked the browser. Each value left out is one the page is built not knowing, as a browser that has not answered yet would report it.
+#[derive(Deserialize, Debug, Clone, Default, PartialEq)]
+#[serde(deny_unknown_fields)]
+pub struct PrerenderSection {
+    /// The surface width in CSS pixels. Default 1280.
+    pub width: Option<u32>,
+    /// The surface height in CSS pixels. Default 800.
+    pub height: Option<u32>,
+    /// `"light"` or `"dark"`.
+    pub color_scheme: Option<String>,
+    pub reduced_motion: Option<bool>,
+    pub high_contrast: Option<bool>,
+    /// The system locales assumed, most preferred first.
+    #[serde(default)]
+    pub locales: Vec<String>,
+}
+
+impl PrerenderSection {
+    /// The surface a page is laid out on.
+    pub fn surface(&self) -> crate::Surface {
+        let fallback = crate::Surface::default();
+        crate::Surface {
+            width: self.width.unwrap_or(fallback.width),
+            height: self.height.unwrap_or(fallback.height),
+        }
+    }
+
+    fn over(self, base: Self) -> Self {
+        Self {
+            width: self.width.or(base.width),
+            height: self.height.or(base.height),
+            color_scheme: self.color_scheme.or(base.color_scheme),
+            reduced_motion: self.reduced_motion.or(base.reduced_motion),
+            high_contrast: self.high_contrast.or(base.high_contrast),
+            locales: if self.locales.is_empty() {
+                base.locales
+            } else {
+                self.locales
+            },
+        }
+    }
+
+    /// The preferences a page is built under.
+    pub fn preferences(&self) -> crate::Preferences {
+        crate::Preferences {
+            color_scheme: self.color_scheme.clone(),
+            reduced_motion: self.reduced_motion,
+            high_contrast: self.high_contrast,
+            locales: self.locales.clone(),
+        }
     }
 }
 
@@ -231,6 +287,7 @@ impl TelarSection {
             web: WebSection {
                 template: self.web.template.or(base.web.template),
                 public: self.web.public.or(base.web.public),
+                prerender: self.web.prerender.over(base.web.prerender),
             },
             // Whole rather than merged: a package naming any face of its own is declaring the set it ships.
             fonts: if self.fonts.is_empty() {

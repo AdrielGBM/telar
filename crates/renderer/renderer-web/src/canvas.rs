@@ -1,5 +1,7 @@
 //! The canvas a frame is presented on.
 
+use std::cell::RefCell;
+use std::rc::Rc;
 use std::sync::atomic::{AtomicU32, Ordering};
 
 use raw_window_handle::{
@@ -18,6 +20,8 @@ static NEXT_HANDLE: AtomicU32 = AtomicU32::new(1);
 pub struct CanvasSurface {
     canvas: web_sys::HtmlCanvasElement,
     handle: u32,
+    /// What the page was served with inside the host, shown until the first frame is drawn over it: a prerendered page, readable before the module has loaded.
+    served: Rc<RefCell<Vec<web_sys::Node>>>,
 }
 
 // SAFETY: wasm32 without `atomics` has exactly one thread, so nothing here can be observed from another — the same argument wgpu makes for its `fragile-send-sync-non-atomic-wasm` feature. The bound exists because the renderer is generic over window types that really do cross threads elsewhere.
@@ -36,6 +40,15 @@ impl CanvasSurface {
         }
         if self.canvas.height() != height {
             self.canvas.set_height(height);
+        }
+    }
+
+    /// Takes away what the page was served with, now that a frame stands in its place. A canvas does not adopt a prerendered document the way the document renderer does; it replaces it.
+    pub(crate) fn release_served(&self) {
+        for node in self.served.borrow_mut().drain(..) {
+            if let Some(parent) = node.parent_node() {
+                let _ = parent.remove_child(&node);
+            }
         }
     }
 }
@@ -77,9 +90,15 @@ pub fn canvas_in(host: &web_sys::HtmlElement) -> Result<CanvasSurface, String> {
     // A canvas cannot take the keyboard, and if it could it would take it from the host that manages focus.
     let _ = style.set_property("outline", "none");
 
+    let children = host.child_nodes();
+    let served = (0..children.length())
+        .filter_map(|index| children.item(index))
+        .collect();
     host.append_child(&canvas)
         .map_err(|_| "could not add the canvas to its host".to_string())?;
-    Ok(CanvasSurface::wrap(canvas))
+    let surface = CanvasSurface::wrap(canvas);
+    surface.served.replace(served);
+    Ok(surface)
 }
 
 impl CanvasSurface {
@@ -87,7 +106,11 @@ impl CanvasSurface {
     pub fn wrap(canvas: web_sys::HtmlCanvasElement) -> Self {
         let handle = NEXT_HANDLE.fetch_add(1, Ordering::Relaxed);
         let _ = canvas.set_attribute("data-raw-handle", &handle.to_string());
-        Self { canvas, handle }
+        Self {
+            canvas,
+            handle,
+            served: Rc::default(),
+        }
     }
 }
 

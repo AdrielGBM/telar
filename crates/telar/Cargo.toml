@@ -51,6 +51,10 @@ name = "location_flow"
 path = "src/location_flow_test.rs"
 
 [[test]]
+name = "prerender_flow"
+path = "src/prerender_flow_test.rs"
+
+[[test]]
 name = "location_locale_flow"
 path = "src/location_locale_flow_test.rs"
 
@@ -154,8 +158,8 @@ android = ["android-bare", "hardware", "software"]
 ## A browser, drawing as a document: real elements laid out by CSS, measured with the browser's own
 ## canvas. No GPU and no shaper, which is most of what a web build used to weigh.
 ##
-## Only meaningful for a `wasm32` build; the dependencies behind it are target-gated, so turning it on for
-## a host build enables nothing.
+## Only meaningful for a `wasm32` build. On a host it compiles only what a frame says the document is, the
+## half `prerender` writes pages from; the browser itself is target-gated.
 web-dom = ["runtime", "dep:platform-web", "dep:renderer-dom"]
 
 ## Both browser frontends: the document above, and pixels on a canvas through WebGPU — what
@@ -164,6 +168,18 @@ web = ["web-dom", "shaper", "dep:renderer-web"]
 
 ## No surface at all: exposes `rasterize`, draw commands in and pixels out, with no window and no GPU.
 headless = ["runtime", "software", "dep:platform-headless"]
+
+## Pages written ahead of time: a host build of the app that `cargo telar build --target web --prerender`
+## runs once per location and locale, writing each as the document the browser would first show, with the
+## inputs it was built from for the client to start from. The packager turns it on for that build; an
+## application never names it. See `docs/prerender.md`.
+prerender = [
+    "runtime",
+    "shaper",
+    "dep:renderer-dom",
+    "dep:serde_json",
+    "dep:telar-project",
+]
 
 #! ## Capabilities
 #!
@@ -361,6 +377,7 @@ preferences-core = { workspace = true }
 reactive-core = { workspace = true, optional = true }
 renderer-assets = { workspace = true, optional = true }
 renderer-core = { workspace = true, optional = true }
+renderer-dom = { workspace = true, optional = true }
 renderer-hardware = { workspace = true, optional = true }
 renderer-software = { workspace = true, optional = true }
 renderer-text = { workspace = true, optional = true }
@@ -368,6 +385,7 @@ renderer-tui = { workspace = true, optional = true }
 services-core = { workspace = true }
 telar-devtools = { workspace = true, optional = true }
 telar-macros = { workspace = true }
+telar-project = { workspace = true, optional = true }
 theme-core = { workspace = true, optional = true }
 ui-components = { workspace = true, optional = true }
 ui-core = { workspace = true, optional = true }
@@ -401,14 +419,13 @@ renderer-record = { workspace = true }
 # Self-referencing so the integration tests get the opt-in `testing` module without it being a default that
 # ships in every binary. Nothing here covers an asset transport any more: `src/http_assets_test.rs` moved to
 # `telar-dynamic` along with the transport it exercises.
-telar = { path = ".", features = ["testing", "watch"] }
+telar = { path = ".", features = ["testing", "watch", "prerender"] }
 
 [lints.rust]
 unexpected_cfgs = { level = "warn", check-cfg = ['cfg(docsrs)'] }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 platform-web = { workspace = true, optional = true }
-renderer-dom = { workspace = true, optional = true }
 renderer-web = { workspace = true, optional = true }
 
 wasm-bindgen-futures = { workspace = true }

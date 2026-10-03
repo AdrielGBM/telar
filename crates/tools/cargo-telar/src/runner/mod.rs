@@ -291,7 +291,11 @@ fn build_format_name(format: &BuildFormat) -> &'static str {
 }
 
 fn run_build_cmd(args: BuildArgs) -> ! {
-    let BuildArgs { mut common, format } = args;
+    let BuildArgs {
+        mut common,
+        format,
+        prerender,
+    } = args;
 
     // All desktop formats reject `--target android`, and `--format apk` implies Android. Resolved before the plan is built, because the format can move the target and the plan is what the target decides.
     match &format {
@@ -319,11 +323,16 @@ fn run_build_cmd(args: BuildArgs) -> ! {
         );
         std::process::exit(2);
     }
-
     // Build always implies --release.
     let plan = BuildPlan::new(common, true);
+    if prerender && plan.target != Target::Web {
+        eprintln!(
+            "[cargo-telar] `--prerender` writes the pages of a site; build with `--target web`."
+        );
+        std::process::exit(2);
+    }
     if plan.target == Target::Web {
-        build_web(plan.cargo_args, plan.config, true, plan.renderer);
+        build_web(plan.cargo_args, plan.config, true, plan.renderer, prerender);
     }
     if plan.target == Target::Android {
         build_android_package(plan.cargo_args, plan.config)

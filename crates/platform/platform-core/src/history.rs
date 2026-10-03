@@ -26,6 +26,11 @@ pub trait HistoryFollower {
 
     /// Steps one entry back. `false` at the first one.
     fn back(&self) -> bool;
+
+    /// Every page this follower has an address for that stands on its own — no locale, no anchor — for a tool that visits each one: a prerender writing a page per location, a sitemap. Empty when it cannot say.
+    fn pages(&self) -> Vec<Location> {
+        Vec::new()
+    }
 }
 
 /// What keeps the app's language in step with the locale its address carries — in practice `telar::follow_location_locale`.
@@ -453,6 +458,13 @@ pub fn bind_location_locale(available: Vec<String>, follower: Rc<dyn LocaleFollo
     if let Some(history) = with_hub(Hub::restamp) {
         replace_on_platform(history);
     }
+}
+
+/// Every page the follower of the app's address declares, as [`HistoryFollower::pages`] names them: the places a prerender writes, once per locale the address carries. Empty while nothing follows the address, or when the follower cannot say.
+pub fn location_pages() -> Vec<Location> {
+    follower()
+        .map(|follower| follower.pages())
+        .unwrap_or_default()
 }
 
 /// The locales the app's addresses carry, as [`bind_location_locale`] declared them. Empty for an app whose addresses carry none.

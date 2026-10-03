@@ -181,6 +181,9 @@ pub(crate) struct BuildArgs {
     /// Output package format
     #[arg(long, value_name = "FORMAT")]
     pub(crate) format: Option<BuildFormat>,
+    /// Write every page of a web build ahead of time, readable before the app has loaded (`--target web`)
+    #[arg(long)]
+    pub(crate) prerender: bool,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, ValueEnum)]
@@ -213,7 +216,7 @@ impl Target {
 }
 
 /// How a browser build draws. Not a fallback order: a document is the other way of drawing an interface, and this is the build saying which one it wants. The page can still say otherwise at load time with `?telar-renderer=`.
-#[derive(Clone, Copy, ValueEnum)]
+#[derive(Clone, Copy, Debug, ValueEnum)]
 pub(crate) enum WebRenderer {
     /// Pixels where the browser offers a GPU adapter, a document where it does not.
     Auto,

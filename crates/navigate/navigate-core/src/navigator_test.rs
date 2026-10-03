@@ -24,6 +24,10 @@ impl crate::Route for Route {
             _ => None,
         }
     }
+
+    fn pages() -> Vec<Self> {
+        vec![Route::Home, Route::Settings]
+    }
 }
 
 #[test]
@@ -418,4 +422,18 @@ fn a_binding_that_ends_takes_its_page_title_with_it() {
     assert_eq!(ui_core::surface_title(), "Credits — Portfolio");
     reactive_core::dispose_owner(owner);
     assert_eq!(ui_core::surface_title(), "Portfolio");
+}
+
+#[test]
+fn the_following_navigator_declares_its_route_types_pages() {
+    platform_core::receive_location_history(vec![at("/")]);
+    let _nav = Navigator::new(Route::Home).follow_location();
+    assert_eq!(platform_core::location_pages(), [at("/"), at("/settings")]);
+}
+
+#[test]
+fn a_route_type_that_names_no_pages_declares_none() {
+    platform_core::receive_location_history(vec![at("/")]);
+    let _nav = Navigator::new(Page::Home).follow_location();
+    assert!(platform_core::location_pages().is_empty());
 }

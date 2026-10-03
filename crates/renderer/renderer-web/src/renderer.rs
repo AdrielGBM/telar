@@ -97,7 +97,11 @@ impl RenderBackend for WebGpuRenderer {
         clear_color: Option<Color>,
     ) -> Result<(), RendererError> {
         match &mut *self.device.borrow_mut() {
-            Device::Ready(gpu) => gpu.render_frame(&self.pictures.resolve(commands), clear_color),
+            Device::Ready(gpu) => {
+                gpu.render_frame(&self.pictures.resolve(commands), clear_color)?;
+                self.canvas.release_served();
+                Ok(())
+            }
             Device::Building | Device::Failed => Ok(()),
         }
     }

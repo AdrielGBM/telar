@@ -195,3 +195,25 @@ fn a_package_naming_any_face_replaces_the_workspace_set_whole() {
     assert_eq!(own.len(), 1);
     assert_eq!(own[0].family, "Own");
 }
+
+#[test]
+fn a_prerender_table_names_the_reader_pages_are_written_for() {
+    let root = package(
+        "web_prerender",
+        Some(
+            "[telar.web.prerender]\nwidth = 390\ncolor_scheme = \"dark\"\nlocales = [\"es-CL\"]\n",
+        ),
+    );
+    let prerender = TelarManifest::load(&root).unwrap().telar.web.prerender;
+    assert_eq!(
+        prerender.surface(),
+        crate::Surface {
+            width: 390,
+            height: crate::DEFAULT_SURFACE.1
+        }
+    );
+    let preferences = prerender.preferences();
+    assert_eq!(preferences.color_scheme.as_deref(), Some("dark"));
+    assert_eq!(preferences.reduced_motion, None);
+    assert_eq!(preferences.locales, ["es-CL"]);
+}

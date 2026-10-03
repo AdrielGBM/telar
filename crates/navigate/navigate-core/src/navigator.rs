@@ -139,6 +139,8 @@ impl<R: Route + 'static> Navigator<R> {
     ///
     /// The current route's [`title`](Route::title) becomes the page's part of the surface's title (see `ui_core::set_page_title`), and is derived again whenever the route — or anything its title reads, such as the active locale — moves.
     ///
+    /// The route type's [`pages`](Route::pages) become the app's (`platform_core::location_pages`), which is how a prerender learns which addresses to write.
+    ///
     /// One navigator follows the address at a time; a later call replaces an earlier one. The binding lasts as long as the reactive owner it was made under.
     pub fn follow_location(self) -> Self {
         let follower = Rc::new(Follower { nav: self });
@@ -201,6 +203,10 @@ impl<R: Route + 'static> HistoryFollower for Follower<R> {
 
     fn back(&self) -> bool {
         self.nav.pop()
+    }
+
+    fn pages(&self) -> Vec<Location> {
+        R::pages().iter().map(Route::to_location).collect()
     }
 }
 

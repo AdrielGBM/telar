@@ -37,7 +37,7 @@ pub use event_sink::{post_event, set_event_sink};
 pub use history::{
     HistoryFollower, HistoryFollowerId, LocaleFollower, bind_location_locale,
     follow_location_history, history_back, is_following_location_history, location_history,
-    location_locale, location_locales, pages_of, push_anchor, push_location,
+    location_locale, location_locales, location_pages, pages_of, push_anchor, push_location,
     receive_location_history, rename_anchor, replace_location, report_location_history,
     rewrite_location_history, set_anchor_revealer, set_location_locale, unfollow_location_history,
 };

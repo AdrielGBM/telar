@@ -10,6 +10,8 @@ use crate::app_config::AppConfig;
 /// Which one that is is a *build* decision: a binary compiled with `desktop` opens a window, a `wasm32` one compiled with `web` mounts on a page, one compiled with only `tui` runs in the terminal it was launched from. Both a window and a terminal being compiled in is the case a dev session wants — switching frontend without a rebuild — and there `TELAR_TARGET=tui` picks the terminal, with the window remaining the default.
 ///
 /// This is what [`telar::app!`](telar_macros::app)'s generated `run()` calls, so a `.rsx` app reaches every frontend from one entry point and one source tree.
+///
+/// A build with `prerender`, started by `cargo telar build --prerender`, writes the page it was asked for instead and exits (see `docs/prerender.md`).
 pub fn run_app_with_name<A: App>(config: AppConfig, app: A, app_name: &str) {
     run_app_with_devtools::<A, crate::DefaultDevTools>(config, app, app_name)
 }
@@ -24,6 +26,10 @@ pub fn run_app_with_devtools<A: App, D: crate::DevPlugin>(
     app: A,
     app_name: &str,
 ) {
+    #[cfg(all(feature = "prerender", not(target_arch = "wasm32")))]
+    if let Some(request) = super::prerender::requested() {
+        super::prerender::run(config, app, app_name, request);
+    }
     #[cfg(feature = "tui")]
     if tui_selected() {
         super::run_tui_app_with_name(config, super::TuiOptions::default(), app, app_name);

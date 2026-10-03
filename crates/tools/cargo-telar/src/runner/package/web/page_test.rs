@@ -14,6 +14,20 @@ fn minimal(extra: &str) -> String {
     format!("<head>\n  %telar.bootstrap%\n</head>\n{extra}")
 }
 
+fn face(path: &str, preload: bool) -> PageFont {
+    PageFont {
+        declaration: toml::from_str::<telar_project::TelarManifest>(
+            "[[telar.fonts]]\nfamily = \"A\"\nsrc = \"a.woff2\"\n",
+        )
+        .unwrap()
+        .telar
+        .fonts
+        .remove(0),
+        path: path.to_string(),
+        preload: preload.then(|| "font/woff2".to_string()),
+    }
+}
+
 #[test]
 fn the_built_in_page_expands_with_nothing_fed_but_the_bootstrap() {
     let html = page()
@@ -81,9 +95,7 @@ fn every_fed_marker_lands_where_the_template_puts_it() {
     page.meta.push(HeadTag::meta("description", "Hola"));
     page.meta
         .push(HeadTag::link("canonical", "https://example.com/es/"));
-    page.font_preloads
-        .push(HeadTag::font_preload("./fonts/a-0123.woff2", "font/woff2"));
-    page.font_faces = "@font-face { font-family: A; }".to_string();
+    page.fonts.push(face("fonts/a-0123.woff2", true));
     page.prerendered = "<main data-telar-id=\"1\">Hola</main>".to_string();
     page.state = Some(serde_json::json!({ "locale": "es" }));
 
@@ -93,9 +105,9 @@ fn every_fed_marker_lands_where_the_template_puts_it() {
     assert!(html.contains(r#"<meta name="description" content="Hola" />"#));
     assert!(html.contains(r#"<link rel="canonical" href="https://example.com/es/" />"#));
     assert!(html.contains(
-        r#"<link rel="preload" href="./fonts/a-0123.woff2" as="font" type="font/woff2" crossorigin />"#
+        r#"<link rel="preload" href="./fonts/a-0123.woff2" as="font" type="font/woff2" crossorigin data-telar-family="A" />"#
     ));
-    assert!(html.contains("@font-face { font-family: A; }"));
+    assert!(html.contains(r#"src: url("./fonts/a-0123.woff2") format("woff2");"#));
     assert!(html.contains(
         r#"<div id="telar-root" data-telar-renderer="dom"><main data-telar-id="1">Hola</main></div>"#
     ));
@@ -205,9 +217,61 @@ fn a_marker_left_out_is_an_error_only_when_the_build_has_content_for_it() {
     );
 
     let mut fonts = page();
-    fonts.font_faces = "@font-face {}".to_string();
+    fonts.fonts.push(face("fonts/a-0123.woff2", false));
     assert_eq!(
         fonts.render(&template),
         Err(TemplateError::Missing(Marker::Fonts))
+    );
+}
+
+#[test]
+fn a_page_below_the_root_reaches_every_file_through_its_own_base() {
+    let mut page = page();
+    page.base = "../../".to_string();
+    page.fonts.push(face("fonts/a-0123.woff2", true));
+    let html = page.render(DEFAULT_TEMPLATE).unwrap();
+    assert!(
+        html.contains(r#"href="../../fonts/a-0123.woff2""#),
+        "{html}"
+    );
+    assert!(
+        html.contains(r#"src: url("../../fonts/a-0123.woff2")"#),
+        "{html}"
+    );
+    assert!(html.contains(r#"import init from "../../app-0123456789ab.js";"#));
+}
+
+#[test]
+fn a_prerendered_page_marks_its_host_and_styles_its_content() {
+    let mut page = page();
+    page.host = vec![
+        ("data-telar".to_string(), String::new()),
+        ("style".to_string(), "position:relative;".to_string()),
+    ];
+    page.head
+        .push("<style id=\"telar-reset\">[data-telar]{}</style>".to_string());
+    page.prerendered = "<main data-telar-id=\"1\"></main>".to_string();
+    let html = page.render(DEFAULT_TEMPLATE).unwrap();
+    assert!(html.contains(
+        r#"<div id="telar-root" data-telar-renderer="auto" data-telar="" style="position:relative;"><main data-telar-id="1"></main></div>"#
+    ), "{html}");
+    assert!(
+        html.contains("    <style id=\"telar-reset\">[data-telar]{}</style>\n"),
+        "{html}"
+    );
+}
+
+#[test]
+fn a_template_with_no_host_marker_cannot_carry_a_prerendered_host() {
+    let mut page = page();
+    page.host = vec![("data-telar".to_string(), String::new())];
+    assert_eq!(
+        page.render(&minimal("")),
+        Err(TemplateError::Missing(Marker::Host))
+    );
+    let twice = minimal("<div %telar.host%></div><div %telar.host%></div>");
+    assert_eq!(
+        page.render(&twice),
+        Err(TemplateError::Repeated(Marker::Host))
     );
 }

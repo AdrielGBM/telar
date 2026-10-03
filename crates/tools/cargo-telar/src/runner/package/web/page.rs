@@ -5,7 +5,9 @@
 use std::fmt;
 
 use layout_core::Direction;
+use telar_project::FontDeclaration;
 
+use super::fonts::{FAMILY_ATTRIBUTE, font_face};
 use crate::runner::cli::WebRenderer;
 
 /// The page a project gets when it brings no template of its own.
@@ -20,6 +22,7 @@ pub(crate) enum Marker {
     Dir,
     Title,
     Renderer,
+    Host,
     Meta,
     Fonts,
     Bootstrap,
@@ -28,11 +31,12 @@ pub(crate) enum Marker {
 }
 
 impl Marker {
-    pub(crate) const ALL: [Self; 9] = [
+    pub(crate) const ALL: [Self; 10] = [
         Self::Lang,
         Self::Dir,
         Self::Title,
         Self::Renderer,
+        Self::Host,
         Self::Meta,
         Self::Fonts,
         Self::Bootstrap,
@@ -46,6 +50,7 @@ impl Marker {
             Self::Dir => "dir",
             Self::Title => "title",
             Self::Renderer => "renderer",
+            Self::Host => "host",
             Self::Meta => "meta",
             Self::Fonts => "fonts",
             Self::Bootstrap => "bootstrap",
@@ -58,9 +63,16 @@ impl Marker {
         Self::ALL.into_iter().find(|marker| marker.name() == name)
     }
 
-    /// A value marker sits inside an attribute or text and is escaped; a block marker is markup and appears at most once.
+    /// A value marker sits inside an attribute or text and is escaped; a block marker is markup and appears at most once. `%telar.host%` is neither: attributes, inside the host element's start tag.
     fn is_block(self) -> bool {
-        !matches!(self, Self::Lang | Self::Dir | Self::Title | Self::Renderer)
+        !matches!(
+            self,
+            Self::Lang | Self::Dir | Self::Title | Self::Renderer | Self::Host
+        )
+    }
+
+    fn appears_once(self) -> bool {
+        self.is_block() || self == Self::Host
     }
 }
 
@@ -169,8 +181,16 @@ pub(crate) struct Bootstrap {
     pub(crate) module: String,
 }
 
+/// One declared face as a page links it: the hashed file under the output root, the media type it is preloaded as when this entry is the first to name the file, and the rule it is declared with.
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) struct PageFont {
+    pub(crate) declaration: FontDeclaration,
+    pub(crate) path: String,
+    pub(crate) preload: Option<String>,
+}
+
 /// Everything the template's markers expand to. Each field starts at what a build that knows nothing more should write, and a later step overwrites what it knows.
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub(crate) struct Page {
     /// `%telar.lang%`.
     pub(crate) lang: String,
@@ -180,10 +200,12 @@ pub(crate) struct Page {
     pub(crate) title: String,
     /// `%telar.meta%`, one tag per line.
     pub(crate) meta: Vec<HeadTag>,
-    /// The preload half of `%telar.fonts%`.
-    pub(crate) font_preloads: Vec<HeadTag>,
-    /// The `@font-face` half of `%telar.fonts%`, as CSS the page wraps in a `<style>`.
-    pub(crate) font_faces: String,
+    /// Markup `%telar.meta%` writes after its tags: what a prerendered page's content needs in `<head>` to look as it will once the app runs.
+    pub(crate) head: Vec<String>,
+    /// `%telar.fonts%`, each URL written against this page's base.
+    pub(crate) fonts: Vec<PageFont>,
+    /// `%telar.host%`: the attributes a prerendered page's host element carries, already escaped.
+    pub(crate) host: Vec<(String, String)>,
     /// `%telar.bootstrap%`.
     pub(crate) bootstrap: Bootstrap,
     /// `%telar.renderer%`, what `data-telar-renderer` says; `None` writes `auto`.
@@ -203,8 +225,9 @@ impl Page {
             dir: Direction::default(),
             title: title.into(),
             meta: Vec::new(),
-            font_preloads: Vec::new(),
-            font_faces: String::new(),
+            head: Vec::new(),
+            fonts: Vec::new(),
+            host: Vec::new(),
             bootstrap,
             renderer: None,
             prerendered: String::new(),
@@ -259,7 +282,7 @@ impl Page {
     fn check(&self, found: &[(usize, Marker)]) -> Result<(), TemplateError> {
         for marker in Marker::ALL {
             let count = found.iter().filter(|(_, m)| *m == marker).count();
-            if marker.is_block() && count > 1 {
+            if marker.appears_once() && count > 1 {
                 return Err(TemplateError::Repeated(marker));
             }
             if count == 0 && self.must_appear(marker) {
@@ -273,7 +296,8 @@ impl Page {
     fn must_appear(&self, marker: Marker) -> bool {
         match marker {
             Marker::Bootstrap => true,
-            Marker::Fonts => !self.font_preloads.is_empty() || !self.font_faces.is_empty(),
+            Marker::Fonts => !self.fonts.is_empty(),
+            Marker::Host => !self.host.is_empty(),
             Marker::Prerendered => !self.prerendered.is_empty(),
             Marker::State => self.state.is_some(),
             _ => false,
@@ -289,7 +313,17 @@ impl Page {
                 .renderer
                 .map_or("auto", WebRenderer::as_str)
                 .to_string(),
-            Marker::Meta => lines(&self.meta),
+            Marker::Host => self
+                .host
+                .iter()
+                .map(|(name, value)| format!(" {name}=\"{value}\""))
+                .collect(),
+            Marker::Meta => {
+                let mut parts = vec![lines(&self.meta)];
+                parts.extend(self.head.iter().cloned());
+                parts.retain(|part| !part.is_empty());
+                parts.join("\n")
+            }
             Marker::Fonts => self.fonts(),
             Marker::Bootstrap => self.bootstrap(),
             Marker::Prerendered => self.prerendered.clone(),
@@ -307,9 +341,25 @@ impl Page {
     }
 
     fn fonts(&self) -> String {
-        let mut parts = vec![lines(&self.font_preloads)];
-        if !self.font_faces.is_empty() {
-            parts.push(format!("<style>\n{}\n</style>", self.font_faces.trim_end()));
+        let preloads: Vec<HeadTag> = self
+            .fonts
+            .iter()
+            .filter_map(|font| {
+                let media_type = font.preload.as_ref()?;
+                Some(
+                    HeadTag::font_preload(self.url(&font.path), media_type.clone())
+                        .attr(FAMILY_ATTRIBUTE, font.declaration.family.clone()),
+                )
+            })
+            .collect();
+        let faces: String = self
+            .fonts
+            .iter()
+            .map(|font| font_face(&font.declaration, &self.url(&font.path)))
+            .collect();
+        let mut parts = vec![lines(&preloads)];
+        if !faces.is_empty() {
+            parts.push(format!("<style>\n{}\n</style>", faces.trim_end()));
         }
         parts.retain(|part| !part.is_empty());
         parts.join("\n")

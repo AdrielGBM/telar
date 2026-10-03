@@ -7,7 +7,7 @@ use telar_project::FontDeclaration;
 
 use super::assets::Assets;
 use super::media::media_type;
-use super::page::{HeadTag, Page};
+use super::page::{Page, PageFont};
 
 /// What a preload carries to name the family its face answers to, which is how a canvas build finds the faces to fetch into its shaper. Read by `renderer_web::FAMILY_ATTRIBUTE`, which must spell it the same.
 pub(crate) const FAMILY_ATTRIBUTE: &str = "data-telar-family";
@@ -15,9 +15,9 @@ pub(crate) const FAMILY_ATTRIBUTE: &str = "data-telar-family";
 /// Where the faces go in the output, under their own names before hashing.
 const FONTS_DIR: &str = "fonts";
 
-/// Emits each declared face as a hashed file and writes its `@font-face` rule and preload into `page`.
+/// Emits each declared face as a hashed file and links it from `page`, which writes its `@font-face` rule and preload.
 ///
-/// Two entries naming one file share it — a variable face declared once per style is one download. Two different files with one name are refused rather than renamed, so a name in the network panel always says which file it is.
+/// Two entries naming one file share it — a variable face declared once per style is one download, preloaded once. Two different files with one name are refused rather than renamed, so a name in the network panel always says which file it is.
 pub(crate) fn declare_fonts(
     page: &mut Page,
     assets: &mut Assets,
@@ -32,8 +32,8 @@ pub(crate) fn declare_fonts(
             .map(|name| name.to_string_lossy().to_string())
             .ok_or_else(|| format!("the font {:?} names no file", font.family))?;
         let logical = format!("{FONTS_DIR}/{file_name}");
-        let hashed = match emitted.get(&logical) {
-            Some((src, hashed)) if *src == font.src => hashed.clone(),
+        let (hashed, preload) = match emitted.get(&logical) {
+            Some((src, hashed)) if *src == font.src => (hashed.clone(), None),
             Some((src, _)) => {
                 return Err(format!(
                     "the fonts `{src}` and `{}` share the file name `{file_name}`; rename one",
@@ -49,16 +49,15 @@ pub(crate) fn declare_fonts(
                     )
                 })?;
                 let hashed = assets.emit(&logical, &bytes)?;
-                page.font_preloads.push(
-                    HeadTag::font_preload(page.url(&hashed), media_type(&path))
-                        .attr(FAMILY_ATTRIBUTE, font.family.clone()),
-                );
                 emitted.insert(logical, (font.src.clone(), hashed.clone()));
-                hashed
+                (hashed, Some(media_type(&path).to_string()))
             }
         };
-        page.font_faces
-            .push_str(&font_face(font, &page.url(&hashed)));
+        page.fonts.push(PageFont {
+            declaration: font.clone(),
+            path: hashed,
+            preload,
+        });
     }
     Ok(())
 }

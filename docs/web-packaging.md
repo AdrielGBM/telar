@@ -27,6 +27,7 @@ that does not exist is an error. So is a misspelled key, as everywhere else in `
 | File | What it is |
 | --- | --- |
 | `index.html` | The page, expanded from the template. |
+| `<locale>/<path>/index.html`, `404.html` | With `--prerender`, every page of the app written ahead of time; see [Prerendering](prerender.md). |
 | `app-<hash>.js` | The `wasm-bindgen` glue, pointed at the hashed module. |
 | `app_bg-<hash>.wasm` | The module. |
 | `fonts/<name>-<hash>.<ext>` | Each face `[[telar.fonts]]` declares; see [Fonts as assets](fonts.md). |
@@ -50,10 +51,11 @@ starting point to copy into `web/index.html`.
 | `%telar.dir%` | value | `ltr` or `rtl`, derived from `%telar.lang%` the same way [`Direction::for_locale`](https://docs.rs/telar-layout-core) resolves it at runtime | derived from the default above |
 | `%telar.title%` | value | the page title, escaped | the package name |
 | `%telar.renderer%` | value | the `--renderer` choice, for `data-telar-renderer` | `auto` |
+| `%telar.host%` | attributes | the attributes of a prerendered page's host element, inside its start tag | nothing |
 | `%telar.meta%` | block | `<meta>`/`<link>` tags for the document | a `description` |
 | `%telar.fonts%` | block | a preload and an `@font-face` rule per declared face ([fonts](fonts.md)) | nothing |
 | `%telar.bootstrap%` | block | the preloads and the module script that start the app | always present |
-| `%telar.prerendered%` | block | prerendered markup for the host element | nothing |
+| `%telar.prerendered%` | block | prerendered markup for the host element ([prerendering](prerender.md)) | nothing |
 | `%telar.state%` | block | `<script type="application/json" id="telar-state">` | nothing |
 
 `%telar.lang%` and `%telar.dir%` are a build-time default: the page a browser first sees, before the wasm
@@ -70,20 +72,23 @@ The rules:
 - **`%telar.bootstrap%` is required.** Without it the page never loads the app, so the build refuses the
   template. Put it in `<head>` (the module script is deferred, so it runs after the document is parsed) or
   just before `</body>`.
-- **`%telar.fonts%`, `%telar.prerendered%` and `%telar.state%` are required only when the build has content
-  for them.** Leaving one out while the build has something for it would silently break the page, so it is
+- **`%telar.host%`** goes inside the start tag of the element the app mounts on, at most once. It writes its
+  own leading space.
+- **`%telar.fonts%`, `%telar.host%`, `%telar.prerendered%` and `%telar.state%` are required only when the build
+  has content for them.** Leaving one out while the build has something for it would silently break the page, so it is
   an error; leaving one out otherwise is fine.
 - **An unknown `%telar.<name>%` is an error** naming the marker and its line, so a typo never ships as text.
   Anything else containing `%`, such as `100%` in CSS, is left alone.
 - The app mounts on the element with `id="telar-root"`, or on `<body>` when there is none. The built-in page
   gives that element `data-telar-renderer="%telar.renderer%"`, which lets `--renderer` choose the renderer
-  without a rebuild; `?telar-renderer=` on the URL still overrides it.
+  without a rebuild; `?telar-renderer=` on the URL still overrides it, and `%telar.host%` after it.
 - The built-in page leaves the document free to scroll (no `overflow: hidden` on `html` or `body`). Under
   the document renderer a root `ScrollPage` is the document's own scroll and the host grows with it, and a
   page scrolled before the module loads keeps its position. A template that fixes the document in place
   takes that away. See [docs/primary-scroll.md](primary-scroll.md).
 
-URLs the page writes for output files start with `./`, which resolves against a page at the output root. The
+URLs the page writes for output files start with `./`, which resolves against a page at the output root. A
+prerendered page further down writes them from where it is (`../../`), and `404.html` from `/`. The
 bootstrap also writes `<meta name="telar-assets" content="./">`: the app resolves it once, when it starts, and
 fetches every file the build shipped from there, so an address it pushes later does not move them.
 

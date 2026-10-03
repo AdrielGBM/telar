@@ -60,7 +60,20 @@ nix shell nixpkgs#firefox nixpkgs#geckodriver --command bash -c \
 itself, and `isolation: isolate` on its parent (or the host, when the blended box is itself a layout root).
 Without the isolation, `mix-blend-mode` reaches past the parent to whatever stacking context is nearest —
 for an otherwise plain tree, the page itself — so a texture meant to multiply against its neighbor would
-also ghost into content several levels up (see [`reconcile.rs`](src/reconcile.rs)'s `isolate_parent`). GPU
+also ghost into content several levels up (see [`document.rs`](src/document.rs)'s `isolate_parent`). GPU
 and software already render each layer through its own compositing pass, so they need no such fix; the
 artwork path (`vector.rs`'s `Drawing::open_layer`) draws inside an `<svg>`, which isolates on its own. TUI
 has no notion of a backdrop to blend against and ignores the attribute.
+
+## One document, two writers
+
+What a frame says the document is — which elements, in which order, with which attributes, CSS and SVG — is
+worked out once, in [`document.rs`](src/document.rs), and compiled on every target. In the browser the
+reconcile brings the live document in line with it; on a host, [`prerender`](src/html.rs) writes it out as
+markup, which is how `cargo telar build --target web --prerender` writes pages ahead of time. Every element a
+box becomes names that box in `data-telar-id`.
+
+`src/prerender_parity_test.rs` holds the two writers to one document: a frame reconciled into one host and
+written as markup into another reads back as the same elements with the same attributes, and a host served
+with a prerendered page gives way to the first frame. See
+[docs/prerender.md](https://github.com/AdrielGBM/telar/blob/main/docs/prerender.md).

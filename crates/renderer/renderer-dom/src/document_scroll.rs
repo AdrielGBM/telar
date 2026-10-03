@@ -9,12 +9,7 @@ use platform_core::primary_scroll::DOCUMENT_SCROLL_ATTRIBUTE;
 use wasm_bindgen::JsCast;
 use wasm_bindgen::prelude::Closure;
 
-/// Host properties the document scroll overrides, and what they must be for it: a host that keeps a fixed height stops the page from growing, and one that declines touch gestures stops a finger from scrolling it, because a touch pans only when every box between it and the scroller allows it. A page scrolls down only, like every other `ScrollPage`, so content wider than it is clipped rather than handed to the document as a sideways scroll; `clip`, not `hidden`, because `hidden` would make the host a scroller and take the scroll away from the document.
-const HOST_OVERRIDES: [(&str, &str); 3] = [
-    ("height", "auto"),
-    ("touch-action", "pan-x pan-y"),
-    ("overflow-x", "clip"),
-];
+use crate::document::DOCUMENT_SCROLL_OVERRIDES;
 
 /// The document scroll while one box holds it. Dropping it gives the host back as it was found.
 pub(crate) struct DocumentScroll {
@@ -30,7 +25,7 @@ impl DocumentScroll {
     /// Hands the document scroll to box `id`, reporting where the document already is so a page scrolled before the app loaded stays where the reader put it.
     pub(crate) fn hold(host: &web_sys::HtmlElement, id: u64) -> Self {
         let style = host.style();
-        let found = HOST_OVERRIDES
+        let found = DOCUMENT_SCROLL_OVERRIDES
             .iter()
             .map(|(name, value)| {
                 let previous = style.get_property_value(name).unwrap_or_default();

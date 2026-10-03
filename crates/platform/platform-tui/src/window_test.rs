@@ -32,7 +32,10 @@ fn a_redraw_request_is_taken_once() {
 
 #[test]
 fn a_title_is_written_as_one_window_title_sequence() {
-    assert_eq!(title_sequence("Credits — Portfolio"), "\x1b]0;Credits — Portfolio\x07");
+    assert_eq!(
+        title_sequence("Credits — Portfolio"),
+        "\x1b]0;Credits — Portfolio\x07"
+    );
 }
 
 #[test]

@@ -4,12 +4,14 @@
 //!
 //! What this buys over drawing pixels is everything a document is and a canvas is not: text that can be selected and found, elements a screen reader can walk, native focus, and an input method that works.
 //!
-//! Only the halves that touch the browser are compiled off `wasm32` — the ones that turn a style into CSS and a shape into SVG are plain string building, and are tested on the host that builds them.
+//! Only the halves that touch the browser are compiled off `wasm32`. What a frame says the document is — which elements, which attributes, which CSS and which SVG — is plain data worked out the same way everywhere, and on a host it is written out as markup instead: [`prerender`] writes the page the browser would first show, from the same functions the live reconcile reads.
 
 #![warn(rustdoc::broken_intra_doc_links)]
 // The document half of the crate is absent off wasm, so what it would have called is unreachable there.
 #![cfg_attr(not(target_arch = "wasm32"), allow(dead_code))]
 
+mod document;
+mod html;
 mod paint;
 mod runs;
 mod vector;
@@ -32,6 +34,8 @@ mod reconcile;
 #[cfg(target_arch = "wasm32")]
 mod renderer;
 
+pub use document::ID_ATTRIBUTE;
+pub use html::{Prerendered, prerender, reset_stylesheet};
 #[cfg(target_arch = "wasm32")]
 pub use metrics::{CanvasTextMetrics, remeasure_on_font_load};
 #[cfg(target_arch = "wasm32")]

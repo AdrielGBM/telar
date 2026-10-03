@@ -5451,6 +5451,7 @@ dependencies = [
  "telar-platform-tui",
  "telar-platform-web",
  "telar-preferences-core",
+ "telar-project",
  "telar-reactive-core",
  "telar-renderer-assets",
  "telar-renderer-core",

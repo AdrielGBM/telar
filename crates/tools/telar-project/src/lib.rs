@@ -14,6 +14,7 @@ mod fonts;
 mod manifest;
 pub mod naming;
 mod paths;
+mod prerender;
 mod theme;
 
 pub use assets::{
@@ -42,11 +43,15 @@ pub use fonts::{
     FontDeclaration, FontDisplay, FontFormat, FontStyleDeclaration, WeightDeclaration,
 };
 pub use manifest::{
-    DevSection, I18nSection, MANIFEST_FILENAME, ManifestError, RendererBackend, TelarManifest,
-    TelarSection, WebSection, WindowSection,
+    DevSection, I18nSection, MANIFEST_FILENAME, ManifestError, PrerenderSection, RendererBackend,
+    TelarManifest, TelarSection, WebSection, WindowSection,
 };
 pub use paths::{
     find_ancestor_dir, find_package_root, find_target_dir, find_telar_root, find_workspace_root,
     resolve_telar_version, write_if_changed_atomic,
+};
+pub use prerender::{
+    DEFAULT_SURFACE, PRERENDER_ENV, PageLocation, PageRequest, Preferences, PrerenderRequest,
+    PrerenderState, PrerenderedPage, STATE_ELEMENT_ID, STATE_VERSION, Surface,
 };
 pub use theme::{normalize_theme_path, theme_type_in_config};

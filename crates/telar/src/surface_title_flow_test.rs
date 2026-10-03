@@ -28,7 +28,10 @@ static CATALOG: Catalog = Catalog {
         },
         Entry {
             key: "home.title",
-            messages: &[("en", Message::Plain("Home")), ("es", Message::Plain("Inicio"))],
+            messages: &[
+                ("en", Message::Plain("Home")),
+                ("es", Message::Plain("Inicio")),
+            ],
         },
     ],
 };

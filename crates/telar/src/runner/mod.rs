@@ -35,6 +35,8 @@ mod host;
 mod hot_host;
 mod location;
 mod multi;
+#[cfg(all(feature = "prerender", not(target_arch = "wasm32")))]
+mod prerender;
 #[cfg(feature = "tui")]
 mod tui;
 #[cfg(all(feature = "web-dom", target_arch = "wasm32"))]
@@ -80,6 +82,8 @@ pub use host::SurfaceWindow;
 ))]
 pub use hot_host::run_hot_reload_host;
 pub use multi::{build_surface_handler, run_multi_with_platform};
+#[cfg(all(feature = "prerender", not(target_arch = "wasm32")))]
+pub use prerender::prerender_page;
 #[cfg(feature = "tui")]
 pub use tui::{TuiOptions, run_tui_app_with_name};
 #[cfg(all(feature = "web-dom", target_arch = "wasm32"))]

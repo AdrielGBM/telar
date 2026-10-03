@@ -17,6 +17,7 @@ mod fonts;
 mod images;
 mod media;
 mod page;
+mod prerender;
 
 use assets::{Assets, MANIFEST_FILE};
 use page::{Bootstrap, DEFAULT_TEMPLATE, HeadTag, Page};
@@ -43,8 +44,9 @@ pub(crate) fn build_web(
     config: TelarSection,
     release: bool,
     renderer: Option<WebRenderer>,
+    prerender: bool,
 ) -> ! {
-    let out = match build_web_bundle(cargo_args, config, release, renderer) {
+    let out = match build_web_bundle(cargo_args, config, release, renderer, prerender) {
         Ok(out) => out,
         Err(e) => {
             eprintln!("[cargo-telar] {e}");
@@ -61,6 +63,7 @@ pub(crate) fn build_web_bundle(
     config: TelarSection,
     release: bool,
     renderer: Option<WebRenderer>,
+    prerender: bool,
 ) -> Result<PathBuf, String> {
     let (_android, rest) = split_android_flag(cargo_args);
     let resolved = resolve_package(&rest);
@@ -88,9 +91,11 @@ pub(crate) fn build_web_bundle(
         build_args.push(WEB_PROFILE.to_string());
     }
     // The renderers a window needs are not target-gated, so a default left on brings wgpu and a glyph shaper into a page that calls neither.
+    let mut frontend = Vec::new();
     resolved
         .frontend_feature(Target::Web.feature(renderer))
-        .push_to(&mut build_args);
+        .push_to(&mut frontend);
+    build_args.extend(frontend.iter().cloned());
 
     eprintln!("[cargo-telar] Building the wasm module...");
     let status = Command::new("cargo")
@@ -122,7 +127,7 @@ pub(crate) fn build_web_bundle(
     let locale = config.default_locale().unwrap_or_else(|| "en".to_string());
     run_wasm_bindgen(&module, &staging)?;
     optimise(&staging.join(format!("{BUNDLE}_bg.wasm")), release);
-    assemble(
+    let (page, template) = assemble(
         &staging,
         &package_root,
         &config.web,
@@ -131,6 +136,19 @@ pub(crate) fn build_web_bundle(
         renderer,
         &locale,
     )?;
+    if prerender {
+        let binary =
+            prerender::build_host_binary(&rest, &frontend, &package_root.join("Cargo.toml"))?;
+        let pages = prerender::write_pages(
+            &staging,
+            &page,
+            &template,
+            &binary,
+            &package_root,
+            &config.web.prerender,
+        )?;
+        eprintln!("[cargo-telar] Prerendered {pages} page(s) and a 404 page");
+    }
     images::ship_images(
         &staging,
         &images::local_crates(&resolved.workspace_root, &resolved.name())?,
@@ -153,7 +171,7 @@ fn assemble(
     app_name: &str,
     renderer: Option<WebRenderer>,
     locale: &str,
-) -> Result<(), String> {
+) -> Result<(Page, String), String> {
     let mut assets = Assets::new(out);
     let module = assets.adopt(&format!("{BUNDLE}_bg.wasm"))?;
     point_glue_at(&out.join(format!("{BUNDLE}.js")), &module)?;
@@ -183,7 +201,8 @@ fn assemble(
         .render(&template)
         .map_err(|e| format!("the page template ({origin}): {e}"))?;
     assets::write_new(&out.join(PAGE_FILE), html.as_bytes())?;
-    assets.write_manifest()
+    assets.write_manifest()?;
+    Ok((page, template))
 }
 
 /// The project's template, or the built-in page where the project has none at the default path. A path the project named that cannot be read is an error, never a quiet fallback.
