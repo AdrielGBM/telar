@@ -1,12 +1,13 @@
 //! [`Input`]: the single-line text field — caret, selection, clipboard and the keys that drive them.
 
+use std::ops::Range;
 use std::rc::Rc;
 
 use geometry_core::Rect;
 use layout_core::{LayoutError, LayoutStyle};
 use platform_core::{Event, Key, ModifiersState, NamedKey, PointerButton};
 use reactive_core::{Effect, RwSignal, effect, signal};
-use renderer_core::{RectStyle, ShapeStyle, TextStyle};
+use renderer_core::{Color, RectStyle, ShapeStyle, TextStyle};
 use ui_tree::{Component, EventResult, RenderNode};
 
 use crate::caret::{Blink, align_origin};
@@ -21,6 +22,49 @@ pub(crate) const PLACEHOLDER_OPACITY: f32 = 0.7;
 /// Width of the caret, in logical px.
 const CARET_WIDTH: f32 = 1.5;
 
+/// How thick an [`Underline`] is drawn, in logical px.
+const UNDERLINE_THICKNESS: f32 = 2.0;
+
+/// How wide an [`Underline`] of no characters is drawn: a mark where something was expected and nothing was written.
+const POINT_MARK: f32 = 6.0;
+
+/// What hears a field's keys before it does, and answers whether it took one.
+type KeyHandler = dyn Fn(&Key, ModifiersState) -> bool;
+
+/// A line drawn under a run of the field's text: a misspelt word, the part of a formula an error is about.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Underline {
+    /// The run, in bytes of the text; an empty one marks the place it starts at.
+    pub range: Range<usize>,
+    pub color: Color,
+}
+
+/// Where a field's insertion point is, for the code that completes or inserts at it.
+///
+/// A byte offset into the text. The field snaps it to a char boundary as it reads it, and reads one past the end of a text that shrank from outside as the end.
+#[derive(Clone, Copy)]
+pub struct Caret {
+    at: RwSignal<usize>,
+    anchor: RwSignal<Option<usize>>,
+}
+
+impl Caret {
+    /// Where it is. Reactive.
+    pub fn get(&self) -> usize {
+        self.at.get()
+    }
+
+    pub fn peek(&self) -> usize {
+        self.at.peek()
+    }
+
+    /// Moves it to `at`, dropping the selection: what a completion inserted at the caret leaves behind.
+    pub fn set(&self, at: usize) {
+        self.anchor.set(None);
+        self.at.set(at);
+    }
+}
+
 /// A single-line editable text field bound to a `RwSignal<String>`. A base primitive: unstyled (no border or background — wrap it in a `box` for the look) and keyboard-driven. It requests focus on tap and, while focused, edits the bound signal from key events, drawing a caret at the insertion point. Selection (`Shift`+arrows/Home/End, `Ctrl+A`) with copy, cut and paste; IME composition is not yet supported. Drag-to-select waits on click-to-position, which this field does not have either.
 pub struct Input {
     value: RwSignal<String>,
@@ -33,6 +77,8 @@ pub struct Input {
     leaf: LayoutLeaf,
     on_submit: Option<Box<dyn Fn()>>,
     on_cancel: Option<Box<dyn Fn()>>,
+    on_key: Option<Box<KeyHandler>>,
+    underlines: Option<Box<dyn Fn() -> Vec<Underline>>>,
     // Rendered in place of the text so the field stays live and tappable when empty — a separate placeholder widget swapped in would not take focus.
     placeholder: String,
     // Rendering only: the bound signal, the caret offsets and every edit still work on the real text.
@@ -96,6 +142,8 @@ impl Input {
             leaf,
             on_submit: None,
             on_cancel: None,
+            on_key: None,
+            underlines: None,
             placeholder: String::new(),
             mask: None,
             blink,
@@ -137,6 +185,28 @@ impl Input {
     pub fn on_cancel(mut self, f: impl Fn() + 'static) -> Self {
         self.on_cancel = Some(Box::new(f));
         self
+    }
+
+    /// Hears every key pressed while the field holds the keyboard, before the field acts on it; answering `true` takes the key from the field.
+    ///
+    /// What a field with suggestions under it needs: while they show, the arrows walk them and Enter, Tab and Escape choose or close them — keys the field uses itself, which a handler around it never hears because a focused field keeps them.
+    pub fn on_key(mut self, f: impl Fn(&Key, ModifiersState) -> bool + 'static) -> Self {
+        self.on_key = Some(Box::new(f));
+        self
+    }
+
+    /// Draws a line under each run `spans` answers, re-read every frame: where a checker found something wrong.
+    pub fn underline(mut self, spans: impl Fn() -> Vec<Underline> + 'static) -> Self {
+        self.underlines = Some(Box::new(spans));
+        self
+    }
+
+    /// The insertion point, to read and to move from outside.
+    pub fn caret(&self) -> Caret {
+        Caret {
+            at: self.caret,
+            anchor: self.anchor,
+        }
     }
 
     /// A muted hint shown while the value is empty (the field stays tappable/focusable, unlike a swapped-in placeholder widget).
@@ -359,60 +429,76 @@ impl Component for Input {
         } else {
             RenderNode::text(self.shown(&text), full, style.clone())
         };
-
-        // Reading `is_focused` subscribes this view to focus moves.
-        if focus::is_focused(self.id) {
-            let caret = self.caret_at(&text);
-            // Everything drawn beside the letters is placed from where the shaper puts the first glyph, or a field inheriting a centred alignment draws its text in the middle and its caret at the left.
-            let line = self.shown(&text);
-            let (line_w, _) = crate::text_metrics::measure_text(&line, None, 1.0e6, &style);
-            let origin = align_origin(style.text_align, full.width, line_w);
-            // Behind the text, in the ink at low alpha: a field is unstyled by design and has no palette, and the ink is the one colour it is guaranteed to contrast with.
-            let highlight = self.selection(&text).map(|(from, to)| {
-                let measure = |upto: usize| {
-                    crate::text_metrics::measure_text(
-                        &self.shown(&text[..upto]),
-                        None,
-                        1.0e6,
-                        &style,
-                    )
-                    .0
-                };
-                let (start, end) = (measure(from), measure(to));
-                let fill = style.color.faded(0.25);
-                RenderNode::rect(
-                    Rect {
-                        x: origin + start,
-                        y: 0.0,
-                        width: (end - start).max(1.0),
-                        height: crate::text_metrics::line_box(&style),
-                    },
-                    RectStyle::default().with_fill(fill),
-                )
-            });
-            // A mask character is not the width of what it hides, so measuring the real prefix would put the caret somewhere the text is not.
-            let prefix = self.shown(&text[..caret]);
-            let (prefix_w, _) = crate::text_metrics::measure_text(&prefix, None, 1.0e6, &style);
-            let line_h = crate::text_metrics::line_box(&style);
-            let caret_rect = Rect {
-                x: origin + prefix_w,
-                y: 0.0,
-                width: CARET_WIDTH,
-                height: line_h,
-            };
-            // Read here and nowhere else, so the caret is the only thing on the surface redrawing on the blink's account.
-            let lit = paint.faded(self.blink.opacity());
-            let caret_node = RenderNode::rect(caret_rect, RectStyle::default().with_fill(lit));
-            let layers = match highlight {
-                Some(highlight) => vec![highlight, text_node, caret_node],
-                None => vec![text_node, caret_node],
-            };
-            self.leaf
-                .at_layout_position_as(|| self.semantics(), RenderNode::group(layers))
-        } else {
-            self.leaf
-                .at_layout_position_as(|| self.semantics(), text_node)
+        let spans = self
+            .underlines
+            .as_ref()
+            .map_or_else(Vec::new, |spans| spans());
+        let focused = focus::is_focused(self.id);
+        if !focused && spans.is_empty() {
+            return self
+                .leaf
+                .at_layout_position_as(|| self.semantics(), text_node);
         }
+        let line = self.shown(&text);
+        let (line_w, _) = crate::text_metrics::measure_text(&line, None, 1.0e6, &style);
+        let origin = align_origin(style.text_align, full.width, line_w);
+        // A mask character is not the width of what it hides, so measuring the real prefix would put the caret somewhere the text is not.
+        let measure = |upto: usize| {
+            crate::text_metrics::measure_text(&self.shown(&text[..upto]), None, 1.0e6, &style).0
+        };
+        let line_h = crate::text_metrics::line_box(&style);
+        let underlines = spans.into_iter().map(|underline| {
+            let from = floor_boundary(&text, underline.range.start);
+            let to = floor_boundary(&text, underline.range.end.max(from));
+            let (start, end) = (measure(from), measure(to));
+            let width = match from == to {
+                true => POINT_MARK,
+                false => (end - start).max(1.0),
+            };
+            RenderNode::rect(
+                Rect {
+                    x: origin + start,
+                    y: line_h - UNDERLINE_THICKNESS,
+                    width,
+                    height: UNDERLINE_THICKNESS,
+                },
+                RectStyle::default().with_fill(underline.color),
+            )
+        });
+        if !focused {
+            let drawn = RenderNode::group(std::iter::once(text_node).chain(underlines));
+            return self.leaf.at_layout_position_as(|| self.semantics(), drawn);
+        }
+        let caret = self.caret_at(&text);
+        let highlight = self.selection(&text).map(|(from, to)| {
+            let (start, end) = (measure(from), measure(to));
+            let fill = style.color.faded(0.25);
+            RenderNode::rect(
+                Rect {
+                    x: origin + start,
+                    y: 0.0,
+                    width: (end - start).max(1.0),
+                    height: line_h,
+                },
+                RectStyle::default().with_fill(fill),
+            )
+        });
+        let caret_rect = Rect {
+            x: origin + measure(caret),
+            y: 0.0,
+            width: CARET_WIDTH,
+            height: line_h,
+        };
+        // Read here and nowhere else, so the caret is the only thing on the surface redrawing on the blink's account.
+        let lit = paint.faded(self.blink.opacity());
+        let caret_node = RenderNode::rect(caret_rect, RectStyle::default().with_fill(lit));
+        let layers = highlight
+            .into_iter()
+            .chain(std::iter::once(text_node))
+            .chain(underlines)
+            .chain(std::iter::once(caret_node));
+        self.leaf
+            .at_layout_position_as(|| self.semantics(), RenderNode::group(layers))
     }
 
     fn on_event(&mut self, event: &Event) -> EventResult {
@@ -435,6 +521,9 @@ impl Component for Input {
                 }
             }
             Event::KeyPressed { key, modifiers } if focus::is_focused(self.id) => {
+                if self.on_key.as_ref().is_some_and(|f| f(key, *modifiers)) {
+                    return EventResult::Handled;
+                }
                 self.edit(key, modifiers)
             }
             _ => EventResult::Ignored,
@@ -454,6 +543,15 @@ impl Drop for Input {
 }
 
 impl_leaf_widget!(Input);
+
+/// The char boundary at or before byte offset `i`, within `s`.
+fn floor_boundary(s: &str, i: usize) -> usize {
+    let mut j = i.min(s.len());
+    while j > 0 && !s.is_char_boundary(j) {
+        j -= 1;
+    }
+    j
+}
 
 /// The char boundary strictly before byte offset `i` (or 0).
 fn prev_boundary(s: &str, i: usize) -> usize {

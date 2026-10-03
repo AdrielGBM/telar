@@ -489,3 +489,114 @@ fn a_field_that_selects_on_focus_is_typed_over() {
     input.on_event(&key(Key::Char('7')));
     assert_eq!(value.get(), "7");
 }
+
+/// A field with suggestions under it walks them with the arrows and chooses with Enter, keys the field would otherwise keep: the handler hears them first, and what it does not take still reaches the field.
+#[test]
+fn a_key_handler_hears_the_keys_first_and_takes_only_what_it_answers_for() {
+    let (input, value) = focused_input("ab");
+    let submitted = Rc::new(std::cell::Cell::new(false));
+    let said = Rc::clone(&submitted);
+    let walked = Rc::new(std::cell::Cell::new(0));
+    let counted = Rc::clone(&walked);
+    let mut input = input
+        .on_submit(move || said.set(true))
+        .on_key(move |key, _| {
+            let taken = matches!(
+                key,
+                Key::Named(NamedKey::ArrowDown) | Key::Named(NamedKey::Enter)
+            );
+            if taken {
+                counted.set(counted.get() + 1);
+            }
+            taken
+        });
+
+    assert_eq!(
+        input.on_event(&key(Key::Named(NamedKey::ArrowDown))),
+        EventResult::Handled
+    );
+    input.on_event(&key(Key::Named(NamedKey::Enter)));
+    assert!(!submitted.get(), "the handler took Enter from the field");
+    input.on_event(&key(Key::Char('c')));
+    assert_eq!(value.get(), "abc", "and left the letters to it");
+    assert_eq!(walked.get(), 2);
+}
+
+/// What inserts at the caret reads it, and leaves it after what it inserted; moving it drops a selection, which would otherwise make the next letter replace text nobody chose.
+#[test]
+fn the_caret_is_read_and_moved_from_outside() {
+    let (mut input, value) = focused_input("hello");
+    let caret = input.caret();
+    input.on_event(&key(Key::Named(NamedKey::ArrowLeft)));
+    assert_eq!(caret.get(), 4);
+    input.on_event(&chord(Key::Char('a')));
+    caret.set(2);
+    assert_eq!(input.selection("hello"), None);
+    input.on_event(&key(Key::Char('x')));
+    assert_eq!(value.get(), "hexllo");
+    assert_eq!(caret.peek(), 3);
+}
+
+/// The underlines drawn in a field's view, left to right.
+fn underlines_of(input: &Input) -> Vec<Rect> {
+    fn walk(node: &RenderNode, found: &mut Vec<Rect>) {
+        match node {
+            RenderNode::Primitive(DrawCommand::Rect { rect, .. })
+                if rect.height == UNDERLINE_THICKNESS =>
+            {
+                found.push(*rect);
+            }
+            RenderNode::Group { children }
+            | RenderNode::Element { children, .. }
+            | RenderNode::Transform { children, .. }
+            | RenderNode::Clip { children, .. }
+            | RenderNode::Layer { children, .. } => {
+                for child in children.iter() {
+                    walk(child, found);
+                }
+            }
+            _ => {}
+        }
+    }
+    let mut found = Vec::new();
+    walk(&input.view(), &mut found);
+    found.sort_by(|a, b| a.x.total_cmp(&b.x));
+    found
+}
+
+/// An underline sits under the letters of its run, along the bottom of the line, focused or not; an empty run is a short mark where it starts, and a run past the end of the text is drawn at the end.
+#[test]
+fn an_underline_runs_under_the_letters_it_is_about() {
+    let (input, _) = focused_input("abcdef");
+    let input = input.underline(|| {
+        vec![
+            Underline {
+                range: 2..4,
+                color: Color::BLACK,
+            },
+            Underline {
+                range: 9..9,
+                color: Color::BLACK,
+            },
+        ]
+    });
+    let drawn = underlines_of(&input);
+    assert_eq!(drawn.len(), 2);
+    let (run, mark) = (drawn[0], drawn[1]);
+    let measure = |text: &str| {
+        crate::text_metrics::measure_text(text, None, 1.0e6, &TextStyle::new(14.0, Color::BLACK)).0
+    };
+    assert!((run.x - measure("ab")).abs() < 0.01, "{run:?}");
+    assert!((run.width - (measure("abcd") - measure("ab"))).abs() < 0.01);
+    assert!((mark.x - measure("abcdef")).abs() < 0.01, "{mark:?}");
+    assert_eq!(mark.width, POINT_MARK);
+    let line = crate::text_metrics::line_box(&TextStyle::new(14.0, Color::BLACK));
+    assert_eq!(run.y + run.height, line);
+
+    focus::clear();
+    assert_eq!(
+        underlines_of(&input).len(),
+        2,
+        "a field without the keyboard still shows what is wrong with it"
+    );
+}

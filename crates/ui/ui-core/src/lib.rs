@@ -95,7 +95,7 @@ pub use drag::{DragAxis, DragStart, drag_start, drag_travel};
 pub use error_boundary::{BuildFailure, ErrorBoundary};
 pub use image::Image;
 pub use inherit::{Inherited, context, declare, inherited_text_style, undeclare};
-pub use input::Input;
+pub use input::{Caret, Input, Underline};
 pub use input_region::{interactive_rects, visible_rect};
 pub use kept::kept;
 pub use keyboard::{
