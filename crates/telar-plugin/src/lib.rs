@@ -344,7 +344,7 @@ pub unsafe fn __plugin_on_frame(inst: *mut PluginInstance, ctx: &mut AppCtx) {
 }
 
 /// The version of the guest/host contract below. Bump it whenever [`PluginVTable`] changes shape — adding a field, reordering one, or changing a signature — so a stale `.so` is refused with a version mismatch instead of being called through a table whose fields have moved under it.
-pub const TELAR_PLUGIN_ABI: u32 = 2;
+pub const TELAR_PLUGIN_ABI: u32 = 3;
 
 /// Everything the host calls on a plugin, as one exported symbol.
 ///
