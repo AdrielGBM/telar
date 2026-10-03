@@ -261,6 +261,16 @@ impl crate::app_runtime::AppRuntime for HotApp {
         }
     }
 
+    // The surface's title is derived in the dylib's store. A missing symbol leaves its titles without the app's part until the dylib is rebuilt.
+    fn open_title(&self, app: &str, showing: &str) {
+        if let Ok(open) = unsafe {
+            self._lib
+                .get::<unsafe extern "Rust" fn(&str, &str)>(b"_rsx_hot_open_title\0")
+        } {
+            unsafe { open(app, showing) }
+        }
+    }
+
     // Its dialogs and its history are the dylib's. A missing symbol answers that nothing went back.
     fn navigate_back(&self) -> bool {
         let Ok(back) = (unsafe {

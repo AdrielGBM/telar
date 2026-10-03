@@ -8,6 +8,9 @@ use raw_window_handle::{
     DisplayHandle, HandleError, HasDisplayHandle, HasWindowHandle, WindowHandle,
 };
 
+/// Every title a [`HeadlessWindow`] was given, oldest first. Shared, because the window is made inside a run that yields nothing back: a caller hands one in with [`HeadlessPlatform::record_titles_into`](crate::HeadlessPlatform::record_titles_into) and reads it after the run returns.
+pub type TitleSink = Arc<Mutex<Vec<String>>>;
+
 /// The one canonical offscreen window marker. It implements [`platform_core::Window`], so a single type satisfies both the renderer bound (which needs only the raw-window-handle traits) and the platform bound (`Window`). Its handles are always [`HandleError::Unavailable`] — there is no surface — so a renderer built against it must use its `new_headless` constructor, and `AppHandler` detects the unavailable handle to build an offscreen renderer. `request_redraw` is a no-op: [`crate::HeadlessPlatform`] drives frames explicitly rather than through a windowing system's redraw queue.
 ///
 /// This replaces the ad-hoc `HeadlessWindow` that lived in `renderer-hardware` and the per-test `struct Fake;` markers that renderer tests each defined for themselves.
@@ -21,6 +24,8 @@ struct Inner {
     height: AtomicU32,
     scale_factor: f64,
     cursor: Mutex<Cursor>,
+    title: Mutex<String>,
+    titles: Mutex<Option<TitleSink>>,
 }
 
 impl HeadlessWindow {
@@ -37,6 +42,8 @@ impl HeadlessWindow {
                 height: AtomicU32::new(height),
                 scale_factor,
                 cursor: Mutex::new(Cursor::Default),
+                title: Mutex::new(String::new()),
+                titles: Mutex::new(None),
             }),
         }
     }
@@ -45,6 +52,16 @@ impl HeadlessWindow {
     pub fn resize(&self, width: u32, height: u32) {
         self.inner.width.store(width, Ordering::Relaxed);
         self.inner.height.store(height, Ordering::Relaxed);
+    }
+
+    /// The title last given through [`Window::set_title`]: what a real window's title bar, a tab or a task switcher would show. Empty until one is given.
+    pub fn title(&self) -> String {
+        lock(&self.inner.title).clone()
+    }
+
+    /// Writes every title this window is given into `sink`, oldest first, for a caller that asserts on — or a prerender that reads — what the surface was called.
+    pub fn record_titles_into(&self, sink: TitleSink) {
+        *lock(&self.inner.titles) = Some(sink);
     }
 
     /// The pointer shape last requested through [`Window::set_cursor`], so a test can see what a real window would show.
@@ -91,9 +108,19 @@ impl Window for HeadlessWindow {
             .lock()
             .unwrap_or_else(PoisonError::into_inner) = cursor;
     }
+    fn set_title(&self, title: &str) {
+        *lock(&self.inner.title) = title.to_owned();
+        if let Some(sink) = lock(&self.inner.titles).as_ref() {
+            lock(sink).push(title.to_owned());
+        }
+    }
     fn is_offscreen(&self) -> bool {
         true
     }
+}
+
+fn lock<T>(mutex: &Mutex<T>) -> std::sync::MutexGuard<'_, T> {
+    mutex.lock().unwrap_or_else(PoisonError::into_inner)
 }
 
 #[cfg(test)]

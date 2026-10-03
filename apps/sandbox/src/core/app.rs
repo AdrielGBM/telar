@@ -96,6 +96,12 @@ const SECTIONS: &[SectionDef] = sections![
         crate::features::locale_address::LocaleAddressProps,
         "locale_address.rsx"
     ),
+    (
+        "Surface title",
+        crate::features::surface_title::surface_title,
+        crate::features::surface_title::SurfaceTitleProps,
+        "surface_title.rsx"
+    ),
     ("Badges & chips", crate::features::pills::pills, crate::features::pills::PillsProps, "pills.rsx"),
     ("Menus & select", crate::features::menus::menus, crate::features::menus::MenusProps, "menus.rsx"),
     ("Dialogs & overlays", crate::features::dialogs::dialogs, crate::features::dialogs::DialogsProps, "dialogs.rsx"),

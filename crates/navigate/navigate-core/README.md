@@ -8,6 +8,10 @@ fragment, query-style params; not a URL) — and `Navigator::location` / `Naviga
 current page and the whole stack as locations, for whichever target adapter (web history, a desktop deep
 link, an Android intent, a TUI argument) serializes them further.
 
+A navigator that follows the app's address also names the page: the current route's `Route::title`, in the
+active locale, becomes the page's part of the surface's title. See
+[docs/surface-title.md](https://github.com/AdrielGBM/telar/blob/main/docs/surface-title.md).
+
 Part of [Telar](https://github.com/AdrielGBM/telar), a modular Rust UI framework with its own template
 language, reactive signals and a self-contained renderer.
 

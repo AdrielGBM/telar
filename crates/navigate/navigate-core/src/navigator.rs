@@ -137,6 +137,8 @@ impl<R: Route + 'static> Navigator<R> {
     ///
     /// An entry this route type has no page for is left out rather than guessed at, and the platform's current entry is rewritten to what the stack shows instead, so a stale or hand-edited address settles on a real page without costing the user the entries before it. When nothing in the platform's history is recognised the stack stays as it was.
     ///
+    /// The current route's [`title`](Route::title) becomes the page's part of the surface's title (see `ui_core::set_page_title`), and is derived again whenever the route — or anything its title reads, such as the active locale — moves.
+    ///
     /// One navigator follows the address at a time; a later call replaces an earlier one. The binding lasts as long as the reactive owner it was made under.
     pub fn follow_location(self) -> Self {
         let follower = Rc::new(Follower { nav: self });
@@ -144,7 +146,18 @@ impl<R: Route + 'static> Navigator<R> {
         let id = platform_core::follow_location_history(follower);
         let nav = self;
         reactive_core::effect(move || platform_core::report_location_history(nav.locations()));
-        reactive_core::on_cleanup(move || platform_core::unfollow_location_history(id));
+        reactive_core::effect(move || {
+            let title = nav.current().title();
+            if platform_core::is_following_location_history(id) {
+                ui_core::set_page_title(title);
+            }
+        });
+        reactive_core::on_cleanup(move || {
+            if platform_core::is_following_location_history(id) {
+                ui_core::set_page_title(None);
+            }
+            platform_core::unfollow_location_history(id);
+        });
         self
     }
 }

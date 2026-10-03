@@ -81,12 +81,18 @@ impl Window for TuiWindow {
     }
 
     fn set_title(&self, title: &str) {
-        // OSC 0 sets both the icon name and the window title, which is what a terminal emulator shows in its tab. A terminal that does not understand it ignores the sequence rather than printing it.
         use std::io::Write;
         let mut out = std::io::stdout();
-        let _ = write!(out, "\x1b]0;{title}\x07");
+        let _ = out.write_all(title_sequence(title).as_bytes());
         let _ = out.flush();
     }
+}
+
+/// The escape that names the terminal's window `title`. OSC 0 rather than OSC 2: it sets the icon name too, which is the tab label in terminals that tell the two apart, and one that understands neither ignores the sequence rather than printing it.
+pub(crate) fn title_sequence(title: &str) -> String {
+    // A control character in the title would end the sequence early and run the rest as terminal input.
+    let printable: String = title.chars().filter(|c| !c.is_control()).collect();
+    format!("\x1b]0;{printable}\x07")
 }
 
 #[cfg(test)]

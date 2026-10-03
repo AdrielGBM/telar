@@ -368,6 +368,11 @@ pub fn app(input: TokenStream) -> TokenStream {
             ) {
                 ::telar::receive_location_history(history.to_vec());
             }
+            // The dylib's own copy of the surface's title, which its navigator and its views write.
+            #[unsafe(no_mangle)]
+            pub unsafe extern "Rust" fn _rsx_hot_open_title(app: &str, showing: &str) {
+                ::telar::open_surface_title(app, showing);
+            }
             // Back closes the dylib's dialogs and steps the dylib's history, neither of which the host can reach.
             #[unsafe(no_mangle)]
             pub unsafe extern "Rust" fn _rsx_hot_navigate_back() -> bool {

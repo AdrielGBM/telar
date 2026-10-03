@@ -27,9 +27,14 @@ pub fn close() {
     push_window_command(WindowCommand::Close);
 }
 
-/// Update the OS window title.
+/// Renames the app in this window's title. The title the window shows is derived from it and from the page the app's address stands on, `Credits — Portfolio`, and follows both; see [`set_title_format`](crate::set_title_format) for another rule and `docs/surface-title.md` for what each target shows it in.
 pub fn set_title(title: impl Into<String>) {
-    push_window_command(WindowCommand::SetTitle(title.into()));
+    ui_core::set_app_title(title);
+}
+
+/// Reactive read of the title this window shows, for a custom title bar to draw.
+pub fn title() -> String {
+    ui_core::use_surface_title()
 }
 
 /// Bring this window to the front and give it input focus. Applied by the runner after the current event or frame; some Wayland compositors forbid programmatic activation, where it is a no-op.

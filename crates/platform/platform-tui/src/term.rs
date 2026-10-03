@@ -14,6 +14,10 @@ use crossterm::terminal::{
 };
 use crossterm::{cursor, execute};
 
+// XTWINOPS: push the icon name and window title on entry and pop them on the way out, so the titles the app sets leave with it. A terminal without a title stack ignores both.
+const SAVE_TITLE: &[u8] = b"\x1b[22;0t";
+const RESTORE_TITLE: &[u8] = b"\x1b[23;0t";
+
 /// Whether a terminal is currently in application mode. Read by the panic hook, which has no other way to know whether there is anything to undo — and undoing nothing must be harmless, because the hook runs on every panic in the process.
 static ACTIVE: AtomicBool = AtomicBool::new(false);
 
@@ -34,6 +38,7 @@ impl TerminalMode {
             EnableBracketedPaste,
             EnableFocusChange
         )?;
+        out.write_all(SAVE_TITLE)?;
         if mouse {
             execute!(out, EnableMouseCapture)?;
         }
@@ -82,6 +87,7 @@ pub fn restore() {
         cursor::Show,
         LeaveAlternateScreen
     );
+    let _ = out.write_all(RESTORE_TITLE);
     let _ = disable_raw_mode();
     let _ = out.flush();
 }

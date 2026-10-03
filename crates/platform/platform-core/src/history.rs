@@ -404,6 +404,15 @@ pub fn follow_location_history(follower: Rc<dyn HistoryFollower>) -> HistoryFoll
     })
 }
 
+/// Whether `id` is still the follower: no later [`follow_location_history`] has replaced it and it has not stopped.
+pub fn is_following_location_history(id: HistoryFollowerId) -> bool {
+    with_hub(|hub| {
+        hub.follower
+            .as_ref()
+            .is_some_and(|(current, _)| *current == id)
+    })
+}
+
 /// Stops following, if `id` is still the follower: one that was replaced since has nothing left to withdraw.
 pub fn unfollow_location_history(id: HistoryFollowerId) {
     with_hub(|hub| {

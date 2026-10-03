@@ -10,4 +10,4 @@ mod platform;
 mod window;
 
 pub use platform::{FrameSink, HeadlessPlatform, SurfaceFrameSink};
-pub use window::HeadlessWindow;
+pub use window::{HeadlessWindow, TitleSink};

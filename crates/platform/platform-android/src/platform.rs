@@ -151,7 +151,9 @@ use winit::event_loop::{ActiveEventLoop, ControlFlow, EventLoop};
 use winit::platform::android::EventLoopBuilderExtAndroid;
 use winit::window::{WindowAttributes, WindowId};
 
-use platform_winit::{SurfaceIntent, TouchDrag, WinitWindow as AndroidWindow, map_window_event};
+use platform_winit::{SurfaceIntent, TouchDrag, map_window_event};
+
+use crate::window::AndroidWindow;
 
 /// The Android event loop, driven by `android-activity` and paced by the choreographer.
 pub struct AndroidPlatform {
@@ -306,7 +308,7 @@ impl<H: EventHandler<AndroidWindow>> ApplicationHandler<()> for AndroidRunner<H>
                         }
                     }
                 }
-                let window = AndroidWindow(Arc::new(w));
+                let window = AndroidWindow::new(Arc::new(w), self.app.clone());
                 let preferences = crate::preferences::read(&self.app);
                 self.preferences = Some(preferences.clone());
                 self.last_preferences_poll = Some(std::time::Instant::now());

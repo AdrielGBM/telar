@@ -36,12 +36,14 @@ where
     // Split into the `WindowConfig` the platform needs and the fonts the handler factory needs, keyed by `SurfaceId` and shared read-only across the surface threads.
     let mut window_configs = Vec::with_capacity(surfaces.len());
     let mut fonts: HashMap<SurfaceId, FontSetup> = HashMap::new();
+    let mut titles: HashMap<SurfaceId, String> = HashMap::new();
     for (id, cfg) in surfaces {
         let AppConfig {
             window,
             fonts: faces,
             font_family,
         } = cfg;
+        titles.insert(id, window.title.clone());
         window_configs.push((id, window));
         fonts.insert(
             id,
@@ -52,6 +54,7 @@ where
         );
     }
     let fonts = Arc::new(fonts);
+    let titles = Arc::new(titles);
     let app_name = app_name.to_owned();
 
     platform.run_surfaces(window_configs, move |id| {
@@ -71,6 +74,9 @@ where
         );
         // Every surface shares this UI thread and the one reactive runtime, so each needs its own `Surface` world. Built here, on the thread that drives the handler.
         handler.surface = Some(ui_core::Surface::new());
+        handler.title = titles
+            .get(&id)
+            .map(|title| super::state::WindowTitle::opened_as(title));
         handler
     })
 }

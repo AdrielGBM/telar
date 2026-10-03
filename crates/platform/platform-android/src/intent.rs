@@ -145,7 +145,7 @@ fn string_of(env: &mut Env, object: JObject) -> jni::errors::Result<Option<Strin
     Ok(Some(string.try_to_string(env)?))
 }
 
-fn with_activity<T>(
+pub(crate) fn with_activity<T>(
     app: &AndroidApp,
     f: impl FnOnce(&mut Env, &JObject) -> jni::errors::Result<T>,
 ) -> jni::errors::Result<T> {

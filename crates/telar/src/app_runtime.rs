@@ -100,6 +100,11 @@ pub trait AppRuntime: 'static {
         platform_core::receive_location_history(history.to_vec());
     }
 
+    /// Tells the surface's title what its window was opened as and what it shows now, in the store [`surface_title`](crate::surface_title) reads; see [`open_surface_title`](crate::open_surface_title).
+    fn open_title(&self, app: &str, showing: &str) {
+        ui_core::open_surface_title(app, showing);
+    }
+
     /// One back as the user means it; see [`navigate_back`](crate::navigate_back).
     fn navigate_back(&self) -> bool {
         crate::location::navigate_back()

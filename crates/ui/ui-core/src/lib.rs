@@ -56,6 +56,7 @@ mod step;
 mod styled_container;
 mod surface;
 mod surface_context;
+mod surface_title;
 #[cfg(feature = "svg")]
 mod svg;
 #[cfg(test)]
@@ -134,6 +135,10 @@ pub use step::{COARSE_STEP, FINE_STEP, step_factor};
 pub use styled_container::{KeyAnswer, StyledContainer, box_transform, style_follows};
 pub use surface::{DEFAULT_SCRIM, Edge, SurfaceScaffold, SurfaceTransition};
 pub use surface_context::{Surface, SurfaceGuard};
+pub use surface_title::{
+    TitleParts, compose_title, open_surface_title, set_app_title, set_page_title, set_title_format,
+    surface_title, use_surface_title,
+};
 #[cfg(feature = "svg")]
 pub use svg::Svg;
 pub use text::{Text, TextRun};

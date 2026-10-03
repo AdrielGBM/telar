@@ -117,5 +117,6 @@ where
         renderer,
     );
     handler.location = location;
+    handler.title = Some(super::state::WindowTitle::opened_as(&window.title));
     platform.run(window, handler)
 }

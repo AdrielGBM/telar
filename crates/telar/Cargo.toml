@@ -79,6 +79,10 @@ name = "surface_size_flow"
 path = "src/surface_size_flow_test.rs"
 
 [[test]]
+name = "surface_title_flow"
+path = "src/surface_title_flow_test.rs"
+
+[[test]]
 name = "text_style_baseline"
 path = "src/text_style_baseline_test.rs"
 

@@ -20,6 +20,8 @@ mod preference_values;
 mod preferences;
 #[cfg(target_os = "android")]
 mod sys_prop;
+#[cfg(target_os = "android")]
+mod window;
 
 #[cfg(target_os = "android")]
 pub use adpf::AdpfSession;
@@ -33,6 +35,5 @@ pub use paths::AndroidPathsProvider;
 pub use platform::AndroidPlatform;
 #[cfg(target_os = "android")]
 pub use sys_prop::read_sys_prop;
-// The android backend reuses the shared winit window wrapper; kept under the AndroidWindow name for callers.
 #[cfg(target_os = "android")]
-pub use platform_winit::WinitWindow as AndroidWindow;
+pub use window::AndroidWindow;

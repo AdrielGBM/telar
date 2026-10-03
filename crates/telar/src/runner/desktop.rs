@@ -105,6 +105,7 @@ pub fn open_window<A: App>(app: A) -> SurfaceToken {
         super::host::SurfaceRenderer::builtin(),
     );
     handler.surface = Some(Surface::new());
+    handler.title = Some(super::state::WindowTitle::opened_as(&window_config.title));
     let boxed: Box<dyn EventHandler<WinitWindow>> = Box::new(handler);
     let close = request_dynamic_surface(window_config, boxed);
     SurfaceToken::new(Box::new(WinitSurfaceControl { close }))

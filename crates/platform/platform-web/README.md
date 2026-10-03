@@ -2,6 +2,9 @@
 
 Browser surface, input and animation-frame loop for Telar's platform abstraction.
 
+The window's title is the page's `document.title`, set to the configured title when the app mounts. See
+[docs/surface-title.md](https://github.com/AdrielGBM/telar/blob/main/docs/surface-title.md).
+
 Part of [Telar](https://github.com/AdrielGBM/telar), a modular Rust UI framework with its own template
 language, reactive signals and a self-contained renderer.
 

@@ -29,3 +29,13 @@ fn a_redraw_request_is_taken_once() {
     w.request_redraw();
     assert!(w.take_redraw_request(), "the request is there to take");
 }
+
+#[test]
+fn a_title_is_written_as_one_window_title_sequence() {
+    assert_eq!(title_sequence("Credits — Portfolio"), "\x1b]0;Credits — Portfolio\x07");
+}
+
+#[test]
+fn a_control_character_cannot_end_the_title_sequence_early() {
+    assert_eq!(title_sequence("a\x07b\x1b]0;c\nd"), "\x1b]0;ab]0;cd\x07");
+}

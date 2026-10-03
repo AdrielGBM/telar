@@ -10,6 +10,10 @@ the control's state (disabled, hidden, inside a modal that holds focus), `Styled
 overrides it for state-dependent widgets, and `focus::follow_box` follows a focus move the surface made
 itself. See [docs/keyboard.md](https://github.com/AdrielGBM/telar/blob/main/docs/keyboard.md).
 
+Each surface keeps the title it shows: `set_app_title`, `set_page_title` and `set_title_format` feed it,
+`use_surface_title` reads it, and an effect owned by the surface announces each change to its platform as
+`WindowCommand::SetTitle`. See [docs/surface-title.md](https://github.com/AdrielGBM/telar/blob/main/docs/surface-title.md).
+
 **Applications depend on the [`telar`](https://crates.io/crates/telar) facade, not on this crate.** Telar
 is split into small crates so a build carries only the target and the capabilities it named, and every one
 of them has to be published for the facade to be. The facade re-exports what an application needs behind

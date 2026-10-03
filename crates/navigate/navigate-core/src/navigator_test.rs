@@ -336,3 +336,86 @@ fn an_anchor_on_a_page_is_that_page_and_survives_the_next_one() {
         "back from the next page returns to the anchor the reader left"
     );
 }
+
+thread_local! {
+    static LANGUAGE: reactive_core::RwSignal<&'static str> =
+        reactive_core::detached(|| reactive_core::signal("en"));
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+enum Page {
+    Home,
+    Credits,
+}
+
+impl crate::Route for Page {
+    fn to_location(&self) -> Location {
+        match self {
+            Page::Home => Location::root(),
+            Page::Credits => Location::root().segment("credits"),
+        }
+    }
+
+    fn from_location(location: &Location) -> Option<Self> {
+        match location.segments() {
+            [] => Some(Page::Home),
+            [s] if s == "credits" => Some(Page::Credits),
+            _ => None,
+        }
+    }
+
+    fn title(&self) -> Option<String> {
+        let spanish = LANGUAGE.with(|language| language.get()) == "es";
+        match self {
+            Page::Home => None,
+            Page::Credits if spanish => Some("Créditos".to_owned()),
+            Page::Credits => Some("Credits".to_owned()),
+        }
+    }
+}
+
+#[test]
+fn the_followed_route_names_the_page_in_the_surface_title() {
+    ui_core::open_surface_title("Portfolio", "Portfolio");
+    platform_core::receive_location_history(vec![at("/")]);
+    let nav = Navigator::new(Page::Home).follow_location();
+    assert_eq!(ui_core::surface_title(), "Portfolio");
+    nav.push(Page::Credits);
+    assert_eq!(ui_core::surface_title(), "Credits — Portfolio");
+    nav.pop();
+    assert_eq!(ui_core::surface_title(), "Portfolio");
+}
+
+#[test]
+fn the_page_title_follows_what_the_route_reads_for_it() {
+    ui_core::open_surface_title("Portfolio", "Portfolio");
+    platform_core::receive_location_history(vec![at("/"), at("/credits")]);
+    Navigator::new(Page::Home).follow_location();
+    assert_eq!(ui_core::surface_title(), "Credits — Portfolio");
+    LANGUAGE.with(|language| language.set("es"));
+    assert_eq!(ui_core::surface_title(), "Créditos — Portfolio");
+}
+
+#[test]
+fn a_navigator_no_longer_followed_no_longer_names_the_page() {
+    ui_core::open_surface_title("Portfolio", "Portfolio");
+    platform_core::receive_location_history(vec![at("/")]);
+    let replaced = Navigator::new(Page::Home).follow_location();
+    let _following = Navigator::new(Route::Home).follow_location();
+    replaced.push(Page::Credits);
+    assert_eq!(ui_core::surface_title(), "Portfolio");
+}
+
+#[test]
+fn a_binding_that_ends_takes_its_page_title_with_it() {
+    ui_core::open_surface_title("Portfolio", "Portfolio");
+    platform_core::receive_location_history(vec![at("/"), at("/credits")]);
+    let owner = {
+        let scope = reactive_core::owner_scope();
+        Navigator::new(Page::Home).follow_location();
+        scope.id()
+    };
+    assert_eq!(ui_core::surface_title(), "Credits — Portfolio");
+    reactive_core::dispose_owner(owner);
+    assert_eq!(ui_core::surface_title(), "Portfolio");
+}

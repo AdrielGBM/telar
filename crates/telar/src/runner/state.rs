@@ -63,3 +63,19 @@ impl AppEnv {
         }
     }
 }
+
+/// The window's title as the handler knows it: the one it was configured with, which is the app's part of every title it derives, and the one the platform shows now.
+pub(super) struct WindowTitle {
+    pub(super) app: String,
+    pub(super) showing: String,
+}
+
+impl WindowTitle {
+    /// A window the platform opened under its configured title.
+    pub(super) fn opened_as(title: &str) -> Self {
+        Self {
+            app: title.to_owned(),
+            showing: title.to_owned(),
+        }
+    }
+}

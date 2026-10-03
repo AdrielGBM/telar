@@ -17,7 +17,7 @@ use super::COMMAND_BUF_POOL_CAP;
 use super::font_config::{SystemFonts, build_font_config};
 use super::frame_thread::FrameMsg;
 use super::host::{RawHandles, RendererHost, RendererRequest, RendererStart, SurfaceRenderer};
-use super::state::{AppEnv, FramePacer};
+use super::state::{AppEnv, FramePacer, WindowTitle};
 use super::{FRAME_BUDGET, HW_KEEPALIVE_INTERVAL, IDLE_GRACE};
 
 pub(super) struct AppHandler<W, D: DevPlugin>
@@ -63,6 +63,8 @@ where
     pub(super) system_preferences: Option<SystemPreferences>,
     // Only the surface that owns the app's address has one; a window opened beside it moves no history.
     pub(super) location: Option<super::location::LocationBinding>,
+    // `None` where the entry point named no window title, which leaves the app's part of the derived title unset.
+    pub(super) title: Option<WindowTitle>,
     #[cfg(all(
         feature = "dev",
         not(target_os = "android"),
@@ -149,6 +151,7 @@ where
         frame_text: Vec::new(),
         system_preferences: None,
         location: None,
+        title: None,
         #[cfg(all(
             feature = "dev",
             not(target_os = "android"),
@@ -203,7 +206,12 @@ where
                 WindowCommand::Minimize => window.set_minimized(true),
                 WindowCommand::ToggleMaximize => window.set_maximized(!window.is_maximized()),
                 WindowCommand::SetMaximized(v) => window.set_maximized(v),
-                WindowCommand::SetTitle(title) => window.set_title(&title),
+                WindowCommand::SetTitle(title) => {
+                    window.set_title(&title);
+                    if let Some(window_title) = &mut self.title {
+                        window_title.showing = title;
+                    }
+                }
                 WindowCommand::Focus => window.focus_window(),
                 WindowCommand::SetCursor(cursor) => window.set_cursor(cursor),
                 WindowCommand::Close => self.exit_requested = true,
@@ -269,6 +277,9 @@ where
         let (width, height) = self.logical_size(window);
         self.report_surface_size(width, height);
         self.hand_over_location();
+        if let Some(title) = &self.title {
+            self.app.open_title(&title.app, &title.showing);
+        }
         self.tree = Some(self.app.mount());
         self.fit_tree_to(window);
     }

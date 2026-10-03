@@ -253,6 +253,11 @@ pub use ui_core::{
 };
 #[cfg(feature = "runtime")]
 pub use ui_core::{
+    TitleParts, compose_title, open_surface_title, set_page_title, set_title_format, surface_title,
+    use_surface_title,
+};
+#[cfg(feature = "runtime")]
+pub use ui_core::{
     Breakpoints, breakpoint, set_safe_area_insets, set_surface_size, surface_size,
     use_safe_area_insets, use_surface_height, use_surface_size, use_surface_width,
 };

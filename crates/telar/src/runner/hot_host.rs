@@ -69,6 +69,7 @@ pub fn run_hot_reload_host(
         super::host::SurfaceRenderer::builtin(),
     );
     handler.hot_reload_rx = Some(hot_rx);
+    handler.title = Some(super::state::WindowTitle::opened_as(&window.title));
     handler.location = Some(super::location::LocationBinding::remembered(Box::new(
         platform_core::ArgumentLocation::from_env(),
     )));

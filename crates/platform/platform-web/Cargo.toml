@@ -80,3 +80,7 @@ path = "src/language_test.rs"
 [[test]]
 name = "safe_area"
 path = "src/safe_area_test.rs"
+
+[[test]]
+name = "title"
+path = "src/title_test.rs"

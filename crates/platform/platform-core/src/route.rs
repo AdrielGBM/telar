@@ -27,8 +27,9 @@ pub trait Route: Clone {
     where
         Self: Sized;
 
-    /// A human-readable title for this route, if it has one — the hook a surface's title (T-9.1) derives
-    /// from. Routes that do not name a page (a dialog route, an in-page anchor) leave this `None`.
+    /// The title of the page this route shows, in the active locale, if it names one: what the surface's title is derived from while a navigator following the app's address stands on it (see `docs/surface-title.md`). Routes that do not name a page (a dialog route, an in-page anchor) leave this `None`.
+    ///
+    /// Called inside an effect, so a title translated here — `t!("credits.title")`, or `telar::t(key)` for a key the route holds — follows a change of locale without anything else asking.
     fn title(&self) -> Option<String> {
         None
     }

@@ -10,7 +10,7 @@ use platform_core::{
     WindowConfig,
 };
 
-use crate::window::HeadlessWindow;
+use crate::window::{HeadlessWindow, TitleSink};
 
 // AppHandler paces content frames off a real wall clock at 60fps; the run loop waits out this budget before each redraw so the frame actually rasterizes instead of being deferred by the pacing gate.
 const FRAME_BUDGET: Duration = Duration::from_nanos(1_000_000_000 / 60);
@@ -35,6 +35,7 @@ pub struct HeadlessPlatform {
     location: Vec<Location>,
     location_sink: Option<HistorySink>,
     location_changes: Vec<Vec<Location>>,
+    title_sink: Option<TitleSink>,
 }
 
 impl HeadlessPlatform {
@@ -51,6 +52,7 @@ impl HeadlessPlatform {
             location: Vec::new(),
             location_sink: None,
             location_changes: Vec::new(),
+            title_sink: None,
         }
     }
 
@@ -87,6 +89,12 @@ impl HeadlessPlatform {
         self
     }
 
+    /// Writes every title the window is given into `sink`, oldest first: the one it opens with, then each the app derives as it moves — what a prerender reads a page's title from. Only the single-surface run records them.
+    pub fn record_titles_into(mut self, sink: TitleSink) -> Self {
+        self.title_sink = Some(sink);
+        self
+    }
+
     /// How many render frames to drive. Defaults to 1. Use more to let animations or multi-pass reactive settling converge before the final pixels are captured.
     pub fn with_frames(mut self, frames: u32) -> Self {
         self.frames = frames;
@@ -119,10 +127,14 @@ impl Platform for HeadlessPlatform {
 
     fn run<H: EventHandler<HeadlessWindow>>(
         self,
-        _config: WindowConfig,
+        config: WindowConfig,
         mut handler: H,
     ) -> Result<(), PlatformError> {
         let window = HeadlessWindow::new(self.width, self.height);
+        if let Some(sink) = &self.title_sink {
+            window.record_titles_into(sink.clone());
+        }
+        window.set_title(&config.title);
 
         // Mirror the winit loop's iteration shape (new_events → dispatch → about_to_wait) so the handler's reactive batching brackets stay balanced exactly as they do under winit.
         handler.new_events();
@@ -203,6 +215,7 @@ impl MultiSurfacePlatform for HeadlessPlatform {
         let mut states: Vec<(SurfaceId, HeadlessWindow, H)> = Vec::with_capacity(surfaces.len());
         for (id, config) in surfaces {
             let window = HeadlessWindow::new(config.width, config.height);
+            window.set_title(&config.title);
             states.push((id, window, factory(id)));
         }
 
