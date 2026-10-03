@@ -36,42 +36,6 @@ fn color_lerp_endpoints_are_exact() {
 }
 
 #[test]
-fn color_lerp_gray_to_gray_stays_neutral() {
-    let mid = Color::rgb(0.2, 0.2, 0.2).lerp(&Color::rgb(0.8, 0.8, 0.8), 0.5);
-    assert!((mid.r - mid.g).abs() < 2e-3, "{mid:?}");
-    assert!((mid.g - mid.b).abs() < 2e-3, "{mid:?}");
-}
-
-#[test]
-fn color_lerp_hue_takes_short_arc() {
-    let mid = Color::RED.lerp(&Color::rgb(1.0, 1.0, 0.0), 0.5);
-    let (_, chroma, hue, _) = mid.to_oklcha();
-    assert!(
-        chroma > ACHROMATIC_EPS,
-        "midpoint unexpectedly gray: {mid:?}"
-    );
-    assert!(
-        (29.0..=110.0).contains(&hue),
-        "hue {hue} left the short arc"
-    );
-}
-
-#[test]
-fn color_lerp_achromatic_endpoint_carries_the_other_hue() {
-    let mid = Color::rgb(0.5, 0.5, 0.5).lerp(&Color::RED, 0.5);
-    let (_, chroma, hue, _) = mid.to_oklcha();
-    let (_, _, red_hue, _) = Color::RED.to_oklcha();
-    assert!(
-        chroma > ACHROMATIC_EPS,
-        "an achromatic endpoint must take the other end's hue, not grey out: {chroma}"
-    );
-    assert!(
-        (hue - red_hue).abs() < 1.0,
-        "hue {hue} != red hue {red_hue}"
-    );
-}
-
-#[test]
 fn font_axes_tween_and_spring_axis_by_axis() {
     use renderer_core::FontVariations;
     let from = FontVariations::new()

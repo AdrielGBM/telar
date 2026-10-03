@@ -271,3 +271,39 @@ fn oklch_round_trip_is_stable() {
     assert!((c1 - c2).abs() < 1e-3, "c: {c1} != {c2}");
     assert!((h1 - h2).abs() < 1e-2, "h: {h1} != {h2}");
 }
+
+#[test]
+fn mix_gray_to_gray_stays_neutral() {
+    let mid = Color::rgb(0.2, 0.2, 0.2).mix(Color::rgb(0.8, 0.8, 0.8), 0.5);
+    assert!((mid.r - mid.g).abs() < 2e-3, "{mid:?}");
+    assert!((mid.g - mid.b).abs() < 2e-3, "{mid:?}");
+}
+
+#[test]
+fn mix_hue_takes_short_arc() {
+    let mid = Color::RED.mix(Color::rgb(1.0, 1.0, 0.0), 0.5);
+    let (_, chroma, hue, _) = mid.to_oklcha();
+    assert!(
+        chroma > ACHROMATIC_CHROMA,
+        "midpoint unexpectedly gray: {mid:?}"
+    );
+    assert!(
+        (29.0..=110.0).contains(&hue),
+        "hue {hue} left the short arc"
+    );
+}
+
+#[test]
+fn mix_achromatic_endpoint_carries_the_other_hue() {
+    let mid = Color::rgb(0.5, 0.5, 0.5).mix(Color::RED, 0.5);
+    let (_, chroma, hue, _) = mid.to_oklcha();
+    let (_, _, red_hue, _) = Color::RED.to_oklcha();
+    assert!(
+        chroma > ACHROMATIC_CHROMA,
+        "an achromatic endpoint must take the other end's hue, not grey out: {chroma}"
+    );
+    assert!(
+        (hue - red_hue).abs() < 1.0,
+        "hue {hue} != red hue {red_hue}"
+    );
+}

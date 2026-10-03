@@ -214,45 +214,9 @@ impl Lerp for BorderRadius {
     }
 }
 
-// Chroma below this (Oklch C) is treated as achromatic; such an endpoint carries the other's hue.
-const ACHROMATIC_EPS: f32 = 1e-4;
-
-// Interpolate hue along the shortest arc, carrying the chromatic endpoint's hue when one side is gray.
-fn lerp_hue(h1: f32, c1: f32, h2: f32, c2: f32, t: f32) -> f32 {
-    let gray1 = c1 < ACHROMATIC_EPS;
-    let gray2 = c2 < ACHROMATIC_EPS;
-    if gray1 && gray2 {
-        return h1;
-    }
-    if gray1 {
-        return h2;
-    }
-    if gray2 {
-        return h1;
-    }
-    let mut delta = (h2 - h1).rem_euclid(360.0);
-    if delta > 180.0 {
-        delta -= 360.0;
-    }
-    (h1 + delta * t).rem_euclid(360.0)
-}
-
 impl Lerp for Color {
     fn lerp(&self, other: &Self, t: f32) -> Self {
-        // Endpoints return exactly to avoid Oklch round-trip drift at t=0/1.
-        if t <= 0.0 {
-            return *self;
-        }
-        if t >= 1.0 {
-            return *other;
-        }
-        let (l1, c1, h1, a1) = self.to_oklcha();
-        let (l2, c2, h2, a2) = other.to_oklcha();
-        let l = l1.lerp(&l2, t);
-        let c = c1.lerp(&c2, t);
-        let a = a1.lerp(&a2, t);
-        let h = lerp_hue(h1, c1, h2, c2, t);
-        Color::from_oklcha(l, c, h, a)
+        self.mix(*other, t)
     }
     // Spring integration for Color runs in sRGB-component space (see trait docs).
     fn add(&self, other: &Self) -> Self {

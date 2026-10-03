@@ -119,6 +119,27 @@ impl Color {
         Self { a, ..self }
     }
 
+    /// The colour `t` of the way from `self` (at `0`) to `other` (at `1`), interpolated in Oklch so the middle keeps its lightness and saturation rather than greying out as an sRGB blend does.
+    ///
+    /// Hue takes the shorter way round the circle, and an achromatic end carries the other end's hue, since a grey has no hue of its own to travel from. The ends come back exactly, without the round trip through Oklch.
+    pub fn mix(self, other: Color, t: f32) -> Self {
+        if t <= 0.0 {
+            return self;
+        }
+        if t >= 1.0 {
+            return other;
+        }
+        let (l1, c1, h1, a1) = self.to_oklcha();
+        let (l2, c2, h2, a2) = other.to_oklcha();
+        let lerp = |from: f32, to: f32| from + (to - from) * t;
+        Self::from_oklcha(
+            lerp(l1, l2),
+            lerp(c1, c2),
+            mix_hue(h1, c1, h2, c2, t),
+            lerp(a1, a2),
+        )
+    }
+
     pub fn darken(self, factor: f32) -> Self {
         Self {
             r: (self.r * (1.0 - factor)).max(0.0),
@@ -191,6 +212,22 @@ impl Color {
     pub const GREEN: Self = Self::rgb(0.0, 1.0, 0.0);
     pub const BLUE: Self = Self::rgb(0.0, 0.0, 1.0);
     pub const TRANSPARENT: Self = Self::rgba(0.0, 0.0, 0.0, 0.0);
+}
+
+const ACHROMATIC_CHROMA: f32 = 1e-4;
+
+fn mix_hue(h1: f32, c1: f32, h2: f32, c2: f32, t: f32) -> f32 {
+    match (c1 < ACHROMATIC_CHROMA, c2 < ACHROMATIC_CHROMA) {
+        (true, true) | (false, true) => h1,
+        (true, false) => h2,
+        (false, false) => {
+            let mut delta = (h2 - h1).rem_euclid(360.0);
+            if delta > 180.0 {
+                delta -= 360.0;
+            }
+            (h1 + delta * t).rem_euclid(360.0)
+        }
+    }
 }
 
 #[cfg(test)]
