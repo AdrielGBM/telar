@@ -226,7 +226,7 @@ telar = "0.2.1"
 
 Everything behind it — the reactive graph, the layout engine, the renderers, the platform backends, the `.rsx` pipeline — is a separate `telar-*` crate. They are published because Cargo requires every dependency of a published crate to be published too, not because an application names them; the split is what lets a terminal build skip a GPU renderer. Reach for one directly only if you are writing a frontend or a tool against Telar's internals.
 
-Three exceptions. [`cargo-telar`](crates/tools/cargo-telar) is a binary you install rather than a dependency. [`telar-dynamic`](crates/telar-dynamic) is a second dependency, for an application that decodes an asset at run time rather than baking it: the facade owns the seam and ships no implementation of it, so the decoders and transports live there, one feature each. And [`telar-plugin`](crates/telar-plugin) is a third, for hosting a separately-compiled Telar UI inside your own — or for being one.
+Four exceptions. [`cargo-telar`](crates/tools/cargo-telar) is a binary you install rather than a dependency. [`telar-dynamic`](crates/telar-dynamic) is a second dependency, for an application that decodes an asset at run time rather than baking it: the facade owns the seam and ships no implementation of it, so the decoders and transports live there, one feature each. [`telar-plugin`](crates/telar-plugin) is a third, for hosting a separately-compiled Telar UI inside your own — or for being one. And [`telar-expression`](crates/telar-expression) is a fourth, for an application whose users bind properties to formulas: a typed, pure expression language checked before it runs and bound to signals, which most applications never need and so the facade does not carry.
 
 <details>
 <summary><b>The crates behind the facade</b></summary>
@@ -244,7 +244,7 @@ Three exceptions. [`cargo-telar`](crates/tools/cargo-telar) is a binary you inst
 | [`telar-renderer-software`](crates/renderer/renderer-software) · [`telar-renderer-hardware`](crates/renderer/renderer-hardware) | CPU and wgpu backends |
 | [`telar-renderer-tui`](crates/renderer/renderer-tui) · [`telar-renderer-dom`](crates/renderer/renderer-dom) · [`telar-renderer-web`](crates/renderer/renderer-web) | Terminal cells, browser elements, browser canvas |
 | [`telar-renderer-text`](crates/renderer/renderer-text) · [`telar-renderer-assets`](crates/renderer/renderer-assets) | Text shaping and glyph atlas; SVG parsing and build-time asset baking |
-| [`telar-dynamic`](crates/telar-dynamic) · [`telar-plugin`](crates/telar-plugin) | Runtime asset decoders and transports; embedding a separately-compiled UI — the two crates here an application depends on directly |
+| [`telar-dynamic`](crates/telar-dynamic) · [`telar-plugin`](crates/telar-plugin) · [`telar-expression`](crates/telar-expression) | Runtime asset decoders and transports; embedding a separately-compiled UI; a typed expression language bound to signals — the three crates here an application depends on directly |
 | [`telar-renderer-cache`](crates/renderer/renderer-cache) · [`telar-renderer-record`](crates/renderer/renderer-record) | The shared byte-budgeted cache; a backend that records instead of drawing |
 | [`telar-platform-core`](crates/platform/platform-core) and `telar-platform-{winit,desktop,android,tui,web,headless}` | Window/event abstraction and its backends |
 | [`telar-preferences-core`](crates/preferences/preferences-core) | The user's system preferences as reactive state, which theme, motion and plugins follow |

@@ -1,0 +1,31 @@
+[package]
+name = "telar-expression"
+version = { workspace = true }
+edition = { workspace = true }
+rust-version = { workspace = true }
+description = "A small typed expression language for Telar applications: formulas a user writes against an application's readings, checked before they run and bound to signals so they recompute only when what they read moves."
+keywords = ["telar", "expression", "formula", "reactive", "calculator"]
+categories = ["gui", "parser-implementations", "mathematics"]
+readme = "README.md"
+license = { workspace = true }
+repository = { workspace = true }
+
+[package.metadata.docs.rs]
+all-features = true
+rustdoc-args = ["--cfg", "docsrs"]
+
+[features]
+#! Nothing to choose: the language, its standard functions and the reactive binding are one piece, and an
+#! application that depends on this crate wants all of it.
+
+## Renders this feature list into the crate documentation. docs.rs only; never enable it yourself.
+document-features = ["dep:document-features"]
+
+[dependencies]
+geometry-core = { workspace = true }
+reactive-core = { workspace = true }
+
+document-features = { workspace = true, optional = true }
+
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(docsrs)'] }

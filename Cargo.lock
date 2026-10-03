@@ -5557,6 +5557,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "telar-expression"
+version = "0.2.1"
+dependencies = [
+ "document-features",
+ "telar-geometry-core",
+ "telar-reactive-core",
+]
+
+[[package]]
 name = "telar-geometry-core"
 version = "0.2.1"
 
