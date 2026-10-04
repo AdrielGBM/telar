@@ -174,3 +174,48 @@ fn an_anchor_is_the_elements_id() {
     let plain = rendered(&[open(41, Semantics::group()), DrawCommand::PopElement]);
     assert_eq!(attribute(&plain, "id"), None);
 }
+
+/// A state is written in the attribute ARIA has for the box's role, and a box whose role changes takes the old attribute away: a switch that becomes a toggle button stops saying it is checked.
+#[wasm_bindgen_test]
+fn a_state_follows_the_role_it_belongs_to() {
+    let host: web_sys::HtmlElement = document()
+        .create_element("div")
+        .expect("a host element")
+        .dyn_into()
+        .expect("a div is an HTML element");
+    document()
+        .body()
+        .expect("a body")
+        .append_child(host.as_ref())
+        .expect("the host went into the page");
+    let mut renderer = DomRenderer::new(host.clone()).expect("a renderer on the host");
+    let frame = |role: Role, on: bool| {
+        [
+            open(50, Semantics::of(role).in_state(false, Some(on), false)),
+            text("x"),
+            DrawCommand::PopElement,
+        ]
+    };
+    renderer
+        .render_frame(&frame(Role::Switch, true), None)
+        .expect("the frame reconciled");
+    let node = host.first_element_child().expect("a box");
+    assert_eq!(attribute(&node, "role").as_deref(), Some("switch"));
+    assert_eq!(attribute(&node, "aria-checked").as_deref(), Some("true"));
+    assert_eq!(attribute(&node, "aria-pressed"), None);
+
+    renderer
+        .render_frame(&frame(Role::Button, false), None)
+        .expect("the frame reconciled");
+    let node = host.first_element_child().expect("a box");
+    assert_eq!(node.tag_name().to_lowercase(), "button");
+    assert_eq!(attribute(&node, "aria-pressed").as_deref(), Some("false"));
+    assert_eq!(attribute(&node, "aria-checked"), None);
+
+    renderer
+        .render_frame(&frame(Role::Tab, true), None)
+        .expect("the frame reconciled");
+    let node = host.first_element_child().expect("a box");
+    assert_eq!(attribute(&node, "aria-selected").as_deref(), Some("true"));
+    assert_eq!(attribute(&node, "aria-pressed"), None);
+}

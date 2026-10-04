@@ -68,6 +68,23 @@ fn a_region_is_not_a_control_and_neither_is_a_plain_box() {
 }
 
 #[test]
+fn the_role_says_what_its_on_off_state_is() {
+    for role in [Role::CheckBox, Role::Radio, Role::Switch] {
+        assert_eq!(role.toggle_kind(), Some(ToggleKind::Checked), "{role:?}");
+    }
+    assert_eq!(
+        Role::Button.toggle_kind(),
+        Some(ToggleKind::Pressed),
+        "a button with a state is a toggle button, pressed rather than checked"
+    );
+    assert_eq!(Role::Tab.toggle_kind(), Some(ToggleKind::Selected));
+    assert_eq!(Role::Disclosure.toggle_kind(), Some(ToggleKind::Expanded));
+    for role in [Role::Link, Role::Slider, Role::Navigation, Role::Group] {
+        assert_eq!(role.toggle_kind(), None, "{role:?} has no on/off state");
+    }
+}
+
+#[test]
 fn a_box_is_a_group_until_it_says_otherwise() {
     assert_eq!(Semantics::default().role, Role::Group);
     assert_eq!(Semantics::of(Role::Main).role, Role::Main);

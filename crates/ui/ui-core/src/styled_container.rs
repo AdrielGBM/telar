@@ -599,9 +599,9 @@ impl StyledContainer {
         self
     }
 
-    /// Declares that this control carries a checked state, and how to read it.
+    /// Declares that this control carries an on/off state, and how to read it: checked on a checkbox, radio or switch, pressed on a button (a toggle button), selected on a tab and expanded on a disclosure, as [`Role::toggle_kind`](renderer_core::Role::toggle_kind) says.
     ///
-    /// Only meaningful after [`control`](Self::control), and only for the roles that have one. Without it a reader announces "checkbox" and stops — and a default of "unticked" would be worse, since it would be confidently wrong for half of them.
+    /// Only meaningful after [`control`](Self::control), and only for the roles that have one; any other role ignores it. Without it a reader announces "checkbox" and stops — and a default of "unticked" would be worse, since it would be confidently wrong for half of them.
     pub fn toggled(self, state: impl Fn() -> bool + 'static) -> Self {
         if let Some(id) = self.focusable.id {
             focus::set_toggled(id, state);

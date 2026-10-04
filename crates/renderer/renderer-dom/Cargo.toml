@@ -53,6 +53,10 @@ name = "semantics"
 path = "src/semantics_test.rs"
 
 [[test]]
+name = "controls"
+path = "src/controls_test.rs"
+
+[[test]]
 name = "document_scroll"
 path = "src/document_scroll_test.rs"
 

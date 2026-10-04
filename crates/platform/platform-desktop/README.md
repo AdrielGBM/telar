@@ -12,7 +12,8 @@ focus. See
 [docs/system-preferences.md](https://github.com/AdrielGBM/telar/blob/main/docs/system-preferences.md).
 
 With `a11y`, the snapshot Telar builds of each window is published as an AccessKit tree. Its tests build a real
-screen and read the tree back: roles, names, links and their URLs, focusable nodes and the focus order. See
+screen and read the tree back: roles, names, links and their URLs, the on/off state of checkboxes, switches and toggle buttons, focusable nodes and
+the focus order. See
 [docs/accessibility.md](https://github.com/AdrielGBM/telar/blob/main/docs/accessibility.md#audits).
 
 **Applications depend on the [`telar`](https://crates.io/crates/telar) facade, not on this crate.** Telar

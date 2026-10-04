@@ -36,11 +36,18 @@ State adjusts it (`ui_core::focus::focusable_of`):
 A control that answers a key it did not declare fights the host for that key on web-dom. That is the rule to
 remember when writing a custom control with `on_focused_key`.
 
-In `.rsx`, a box declares its keys with `consumes_keys:`. It takes key names separated by commas or spaces
-(`up`, `down`, `left`, `right`, `space`, `enter`, `tab`, `backspace`, `pageup`, `pagedown`, `home`, `end`)
-or groups (`arrows`, `vertical-arrows`, `horizontal-arrows`, `activation`, `paging`, `edges`, `scrolling`,
-`none`). These are the same names `ConsumedKeys::named` reads. A misspelt name is a compile error. A
-`$`-reading expression that yields a `ConsumedKeys` is re-read every render:
+In `.rsx`, a box becomes a control by its role: `role:button`, `role:switch`, `role:checkbox`, `role:tab`,
+`role:slider` and the other roles a person operates make it a Tab stop that keeps that role's keys, wears the
+theme's ring, and is pressed by Enter and Space as by a tap (see
+[accessibility.md](accessibility.md#controls-and-their-state)). A region (`role:navigation`) stays out of the
+Tab order. A box with `on_press` and no role still answers only the pointer: a scrim or a drag surface takes
+presses without being a place the keyboard should stop.
+
+A box declares its keys with `consumes_keys:`, in place of what its role keeps. It takes key names separated
+by commas or spaces (`up`, `down`, `left`, `right`, `space`, `enter`, `tab`, `backspace`, `pageup`, `pagedown`,
+`home`, `end`) or groups (`arrows`, `vertical-arrows`, `horizontal-arrows`, `activation`, `paging`, `edges`,
+`scrolling`, `none`). These are the same names `ConsumedKeys::named` reads. A misspelt name is a compile
+error. A `$`-reading expression that yields a `ConsumedKeys` is re-read every render:
 
 ```text
 box role:slider focus_style(stroke:$theme.primary) consumes_keys:arrows on_key:(|key| …)
@@ -49,7 +56,8 @@ box focus_style(…) consumes_keys:(if $open { ConsumedKeys::ARROWS } else { Con
 ```
 
 The sandbox's Keyboard page (`apps/sandbox/src/features/keyboard.rsx`) shows a custom control that keeps the
-arrows next to plain buttons.
+arrows next to plain buttons, and its Controls with state page (`controls.rsx`) a button, a switch and toggle
+buttons written as boxes with a role.
 
 The result reaches the renderer as `Semantics::focusable`: whether Tab stops on the box right now, and the
 set it keeps. A box that cannot hold focus has `None`.
@@ -111,6 +119,9 @@ prevented where, which boxes are Tab stops, that an unconsumed Tab never reaches
 move is reported, that focus leaving for the page or for a link inside a paragraph clears the app's, and which
 focused elements keep the browser's outline. `crates/renderer/renderer-dom/src/audit_test.rs` checks that a
 keyboard-focused control wears Telar's ring in the document (see [accessibility.md](accessibility.md#audits)).
+`crates/renderer/renderer-dom/src/controls_test.rs` sends Space and Enter to a switch and a toggle button
+written as boxes with a role, and checks that the page keeps neither, that the platform hands each to the
+box, and that its state attribute follows.
 
 None of these press a real key. A synthetic `KeyboardEvent` is untrusted, so the browser runs no default
 action for it: no Tab walk, no scroll, no activation. Trusted input in an automated browser comes only from

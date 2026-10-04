@@ -154,13 +154,52 @@ fn a_link_is_announced_with_where_it_goes() {
     assert_eq!(ak.url(), Some("https://example.com"));
 }
 
+/// One flag, carried in the property AccessKit reads for the role: a switch's and a toggle button's `toggled`, a tab's `selected`, a disclosure's `expanded`.
+#[test]
+fn a_state_lands_where_its_role_is_read_from() {
+    let toggled = |role: Role, on: bool| AccessNode {
+        toggled: Some(on),
+        ..node(Some(1), role, "Control")
+    };
+    let published = |node: AccessNode| tree_update(&[node], "States", None).nodes[0].1.clone();
+
+    let switch = published(toggled(Role::Switch, true));
+    assert_eq!(switch.role(), AkRole::Switch);
+    assert_eq!(switch.toggled(), Some(Toggled::True));
+
+    let pressed = published(toggled(Role::Button, false));
+    assert_eq!(pressed.role(), AkRole::Button);
+    assert_eq!(
+        pressed.toggled(),
+        Some(Toggled::False),
+        "a button with a state is a toggle button"
+    );
+
+    let tab = published(toggled(Role::Tab, true));
+    assert_eq!(tab.is_selected(), Some(true));
+    assert_eq!(tab.toggled(), None, "a tab is selected, not checked");
+
+    let disclosure = published(toggled(Role::Disclosure, false));
+    assert_eq!(disclosure.is_expanded(), Some(false));
+    assert_eq!(disclosure.toggled(), None);
+
+    let slider = published(toggled(Role::Slider, true));
+    assert_eq!(
+        slider.toggled(),
+        None,
+        "a slider has no on/off state to say"
+    );
+    assert_eq!(slider.is_selected(), None);
+}
+
 mod from_a_screen {
+    use std::cell::Cell;
     use std::rc::Rc;
 
     use accesskit::{Action, Node, Role as AkRole, Toggled};
     use geometry_core::Size;
     use layout_core::{LayoutError, LayoutStyle};
-    use platform_core::{Event, Location, external};
+    use platform_core::{Event, Key, Location, ModifiersState, NamedKey, external};
     use renderer_core::{Color, RectStyle, TextStyle};
     use ui_components::{ButtonProps, CheckboxProps, TextFieldProps, button, checkbox, text_field};
     use ui_core::{
@@ -195,6 +234,27 @@ mod from_a_screen {
         Ok(box_item(link))
     }
 
+    /// What `box role:<role> toggled:$on label:"…" on_press:(…)` builds in `.rsx`: a box drawing a glyph that is a control with an on/off state, flipped by its own press.
+    fn stateful_control(
+        role: platform_core::Role,
+        name: &'static str,
+        glyph: &'static str,
+        on: bool,
+    ) -> Result<Box<dyn LayoutItem>, LayoutError> {
+        let state = Rc::new(Cell::new(on));
+        let read = state.clone();
+        let control = StyledContainer::new(
+            LayoutStyle::new().flex_row(),
+            |_| RectStyle::default(),
+            vec![box_item(words(glyph)?)],
+        )?
+        .on_press(move || state.set(!state.get()))
+        .control(role)
+        .toggled(move || read.get())
+        .a11y_label(move || name);
+        Ok(box_item(control))
+    }
+
     /// The same screen the document's axe audit runs over (`renderer-dom/src/audit_test.rs`), so the two targets are held to one fixture.
     fn screen() -> Result<Box<dyn LayoutItem>, LayoutError> {
         let heading = StyledContainer::new(
@@ -225,6 +285,8 @@ mod from_a_screen {
                 .build(),
             Children::default(),
         )?;
+        let calm = stateful_control(platform_core::Role::Switch, "Reduce motion", "≈", true)?;
+        let bold = stateful_control(platform_core::Role::Button, "Bold", "B", false)?;
         let paragraph = Text::runs(
             vec![
                 TextRun::new(|| "Read ".to_string()),
@@ -251,6 +313,8 @@ mod from_a_screen {
                 about,
                 name,
                 subscribe,
+                calm,
+                bold,
                 box_item(paragraph),
                 box_item(word),
                 box_item(greeting),
@@ -325,6 +389,8 @@ mod from_a_screen {
             ("About", AkRole::Link),
             ("Name", AkRole::TextInput),
             ("Send me the newsletter", AkRole::CheckBox),
+            ("Reduce motion", AkRole::Switch),
+            ("Bold", AkRole::Button),
         ] {
             assert_eq!(control(&update, name).role(), role, "{name}");
         }
@@ -332,6 +398,49 @@ mod from_a_screen {
             control(&update, "Send me the newsletter").toggled(),
             Some(Toggled::False)
         );
+    }
+
+    fn key(named: NamedKey) -> Event {
+        Event::KeyPressed {
+            key: Key::Named(named),
+            modifiers: ModifiersState::default(),
+        }
+    }
+
+    fn focus_on(tree: &ComponentList, name: &str) {
+        let node = ui_core::accessibility::snapshot(&tree.commands())
+            .into_iter()
+            .find(|node| node.name == name && node.id.is_some())
+            .unwrap_or_else(|| panic!("{name:?} is a control"));
+        focus::request(node.id.expect("a control has an id"));
+    }
+
+    /// A switch and a toggle button written as a box with a role: each says its state, and Space or Enter on it presses it the way a tap does, which the next tree reports.
+    #[test]
+    fn a_box_with_a_role_and_a_state_is_pressed_from_the_keyboard() {
+        let mut tree = mount();
+        let update = published(&tree);
+        assert_eq!(
+            control(&update, "Reduce motion").toggled(),
+            Some(Toggled::True)
+        );
+        assert_eq!(control(&update, "Bold").toggled(), Some(Toggled::False));
+
+        focus_on(&tree, "Reduce motion");
+        tree.on_event(&key(NamedKey::Space));
+        assert_eq!(
+            control(&published(&tree), "Reduce motion").toggled(),
+            Some(Toggled::False)
+        );
+
+        focus_on(&tree, "Bold");
+        tree.on_event(&key(NamedKey::Enter));
+        assert_eq!(
+            control(&published(&tree), "Bold").toggled(),
+            Some(Toggled::True),
+            "a toggle button is pressed by Enter and stays pressed"
+        );
+        focus::clear();
     }
 
     #[test]
@@ -382,7 +491,7 @@ mod from_a_screen {
             "nothing focused is the window"
         );
         let mut walked = Vec::new();
-        for _ in 0..6 {
+        for _ in 0..8 {
             focus::focus_next();
             let update = published(&tree);
             let (_, node) = update
@@ -400,6 +509,8 @@ mod from_a_screen {
                 "About",
                 "Name",
                 "Send me the newsletter",
+                "Reduce motion",
+                "Bold",
                 "Save"
             ]
         );

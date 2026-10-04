@@ -10,3 +10,12 @@ fn every_spelling_is_one_the_vocabulary_answers_to() {
         );
     }
 }
+
+/// The path a spelling is emitted as names the role the runtime parses that spelling to, so whether the transpiler makes the box a control and what the box turns out to be are one answer.
+#[test]
+fn every_spelling_is_emitted_as_the_role_it_parses_to() {
+    for (name, variant) in role_values() {
+        let parsed = semantics_core::Role::parse(name).expect("a known spelling");
+        assert_eq!(format!("{parsed:?}"), *variant, "`{name}`");
+    }
+}

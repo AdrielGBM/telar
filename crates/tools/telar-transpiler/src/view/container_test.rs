@@ -103,3 +103,86 @@ fn a_link_cannot_let_the_pointer_through() {
     let code = transpiled("box input_transparent to:anchor(\"a\")\n    text \"x\"\n");
     assert!(code.contains("compile_error!"), "{code}");
 }
+
+#[test]
+fn a_role_a_person_operates_makes_the_box_a_control() {
+    let code = transpiled("box role:button on_press:(|| ())\n    text \"x\"\n");
+    assert!(code.contains(".control(::telar::Role::Button)"), "{code}");
+    assert!(!code.contains(".role("), "{code}");
+    assert!(!code.contains("compile_error!"), "{code}");
+}
+
+#[test]
+fn a_region_is_described_and_not_made_a_tab_stop() {
+    let code = transpiled("col role:navigation\n    text \"x\"\n");
+    assert!(code.contains("Container::new("), "{code}");
+    assert!(!code.contains("StyledContainer::new("), "{code}");
+    assert!(code.contains(".role(::telar::Role::Navigation)"), "{code}");
+    assert!(!code.contains(".control("), "{code}");
+}
+
+#[test]
+fn a_control_role_makes_a_plain_row_a_styled_container() {
+    let code = transpiled("row role:switch on_press:(|| ())\n    text \"x\"\n");
+    assert!(code.contains("StyledContainer::new("), "{code}");
+    assert!(code.contains(".control(::telar::Role::Switch)"), "{code}");
+}
+
+#[test]
+fn an_alias_is_the_role_it_stands_for() {
+    let code = transpiled("box role:toggle on_press:(|| ())\n    text \"x\"\n");
+    assert!(code.contains(".control(::telar::Role::Switch)"), "{code}");
+}
+
+#[test]
+fn a_state_is_read_after_the_box_became_the_control_that_carries_it() {
+    let code = transpiled(
+        "box role:switch toggled:$open label:\"Open\" on_press:(|| $open.set(!$open.get()))\n    text \"x\"\n",
+    );
+    let control = code
+        .find(".control(::telar::Role::Switch)")
+        .unwrap_or_else(|| panic!("a control: {code}"));
+    let toggled = code
+        .find(".toggled(")
+        .unwrap_or_else(|| panic!("a state: {code}"));
+    assert!(
+        control < toggled,
+        "`toggled` is only kept by a box already registered as a control: {code}"
+    );
+    assert!(code.contains("open.get()"), "{code}");
+    assert!(code.contains(".a11y_label("), "{code}");
+    assert!(!code.contains("compile_error!"), "{code}");
+}
+
+#[test]
+fn a_toggle_button_is_a_button_with_a_state() {
+    let code = transpiled("box role:button toggled:$open on_press:(|| ())\n    text \"B\"\n");
+    assert!(code.contains(".control(::telar::Role::Button)"), "{code}");
+    assert!(code.contains(".toggled("), "{code}");
+    assert!(!code.contains("compile_error!"), "{code}");
+}
+
+#[test]
+fn a_state_on_a_role_without_one_is_a_build_error() {
+    for view in [
+        "box toggled:$open on_press:(|| ())\n    text \"x\"\n",
+        "box role:slider toggled:$open\n    text \"x\"\n",
+        "col role:navigation toggled:$open\n    text \"x\"\n",
+    ] {
+        let code = transpiled(view);
+        assert!(code.contains("compile_error!"), "{view}: {code}");
+        assert!(code.contains("`toggled:` needs a role"), "{view}: {code}");
+    }
+}
+
+#[test]
+fn a_control_role_with_a_destination_is_a_build_error() {
+    let code = transpiled("box role:button to:anchor(\"a\")\n    text \"x\"\n");
+    assert!(code.contains("compile_error!"), "{code}");
+    assert!(
+        code.contains("a box with a destination is a link"),
+        "{code}"
+    );
+    let code = transpiled("box role:link to:anchor(\"a\")\n    text \"x\"\n");
+    assert!(!code.contains("compile_error!"), "{code}");
+}

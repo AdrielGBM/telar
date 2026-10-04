@@ -5,7 +5,7 @@
 use geometry_core::Rect;
 
 /// The vocabulary itself lives a layer down, where a renderer can reach it too: the desktop announcing a checkbox and a document drawing one have to be describing the same box.
-pub use semantics_core::Role;
+pub use semantics_core::{Role, ToggleKind};
 
 /// One thing a screen reader can land on.
 #[derive(Debug, Clone, PartialEq)]
@@ -19,7 +19,7 @@ pub struct AccessNode {
     pub focused: bool,
     /// `false` announces "unavailable"; a control that is genuinely not there is absent instead.
     pub enabled: bool,
-    /// Whether a control that carries a checked state is in it. `None` for the roles that have no such state — and never a default of `false` for the ones that do, which would announce every checkbox as unticked.
+    /// Whether a control that carries an on/off state is in it, read through its role's [`Role::toggle_kind`]: checked, pressed, selected or expanded. `None` for the roles that have no such state — and never a default of `false` for the ones that do, which would announce every checkbox as unticked.
     pub toggled: Option<bool>,
     /// Where a control that carries a number stands, and between which bounds.
     ///
@@ -55,8 +55,9 @@ pub fn transcript(nodes: &[AccessNode]) -> String {
             out.push_str(", ");
             out.push_str(role);
         }
-        if let Some(on) = node.toggled {
-            out.push_str(if on { ", checked" } else { ", not checked" });
+        if let Some(state) = node.toggled.and_then(|on| toggle_words(node.role, on)) {
+            out.push_str(", ");
+            out.push_str(state);
         }
         if !node.enabled {
             out.push_str(", unavailable");
@@ -66,6 +67,20 @@ pub fn transcript(nodes: &[AccessNode]) -> String {
         }
     }
     out
+}
+
+/// The words a reader says for a role's on/off state, or `None` where it says nothing: an unselected tab is every tab but one, and announcing each of them is noise.
+fn toggle_words(role: Role, on: bool) -> Option<&'static str> {
+    Some(match (role.toggle_kind()?, on) {
+        (ToggleKind::Checked, true) => "checked",
+        (ToggleKind::Checked, false) => "not checked",
+        (ToggleKind::Pressed, true) => "pressed",
+        (ToggleKind::Pressed, false) => "not pressed",
+        (ToggleKind::Selected, true) => "selected",
+        (ToggleKind::Selected, false) => return None,
+        (ToggleKind::Expanded, true) => "expanded",
+        (ToggleKind::Expanded, false) => "collapsed",
+    })
 }
 
 #[cfg(test)]

@@ -8,7 +8,7 @@ use accesskit::{
     Action, ActionRequest, Node, NodeId, Rect as AkRect, Role as AkRole, Toggled, TreeId, TreeInfo,
     TreeUpdate,
 };
-use platform_core::{AccessNode, Role};
+use platform_core::{AccessNode, Role, ToggleKind};
 
 /// The window itself, which every other node hangs from. A fixed id because there is exactly one and the platform needs to name it before any of its children exist.
 const ROOT: NodeId = NodeId(0);
@@ -60,7 +60,7 @@ pub(crate) fn tree_update(nodes: &[AccessNode], title: &str, lang: Option<&str>)
         }
         // A role carrying a state has to say which, or a reader announces "checkbox" and stops. Defaulting the answer would be worse than silence, since every box would read as unticked.
         if let Some(on) = node.toggled {
-            ak.set_toggled(if on { Toggled::True } else { Toggled::False });
+            set_toggle_state(&mut ak, node.role, on);
         }
         // A slider that says only "slider" has not reported the one thing it is for.
         if let Some(v) = node.value {
@@ -79,6 +79,16 @@ pub(crate) fn tree_update(nodes: &[AccessNode], title: &str, lang: Option<&str>)
         tree: Some(TreeInfo::new(ROOT)),
         tree_id: TreeId::ROOT,
         focus,
+    }
+}
+
+/// The on/off state, in the property AccessKit reads it from for this role: `toggled` is checked on a checkbox or switch and pressed on a button, while a tab is selected and a disclosure expanded.
+fn set_toggle_state(ak: &mut Node, role: Role, on: bool) {
+    match role.toggle_kind() {
+        Some(ToggleKind::Checked | ToggleKind::Pressed) => ak.set_toggled(Toggled::from(on)),
+        Some(ToggleKind::Selected) => ak.set_selected(on),
+        Some(ToggleKind::Expanded) => ak.set_expanded(on),
+        None => {}
     }
 }
 

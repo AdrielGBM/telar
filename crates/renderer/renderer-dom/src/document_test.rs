@@ -160,6 +160,9 @@ fn every_attribute_is_named_in_the_order_it_is_written() {
             "id",
             "aria-hidden",
             "aria-checked",
+            "aria-pressed",
+            "aria-selected",
+            "aria-expanded",
             "aria-disabled",
             "tabindex",
             CONSUMED_KEYS_ATTRIBUTE,
@@ -177,4 +180,58 @@ fn a_picture_is_named_by_its_alt_even_when_nobody_named_it() {
     let attributes = described.attributes(5);
     assert!(attributes.contains(&("alt", Some(String::new()))));
     assert!(!attributes.iter().any(|(name, _)| *name == "aria-label"));
+}
+
+/// The attributes a box with `toggled` set ends up with, by role, leaving out the ones that are absent.
+fn state_attributes(role: Role, on: bool) -> (&'static str, Vec<(&'static str, String)>) {
+    let frame = describe_frame(
+        &[
+            open(1, Semantics::of(role).in_state(false, Some(on), false)),
+            DrawCommand::PopElement,
+        ],
+        None,
+        &mut Fixed,
+        false,
+    );
+    let node = only_box(&frame);
+    let states = node
+        .described
+        .attributes(node.id)
+        .into_iter()
+        .filter(|(name, _)| {
+            matches!(
+                *name,
+                "aria-checked" | "aria-pressed" | "aria-selected" | "aria-expanded"
+            )
+        })
+        .filter_map(|(name, value)| Some((name, value?)))
+        .collect();
+    (node.tag, states)
+}
+
+/// One flag, written as the attribute ARIA has for the role: a switch is checked, a toggle button pressed, a tab selected, a disclosure expanded.
+#[test]
+fn a_state_is_the_attribute_its_role_carries_it_in() {
+    let on = |name: &'static str| vec![(name, "true".to_string())];
+    assert_eq!(
+        state_attributes(Role::Switch, true),
+        ("div", on("aria-checked"))
+    );
+    assert_eq!(
+        state_attributes(Role::Button, false),
+        ("button", vec![("aria-pressed", "false".to_string())])
+    );
+    assert_eq!(
+        state_attributes(Role::Tab, true),
+        ("div", on("aria-selected"))
+    );
+    assert_eq!(
+        state_attributes(Role::Disclosure, true),
+        ("div", on("aria-expanded"))
+    );
+    assert_eq!(
+        state_attributes(Role::Slider, true),
+        ("div", vec![]),
+        "a role with no on/off state carries none"
+    );
 }

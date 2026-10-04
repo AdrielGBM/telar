@@ -135,6 +135,12 @@ const SECTIONS: &[SectionDef] = sections![
     ("Pointer & drag", crate::features::pointer::pointer, crate::features::pointer::PointerProps, "pointer.rsx"),
     ("Keyboard", crate::features::keyboard::keyboard, crate::features::keyboard::KeyboardProps, "keyboard.rsx"),
     (
+        "Controls with state",
+        crate::features::controls::controls,
+        crate::features::controls::ControlsProps,
+        "controls.rsx"
+    ),
+    (
         "Accessibility",
         crate::features::accessibility::accessibility,
         crate::features::accessibility::AccessibilityProps,

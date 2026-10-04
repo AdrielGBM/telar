@@ -51,6 +51,43 @@ fn input_contradictions(el: &Element) -> Vec<String> {
     errors
 }
 
+/// The role `role:` names, as the variant path the box is emitted with and the role the runtime reads it as. `None` without one, or for a word nothing answers to.
+fn role_of(el: &Element) -> Option<(&'static str, semantics_core::Role)> {
+    let spelling = el.attributes.iter().find(|a| a.key == "role")?.value.text();
+    let spelling = spelling.trim();
+    Some((
+        crate::registry::role_variant(spelling)?,
+        semantics_core::Role::parse(spelling)?,
+    ))
+}
+
+/// What a role cannot be said together with, as compile errors: a destination, which makes the box a link whatever else it claimed, and an on/off state on a role that has none to carry it in.
+fn role_contradictions(
+    el: &Element,
+    role: Option<(&'static str, semantics_core::Role)>,
+) -> Vec<String> {
+    let has = |key: &str| el.attributes.iter().any(|a| a.key == key);
+    let role = role.map(|(_, role)| role);
+    let mut errors = Vec::new();
+    if let Some(role) = role
+        && role.is_control()
+        && role != semantics_core::Role::Link
+        && has("to")
+    {
+        errors.push(format!(
+            "`role:{}` cannot be combined with `to:`: a box with a destination is a link",
+            role.as_str()
+        ));
+    }
+    if has("toggled") && role.and_then(|role| role.toggle_kind()).is_none() {
+        errors.push(
+            "`toggled:` needs a role with an on/off state: `role:switch`, `role:checkbox` or `role:radio` (checked), `role:button` (pressed) or `role:tab` (selected)"
+                .to_string(),
+        );
+    }
+    errors
+}
+
 /// The string an `external("…")` destination is written with, when it is a plain literal.
 pub(super) fn external_literal(value: &str) -> Option<&str> {
     value
@@ -134,14 +171,6 @@ impl ViewGen<'_> {
                 )
             })
             .unwrap_or_default();
-        // Emitted on a plain `Container` too, so calling a `col` the navigation does not turn it into a styled box.
-        let role = el
-            .attributes
-            .iter()
-            .find(|a| a.key == "role")
-            .and_then(|a| crate::registry::role_variant(a.value.text().trim()))
-            .map(|variant| format!(".role(::telar::Role::{variant})"))
-            .unwrap_or_default();
         // Only meaningful on a `StyledContainer`, so a plain `col`/`row` this promotes still gets it: `has_paint` (see `signals.rs`) counts `blend` among what forces the upgrade.
         let blend = el
             .attributes
@@ -161,6 +190,16 @@ impl ViewGen<'_> {
             .collect::<String>();
         let inert = self.predicate_call(el, "inert");
         let to = self.destination_call(el, &mut errors);
+        let role = role_of(el);
+        errors.extend(role_contradictions(el, role));
+        let operated = role.is_some_and(|(_, role)| role.is_control());
+        // A described role is emitted on a plain `Container` too, so calling a `col` the navigation does not turn it into a styled box.
+        let role_call = match role {
+            Some((variant, _)) if operated => format!(".control(::telar::Role::{variant})"),
+            Some((variant, _)) => format!(".role(::telar::Role::{variant})"),
+            None => String::new(),
+        };
+        let toggled = self.predicate_call(el, "toggled");
         let holds_stroke = el
             .attributes
             .iter()
@@ -197,16 +236,20 @@ impl ViewGen<'_> {
         // What the container says about the text below it: `col font_size:11` draws no text, it names the size everything under it starts from.
         let declaring = self.declaring_call(&attrs, &transitions, &mut hoists);
 
-        // Any of these forces the StyledContainer upgrade. `on_press` is excluded because its closure form wires on a plain Container; `on_press_forwarded` covers the other case.
+        // Any of these forces the StyledContainer upgrade. `on_press` is excluded because its closure form wires on a plain Container; `on_press_forwarded` covers the other case, and `operated` a role only a StyledContainer can make a control.
         let styling = format!(
             "{hover_call}{active_call}{disabled_call}{focus_ring}{disabled}{transform_call}{on_hover}{on_pointer_move}{on_key}{on_drag}{on_drag_end}{on_scroll}{on_focus}{on_long_press}{on_alt_press}{cursor}{drag_button}{drag_threshold}{input}{inert}{consumes_keys}{to}"
         );
-        let pieces =
-            if always_style || has_paint(&attrs) || !styling.is_empty() || on_press_forwarded {
-                Some(self.rect_style_pieces(&attrs, &transitions, &mut hoists))
-            } else {
-                None
-            };
+        let pieces = if always_style
+            || has_paint(&attrs)
+            || !styling.is_empty()
+            || on_press_forwarded
+            || operated
+        {
+            Some(self.rect_style_pieces(&attrs, &transitions, &mut hoists))
+        } else {
+            None
+        };
 
         let mode = Self::child_mode(&el.children);
 
@@ -244,13 +287,13 @@ impl ViewGen<'_> {
             Some((closure, opacity_call)) => {
                 let _ = writeln!(
                     code,
-                    "{inner_pad}{bind}StyledContainer::{ctor}({style}, {closure}, {children})?{opacity_call}{blend}{hover_call}{active_call}{disabled_call}{focus_ring}{disabled}{on_press}{transform_call}{on_hover}{on_pointer_move}{on_key}{on_drag}{on_drag_end}{on_scroll}{on_focus}{on_long_press}{on_alt_press}{cursor}{drag_button}{drag_threshold}{input}{inert}{consumes_keys}{holds_stroke}{role}{to}{styled_by}{declaring}{terminator}"
+                    "{inner_pad}{bind}StyledContainer::{ctor}({style}, {closure}, {children})?{opacity_call}{blend}{hover_call}{active_call}{disabled_call}{focus_ring}{disabled}{on_press}{transform_call}{on_hover}{on_pointer_move}{on_key}{on_drag}{on_drag_end}{on_scroll}{on_focus}{on_long_press}{on_alt_press}{cursor}{drag_button}{drag_threshold}{input}{inert}{consumes_keys}{holds_stroke}{role_call}{toggled}{to}{styled_by}{declaring}{terminator}"
                 );
             }
             None => {
                 let _ = writeln!(
                     code,
-                    "{inner_pad}{bind}Container::{ctor}({style}, {children})?{on_press}{role}{styled_by}{declaring}{terminator}"
+                    "{inner_pad}{bind}Container::{ctor}({style}, {children})?{on_press}{role_call}{styled_by}{declaring}{terminator}"
                 );
             }
         }

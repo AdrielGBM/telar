@@ -179,6 +179,19 @@ impl Role {
         }
     }
 
+    /// What [`Semantics::toggled`] means on this role, or `None` for a role that carries no on/off state.
+    ///
+    /// One flag read through the role, as AccessKit models it, rather than a flag per meaning: a pressed checkbox or a checked tab is a state no target can say, and a single flag cannot be set to one.
+    pub fn toggle_kind(&self) -> Option<ToggleKind> {
+        match self {
+            Self::CheckBox | Self::Radio | Self::Switch => Some(ToggleKind::Checked),
+            Self::Button => Some(ToggleKind::Pressed),
+            Self::Tab => Some(ToggleKind::Selected),
+            Self::Disclosure => Some(ToggleKind::Expanded),
+            _ => None,
+        }
+    }
+
     /// The role a name spells, for the one place a name arrives as text: what an application wrote.
     ///
     /// Aliases are the words people reach for first. `nav` and `sidebar` are not ARIA — they are what an author types — and pointing them at the role they mean is cheaper than being asked why `sidebar` is spelled `complementary`.
@@ -226,6 +239,19 @@ impl Role {
     }
 }
 
+/// What a control's on/off state is, as its [`Role::toggle_kind`] decides.
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
+pub enum ToggleKind {
+    /// A checkbox ticked, a radio chosen, a switch on.
+    Checked,
+    /// A toggle button held down: a button that stays pressed until pressed again, such as bold in a toolbar.
+    Pressed,
+    /// The tab whose panel is showing.
+    Selected,
+    /// A disclosure whose content is showing.
+    Expanded,
+}
+
 /// What a box is, and what should be said about it.
 ///
 /// Carried alongside geometry rather than inside it: two boxes with the same rect can mean entirely different things, and the thing that draws them needs both.
@@ -242,7 +268,7 @@ pub struct Semantics {
     ///
     /// A target that draws its own focus ring does not need telling; one that hands the box to a document does, because the document has a focus of its own and the two must be the same box.
     pub focused: bool,
-    /// Whether a control carrying a checked state is in it. `None` for the roles that have no such state — never a default of `false` for the ones that do, which announces every checkbox as unticked.
+    /// Whether a control carrying an on/off state is in it; what that state is — checked, pressed, selected, expanded — is its role's [`Role::toggle_kind`]. `None` for the roles that have no such state — never a default of `false` for the ones that do, which announces every checkbox as unticked.
     pub toggled: Option<bool>,
     /// Whether the box is present but not operable. Announced rather than hidden: a control that is genuinely not there is absent instead.
     pub disabled: bool,

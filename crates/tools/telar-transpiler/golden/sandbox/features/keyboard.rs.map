@@ -125,4 +125,4 @@
 # verbatim expression spans: rsx[start..end] -> gen[start] `source text`
 1552..1557	3961	`level`
 1185..1190	4978	`|| ()`
-1867..1874	6600	`pressed`
+1867..1874	6603	`pressed`

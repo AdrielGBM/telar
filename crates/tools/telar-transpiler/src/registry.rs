@@ -213,8 +213,12 @@ const CONTAINER_PAINT: &[AttrSpec] = &[
         .doc("Which other buttons may start this box's drag; the primary one always can."),
     AttrSpec::num("drag_threshold")
         .doc("How far a press must travel before it is a drag rather than a click."),
-    AttrSpec::keywords("role", ROLE_VALUES)
-        .doc("What the box is, beyond a box: a region, a list, a heading."),
+    AttrSpec::keywords("role", ROLE_VALUES).doc(
+        "What the box is, beyond a box: a region, a list, a heading. A role a person operates (`button`, `switch`, `checkbox`, `radio`, `tab`, `slider`…) also makes the box a control: a Tab stop with the theme's focus ring, pressed by Enter and Space the way `on_press` is by a tap.",
+    ),
+    AttrSpec::free("toggled").doc(
+        "The on/off state of a control, re-read when what it reads changes: `toggled:$on`. Checked on `role:switch`/`checkbox`/`radio`, pressed on `role:button` (a toggle button), selected on `role:tab`.",
+    ),
     AttrSpec::free("to").doc(
         "Makes the box a link: a typed route, `anchor(\"name\")` on this page, `in_locale(\"en\")` for this place in another language, or `external(\"https://…\")` outside the app. Focusable, followed on a tap or Enter, and a real `<a href>` in a document.",
     ),

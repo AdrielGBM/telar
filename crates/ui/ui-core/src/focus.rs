@@ -537,7 +537,7 @@ fn snapshot() -> (Vec<(FocusId, Option<NodeId>)>, Vec<ScopeView>) {
     })
 }
 
-/// Declares that `id` carries a checked state, and how to read it now.
+/// Declares that `id` carries an on/off state, and how to read it now. What the state is — checked, pressed, selected, expanded — is its role's [`Role::toggle_kind`].
 ///
 /// Separate from registering the control because the two are known at different moments: a box declares what it *is* as it is built, and what it is *bound to* when the caller hands it a signal.
 pub fn set_toggled(id: FocusId, state: impl Fn() -> bool + 'static) {
@@ -566,7 +566,7 @@ pub struct Exposed {
     pub role: Role,
     /// Available to be activated. `false` is *announced*, not hidden — see [`ScopeReason`].
     pub enabled: bool,
-    /// Its checked state, for the controls that carry one.
+    /// Its on/off state, for the controls that carry one: checked, pressed, selected or expanded as its role says.
     pub toggled: Option<bool>,
     /// Its numeric reading, for the controls that carry one.
     pub value: Option<NumericValue>,

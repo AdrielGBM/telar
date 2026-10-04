@@ -1,4 +1,4 @@
-# Accessibility: names, languages and hiding
+# Accessibility: names, languages, hiding and state
 
 Most of what a screen reader needs Telar derives on its own: the role of a control comes from what it
 does or from `role:`, its state from the widget, and its name from the text it draws. Three things only
@@ -40,6 +40,49 @@ row label:"Telar" role:h2
 
 A name does not replace a box's content: a reader that walks into the box still finds what is drawn
 there, which is why the letters are hidden rather than left for the name to cover.
+
+## Controls and their state
+
+`role:` on a `box`, `col`, `row` or `grid` says what the box is. A region or a heading (`role:navigation`,
+`role:h2`) only describes it. A role a person operates — `button`, `switch` (or `toggle`), `checkbox`,
+`radio`, `tab`, `menuitem`, `slider`, `spinbutton`, `link` — also makes the box a control, as
+`StyledContainer::control` does from Rust: a Tab stop that wears the theme's focus ring when the keyboard
+reaches it, pressed by Enter and Space the way a tap presses it (Enter only for a link), and announced with
+that role. A plain `col` or `row` with such a role becomes a styled box, since only a styled box can be one.
+
+`toggled:` gives the control an on/off state, re-read whenever what it reads changes. One flag, and the role
+says what it means, the way AccessKit models it:
+
+| Role | `toggled:` is |
+| --- | --- |
+| `switch`, `checkbox`, `radio` | checked |
+| `button` | pressed: a toggle button, such as bold in a toolbar |
+| `tab` | selected |
+
+```text
+box role:button label:"Add one" on_press:(|| $count += 1)
+    text "+1"
+box role:switch toggled:$calm label:"Reduce motion" on_press:(|| $calm.set(!$calm.get()))
+    text "≈"
+box role:button toggled:$bold label:"Bold" on_press:(|| $bold.set(!$bold.get()))
+    text "B"
+```
+
+Two combinations are build errors: `toggled:` on a box whose role carries no on/off state (no role, a region,
+a slider), and an operated role other than `link` together with `to:`, since a box with a destination is a
+link whatever else it said. A box that also has `on_key:` answers its own keys, so Enter and Space go to that
+handler rather than pressing it.
+
+From Rust, the same box is `StyledContainer::control(role)` followed by `.toggled(|| …)`; the disclosure in
+the catalogue's accordion uses the same flag for expanded.
+
+| Target | Role | State |
+| --- | --- | --- |
+| Browser, document (`web-dom`) | A button is a `<button>`, a link an `<a>`; any other control is a `div` with the ARIA `role`. `tabindex="0"`, and the platform keeps Space and Enter from the page while the box holds focus. | `aria-checked` on a switch, checkbox or radio, `aria-pressed` on a button, `aria-selected` on a tab, `aria-expanded` on a disclosure; only the one the role carries, so a box whose role changes drops the old one. |
+| Desktop | The AccessKit role (`Switch`, `Button`, `CheckBox`…), with `Focus` and `Click` actions. | AccessKit `toggled` for checked and pressed (it reads the flag through the role, as Telar does), `selected` for a tab, `expanded` for a disclosure. |
+| Terminal | In the plain-text reading (`Reduce motion, switch`). | `checked`/`not checked`, `pressed`/`not pressed`, `selected` (an unselected tab says nothing), `expanded`/`collapsed`. |
+| Android | Focus and keyboard activation as on the desktop; no accessibility bridge yet, so the role and state reach no reader. | — |
+| Browser, canvas (`web`) and headless | Focus and keyboard activation as on the desktop. The snapshot carries role and state for tests; there is no reader to hand them to. | — |
 
 ## What each target does with them
 
@@ -97,13 +140,15 @@ overrides a token owns its contrast, and the audit below is the way to check it.
 ## Audits
 
 Two tests hold every target to the same fixture: a heading, a button, a link to an external address and one
-to a route, a labelled field, a checkbox, a paragraph with a link run, a word named with `label:` over hidden
-letters, a quotation in another `lang:` and a box under `a11y:hidden`.
+to a route, a labelled field, a checkbox, a switch and a toggle button built the way `role:` boxes are, a
+paragraph with a link run, a word named with `label:` over hidden letters, a quotation in another `lang:` and
+a box under `a11y:hidden`.
 
 | Test | What it checks |
 | --- | --- |
 | `crates/renderer/renderer-dom/src/audit_test.rs` | The document those widgets render to, audited by [axe-core](https://github.com/dequelabs/axe-core) with its WCAG 2.2 A/AA and best-practice rules (`region` off: the fixture is a fragment of a page). Run with nothing focused, with the field focused and with the button focused, and any violation fails the test with the rule, the element and the reason. It also checks that the keyboard's box wears Telar's ring in the document. |
-| `crates/platform/platform-desktop/src/accessibility_test.rs` (`from_a_screen`) | The AccessKit tree a desktop window publishes for the same screen: each control's role and name, that it takes `Focus` and `Click`, the URL of each link and link run, the checkbox's state, the language and the hidden boxes, and that the tree's focus follows the Tab order. |
+| `crates/platform/platform-desktop/src/accessibility_test.rs` (`from_a_screen`) | The AccessKit tree a desktop window publishes for the same screen: each control's role and name, that it takes `Focus` and `Click`, the URL of each link and link run, the state of the checkbox, the switch and the toggle button, that Space and Enter press the last two, the language and the hidden boxes, and that the tree's focus follows the Tab order. |
+| `crates/renderer/renderer-dom/src/controls_test.rs` | A switch and a toggle button in the document: their role, `aria-checked` and `aria-pressed`, that each is a Tab stop, and that Space or Enter sent to the element is kept from the page, reaches the box through the platform and flips the state the next frame writes. `semantics_test.rs` checks that a box whose role changes drops the state attribute of the old one. |
 
 axe-core is MPL-2.0 and is not vendored into the repository. The flake fetches the published npm tarball by its
 integrity hash and puts `axe.min.js` and its `LICENSE` in the store, and the dev shell names the script in

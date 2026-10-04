@@ -16,6 +16,7 @@ use platform_core::Destination;
 use platform_core::consumed_keys::{CONSUMED_KEYS_ATTRIBUTE, FOCUS_BOX_ATTRIBUTE};
 use renderer_core::{
     BlendMode, Color, DrawCommand, Element, Focusable, ImageData, Picture, Role, TextStyle,
+    ToggleKind,
 };
 
 use crate::paint;
@@ -153,7 +154,8 @@ pub(crate) struct Described {
     pub lang: Option<String>,
     pub anchor: Option<String>,
     pub hidden: bool,
-    pub checked: Option<bool>,
+    /// A control's on/off state and what its role makes it, which decides the attribute that carries it.
+    pub toggled: Option<(ToggleKind, bool)>,
     pub disabled: bool,
     /// Part of the record even though it writes no attribute: a box that has just become the focused one is a box the reconcile has to act on, and comparing without it made the acting unreachable.
     pub focused: bool,
@@ -195,13 +197,23 @@ impl Described {
             ("lang", self.lang.clone()),
             ("id", self.anchor.clone()),
             ("aria-hidden", flag(self.hidden)),
-            ("aria-checked", self.checked.map(|on| on.to_string())),
+            ("aria-checked", self.state_of(ToggleKind::Checked)),
+            ("aria-pressed", self.state_of(ToggleKind::Pressed)),
+            ("aria-selected", self.state_of(ToggleKind::Selected)),
+            ("aria-expanded", self.state_of(ToggleKind::Expanded)),
             ("aria-disabled", flag(self.disabled)),
             ("tabindex", tabindex.map(str::to_string)),
             (CONSUMED_KEYS_ATTRIBUTE, keys),
             (FOCUS_BOX_ATTRIBUTE, self.focusable.map(|_| id.to_string())),
         ]);
         attributes
+    }
+
+    /// The value of the state attribute for `kind`: written only on the role that state belongs to, so a switch never carries `aria-pressed` and a toggle button never `aria-checked`.
+    fn state_of(&self, kind: ToggleKind) -> Option<String> {
+        self.toggled
+            .filter(|(carried, _)| *carried == kind)
+            .map(|(_, on)| on.to_string())
     }
 }
 
@@ -739,7 +751,9 @@ fn describe(element: &Element, tag: &'static str) -> Described {
         lang: semantics.lang.as_deref().map(str::to_string),
         anchor: semantics.anchor.as_deref().map(str::to_string),
         hidden,
-        checked: semantics.toggled,
+        toggled: semantics
+            .toggled
+            .and_then(|on| Some((semantics.role.toggle_kind()?, on))),
         disabled: semantics.disabled,
         focused: semantics.focused,
         control: semantics.role.is_control(),

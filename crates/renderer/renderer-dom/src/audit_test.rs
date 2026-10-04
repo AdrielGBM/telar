@@ -1,4 +1,4 @@
-//! The document real widgets render to, audited the way an accessibility review would: axe-core's WCAG A/AA and best-practice rules, run over buttons, links, a field, a checkbox, a paragraph with a link in it and the boxes an application named, gave a language or hid. Needs a browser and the dev shell's `TELAR_AXE_CORE`, so it runs under `wasm-bindgen-test` rather than `cargo test`.
+//! The document real widgets render to, audited the way an accessibility review would: axe-core's WCAG A/AA and best-practice rules, run over buttons, links, a field, a checkbox, a switch and a toggle button, a paragraph with a link in it and the boxes an application named, gave a language or hid. Needs a browser and the dev shell's `TELAR_AXE_CORE`, so it runs under `wasm-bindgen-test` rather than `cargo test`.
 
 #![cfg(target_arch = "wasm32")]
 
@@ -74,6 +74,25 @@ fn link<D: platform_core::IntoDestination + 'static>(
     Ok(box_item(link))
 }
 
+/// What `box role:<role> toggled:$on label:"…"` builds in `.rsx`: a box drawing a glyph that is a control with an on/off state.
+fn stateful_control(
+    role: Role,
+    name: &'static str,
+    glyph: &'static str,
+    on: bool,
+) -> Result<Box<dyn LayoutItem>, LayoutError> {
+    let control = StyledContainer::new(
+        LayoutStyle::new().flex_row().padding_all(4.0),
+        |_| RectStyle::default(),
+        vec![box_item(words(glyph)?)],
+    )?
+    .on_press(|| {})
+    .control(role)
+    .toggled(move || on)
+    .a11y_label(move || name);
+    Ok(box_item(control))
+}
+
 /// One of everything an application builds most of its screens from.
 fn controls() -> Result<Box<dyn LayoutItem>, LayoutError> {
     let heading = StyledContainer::new(
@@ -104,6 +123,8 @@ fn controls() -> Result<Box<dyn LayoutItem>, LayoutError> {
             .build(),
         Children::default(),
     )?;
+    let calm = stateful_control(Role::Switch, "Reduce motion", "≈", true)?;
+    let bold = stateful_control(Role::Button, "Bold", "B", false)?;
     let paragraph = Text::runs(
         vec![
             TextRun::new(|| "Read ".to_string()),
@@ -136,6 +157,8 @@ fn controls() -> Result<Box<dyn LayoutItem>, LayoutError> {
             about,
             name,
             subscribe,
+            calm,
+            bold,
             box_item(paragraph),
             box_item(word),
             box_item(greeting),

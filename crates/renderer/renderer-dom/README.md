@@ -35,11 +35,16 @@ and that a focus move the browser made is reported as `Event::BoxFocused`. Each 
 It also checks that focus landing on a link inside a paragraph clears the box Telar had focused, and that
 what Telar draws no ring for keeps the browser's `:focus-visible` outline.
 
-`src/audit_test.rs` renders real widgets (a button, links, a field, a checkbox, a paragraph with a link run,
-named, translated and hidden boxes) and runs [axe-core](https://github.com/dequelabs/axe-core) over the
+`src/audit_test.rs` renders real widgets (a button, links, a field, a checkbox, a switch, a toggle button, a
+paragraph with a link run, named, translated and hidden boxes) and runs [axe-core](https://github.com/dequelabs/axe-core) over the
 document; any WCAG 2.2 A/AA or best-practice violation fails it. The script comes from the dev shell, which
 names it in `TELAR_AXE_CORE` (a pinned npm tarball fetched by the flake), so run it inside `nix develop`. See
 [docs/accessibility.md](https://github.com/AdrielGBM/telar/blob/main/docs/accessibility.md#audits).
+
+`src/controls_test.rs` checks a box made a control by its role, with an on/off state: a switch carries
+`role="switch"` and `aria-checked`, a toggle button is a `<button>` with `aria-pressed`, and Space or Enter sent to
+the focused element is kept from the page and presses the box, which the next frame writes back. See
+[docs/accessibility.md](https://github.com/AdrielGBM/telar/blob/main/docs/accessibility.md#controls-and-their-state).
 
 `src/document_scroll_test.rs` checks the surface's primary scroll as the document's own scroll: the host
 grows with the content, a `window` scroll is reported as the page's `Event::BoxScrolled`, a request to move

@@ -51,3 +51,26 @@ fn the_focused_node_says_so_last() {
         "Cancel, button\nSave, button, focused"
     );
 }
+
+/// A switch is checked, a toggle button pressed, a tab selected and a disclosure expanded: one flag, said the way its role says it.
+#[test]
+fn a_state_is_read_in_the_words_of_its_role() {
+    let toggled = |role: Role, name: &str, on: bool| {
+        let mut node = node(role, name);
+        node.toggled = Some(on);
+        node
+    };
+    let nodes = [
+        toggled(Role::Switch, "Reduce motion", true),
+        toggled(Role::Button, "Bold", true),
+        toggled(Role::Button, "Italic", false),
+        toggled(Role::Tab, "General", true),
+        toggled(Role::Tab, "Advanced", false),
+        toggled(Role::Disclosure, "Details", false),
+        toggled(Role::Slider, "Volume", true),
+    ];
+    assert_eq!(
+        transcript(&nodes),
+        "Reduce motion, switch, checked\nBold, button, pressed\nItalic, button, not pressed\nGeneral, tab, selected\nAdvanced, tab\nDetails, button, collapsed\nVolume, slider"
+    );
+}
