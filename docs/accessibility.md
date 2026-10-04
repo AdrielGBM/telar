@@ -84,6 +84,10 @@ the catalogue's accordion uses the same flag for expanded.
 | Android | Focus and keyboard activation as on the desktop; no accessibility bridge yet, so the role and state reach no reader. | — |
 | Browser, canvas (`web`) and headless | Focus and keyboard activation as on the desktop. The snapshot carries role and state for tests; there is no reader to hand them to. | — |
 
+A link has one state of its own: `current:` marks it as the current one of its set, the page being shown or
+the place on the page the reader is at. It is `aria-current` in a document, AccessKit's `aria_current` on the
+desktop and `, current` in the terminal's reading; see [docs/links.md](links.md#the-current-link).
+
 ## What each target does with them
 
 | Target | `label` | `lang` | `a11y:hidden` |
@@ -120,7 +124,7 @@ tail -F /tmp/reading.txt
 ```
 
 The reading ends the line of whatever holds the keyboard with `, focused` (`Save, button, focused`), since a
-reader following the file has no ring to look at.
+reader following the file has no ring to look at. A link marked `current:` says so after its role (`Web, link, current`).
 
 ## Names the catalogue gives
 
@@ -147,7 +151,7 @@ a box under `a11y:hidden`.
 | Test | What it checks |
 | --- | --- |
 | `crates/renderer/renderer-dom/src/audit_test.rs` | The document those widgets render to, audited by [axe-core](https://github.com/dequelabs/axe-core) with its WCAG 2.2 A/AA and best-practice rules (`region` off: the fixture is a fragment of a page). Run with nothing focused, with the field focused and with the button focused, and any violation fails the test with the rule, the element and the reason. It also checks that the keyboard's box wears Telar's ring in the document. |
-| `crates/platform/platform-desktop/src/accessibility_test.rs` (`from_a_screen`) | The AccessKit tree a desktop window publishes for the same screen: each control's role and name, that it takes `Focus` and `Click`, the URL of each link and link run, the state of the checkbox, the switch and the toggle button, that Space and Enter press the last two, the language and the hidden boxes, and that the tree's focus follows the Tab order. |
+| `crates/platform/platform-desktop/src/accessibility_test.rs` (`from_a_screen`) | The AccessKit tree a desktop window publishes for the same screen: each control's role and name, that it takes `Focus` and `Click`, the URL of each link and link run, the state of the checkbox, the switch and the toggle button, that Space and Enter press the last two, that a link to the section under a bar is the current location as the page scrolls, the language and the hidden boxes, and that the tree's focus follows the Tab order. |
 | `crates/renderer/renderer-dom/src/controls_test.rs` | A switch and a toggle button in the document: their role, `aria-checked` and `aria-pressed`, that each is a Tab stop, and that Space or Enter sent to the element is kept from the page, reaches the box through the platform and flips the state the next frame writes. `semantics_test.rs` checks that a box whose role changes drops the state attribute of the old one. |
 
 axe-core is MPL-2.0 and is not vendored into the repository. The flake fetches the published npm tarball by its

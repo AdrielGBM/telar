@@ -14,6 +14,7 @@ fn node(role: Role, name: &str) -> AccessNode {
         value: None,
         lang: None,
         url: None,
+        current: None,
     }
 }
 
@@ -72,5 +73,27 @@ fn a_state_is_read_in_the_words_of_its_role() {
     assert_eq!(
         transcript(&nodes),
         "Reduce motion, switch, checked\nBold, button, pressed\nItalic, button, not pressed\nGeneral, tab, selected\nAdvanced, tab\nDetails, button, collapsed\nVolume, slider"
+    );
+}
+
+/// The link to where the reader is says so after its role, before whether it is focused, whatever it is the current one of.
+#[test]
+fn a_current_link_says_so() {
+    let link = |name: &str, current: Option<CurrentKind>| {
+        let mut node = node(Role::Link, name);
+        node.current = current;
+        node
+    };
+    let mut page = link("Home", Some(CurrentKind::Page));
+    page.focused = true;
+    let nodes = [
+        page,
+        link("Desktop", Some(CurrentKind::Location)),
+        link("Simulation", None),
+        link("EN", Some(CurrentKind::Item)),
+    ];
+    assert_eq!(
+        transcript(&nodes),
+        "Home, link, current, focused\nDesktop, link, current\nSimulation, link\nEN, link, current"
     );
 }

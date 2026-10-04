@@ -18,6 +18,7 @@ use reactive_core::{
 };
 use ui_tree::{OverlayContext, OverlayGuard};
 
+use crate::anchor_line::{PlacesContext, PlacesGuard};
 use crate::annotation::{AnnotationsContext, AnnotationsGuard};
 use crate::cursor::{CursorContext, CursorGuard};
 use crate::focus::{FocusContext, FocusGuard};
@@ -42,6 +43,7 @@ pub struct Surface {
     cursor: CursorContext,
     annotations: AnnotationsContext,
     viewports: ViewportsContext,
+    places: PlacesContext,
     title: SurfaceTitleContext,
     window_commands: WindowCommandContext,
 }
@@ -67,6 +69,7 @@ impl Surface {
                 cursor: CursorContext::new_owned(),
                 annotations: AnnotationsContext::new_owned(),
                 viewports: ViewportsContext::new_owned(),
+                places: PlacesContext::new_owned(),
                 title: SurfaceTitleContext::new_owned(),
                 window_commands: WindowCommandContext::new_owned(),
             })
@@ -99,6 +102,7 @@ impl Surface {
             _cursor: self.cursor.enter(),
             _annotations: self.annotations.enter(),
             _viewports: self.viewports.enter(),
+            _places: self.places.enter(),
             _title: self.title.enter(),
             _prev_surface: RestoreSurface(prev_surface),
         }
@@ -125,6 +129,7 @@ impl Surface {
             _cursor: CursorContext::enter_ambient(),
             _annotations: AnnotationsContext::enter_ambient(),
             _viewports: ViewportsContext::enter_ambient(),
+            _places: PlacesContext::enter_ambient(),
             _title: SurfaceTitleContext::enter_ambient(),
             _prev_surface: RestoreSurface(prev_surface),
         }
@@ -159,6 +164,7 @@ pub struct SurfaceGuard {
     _cursor: CursorGuard,
     _annotations: AnnotationsGuard,
     _viewports: ViewportsGuard,
+    _places: PlacesGuard,
     _title: SurfaceTitleGuard,
     _prev_surface: RestoreSurface,
 }

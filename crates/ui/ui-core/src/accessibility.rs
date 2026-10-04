@@ -8,7 +8,7 @@ use std::sync::Arc;
 
 use geometry_core::Rect;
 use layout_core::NodeId;
-use platform_core::{AccessNode, Role};
+use platform_core::{AccessNode, CurrentKind, Role};
 use renderer_core::DrawCommand;
 use rustc_hash::FxHashMap;
 
@@ -49,6 +49,7 @@ pub fn snapshot(commands: &[DrawCommand]) -> Vec<AccessNode> {
         .map(|(i, (e, rect))| {
             let label = reading.label_of(e.node);
             named_controls[i] = label.is_some();
+            let link = reading.links.get(&e.node);
             AccessNode {
                 id: Some(e.id),
                 role: e.role,
@@ -59,7 +60,8 @@ pub fn snapshot(commands: &[DrawCommand]) -> Vec<AccessNode> {
                 toggled: e.toggled,
                 value: e.value,
                 lang: reading.scope(e.node).lang.as_deref().map(str::to_string),
-                url: reading.links.get(&e.node).map(platform_core::address_of),
+                url: link.map(|(destination, _)| platform_core::address_of(destination)),
+                current: link.and_then(|(_, current)| *current),
             }
         })
         .collect();
@@ -110,6 +112,7 @@ pub fn snapshot(commands: &[DrawCommand]) -> Vec<AccessNode> {
                 value: None,
                 lang: piece.lang.as_deref().map(str::to_string),
                 url: piece.url,
+                current: None,
             }),
         }
     }
@@ -158,7 +161,8 @@ struct Reading {
     scopes: FxHashMap<NodeId, Scope>,
     named: Vec<Named>,
     text: Vec<Piece>,
-    links: FxHashMap<NodeId, platform_core::Destination>,
+    /// Where each link box goes, and what it is the current one of when it is marked so.
+    links: FxHashMap<NodeId, (platform_core::Destination, Option<CurrentKind>)>,
 }
 
 impl Reading {
@@ -172,7 +176,9 @@ impl Reading {
                 DrawCommand::PushElement { element } => {
                     let node = NodeId::from(element.id.0);
                     if let Some(link) = &element.semantics.link {
-                        reading.links.insert(node, link.clone());
+                        reading
+                            .links
+                            .insert(node, (link.clone(), element.semantics.current_kind()));
                     }
                     let annotation = crate::annotation::peek(node).unwrap_or_default();
                     let inner = Scope {

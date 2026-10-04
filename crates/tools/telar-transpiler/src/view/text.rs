@@ -91,6 +91,13 @@ impl ViewGen<'_> {
                     continue;
                 }
             };
+            let allowed = crate::registry::tag_attr_keys("span");
+            errors.extend(
+                span.attributes
+                    .iter()
+                    .filter(|attr| !allowed.contains(&attr.key.as_str()))
+                    .map(|attr| format!("`{}` is not an attribute of `span`", attr.key)),
+            );
             let content = span.content.as_deref().unwrap_or("");
             let mut run = format!(
                 "TextRun::new({})",

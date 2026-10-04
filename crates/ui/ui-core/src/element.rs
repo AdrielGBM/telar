@@ -37,14 +37,17 @@ pub(crate) fn identity(node: NodeId) -> Arc<Element> {
     ))
 }
 
-/// [`identity`], for a box that is a link to `destination`.
+/// [`identity`], for a box that is a link to `destination`, and the current one of its set when `current` says so.
 pub(crate) fn identity_linking(
     node: NodeId,
     destination: platform_core::Destination,
+    current: bool,
 ) -> Arc<Element> {
     Arc::new(Element::new(
         ElementId(node.into()),
-        Semantics::group().linking_to(destination),
+        Semantics::group()
+            .linking_to(destination)
+            .marked_current(current),
         "",
         Rect::default(),
     ))

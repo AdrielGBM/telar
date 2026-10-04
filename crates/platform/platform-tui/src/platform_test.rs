@@ -30,6 +30,7 @@ fn label(name: &str) -> AccessNode {
         value: None,
         lang: None,
         url: None,
+        current: None,
     }
 }
 

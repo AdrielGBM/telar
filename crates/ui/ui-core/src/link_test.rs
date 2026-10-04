@@ -271,3 +271,28 @@ fn a_locale_link_switches_the_place_shown_and_goes_nowhere_without_one() {
         "told of the opening locale, then of the switch"
     );
 }
+
+#[test]
+fn a_link_is_current_while_what_it_reads_says_so() {
+    let here = reactive_core::signal(false);
+    let link = link_to(anchor("web")).current(move || here.get());
+    assert_eq!(element_of(&link, true).semantics.current_kind(), None);
+    here.set(true);
+    assert_eq!(
+        element_of(&link, true).semantics.current_kind(),
+        Some(platform_core::CurrentKind::Location)
+    );
+    assert_eq!(
+        element_of(&link, false).semantics.current_kind(),
+        Some(platform_core::CurrentKind::Location),
+        "a surface that reads no document still hears which link is current"
+    );
+}
+
+#[test]
+fn a_link_with_nowhere_to_go_is_the_current_one_of_nothing() {
+    let link = link_reading(|| external("not-a-uri")).current(|| true);
+    let element = element_of(&link, true);
+    assert!(element.semantics.current, "it was told");
+    assert_eq!(element.semantics.current_kind(), None);
+}

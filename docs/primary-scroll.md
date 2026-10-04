@@ -33,6 +33,42 @@ rect and `progress` are signals of their own. A bar fixed over the page (see
 let read = memo(|| use_primary_scroll().map_or(0.0, |page| page.progress(Axis::Vertical)));
 ```
 
+## The place under a line
+
+`use_anchor_at(line)` is the anchor whose box spans the line `line` px below the top edge of the primary
+scroll's view: the name `anchor:` gave it, or `None` while no page holds the primary scroll or no place on it
+spans the line. A bar fixed over the page reads it with its own height to know which section is under it, to
+mark the link to that section current (see [docs/links.md](links.md#the-current-link)) and to take that
+section's look:
+
+```rsx
+[logic]
+let here = memo(|| use_anchor_at(48.0));
+let act = memo(move || act_of(here.get().as_deref()));
+
+[view]
+layer
+    row theme:(theme_for($act)) width:100% height:48
+        box to:anchor("web") current:($here.as_deref() == Some("web"))
+            text "Web"
+```
+
+- **Reactive.** Whoever reads it runs again as the page scrolls, as places come and go or are renamed, as
+  their boxes move and when a page takes the primary scroll or lets it go. A `memo` over it changes only
+  when the place does, so a bar re-dresses itself once per section rather than once per scroll tick.
+- **Which place.** A box spans the line from its top edge to just above its bottom edge, so of two sections
+  that meet at the line the one below it is under it. Where several places span it, the one whose top the
+  reader passed last wins, and of two whose tops are level the shorter: the innermost of nested places. A
+  place inside a scroll area of its own counts only where that area shows it; a place outside the page's
+  scroll, in a layer or an overlay, never does. Only where a box runs top to bottom counts: the line
+  crosses the whole width of the view.
+- **Any scroll.** `ScrollViewport::anchor_at(line)` asks the same of any scroll: a sticky bar inside a
+  scroll area reads its own area with `use_scroll_viewport()`, as the sandbox's *Current place* page does.
+- **Every target alike.** It is worked out from Telar's layout and the scroll's offset, as `scroll_progress`
+  is: on web-dom the offset is the document's scroll, which the page hears as `Event::BoxScrolled` one frame
+  after the browser moved it; everywhere else it is the scroll area's own offset. Headless and the terminal
+  answer the same, on their own layout.
+
 ## Targets
 
 | Target | The primary scroll is |

@@ -14,6 +14,7 @@ fn node(id: Option<u64>, role: Role, name: &str) -> AccessNode {
         value: None,
         lang: None,
         url: None,
+        current: None,
     }
 }
 
@@ -154,6 +155,28 @@ fn a_link_is_announced_with_where_it_goes() {
     assert_eq!(ak.url(), Some("https://example.com"));
 }
 
+/// The current page, the current location on it, or plainly the current one: AccessKit's `aria_current` carries each, and a link not marked carries none.
+#[test]
+fn a_current_link_says_what_it_is_the_current_one_of() {
+    let published = |current: Option<CurrentKind>| {
+        let link = AccessNode {
+            url: Some("/#web".to_string()),
+            current,
+            ..node(Some(3), Role::Link, "Web")
+        };
+        tree_update(&[link], "Links", None).nodes[0]
+            .1
+            .aria_current()
+    };
+    assert_eq!(published(Some(CurrentKind::Page)), Some(AriaCurrent::Page));
+    assert_eq!(
+        published(Some(CurrentKind::Location)),
+        Some(AriaCurrent::Location)
+    );
+    assert_eq!(published(Some(CurrentKind::Item)), Some(AriaCurrent::True));
+    assert_eq!(published(None), None);
+}
+
 /// One flag, carried in the property AccessKit reads for the role: a switch's and a toggle button's `toggled`, a tab's `selected`, a disclosure's `expanded`.
 #[test]
 fn a_state_lands_where_its_role_is_read_from() {
@@ -196,15 +219,16 @@ mod from_a_screen {
     use std::cell::Cell;
     use std::rc::Rc;
 
-    use accesskit::{Action, Node, Role as AkRole, Toggled};
+    use accesskit::{Action, AriaCurrent, Node, Role as AkRole, Toggled};
     use geometry_core::Size;
     use layout_core::{LayoutError, LayoutStyle};
-    use platform_core::{Event, Key, Location, ModifiersState, NamedKey, external};
+    use platform_core::{Event, Key, Location, ModifiersState, NamedKey, anchor, external};
     use renderer_core::{Color, RectStyle, TextStyle};
     use ui_components::{ButtonProps, CheckboxProps, TextFieldProps, button, checkbox, text_field};
     use ui_core::{
-        Accessible, Children, ComponentList, Container, LayoutItem, StyledContainer, Text, TextRun,
-        WindowRoot, box_item, focus,
+        Accessible, Children, ComponentList, Container, FixedLayer, LayoutItem, PageAnchor,
+        ScrollPage, ScrollViewport, StyledContainer, Text, TextRun, WindowRoot, box_item, focus,
+        use_anchor_at,
     };
 
     use super::*;
@@ -441,6 +465,77 @@ mod from_a_screen {
             "a toggle button is pressed by Enter and stays pressed"
         );
         focus::clear();
+    }
+
+    /// What `box to:anchor("…") current:(…)` builds in `.rsx` for a bar over the page: a link current while its section is the place under the bar.
+    fn section_link(name: &'static str, section: &'static str) -> StyledContainer {
+        StyledContainer::new(
+            LayoutStyle::new().padding_horizontal(4.0),
+            |_| RectStyle::default(),
+            vec![box_item(words(name).expect("a link's words"))],
+        )
+        .expect("a link builds")
+        .to(move || anchor(section))
+        .current(move || use_anchor_at(BAR).as_deref() == Some(section))
+    }
+
+    const BAR: f32 = 48.0;
+
+    /// A bar fixed over a page of two sections, each taller than the window, with a link to each; `viewport` is the page's scroll.
+    fn sections() -> (ComponentList, ScrollViewport) {
+        renderer_core::set_default_text_metrics(renderer_text::ShaperMetrics);
+        ui_core::reset_layout_runtime();
+        focus::clear();
+        ui_core::set_surface_size(Size::new(WIDTH as f32, HEIGHT as f32));
+        let bar = Container::new(
+            LayoutStyle::new().flex_row().gap(8.0).height(BAR),
+            vec![
+                box_item(section_link("Intro", "intro")),
+                box_item(section_link("Usage", "usage")),
+            ],
+        )
+        .expect("the bar builds");
+        let layer = FixedLayer::new(LayoutStyle::new().flex_column(), vec![box_item(bar)])
+            .expect("a layer");
+        let section = |name: &'static str| {
+            box_item(
+                Container::new(LayoutStyle::new().height(HEIGHT as f32 * 1.5), vec![])
+                    .expect("a section builds")
+                    .page_anchor(move || name),
+            )
+        };
+        let content = Container::column(vec![box_item(layer), section("intro"), section("usage")])
+            .expect("the content builds");
+        let mut page = ScrollPage::new(Box::new(content)).expect("the page builds");
+        page.relayout(WIDTH as f32, HEIGHT as f32);
+        let viewport = page.viewport();
+        let mut tree = ComponentList::new(page);
+        tree.on_event(&Event::WindowResized {
+            width: WIDTH,
+            height: HEIGHT,
+        });
+        (tree, viewport)
+    }
+
+    /// The link to the section under the bar is the current location, and only that one; scrolling the next section under the bar moves the mark to its link.
+    #[test]
+    fn the_link_to_the_section_under_a_bar_is_the_current_location() {
+        let (tree, viewport) = sections();
+        let update = published(&tree);
+        assert_eq!(
+            control(&update, "Intro").aria_current(),
+            Some(AriaCurrent::Location)
+        );
+        assert_eq!(control(&update, "Usage").aria_current(), None);
+
+        viewport.scroll_to(0.0, HEIGHT as f32 * 1.5 - BAR);
+        let update = published(&tree);
+        assert_eq!(control(&update, "Intro").aria_current(), None);
+        assert_eq!(
+            control(&update, "Usage").aria_current(),
+            Some(AriaCurrent::Location)
+        );
+        assert_eq!(control(&update, "Usage").url(), Some("/#usage"));
     }
 
     #[test]

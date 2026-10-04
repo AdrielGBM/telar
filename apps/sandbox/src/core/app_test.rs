@@ -84,3 +84,46 @@ fn reselecting_the_current_section_returns_to_its_overview() {
     assert_eq!(host.current_route(), Some(SectionRoute::Overview));
     assert_eq!(stacks.depth(), 1);
 }
+
+/// The links in the bar marked current, by where they go.
+fn current_links(tree: &telar::ComponentList) -> Vec<telar::Destination> {
+    tree.commands()
+        .iter()
+        .filter_map(|command| match command {
+            telar::DrawCommand::PushElement { element } if element.semantics.current => {
+                element.semantics.link.clone()
+            }
+            _ => None,
+        })
+        .collect()
+}
+
+/// The demo's section is built inside the scroll it is shown in, so its bar reads that scroll: following the link to a section brings it under the bar, and the link to it becomes the current one.
+#[test]
+fn the_current_place_demo_marks_the_link_to_the_section_under_its_bar() {
+    reset_layout_runtime();
+    telar::set_theme(crate::core::theme::SandboxTheme::modern());
+    telar::receive_location_history(vec![telar::Location::root()]);
+    let section = SECTIONS
+        .iter()
+        .position(|def| def.title == "Current place")
+        .expect("the demo is listed");
+    let page = SectionPage::new(Navigator::new(SectionRoute::Overview), section).unwrap();
+    compute_layout(
+        page.layout_node(),
+        AvailableSpace::Definite(900.0),
+        AvailableSpace::Definite(700.0),
+    )
+    .unwrap();
+    let mut tree = telar::ComponentList::new(page);
+    tree.on_event(&Event::WindowResized {
+        width: 900,
+        height: 700,
+    });
+    telar::relayout_if_dirty();
+    assert_eq!(current_links(&tree), [], "the header is under the bar");
+
+    assert!(telar::follow(&telar::anchor("place-usage")));
+    telar::relayout_if_dirty();
+    assert_eq!(current_links(&tree), [telar::anchor("place-usage")]);
+}

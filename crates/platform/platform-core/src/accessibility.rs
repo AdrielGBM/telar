@@ -5,7 +5,7 @@
 use geometry_core::Rect;
 
 /// The vocabulary itself lives a layer down, where a renderer can reach it too: the desktop announcing a checkbox and a document drawing one have to be describing the same box.
-pub use semantics_core::{Role, ToggleKind};
+pub use semantics_core::{CurrentKind, Role, ToggleKind};
 
 /// One thing a screen reader can land on.
 #[derive(Debug, Clone, PartialEq)]
@@ -29,6 +29,8 @@ pub struct AccessNode {
     pub lang: Option<String>,
     /// Where a link goes, written as [`address_of`](crate::address_of) writes it. `None` for everything that is not a link.
     pub url: Option<String>,
+    /// What a link marked current is the current one of: the page being shown, the place on it the reader is at. `None` for every box that is not a current link.
+    pub current: Option<CurrentKind>,
 }
 
 /// A numeric control's reading: where it is now, and the range that makes that number mean something.
@@ -58,6 +60,9 @@ pub fn transcript(nodes: &[AccessNode]) -> String {
         if let Some(state) = node.toggled.and_then(|on| toggle_words(node.role, on)) {
             out.push_str(", ");
             out.push_str(state);
+        }
+        if node.current.is_some() {
+            out.push_str(", current");
         }
         if !node.enabled {
             out.push_str(", unavailable");

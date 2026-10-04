@@ -24,7 +24,7 @@ pub mod system_preferences;
 pub mod window;
 pub mod window_command;
 
-pub use accessibility::{AccessNode, NumericValue, Role, ToggleKind};
+pub use accessibility::{AccessNode, CurrentKind, NumericValue, Role, ToggleKind};
 pub use app_ctx::{AppCtx, RedrawWaker};
 pub use asset_base::{asset_url, set_asset_base};
 pub use consumed_keys::{ConsumedKeys, consumes, key_member};

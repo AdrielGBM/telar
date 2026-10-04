@@ -13,6 +13,10 @@ A control's on/off state is one flag, `Semantics::toggled`, read through its rol
 it is checked (checkbox, radio, switch), pressed (a button, which makes it a toggle button), selected (a tab) or
 expanded (a disclosure). See [docs/accessibility.md](https://github.com/AdrielGBM/telar/blob/main/docs/accessibility.md#controls-and-their-state).
 
+A link marked current is `Semantics::current`, and what it is the current one of (`CurrentKind`: a page, a
+location on the page, or plainly the current item) is its destination's to say, through
+`Destination::current_kind`. See [docs/links.md](https://github.com/AdrielGBM/telar/blob/main/docs/links.md#the-current-link).
+
 **Applications depend on the [`telar`](https://crates.io/crates/telar) facade, not on this crate.** Telar
 is split into small crates so a build carries only the target and the capabilities it named, and every one
 of them has to be published for the facade to be. The facade re-exports what an application needs behind

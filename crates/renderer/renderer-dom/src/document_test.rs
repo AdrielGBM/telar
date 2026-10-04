@@ -167,6 +167,7 @@ fn every_attribute_is_named_in_the_order_it_is_written() {
             "aria-pressed",
             "aria-selected",
             "aria-expanded",
+            "aria-current",
             "aria-disabled",
             "tabindex",
             CONSUMED_KEYS_ATTRIBUTE,
@@ -237,6 +238,51 @@ fn a_state_is_the_attribute_its_role_carries_it_in() {
         state_attributes(Role::Slider, true),
         ("div", vec![]),
         "a role with no on/off state carries none"
+    );
+}
+
+/// The `aria-current` a link marked current ends up with, `None` when it carries none.
+fn current_attribute(semantics: Semantics) -> Option<String> {
+    let frame = describe_frame(
+        &[open(1, semantics), DrawCommand::PopElement],
+        None,
+        &mut Fixed,
+        false,
+    );
+    let node = only_box(&frame);
+    node.described
+        .attributes(node.id)
+        .into_iter()
+        .find(|(name, _)| *name == "aria-current")
+        .and_then(|(_, value)| value)
+}
+
+/// A route is the current page, an anchor the current location on it, and a language or an outside address just the current one; a link not marked, or one that goes nowhere, says nothing.
+#[test]
+fn a_current_link_says_what_it_is_the_current_one_of() {
+    let link = |destination: Destination| Semantics::group().linking_to(destination);
+    let route = Destination::Route(platform_core::Location::root().segment("about"));
+    assert_eq!(
+        current_attribute(link(route).marked_current(true)).as_deref(),
+        Some("page")
+    );
+    assert_eq!(
+        current_attribute(link(Destination::anchor("web")).marked_current(true)).as_deref(),
+        Some("location")
+    );
+    assert_eq!(
+        current_attribute(link(Destination::locale("en")).marked_current(true)).as_deref(),
+        Some("true")
+    );
+    assert_eq!(current_attribute(link(Destination::anchor("web"))), None);
+    assert_eq!(
+        current_attribute(
+            link(Destination::anchor("web"))
+                .marked_current(true)
+                .in_state(false, None, true)
+        ),
+        None,
+        "a disabled link is no `<a href>`, so it is the current one of nothing"
     );
 }
 

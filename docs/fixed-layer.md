@@ -90,3 +90,8 @@ layer
     row width:100% height:48
         text "{($read * 100.0).round()}%"
 ```
+
+`use_anchor_at(48.0)` reads, the same way, which place on the page is under a 48 px bar: the anchor whose box
+spans that line of the page's view. A bar marks its link to that place with `current:` and can take that
+place's theme; see [The place under a line](primary-scroll.md#the-place-under-a-line) and
+[The current link](links.md#the-current-link).

@@ -112,7 +112,7 @@ const ACCESSIBILITY_ATTRS: &[AttrSpec] = &[
         "`a11y:hidden` takes the box and everything under it out of what assistive technology is told; it is still drawn and still answers the pointer.",
     ),
     AttrSpec::free("anchor").doc(
-        "Names the box as a place on the page that `to:anchor(\"name\")` reaches: a quoted string, `t!(…)`, or an expression reading `$state`. Following it reveals the box at the top of its scroll and adds a history entry; a document gives the element that `id`, so `#name` in the address opens there.",
+        "Names the box as a place on the page that `to:anchor(\"name\")` reaches: a quoted string, `t!(…)`, or an expression reading `$state`. Following it reveals the box at the top of its scroll and adds a history entry; a document gives the element that `id`, so `#name` in the address opens there. `use_anchor_at(line)` reads which place is under a line across the page's view, for marking the `current:` link.",
     ),
     AttrSpec::free("theme").doc(
         "Provides a theme to the box and everything under it, any number of children: a theme value, or a `ScopedTheme` to switch it later. A value reading `$state` is followed, re-running only the readers under it.",
@@ -238,6 +238,9 @@ const CONTAINER_PAINT: &[AttrSpec] = &[
     ),
     AttrSpec::free("to").doc(
         "Makes the box a link: a typed route, `anchor(\"name\")` on this page, `in_locale(\"en\")` for this place in another language, or `external(\"https://…\")` outside the app. Focusable, followed on a tap or Enter, and a real `<a href>` in a document.",
+    ),
+    AttrSpec::free("current").doc(
+        "Marks the link as the current one of its set while it reads true, re-read when what it reads changes: `current:($here.as_deref() == Some(\"web\"))`, with `$here` a memo over `use_anchor_at(48.0)`. The current page for a route, the current location for an `anchor(…)`: `aria-current` in a document, AccessKit's `aria_current` on the desktop, \", current\" in a terminal's reading. Needs `to:` on the same box.",
     ),
     AttrSpec::flag("input_opaque")
         .doc("Claims the pointer over the box without a handler, so nothing beneath takes the press."),

@@ -19,7 +19,7 @@ mod destination;
 mod keys;
 mod location;
 
-pub use destination::{Destination, Uri};
+pub use destination::{CurrentKind, Destination, Uri};
 pub use keys::ConsumedKeys;
 pub use location::Location;
 
@@ -282,6 +282,8 @@ pub struct Semantics {
     pub hidden: bool,
     /// The name a [`Destination::Anchor`] reaches this box by: a place on the page.
     pub anchor: Option<Arc<str>>,
+    /// Whether a link is the current one of its set: the page being shown, the place on the page the reader is at. Read through [`current_kind`](Self::current_kind), since what it is the current one of is its destination's to say.
+    pub current: bool,
 }
 
 /// What an application said about a box, laid over what the widget derived.
@@ -372,6 +374,20 @@ impl Semantics {
         self.role = Role::Link;
         self.link = Some(destination);
         self
+    }
+
+    /// Marks a link as the current one of its set, or not; see [`current`](Self::current).
+    pub fn marked_current(mut self, current: bool) -> Self {
+        self.current = current;
+        self
+    }
+
+    /// What this box is the current one of: `None` unless it is a link with somewhere to go that is marked current.
+    pub fn current_kind(&self) -> Option<CurrentKind> {
+        self.link
+            .as_ref()
+            .filter(|_| self.current)
+            .map(Destination::current_kind)
     }
 
     pub fn focusable(mut self, focusable: Focusable) -> Self {

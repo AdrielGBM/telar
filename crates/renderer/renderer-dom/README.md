@@ -58,6 +58,12 @@ order; it stays at the top over the stuck stage; and the browser hands it the po
 boxes. See
 [docs/fixed-layer.md](https://github.com/AdrielGBM/telar/blob/main/docs/fixed-layer.md).
 
+`src/current_test.rs` mounts a bar fixed over a page the document scrolls, with a link to each of three sections
+marked `current:` while `use_anchor_at` answers with its section: scrolling the document moves the page's offset
+through `Event::BoxScrolled`, and the link to the section under the bar is the one with
+`aria-current="location"`. See
+[docs/links.md](https://github.com/AdrielGBM/telar/blob/main/docs/links.md#the-current-link).
+
 The dev shell's chromedriver may not match its Chromium. In that case run the tests in Firefox:
 
 ```sh

@@ -40,3 +40,22 @@ fn constructors_build_each_kind() {
 fn an_external_destination_without_a_scheme_is_refused() {
     assert!(Destination::external("example.com").is_none());
 }
+
+#[test]
+fn a_current_link_is_the_current_one_of_what_its_destination_names() {
+    assert_eq!(
+        Destination::from(Location::root().segment("a")).current_kind(),
+        CurrentKind::Page
+    );
+    assert_eq!(
+        Destination::anchor("contact").current_kind(),
+        CurrentKind::Location
+    );
+    assert_eq!(Destination::locale("en").current_kind(), CurrentKind::Item);
+    assert_eq!(
+        Destination::external("https://example.com")
+            .unwrap()
+            .current_kind(),
+        CurrentKind::Item
+    );
+}

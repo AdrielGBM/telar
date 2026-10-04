@@ -34,6 +34,26 @@ impl Destination {
     pub fn external(uri: &str) -> Option<Self> {
         Uri::parse(uri).map(Self::External)
     }
+
+    /// What a link here is the current one of, once marked current: the page being shown for a route, the place on that page the reader is at for an anchor, and plainly the current one of its set for a language or an outside address.
+    pub fn current_kind(&self) -> CurrentKind {
+        match self {
+            Self::Route(_) => CurrentKind::Page,
+            Self::Anchor(_) => CurrentKind::Location,
+            Self::Locale(_) | Self::External(_) => CurrentKind::Item,
+        }
+    }
+}
+
+/// What a link marked current is the current one of, as [`Destination::current_kind`] decides: the tokens of ARIA's `aria-current`, which AccessKit models too.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum CurrentKind {
+    /// The page being shown, among links to pages.
+    Page,
+    /// The place on the page the reader is at, among links to places on it.
+    Location,
+    /// The current one of a set that has no more specific word for it.
+    Item,
 }
 
 impl From<Location> for Destination {

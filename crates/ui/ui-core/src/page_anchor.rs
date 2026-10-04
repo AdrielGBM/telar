@@ -6,6 +6,7 @@ use std::sync::Arc;
 
 use layout_core::NodeId;
 
+use crate::anchor_line::{PlaceRegistration, name_place};
 use crate::context::track_layout;
 use crate::layout_item::LayoutItem;
 use crate::link::{AnchorRegistration, anchor_moved, anchor_renamed, register_anchor};
@@ -22,10 +23,12 @@ pub trait PageAnchor: LayoutItem + Sized {
         let node = self.layout_node();
         let current: Rc<RefCell<Option<Arc<str>>>> = Rc::default();
         let registration: Rc<RefCell<Option<AnchorRegistration>>> = Rc::default();
+        let place: Rc<RefCell<Option<PlaceRegistration>>> = Rc::default();
         let annotation = crate::annotation::slot(node);
         {
             let current = current.clone();
             let registration = registration.clone();
+            let place = place.clone();
             reactive_core::effect(move || {
                 let name: Arc<str> = name().into();
                 let previous = current.borrow().clone();
@@ -37,6 +40,7 @@ pub trait PageAnchor: LayoutItem + Sized {
                 next.anchor = Some(name.clone());
                 annotation.set(next);
                 *registration.borrow_mut() = Some(register_anchor(&name, move || reveal(node)));
+                *place.borrow_mut() = Some(name_place(node, name.clone()));
                 *current.borrow_mut() = Some(name.clone());
                 if let Some(previous) = previous {
                     anchor_renamed(&previous, &name);
@@ -52,7 +56,10 @@ pub trait PageAnchor: LayoutItem + Sized {
                 anchor_moved(&name);
             }
         });
-        reactive_core::on_cleanup(move || drop(registration.borrow_mut().take()));
+        reactive_core::on_cleanup(move || {
+            drop(registration.borrow_mut().take());
+            drop(place.borrow_mut().take());
+        });
         self
     }
 }

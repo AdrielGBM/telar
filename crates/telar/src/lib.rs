@@ -226,7 +226,7 @@ pub use platform_core::{
 };
 #[cfg(feature = "runtime")]
 pub use platform_core::{
-    Destination, IntoDestination, Route, Uri, address_of, anchor, external, in_locale,
+    CurrentKind, Destination, IntoDestination, Route, Uri, address_of, anchor, external, in_locale,
 };
 #[cfg(feature = "runtime")]
 pub use preferences_core::{
@@ -257,7 +257,8 @@ pub use ui_core::Svg;
 pub use ui_core::{
     AnchorRegistration, PageAnchor, ScrollLinked, ViewRange, enclosing_scroll_viewport, follow,
     has_anchor, range_progress, register_anchor, reveal_anchor, scroll_progress,
-    scroll_progress_along, scroll_viewports_of, use_primary_scroll, use_scroll_viewport,
+    scroll_progress_along, scroll_viewports_of, use_anchor_at, use_primary_scroll,
+    use_scroll_viewport,
 };
 #[cfg(feature = "runtime")]
 pub use ui_core::{

@@ -136,3 +136,26 @@ fn a_language_is_an_annotation_even_without_a_name() {
     assert_eq!(said.lang.as_deref(), Some("ja"));
     assert!(said.label.is_none());
 }
+
+#[test]
+fn only_a_link_with_somewhere_to_go_is_current() {
+    let link = Semantics::group().linking_to(Destination::anchor("web"));
+    assert_eq!(link.current_kind(), None, "not marked");
+    assert_eq!(
+        link.marked_current(true).current_kind(),
+        Some(CurrentKind::Location)
+    );
+    assert_eq!(
+        Semantics::of(Role::Link)
+            .marked_current(true)
+            .current_kind(),
+        None,
+        "a disabled link goes nowhere, so it is the current one of nothing"
+    );
+    assert_eq!(
+        Semantics::of(Role::Button)
+            .marked_current(true)
+            .current_kind(),
+        None
+    );
+}

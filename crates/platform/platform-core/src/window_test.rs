@@ -32,6 +32,7 @@ impl EventHandler<TestWindow> for TestHandler {
             value: None,
             lang: None,
             url: None,
+            current: None,
         }]
     }
 }

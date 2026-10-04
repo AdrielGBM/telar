@@ -70,6 +70,36 @@ history keeps the anchor entries around it (see [docs/location.md](location.md))
 | Web, document | The element's `id`, so `#name` is a native fragment. A plain click on its `<a>` is taken back and followed by Telar, which pushes the entry and reveals the box through the document's scroll. |
 | Web, canvas, desktop, Android, terminal, headless | Revealed by Telar in its scroll areas. A desktop or terminal `--location /page#name` and an Android link with a fragment open there. |
 
+## The current link
+
+```rsx
+[logic]
+let here = memo(|| use_anchor_at(48.0));
+
+[view]
+box to:anchor("web") current:($here.as_deref() == Some("web"))
+    text "Web"
+```
+
+`current:` marks a link as the current one of its set while it reads true, and is re-read whenever what it
+reads changes. What it is the current one of is its destination's to say (`Destination::current_kind`): a
+route is the current **page**, an anchor the current **location** on the page, and a language or an outside
+address plainly the current one. A link with nowhere to go right now (a disabled one) is the current one of
+nothing. In Rust it is `StyledContainer::current(|| …)` after `to`. `current:` without `to:` on the same box
+is a build error, and a `span` takes no `current:`: a link the reader is shown as current belongs on a box.
+
+The place under a bar comes from `use_anchor_at(line)`, which reads the anchor spanning a line of the primary
+scroll's view (see [docs/primary-scroll.md](primary-scroll.md#the-place-under-a-line)); a link to a route
+compares its route with the location being shown.
+
+| Target | A current link is |
+| --- | --- |
+| Web, document | `aria-current="page"` for a route, `"location"` for an anchor, `"true"` for a language or an outside address, on its `<a>`; removed when it stops being current. |
+| Desktop | AccessKit's `aria_current` (`Page`, `Location`, `True`) on its `Link` node. The Windows adapter hands it to UI Automation; the AT-SPI (Linux) and macOS adapters of this AccessKit release do not pass it on yet, so a reader there announces the link without it. |
+| Terminal | `, current` after its role in the plain-text reading (`Web, link, current`). |
+| Web canvas, headless | Carried in the snapshot for tests; there is no reader to hand it to. |
+| Android | Nothing yet: no accessibility bridge (as for every role and state). |
+
 ## Links inside a paragraph
 
 ```rsx

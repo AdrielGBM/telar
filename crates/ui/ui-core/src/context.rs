@@ -10,6 +10,7 @@ pub use layout_reactive::overlay_viewport;
 pub fn reset_layout_runtime() {
     crate::inherit::reset_cascade();
     crate::annotation::reset();
+    crate::anchor_line::reset();
     crate::input_region::reset();
     crate::presence::reset_exits();
     crate::cursor::reset();

@@ -15,8 +15,8 @@ use geometry_core::Rect;
 use platform_core::Destination;
 use platform_core::consumed_keys::{CONSUMED_KEYS_ATTRIBUTE, FOCUS_BOX_ATTRIBUTE};
 use renderer_core::{
-    BlendMode, Color, DrawCommand, Element, Focusable, ImageData, Picture, Role, TextStyle,
-    ToggleKind,
+    BlendMode, Color, CurrentKind, DrawCommand, Element, Focusable, ImageData, Picture, Role,
+    TextStyle, ToggleKind,
 };
 
 use crate::paint;
@@ -159,6 +159,8 @@ pub(crate) struct Described {
     pub hidden: bool,
     /// A control's on/off state and what its role makes it, which decides the attribute that carries it.
     pub toggled: Option<(ToggleKind, bool)>,
+    /// What a link marked current is the current one of.
+    pub current: Option<CurrentKind>,
     pub disabled: bool,
     /// Part of the record even though it writes no attribute: a box that has just become the focused one is a box the reconcile has to act on, and comparing without it made the acting unreachable.
     pub focused: bool,
@@ -204,6 +206,11 @@ impl Described {
             ("aria-pressed", self.state_of(ToggleKind::Pressed)),
             ("aria-selected", self.state_of(ToggleKind::Selected)),
             ("aria-expanded", self.state_of(ToggleKind::Expanded)),
+            (
+                "aria-current",
+                self.current
+                    .map(|current| aria_current(current).to_string()),
+            ),
             ("aria-disabled", flag(self.disabled)),
             ("tabindex", tabindex.map(str::to_string)),
             (CONSUMED_KEYS_ATTRIBUTE, keys),
@@ -854,6 +861,7 @@ fn describe(element: &Element, tag: &'static str) -> Described {
         toggled: semantics
             .toggled
             .and_then(|on| Some((semantics.role.toggle_kind()?, on))),
+        current: semantics.current_kind().filter(|_| link.is_some()),
         disabled: semantics.disabled,
         focused: semantics.focused,
         control: semantics.role.is_control(),
@@ -943,6 +951,14 @@ pub(crate) fn tag_of(role: &Role) -> &'static str {
             _ => "h6",
         },
         _ => "div",
+    }
+}
+
+fn aria_current(current: CurrentKind) -> &'static str {
+    match current {
+        CurrentKind::Page => "page",
+        CurrentKind::Location => "location",
+        CurrentKind::Item => "true",
     }
 }
 

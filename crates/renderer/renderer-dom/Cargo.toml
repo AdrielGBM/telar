@@ -107,3 +107,7 @@ path = "src/transform_origin_test.rs"
 [[test]]
 name = "text_paint"
 path = "src/text_paint_test.rs"
+
+[[test]]
+name = "current"
+path = "src/current_test.rs"

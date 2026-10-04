@@ -186,3 +186,43 @@ fn a_control_role_with_a_destination_is_a_build_error() {
     let code = transpiled("box role:link to:anchor(\"a\")\n    text \"x\"\n");
     assert!(!code.contains("compile_error!"), "{code}");
 }
+
+#[test]
+fn a_current_link_reads_its_state_after_its_destination() {
+    let code = transpiled(
+        "box to:anchor(\"web\") current:($here.as_deref() == Some(\"web\"))\n    text \"Web\"\n",
+    );
+    let to = code
+        .find(".to(")
+        .unwrap_or_else(|| panic!("a link: {code}"));
+    let current = code
+        .find(".current(")
+        .unwrap_or_else(|| panic!("a current state: {code}"));
+    assert!(to < current, "{code}");
+    assert!(code.contains("here.get()"), "{code}");
+    assert!(!code.contains("compile_error!"), "{code}");
+}
+
+#[test]
+fn a_bare_current_marks_the_link_for_good() {
+    let code = transpiled("row to:anchor(\"web\") current\n    text \"Web\"\n");
+    assert!(code.contains("StyledContainer::new("), "{code}");
+    assert!(code.contains(".current(|| true)"), "{code}");
+}
+
+#[test]
+fn current_without_a_destination_is_a_build_error() {
+    let code = transpiled("box current:$here on_press:(|| ())\n    text \"x\"\n");
+    assert!(code.contains("compile_error!"), "{code}");
+    assert!(code.contains("`current:` marks a link"), "{code}");
+}
+
+#[test]
+fn a_link_run_cannot_be_marked_current() {
+    let code = transpiled("text\n    span \"Web\" to:anchor(\"web\") current\n");
+    assert!(code.contains("compile_error!"), "{code}");
+    assert!(
+        code.contains("`current` is not an attribute of `span`"),
+        "{code}"
+    );
+}

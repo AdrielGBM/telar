@@ -188,6 +188,12 @@ impl ViewGen<'_> {
             .collect::<String>();
         let inert = self.predicate_call(el, "inert");
         let to = self.destination_call(el, &mut errors);
+        let current = self.predicate_call(el, "current");
+        if !current.is_empty() && to.is_empty() {
+            errors.push(
+                "`current:` marks a link as the current one of its set: it needs `to:` on the same box".to_string(),
+            );
+        }
         let role = role_of(el);
         errors.extend(role_contradictions(el, role));
         let operated = role.is_some_and(|(_, role)| role.is_control());
@@ -285,7 +291,7 @@ impl ViewGen<'_> {
             Some((closure, layer_calls)) => {
                 let _ = writeln!(
                     code,
-                    "{inner_pad}{bind}StyledContainer::{ctor}({style}, {closure}, {children})?{layer_calls}{blend}{hover_call}{active_call}{disabled_call}{focus_ring}{disabled}{on_press}{transform_call}{on_hover}{on_pointer_move}{on_key}{on_drag}{on_drag_end}{on_scroll}{on_focus}{on_long_press}{on_alt_press}{cursor}{drag_button}{drag_threshold}{input}{inert}{consumes_keys}{holds_stroke}{role_call}{toggled}{to}{styled_by}{declaring}{terminator}"
+                    "{inner_pad}{bind}StyledContainer::{ctor}({style}, {closure}, {children})?{layer_calls}{blend}{hover_call}{active_call}{disabled_call}{focus_ring}{disabled}{on_press}{transform_call}{on_hover}{on_pointer_move}{on_key}{on_drag}{on_drag_end}{on_scroll}{on_focus}{on_long_press}{on_alt_press}{cursor}{drag_button}{drag_threshold}{input}{inert}{consumes_keys}{holds_stroke}{role_call}{toggled}{to}{current}{styled_by}{declaring}{terminator}"
                 );
             }
             None => {

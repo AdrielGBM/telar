@@ -5,10 +5,10 @@
 //! Built only while something is listening. Every desktop accessibility API works this way, and it is what makes the cost honest: with no assistive technology attached, nothing here runs at all.
 
 use accesskit::{
-    Action, ActionRequest, Node, NodeId, Rect as AkRect, Role as AkRole, Toggled, TreeId, TreeInfo,
-    TreeUpdate,
+    Action, ActionRequest, AriaCurrent, Node, NodeId, Rect as AkRect, Role as AkRole, Toggled,
+    TreeId, TreeInfo, TreeUpdate,
 };
-use platform_core::{AccessNode, Role, ToggleKind};
+use platform_core::{AccessNode, CurrentKind, Role, ToggleKind};
 
 /// The window itself, which every other node hangs from. A fixed id because there is exactly one and the platform needs to name it before any of its children exist.
 const ROOT: NodeId = NodeId(0);
@@ -55,6 +55,9 @@ pub(crate) fn tree_update(nodes: &[AccessNode], title: &str, lang: Option<&str>)
         if let Some(url) = &node.url {
             ak.set_url(url.as_str());
         }
+        if let Some(current) = node.current {
+            ak.set_aria_current(aria_current(current));
+        }
         if node.focused {
             focus = id;
         }
@@ -89,6 +92,14 @@ fn set_toggle_state(ak: &mut Node, role: Role, on: bool) {
         Some(ToggleKind::Selected) => ak.set_selected(on),
         Some(ToggleKind::Expanded) => ak.set_expanded(on),
         None => {}
+    }
+}
+
+fn aria_current(current: CurrentKind) -> AriaCurrent {
+    match current {
+        CurrentKind::Page => AriaCurrent::Page,
+        CurrentKind::Location => AriaCurrent::Location,
+        CurrentKind::Item => AriaCurrent::True,
     }
 }
 

@@ -189,6 +189,7 @@ pub struct StyledContainer {
     // What the box is, where it is more than a box. `None` reads it from what the box does.
     role: Option<renderer_core::Role>,
     link: Option<Rc<dyn Fn() -> Option<Destination>>>,
+    current: Option<Rc<dyn Fn() -> bool>>,
 }
 
 impl StyledContainer {
@@ -234,6 +235,7 @@ impl StyledContainer {
             holds_stroke: false,
             role: None,
             link: None,
+            current: None,
         }
     }
 
@@ -275,8 +277,13 @@ impl StyledContainer {
                 Some(destination) => semantics.linking_to(destination),
                 None => semantics.with_role(renderer_core::Role::Link),
             };
+            semantics.current = self.is_current();
         }
         crate::element::with_semantics(self.node, semantics)
+    }
+
+    fn is_current(&self) -> bool {
+        self.current.as_ref().is_some_and(|current| current())
     }
 
     /// Whether the box is currently refusing input: the application asked, or it is a link with nowhere to go right now.
@@ -590,6 +597,14 @@ impl StyledContainer {
             }
         });
         self.control(renderer_core::Role::Link)
+    }
+
+    /// Marks the link as the current one of its set while `current` reads true: the page being shown, or the place on the page the reader is at, as its destination says. Re-read whenever what it read changes, so a link can follow [`use_anchor_at`](crate::use_anchor_at) or the location.
+    ///
+    /// Only a link is ever current; on a box without [`to`](Self::to), or one whose destination reads `None` right now, it says nothing.
+    pub fn current(mut self, current: impl Fn() -> bool + 'static) -> Self {
+        self.current = Some(Rc::new(current));
+        self
     }
 
     /// What this box *is*, beyond a box: a region of the screen, a list, an article.
@@ -1074,7 +1089,9 @@ impl StyledContainer {
     fn target_element(&self) -> std::sync::Arc<renderer_core::Element> {
         match &self.link {
             Some(link) if !ui_tree::element_capture() => match link() {
-                Some(destination) => crate::element::identity_linking(self.node, destination),
+                Some(destination) => {
+                    crate::element::identity_linking(self.node, destination, self.is_current())
+                }
                 None => crate::element::identity(self.node),
             },
             _ => crate::element::for_target(self.node, || self.element()),

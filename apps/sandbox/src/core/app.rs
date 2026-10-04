@@ -100,6 +100,12 @@ const SECTIONS: &[SectionDef] = sections![
     ),
     ("Links", crate::features::links::links, crate::features::links::LinksProps, "links.rsx"),
     (
+        "Current place",
+        crate::features::current_place::current_place,
+        crate::features::current_place::CurrentPlaceProps,
+        "current_place.rsx"
+    ),
+    (
         "Locale in the address",
         crate::features::locale_address::locale_address,
         crate::features::locale_address::LocaleAddressProps,
@@ -166,26 +172,29 @@ struct SectionPage {
 impl SectionPage {
     fn new(nav: Navigator<SectionRoute>, section: usize) -> Result<Self, LayoutError> {
         let def = section_def(section);
-        let column = Container::new(
-            LayoutStyle::new()
-                .flex_column()
-                .width(SizeDimension::Percent(1.0))
-                .max_width(960.0)
-                .padding_all(32.0)
-                .gap(40.0),
-            vec![(def.build)()?, build_source_link(nav, section)?],
-        )?
-        // The one region this screen is *for*. What a reader jumps to first and a document writes as `<main>`.
-        .role(Role::Main);
-        let centered = Container::new(
-            LayoutStyle::new()
-                .flex_column()
-                .align_items(AlignItems::CENTER),
-            vec![Box::new(column)],
-        )?;
-        let scroll = LayoutScrollArea::new(
+        // Built inside the scroll's builder, so a section reads the scroll it is shown in with `use_scroll_viewport()`.
+        let scroll = LayoutScrollArea::new_with(
             LayoutStyle::new().flex_grow(1.0).align_self_stretch(),
-            Box::new(centered),
+            |_| {
+                let column = Container::new(
+                    LayoutStyle::new()
+                        .flex_column()
+                        .width(SizeDimension::Percent(1.0))
+                        .max_width(960.0)
+                        .padding_all(32.0)
+                        .gap(40.0),
+                    vec![(def.build)()?, build_source_link(nav, section)?],
+                )?
+                // The one region this screen is *for*. What a reader jumps to first and a document writes as `<main>`.
+                .role(Role::Main);
+                let centered = Container::new(
+                    LayoutStyle::new()
+                        .flex_column()
+                        .align_items(AlignItems::CENTER),
+                    vec![Box::new(column)],
+                )?;
+                Ok(Box::new(centered) as Box<dyn LayoutItem>)
+            },
         )?;
         Ok(Self { scroll })
     }

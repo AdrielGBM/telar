@@ -343,8 +343,8 @@ pub unsafe fn __plugin_on_frame(inst: *mut PluginInstance, ctx: &mut AppCtx) {
     unsafe { (*inst).on_frame(ctx) }
 }
 
-/// The version of the guest/host contract below. Bump it whenever [`PluginVTable`] changes shape — adding a field, reordering one, or changing a signature — so a stale `.so` is refused with a version mismatch instead of being called through a table whose fields have moved under it. A type that crosses the boundary inside an event or a draw command changing layout bumps it too: 4 is for `TextStyle` gaining its case, underline and `lang`, `DrawCommand::Line` holding an `Arc<Stroke>` that now carries a dash, and `Element` gaining `fixed_in_place_of`.
-pub const TELAR_PLUGIN_ABI: u32 = 4;
+/// The version of the guest/host contract below. Bump it whenever [`PluginVTable`] changes shape — adding a field, reordering one, or changing a signature — so a stale `.so` is refused with a version mismatch instead of being called through a table whose fields have moved under it. A type that crosses the boundary inside an event or a draw command changing layout bumps it too: 5 is for `Semantics` gaining `current`, which `Element` carries across, and `Element` gaining `arrival_margin`.
+pub const TELAR_PLUGIN_ABI: u32 = 5;
 
 /// Everything the host calls on a plugin, as one exported symbol.
 ///
