@@ -33,6 +33,7 @@ mod host;
     not(target_arch = "wasm32")
 ))]
 mod hot_host;
+mod hydration;
 mod location;
 mod multi;
 #[cfg(all(feature = "prerender", not(target_arch = "wasm32")))]

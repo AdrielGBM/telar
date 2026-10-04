@@ -18,6 +18,8 @@ mod vector;
 mod wrap;
 
 #[cfg(target_arch = "wasm32")]
+mod adopt;
+#[cfg(target_arch = "wasm32")]
 mod bitmap;
 #[cfg(target_arch = "wasm32")]
 mod document_scroll;

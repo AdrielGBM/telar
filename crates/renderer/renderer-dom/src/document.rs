@@ -778,9 +778,14 @@ fn draw(drawing: &mut Drawing, command: &DrawCommand, surface: &mut dyn Surface)
             raster,
             fill,
         } => {
-            if let Some(href) = surface.image_href(data) {
-                drawing.image(&href, (data.width, data.height), *rect, *raster, *fill);
-            }
+            let href = surface.image_href(data);
+            drawing.image(
+                href.as_deref(),
+                (data.width, data.height),
+                *rect,
+                *raster,
+                *fill,
+            );
         }
         DrawCommand::PushClip { rect, radius } => drawing.open_clip(*rect, *radius),
         DrawCommand::PushMatrix { matrix } => drawing.open_matrix(*matrix),

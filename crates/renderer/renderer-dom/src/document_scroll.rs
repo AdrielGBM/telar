@@ -25,15 +25,23 @@ impl DocumentScroll {
     /// Hands the document scroll to box `id`, reporting where the document already is so a page scrolled before the app loaded stays where the reader put it.
     pub(crate) fn hold(host: &web_sys::HtmlElement, id: u64) -> Self {
         let style = host.style();
+        // A host served already scrolling as the document carries the overrides because the page was written that way, not because its author set them, so giving it back takes them off.
+        let served = host.has_attribute(DOCUMENT_SCROLL_ATTRIBUTE);
         let found = DOCUMENT_SCROLL_OVERRIDES
             .iter()
             .map(|(name, value)| {
-                let previous = style.get_property_value(name).unwrap_or_default();
-                let _ = style.set_property(name, value);
+                let mut previous = style.get_property_value(name).unwrap_or_default();
+                if previous != *value {
+                    let _ = style.set_property(name, value);
+                } else if served {
+                    previous.clear();
+                }
                 (*name, previous)
             })
             .collect();
-        let _ = host.set_attribute(DOCUMENT_SCROLL_ATTRIBUTE, "");
+        if !served {
+            let _ = host.set_attribute(DOCUMENT_SCROLL_ATTRIBUTE, "");
+        }
         let box_id = Rc::new(Cell::new(id));
         let reported = box_id.clone();
         let listener = Closure::<dyn FnMut(web_sys::Event)>::new(move |_: web_sys::Event| {

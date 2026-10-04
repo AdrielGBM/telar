@@ -218,9 +218,21 @@ fn prepare_host(host: &web_sys::HtmlElement, config: &WebPlatformConfig) {
         let _ = host.set_attribute("tabindex", "-1");
     }
     let _ = style.set_property("outline", "none");
-    if config.autofocus {
+    if config.autofocus && !focus_is_placed() {
         let _ = host.focus();
     }
+}
+
+/// Whether something on the page already holds focus, which the app must not take: on a prerendered page a reader can tab to a link before the app has loaded.
+fn focus_is_placed() -> bool {
+    let document = dom::document();
+    let Some(active) = document.active_element() else {
+        return false;
+    };
+    let is = |element: Option<web_sys::Element>| {
+        element.is_some_and(|element| element.is_same_node(Some(active.as_ref())))
+    };
+    !is(document.body().map(Into::into)) && !is(document.document_element())
 }
 
 pub(crate) fn listen(

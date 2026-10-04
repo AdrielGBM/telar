@@ -13,6 +13,12 @@ pub const REDUCED_MOTION_KEY: &str = "telar.reduced_motion";
 
 /// Installs the target's preference store for `app_name` and brings back what Telar keeps in it. Every runner calls it once, where it installs the app's paths.
 pub(crate) fn install(app_name: &str) {
+    install_store(app_name);
+    follow_stored_choices();
+}
+
+/// Installs the target's preference store for `app_name` alone, for a runner that brings back what is kept in it later: one taking over a prerendered page builds its first tree from the choices the page was written with.
+pub(crate) fn install_store(app_name: &str) {
     #[cfg(all(feature = "web-dom", target_arch = "wasm32"))]
     services_core::set_preference_store(std::sync::Arc::new(platform_web::WebStorage::new(
         app_name,
@@ -25,6 +31,10 @@ pub(crate) fn install(app_name: &str) {
     }
     #[cfg(not(all(feature = "web-dom", target_arch = "wasm32")))]
     let _ = app_name;
+}
+
+/// Restores every choice Telar keeps in the installed store, then keeps each as it changes.
+pub(crate) fn follow_stored_choices() {
     follow_stored_scheme();
     follow_stored_reduced_motion();
 }

@@ -187,9 +187,11 @@ impl Drawing {
     }
 
     /// `rect` already has `object-fit` applied; `size` is the source's own pixel dimensions, needed separately because a tile repeats at it and a nine-slice cuts by it.
+    ///
+    /// With no `href` the picture is drawn without its pixels: a page written ahead of time cannot carry the ones the app makes, and keeping the element lets the client that takes the page over give it just the address.
     pub fn image(
         &mut self,
-        href: &str,
+        href: Option<&str>,
         size: (u32, u32),
         rect: Rect,
         raster: Raster,
@@ -596,18 +598,19 @@ fn attr(out: &mut String, name: &str, value: &str) {
 }
 
 /// Markup-safe text. Every string that reaches this file is one the application chose — a label, a font family, a path a picture was loaded from — so none of it can be assumed to be markup already.
-fn image_tag(href: &str, rect: Rect, raster: Raster) -> String {
+fn image_tag(href: Option<&str>, rect: Rect, raster: Raster) -> String {
     let rendering = match raster {
         Raster::Pixel => " style=\"image-rendering:pixelated\"",
         Raster::Smooth => "",
     };
     format!(
-        "<image x=\"{}\" y=\"{}\" width=\"{}\" height=\"{}\" preserveAspectRatio=\"none\"{rendering} href=\"{}\"/>",
+        "<image x=\"{}\" y=\"{}\" width=\"{}\" height=\"{}\" preserveAspectRatio=\"none\"{rendering}{}/>",
         round(rect.x),
         round(rect.y),
         round(rect.width.max(0.0)),
         round(rect.height.max(0.0)),
-        escape(href),
+        href.map(|href| format!(" href=\"{}\"", escape(href)))
+            .unwrap_or_default(),
     )
 }
 

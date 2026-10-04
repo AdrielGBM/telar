@@ -40,6 +40,7 @@ fn run_desktop_with_plugin<A: App, D: DevPlugin>(config: AppConfig, app: A, app_
         Some(super::location::LocationBinding::remembered(Box::new(
             platform_core::ArgumentLocation::from_env(),
         ))),
+        None,
     ) {
         tracing::error!("Event loop exited with error: {e}");
         std::process::exit(1);

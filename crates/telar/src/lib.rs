@@ -33,7 +33,11 @@ pub mod files;
     not(target_arch = "wasm32")
 ))]
 pub mod hot;
-#[cfg(any(feature = "dev", feature = "prerender"))]
+#[cfg(any(
+    feature = "dev",
+    feature = "prerender",
+    all(feature = "web-dom", target_arch = "wasm32")
+))]
 pub mod hot_state;
 #[cfg(feature = "runtime")]
 mod location;
@@ -349,11 +353,24 @@ pub use preview::run_preview_png;
 #[cfg(feature = "headless")]
 pub use raster::rasterize;
 
+#[cfg(any(
+    feature = "dev",
+    feature = "prerender",
+    all(feature = "web-dom", target_arch = "wasm32")
+))]
+pub use hot_state::hot_signal;
 #[cfg(any(feature = "dev", feature = "prerender"))]
-pub use hot_state::{hot_restore_json, hot_signal, hot_snapshot_json, probe};
+pub use hot_state::{hot_restore_json, hot_snapshot_json, probe};
 
-/// Without `dev` there is no dylib swap to survive, and without `prerender` no page to carry it in, so the key is inert and this degrades to a plain signal. The bounds match the keyed build's so a type that compiles here cannot fail once either is on — letting hand-written app state (a navigation stack, an active locale) be declared once instead of behind a `cfg`.
-#[cfg(all(feature = "runtime", not(any(feature = "dev", feature = "prerender"))))]
+/// Without `dev` there is no dylib swap to survive, without `prerender` no page to carry it in, and without a page to take over none to read it back from, so the key is inert and this degrades to a plain signal. The bounds match the keyed build's so a type that compiles here cannot fail once either is on — letting hand-written app state (a navigation stack, an active locale) be declared once instead of behind a `cfg`.
+#[cfg(all(
+    feature = "runtime",
+    not(any(
+        feature = "dev",
+        feature = "prerender",
+        all(feature = "web-dom", target_arch = "wasm32")
+    ))
+))]
 pub fn hot_signal<T>(key: &str, init: T) -> reactive_core::RwSignal<T>
 where
     T: Clone + serde::Serialize + serde::de::DeserializeOwned + 'static,

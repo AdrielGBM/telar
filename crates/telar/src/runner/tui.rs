@@ -78,6 +78,7 @@ pub fn run_tui_app_with_name<A: App>(
         Some(super::location::LocationBinding::remembered(Box::new(
             platform_core::ArgumentLocation::from_env(),
         ))),
+        None,
     ) {
         // The terminal is restored by the platform's own teardown and by its panic hook, so by the time this prints, the message lands on a shell the user can read it in.
         eprintln!("telar: {e}");

@@ -277,7 +277,7 @@ fn every_box_names_the_box_it_stands_for() {
 }
 
 #[wasm_bindgen_test]
-fn the_page_a_host_was_served_with_gives_way_to_the_first_frame() {
+fn the_page_a_host_was_served_with_is_taken_over_by_the_first_frame() {
     let commands = page();
     let reference = new_host();
     let mut renderer = DomRenderer::new(reference.clone()).expect("a renderer on the host");
@@ -296,8 +296,8 @@ fn the_page_a_host_was_served_with_gives_way_to_the_first_frame() {
         .render_frame(&commands, None)
         .expect("the frame reconciled");
     assert!(
-        !served.contains(Some(&first_served)),
-        "what the page was served with is gone once a frame stands in its place"
+        served.contains(Some(&first_served)),
+        "what the page was served with is kept once a frame takes it over"
     );
     assert_eq!(reconciled_markup(&served), expected);
     drop(renderer);

@@ -218,7 +218,7 @@ fn a_clip_is_a_definition_the_group_points_at() {
     let mut d = drawing();
     d.open_clip(Rect::new(0.0, 0.0, 30.0, 30.0), BorderRadius::all(6.0));
     d.image(
-        "data:image/png;base64,AAA",
+        Some("data:image/png;base64,AAA"),
         (4, 4),
         Rect::new(0.0, 0.0, 30.0, 30.0),
         Raster::Pixel,
@@ -229,6 +229,27 @@ fn a_clip_is_a_definition_the_group_points_at() {
     assert!(out.contains("<g clip-path=\"url(#t7-1)\">"), "{out}");
     assert!(out.contains("image-rendering:pixelated"), "{out}");
     assert!(out.ends_with("</g>"), "{out}");
+}
+
+#[test]
+fn a_picture_without_its_pixels_keeps_its_element_and_its_place_among_the_definitions() {
+    let mut d = drawing();
+    d.image(
+        None,
+        (4, 4),
+        Rect::new(0.0, 0.0, 30.0, 30.0),
+        Raster::Smooth,
+        ImageFill::Tile { scale: 1.0 },
+    );
+    d.open_clip(Rect::new(0.0, 0.0, 30.0, 30.0), BorderRadius::all(0.0));
+    let out = d.finish();
+    assert!(
+        out.contains(
+            "<image x=\"0\" y=\"0\" width=\"4\" height=\"4\" preserveAspectRatio=\"none\"/>"
+        ),
+        "{out}"
+    );
+    assert!(out.contains("<clipPath id=\"t7-2\">"), "{out}");
 }
 
 #[test]
@@ -285,7 +306,7 @@ fn a_frame_that_swallows_its_box_is_the_outline_alone() {
 fn a_tile_is_a_pattern_repeating_at_the_scaled_picture_size() {
     let mut d = drawing();
     d.image(
-        "p.png",
+        Some("p.png"),
         (4, 2),
         Rect::new(10.0, 20.0, 40.0, 30.0),
         Raster::Smooth,
@@ -306,7 +327,7 @@ fn a_tile_is_a_pattern_repeating_at_the_scaled_picture_size() {
 fn a_nine_slice_is_one_viewport_per_piece() {
     let mut d = drawing();
     d.image(
-        "p.png",
+        Some("p.png"),
         (8, 8),
         Rect::new(0.0, 0.0, 40.0, 20.0),
         Raster::Pixel,

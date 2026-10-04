@@ -40,7 +40,7 @@ pub fn reset_stylesheet() -> String {
 
 /// Writes the document `commands` describe, as a browser would first show it: the page at its top, with nothing asked of it yet.
 ///
-/// A bitmap drawn inside a drawing is written when it is linked from an address, and left out when it is pixels the app made, which only the running app can encode. A masked line of text sits on a baseline estimated from its size rather than measured.
+/// A bitmap drawn inside a drawing is written with its address when it is linked from one, and without its pixels when the app made them, which only the running app can encode: the client that takes the page over fills in just the address. A masked line of text sits on a baseline estimated from its size rather than measured.
 pub fn prerender(commands: &[DrawCommand], clear: Option<Color>) -> Prerendered {
     let mut surface = PageAtRest { scrolling: false };
     let frame = document::describe_frame(commands, clear, &mut surface, false);

@@ -41,6 +41,7 @@ where
         app_name,
         SurfaceRenderer::builtin(),
         None,
+        None,
     )
 }
 
@@ -72,10 +73,11 @@ where
         app_name,
         SurfaceRenderer::installed(factory),
         None,
+        None,
     )
 }
 
-/// The boot every runner shares. `location` is the address the caller keeps for this platform; `None` asks the platform for its own.
+/// The boot every runner shares. `location` is the address the caller keeps for this platform; `None` asks the platform for its own. `hydration` is the prerendered page the surface takes over, whose inputs the first tree is built from.
 #[allow(clippy::too_many_arguments)]
 pub(super) fn run_on_platform<P, A, D>(
     mut platform: P,
@@ -85,6 +87,7 @@ pub(super) fn run_on_platform<P, A, D>(
     app_name: &str,
     renderer: SurfaceRenderer<P::Window>,
     location: Option<LocationBinding>,
+    hydration: Option<super::hydration::Hydration>,
 ) -> Result<(), PlatformError>
 where
     P: Platform,
@@ -94,7 +97,10 @@ where
 {
     // The one place every runner passes through, so app code can ask `telar::paths::cache()` instead of resolving XDG for itself and landing somewhere other than the runtime it is embedded in.
     services_core::app_paths::install(app_name, paths.clone());
-    crate::user_preferences::install(app_name);
+    match hydration {
+        Some(_) => crate::user_preferences::install_store(app_name),
+        None => crate::user_preferences::install(app_name),
+    }
     let prefs = UserPrefs::load(app_name, paths.as_ref());
     let backend = prefs.backend.unwrap_or_else(config::compile_time_backend);
     let AppConfig {
@@ -117,6 +123,7 @@ where
         renderer,
     );
     handler.location = location;
+    handler.hydration = hydration;
     handler.title = Some(super::state::WindowTitle::opened_as(&window.title));
     platform.run(window, handler)
 }

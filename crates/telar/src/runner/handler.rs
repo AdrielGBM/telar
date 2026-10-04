@@ -65,6 +65,8 @@ where
     pub(super) location: Option<super::location::LocationBinding>,
     // `None` where the entry point named no window title, which leaves the app's part of the derived title unset.
     pub(super) title: Option<WindowTitle>,
+    // The inputs of the prerendered page this surface takes over, until the first tree has been built from them.
+    pub(super) hydration: Option<super::hydration::Hydration>,
     #[cfg(all(
         feature = "dev",
         not(target_os = "android"),
@@ -152,6 +154,7 @@ where
         system_preferences: None,
         location: None,
         title: None,
+        hydration: None,
         #[cfg(all(
             feature = "dev",
             not(target_os = "android"),
@@ -274,7 +277,15 @@ where
     fn mount_tree(&mut self, window: &W) {
         // Dropped before the new one is built: an effect from the outgoing tree re-running mid-assembly would write into widgets nothing is drawing any more.
         self.tree = None;
-        let (width, height) = self.logical_size(window);
+        let hydration = self.hydration.take();
+        let (width, height) = match &hydration {
+            Some(hydration) => {
+                self.apply_system_preferences(hydration.preferences.clone());
+                hydration.restore();
+                hydration.surface
+            }
+            None => self.logical_size(window),
+        };
         self.report_surface_size(width, height);
         self.hand_over_location();
         if let Some(title) = &self.title {
@@ -282,6 +293,18 @@ where
         }
         self.tree = Some(self.app.mount());
         self.fit_tree_to(window);
+        if let Some(hydration) = hydration {
+            self.catch_up_with(hydration);
+        }
+    }
+
+    /// Brings a tree built from a prerendered page's inputs up to this browser: the preferences it really reports and the choices its reader kept (scheme, reduced motion), as any later change would arrive, with every animation at the end the page was written at.
+    fn catch_up_with(&mut self, hydration: super::hydration::Hydration) {
+        if let Some(reported) = hydration.reported {
+            self.apply_system_preferences(reported);
+        }
+        crate::user_preferences::follow_stored_choices();
+        super::hydration::settle_motion(self.app.as_ref());
     }
 
     /// Readies the tree for a presentation that has retained nothing of it: past every generation already drawn (see [`FrameGeneration`]), and at the surface's real size. Callers must have `scale_factor` and `renderer_transparent` current before calling.
@@ -847,6 +870,10 @@ where
                 return;
             }
             Event::SystemPreferencesChanged { preferences } => {
+                if let Some(hydration) = self.hydration.as_mut() {
+                    hydration.reported = Some(preferences.clone());
+                    return;
+                }
                 self.apply_system_preferences(preferences.clone());
                 window.request_redraw();
                 return;

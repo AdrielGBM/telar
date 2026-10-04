@@ -34,11 +34,13 @@ pub struct Field<'a> {
     pub element: Option<web_sys::HtmlElement>,
 }
 
+type Listener = (&'static str, Closure<dyn FnMut(web_sys::Event)>);
+
 /// The hidden editable element the browser types into, placed over whichever field holds the keyboard.
 pub struct TextEntry {
     node: web_sys::HtmlElement,
-    /// Kept alive for as long as the entry: dropping a `Closure` unregisters the listener behind it.
-    _listeners: Vec<Closure<dyn FnMut(web_sys::Event)>>,
+    /// Taken off the element when the entry goes, since the element can outlive it: a later reconcile on the same host takes it over.
+    listeners: Vec<Listener>,
     /// Where it is parked, so an unchanged frame writes nothing.
     placed: String,
     /// The name it is currently answering to, for the same reason.
@@ -52,24 +54,39 @@ pub struct TextEntry {
 }
 
 impl TextEntry {
+    /// The entry `host` already holds, when an earlier reconcile left one there, or a new one appended after everything the host was served with.
     pub fn new(document: &web_sys::Document, host: &web_sys::HtmlElement) -> Option<Self> {
-        let node = document
-            .create_element("textarea")
-            .ok()?
-            .dyn_into::<web_sys::HtmlElement>()
-            .ok()?;
-        let _ = node.set_attribute("style", HIDDEN);
-        let _ = node.set_attribute(ENTRY_ATTRIBUTE, "");
-        let _ = node.set_attribute("autocapitalize", "off");
-        let _ = node.set_attribute("autocorrect", "off");
-        let _ = node.set_attribute("spellcheck", "false");
-        // A single line as far as the browser is concerned; `Enter` is Telar's to interpret, and a textarea lets an input method compose without the element submitting anything.
-        let _ = node.set_attribute("rows", "1");
-        // Deliberately not `aria-hidden`: this is where the keyboard actually is, and a focused element a reader has been told to ignore is worse than an unnamed one. It takes the name of whichever field it stands for in `park`.
-        let _ = node.set_attribute("tabindex", "-1");
-        // Named from the moment it exists, not only once a field has claimed it. The element is in the document for the whole life of the app and holds no field for most of it, and a control with no name is one an audit reports whenever it happens to look — which on a page nobody has typed into yet is always.
-        let _ = node.set_attribute("aria-label", FALLBACK);
-        host.append_child(node.as_ref()).ok()?;
+        let existing = host
+            .query_selector(&format!(":scope > textarea[{ENTRY_ATTRIBUTE}]"))
+            .ok()
+            .flatten();
+        let created = existing.is_none();
+        let node = match existing {
+            Some(node) => node,
+            None => document.create_element("textarea").ok()?,
+        }
+        .dyn_into::<web_sys::HtmlElement>()
+        .ok()?;
+        let attributes = [
+            ("style", Some(HIDDEN)),
+            (ENTRY_ATTRIBUTE, Some("")),
+            ("autocapitalize", Some("off")),
+            ("autocorrect", Some("off")),
+            ("spellcheck", Some("false")),
+            // A single line as far as the browser is concerned; `Enter` is Telar's to interpret, and a textarea lets an input method compose without the element submitting anything.
+            ("rows", Some("1")),
+            // Deliberately not `aria-hidden`: this is where the keyboard actually is, and a focused element a reader has been told to ignore is worse than an unnamed one. It takes the name of whichever field it stands for in `park`.
+            ("tabindex", Some("-1")),
+            // Named from the moment it exists, not only once a field has claimed it. The element is in the document for the whole life of the app and holds no field for most of it, and a control with no name is one an audit reports whenever it happens to look — which on a page nobody has typed into yet is always.
+            ("aria-label", Some(FALLBACK)),
+            (CONSUMED_KEYS_ATTRIBUTE, None),
+        ];
+        for (name, value) in attributes {
+            crate::adopt::patch_attribute(&node, name, value);
+        }
+        if created {
+            host.append_child(node.as_ref()).ok()?;
+        }
 
         let field: Rc<RefCell<Option<web_sys::HtmlElement>>> = Rc::default();
         let listeners = vec![
@@ -82,7 +99,7 @@ impl TextEntry {
         ];
         Some(Self {
             node,
-            _listeners: listeners,
+            listeners,
             placed: String::new(),
             named: Some(FALLBACK.to_string()),
             active: false,
@@ -181,14 +198,24 @@ impl TextEntry {
 
 fn listen(
     node: &web_sys::HtmlElement,
-    event: &str,
+    event: &'static str,
     handler: impl Fn(&web_sys::Event) + 'static,
-) -> Closure<dyn FnMut(web_sys::Event)> {
+) -> Listener {
     let closure = Closure::<dyn FnMut(web_sys::Event)>::new(move |event: web_sys::Event| {
         handler(&event);
     });
     let _ = node.add_event_listener_with_callback(event, closure.as_ref().unchecked_ref());
-    closure
+    (event, closure)
+}
+
+impl Drop for TextEntry {
+    fn drop(&mut self) {
+        for (event, closure) in &self.listeners {
+            let _ = self
+                .node
+                .remove_event_listener_with_callback(event, closure.as_ref().unchecked_ref());
+        }
+    }
 }
 
 /// The edits a browser reports before making them, as the keys the field would have received.

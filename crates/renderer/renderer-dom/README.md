@@ -74,6 +74,12 @@ markup, which is how `cargo telar build --target web --prerender` writes pages a
 box becomes names that box in `data-telar-id`.
 
 `src/prerender_parity_test.rs` holds the two writers to one document: a frame reconciled into one host and
-written as markup into another reads back as the same elements with the same attributes, and a host served
-with a prerendered page gives way to the first frame. See
+written as markup into another reads back as the same elements with the same attributes.
+
+A host served with a prerendered page is taken over in place ([`adopt.rs`](src/adopt.rs)): the first frame
+keeps every served element whose `data-telar-id`, tag and parent still match, patches the attributes, text and
+shapes that differ where they stand, rebuilds only the subtree under a box that no longer fits, and sweeps what
+it did not claim once the frame is done. `src/hydration_test.rs` checks it in a real browser: the same nodes
+before and after, no structural mutation on a clean take-over, patches in place, a rebuilt subtree, links and
+keys on the adopted elements, and the reader's scroll and focus kept. See
 [docs/prerender.md](https://github.com/AdrielGBM/telar/blob/main/docs/prerender.md).

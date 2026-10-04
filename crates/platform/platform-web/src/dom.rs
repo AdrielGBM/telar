@@ -37,6 +37,11 @@ pub fn host(selector: Option<&str>) -> Result<web_sys::HtmlElement, String> {
     }
 }
 
+/// The text of the page's element with `id`, such as the inputs a prerendered page carries in a script for the app that takes it over.
+pub(crate) fn element_text(id: &str) -> Option<String> {
+    document().get_element_by_id(id)?.text_content()
+}
+
 /// Keeps `<html lang>` and `<html dir>` matching the active locale. `is_rtl` is the caller's, since this
 /// crate knows nothing about locales — `layout_core::Direction::for_locale` is the rule to compute it with.
 pub fn set_document_language(lang: &str, is_rtl: bool) {
@@ -110,7 +115,9 @@ pub fn safe_area_insets() -> geometry_core::Insets {
 /// The meta tag a packaged page names the directory of its files with, relative to the page.
 pub const ASSETS_META: &str = "telar-assets";
 
-/// Where the build's files live, as an absolute address: the page's `telar-assets` meta resolved against the address the page was opened at, or that address's directory for a page without one.
+/// Where the build's files live: the page's `telar-assets` meta resolved against the address the page was opened at, or that address's directory for a page without one.
+///
+/// Written from the site's root (`/images/`) when it is on the page's own origin, which is how a prerendered page writes the addresses of the files it links, so a document taken over carries the same `src` it was served with. A base on another origin keeps its full address.
 pub fn asset_base() -> Option<String> {
     let document = document();
     let page = document.base_uri().ok().flatten()?;
@@ -120,7 +127,14 @@ pub fn asset_base() -> Option<String> {
         .flatten()
         .and_then(|meta| meta.get_attribute("content"))
         .unwrap_or_else(|| "./".to_string());
-    web_sys::Url::new_with_base(&relative, &page)
-        .ok()
-        .map(|url| url.href())
+    let base = web_sys::Url::new_with_base(&relative, &page).ok()?;
+    let same_origin = web_sys::Url::new(&page).is_ok_and(|page| page.origin() == base.origin());
+    Some(match same_origin {
+        true => base.pathname(),
+        false => base.href(),
+    })
 }
+
+#[cfg(test)]
+#[path = "dom_test.rs"]
+mod tests;

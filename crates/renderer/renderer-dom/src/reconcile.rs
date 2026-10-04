@@ -1,6 +1,8 @@
 //! Bringing the live document in line with the one a frame describes.
 //!
 //! What the document should be is worked out in `document.rs`, the same way a prerendered page is; this half only knows how to get there from what the last frame left. The reconcile is keyed by [`ElementId`](renderer_core::ElementId), which is the layout node the widget was built with: it lives as long as the widget, so a box that only moved is *moved*, and only a box that is genuinely new is created. Nothing here diffs strings against the DOM — the last style written is kept beside the node, because reading a property back out of the browser is the expensive direction.
+//!
+//! The one exception is the first frame on a host that was served a prerendered page: there the elements already exist, and are taken over rather than built (`adopt.rs`), which means reading each one once.
 
 use std::rc::Rc;
 
@@ -68,6 +70,9 @@ struct Live {
     shown: Option<crate::picture::Shown>,
     /// Kept alive for a box that scrolls itself: dropping the closure unregisters the listener behind it.
     _scrolls: Option<Closure<dyn FnMut(web_sys::Event)>>,
+    /// Taken over from the served page and not yet brought in line with a frame, so what it says is read off the element instead of assumed.
+    adopted: bool,
+    served_pieces: std::collections::VecDeque<web_sys::Element>,
 }
 
 /// Writes an attribute, or takes it off where there is nothing to say. Removing matters as much as setting: a box that stops being a link keeps sending the reader somewhere until the `href` goes.
@@ -87,6 +92,47 @@ struct Piece {
     node: web_sys::Element,
     style: String,
     text: String,
+    adopted: bool,
+}
+
+impl Piece {
+    fn created(node: web_sys::Element) -> Self {
+        Self {
+            node,
+            style: String::new(),
+            text: String::new(),
+            adopted: false,
+        }
+    }
+
+    fn adopted(node: web_sys::Element) -> Self {
+        Self {
+            style: node.get_attribute("style").unwrap_or_default(),
+            node,
+            text: String::new(),
+            adopted: true,
+        }
+    }
+
+    /// Brings the piece's content in line with `text`, or with `runs` when it has spans, as the text of box `box_id`.
+    fn show(
+        &mut self,
+        document: &web_sys::Document,
+        text: &str,
+        runs: Option<&[crate::runs::Run]>,
+        box_id: u64,
+    ) {
+        let written = runs.map(crate::runs::signature);
+        let wanted = written.as_deref().unwrap_or(text);
+        if std::mem::take(&mut self.adopted) {
+            morph_text(document, &self.node, text, runs, box_id);
+        } else if self.text != wanted {
+            write_text(document, &self.node, text, runs, box_id);
+        }
+        if self.text != wanted {
+            self.text = wanted.to_string();
+        }
+    }
 }
 
 /// Turns one frame's command list into the document, reusing the elements the last frame left in place.
@@ -114,8 +160,8 @@ pub struct Reconciler {
     _follows_links: Option<crate::links::LinkFollower>,
     /// The document's own scroll, while a box that is the surface's primary scroll holds it.
     document_scroll: Option<crate::document_scroll::DocumentScroll>,
-    /// What the page was served with inside the host before the app ran, shown until the first frame stands in its place.
-    served: Vec<web_sys::Node>,
+    /// What the page was served with inside the host before the app ran, until the first frame has taken it over.
+    served: Option<crate::adopt::Served>,
 }
 
 /// The live document, as the walk asks it things.
@@ -154,16 +200,13 @@ impl Surface for LiveSurface<'_> {
 impl Reconciler {
     pub fn new(host: web_sys::HtmlElement) -> Result<Self, String> {
         // Layout roots are placed in it absolutely, so it has to be what they are placed relative to.
-        let _ = host.style().set_property("position", "relative");
+        set_host_property(&host, "position", "relative");
         let document = host
             .owner_document()
             .ok_or_else(|| "the host element is not in a document".to_string())?;
-        let _ = host.set_attribute(HOST_ATTRIBUTE, "");
+        crate::adopt::patch_attribute(&host, HOST_ATTRIBUTE, Some(""));
         install_reset(&document);
-        let children = host.child_nodes();
-        let served = (0..children.length())
-            .filter_map(|index| children.item(index))
-            .collect();
+        let served = Some(crate::adopt::Served::index(&host));
         let entry = crate::entry::TextEntry::new(&document, &host);
         let follows_focus = follow_focus(&host);
         Ok(Self {
@@ -198,7 +241,7 @@ impl Reconciler {
         );
         self.paint_host(frame.background);
         if frame.isolate_host {
-            let _ = self.host.style().set_property("isolation", "isolate");
+            set_host_property(&self.host, "isolation", "isolate");
         }
         self.seen.clear();
 
@@ -207,7 +250,7 @@ impl Reconciler {
         let mut placed = 0u32;
         for child in &frame.children {
             let node = match child {
-                Node::Box(node) => Some(self.apply(node)),
+                Node::Box(node) => Some(self.apply(node, &host)),
                 Node::Paint(paint) => self.paint_at_root(root_painted, paint).inspect(|_| {
                     root_painted += 1;
                 }),
@@ -223,17 +266,13 @@ impl Reconciler {
                 extra.node.remove();
             }
         }
-        for node in self.served.drain(..) {
-            if let Some(parent) = node.parent_node() {
-                let _ = parent.remove_child(&node);
-            }
-        }
-        // Anything left beyond what this frame placed is gone — except the one editable element the browser types into, which is a child of the host and is put back rather than swept.
-        let entry = u32::from(self.entry.is_some());
-        truncate(self.host.as_ref(), placed + entry);
+        // Anything left beyond what this frame placed is gone — except the one editable element the browser types into, which is put in its place first so that it is moved rather than swept.
         if let Some(entry) = self.entry.as_ref() {
             entry.settle(&self.host, placed);
         }
+        let entry = u32::from(self.entry.is_some());
+        truncate(self.host.as_ref(), placed + entry);
+        let adopting = self.served.take().map(crate::adopt::Served::finish);
         self.retire();
         if frame.primary.is_none() {
             self.document_scroll = None;
@@ -242,6 +281,25 @@ impl Reconciler {
             held.keep_arrival();
         }
         self.keep_the_keyboard();
+        if adopting.is_some() {
+            self.follow_served_focus();
+        }
+    }
+
+    /// Tells the app which box a reader focused on the served page before it ran, so its focus starts where the document's already is.
+    fn follow_served_focus(&self) {
+        let Some(active) = self.document.active_element() else {
+            return;
+        };
+        if !self.host.contains(Some(active.as_ref())) {
+            return;
+        }
+        if let Some(box_id) = active
+            .get_attribute(FOCUS_BOX_ATTRIBUTE)
+            .and_then(|id| id.parse::<u64>().ok())
+        {
+            platform_core::post_event(platform_core::Event::BoxFocused { box_id });
+        }
     }
 
     /// The surface's own background, as a property of the element the app fills.
@@ -256,13 +314,13 @@ impl Reconciler {
         if self.background == declared {
             return;
         }
-        let style = self.host.style();
         match background {
             Some(color) => {
-                let _ = style.set_property("background-color", &declared);
-                let _ = style.set_property("color-scheme", paint::scheme_of(color));
+                set_host_property(&self.host, "background-color", &declared);
+                set_host_property(&self.host, "color-scheme", paint::scheme_of(color));
             }
             None => {
+                let style = self.host.style();
                 let _ = style.remove_property("background-color");
                 let _ = style.remove_property("color-scheme");
             }
@@ -273,28 +331,28 @@ impl Reconciler {
     /// The element standing for the `index`th piece of paint the frame carries at its own level, reused from the frame before when there was one.
     fn paint_at_root(&mut self, index: usize, paint: &PaintNode) -> Option<web_sys::Element> {
         if index == self.root_paint.len() {
-            let node = self.document.create_element("div").ok()?;
-            self.root_paint.push(Piece {
-                node,
-                style: String::new(),
-                text: String::new(),
-            });
+            let piece = match self
+                .served
+                .as_mut()
+                .and_then(|served| served.next_root_paint())
+            {
+                Some(node) => Piece::adopted(node),
+                None => Piece::created(self.document.create_element("div").ok()?),
+            };
+            self.root_paint.push(piece);
         }
         let piece = &mut self.root_paint[index];
         if piece.style != paint.style {
             let _ = piece.node.set_attribute("style", &paint.style);
             piece.style = paint.style.clone();
         }
-        if piece.text != paint.text {
-            piece.node.set_text_content(Some(&paint.text));
-            piece.text = paint.text.clone();
-        }
+        piece.show(&self.document, &paint.text, None, 0);
         Some(piece.node.clone())
     }
 
-    /// Brings one box's element, and everything inside it, in line with `node`.
-    fn apply(&mut self, node: &BoxNode) -> web_sys::Element {
-        let element = self.element_for(node.id, node.tag, node.scrolls);
+    /// Brings one box's element, and everything inside it, in line with `node`. `parent` is where the box belongs, which a served element has to be in already to be taken over.
+    fn apply(&mut self, node: &BoxNode, parent: &web_sys::Node) -> web_sys::Element {
+        let element = self.element_for(node.id, node.tag, node.scrolls, parent);
         self.describe(&element, node);
         if let Some((picture, width)) = &node.picture
             && let Some(live) = self.live.get_mut(&node.id)
@@ -305,19 +363,19 @@ impl Reconciler {
             Some(held) if node.primary => held.scroll_as_asked(node.scroll_to),
             _ => settle_scroll(&element, node.scroll_to),
         }
-        if let Some(rect) = node.audit {
-            let _ = element.set_attribute(
-                AUDIT_ATTRIBUTE,
-                &format!("{} {} {} {}", rect.x, rect.y, rect.width, rect.height),
-            );
+        let audit = node
+            .audit
+            .map(|rect| format!("{} {} {} {}", rect.x, rect.y, rect.width, rect.height));
+        if audit.is_some() || self.live.get(&node.id).is_some_and(|live| live.adopted) {
+            crate::adopt::patch_attribute(&element, AUDIT_ATTRIBUTE, audit.as_deref());
         }
         self.seen.push(node.id);
 
-        let parent: web_sys::Node = element.clone().into();
+        let own: web_sys::Node = element.clone().into();
         if let Content::Children { boxes, .. } = &node.content {
             for (index, child) in boxes.iter().enumerate() {
-                let child = self.apply(child);
-                place(&parent, index as u32, &child);
+                let child = self.apply(child, &own);
+                place(&own, index as u32, &child);
             }
         }
 
@@ -325,6 +383,7 @@ impl Reconciler {
         let Some(live) = self.live.get_mut(&node.id) else {
             return element;
         };
+        let adopted = std::mem::take(&mut live.adopted);
         // Everything the element ended up holding is known now, so the attribute is written once.
         if live.style != node.style {
             let _ = live.node.set_attribute("style", &node.style);
@@ -332,28 +391,42 @@ impl Reconciler {
         }
         match &node.content {
             Content::Drawing(markup) => {
-                if live.drawn != *markup {
+                if adopted {
+                    morph_drawing(&document, &live.node, markup);
+                } else if live.drawn != *markup {
                     live.node.set_inner_html(markup);
+                }
+                if live.drawn != *markup {
                     live.drawn = markup.clone();
                     live.text.clear();
                     live.pieces.clear();
                 }
             }
             Content::Text { text, runs } => {
-                let written = runs.as_deref().map(crate::runs::signature);
-                if live.text != *written.as_ref().unwrap_or(text) {
-                    // Wipes the children with it, which is the point: the element carries the text itself now.
-                    match runs {
-                        Some(runs) => crate::runs::write(&document, &live.node, runs, node.id),
-                        None => live.node.set_text_content(Some(text)),
-                    }
-                    live.text = written.unwrap_or_else(|| text.clone());
+                let wanted = runs
+                    .as_deref()
+                    .map(crate::runs::signature)
+                    .unwrap_or_else(|| text.clone());
+                if adopted {
+                    morph_text(&document, &live.node, text, runs.as_deref(), node.id);
+                } else if live.text != wanted {
+                    write_text(&document, &live.node, text, runs.as_deref(), node.id);
+                }
+                if live.text != wanted {
+                    live.text = wanted;
                     live.pieces.clear();
                 }
             }
             Content::Children { boxes, pieces } => {
                 live.text.clear();
-                fill_pieces(&document, live, node.id, boxes.len() as u32, pieces);
+                fill_pieces(
+                    &document,
+                    live,
+                    node.id,
+                    boxes.len() as u32,
+                    pieces,
+                    self.served.as_mut(),
+                );
             }
         }
         element
@@ -443,23 +516,39 @@ impl Reconciler {
         let Some(live) = self.live.get_mut(&node.id) else {
             return;
         };
-        if live.described == node.described {
+        if live.adopted {
+            for (name, value) in node.described.attributes(node.id) {
+                crate::adopt::patch_attribute(element, name, value.as_deref());
+            }
+        } else if live.described != node.described {
+            for (name, value) in node.described.attributes(node.id) {
+                set_or_clear(element, name, value.as_deref());
+            }
+        } else {
             return;
-        }
-        for (name, value) in node.described.attributes(node.id) {
-            set_or_clear(element, name, value.as_deref());
         }
         live.described = node.described.clone();
     }
 
-    /// The element for `id`, created if this is the first frame that mentions it — or recreated if what it means changed, since a role is a tag and a tag cannot be edited.
-    fn element_for(&mut self, id: u64, tag: &'static str, scrolls: bool) -> web_sys::Element {
+    /// The element for `id`: on the first frame the served one, while it still fits under `parent`; otherwise created if this is the first frame that mentions it — or recreated if what it means changed, since a role is a tag and a tag cannot be edited.
+    fn element_for(
+        &mut self,
+        id: u64,
+        tag: &'static str,
+        scrolls: bool,
+        parent: &web_sys::Node,
+    ) -> web_sys::Element {
         if let Some(live) = self.live.get(&id)
             && live.tag == tag
         {
             return live.node.clone();
         }
-        let Some(node) = create(&self.document, tag, id) else {
+        let claimed = self
+            .served
+            .as_mut()
+            .and_then(|served| served.claim(id, tag, parent));
+        let adopted = claimed.is_some();
+        let Some(node) = claimed.or_else(|| create(&self.document, tag, id)) else {
             // Only reachable if the document refuses a tag this crate chose, which would be a bug here rather than something an application can act on.
             tracing::error!("could not create a <{tag}>");
             return self.host.clone().into();
@@ -469,18 +558,31 @@ impl Reconciler {
         }
         // A box that scrolls itself has to say where it ended up, or hit-testing and every anchored overlay keep reading an offset that stopped being true the moment the compositor moved it.
         let scrolls = scrolls.then(|| watch_scroll(&node, id)).flatten();
+        // A reader may have scrolled the served box before the app ran, and the app has to start from where they left it.
+        if adopted && scrolls.is_some() && (node.scroll_left() != 0 || node.scroll_top() != 0) {
+            report_scroll(&node, id);
+        }
+        let (style, served_pieces) = match adopted {
+            true => (
+                node.get_attribute("style").unwrap_or_default(),
+                crate::adopt::paint_children(&node),
+            ),
+            false => Default::default(),
+        };
         self.live.insert(
             id,
             Live {
                 node: node.clone(),
                 tag,
-                style: String::new(),
+                style,
                 text: String::new(),
                 drawn: String::new(),
                 pieces: Vec::new(),
                 described: Described::default(),
                 shown: None,
                 _scrolls: scrolls,
+                adopted,
+                served_pieces,
             },
         );
         node
@@ -529,28 +631,34 @@ fn create(document: &web_sys::Document, tag: &'static str, id: u64) -> Option<we
 }
 
 /// Brings the element's positioned children in line with what it painted this frame.
+///
+/// While `served` is still being taken over, a new piece is the next served one, and what lies past the pieces is swept once the frame is done rather than here.
 fn fill_pieces(
     document: &web_sys::Document,
     live: &mut Live,
     box_id: u64,
     after: u32,
     pieces: &[PaintNode],
+    served: Option<&mut crate::adopt::Served>,
 ) {
     // Anything past the boxes and the pieces is a child from a frame that had more of either.
-    truncate(live.node.as_ref(), after + live.pieces.len() as u32);
+    if served.is_none() {
+        truncate(live.node.as_ref(), after + live.pieces.len() as u32);
+    }
     for (index, painted) in pieces.iter().enumerate() {
-        let written = painted.runs.as_deref().map(crate::runs::signature);
         if index == live.pieces.len() {
-            let Ok(node) = document.create_element("div") else {
-                return;
+            let piece = match live.served_pieces.pop_front() {
+                Some(node) => Piece::adopted(node),
+                None => {
+                    let Ok(node) = document.create_element("div") else {
+                        return;
+                    };
+                    Piece::created(node)
+                }
             };
             // Paint, not content: a caret, a selection band, a scrollbar's thumb. Out of the accessibility tree entirely, because in it they are children — and a role that comes with a content model counts them. A `role="list"` whose scrollbar is one of its children has a child that is not a `listitem`, which is exactly what an audit reports and a reader walks into.
-            let _ = node.set_attribute("role", "presentation");
-            live.pieces.push(Piece {
-                node,
-                style: String::new(),
-                text: String::new(),
-            });
+            crate::adopt::patch_attribute(&piece.node, "role", Some("presentation"));
+            live.pieces.push(piece);
         }
         // Where the boxes end, in the order the paint was drawn — and only moved when it is not there.
         let parent: web_sys::Node = live.node.clone().into();
@@ -560,24 +668,69 @@ fn fill_pieces(
             let _ = piece.node.set_attribute("style", &painted.style);
             piece.style = painted.style.clone();
         }
-        let wanted = written.as_deref().unwrap_or(&painted.text);
-        if piece.text != wanted {
-            match &painted.runs {
-                Some(runs) => crate::runs::write(document, &piece.node, runs, box_id),
-                None => piece.node.set_text_content(Some(&painted.text)),
-            }
-            piece.text = wanted.to_string();
-        }
+        piece.show(document, &painted.text, painted.runs.as_deref(), box_id);
     }
     while live.pieces.len() > pieces.len() {
         if let Some(extra) = live.pieces.pop() {
             extra.node.remove();
         }
     }
+    live.served_pieces.clear();
+    if let Some(served) = served {
+        served.sweep_past(live.node.clone().into(), after + pieces.len() as u32);
+    }
+}
+
+/// Replaces `node`'s children with `text`, or with `runs` when it has spans. Wipes the children with it, which is the point: the element carries the text itself now.
+fn write_text(
+    document: &web_sys::Document,
+    node: &web_sys::Element,
+    text: &str,
+    runs: Option<&[crate::runs::Run]>,
+    box_id: u64,
+) {
+    match runs {
+        Some(runs) => crate::runs::write(document, node, runs, box_id),
+        None => node.set_text_content(Some(text)),
+    }
+}
+
+/// The same content brought into a served element, keeping every text node and inline element already there that says the same.
+fn morph_text(
+    document: &web_sys::Document,
+    node: &web_sys::Element,
+    text: &str,
+    runs: Option<&[crate::runs::Run]>,
+    box_id: u64,
+) {
+    let Ok(wanted) = document.create_element("div") else {
+        write_text(document, node, text, runs, box_id);
+        return;
+    };
+    write_text(document, &wanted, text, runs, box_id);
+    crate::adopt::morph_children(node.as_ref(), wanted.as_ref());
+}
+
+/// A drawing's markup brought into a served `<svg>`, keeping every shape already there: a picture the page could not carry whole gains only what it lacked.
+fn morph_drawing(document: &web_sys::Document, node: &web_sys::Element, markup: &str) {
+    let Ok(wanted) = document.create_element_ns(Some(SVG_NS), "svg") else {
+        node.set_inner_html(markup);
+        return;
+    };
+    wanted.set_inner_html(markup);
+    crate::adopt::morph_children(node.as_ref(), wanted.as_ref());
+}
+
+/// Sets a property of the host's own style only where it says something else, so a served host is not rewritten with what it already carries.
+fn set_host_property(host: &web_sys::HtmlElement, name: &str, value: &str) {
+    let style = host.style();
+    if style.get_property_value(name).ok().as_deref() != Some(value) {
+        let _ = style.set_property(name, value);
+    }
 }
 
 /// Removes every child past `keep`, which is what a box that lost children leaves behind.
-fn truncate(parent: &web_sys::Node, keep: u32) {
+pub(crate) fn truncate(parent: &web_sys::Node, keep: u32) {
     while parent.child_nodes().length() > keep {
         let Some(extra) = parent.last_child() else {
             return;
@@ -609,11 +762,7 @@ fn settle_scroll(node: &web_sys::Element, scroll_to: Option<(f32, f32)>) {
 fn watch_scroll(node: &web_sys::Element, id: u64) -> Option<Closure<dyn FnMut(web_sys::Event)>> {
     let target = node.clone();
     let closure = Closure::<dyn FnMut(web_sys::Event)>::new(move |_: web_sys::Event| {
-        platform_core::post_event(platform_core::Event::BoxScrolled {
-            box_id: id,
-            x: target.scroll_left() as f32,
-            y: target.scroll_top() as f32,
-        });
+        report_scroll(&target, id);
     });
     // Passive: this only reports, and saying so lets the browser scroll without waiting to hear whether the listener wanted to prevent it — which is the whole reason a compositor scroll stays smooth.
     let options = web_sys::AddEventListenerOptions::new();
@@ -625,6 +774,14 @@ fn watch_scroll(node: &web_sys::Element, id: u64) -> Option<Closure<dyn FnMut(we
     )
     .ok()?;
     Some(closure)
+}
+
+fn report_scroll(node: &web_sys::Element, id: u64) {
+    platform_core::post_event(platform_core::Event::BoxScrolled {
+        box_id: id,
+        x: node.scroll_left() as f32,
+        y: node.scroll_top() as f32,
+    });
 }
 
 /// Reports where the document moves focus on its own — its own Tab order — so the app's focus follows it.

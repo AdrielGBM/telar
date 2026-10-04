@@ -1,0 +1,13 @@
+{
+  "version": 1,
+  "location": "/es/proyectos",
+  "locale": "es",
+  "preferences": {
+    "color_scheme": "dark",
+    "reduced_motion": true,
+    "high_contrast": null,
+    "locales": ["es-CL", "en"]
+  },
+  "surface": { "width": 1280, "height": 800 },
+  "signals": { "@telar/theme.scheme": "system", "site::visits": "3" }
+}

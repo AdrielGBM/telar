@@ -26,7 +26,7 @@ pub fn show(
         return;
     }
     for (name, value) in crate::document::picture_attributes(picture, width) {
-        crate::reconcile::set_or_clear(node, name, value.as_deref());
+        crate::adopt::patch_attribute(node, name, value.as_deref());
     }
     *shown = Some(now);
 }

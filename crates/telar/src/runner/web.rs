@@ -144,6 +144,11 @@ fn follow_locale_language() {
     FOLLOW_LANGUAGE.with(|f| *f.borrow_mut() = Some(effect));
 }
 
+/// The inputs of the prerendered page the host was served with, for a document that takes it over. A canvas does not: it replaces the page once it has drawn.
+fn served_page() -> Option<super::hydration::Hydration> {
+    super::hydration::Hydration::served()
+}
+
 fn start<A: App>(
     config: AppConfig,
     options: WebOptions,
@@ -172,13 +177,15 @@ fn start<A: App>(
         renderer_core::set_text_metrics(renderer_dom::CanvasTextMetrics);
         renderer_dom::remeasure_on_font_load();
         ui_tree::set_element_capture(true);
-        crate::runner::run_with_platform_and_renderer::<_, _, A, ()>(
+        super::generic::run_on_platform::<_, A, ()>(
             platform,
-            renderer_dom::DomRendererFactory::new(host),
             config,
             paths,
             app,
             app_name,
+            super::host::SurfaceRenderer::installed(renderer_dom::DomRendererFactory::new(host)),
+            None,
+            served_page(),
         )
     } else {
         #[cfg(feature = "web")]

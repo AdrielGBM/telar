@@ -163,8 +163,10 @@ android = ["android-bare", "hardware", "software"]
 ## canvas. No GPU and no shaper, which is most of what a web build used to weigh.
 ##
 ## Only meaningful for a `wasm32` build. On a host it compiles only what a frame says the document is, the
-## half `prerender` writes pages from; the browser itself is target-gated.
-web-dom = ["runtime", "dep:platform-web", "dep:renderer-dom"]
+## half `prerender` writes pages from; the browser itself is target-gated. A page that was prerendered is
+## taken over in place, so the keyed signals it carries are read back here too (`serde_json` is linked only
+## by an app that keys one).
+web-dom = ["runtime", "dep:platform-web", "dep:renderer-dom", "dep:serde_json"]
 
 ## Both browser frontends: the document above, and pixels on a canvas through WebGPU — what
 ## `WebRenderer::Auto` needs to have a choice to make. The canvas draws its own glyphs, hence the shaper.
