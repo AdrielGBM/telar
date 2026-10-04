@@ -90,6 +90,52 @@ Renderers only ever see pixels: a web document is told the resolved size, as it 
 because `vw` names the viewport and the surface is not always the viewport. A terminal draws a cell whatever the
 size, so there a size is only the band a heading reserves, rounded to cells like any length.
 
+### A line fitted to a width
+
+`font_size:fit(…)` asks for a width instead of a size: the text takes the size that sets its one line to it.
+
+```rsx
+col pad_x:24
+    text "ADRIEL" font_size:fit(48%, max_height:28sh) letter_spacing:0.04em
+    text "BARRIENTOS" font_size:fit(60%, max_height:28sh) letter_spacing:0.04em
+    text "320 wide" font_size:fit(320)
+```
+
+| `.rsx` | Rust | The line is |
+| --- | --- | --- |
+| `fit(60%)` | `FontFit::containing(0.6)` | that share of the content width of the box holding the text, as `%` is for a box |
+| `fit(480)`, `fit(40sw)`, `fit(12em)` | `FontFit::new(TextLength::Px(480.0))`… | that length; `em` is of the size the text inherits |
+| `fit($width)` | `FontFit::new(width.get())` | whatever `FitWidth` (or pixels) the expression gives, followed as it changes |
+| `fit(…, max_height:56sh)` | `.with_max_height(TextLength::SurfaceHeight(0.56))` | no taller than that, measured as its line box (`line_height` included) |
+
+Layout resolves it, on every target, through the installed `TextMetrics`: the text's measure measures the
+line at two sizes and solves for the size that sets it to the width, since a line's width grows in proportion
+to its size plus whatever does not grow with it (tracking or a span in pixels). It resolves again when the
+width of the box holding the text changes, and when the text, its style (family, weight, axes, features,
+tracking), the fit, the surface it reads, or the [text metrics generation](fonts.md#faces-that-arrive-later)
+does. A face that lands fits the line again in it.
+
+- **The line scales whole.** The text's own lengths in `em` (its tracking) are of the fitted size, so the
+  tracking scales with the line; tracking in pixels stays pixels.
+- **It is one line.** A fitted text never wraps.
+- **It goes on a `text`.** A container or a `span` that names `fit(…)` is a build error. In Rust it is
+  `Text::fitting(content, layout, fit, style)` (`Text::runs_fitting` for runs); `style` is handed the size being
+  tried.
+- **A row sizes its items before it says how wide it is**, as CSS keeps a percentage out of a content
+  contribution. A fitted text in a row measures those probes at the width it last heard and, the first time and
+  after each resize, is laid out once more in the same pass at the width it then learns.
+- **A share of a box with no definite width** — nothing but content all the way up — means nothing, and the
+  text keeps the size it inherits.
+
+| Target | A fitted line |
+| --- | --- |
+| web-dom | Measured by the document's measurer (a canvas, or a hidden element for axes and features); the element is handed the size in pixels, like any text unit. |
+| web canvas, desktop, Android, headless | Measured by the shaper, and drawn at the size it found. |
+| TUI | A cell is a cell whatever the size, so the line cannot grow toward a width: the text keeps the size it inherits, and its box comes to whole cells like any text's. |
+
+Code that sizes text by measuring it itself — the way a fit had to be written before — reads
+`use_text_metrics_generation()` to run again when a face lands; see [fonts.md](fonts.md#text-measured-by-hand).
+
 ## The safe area
 
 Part of a surface can belong to the system: a phone's status and navigation bars, a notch, rounded corners, a

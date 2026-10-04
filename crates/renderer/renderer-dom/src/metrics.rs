@@ -44,6 +44,11 @@ fn make_context() -> Option<web_sys::CanvasRenderingContext2d> {
 
 /// The `font` shorthand a 2D context takes, from a Telar text style.
 fn font_of(style: &TextStyle) -> String {
+    font_at(style, style.font_size)
+}
+
+/// The `font` shorthand for `style` at `size`.
+fn font_at(style: &TextStyle, size: f32) -> String {
     // The canvas `font` shorthand takes the same family-list grammar CSS does, so the DOM's own serializer is the measurer's too — the two have to agree on what a generic resolves to, or the number this reports is for a face the page will not draw.
     let family = crate::paint::font_family_list(&style.font_family)
         .unwrap_or_else(|| "sans-serif".to_string());
@@ -52,10 +57,13 @@ fn font_of(style: &TextStyle) -> String {
     } else {
         "italic "
     };
-    format!(
-        "{slant}{} {}px {family}",
-        style.font_weight, style.font_size
-    )
+    format!("{slant}{} {size}px {family}", style.font_weight)
+}
+
+/// The `font` a canvas measures `style` in, and what to scale its answers by. Firefox snaps the size a canvas `font` names to a whole pixel, measuring 71.5px text as 72px text, while its document takes the advances of the whole size below and scales them to the size it is given; measured at that whole size and scaled, the two agree, and a browser that measures any size exactly loses nothing to the scaling.
+fn canvas_font(style: &TextStyle) -> (String, f32) {
+    let whole = style.font_size.floor().max(1.0);
+    (font_at(style, whole), style.font_size / whole)
 }
 
 /// Whether measuring `style` needs a laid-out element rather than a canvas: a canvas `font` carries family, size, weight and slant, and nothing sets the axes or the OpenType features on it. Not even `wght`: standing it in for the weight would have the browser embolden a face whose `@font-face` names one weight, which the page, setting the axis, never does.
@@ -81,9 +89,10 @@ fn width_of(text: &str, style: &TextStyle) -> f32 {
         return probed_width(text, style) + style.letter_spacing * text.chars().count() as f32;
     }
     with_context(|ctx| {
-        ctx.set_font(&font_of(style));
+        let (font, scale) = canvas_font(style);
+        ctx.set_font(&font);
         ctx.measure_text(text)
-            .map(|m| m.width() as f32)
+            .map(|m| m.width() as f32 * scale)
             .unwrap_or(0.0)
     })
     .unwrap_or(0.0)
@@ -149,12 +158,13 @@ fn natural(style: &TextStyle) -> f32 {
 /// How far below the top of its line box a line in `style` sits on its baseline: half the leading the line box adds, then the face's ascent, as a document lays a line out.
 pub(crate) fn baseline(style: &TextStyle) -> f32 {
     let (ascent, descent) = with_context(|ctx| {
-        ctx.set_font(&font_of(style));
+        let (font, scale) = canvas_font(style);
+        ctx.set_font(&font);
         ctx.measure_text("Hg")
             .map(|m| {
                 (
-                    m.font_bounding_box_ascent() as f32,
-                    m.font_bounding_box_descent() as f32,
+                    m.font_bounding_box_ascent() as f32 * scale,
+                    m.font_bounding_box_descent() as f32 * scale,
                 )
             })
             .unwrap_or((style.font_size * 0.8, style.font_size * 0.2))

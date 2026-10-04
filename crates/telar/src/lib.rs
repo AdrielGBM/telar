@@ -158,11 +158,12 @@ pub use renderer_assets::{SvgData, SvgError, VectorCommand};
 #[cfg(feature = "runtime")]
 pub use renderer_core::{
     BlendMode, Border, BorderRadius, Clamp, Color, Dash, Declared, DrawCommand, DrawState,
-    FillRule, FontFamily, FontFeatures, FontStyle, FontTag, FontVariations, Gradient, GradientKind,
-    GradientStop, GradientStops, ImageData, ImageFill, ImageSlice, LayerMask, LineCap, LineHeight,
-    LineJoin, Paint, PathData, PathStyle, PathVerb, Raster, RectStyle, RendererError, Role, Scale,
-    Semantics, Shadow, ShapeStyle, Span, Stroke, TextAlign, TextLength, TextShadow, TextStyle,
-    TextWrap, for_each_with_matrix, hash_draw_commands, measure_text, transform_clip_rect,
+    FillRule, FitWidth, FontFamily, FontFeatures, FontFit, FontStyle, FontTag, FontVariations,
+    Gradient, GradientKind, GradientStop, GradientStops, ImageData, ImageFill, ImageSlice,
+    LayerMask, LineCap, LineHeight, LineJoin, Paint, PathData, PathStyle, PathVerb, Raster,
+    RectStyle, RendererError, Role, Scale, Semantics, Shadow, ShapeStyle, Span, Stroke, TextAlign,
+    TextLength, TextShadow, TextStyle, TextWrap, fitted_font_size, for_each_with_matrix,
+    hash_draw_commands, measure_text, text_metrics_generation, transform_clip_rect,
 };
 // The drawing half of the backend-author API: a frontend implements `RendererFactory` and installs a `TextMetrics` for whatever "how wide is this string" means on its surface.
 #[cfg(feature = "runtime")]
@@ -261,6 +262,7 @@ pub use ui_core::{
 pub use ui_core::{
     Breakpoints, breakpoint, set_safe_area_insets, set_surface_size, surface_size,
     use_safe_area_insets, use_surface_height, use_surface_size, use_surface_width,
+    use_text_metrics_generation,
 };
 #[cfg(feature = "runtime")]
 pub use ui_core::{

@@ -64,10 +64,11 @@ mod svg;
 mod test_support;
 mod text;
 mod text_area;
+mod text_fit;
 mod text_metrics;
 mod theme_provider;
 mod transform_origin;
-pub use text_metrics::{SINGLE_LINE_LEADING, single_line_box};
+pub use text_metrics::{SINGLE_LINE_LEADING, single_line_box, use_text_metrics_generation};
 mod virtual_list;
 mod window_root;
 

@@ -63,6 +63,7 @@ const SECTIONS: &[SectionDef] = sections![
         "reduced_motion.rsx"
     ),
     ("Typography", crate::features::typography::typography, crate::features::typography::TypographyProps, "typography.rsx"),
+    ("Fitted text", crate::features::text_fit::text_fit, crate::features::text_fit::TextFitProps, "text_fit.rsx"),
     ("Color & theme", crate::features::color::color, crate::features::color::ColorProps, "color.rsx"),
     ("Boxes & borders", crate::features::boxes::boxes, crate::features::boxes::BoxesProps, "boxes.rsx"),
     ("Gradients", crate::features::gradients::gradients, crate::features::gradients::GradientsProps, "gradients.rsx"),

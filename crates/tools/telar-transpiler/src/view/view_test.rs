@@ -1469,6 +1469,74 @@ fn text_lengths_take_the_units_a_box_does() {
     );
 }
 
+/// A size fitted to a width is the text's own, built into it rather than into its style, which is handed each size layout tries.
+#[test]
+fn a_fitted_size_builds_a_fitting_text() {
+    let src = "[logic]\nlet share = signal(FitWidth::Containing(0.6));\n[view]\ncol\n    text \"ADRIEL\" font_size:fit(60%, max_height:56sh) letter_spacing:0.04em\n    text \"B\" font_size:fit(480)\n    text \"C\" font_size:fit(40sw, max_height:3em)\n    text \"D\" font_size:fit($share)\n    text font_size:fit(100%)\n        span \"E\"\n        span \"F\" font_weight:bold\n";
+    let code = crate::transpile_source(src, "demo", None, None)
+        .unwrap()
+        .rust_code;
+    assert!(!code.contains("compile_error!"), "{code}");
+    assert!(
+        code.contains("Text::fitting(")
+            && code.contains(
+                "move || FontFit::containing(0.6).with_max_height(TextLength::SurfaceHeight(0.56))"
+            ),
+        "{code}"
+    );
+    assert!(
+        code.contains("move || FontFit::new(TextLength::Px(480.0))"),
+        "{code}"
+    );
+    assert!(
+        code.contains(
+            "move || FontFit::new(TextLength::SurfaceWidth(0.4)).with_max_height(TextLength::Em(3.0))"
+        ),
+        "{code}"
+    );
+    assert!(code.contains("FontFit::new(share.get())"), "{code}");
+    assert!(
+        code.contains("Text::runs_fitting(") && code.contains("move || FontFit::containing(1.0)"),
+        "{code}"
+    );
+    assert!(
+        !code.contains("with_font_size"),
+        "the fit owns the size, so the style never sets one:\n{code}"
+    );
+    assert!(
+        code.contains(".with_letter_spacing_in(TextLength::Em(0.04), Size::ZERO)"),
+        "tracking in em resolves against whichever size layout tries:\n{code}"
+    );
+}
+
+#[test]
+fn a_fit_is_refused_off_a_text_and_when_it_names_nothing() {
+    for (src, says) in [
+        (
+            "[view]\ncol font_size:fit(60%)\n    text \"x\"\n",
+            "goes on a `text`",
+        ),
+        ("[view]\ntext \"x\" font_size:fit()\n", "names no width"),
+        (
+            "[view]\ntext \"x\" font_size:fit(60%, max:3)\n",
+            "takes a width and then `max_height:`",
+        ),
+        (
+            "[view]\ntext \"x\" font_size:fit(sixty%)\n",
+            "is not a percentage",
+        ),
+        (
+            "[logic]\nlet v = signal(String::new());\n[view]\ninput value:$v font_size:fit(50%)\n",
+            "an `input` takes a size",
+        ),
+    ] {
+        let code = crate::transpile_source(src, "demo", None, None)
+            .unwrap()
+            .rust_code;
+        assert!(code.contains(says), "{src}\n{code}");
+    }
+}
+
 /// A mask is its box, then the source its content is seen through, then the content.
 #[test]
 fn a_mask_is_a_source_and_a_content_in_one_box() {

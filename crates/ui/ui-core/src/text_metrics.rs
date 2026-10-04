@@ -80,3 +80,42 @@ pub(crate) fn line_box(style: &TextStyle) -> f32 {
         None => line_height(style.font_size),
     }
 }
+
+thread_local! {
+    static GENERATION: reactive_core::RwSignal<u64> =
+        reactive_core::detached(|| reactive_core::signal(renderer_core::text_metrics_generation()));
+}
+
+/// [`renderer_core::text_metrics_generation`], read reactively: a memo or an effect that measures text itself reads this to run again when a face lands, since what it measured before may have been the fallback.
+///
+/// It moves on the frame after the face arrives, before that frame lays out, so whatever it re-runs is laid out in the same pass as the text the face re-measured.
+pub fn use_text_metrics_generation() -> u64 {
+    GENERATION.with(|generation| generation.get())
+}
+
+/// Moves [`use_text_metrics_generation`] up to the measurer's generation, and answers it.
+pub(crate) fn follow_text_metrics_generation() -> u64 {
+    let now = renderer_core::text_metrics_generation();
+    GENERATION.with(|generation| {
+        if generation.peek() != now {
+            generation.set(now);
+        }
+    });
+    now
+}
+
+pub(crate) fn fitted_font_size(
+    text: &str,
+    spans: Option<&[Span]>,
+    width: f32,
+    max_height: Option<f32>,
+    style_at: &dyn Fn(f32) -> TextStyle,
+) -> Option<f32> {
+    #[cfg(test)]
+    ensure_installed();
+    renderer_core::fitted_font_size(text, spans, width, max_height, style_at)
+}
+
+#[cfg(test)]
+#[path = "text_metrics_test.rs"]
+mod tests;

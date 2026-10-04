@@ -662,7 +662,7 @@ fn marking_measured_leaves_stale_measures_them_again_and_leaves_the_rest_cached(
 #[test]
 fn a_squeezed_row_stops_each_measured_leaf_at_its_min_content_width() {
     let word = || -> MeasureFn {
-        Box::new(|width| match width {
+        Box::new(|input: MeasureInput| match input.width {
             AvailableSpace::MinContent => (60.0, 20.0),
             AvailableSpace::MaxContent => (120.0, 10.0),
             AvailableSpace::Definite(w) if w >= 120.0 => (120.0, 10.0),
@@ -682,4 +682,44 @@ fn a_squeezed_row_stops_each_measured_leaf_at_its_min_content_width() {
     lay_out(&mut engine, root);
     assert_eq!(engine.layout(first).unwrap().width, 60.0);
     assert_eq!(engine.layout(second).unwrap().width, 60.0);
+}
+
+/// A leaf that sizes itself by a fraction of the box holding it — a text fitted to `60%` of its column — is told that box's content width. A column tells it on every measure; a row, like CSS, keeps it out of the probes that size its items along the row, and tells it in the pass that places them.
+#[test]
+fn a_measured_leaf_hears_the_content_width_of_the_box_holding_it() {
+    use std::cell::RefCell;
+    use std::rc::Rc;
+
+    for row in [false, true] {
+        let heard = Rc::new(RefCell::new(Vec::new()));
+        let hearing = heard.clone();
+        let mut engine = LayoutEngine::new();
+        let leaf = engine
+            .new_measured_leaf(
+                LayoutStyle::new(),
+                Box::new(move |input: MeasureInput| {
+                    hearing.borrow_mut().push(input.containing_width);
+                    (40.0, 10.0)
+                }),
+            )
+            .unwrap();
+        let holder = LayoutStyle::new().width(300.0).padding_all(20.0);
+        let holder = if row {
+            holder.flex_row()
+        } else {
+            holder.flex_column()
+        };
+        let root = engine.new_container(holder, &[leaf]).unwrap();
+        lay_out(&mut engine, root);
+        let heard = heard.borrow();
+        assert!(!heard.is_empty());
+        if row {
+            assert_eq!(heard.last(), Some(&Some(260.0)), "heard {heard:?}");
+        } else {
+            assert!(
+                heard.iter().all(|width| *width == Some(260.0)),
+                "heard {heard:?}"
+            );
+        }
+    }
 }

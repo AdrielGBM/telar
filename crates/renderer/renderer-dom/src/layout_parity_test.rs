@@ -8,16 +8,18 @@
 
 #![cfg(target_arch = "wasm32")]
 
+use std::cell::Cell;
+use std::rc::Rc;
 use std::sync::Arc;
 
 use geometry_core::{Rect, Size};
 use layout_core::{
-    AlignItems, AvailableSpace, Direction, JustifyContent, LayoutEngine, LayoutStyle, NodeId,
-    SizeDimension, TemplateTrack,
+    AlignItems, AvailableSpace, Direction, JustifyContent, LayoutEngine, LayoutStyle, MeasureInput,
+    NodeId, SizeDimension, TemplateTrack,
 };
 use renderer_core::{
-    BorderRadius, Color, DrawCommand, Element, ElementId, RenderBackend, Role, Semantics,
-    TextMetrics, TextStyle, TextWrap,
+    BorderRadius, Color, DrawCommand, Element, ElementId, FontFit, RenderBackend, Role, Semantics,
+    TextLength, TextMetrics, TextStyle, TextWrap,
 };
 use telar_renderer_dom::{CanvasTextMetrics, DomRenderer};
 use wasm_bindgen::JsCast;
@@ -37,7 +39,41 @@ struct Spec {
     style: LayoutStyle,
     children: Vec<Spec>,
     /// A leaf that measures a string, as a `text` does: Taffy asks the document's measurer, the browser lays the glyphs out itself.
-    text: Option<(String, TextStyle)>,
+    text: Option<(String, Styled)>,
+}
+
+/// A text's style: given, or fitted to a width as `font_size:fit(…)` asks, at the size its measure found.
+#[derive(Clone)]
+enum Styled {
+    Given(Box<TextStyle>),
+    Fitted {
+        fit: FontFit,
+        at: Rc<dyn Fn(f32) -> TextStyle>,
+        size: Rc<Cell<f32>>,
+    },
+}
+
+impl Styled {
+    fn style(&self) -> TextStyle {
+        match self {
+            Styled::Given(style) => (**style).clone(),
+            Styled::Fitted { at, size, .. } => at(size.get()).with_text_wrap(TextWrap::NoWrap),
+        }
+    }
+
+    /// Resolves a fit for a box holding the text `containing_width` wide, as the text widget does in its measure.
+    fn fit_into(&self, text: &str, containing_width: Option<f32>) {
+        let Styled::Fitted { fit, at, size } = self else {
+            return;
+        };
+        let surface = Size::new(SURFACE.0, SURFACE.1);
+        if let Some((width, max_height)) = fit.target(16.0, surface, containing_width)
+            && let Some(fitted) =
+                CanvasTextMetrics.fitted_size(text, None, width, max_height, &**at)
+        {
+            size.set(fitted);
+        }
+    }
 }
 
 fn a_box(style: LayoutStyle) -> Spec {
@@ -60,7 +96,23 @@ fn text_leaf(text: &str, style: TextStyle) -> Spec {
     Spec {
         style: LayoutStyle::new(),
         children: Vec::new(),
-        text: Some((text.to_owned(), style)),
+        text: Some((text.to_owned(), Styled::Given(Box::new(style)))),
+    }
+}
+
+/// A text sized by `fit`, its style at a size given by `at`.
+fn fitted_leaf(text: &str, fit: FontFit, at: impl Fn(f32) -> TextStyle + 'static) -> Spec {
+    Spec {
+        style: LayoutStyle::new(),
+        children: Vec::new(),
+        text: Some((
+            text.to_owned(),
+            Styled::Fitted {
+                fit,
+                at: Rc::new(at),
+                size: Rc::new(Cell::new(16.0)),
+            },
+        )),
     }
 }
 
@@ -72,24 +124,28 @@ fn sized(width: f32, height: f32) -> Spec {
 struct Built {
     node: NodeId,
     children: Vec<Built>,
-    text: Option<(String, TextStyle)>,
+    text: Option<(String, Styled)>,
 }
 
 fn build(engine: &mut LayoutEngine, spec: Spec) -> Built {
     if let Some((text, style)) = spec.text {
-        let (measured, with) = (text.clone(), style.clone());
+        let (measured, styled) = (text.clone(), style.clone());
         let node = engine
             .new_measured_leaf(
                 spec.style,
-                Box::new(move |space| match space {
-                    AvailableSpace::Definite(width) => {
-                        CanvasTextMetrics.measure(&measured, None, width, &with)
-                    }
-                    AvailableSpace::MaxContent => {
-                        CanvasTextMetrics.measure(&measured, None, 1.0e6, &with)
-                    }
-                    AvailableSpace::MinContent => {
-                        CanvasTextMetrics.min_content(&measured, None, &with)
+                Box::new(move |input: MeasureInput| {
+                    styled.fit_into(&measured, input.containing_width);
+                    let with = styled.style();
+                    match input.width {
+                        AvailableSpace::Definite(width) => {
+                            CanvasTextMetrics.measure(&measured, None, width, &with)
+                        }
+                        AvailableSpace::MaxContent => {
+                            CanvasTextMetrics.measure(&measured, None, 1.0e6, &with)
+                        }
+                        AvailableSpace::MinContent => {
+                            CanvasTextMetrics.min_content(&measured, None, &with)
+                        }
                     }
                 }),
             )
@@ -142,7 +198,7 @@ fn frame(engine: &LayoutEngine, built: &Built, origin: (f32, f32), out: &mut Vec
             text: Arc::from(text.as_str()),
             spans: None,
             rect: Rect::new(0.0, 0.0, rect.width, rect.height),
-            style: Arc::new(style.clone()),
+            style: Arc::new(style.style()),
         });
     }
     for child in &built.children {
@@ -916,4 +972,89 @@ fn tracking_opened_wide_moves_what_follows_by_the_same_amount() {
             ],
         ),
     );
+}
+
+/// A line fitted to a share of its column, as `font_size:fit(60%)` asks: the size is found by measuring through the document's own measurer, so the box Taffy gives the line, the box the browser lays the glyphs out in at the size it is handed, and the width asked for must all be the same.
+#[wasm_bindgen_test]
+fn a_fitted_display_line_takes_its_share_in_both() {
+    for (padding, share, tracking) in [(40.0, 0.6, -0.04), (16.0, 0.92, 0.04), (120.0, 0.48, 0.0)] {
+        let fitted = fitted_leaf("BARRIENTOS", FontFit::containing(share), move |size| {
+            display(size, 0.84, tracking)
+        });
+        let Some((_, styled)) = &fitted.text else {
+            unreachable!("a fitted leaf is a text")
+        };
+        let styled = styled.clone();
+        let case = format!("a line fitted to {share} of a column padded {padding}");
+        parity(
+            &case,
+            Direction::Ltr,
+            surface(
+                LayoutStyle::new()
+                    .flex_column()
+                    .align_items(AlignItems::START)
+                    .padding_all(padding),
+                vec![fitted, sized(200.0, 20.0)],
+            ),
+        );
+        let target = share * (SURFACE.0 - 2.0 * padding);
+        let style = styled.style();
+        let drawn = CanvasTextMetrics
+            .measure("BARRIENTOS", None, 1.0e6, &style)
+            .0;
+        assert!(
+            (drawn - target).abs() <= TOLERANCE,
+            "{case}: the line is {drawn} wide at {}px, asked for {target}",
+            style.font_size
+        );
+    }
+}
+
+/// A fit capped by a height, as `fit(100%, max_height:20sh)` asks: the line stops growing at the height, and both engines stack what follows under the same box.
+#[wasm_bindgen_test]
+fn a_fitted_line_held_by_a_height_stacks_the_same_in_both() {
+    let fit = FontFit::containing(1.0).with_max_height(TextLength::SurfaceHeight(0.2));
+    let fitted = fitted_leaf("ADRIEL", fit, |size| display(size, 0.84, -0.02));
+    let Some((_, styled)) = &fitted.text else {
+        unreachable!("a fitted leaf is a text")
+    };
+    let styled = styled.clone();
+    parity(
+        "a fitted line held down by a height",
+        Direction::Ltr,
+        surface(
+            LayoutStyle::new()
+                .flex_column()
+                .align_items(AlignItems::START),
+            vec![fitted, sized(200.0, 20.0)],
+        ),
+    );
+    let style = styled.style();
+    let height = CanvasTextMetrics.measure("ADRIEL", None, 1.0e6, &style).1;
+    assert!(
+        (height - 0.2 * SURFACE.1).abs() <= TOLERANCE,
+        "the line box is {height} tall at {}px, capped at {}",
+        style.font_size,
+        0.2 * SURFACE.1
+    );
+}
+
+/// A size that is not a whole pixel — which a fit almost always finds, and a fraction of the surface often is — measures as the size it is. A canvas rounds the size in its `font`, and measured there the line came out a whole size narrower than the document laid it out.
+#[wasm_bindgen_test]
+fn a_size_between_whole_pixels_measures_between_them() {
+    for size in [71.25_f32, 71.5, 142.857, 230.4] {
+        parity(
+            &format!("a {size}px display line"),
+            Direction::Ltr,
+            surface(
+                LayoutStyle::new()
+                    .flex_column()
+                    .align_items(AlignItems::START),
+                vec![
+                    text_leaf("BARRIENTOS", display(size, 0.84, -0.02)),
+                    sized(200.0, 20.0),
+                ],
+            ),
+        );
+    }
 }

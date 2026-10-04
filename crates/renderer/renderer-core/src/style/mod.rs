@@ -5,6 +5,7 @@ use std::sync::Arc;
 
 mod dash;
 mod declared;
+mod font_fit;
 mod font_settings;
 mod gradient;
 mod paint;
@@ -14,6 +15,7 @@ mod text_length;
 
 pub use dash::Dash;
 pub use declared::{Declared, Span, link_at};
+pub use font_fit::{FitWidth, FontFit};
 pub use font_settings::{FontFeatures, FontTag, FontVariations};
 pub use gradient::{Gradient, GradientKind, GradientStop, GradientStops};
 pub use paint::{FillRule, LineCap, LineJoin, Paint, Shadow, Stroke};

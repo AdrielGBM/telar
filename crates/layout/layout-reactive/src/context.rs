@@ -61,10 +61,16 @@ pub fn new_container(style: LayoutStyle, children: &[NodeId]) -> Result<NodeId, 
     Ok(node)
 }
 
+type AfterLayout = Box<dyn FnOnce()>;
+
 // `ManuallyDrop` for the reason every TLS slot here carries it: a destructor registered from the app dylib makes `dlclose` unsafe.
 thread_local! {
     /// Every open recording, innermost last.
     static RECORDINGS: ManuallyDrop<RefCell<Vec<Recording>>> =
+        const { ManuallyDrop::new(RefCell::new(Vec::new())) };
+    static AFTER_LAYOUT: ManuallyDrop<RefCell<Vec<AfterLayout>>> =
+        const { ManuallyDrop::new(RefCell::new(Vec::new())) };
+    static MEASURE_AGAIN: ManuallyDrop<RefCell<Vec<NodeId>>> =
         const { ManuallyDrop::new(RefCell::new(Vec::new())) };
 }
 
@@ -184,9 +190,30 @@ pub fn compute_layout(
         rt.engine.set_direction(direction);
         rt.engine.set_surface_size(surface);
     });
-    let updates = with_runtime(|rt| rt.compute_layout(root, width, height))?;
+    let updates = with_runtime(|rt| -> Result<Vec<Update>, LayoutError> {
+        let updates = rt.compute_layout(root, width, height)?;
+        let again = MEASURE_AGAIN.with(|nodes| std::mem::take(&mut *nodes.borrow_mut()));
+        if again.is_empty() {
+            return Ok(updates);
+        }
+        for node in again {
+            rt.engine.mark_dirty(node).ok();
+        }
+        let again = rt.compute_layout(root, width, height)?;
+        Ok(if again.is_empty() { updates } else { again })
+    })?;
     publish(updates);
     Ok(())
+}
+
+/// From inside a measure: lays `node` out again before the pass now running publishes, once. For a measure that learned, late in a pass, what its earlier answers in that pass had to guess.
+pub fn measure_again(node: NodeId) {
+    MEASURE_AGAIN.with(|nodes| nodes.borrow_mut().push(node));
+}
+
+/// Runs `f` once the layout pass now running publishes its rects, in the same batch: how a measure, which runs under the runtime's borrow where a signal set could re-enter it, hands its view something it learned.
+pub fn after_layout(f: impl FnOnce() + 'static) {
+    AFTER_LAYOUT.with(|queue| queue.borrow_mut().push(Box::new(f)));
 }
 
 /// Sets what `root`'s sticky nodes stick against: the part of its tree a viewport shows, in the root's own coordinates — for a scroll's content, the offset and the size of its visible window.
@@ -199,10 +226,14 @@ pub fn set_sticky_view(root: NodeId, view: Rect) {
 
 /// Applies what a walk collected under the runtime borrow, after it is released: a `set` can flush effects, and one of those may itself touch the layout runtime (a reactive list), which would re-enter the borrow.
 fn publish(updates: Vec<Update>) {
-    if updates.is_empty() {
+    let learned = AFTER_LAYOUT.with(|queue| std::mem::take(&mut *queue.borrow_mut()));
+    if updates.is_empty() && learned.is_empty() {
         return;
     }
     batch(|| {
+        for after in learned {
+            after();
+        }
         for update in updates {
             match update {
                 Update::Rect(sig, rect) => {

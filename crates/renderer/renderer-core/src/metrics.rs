@@ -38,7 +38,37 @@ pub trait TextMetrics: Send + Sync + 'static {
     ) -> Option<usize> {
         None
     }
+
+    /// The font size at which `text`, on one line, is `width` wide and no taller than `max_height`, with `style_at` giving the text's style at a size. `None` where the line's extent does not grow with its size: an empty string, or a terminal's cells.
+    ///
+    /// Measured at two sizes and solved rather than measured at one and scaled, because a line's width is linear in its size plus whatever does not scale with it: tracking or a span declared in pixels.
+    fn fitted_size(
+        &self,
+        text: &str,
+        spans: Option<&[Span]>,
+        width: f32,
+        max_height: Option<f32>,
+        style_at: &dyn Fn(f32) -> TextStyle,
+    ) -> Option<f32> {
+        let line_at = |size: f32| {
+            let style = style_at(size).with_text_wrap(crate::TextWrap::NoWrap);
+            self.measure(text, spans, FIT_UNBOUNDED_WIDTH, &style)
+        };
+        let (near_width, near_height) = line_at(FIT_PROBE_SIZE);
+        let (far_width, far_height) = line_at(2.0 * FIT_PROBE_SIZE);
+        let size_at = |target: f32, near: f32, far: f32| {
+            let slope = (far - near) / FIT_PROBE_SIZE;
+            (slope.is_finite() && slope > f32::EPSILON)
+                .then(|| FIT_PROBE_SIZE + (target - near) / slope)
+        };
+        let by_width = size_at(width, near_width, far_width)?;
+        let by_height = max_height.and_then(|height| size_at(height, near_height, far_height));
+        Some(by_height.map_or(by_width, |cap| by_width.min(cap)).max(0.0))
+    }
 }
+
+const FIT_PROBE_SIZE: f32 = 100.0;
+const FIT_UNBOUNDED_WIDTH: f32 = 1.0e6;
 
 static TEXT_METRICS: RwLock<Option<Arc<dyn TextMetrics>>> = RwLock::new(None);
 
@@ -101,6 +131,17 @@ pub fn text_index_at(
     at: (f32, f32),
 ) -> Option<usize> {
     metrics().index_at(text, spans, max_width, style, at)
+}
+
+/// The size that sets `text`'s line to `width`, no taller than `max_height`. See [`TextMetrics::fitted_size`].
+pub fn fitted_font_size(
+    text: &str,
+    spans: Option<&[Span]>,
+    width: f32,
+    max_height: Option<f32>,
+    style_at: &dyn Fn(f32) -> TextStyle,
+) -> Option<f32> {
+    metrics().fitted_size(text, spans, width, max_height, style_at)
 }
 
 /// The height of one line of text at `font_size`. See [`TextMetrics::line_height`].

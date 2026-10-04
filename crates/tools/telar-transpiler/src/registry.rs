@@ -578,7 +578,9 @@ pub fn keyword(
 
 /// The text properties that flow down the tree. See [`is_inheritable_text_attr`].
 const INHERITABLE_TEXT_ATTRS: &[AttrSpec] = &[
-    AttrSpec::num("font_size"),
+    AttrSpec::num("font_size").doc(
+        "The size of the text: pixels (`24`), a multiple of the inherited size (`1.5em`) or a fraction of the surface (`22sw`, `10sh`, `5smin`, `5smax`). On a `text`, `fit(60%)` instead sets its one line to a width: a percentage of the box holding it, a length (`fit(480)`, `fit(40sw)`) or an expression yielding a `FitWidth`, with an optional cap, `fit(60%, max_height:56sh)`. The line scales whole, tracking in `em` included, and never wraps; see docs/surface-size.md.",
+    ),
     AttrSpec::free("font_family").doc(
         "A generic (sans_serif|serif|monospace|system_ui|cursive|fantasy, bare or quoted), a quoted face (\"Inter\"), a quoted comma list for an ordered fallback (\"Inter, sans_serif\"), or any expression yielding a FontFamily.",
     ),

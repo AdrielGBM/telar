@@ -67,8 +67,8 @@ fn a_maxwidth_box_measures_its_content_at_the_capped_width() {
     reset_layout_runtime();
     const TOTAL: f32 = 1200.0;
     const LINE: f32 = 20.0;
-    let measure: layout_core::MeasureFn = Box::new(|available| {
-        let width = match available {
+    let measure: layout_core::MeasureFn = Box::new(|available: layout_core::MeasureInput| {
+        let width = match available.width {
             AvailableSpace::Definite(width) if width > 0.0 => width,
             _ => TOTAL,
         };
@@ -1091,4 +1091,59 @@ fn a_tracked_display_wakes_its_reader_when_the_node_is_hidden_or_shown() {
     assert_eq!(seen.get(), Some(true));
     set_display(node, true);
     assert_eq!(seen.get(), Some(false));
+}
+
+/// A measure runs under the runtime's borrow, so what it learns for its view waits for the pass to publish, and arrives with the rects that pass moved.
+#[test]
+fn what_a_measure_learns_reaches_its_signal_once_the_pass_publishes() {
+    reset_layout_runtime();
+    let learned = reactive_core::signal(0.0_f32);
+    let measure: layout_core::MeasureFn = Box::new(move |input: layout_core::MeasureInput| {
+        let width = input.containing_width.unwrap_or(0.0);
+        crate::after_layout(move || learned.set(width));
+        (10.0, 10.0)
+    });
+    let (text, _) = new_measured_leaf(LayoutStyle::new(), measure).unwrap();
+    let root = new_container(LayoutStyle::new().flex_column().width(240.0), &[text]).unwrap();
+    compute_layout(
+        root,
+        AvailableSpace::Definite(500.0),
+        AvailableSpace::Definite(500.0),
+    )
+    .unwrap();
+    assert_eq!(learned.peek(), 240.0);
+}
+
+/// A row sizes its items without telling them its width, so a leaf whose size is a fraction of it guesses in those probes and only hears the width in the pass that places it; asking to be measured again lays it out at what it heard before the pass publishes.
+#[test]
+fn a_leaf_measured_again_is_placed_by_what_it_learned_in_the_same_pass() {
+    use std::cell::Cell;
+    use std::rc::Rc;
+
+    reset_layout_runtime();
+    let heard = Rc::new(Cell::new(None::<f32>));
+    let node_cell = Rc::new(Cell::new(None::<NodeId>));
+    let measure: layout_core::MeasureFn = {
+        let heard = heard.clone();
+        let node_cell = node_cell.clone();
+        Box::new(move |input: layout_core::MeasureInput| {
+            if let Some(width) = input.containing_width
+                && heard.get() != Some(width)
+            {
+                heard.set(Some(width));
+                crate::measure_again(node_cell.get().unwrap());
+            }
+            (heard.get().unwrap_or(0.0) / 2.0, 10.0)
+        })
+    };
+    let (leaf, rect) = new_measured_leaf(LayoutStyle::new(), measure).unwrap();
+    node_cell.set(Some(leaf));
+    let root = new_container(LayoutStyle::new().flex_row().width(400.0), &[leaf]).unwrap();
+    compute_layout(
+        root,
+        AvailableSpace::Definite(400.0),
+        AvailableSpace::Definite(100.0),
+    )
+    .unwrap();
+    assert_eq!(rect.peek().width, 200.0);
 }

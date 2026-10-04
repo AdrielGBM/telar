@@ -27,12 +27,14 @@ impl ViewGen<'_> {
         } else {
             self.interpolate_content(content, el.content_start)
         };
-        let (specs, errors) = self.parse_transitions(el);
+        let (specs, mut errors) = self.parse_transitions(el);
         let transitions: HashMap<String, String> = specs.into_iter().collect();
         let mut hoists: Vec<String> = Vec::new();
         // Regression: the class reached a container and stopped there, so `@heading { font_size: 22 }` compiled and did nothing.
         let attrs = self.effective_attrs(el);
         let style = self.text_style(&attrs, &transitions, &mut hoists);
+        let fit = fit_closure(&attrs, &mut errors);
+        let (constructor, fit_arg) = fit_constructor("Text::declaring", "Text::fitting", fit, &pad);
 
         let layout_style = text_layout_style(&attrs);
 
@@ -49,9 +51,10 @@ impl ViewGen<'_> {
             "{pad}let {var} = {{\n\
              {clones}\
              {prelude}\
-             {pad}    Text::declaring(\n\
+             {pad}    {constructor}(\n\
              {pad}        {content_fn},\n\
              {pad}        {layout_style},\n\
+             {fit_arg}\
              {pad}        {style},\n\
              {pad}    )?\n\
              {pad}}};"
@@ -69,6 +72,8 @@ impl ViewGen<'_> {
         let attrs = self.effective_attrs(el);
         let style = self.text_style(&attrs, &transitions, &mut hoists);
         let layout_style = text_layout_style(&attrs);
+        let fit = fit_closure(&attrs, &mut errors);
+        let (constructor, fit_arg) = fit_constructor("Text::runs", "Text::runs_fitting", fit, &pad);
 
         let mut runs: Vec<String> = Vec::new();
         if let Some(content) = el.content.as_deref().filter(|content| !content.is_empty()) {
@@ -134,11 +139,12 @@ impl ViewGen<'_> {
             "{pad}let {var} = {{\n\
              {clones}\
              {prelude}\
-             {pad}    Text::runs(\n\
+             {pad}    {constructor}(\n\
              {pad}        vec![\n\
              {pad}            {runs},\n\
              {pad}        ],\n\
              {pad}        {layout_style},\n\
+             {fit_arg}\
              {pad}        {style},\n\
              {pad}    )?\n\
              {pad}}};"
@@ -291,12 +297,18 @@ impl ViewGen<'_> {
         // Amends what the tree declared rather than building a style from nothing; baking a literal here is why a theme could not say "make the body text 11px".
         let mut modifiers = String::new();
         if let Some(size) = attrs.iter().find(|a| a.key == "font_size") {
-            modifiers.push_str(&length_modifier(
-                "with_font_size",
-                size.value.text(),
-                DEFAULT_SIZE,
-                target,
-            ));
+            match (font_fit(size.value.text()), target) {
+                (Some(_), StyleTarget::Text) => {}
+                (Some(_), StyleTarget::Declared) => modifiers.push_str(
+                    ".with_font_size(::core::compile_error!(\"`font_size:fit(…)` fits one line to a width, so it goes on a `text`, not on what holds or runs inside one\"))",
+                ),
+                (None, _) => modifiers.push_str(&length_modifier(
+                    "with_font_size",
+                    size.value.text(),
+                    DEFAULT_SIZE,
+                    target,
+                )),
+            }
         }
         let color_attr = attrs.iter().find(|a| a.key == "color");
         if let Some(a) = color_attr {
@@ -567,6 +579,85 @@ fn text_length(value: &str) -> Option<(String, bool)> {
         format!("TextLength::Em({})", crate::style::format_f32(em)),
         false,
     ))
+}
+
+/// The inside of a `font_size:fit(…)`, or `None` when the size is not a fit.
+pub(super) fn font_fit(value: &str) -> Option<&str> {
+    value.trim().strip_prefix("fit(")?.strip_suffix(')')
+}
+
+/// The `FontFit` a `fit(…)` builds: a width — a percentage of the box holding the text, a text length, or an expression yielding a `FitWidth` — and an optional `max_height:` length.
+fn font_fit_expr(inner: &str) -> Result<String, String> {
+    let clauses: Vec<String> = crate::transition::split_top_level(inner, ',')
+        .into_iter()
+        .map(|clause| clause.trim().to_string())
+        .filter(|clause| !clause.is_empty())
+        .collect();
+    let Some((width, rest)) = clauses.split_first() else {
+        return Err("`fit()` names no width: write `fit(60%)`, `fit(480)` or `fit(40sw)`".into());
+    };
+    let mut expr = match width.strip_suffix('%') {
+        Some(percent) => match percent.trim().parse::<f32>() {
+            Ok(n) => format!(
+                "FontFit::containing({})",
+                crate::style::format_f32(n / 100.0)
+            ),
+            Err(_) => return Err(format!("`fit({width})`: `{width}` is not a percentage")),
+        },
+        None => format!("FontFit::new({})", fit_length(width)?),
+    };
+    for clause in rest {
+        match clause.split_once(':') {
+            Some((key, value)) if key.trim() == "max_height" => {
+                let _ = write!(expr, ".with_max_height({})", fit_length(value.trim())?);
+            }
+            _ => {
+                return Err(format!(
+                    "`fit(…)` takes a width and then `max_height:`, not `{clause}`"
+                ));
+            }
+        }
+    }
+    Ok(expr)
+}
+
+/// A length inside `fit(…)`: pixels, `em` or a fraction of the surface as `font_size:` spells them, or an expression.
+fn fit_length(value: &str) -> Result<String, String> {
+    if value.is_empty() {
+        return Err("`fit(…)` is missing a length".into());
+    }
+    if let Some((length, _)) = text_length(value) {
+        return Ok(length);
+    }
+    if let Ok(px) = value.parse::<f32>() {
+        return Ok(format!("TextLength::Px({})", crate::style::format_f32(px)));
+    }
+    Ok(super::signals::substitute_reads(value))
+}
+
+/// The closure a fitted `text` is built with, or `None` when it names no fit (or a fit that is an error, pushed onto `errors`).
+fn fit_closure(attrs: &[Attr], errors: &mut Vec<String>) -> Option<String> {
+    let raw = attrs.iter().find(|a| a.key == "font_size")?.value.text();
+    match font_fit_expr(font_fit(raw)?) {
+        Ok(expr) => Some(wrap_signal_clones(&[raw], format!("move || {expr}"))),
+        Err(message) => {
+            errors.push(message);
+            None
+        }
+    }
+}
+
+/// The constructor a `text` calls and the extra argument line a fit adds to it.
+fn fit_constructor(
+    plain: &'static str,
+    fitting: &'static str,
+    fit: Option<String>,
+    pad: &str,
+) -> (&'static str, String) {
+    match fit {
+        Some(closure) => (fitting, format!("{pad}        {closure},\n")),
+        None => (plain, String::new()),
+    }
 }
 
 /// `.{method}(…)` for a length: pixels as they always were, a length with a unit resolved where the target resolves it. A `text` reads the surface reactively only for a fraction of it, so a resize re-styles just the text that depends on it.

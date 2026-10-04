@@ -76,16 +76,39 @@ feature, because a canvas `font` carries only family, size, weight and slant; a 
 ## Faces that arrive later
 
 The font database only grows. Whenever faces are added to it — a declared face fetched by a canvas page, a
-face decoded by `telar_dynamic::FontDecoder`, `renderer_text::fonts::add_faces` — three things follow on the
+face decoded by `telar_dynamic::FontDecoder`, `renderer_text::fonts::add_faces` — four things follow on the
 next frame:
 
 - every shaper, including a renderer's that was built before, takes the new faces and drops what it cached
   without them, so a `FontFamily::Stack` whose first member just arrived resolves to it;
 - `renderer_core::text_metrics_generation()` moves, and `ui_core`'s `relayout_if_dirty`/`compute_layout`
   mark every measured leaf dirty, so each text is measured again once per generation;
+- `use_text_metrics_generation()` moves to the same generation, before that frame lays out, so whatever reads
+  it runs again (see [Text measured by hand](#text-measured-by-hand));
 - the loop is woken, so this happens without waiting for input.
 
 A document build moves the same generation from the page's `loadingdone` event.
+
+### Text measured by hand
+
+A text sized with `font_size:fit(…)` is measured again by layout like any other (see
+[surface-size.md](surface-size.md#a-line-fitted-to-a-width)). Code that measures text itself, with
+`measure_text`, reads `use_text_metrics_generation()` so it runs again when a face lands; otherwise whatever
+it measured in the fallback stays:
+
+```rust
+let natural = memo(move || {
+    use_text_metrics_generation();
+    measure_text("ADRIEL", None, 1.0e6, &probe_style()).0
+});
+```
+
+| Target | The generation moves when |
+| --- | --- |
+| web-dom | the page's `document.fonts` reports `loadingdone` |
+| web canvas | a declared face the page fetched is added to the shaper |
+| desktop, Android, headless | a face is added after startup (`add_faces`, `telar_dynamic::FontDecoder`); the faces in `AppConfig::fonts` are there before the first measure |
+| TUI | never: a cell has no typeface |
 
 ## Declaring faces in Rust
 

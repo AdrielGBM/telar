@@ -23,12 +23,19 @@ impl ViewGen<'_> {
 
         let mut hoists = Vec::new();
         let transitions = std::collections::HashMap::new();
-        let modifiers = self.inheritable_modifiers(
+        let mut modifiers = self.inheritable_modifiers(
             &el.attributes,
             &transitions,
             &mut hoists,
             super::text::StyleTarget::Text,
         );
+        if el
+            .attributes
+            .iter()
+            .any(|a| a.key == "font_size" && super::text::font_fit(a.value.text()).is_some())
+        {
+            modifiers.push_str(".with_font_size(::core::compile_error!(\"`font_size:fit(…)` fits the line of a `text`; an `input` takes a size\"))");
+        }
         let style = wrap_signal_clones(
             &super::text::raw_reactive_values(&el.attributes),
             format!("move |__inherited: TextStyle| __inherited{modifiers}"),

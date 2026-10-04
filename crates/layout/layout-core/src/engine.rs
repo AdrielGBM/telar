@@ -13,8 +13,27 @@ use crate::style::{AvailableSpace, LayoutStyle};
 /// A node in the layout tree. Ids are reused after a node is freed, so a stale one may name a live node.
 pub type NodeId = taffy::NodeId;
 
-/// Per-node measure callback: given the width the node is laid out in — a definite width, or a request for its min-content or max-content size — returns its intrinsic (width, height). Used for text, whose height depends on how many lines it wraps into, and whose min-content width is its longest word rather than zero.
-pub type MeasureFn = Box<dyn FnMut(AvailableSpace) -> (f32, f32)>;
+/// Per-node measure callback: given what it is asked (see [`MeasureInput`]), returns its intrinsic (width, height). Used for text, whose height depends on how many lines it wraps into, and whose min-content width is its longest word rather than zero.
+pub type MeasureFn = Box<dyn FnMut(MeasureInput) -> (f32, f32)>;
+
+/// What a measured leaf is asked.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct MeasureInput {
+    /// The width the leaf is laid out in: a definite width, or a request for its min-content or max-content size.
+    pub width: AvailableSpace,
+    /// The content width of the box holding the leaf, when it is definite: what a fraction the leaf resolves for itself is of, as a box's own `%` is.
+    pub containing_width: Option<f32>,
+}
+
+impl MeasureInput {
+    /// Asked for `width` inside a box of unknown width.
+    pub fn new(width: AvailableSpace) -> Self {
+        Self {
+            width,
+            containing_width: None,
+        }
+    }
+}
 
 /// The layout tree: nodes, their styles, and the measure hooks for the leaves that size themselves.
 pub struct LayoutEngine {
@@ -396,6 +415,7 @@ impl LayoutEngine {
                     height: available_height,
                 },
                 |inputs, _node, context, style| {
+                    let containing_width = inputs.parent_size.width;
                     taffy::compute_leaf_layout(
                         inputs,
                         style,
@@ -408,7 +428,10 @@ impl LayoutEngine {
                                 .width
                                 .map(AvailableSpace::Definite)
                                 .unwrap_or(available.width);
-                            let (mw, mh) = measure(width);
+                            let (mw, mh) = measure(MeasureInput {
+                                width,
+                                containing_width,
+                            });
                             taffy::geometry::Size {
                                 width: known.width.unwrap_or(mw),
                                 height: known.height.unwrap_or(mh),

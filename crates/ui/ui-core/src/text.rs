@@ -14,6 +14,14 @@ use ui_tree::{Component, EventResult, RenderNode};
 use crate::context::mark_dirty;
 use crate::impl_leaf_widget;
 use crate::layout_leaf::LayoutLeaf;
+use crate::text_fit::Fitting;
+
+/// What a text was last measured from: its string, its declared style, and the fit it asked for with the surface that fit read.
+type Measured = (
+    String,
+    TextStyle,
+    Option<(renderer_core::FontFit, geometry_core::Size)>,
+);
 
 /// The run the glyph band is measured from: a capital, an x-height letter and a descender, which between them span the extent a Latin face actually draws in. Any string of the same style is then centred by the same amount, which is what puts a row of labels on one baseline.
 const REFERENCE: &str = "Hxg";
@@ -70,10 +78,14 @@ impl TextRun {
     }
 }
 
-/// Where a text gets its style: given whole, or derived from what the tree above it declared.
+/// Where a text gets its style: given whole, derived from what the tree above it declared, or derived and then fitted to a width.
 enum StyleSource {
     Complete(Rc<dyn Fn() -> TextStyle>),
     Inheriting(Rc<dyn Fn(TextStyle) -> TextStyle>),
+    Fitting(
+        Rc<dyn Fn(TextStyle) -> TextStyle>,
+        Rc<dyn Fn() -> renderer_core::FontFit>,
+    ),
 }
 
 impl Text {
@@ -111,6 +123,21 @@ impl Text {
         )
     }
 
+    /// [`declaring`](Self::declaring) with its size found rather than given: the size that sets its one line to the width `fit_fn` asks for, resolved by layout where it knows the box holding the text. `style_fn` is handed the size being tried, so what it declares in `em` scales with the line. See [`FontFit`](renderer_core::FontFit).
+    pub fn fitting(
+        content_fn: impl Fn() -> String + 'static,
+        layout_style: LayoutStyle,
+        fit_fn: impl Fn() -> renderer_core::FontFit + 'static,
+        style_fn: impl Fn(TextStyle) -> TextStyle + 'static,
+    ) -> Result<Self, LayoutError> {
+        Self::build(
+            Rc::new(content_fn),
+            None,
+            layout_style,
+            StyleSource::Fitting(Rc::new(style_fn), Rc::new(fit_fn)),
+        )
+    }
+
     /// [`new`](Self::new) with byte ranges that style themselves differently from the paragraph — a bold word, a coloured link — shaped and wrapped as one text rather than as separate widgets.
     pub fn spanned(
         content_fn: impl Fn() -> String + 'static,
@@ -131,6 +158,32 @@ impl Text {
         runs: Vec<TextRun>,
         layout_style: LayoutStyle,
         style_fn: impl Fn(TextStyle) -> TextStyle + 'static,
+    ) -> Result<Self, LayoutError> {
+        Self::from_runs(
+            runs,
+            layout_style,
+            StyleSource::Inheriting(Rc::new(style_fn)),
+        )
+    }
+
+    /// [`runs`](Self::runs) fitted to a width, as [`fitting`](Self::fitting) is.
+    pub fn runs_fitting(
+        runs: Vec<TextRun>,
+        layout_style: LayoutStyle,
+        fit_fn: impl Fn() -> renderer_core::FontFit + 'static,
+        style_fn: impl Fn(TextStyle) -> TextStyle + 'static,
+    ) -> Result<Self, LayoutError> {
+        Self::from_runs(
+            runs,
+            layout_style,
+            StyleSource::Fitting(Rc::new(style_fn), Rc::new(fit_fn)),
+        )
+    }
+
+    fn from_runs(
+        runs: Vec<TextRun>,
+        layout_style: LayoutStyle,
+        source: StyleSource,
     ) -> Result<Self, LayoutError> {
         let runs: Rc<[TextRun]> = runs.into();
         let content = {
@@ -153,12 +206,7 @@ impl Text {
             }
             spans
         });
-        Self::build(
-            content,
-            Some(spans),
-            layout_style,
-            StyleSource::Inheriting(Rc::new(style_fn)),
-        )
+        Self::build(content, Some(spans), layout_style, source)
     }
 
     fn build(
@@ -169,28 +217,53 @@ impl Text {
     ) -> Result<Self, LayoutError> {
         // The node does not exist until the leaf is registered, and that call's measure closure already reads the style, so the cell lets the style close over a node older than itself.
         let node_cell = Rc::new(std::cell::Cell::new(None::<layout_core::NodeId>));
-        let style: Rc<dyn Fn() -> TextStyle> = match source {
-            StyleSource::Complete(style_fn) => style_fn,
-            StyleSource::Inheriting(amend) => {
-                let cell = Rc::clone(&node_cell);
-                Rc::new(move || {
-                    let inherited = match cell.get() {
-                        Some(node) => crate::inherit::inherited_text_style(node),
-                        None => crate::inherit::Inherited::initial().text_style(),
-                    };
-                    amend(inherited)
-                })
+        let inherited: Rc<dyn Fn() -> TextStyle> = {
+            let cell = Rc::clone(&node_cell);
+            Rc::new(move || match cell.get() {
+                Some(node) => crate::inherit::inherited_text_style(node),
+                None => crate::inherit::Inherited::initial().text_style(),
+            })
+        };
+        let declared_by = |amend: Rc<dyn Fn(TextStyle) -> TextStyle>| {
+            let inherited = Rc::clone(&inherited);
+            Rc::new(move || amend(inherited())) as Rc<dyn Fn() -> TextStyle>
+        };
+        let (declared, fitting) = match source {
+            StyleSource::Complete(style_fn) => (style_fn, None),
+            StyleSource::Inheriting(amend) => (declared_by(amend), None),
+            StyleSource::Fitting(amend, fit) => (
+                declared_by(Rc::clone(&amend)),
+                Some(Rc::new(Fitting::new(
+                    amend,
+                    fit,
+                    Rc::clone(&inherited),
+                    Rc::clone(&node_cell),
+                ))),
+            ),
+        };
+        let style: Rc<dyn Fn() -> TextStyle> = match &fitting {
+            Some(fitting) => {
+                let fitting = Rc::clone(fitting);
+                Rc::new(move || fitting.drawn_style())
             }
+            None => Rc::clone(&declared),
         };
 
         let measure_content = Rc::clone(&content_fn);
-        let measure_style = Rc::clone(&style);
+        let measure_style = Rc::clone(&declared);
         let measure_spans = spans_fn.clone();
-        let measure = Box::new(move |width: layout_core::AvailableSpace| {
-            let s = (measure_style)();
+        let measure_fitting = fitting.clone();
+        let measure = Box::new(move |input: layout_core::MeasureInput| {
+            let content = (measure_content)();
             // Spans change the extent, so a box measured without them wraps differently from the text drawn into it.
             let spans = measure_spans.as_ref().map(|f| f());
-            crate::text_metrics::measure_in(&(measure_content)(), spans.as_deref(), width, &s)
+            let s = match &measure_fitting {
+                Some(fitting) => {
+                    fitting.measured_style(&content, spans.as_deref(), input.containing_width)
+                }
+                None => (measure_style)(),
+            };
+            crate::text_metrics::measure_in(&content, spans.as_deref(), input.width, &s)
         });
 
         // Stretch overrides any parent align-items, so text fills the cross axis instead of collapsing to 0.
@@ -199,14 +272,21 @@ impl Text {
         node_cell.set(Some(node));
         // Reads what the measure reads, so it subscribes to exactly what the measure depends on, and compares before dirtying: a signal re-set to its own value, or a colour change, would otherwise cost a shaping pass and a relayout for nothing.
         let dirty_content = Rc::clone(&content_fn);
-        let dirty_style = Rc::clone(&style);
-        let measured = RefCell::new(Option::<(String, TextStyle)>::None);
+        let dirty_style = Rc::clone(&declared);
+        let dirty_fit = fitting;
+        let measured = RefCell::new(Option::<Measured>::None);
         let remeasure = effect(move || {
-            let next = ((dirty_content)(), (dirty_style)());
+            let next = (
+                (dirty_content)(),
+                (dirty_style)(),
+                dirty_fit.as_ref().map(|fitting| fitting.watched()),
+            );
             let unchanged = measured
                 .borrow()
                 .as_ref()
-                .is_some_and(|(content, style)| *content == next.0 && style.same_extent(&next.1));
+                .is_some_and(|(content, style, fit)| {
+                    *content == next.0 && style.same_extent(&next.1) && *fit == next.2
+                });
             if unchanged {
                 return;
             }
