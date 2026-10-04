@@ -386,45 +386,55 @@ pub(crate) fn transpile(input: TranspileInput<'_>) -> Result<TranspiledSource, T
     }
 
     if !logic.is_empty() {
-        // A `move` closure at depth 0 starts a statement, so a `let` clone may precede it; inside an unclosed call that would not parse and the clone must wrap the closure instead.
-        let mut arg_depth = 0i32;
-        for (j, line) in logic.lines().enumerate() {
-            let src = Some(logic_line_src(j));
-            if hoisted_uses.contains(&j) {
+        let logic_lines: Vec<&str> = logic.lines().collect();
+        let mut j = 0;
+        while j < logic_lines.len() {
+            if logic_lines[j].is_empty() {
+                code.push("\n", Some(logic_line_src(j)));
+                j += 1;
                 continue;
             }
-            if line.is_empty() {
-                code.push("\n", src);
-                continue;
+            let end = statement_end(&logic_lines, j);
+            let first_move = (j..end).find(|k| {
+                !hoisted_uses.contains(k) && find_move_keyword(logic_lines[*k]).is_some()
+            });
+            let captured: Vec<&str> = first_move
+                .map(|m| {
+                    let from_closure = logic_lines[m..end].join("\n");
+                    signals
+                        .iter()
+                        .filter(|s| s.line_index < m && contains_ident(&from_closure, &s.name))
+                        .map(|s| s.name.as_str())
+                        .collect()
+                })
+                .unwrap_or_default();
+            for name in &captured {
+                code.push(&format!("    let {name}_rsx_mv = {name}.clone();\n"), None);
             }
-            let mut emitted_line = line.to_string();
-            if input.hot_reload
-                && let Some(rewritten) =
-                    crate::signal_scan::hot_rewrite_signal_decl(&emitted_line, &fn_name)
-            {
-                emitted_line = rewritten;
-            }
-            let line_start_depth = arg_depth;
-            arg_depth += arg_depth_delta(line);
-            if line.contains("move") {
-                let captured: Vec<&str> = signals
-                    .iter()
-                    .filter(|s| s.line_index < j && contains_ident(line, &s.name))
-                    .map(|s| s.name.as_str())
-                    .collect();
-                if line_start_depth > 0 {
-                    // Wrap just the closure so it stays a valid expression.
-                    emitted_line = wrap_closure_clones(&emitted_line, &captured);
-                } else {
+            for (k, line) in logic_lines.iter().enumerate().take(end).skip(j) {
+                if hoisted_uses.contains(&k) {
+                    continue;
+                }
+                if line.is_empty() {
+                    code.push("\n", Some(logic_line_src(k)));
+                    continue;
+                }
+                let mut emitted_line = line.to_string();
+                if input.hot_reload
+                    && let Some(rewritten) =
+                        crate::signal_scan::hot_rewrite_signal_decl(&emitted_line, &fn_name)
+                {
+                    emitted_line = rewritten;
+                }
+                if first_move.is_some_and(|m| k >= m) {
                     for name in &captured {
-                        let mv_name = format!("{name}_rsx_mv");
-                        // Injected clone: no `.rsx` counterpart.
-                        code.push(&format!("    let {mv_name} = {name}.clone();\n"), None);
-                        emitted_line = replace_whole_word(&emitted_line, name, &mv_name);
+                        emitted_line =
+                            replace_whole_word(&emitted_line, name, &format!("{name}_rsx_mv"));
                     }
                 }
+                code.push(&format!("    {emitted_line}\n"), Some(logic_line_src(k)));
             }
-            code.push(&format!("    {emitted_line}\n"), src);
+            j = end;
         }
         code.push("\n", None);
     }
@@ -544,24 +554,56 @@ pub(crate) fn transpile(input: TranspileInput<'_>) -> Result<TranspiledSource, T
     })
 }
 
-/// Net change in argument-context depth for `line`: `(`/`[` open it, `)`/`]` close it. Block braces `{}` are statement contexts (a `let` is valid inside them), so they don't count. Literals and comments are skipped so brackets inside them don't miscount. Used by the `[logic]` signal-clone pass to tell a statement-start line from a continuation line inside an open call/array.
-fn arg_depth_delta(line: &str) -> i32 {
+/// Net change in bracket depth for `line` — `(`/`[`/`{` open, `)`/`]`/`}` close — and the last code byte on it, with literals and comments skipped.
+fn bracket_delta_and_last_byte(line: &str) -> (i32, Option<u8>) {
     let bytes = line.as_bytes();
     let mut depth = 0i32;
+    let mut last = None;
     let mut i = 0;
     while i < bytes.len() {
         if let Some(end) = literal_or_comment_end(bytes, i) {
+            if bytes[i] != b'/' {
+                last = Some(b'"');
+            }
             i = end;
             continue;
         }
         match bytes[i] {
-            b'(' | b'[' => depth += 1,
-            b')' | b']' => depth -= 1,
+            b'(' | b'[' | b'{' => depth += 1,
+            b')' | b']' | b'}' => depth -= 1,
             _ => {}
+        }
+        if !bytes[i].is_ascii_whitespace() {
+            last = Some(bytes[i]);
         }
         i += 1;
     }
-    depth
+    (depth, last)
+}
+
+/// Index one past the last line of the Rust statement beginning at `lines[start]`. A line comment is a unit of its own, so the clones land below it, next to the statement they serve. A statement ends on a line that leaves every bracket closed and finishes with `;` or `}`, unless the next code line continues it (`.method()`, `?`, `else`). A formatter is free to break `let x =` from its value or a method chain across lines, and the clone `let`s must precede the whole statement, never land inside it.
+fn statement_end(lines: &[&str], start: usize) -> usize {
+    if lines[start].trim_start().starts_with("//") {
+        return start + 1;
+    }
+    let mut depth = 0i32;
+    for (k, line) in lines.iter().enumerate().skip(start) {
+        let (delta, last) = bracket_delta_and_last_byte(line);
+        depth += delta;
+        if depth > 0 || !matches!(last, Some(b';' | b'}')) {
+            continue;
+        }
+        let next = lines[k + 1..]
+            .iter()
+            .map(|l| l.trim_start())
+            .find(|l| !l.is_empty());
+        let continues =
+            next.is_some_and(|l| l.starts_with('.') || l.starts_with('?') || l.starts_with("else"));
+        if !continues {
+            return k + 1;
+        }
+    }
+    lines.len()
 }
 
 /// Byte index of the first whole-word `move` keyword in `line`, or `None`.
@@ -579,47 +621,6 @@ fn find_move_keyword(line: &str) -> Option<usize> {
         from = pos + 4;
     }
     None
-}
-
-/// Byte index just past the closure that begins at `start`: scans its body tracking bracket depth and stops at the first depth-0 `,` or the first closing bracket that would pop past the closure's own nesting (i.e. one that closes the *enclosing* call), or end of line. Lets a continuation-line closure argument be wrapped without swallowing the surrounding call's `)`/`,`. Literals and comments are skipped, so a `}` or a `,` written inside one does not end the closure early.
-fn closure_end(line: &str, start: usize) -> usize {
-    let bytes = line.as_bytes();
-    let mut depth = 0i32;
-    let mut i = start;
-    while i < bytes.len() {
-        if let Some(end) = literal_or_comment_end(bytes, i) {
-            i = end;
-            continue;
-        }
-        match bytes[i] {
-            b'(' | b'[' | b'{' => depth += 1,
-            b')' | b']' | b'}' if depth == 0 => break,
-            b')' | b']' | b'}' => depth -= 1,
-            b',' if depth == 0 => break,
-            _ => {}
-        }
-        i += 1;
-    }
-    i
-}
-
-/// Wraps the `move` closure on `line` in a clone block — `{ let x_rsx_mv = x.clone(); move |..| ..x_rsx_mv.. }` — for every `captured` signal it references, renaming those signals inside the closure. Used when the closure is a call argument (depth > 0), where a preceding `let` statement would be invalid Rust. Returns `line` unchanged when there is no `move` keyword or nothing to capture.
-fn wrap_closure_clones(line: &str, captured: &[&str]) -> String {
-    if captured.is_empty() {
-        return line.to_string();
-    }
-    let Some(mpos) = find_move_keyword(line) else {
-        return line.to_string();
-    };
-    let end = closure_end(line, mpos);
-    let mut inner = line[mpos..end].to_string();
-    let mut clones = String::new();
-    for name in captured {
-        let mv = format!("{name}_rsx_mv");
-        inner = replace_whole_word(&inner, name, &mv);
-        clones.push_str(&format!("let {mv} = {name}.clone(); "));
-    }
-    format!("{}{{ {clones}{inner} }}{}", &line[..mpos], &line[end..])
 }
 
 /// Whether any node in the view tree is a `children` slot placeholder, so the component function must take a `Slots` argument. Recurses through element children and `if`/`for` branches. The `fixture:` header option of a `[preview]`, if it names one. Quoted or bare, both spellings reach the same path — `fixture:"mock_env"` and `fixture:mock_env` are the same request.

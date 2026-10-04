@@ -332,19 +332,17 @@ fn move_clone_emitted_for_type_annotated_signal() {
     );
 }
 
-// Regression: inside an unclosed call argument the clone must be block-wrapped, not emitted as a preceding `let` — that would land in the argument list and not parse.
+// Regression: a closure argument on its own line gets its clone ahead of the whole call, never inside the argument list where a `let` would not parse.
 #[test]
-fn move_clone_in_call_arg_closure_is_block_wrapped() {
+fn move_clone_in_call_arg_closure_precedes_the_statement() {
     let src =
         "[logic]\nlet s = signal(0i32);\nsetup(\n    move || s.set(1),\n);\n[view]\ntext \"x\"\n";
     let code = transpile_source(src, "demo", None, None).unwrap().rust_code;
     assert!(
-        code.contains("{ let s_rsx_mv = s.clone(); move || s_rsx_mv.set(1) }"),
-        "a call-arg closure's clone must be block-wrapped, not a preceding let:\n{code}"
-    );
-    assert!(
-        !code.contains("\n    let s_rsx_mv = s.clone();\n    move"),
-        "the clone must not be emitted as a preceding statement inside the call args:\n{code}"
+        code.contains(
+            "    let s_rsx_mv = s.clone();\n    setup(\n        move || s_rsx_mv.set(1),\n    );"
+        ),
+        "the clone must precede the call:\n{code}"
     );
 }
 
@@ -2593,4 +2591,67 @@ fn forwarded_children_reach_the_named_slot_they_are_routed_to() {
         .find("__slots.push(Some(\"header\"), __item);")
         .unwrap_or_else(|| panic!("and land in the header slot:\n{code}"));
     assert!(guard < routed, "inside that guard:\n{code}");
+}
+
+fn assert_logic_parses(code: &str) {
+    if let Err(e) = syn::parse_file(code) {
+        panic!("generated code does not parse: {e}\n{code}");
+    }
+}
+
+fn transpile_formatted(src: &str) -> (String, String) {
+    let formatted = telar_parser::format::format_document(src).unwrap_or_else(|| src.to_string());
+    let code = transpile_source(&formatted, "demo", None, None)
+        .unwrap()
+        .rust_code;
+    (formatted, code)
+}
+
+// Regression (T-12.7): rustfmt breaks a long `let x = memo(move || ..)` after the `=`, and the clone `let`s must still precede the whole statement.
+#[test]
+fn fmt_split_let_memo_keeps_clone_before_statement() {
+    let src = "[logic]\nlet first_signal = signal(0i32);\nlet second_signal = signal(1i32);\nlet combined_value_of_both = memo(move || crate::helpers::combine(first_signal.get(), second_signal.get()));\n[view]\ntext \"hi\"\n";
+    let (formatted, code) = transpile_formatted(src);
+    assert!(
+        formatted.contains("combined_value_of_both =\n"),
+        "fixture no longer exercises the split:\n{formatted}"
+    );
+    assert!(
+        code.contains("    let first_signal_rsx_mv = first_signal.clone();\n")
+            && code.contains("let combined_value_of_both =\n"),
+        "{code}"
+    );
+    assert!(
+        !code.contains("=\n    let "),
+        "a clone landed between `let x =` and its value:\n{code}"
+    );
+    assert_logic_parses(&code);
+}
+
+// Statement shapes a formatter or an author spreads over several lines must all keep their clones ahead of the statement.
+#[test]
+fn multi_line_statements_hoist_clones_before_the_statement() {
+    let shapes = [
+        "let b =\n    memo(move || s.get() + 1);",
+        "let b = memo(\n    move || s.get() + 1,\n);",
+        "let b = memo(move || {\n    let v = s.get();\n    v + 1\n});",
+        "let b =\n    memo(move || {\n        let v = s.get();\n        v + 1\n    });",
+        "let b = s\n    .map(|v| v)\n    .and_then(move |v| Some(v + s.get()));",
+        "let b = {\n    let k = 2;\n    memo(move || s.get() * k)\n};",
+        "let b = if true {\n    memo(move || s.get())\n} else {\n    memo(move || s.get() + 1)\n};",
+        "effect(move || {\n    let _ = s.get();\n});",
+        "setup(\n    move || s.set(1),\n);",
+    ];
+    for shape in shapes {
+        let src = format!("[logic]\nlet s = signal(0i32);\n{shape}\n[view]\ntext \"x\"\n");
+        let (_, code) = transpile_formatted(&src);
+        assert!(
+            code.contains("    let s_rsx_mv = s.clone();\n"),
+            "{shape}\n{code}"
+        );
+        let clone_at = code.find("let s_rsx_mv = s.clone();").unwrap();
+        let stmt_at = code.find(shape.lines().next().unwrap().trim()).unwrap_or(0);
+        assert!(clone_at < stmt_at || stmt_at == 0, "{shape}\n{code}");
+        assert_logic_parses(&code);
+    }
 }
