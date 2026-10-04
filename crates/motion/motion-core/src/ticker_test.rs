@@ -125,3 +125,28 @@ fn an_application_can_decline_to_follow_it() {
     follow_reduced_motion(true);
     assert_eq!(seen, (Some(1.0), Some(1.0)));
 }
+
+#[test]
+fn the_apps_override_wins_over_the_system() {
+    preferences_core::set_reduced_motion_override(Some(true));
+    let forced_on = scales_seen(Some(false));
+    preferences_core::set_reduced_motion_override(Some(false));
+    let forced_off = scales_seen(Some(true));
+    preferences_core::set_reduced_motion_override(None);
+    let followed = scales_seen(Some(true));
+    assert_eq!(
+        forced_on,
+        (Some(0.0), Some(1.0)),
+        "reduced where the system is not"
+    );
+    assert_eq!(
+        forced_off,
+        (Some(1.0), Some(1.0)),
+        "full motion where the system asks for less"
+    );
+    assert_eq!(
+        followed,
+        (Some(0.0), Some(1.0)),
+        "cleared, it follows the system again"
+    );
+}

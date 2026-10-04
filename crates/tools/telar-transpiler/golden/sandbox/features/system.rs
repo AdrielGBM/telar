@@ -22,14 +22,13 @@ pub fn system(props: SystemProps, children: Children) -> Result<Box<dyn LayoutIt
     }
 
     let scheme = memo(|| reading(telar::use_color_scheme()));
-    let reduced = memo(|| reading(telar::use_reduced_motion()));
+    let reduced = memo(|| reading(telar::use_system_reduced_motion()));
     let contrast = memo(|| reading(telar::use_high_contrast()));
     let locales = memo(|| {
         let locales = telar::use_preferred_locales();
         if locales.is_empty() { "none reported".to_string() } else { locales.join(", ") }
     });
     let negotiated = memo(|| telar::negotiate_locale(&telar::use_preferred_locales(), &["es", "en"], "es").to_string());
-    let pulse = signal(0.0f32);
     let chosen = memo(|| telar::use_scheme_preference().as_str().to_string());
     let safe_area = memo(|| {
         let insets = telar::use_safe_area_insets();
@@ -128,7 +127,7 @@ pub fn system(props: SystemProps, children: Children) -> Result<Box<dyn LayoutIt
                         card(CardProps::props().gap(6.0).build(), __deferred)?
                     };
                     __children.push(box_item(__node_2));
-                    let __node_3 = code_line(CodeLineProps::props().code("use_color_scheme()   ·   use_reduced_motion()   ·   use_high_contrast()   ·   use_preferred_locales()").build(), Children::default())?;
+                    let __node_3 = code_line(CodeLineProps::props().code("use_color_scheme()   ·   use_system_reduced_motion()   ·   use_high_contrast()   ·   use_preferred_locales()").build(), Children::default())?;
                     __children.push(box_item(__node_3));
                     __slots.extend_default(__children);
                     Ok(__slots)
@@ -257,54 +256,7 @@ pub fn system(props: SystemProps, children: Children) -> Result<Box<dyn LayoutIt
             );
             example(ExampleProps::props().title("A scheme the person chooses, kept between runs").build(), __deferred)?
         };
-        let __node_13 = {
-            let __deferred = Children::new(
-                {
-                    let theme = theme.clone();
-                    let pulse = pulse.clone();
-                move || {
-                    let theme = theme.clone();
-                    let pulse = pulse.clone();
-                    let mut __slots = Slots::new();
-                    let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-                    let __node_14 = {
-                        let __deferred = Children::new(
-                            {
-                                let theme = theme.clone();
-                                let pulse = pulse.clone();
-                            move || {
-                                let theme = theme.clone();
-                                let pulse = pulse.clone();
-                                let mut __slots = Slots::new();
-                                let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-                                let __node_15 = button(ButtonProps::props().label("Slide").fill(Reactive::of({ let theme = theme.clone(); move || theme.get().primary })).on_press(std::rc::Rc::new({ let pulse = pulse.clone(); move || pulse.set(if pulse.get() < 0.5 { 1.0 } else { 0.0 }) })).build(), Children::default())?;
-                                __children.push(box_item(__node_15));
-                                let __sbox_0 = {
-                                    let __sbox_1 = {
-                                        let __transition_0 = motion::Animated::new(((pulse.get() * 220.0)) as f32, motion::tween(std::time::Duration::from_millis(1200), motion::Easing::EaseInOut));
-                                        StyledContainer::new(LayoutStyle::new().flex_column().height(12.0).width(40.0), { let theme = theme.clone(); move |_| RectStyle::default().with_fill(theme.get().primary).with_radius(BorderRadius::all(6.0)) }, children![])?.with_transform({ let pulse = pulse.clone(); move |__r: Rect| box_transform(__r, (0) as f32, (1) as f32, (1) as f32, { __transition_0.retarget(((pulse.get() * 220.0)) as f32); __transition_0.get() }, (0) as f32) })
-                                    };
-                                    StyledContainer::new(LayoutStyle::new().flex_column().height(12.0).width(260.0), { let theme = theme.clone(); move |_| RectStyle::default().with_fill(theme.get().surface_alt).with_radius(BorderRadius::all(6.0)) }, children![__sbox_1])?
-                                };
-                                __children.push(box_item(__sbox_0));
-                                __slots.extend_default(__children);
-                                Ok(__slots)
-                            }
-                            }
-                        );
-                        card(CardProps::props().gap(12.0).build(), __deferred)?
-                    };
-                    __children.push(box_item(__node_14));
-                    let __node_16 = code_line(CodeLineProps::props().code("follow_reduced_motion(false)   // opt out").build(), Children::default())?;
-                    __children.push(box_item(__node_16));
-                    __slots.extend_default(__children);
-                    Ok(__slots)
-                }
-                }
-            );
-            example(ExampleProps::props().title("Reduced motion — the bar slides, or jumps straight to its end").build(), __deferred)?
-        };
-        Container::new(LayoutStyle::new().flex_column().gap(20.0), children![__node_0, __node_1, __node_4, __node_7, __node_13])?
+        Container::new(LayoutStyle::new().flex_column().gap(20.0), children![__node_0, __node_1, __node_4, __node_7])?
     };
     Ok(Box::new(__col_0))
 }

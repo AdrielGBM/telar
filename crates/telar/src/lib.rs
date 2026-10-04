@@ -224,8 +224,10 @@ pub use platform_core::{
 };
 #[cfg(feature = "runtime")]
 pub use preferences_core::{
-    set_system_preferences, system_preferences, use_color_scheme, use_high_contrast,
-    use_preferred_locales, use_reduced_motion, use_system_preferences,
+    reduced_motion_override, set_reduced_motion_override, set_system_preferences,
+    system_preferences, use_color_scheme, use_high_contrast, use_preferred_locales,
+    use_reduced_motion, use_reduced_motion_override, use_system_preferences,
+    use_system_reduced_motion,
 };
 #[cfg(feature = "runtime")]
 pub use services_core::{Scope, context, provide, set_context, try_inject, with_service};

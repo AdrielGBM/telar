@@ -78,11 +78,12 @@ An application that finds a frozen spinner reads as hung is free to build its ow
 `Tickable::reducible() -> false`, the same escape hatch a fling and a glide use; the default stays reducible
 because most spinners are decorative enough that "less motion" should mean less motion.
 
-When the user asks their system for less motion (`use_reduced_motion() == Some(true)`, see
-[system-preferences.md](system-preferences.md)), the ticker hands every animation a scale of `0.0` without
-touching the one the application set, so turning the preference off restores it. It is read on every tick, so
-the change applies from the next frame on every target that reports the preference. Where the preference is
-unknown (a terminal, a headless run that did not declare it) nothing changes.
+When the user asks for less motion (`use_reduced_motion() == Some(true)`: their system's preference, or the
+app's override, see [system-preferences.md](system-preferences.md#choosing-reduced-motion)), the ticker
+hands every animation a scale of `0.0` without touching the one the application set, so turning the preference
+off restores it. It is read on every tick, so the change applies from the next frame: on every target that
+reports the preference, and on every target for an override. Where the preference is unknown and the app sets
+no override (a terminal, a headless run that did not declare it) nothing changes.
 
 Two things are exempt:
 

@@ -1,4 +1,4 @@
-//! The user's system preferences as reactive state: written by the runner from `Event::SystemPreferencesChanged`, read by anything that should follow them.
+//! The user's system preferences as reactive state: written by the runner from `Event::SystemPreferencesChanged`, read by anything that should follow them. Beside them, the reduced-motion choice an app makes for itself, which wins over the system's while it is set.
 //!
 //! One signal per field, so a view that reads only the locales does not re-render when the colour scheme flips.
 //!
@@ -14,6 +14,7 @@ thread_local! {
     static REDUCED_MOTION: RwSignal<Option<bool>> = detached(|| signal(None));
     static HIGH_CONTRAST: RwSignal<Option<bool>> = detached(|| signal(None));
     static LOCALES: RwSignal<Vec<String>> = detached(|| signal(Vec::new()));
+    static REDUCED_MOTION_OVERRIDE: RwSignal<Option<bool>> = detached(|| signal(None));
 }
 
 /// Replaces the preferences everything reads, notifying only the fields that changed. The runner calls this; a test or a tool without one can call it to stand in for the platform.
@@ -43,17 +44,17 @@ fn replace<T: Clone + PartialEq + 'static>(
     });
 }
 
-/// Reactive read of every field; subscribes the caller to all four.
+/// Reactive read of every field as the system reported it; subscribes the caller to all four.
 pub fn use_system_preferences() -> SystemPreferences {
     SystemPreferences {
         color_scheme: use_color_scheme(),
-        reduced_motion: use_reduced_motion(),
+        reduced_motion: use_system_reduced_motion(),
         high_contrast: use_high_contrast(),
         locales: use_preferred_locales(),
     }
 }
 
-/// Non-reactive read, for event handlers and bridges.
+/// Non-reactive read of what the system reported, for event handlers and bridges.
 pub fn system_preferences() -> SystemPreferences {
     SystemPreferences {
         color_scheme: COLOR_SCHEME.with(|s| s.peek()),
@@ -68,14 +69,38 @@ pub fn use_color_scheme() -> Option<ColorScheme> {
     COLOR_SCHEME.with(|s| s.get())
 }
 
-/// `Some(true)` when the user asked for less motion; `None` where the platform cannot say.
+/// Whether the app runs with less motion: the [`reduced_motion_override`] while one is set, the system's preference otherwise. `None` only while both are unknown.
 pub fn use_reduced_motion() -> Option<bool> {
-    REDUCED_MOTION.with(|s| s.get())
+    use_reduced_motion_override().or_else(use_system_reduced_motion)
 }
 
 /// Non-reactive [`use_reduced_motion`], for the frame clock: it asks on every tick and must neither subscribe whatever happens to be running nor clone the locale list to answer.
 pub fn reduced_motion() -> Option<bool> {
-    REDUCED_MOTION.with(|s| s.peek())
+    reduced_motion_override().or_else(|| REDUCED_MOTION.with(|s| s.peek()))
+}
+
+/// `Some(true)` when the user asked the system for less motion; `None` where the platform cannot say. Ignores the app's [`reduced_motion_override`].
+pub fn use_system_reduced_motion() -> Option<bool> {
+    REDUCED_MOTION.with(|s| s.get())
+}
+
+/// Fixes reduced motion for this app whatever the system says: `Some(true)` for less motion, `Some(false)` for all of it, `None` to follow the system again. A fixed value holds until the app changes it, through every change the system reports meanwhile.
+pub fn set_reduced_motion_override(reduced: Option<bool>) {
+    REDUCED_MOTION_OVERRIDE.with(|s| {
+        if s.peek() != reduced {
+            s.set(reduced);
+        }
+    });
+}
+
+/// The override now, without subscribing.
+pub fn reduced_motion_override() -> Option<bool> {
+    REDUCED_MOTION_OVERRIDE.with(|s| s.peek())
+}
+
+/// The override, read reactively.
+pub fn use_reduced_motion_override() -> Option<bool> {
+    REDUCED_MOTION_OVERRIDE.with(|s| s.get())
 }
 
 /// `Some(true)` when the user asked for more contrast; `None` where the platform cannot say.

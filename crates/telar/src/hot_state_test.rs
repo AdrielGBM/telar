@@ -63,3 +63,18 @@ fn a_chosen_scheme_survives_snapshot_restore() {
         theme_core::SchemePreference::Dark
     );
 }
+
+#[test]
+fn a_reduced_motion_override_survives_snapshot_restore() {
+    preferences_core::set_reduced_motion_override(Some(true));
+    let blob = hot_snapshot_json();
+    preferences_core::set_reduced_motion_override(None);
+    hot_restore_json(&blob);
+    assert_eq!(preferences_core::reduced_motion_override(), Some(true));
+}
+
+#[test]
+fn following_the_system_adds_nothing_to_the_snapshot() {
+    preferences_core::set_reduced_motion_override(None);
+    assert!(!hot_snapshot_json().contains(REDUCED_MOTION_OVERRIDE_KEY));
+}

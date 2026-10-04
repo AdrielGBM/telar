@@ -19,11 +19,13 @@ struct Recorder {
     mode_in_frame: Rc<RefCell<Option<String>>>,
     snapshots: Rc<RefCell<Vec<SystemPreferences>>>,
     seen_at_build: Rc<RefCell<Option<SystemPreferences>>>,
+    reduced_motion_at_build: Rc<RefCell<Option<Option<bool>>>>,
 }
 
 impl App for Recorder {
     fn root(&self) -> Box<dyn Component> {
         *self.seen_at_build.borrow_mut() = Some(system_preferences());
+        *self.reduced_motion_at_build.borrow_mut() = Some(telar::use_reduced_motion());
         self.fill.root()
     }
 
@@ -44,6 +46,7 @@ fn run(preferences: SystemPreferences) -> Recorder {
         mode_in_frame: Rc::default(),
         snapshots: Rc::default(),
         seen_at_build: Rc::default(),
+        reduced_motion_at_build: Rc::default(),
     };
     let observed = Recorder {
         fill: FillApp {
@@ -52,6 +55,7 @@ fn run(preferences: SystemPreferences) -> Recorder {
         mode_in_frame: recorder.mode_in_frame.clone(),
         snapshots: recorder.snapshots.clone(),
         seen_at_build: recorder.seen_at_build.clone(),
+        reduced_motion_at_build: recorder.reduced_motion_at_build.clone(),
     };
     telar::register_mode("day", || {});
     telar::register_mode("night", || {});
@@ -93,4 +97,27 @@ fn an_unknown_scheme_leaves_the_theme_on_its_default() {
     });
     assert_eq!(observed.mode_in_frame.borrow().as_deref(), Some("day"));
     assert_eq!(observed.snapshots.borrow().len(), 1);
+}
+
+#[test]
+fn the_apps_reduced_motion_override_outlasts_the_systems_snapshot() {
+    telar::set_reduced_motion_override(Some(false));
+    let observed = run(SystemPreferences {
+        reduced_motion: Some(true),
+        ..SystemPreferences::default()
+    });
+    telar::set_reduced_motion_override(None);
+    assert_eq!(
+        *observed.reduced_motion_at_build.borrow(),
+        Some(Some(false))
+    );
+    assert_eq!(
+        observed
+            .seen_at_build
+            .borrow()
+            .as_ref()
+            .map(|p| p.reduced_motion),
+        Some(Some(true)),
+        "the snapshot still says what the system reported"
+    );
 }

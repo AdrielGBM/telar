@@ -173,7 +173,7 @@ pub fn scale() -> f32 {
     REGISTRY.with(|r| r.borrow().scale)
 }
 
-/// Whether the user's reduced-motion preference zeroes the time scale, which it does unless an application says otherwise.
+/// Whether reduced motion zeroes the time scale, which it does unless an application says otherwise. Reduced motion is the app's override while it sets one (`set_reduced_motion_override`), the user's system preference otherwise.
 ///
 /// With it on and the preference set, every animation jumps to its end as a zero [`set_scale`] would, while momentum a gesture set going (see [`Tickable::reducible`]) keeps moving. Turn it off only for an application that tones its motion down itself, by reading `use_reduced_motion` and choosing gentler animations: an application that simply prefers its animations is overriding the user.
 pub fn follow_reduced_motion(follow: bool) {

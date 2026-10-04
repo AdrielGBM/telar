@@ -1,7 +1,7 @@
 # telar-preferences-core
 
 The user's system preferences as reactive state for Telar: colour scheme, reduced motion, contrast and
-preferred locales.
+preferred locales, and the app's own reduced-motion override, which wins over the system's while it is set.
 
 Part of [Telar](https://github.com/AdrielGBM/telar), a modular Rust UI framework with its own template
 language, reactive signals and a self-contained renderer.

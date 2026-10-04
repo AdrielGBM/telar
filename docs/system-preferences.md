@@ -29,12 +29,13 @@ flips.
 
 | Function | Reactive | Returns |
 | --- | --- | --- |
-| `use_system_preferences()` | yes, all four fields | `SystemPreferences` |
+| `use_system_preferences()` | yes, all four fields | `SystemPreferences`, as the system reported it |
 | `use_color_scheme()` | yes | `Option<ColorScheme>` |
-| `use_reduced_motion()` | yes | `Option<bool>` |
+| `use_reduced_motion()` | yes | `Option<bool>`, the app's override while it sets one (see [Choosing reduced motion](#choosing-reduced-motion)) |
+| `use_system_reduced_motion()` | yes | `Option<bool>`, the system's alone |
 | `use_high_contrast()` | yes | `Option<bool>` |
 | `use_preferred_locales()` | yes | `Vec<String>` |
-| `system_preferences()` | no | `SystemPreferences`, for event handlers |
+| `system_preferences()` | no | `SystemPreferences` as the system reported it, for event handlers |
 
 The tree is built after the first snapshot arrives, so the first layout already follows it. There is no
 flash of the wrong theme.
@@ -63,7 +64,7 @@ facade to do so.
 | Preference | Follower | Behaviour |
 | --- | --- | --- |
 | Colour scheme | `follow_system(light, dark)` (theme) | Selects `light` or `dark` as the resolved scheme changes: the system's, or the person's choice (see [Choosing a scheme](#choosing-a-scheme)). Under `System`, an unknown scheme leaves an active mode alone and selects `light` only if no mode is active yet. A manual `set_mode` of another mode wins until the next change. |
-| Reduced motion | the motion ticker, by default | Every animation jumps to its end; scroll momentum keeps moving. `motion::follow_reduced_motion(false)` opts out. See [animations.md](animations.md#d5-one-time-scale-and-reduced-motion-zeroes-it). |
+| Reduced motion | the motion ticker, by default | Follows `use_reduced_motion()`: the system's preference, or the app's override (see [Choosing reduced motion](#choosing-reduced-motion)). Every animation jumps to its end; scroll momentum keeps moving. `motion::follow_reduced_motion(false)` opts out. See [animations.md](animations.md#d5-one-time-scale-and-reduced-motion-zeroes-it). |
 | Locales | `follow_system_locale(available, fallback)` | Sets the active locale to `negotiate_locale(&use_preferred_locales(), available, fallback)`, again whenever the list changes. An empty list leaves an active locale alone. |
 | Locales, once | `follow_location_locale(available, base)` | For an app whose address carries its locale: the system's list is negotiated only when the address the app opens at names none and the person never chose one, and is not followed after. See [docs/location.md](location.md#the-locale-in-the-location). |
 | High contrast | nothing built in | An application reads `use_high_contrast()` and picks its own palette. |
@@ -80,6 +81,40 @@ hands it back. `use_resolved_scheme()` is the scheme the app is in (the preferen
 `use_color_scheme()`, a system that reports none taken as light), `use_scheme_preference()` the choice itself,
 and `is_dark()` and `use_mode()` read the active mode reactively. The choice is app state: it is the same on
 every target, survives a hot reload, and persists between sessions where the target keeps preferences.
+
+### Choosing reduced motion
+
+A person can ask the app itself for less motion, or for all of it, whatever the system says:
+`set_reduced_motion_override(Some(true))` or `Some(false)`. The choice holds until the app changes it again,
+through every change the system reports meanwhile; `None` hands it back. `use_reduced_motion()` is then the
+value in effect, and the motion ticker follows that same value, so an override reduces every animation the
+system's preference would. `use_system_reduced_motion()` and `use_system_preferences()` still answer what the
+system said, and `use_reduced_motion_override()` the choice itself.
+
+```rust
+use telar::{set_reduced_motion_override, use_reduced_motion, use_system_reduced_motion};
+
+set_reduced_motion_override(Some(true));         // less motion here, whatever the system says
+let calm = use_reduced_motion() == Some(true);   // true
+let system = use_system_reduced_motion();        // unchanged
+set_reduced_motion_override(None);               // follow the system again
+```
+
+In `.rsx`, a control that offers the choice calls it from a handler:
+
+```rsx
+button label:"Less motion" on_press:(|| telar::set_reduced_motion_override(Some(true)))
+button label:"Follow the system" ghost on_press:(|| telar::set_reduced_motion_override(None))
+```
+
+The override is meant for that: a choice the person makes in the app. An application that merely prefers its own
+animations should not set it, nor turn `follow_reduced_motion` off.
+
+Like the scheme, it is app state, so it behaves the same on every target. It persists between sessions in the
+target's preference store under `telar.reduced_motion` (`localStorage` on the web, a file in the config
+directory on desktop, a terminal and Android, memory in a headless run), and survives a hot reload. It belongs
+to the runtime that set it: the snapshot a `telar-plugin` host forwards is what the system reported, so a
+plugin keeps following the system, or its own override, rather than its host's.
 
 ### Negotiating a locale
 

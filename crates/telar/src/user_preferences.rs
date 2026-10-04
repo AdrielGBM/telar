@@ -8,6 +8,9 @@ pub const SCHEME_KEY: &str = "telar.scheme";
 /// The key the locale a person last read the app in is kept under, by an app whose address carries it (see [`follow_location_locale`](crate::follow_location_locale)).
 pub const LOCALE_KEY: &str = "telar.locale";
 
+/// The key the app's reduced-motion override is kept under (see [`set_reduced_motion_override`](crate::set_reduced_motion_override)): `true` or `false`, and absent while the app follows the system.
+pub const REDUCED_MOTION_KEY: &str = "telar.reduced_motion";
+
 /// Installs the target's preference store for `app_name` and brings back what Telar keeps in it. Every runner calls it once, where it installs the app's paths.
 pub(crate) fn install(app_name: &str) {
     #[cfg(all(feature = "web-dom", target_arch = "wasm32"))]
@@ -23,6 +26,7 @@ pub(crate) fn install(app_name: &str) {
     #[cfg(not(all(feature = "web-dom", target_arch = "wasm32")))]
     let _ = app_name;
     follow_stored_scheme();
+    follow_stored_reduced_motion();
 }
 
 /// Restores the scheme a person chose, then keeps it as they change it.
@@ -36,6 +40,21 @@ pub(crate) fn follow_stored_scheme() {
     reactive_core::effect(|| {
         let preference = theme_core::use_scheme_preference();
         services_core::store_preference(SCHEME_KEY, Some(preference.as_str()));
+    });
+}
+
+/// Restores the reduced-motion override a person chose, then keeps it as they change it.
+pub(crate) fn follow_stored_reduced_motion() {
+    if let Some(reduced) =
+        services_core::stored_preference(REDUCED_MOTION_KEY).and_then(|word| word.parse().ok())
+    {
+        preferences_core::set_reduced_motion_override(Some(reduced));
+    }
+    let _scope = reactive_core::detached(reactive_core::owner_scope);
+    reactive_core::effect(|| {
+        let word =
+            preferences_core::use_reduced_motion_override().map(|reduced| reduced.to_string());
+        services_core::store_preference(REDUCED_MOTION_KEY, word.as_deref());
     });
 }
 

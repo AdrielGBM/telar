@@ -94,3 +94,75 @@ fn the_frame_clock_read_answers_without_subscribing() {
     assert_eq!(reduced_motion(), Some(true));
     assert_eq!(runs.get(), 1, "a peek must not re-run its caller");
 }
+
+fn reduced(system: Option<bool>) -> SystemPreferences {
+    SystemPreferences {
+        reduced_motion: system,
+        ..SystemPreferences::default()
+    }
+}
+
+#[test]
+fn without_an_override_reduced_motion_is_the_systems() {
+    set_system_preferences(reduced(Some(true)));
+    assert_eq!(reduced_motion_override(), None);
+    assert_eq!(use_reduced_motion(), Some(true));
+    assert_eq!(reduced_motion(), Some(true));
+}
+
+#[test]
+fn an_override_wins_over_the_system_until_it_is_cleared() {
+    set_system_preferences(reduced(Some(true)));
+    set_reduced_motion_override(Some(false));
+    assert_eq!(use_reduced_motion(), Some(false));
+    assert_eq!(reduced_motion(), Some(false));
+
+    set_system_preferences(reduced(None));
+    set_reduced_motion_override(Some(true));
+    assert_eq!(
+        use_reduced_motion(),
+        Some(true),
+        "it also answers where the system cannot"
+    );
+
+    set_system_preferences(reduced(Some(false)));
+    assert_eq!(
+        reduced_motion(),
+        Some(true),
+        "a system change does not undo it"
+    );
+
+    set_reduced_motion_override(None);
+    assert_eq!(use_reduced_motion(), Some(false));
+}
+
+#[test]
+fn the_system_snapshot_ignores_the_override() {
+    set_system_preferences(reduced(Some(true)));
+    set_reduced_motion_override(Some(false));
+    assert_eq!(use_system_reduced_motion(), Some(true));
+    assert_eq!(system_preferences().reduced_motion, Some(true));
+    assert_eq!(use_system_preferences().reduced_motion, Some(true));
+}
+
+#[test]
+fn a_reader_of_reduced_motion_hears_the_override() {
+    set_system_preferences(reduced(Some(false)));
+    let (runs, _effect) = count_runs(|| {
+        use_reduced_motion();
+    });
+    set_reduced_motion_override(Some(true));
+    assert_eq!(runs.get(), 2);
+    set_reduced_motion_override(Some(true));
+    assert_eq!(runs.get(), 2, "setting the same override notifies nobody");
+}
+
+#[test]
+fn a_forced_value_is_not_disturbed_by_the_system() {
+    set_reduced_motion_override(Some(true));
+    let (runs, _effect) = count_runs(|| {
+        use_reduced_motion();
+    });
+    set_system_preferences(reduced(Some(false)));
+    assert_eq!(runs.get(), 1);
+}
