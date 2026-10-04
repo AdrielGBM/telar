@@ -166,6 +166,13 @@ wires what it finds there instead of producing it. Every source and every genera
 against that index before a line of it is used, so an artifact that has fallen behind is never quietly
 compiled.
 
+A `.rsx` the transpiler refuses is reported with its location, in the form rustc prints
+(`/path/to/src/home.rsx:12: unterminated string literal`). `cargo telar transpile` exits non-zero on it; the
+commands that go on to build print it and let the build fail with the same text. The reason is also recorded
+beside the index (`.telar/<flavour>.failure.json`), so a build started any other way — a plain `cargo build`,
+the editor's check — reports that error on the macro call instead of only saying the artifact no longer
+answers. The record is believed only while the file it names is byte-identical, and a successful run deletes it.
+
 All of it lands under `.telar/`, and `cargo telar check` / `dev` / `build` / `test` / `preview` refresh it
 before they invoke cargo. A plain `cargo build` does not, and fails with a message naming the command that
 would. Add it to CI ahead of whatever compiles your app.

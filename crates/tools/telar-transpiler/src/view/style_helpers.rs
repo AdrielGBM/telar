@@ -177,6 +177,7 @@ impl ViewGen<'_> {
         hoists: &mut Vec<String>,
     ) -> String {
         let value = attr.value.text().trim();
+        let value = super::redundant_parens(value).unwrap_or(value).trim();
         let is_reactive = value.contains('$');
         let is_static = !is_reactive && value.parse::<f32>().is_ok();
         let expr = if is_reactive {
@@ -196,15 +197,19 @@ impl ViewGen<'_> {
             hoists.push(format!(
                 "let {name} = motion::Animated::new({expr}, {curve});"
             ));
-            if is_static {
-                format!("move || {{ {name}.retarget({expr}); {name}.get() }}")
-            } else {
-                format!("{{ {clone_prefix}move || {{ {name}.retarget({expr}); {name}.get() }} }}")
+            let closure = format!("move || {{ {name}.retarget({expr}); {name}.get() }}");
+            match clone_prefix.is_empty() {
+                true => closure,
+                false => format!("{{ {clone_prefix}{closure} }}"),
             }
         } else if is_static {
             format!("|| {expr}")
         } else {
-            format!("{{ {clone_prefix}move || {expr} }}")
+            let closure = format!("move || {expr}");
+            match clone_prefix.is_empty() {
+                true => closure,
+                false => format!("{{ {clone_prefix}{closure} }}"),
+            }
         }
     }
 

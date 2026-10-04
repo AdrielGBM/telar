@@ -65,7 +65,9 @@ pub fn run(args: Vec<String>) {
         TelarCommand::Bake => bake_workspace(),
         TelarCommand::Transpile => {
             bake_workspace();
-            transpile_workspace()
+            if !transpile_workspace() {
+                std::process::exit(1);
+            }
         }
         TelarCommand::Doctor => run_doctor_cmd(),
         TelarCommand::Fmt(args) => run_fmt_cmd(args),

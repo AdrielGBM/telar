@@ -5,8 +5,8 @@ mod artifact;
 use std::path::{Path, PathBuf};
 
 pub use artifact::{
-    BUILD_ARTIFACT_FORMAT, BuildEntry, BuildIndex, read_build_index, relative_source,
-    write_build_index,
+    BUILD_ARTIFACT_FORMAT, BuildEntry, BuildFailure, BuildIndex, clear_build_failure,
+    read_build_failure, read_build_index, relative_source, write_build_failure, write_build_index,
 };
 
 /// Which shape a package's `.rsx` is compiled into: hot-reloadable or not, carrying `[preview]` fns or not.
@@ -70,6 +70,16 @@ impl BuildFlavour {
             Self::Hot => "build-hot.json",
             Self::Preview => "build-preview.json",
             Self::HotPreview => "build-hot-preview.json",
+        }
+    }
+
+    /// Where a transpile that failed leaves its reason, beside the index it could not write.
+    pub fn failure_filename(self) -> &'static str {
+        match self {
+            Self::Plain => "build.failure.json",
+            Self::Hot => "build-hot.failure.json",
+            Self::Preview => "build-preview.failure.json",
+            Self::HotPreview => "build-hot-preview.failure.json",
         }
     }
 

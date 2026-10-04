@@ -2655,3 +2655,20 @@ fn multi_line_statements_hoist_clones_before_the_statement() {
         assert_logic_parses(&code);
     }
 }
+
+/// `shown:(…)` and `opacity:(…)` hold their value in the markup's delimiters, which are not Rust: spliced as written they warn `unused_parens` in generated code the author cannot edit.
+#[test]
+fn layout_and_opacity_values_leave_their_delimiters_behind() {
+    let out = transpile_source(
+        "[logic]\nlet open = signal(true);\nlet fade = signal(0.5);\n[view]\nbox shown:(open.get()) opacity:(fade.get() * 0.5) width:20\n",
+        "demo",
+        None,
+        None,
+    )
+    .unwrap();
+    let code = &out.rust_code;
+    assert!(code.contains(".shown(open.get())"), "{code}");
+    assert!(!code.contains(".shown(("), "{code}");
+    assert!(code.contains("move || fade.get() * 0.5"), "{code}");
+    assert!(!code.contains("|| (fade"), "{code}");
+}

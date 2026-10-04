@@ -51,3 +51,65 @@ fn a_declared_face_is_embedded_as_the_manifest_declared_it() {
         "{tokens}"
     );
 }
+
+fn package(name: &str) -> std::path::PathBuf {
+    let root = std::env::temp_dir().join(format!("telar_macros_{name}_{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&root);
+    std::fs::create_dir_all(root.join("src")).unwrap();
+    root
+}
+
+fn wire(root: &std::path::Path) -> Result<Vec<super::WiredFile>, proc_macro2::TokenStream> {
+    let assets = telar_project::AssetContext::load(root, "0.0.0");
+    let flavour = telar_project::BuildFlavour::Plain;
+    super::wire_sources(
+        root,
+        &root.join("src"),
+        &telar_project::generated_dir(root, flavour),
+        None,
+        flavour,
+        &assets,
+    )
+}
+
+/// The macro has no transpiler, so the reason the CLI could not produce the artifact is the only thing that can tell the author what is wrong with their markup — "re-run the command" is a loop when the command is what failed.
+#[test]
+fn a_recorded_transpile_error_is_what_the_build_reports() {
+    let root = package("reports");
+    std::fs::write(root.join("src/home.rsx"), "[view]\ntext \"oops\n").unwrap();
+    let failure = telar_project::BuildFailure {
+        source: "home.rsx".to_string(),
+        hash: telar_project::content_hash(b"[view]\ntext \"oops\n"),
+        message: "src/home.rsx:2: unterminated string literal".to_string(),
+    };
+    telar_project::write_build_failure(&root, telar_project::BuildFlavour::Plain, &failure)
+        .unwrap();
+
+    let message = wire(&root).err().unwrap().to_string();
+    assert!(
+        message.contains("src/home.rsx:2: unterminated string literal"),
+        "{message}"
+    );
+    assert!(!message.contains("no longer answers"), "{message}");
+
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+/// Once the author has edited the file the record names, it may be describing an error that is gone, so the generic advice is true again.
+#[test]
+fn a_record_for_an_edited_source_is_not_reported() {
+    let root = package("edited");
+    std::fs::write(root.join("src/home.rsx"), "[view]\ntext \"fixed\"\n").unwrap();
+    let failure = telar_project::BuildFailure {
+        source: "home.rsx".to_string(),
+        hash: telar_project::content_hash(b"[view]\ntext \"oops\n"),
+        message: "src/home.rsx:2: unterminated string literal".to_string(),
+    };
+    telar_project::write_build_failure(&root, telar_project::BuildFlavour::Plain, &failure)
+        .unwrap();
+
+    let message = wire(&root).err().unwrap().to_string();
+    assert!(!message.contains("unterminated"), "{message}");
+
+    let _ = std::fs::remove_dir_all(&root);
+}

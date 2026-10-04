@@ -14,8 +14,10 @@ use telar_transpiler::PackageOptions;
 use super::bake::member_dirs;
 use super::config::find_package_dir;
 
-/// Transpiles every workspace member's `.rsx`, in both build flavours.
-pub(crate) fn transpile_workspace() {
+/// Transpiles every workspace member's `.rsx`, in both build flavours, and says whether every one of them transpiled.
+///
+/// A failure is reported here and recorded for the macro (see [`telar_project::BuildFailure`]) rather than ending the process: the watch loops call this between rebuilds and must survive a typo, and the build that follows reports the same error through the compiler.
+pub(crate) fn transpile_workspace() -> bool {
     let dir = find_package_dir(&[]);
     let workspace_root = telar_project::find_workspace_root(&dir).unwrap_or_else(|| dir.clone());
     let telar_version = telar_project::resolve_telar_version(&workspace_root)
@@ -23,15 +25,20 @@ pub(crate) fn transpile_workspace() {
     super::config::warn_if_foreign_version(&telar_version);
     let producer = format!("cargo-telar {}", env!("CARGO_PKG_VERSION"));
 
-    for member in member_dirs(&workspace_root) {
-        transpile_member(&member, &producer, &telar_version);
-    }
+    // Collected before judging, so a failing member does not stop the ones after it from being transpiled and reported.
+    member_dirs(&workspace_root)
+        .iter()
+        .map(|member| transpile_member(member, &producer, &telar_version))
+        .collect::<Vec<bool>>()
+        .iter()
+        .all(|ok| *ok)
 }
 
-pub(super) fn transpile_member(member: &Path, producer: &str, telar_version: &str) {
+/// Transpiles one member in every flavour. `false` when a `.rsx` was refused or the output could not be written; a package with no markup is trivially fine.
+pub(super) fn transpile_member(member: &Path, producer: &str, telar_version: &str) -> bool {
     let src_dir = member.join("src");
     if telar_project::find_rsx_files(&src_dir).is_empty() {
-        return;
+        return true;
     }
     let name = member
         .file_name()
@@ -41,6 +48,8 @@ pub(super) fn transpile_member(member: &Path, producer: &str, telar_version: &st
     let assets = telar_project::AssetContext::load(member, telar_version);
     let theme = telar_transpiler::resolve_theme_type(member);
 
+    let mut reported: Vec<String> = Vec::new();
+    let mut all_ok = true;
     for flavour in BuildFlavour::ALL {
         let files = match telar_transpiler::transpile_package(&PackageOptions {
             src_dir: &src_dir,
@@ -49,13 +58,26 @@ pub(super) fn transpile_member(member: &Path, producer: &str, telar_version: &st
             flavour,
         }) {
             Ok(files) => files,
-            // Reported by the compiler, on the `.rsx` line, once the macro reaches the same file — saying it twice from two processes only makes the second one look like a different problem.
-            Err(_) => return,
+            Err(error) => {
+                all_ok = false;
+                let failure = error.to_build_failure(&src_dir);
+                if !reported.contains(&failure.message) {
+                    eprintln!("[cargo-telar] error: {}", failure.message);
+                    reported.push(failure.message.clone());
+                }
+                if let Err(e) = telar_project::write_build_failure(member, flavour, &failure) {
+                    eprintln!(
+                        "[cargo-telar] warning: could not record {name}'s transpile error: {e}"
+                    );
+                }
+                continue;
+            }
         };
+        telar_project::clear_build_failure(member, flavour);
         let generated_dir = telar_project::generated_dir(member, flavour);
         if let Err(e) = telar_transpiler::write_package(&files, &generated_dir) {
             eprintln!("[cargo-telar] warning: could not write {name}'s generated Rust: {e}");
-            return;
+            return false;
         }
         let index = telar_transpiler::build_index(
             &files,
@@ -66,6 +88,12 @@ pub(super) fn transpile_member(member: &Path, producer: &str, telar_version: &st
         );
         if let Err(e) = telar_project::write_build_index(member, flavour, &index) {
             eprintln!("[cargo-telar] warning: could not write {name}'s build index: {e}");
+            all_ok = false;
         }
     }
+    all_ok
 }
+
+#[cfg(test)]
+#[path = "transpile_test.rs"]
+mod tests;

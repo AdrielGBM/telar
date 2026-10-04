@@ -157,3 +157,72 @@ fn a_flavour_without_previews_generates_none() {
     );
     assert!(without[0].source.rust_code.contains("pub fn card("));
 }
+
+const BROKEN_VIEW: &str = "[view]\ncol\n    text \"fine\"\n    text \"oops\n";
+
+/// The point of carrying the path in the error: a macro or a CLI relaying it names the `.rsx` and the line, which is all the author has to go on.
+#[test]
+fn a_refused_source_is_named_with_its_file_and_line() {
+    let root = package("refused");
+    std::fs::write(root.join("src/ok.rsx"), "[view]\ntext \"a\"\n").unwrap();
+    std::fs::write(root.join("src/broken.rsx"), BROKEN_VIEW).unwrap();
+
+    let src_dir = root.join("src");
+    let error = transpile_package(&options(&src_dir, BuildFlavour::Plain)).unwrap_err();
+
+    let message = error.to_string();
+    assert!(
+        message.starts_with(&format!("{}:", root.join("src/broken.rsx").display())),
+        "{message}"
+    );
+    assert_eq!(error.path(), root.join("src/broken.rsx"));
+
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+/// What the macro reads back: the message as printed, and the hash that lets it tell a standing failure from one the author has since fixed.
+#[test]
+fn a_failure_record_holds_only_while_its_source_is_unchanged() {
+    let root = package("record");
+    std::fs::write(root.join("src/broken.rsx"), BROKEN_VIEW).unwrap();
+    let src_dir = root.join("src");
+
+    let error = transpile_package(&options(&src_dir, BuildFlavour::Plain)).unwrap_err();
+    let failure = error.to_build_failure(&src_dir);
+    assert_eq!(failure.source, "broken.rsx");
+    assert_eq!(failure.message, error.to_string());
+    assert!(failure.still_applies(&src_dir));
+
+    std::fs::write(root.join("src/broken.rsx"), "[view]\ntext \"fixed\"\n").unwrap();
+    assert!(!failure.still_applies(&src_dir));
+
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+/// A failure that outlives its cause would be the macro blaming a file for an error it no longer has.
+#[test]
+fn a_recorded_failure_is_forgotten_when_cleared() {
+    let root = package("clear");
+    let failure = telar_project::BuildFailure {
+        source: "a.rsx".to_string(),
+        hash: "h".to_string(),
+        message: "boom".to_string(),
+    };
+    telar_project::write_build_failure(&root, BuildFlavour::Plain, &failure).unwrap();
+    assert_eq!(
+        telar_project::read_build_failure(&root, BuildFlavour::Plain),
+        Some(failure)
+    );
+    assert_eq!(
+        telar_project::read_build_failure(&root, BuildFlavour::Hot),
+        None
+    );
+
+    telar_project::clear_build_failure(&root, BuildFlavour::Plain);
+    assert_eq!(
+        telar_project::read_build_failure(&root, BuildFlavour::Plain),
+        None
+    );
+
+    let _ = std::fs::remove_dir_all(&root);
+}

@@ -25,8 +25,9 @@ pub use assets::{
     content_hash, generate_assets, read_index, static_name_for_path, write_generated,
 };
 pub use build::{
-    BUILD_ARTIFACT_FORMAT, BuildEntry, BuildFlavour, BuildIndex, generated_dir, read_build_index,
-    relative_source, write_build_index,
+    BUILD_ARTIFACT_FORMAT, BuildEntry, BuildFailure, BuildFlavour, BuildIndex, clear_build_failure,
+    generated_dir, read_build_failure, read_build_index, relative_source, write_build_failure,
+    write_build_index,
 };
 pub use catalog::{
     CATALOG_ARTIFACT_FORMAT, CATALOG_INDEX_FILENAME, CATALOG_SOURCE_FILENAME, CatalogContext,

@@ -133,6 +133,60 @@ pub fn write_build_index(
     crate::write_if_changed_atomic(&path, &format!("{}\n", index.to_json()))
 }
 
+/// Why the last `cargo telar transpile` produced nothing for a flavour, left where the macro can read it.
+///
+/// The macro carries no transpiler, so when the index no longer answers it can only say that, not why. Without this record the reason lived and died in the CLI's stderr, and a build started any other way (a plain `cargo build`, the editor's own check) was told to re-run a command that would fail again.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct BuildFailure {
+    /// Path to the `.rsx` that failed, relative to the package's `src/`, with `/` separators. Empty when the failure belongs to no source.
+    pub source: String,
+    /// Content hash of that `.rsx` when it failed; empty when it could not be read. How a failure the author has since fixed is told apart from one still standing.
+    pub hash: String,
+    /// The error exactly as the compiler would print it, location included.
+    pub message: String,
+}
+
+impl BuildFailure {
+    /// Whether the source this was recorded against is still byte-identical, so the message still describes what the build would hit.
+    pub fn still_applies(&self, src_dir: &Path) -> bool {
+        if self.source.is_empty() {
+            return true;
+        }
+        let current = std::fs::read(src_dir.join(&self.source))
+            .map(|bytes| crate::content_hash(&bytes))
+            .unwrap_or_default();
+        current == self.hash
+    }
+}
+
+/// Reads the failure left beside the flavour's index, or `None` when the last transpile succeeded or none ran.
+pub fn read_build_failure(package_dir: &Path, flavour: BuildFlavour) -> Option<BuildFailure> {
+    let content = std::fs::read_to_string(failure_path(package_dir, flavour)).ok()?;
+    serde_json::from_str(&content).ok()
+}
+
+pub fn write_build_failure(
+    package_dir: &Path,
+    flavour: BuildFlavour,
+    failure: &BuildFailure,
+) -> std::io::Result<()> {
+    let path = failure_path(package_dir, flavour);
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent)?;
+    }
+    let json = serde_json::to_string_pretty(failure).expect("BuildFailure holds only strings");
+    crate::write_if_changed_atomic(&path, &format!("{json}\n"))
+}
+
+/// Forgets a recorded failure; a success has to, or the macro would keep reporting an error that is gone.
+pub fn clear_build_failure(package_dir: &Path, flavour: BuildFlavour) {
+    let _ = std::fs::remove_file(failure_path(package_dir, flavour));
+}
+
+fn failure_path(package_dir: &Path, flavour: BuildFlavour) -> std::path::PathBuf {
+    package_dir.join(".telar").join(flavour.failure_filename())
+}
+
 fn index_path(package_dir: &Path, flavour: BuildFlavour) -> std::path::PathBuf {
     package_dir.join(".telar").join(flavour.index_filename())
 }

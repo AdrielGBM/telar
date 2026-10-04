@@ -100,6 +100,10 @@ pub fn layout_prop_call(key: &str, value: &str) -> PropCall {
 }
 
 fn layout_call(key: &str, value: &str) -> Result<Option<String>, String> {
+    // The markup's delimiting parens, dropped once here rather than at each key that splices the value as Rust: a key that forgot warned `unused_parens` in code the author cannot edit. An empty pair is a value of its own (`()`), not a delimiter around nothing.
+    let value = crate::view::redundant_parens(value)
+        .filter(|inner| !inner.trim().is_empty())
+        .unwrap_or(value);
     let call = match key {
         "width" => format!(".width({})", format_number(value)?),
         "height" => format!(".height({})", format_number(value)?),

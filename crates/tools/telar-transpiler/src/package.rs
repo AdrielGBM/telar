@@ -76,6 +76,31 @@ pub enum PackageError {
 }
 
 #[cfg(feature = "transpile")]
+impl PackageError {
+    /// The file this stopped on.
+    pub fn path(&self) -> &Path {
+        match self {
+            Self::Parse { path, .. }
+            | Self::Read { path, .. }
+            | Self::Codegen { path, .. }
+            | Self::Write { path, .. } => path,
+        }
+    }
+
+    /// The record the macro reads when no artifact can be produced, taken against the source as it is now.
+    pub fn to_build_failure(&self, src_dir: &Path) -> telar_project::BuildFailure {
+        let path = self.path();
+        telar_project::BuildFailure {
+            source: relative_source(path, src_dir).unwrap_or_default(),
+            hash: std::fs::read(path)
+                .map(|bytes| telar_project::content_hash(&bytes))
+                .unwrap_or_default(),
+            message: self.to_string(),
+        }
+    }
+}
+
+#[cfg(feature = "transpile")]
 /// Transpiles every `.rsx` under `options.src_dir`, in a stable order, touching no disk beyond reading the sources.
 ///
 /// Each file is transpiled under its own stem and knows nothing of its siblings, so this is a plain map over the walk: there is no cross-file pre-pass to keep in step, and adding one would be what makes a single-file edit re-read the whole package.

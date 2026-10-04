@@ -527,6 +527,17 @@ fn wire_sources(
             .collect());
     }
 
+    // The reason the CLI recorded outranks both generic messages: it is the one thing the macro cannot work out for itself, and "re-run the command" is a loop when the command is what failed. Only while the source it names is unchanged — an edit since may have fixed it, and then the generic advice is true again.
+    if let Some(failure) = telar_project::read_build_failure(package_dir, flavour)
+        && failure.still_applies(src_dir)
+    {
+        let msg = format!(
+            "rsx: `cargo telar transpile` could not transpile this package.\n{}",
+            failure.message
+        );
+        return Err(quote! { compile_error!(#msg); });
+    }
+
     // Nothing here can produce the Rust: this crate carries no transpiler, on purpose. Which of the two messages is not a guess — an artifact that is absent and one that no longer answers are different facts, and only the first can mean the CLI was never installed. What made an artifact stop answering (an edited `.rsx`, a rewritten output, another theme) it does not try to say: the command is the same for all of them.
     let msg = match artifact.is_some() {
         true => {
