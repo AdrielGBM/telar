@@ -27,6 +27,7 @@ use crate::pointer::dispatch_container_event;
 /// - **Pointer.** It is hit-tested before the page, but only over its children's boxes. A press anywhere else, the empty part of the surface it spans included, reaches the page under it.
 /// - **Keyboard.** Its focusables keep their place in the Tab order, where the layer was declared, and focus walks in and out of it freely.
 /// - **Stacking.** It is drawn over every box of the page, sticky ones included, and under every overlay, whatever order the two were declared in. Layers among themselves stack in the order they were declared.
+/// - **Arrival.** A box of it that stands against the top or the bottom edge of the surface, and not both, is a bar over that edge, and a [`ScrollPage`](crate::ScrollPage) that declares no arrival margin of its own stops what it brings into view short of it.
 ///
 /// Like an overlay, its content starts the cascade over from the surface rather than from the boxes around where it is declared, so a `theme:` or a text style meant for it goes on the layer or inside it.
 pub struct FixedLayer {
@@ -36,6 +37,7 @@ pub struct FixedLayer {
     children: TrackedChildren,
     overlay_id: u64,
     _input: InputHandle,
+    _covers: crate::scroll_viewports::LayerRegistration,
 }
 
 impl FixedLayer {
@@ -54,12 +56,16 @@ impl FixedLayer {
         let mut input = InputHandle::new();
         // Linked as hoisted: whether it takes input is asked of where it was declared, but its geometry is the surface's own.
         input.link(content, place, true);
+        let covers = crate::scroll_viewports::register_layer(
+            children.iter().map(|child| child.node()).collect(),
+        );
         Ok(Self {
             place,
             content,
             children,
             overlay_id,
             _input: input,
+            _covers: covers,
         })
     }
 

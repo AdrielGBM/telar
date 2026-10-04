@@ -69,6 +69,55 @@ layer
   after the browser moved it; everywhere else it is the scroll area's own offset. Headless and the terminal
   answer the same, on their own layout.
 
+## Arrival margin
+
+A bar fixed over the page covers the strip of it the bar is drawn on. A place the page is brought to has to
+land below that strip, not under it: an anchor followed (see [docs/links.md](links.md)), a control the
+keyboard focuses, a selection followed with `ScrollViewport::reveal`. That strip is the scroll's **arrival
+margin**, what CSS calls `scroll-padding`: how far short of each edge of its view a scroll stops what it brings
+into view.
+
+```rust
+let page = ScrollPage::new(content)?;                                    // derived from the layers
+let page = ScrollPage::new(content)?.arrival_margin(|| Insets::new(56.0, 0.0, 0.0, 0.0)); // declared
+let top = page.viewport().arrival_margin().top;                          // read, reactively
+```
+
+- **Derived.** A page that declares none takes it from the layers fixed over the surface (see
+  [docs/fixed-layer.md](fixed-layer.md)). A box of a layer that stands against the top edge of the surface,
+  and not against the bottom one, covers the page from the top down to its own bottom edge; one against the
+  bottom edge and not the top covers it from the bottom up. The deepest box along each edge is the margin
+  there. A box against both edges (a side panel) or against neither (a bar floating clear of the edge, a
+  centred panel) covers no edge, and neither does a hidden one or one of no size. It follows the layers: a bar
+  that grows, hides or comes and goes with an `if` moves the margin with it. Only a layer's own boxes count,
+  laid out where layout put them: a bar moved with `translate_*` counts where it was laid out.
+- **Declared.** `ScrollPage::arrival_margin(|| …)` replaces the derived margin, for what the layers do not
+  say: a bar that floats clear of the edge, a second bar stacked under the first, or none at all
+  (`Insets::default()`). It is re-read when what it reads changes. Any other scroll declares one the same
+  way, `LayoutScrollArea::arrival_margin(|| …)` or `scroll arrival_margin:"40 0 0"` in a view (the CSS
+  shorthand, or `arrival_margin_top:40` and its siblings for one edge), for a header stuck over its own top.
+- **Kept to the page.** A page kept clear of a notch (`keep_to_safe_area`) already starts below part of a bar
+  that spans the notch too, so the margin is only the part of the bar over the page itself.
+- **The place under the bar.** An anchor followed lands with its top edge on the bar's bottom edge, so
+  `use_anchor_at` read with the bar's height answers with that anchor, not with the section that ends there
+  (see [the place under a line](#the-place-under-a-line)).
+
+What respects it:
+
+| | web-dom | Web canvas, desktop, Android, TUI, headless |
+| --- | --- | --- |
+| An anchor Telar follows, and one an address names on arrival | Telar's arrival (`reveal_at_start`), scrolled through the document | Telar's arrival |
+| A fragment the browser follows before the app has loaded | `scroll-padding` on the document scroller, written into the prerendered page's `<head>` | — |
+| A control focused by Tab or by the app | The browser's own scrolling into view, under `scroll-padding` | Telar does not scroll a focused control into view on these targets yet |
+| Page Up/Down and Space | The browser's paging, which leaves the `scroll-padding` out of the step | Telar does not page a scroll with the keyboard on these targets yet |
+| `ScrollViewport::reveal` (a selection followed) | Telar's reveal | Telar's reveal |
+
+On web-dom the margin of the primary scroll is a `<style id="telar-arrival">` giving the root element
+`scroll-padding`, kept in step with the page and removed when the page stops holding the document scroll. A
+prerendered page is served with it, so the browser's own jump to `#name` lands below the bar before the
+module has run, and the app's arrival lands in the same place. A scroll inside the page takes its margin as
+its element's own `scroll-padding`.
+
 ## Targets
 
 | Target | The primary scroll is |

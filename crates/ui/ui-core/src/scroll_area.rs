@@ -3,7 +3,7 @@
 use std::cell::RefCell;
 use std::rc::Rc;
 
-use geometry_core::{LayoutGrid, Rect};
+use geometry_core::{Insets, LayoutGrid, Rect};
 use layout_core::{AvailableSpace, LayoutError, LayoutStyle, NodeId};
 use platform_core::Event;
 use reactive_core::{Effect, ReadSignal, RwSignal, effect, signal};
@@ -327,15 +327,18 @@ fn command_offset(
     x: f32,
     y: f32,
 ) {
-    if scroll_x.peek() != x {
-        scroll_x.set(x);
-    }
-    if scroll_y.peek() != y {
-        scroll_y.set(y);
-    }
-    if ui_tree::element_capture() {
-        commanded.set(Some((x, y)));
-    }
+    // One batch, with the request in it: outside one, each write redraws the area at once, and the first redraw would take the request before the second axis had moved, leaving the frame that is drawn last without it.
+    reactive_core::batch(|| {
+        if ui_tree::element_capture() {
+            commanded.set(Some((x, y)));
+        }
+        if scroll_x.peek() != x {
+            scroll_x.set(x);
+        }
+        if scroll_y.peek() != y {
+            scroll_y.set(y);
+        }
+    });
 }
 
 /// Accumulated finger travel (logical px) within a gesture past which the scroll area treats it as a scroll and cancels any pending tap on its content.
@@ -679,6 +682,8 @@ pub struct ScrollViewport {
     set_x: RwSignal<f32>,
     set_y: RwSignal<f32>,
     commanded: Commanded,
+    /// How far short of each edge of the view a reveal stops. See [`arrival_margin`](Self::arrival_margin).
+    arrival: RwSignal<Insets>,
     /// The content's rect, known once the builder has returned it.
     content: Rc<std::cell::Cell<Option<ReadSignal<Rect>>>>,
 }
@@ -714,6 +719,8 @@ impl ScrollViewport {
 
     /// Scrolls so `item` starts at the viewport's top edge, as far as the content allows, and brings it into view across. Where a link to a place on the page leaves the reader: at the start of that place, not at whichever edge is nearest.
     ///
+    /// The top edge is the one the [`arrival_margin`](Self::arrival_margin) leaves, so a place arrived at under a bar fixed over the page starts just below the bar.
+    ///
     /// Returns the offset asked for, or `None` when `item` has not been laid out. `peek`s for the same reason as [`reveal`](Self::reveal).
     pub fn reveal_at_start(&self, item: NodeId) -> Option<(f32, f32)> {
         let item = track_layout(item)?.get();
@@ -721,15 +728,16 @@ impl ScrollViewport {
         if viewport.height <= 0.0 {
             return None;
         }
+        let margin = self.arrival.get();
         let at_x = self.set_x.peek();
-        let x = if item.x < at_x {
-            item.x.max(0.0)
-        } else if item.x + item.width > at_x + viewport.width {
-            (item.x + item.width - viewport.width).min(item.x).max(0.0)
+        let x = if item.x < at_x + margin.left {
+            item.x - margin.left
+        } else if item.x + item.width > at_x + viewport.width - margin.right {
+            (item.x + item.width - viewport.width + margin.right).min(item.x - margin.left)
         } else {
             at_x
         };
-        let target = (x, item.y.max(0.0));
+        let target = (x.max(0.0), (item.y - margin.top).max(0.0));
         self.scroll_to(target.0, target.1);
         Some(target)
     }
@@ -741,6 +749,8 @@ impl ScrollViewport {
 
     /// Scrolls the minimum distance needed to bring `item` fully into view, leaving `margin` px of breathing room at whichever edge it entered from. A no-op when the item is already visible.
     ///
+    /// The view's edges are the ones the [`arrival_margin`](Self::arrival_margin) leaves, so a selection followed up a list never ends under a bar drawn over its top.
+    ///
     /// This is what keyboard navigation needs and what a scroll offset alone cannot express: moving a selection down a list should follow it, without yanking the view when the item was on screen all along. `item` must be a node inside this scroll's content, so its tracked rect shares the content-local space the offset indexes into.
     pub fn reveal(&self, item: NodeId, margin: f32) {
         let Some(item_rect) = track_layout(item) else {
@@ -748,24 +758,45 @@ impl ScrollViewport {
         };
         let item = item_rect.get();
         let viewport = self.rect.get();
+        let arrival = self.arrival.get();
 
-        let reveal_axis = |offset: f32, span: f32, start: f32, size: f32| -> f32 {
-            if start - margin < offset {
-                (start - margin).max(0.0)
-            } else if start + size + margin > offset + span {
-                (start + size + margin - span).max(0.0)
-            } else {
-                offset
-            }
-        };
+        let reveal_axis =
+            |offset: f32, span: f32, start: f32, size: f32, (before, after): (f32, f32)| -> f32 {
+                if start - margin - before < offset {
+                    (start - margin - before).max(0.0)
+                } else if start + size + margin + after > offset + span {
+                    (start + size + margin + after - span).max(0.0)
+                } else {
+                    offset
+                }
+            };
 
         // `peek` is load-bearing here: the natural caller is an effect ("keep the selected row in view"), and a reactive read of the offset would subscribe it to the signal it writes, dragging the view back on every manual scroll. The item and viewport rects are inputs, so re-running when those move is correct.
         let (at_x, at_y) = (self.set_x.peek(), self.set_y.peek());
-        let x = reveal_axis(at_x, viewport.width, item.x, item.width);
-        let y = reveal_axis(at_y, viewport.height, item.y, item.height);
+        let x = reveal_axis(
+            at_x,
+            viewport.width,
+            item.x,
+            item.width,
+            (arrival.left, arrival.right),
+        );
+        let y = reveal_axis(
+            at_y,
+            viewport.height,
+            item.y,
+            item.height,
+            (arrival.top, arrival.bottom),
+        );
         if (x, y) != (at_x, at_y) {
             self.scroll_to(x, y);
         }
+    }
+
+    /// How far short of each edge of the view a reveal stops, read reactively: the strip along each edge that something drawn over the view covers, such as a bar fixed over the page. [`reveal_at_start`](Self::reveal_at_start) and [`reveal`](Self::reveal) leave it, an anchor arrived at lands below it, and a document makes it the scroller's `scroll-padding` so the browser's own scrolling into view does too.
+    ///
+    /// Zero unless declared ([`LayoutScrollArea::arrival_margin`], [`ScrollPage::arrival_margin`](crate::ScrollPage::arrival_margin), `scroll arrival_margin:` in a view) or, for a page, derived from the layers fixed over it.
+    pub fn arrival_margin(&self) -> Insets {
+        self.arrival.get()
     }
 
     /// The live viewport rect; its `width`/`height` are the visible window's size.
@@ -823,7 +854,13 @@ pub struct LayoutScrollArea {
     _clamp_effect: Effect,
     // Tells the content's sticky boxes what part of it the viewport shows, so a scroll moves them without a relayout.
     _sticky_effect: Effect,
+    arrival: RwSignal<Insets>,
+    declared_arrival: RwSignal<Option<ArrivalRule>>,
+    follows_arrival: bool,
 }
+
+/// What a scroll's arrival margin is declared as.
+type ArrivalRule = Rc<dyn Fn() -> Insets>;
 
 impl LayoutScrollArea {
     pub fn new(
@@ -870,6 +907,7 @@ impl LayoutScrollArea {
         let leaf = LayoutLeaf::register(layout_style)?;
         let (scroll_x, scroll_y) = offset;
         let commanded = Commanded::default();
+        let arrival = signal(Insets::default());
         let handed = ScrollViewport {
             area: leaf.node,
             offset_x: scroll_x.read_only(),
@@ -878,6 +916,7 @@ impl LayoutScrollArea {
             set_x: scroll_x,
             set_y: scroll_y,
             commanded: commanded.clone(),
+            arrival,
             content: Rc::default(),
         };
         let content = {
@@ -965,6 +1004,9 @@ impl LayoutScrollArea {
             _layout_effect: layout_effect,
             _clamp_effect: clamp_effect,
             _sticky_effect: sticky_effect,
+            arrival,
+            declared_arrival: signal(None),
+            follows_arrival: false,
         })
     }
 
@@ -979,6 +1021,31 @@ impl LayoutScrollArea {
 
     pub fn viewport_rect(&self) -> Rect {
         self.leaf.rect.get()
+    }
+
+    /// Declares how far short of each edge of its view this scroll stops what it brings into view: the strip a bar drawn over it covers, so an anchor arrived at, a selection followed or a focused control is not left under the bar. Re-read when what `margin` reads changes. See [`ScrollViewport::arrival_margin`].
+    pub fn arrival_margin(mut self, margin: impl Fn() -> Insets + 'static) -> Self {
+        self.declare_arrival_margin(margin);
+        self
+    }
+
+    pub(crate) fn declare_arrival_margin(&mut self, margin: impl Fn() -> Insets + 'static) {
+        self.declared_arrival.set(Some(Rc::new(margin)));
+        self.follow_arrival_margin(Insets::default);
+    }
+
+    /// Keeps the arrival margin at the declared one, or at what `fallback` answers while none is declared. The first fallback a scroll is given is the one it keeps.
+    pub(crate) fn follow_arrival_margin(&mut self, fallback: impl Fn() -> Insets + 'static) {
+        if std::mem::replace(&mut self.follows_arrival, true) {
+            return;
+        }
+        let (arrival, declared) = (self.arrival, self.declared_arrival);
+        effect(move || {
+            let margin = declared.get().map_or_else(&fallback, |rule| rule());
+            if arrival.peek() != margin {
+                arrival.set(margin);
+            }
+        });
     }
 
     /// Makes this the surface's primary scroll: the one that stands for the whole page. [`ScrollPage`](crate::ScrollPage) is the way in; a document maps this scroll onto its own and shows its own bar for it, and every other target is unchanged.
@@ -1004,6 +1071,7 @@ impl Component for LayoutScrollArea {
                 renderer_core::Semantics::of(renderer_core::Role::ScrollArea),
                 self.core.take_command(),
                 self.core.primary,
+                self.arrival.get(),
             )
         });
         RenderNode::element(element, [content])

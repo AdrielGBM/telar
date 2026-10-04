@@ -5,6 +5,7 @@
 pub mod accessibility;
 mod anchor_line;
 mod annotation;
+mod arrival_margin;
 #[cfg(feature = "async-assets")]
 mod async_asset;
 mod border;

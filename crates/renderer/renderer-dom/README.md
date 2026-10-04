@@ -64,6 +64,12 @@ through `Event::BoxScrolled`, and the link to the section under the bar is the o
 `aria-current="location"`. See
 [docs/links.md](https://github.com/AdrielGBM/telar/blob/main/docs/links.md#the-current-link).
 
+`src/arrival_margin_test.rs` mounts a page the document scrolls under a 48px bar fixed over it: the document
+scroller takes the bar as its `scroll-padding`, so an anchor Telar follows, a fragment the browser follows and a
+control the browser scrolls to on focus all land clear of the bar, and a page down leaves the bar out of its
+step. See
+[docs/primary-scroll.md](https://github.com/AdrielGBM/telar/blob/main/docs/primary-scroll.md#arrival-margin).
+
 The dev shell's chromedriver may not match its Chromium. In that case run the tests in Firefox:
 
 ```sh

@@ -14,9 +14,10 @@ one (a field's border) draws it with `StyledContainer::frames_focus_of`. See
 
 `FixedLayer` (the `layer` tag) stands boxes against the surface over the page: a layout root of its own,
 hit-tested before the page but only over its boxes, with its focusables where it was declared in the Tab order.
-`use_primary_scroll` reads the page's `ScrollViewport` reactively from anywhere. `use_anchor_at` reads which anchor
-is under a line across the page's view (`ScrollViewport::anchor_at` for any scroll), and `StyledContainer::current`
-marks a link as the current one of its set. See
+`use_primary_scroll` reads the page's `ScrollViewport` reactively from anywhere, and the page's arrival
+margin follows the bars of its layers, so a place it is brought to lands below them. `use_anchor_at` reads which
+anchor is under a line across the page's view (`ScrollViewport::anchor_at` for any scroll), and
+`StyledContainer::current` marks a link as the current one of its set. See
 [docs/fixed-layer.md](https://github.com/AdrielGBM/telar/blob/main/docs/fixed-layer.md) and
 [docs/primary-scroll.md](https://github.com/AdrielGBM/telar/blob/main/docs/primary-scroll.md).
 

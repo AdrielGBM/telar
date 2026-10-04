@@ -71,6 +71,38 @@ fn a_scroll_keeps_its_position_only_when_it_is_asked_to() {
     );
 }
 
+/// `arrival_margin:` declares the margin on the scroll it is written on, in the shorthand `scroll-padding` takes or one edge at a time; a scroll that names none is emitted as before.
+#[test]
+fn a_scroll_declares_its_arrival_margin_in_the_shorthand_or_by_edge() {
+    let emitted = |source: &str| {
+        transpile_source(source, "demo", None, None)
+            .unwrap()
+            .rust_code
+    };
+    let plain = emitted("[view]\nscroll\n    text \"x\"\n");
+    assert!(!plain.contains("arrival_margin"), "{plain}");
+
+    let shorthand = emitted("[view]\nscroll arrival_margin:\"40 0 0\"\n    text \"x\"\n");
+    assert!(
+        shorthand.contains(".arrival_margin(move || Insets::new(40.0, 0.0, 0.0, 0.0))"),
+        "{shorthand}"
+    );
+
+    let uniform = emitted("[view]\nscroll arrival_margin:12\n    text \"x\"\n");
+    assert!(
+        uniform.contains(".arrival_margin(move || Insets::all(12.0))"),
+        "{uniform}"
+    );
+
+    let by_edge = emitted(
+        "[view]\nscroll keep:\"list\" arrival_margin_top:48 arrival_margin_bottom:$footer\n    text \"x\"\n",
+    );
+    assert!(
+        by_edge.contains("?.arrival_margin(move || Insets::new(48.0, 0.0, footer.get(), 0.0))"),
+        "{by_edge}"
+    );
+}
+
 /// A bare name is the author's own binding, whatever a theme happens to call a field of its own — a theme used to make every bare lowercase name a candidate token, so a `let` three lines above was unreachable from the view and a binding named after a real token read the theme instead of itself.
 #[test]
 fn a_bare_name_is_the_binding_not_a_theme_token() {

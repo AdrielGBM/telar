@@ -2,7 +2,7 @@
 
 use std::fmt::Write;
 
-use telar_parser::Element;
+use telar_parser::{Attr, Element};
 
 use super::signals::rust_str;
 use super::{ChildEmit, ChildMode, ViewGen, wrap_as_single_content};
@@ -20,15 +20,20 @@ impl ViewGen<'_> {
             .map(|attr| rust_str(attr.value.text()));
         // Only the closure forms hand over a live viewport, so the constructor's shape follows what the subtree asked for and every other scroll keeps the cheaper form.
         let viewport = wants_viewport(&el.children).then(|| "__viewport".to_string());
+        let arrival = arrival_margin(&el.attributes)
+            .map(|margin| format!(".arrival_margin(move || {margin})"))
+            .unwrap_or_default();
         let bind = viewport.as_deref().unwrap_or("_");
         let build = |content: &str| match (&keep, &viewport) {
             (Some(key), _) => format!(
-                "LayoutScrollArea::new_kept({key}, {style}, |{bind}| Ok(Box::new({content}) as Box<dyn LayoutItem>))?"
+                "LayoutScrollArea::new_kept({key}, {style}, |{bind}| Ok(Box::new({content}) as Box<dyn LayoutItem>))?{arrival}"
             ),
             (None, Some(_)) => format!(
-                "LayoutScrollArea::new_with({style}, |{bind}| Ok(Box::new({content}) as Box<dyn LayoutItem>))?"
+                "LayoutScrollArea::new_with({style}, |{bind}| Ok(Box::new({content}) as Box<dyn LayoutItem>))?{arrival}"
             ),
-            (None, None) => format!("LayoutScrollArea::new({style}, Box::new({content}))?"),
+            (None, None) => {
+                format!("LayoutScrollArea::new({style}, Box::new({content}))?{arrival}")
+            }
         };
         let body_pad = format!("{pad}    ");
         let build_with_body = |body: &str, content: &str| {
@@ -37,7 +42,7 @@ impl ViewGen<'_> {
                 None => format!("LayoutScrollArea::new_with({style}, |{bind}| {{"),
             };
             format!(
-                "{body_pad}{ctor}\n{body}{body_pad}    Ok(Box::new({content}) as Box<dyn LayoutItem>)\n{body_pad}}})?\n"
+                "{body_pad}{ctor}\n{body}{body_pad}    Ok(Box::new({content}) as Box<dyn LayoutItem>)\n{body_pad}}})?{arrival}\n"
             )
         };
 
@@ -88,6 +93,27 @@ impl ViewGen<'_> {
         }
         let _ = write!(code, "{pad}}};");
         ChildEmit::Simple { name: var, code }
+    }
+}
+
+/// The `Insets` a scroll's `arrival_margin` and its per-edge names ask for, or `None` when it names none: one value is every edge, as in `scroll-padding`.
+fn arrival_margin(attrs: &[Attr]) -> Option<String> {
+    let edges = crate::edges::collect(attrs, "arrival_margin", "arrival_margin_", arrival_side);
+    if let Some(all) = edges.uniform {
+        return Some(format!("Insets::all({all})"));
+    }
+    if edges.is_empty() {
+        return None;
+    }
+    let [top, right, bottom, left] = edges.resolved("0.0");
+    Some(format!("Insets::new({top}, {right}, {bottom}, {left})"))
+}
+
+/// The sides `arrival_margin_*` names: `Insets` has no edge that follows the writing direction, so `start` and `end` are not among them.
+fn arrival_side(suffix: &str) -> Option<crate::edges::EdgeTarget> {
+    match crate::edges::side_target(suffix)? {
+        crate::edges::EdgeTarget::Slots(slots) => Some(crate::edges::EdgeTarget::Slots(slots)),
+        _ => None,
     }
 }
 

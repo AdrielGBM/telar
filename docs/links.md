@@ -53,14 +53,16 @@ it takes it over and a warning names it.
 Following an anchor:
 
 - **Reveals it at the start.** The box is brought to the top of the innermost scroll it sits in, and that scroll
-  to the top of the next one out, up to the page. Nearest-edge scrolling is `ScrollViewport::reveal`, for
+  to the top of the next one out, up to the page. The top is where each scroll's arrival margin leaves it, so under a bar
+  fixed over the page the box lands just below the bar (see
+  [docs/primary-scroll.md](primary-scroll.md#arrival-margin)). Nearest-edge scrolling is `ScrollViewport::reveal`, for
   keyboard selection; an anchor is a place, so it goes to the top the way a web fragment does. The scrolls are
   found from the box itself (`scroll_viewports_of`), so the order the tree was built in does not matter.
 - **Adds a history entry.** The current page with that fragment (`/es/#contact`) is pushed, so back returns to
   where the reader was and the address can be shared. Following the anchor already shown adds nothing.
 - **Keeps up with the page on arrival.** An address that names an anchor (a page loaded at `/es/#contact`, a
   deep link, a hand-edited hash) is revealed once its box is laid out, and again whenever that box moves (a face
-  arriving, an image taking its size), until the reader presses, scrolls or types.
+  arriving, an image taking its size) or the arrival margin changes (a bar fixed over the page laid out), until the reader presses, scrolls or types.
 
 A fragment names a place on a page, never a page: the navigator following the location sees the page, and the
 history keeps the anchor entries around it (see [docs/location.md](location.md)).

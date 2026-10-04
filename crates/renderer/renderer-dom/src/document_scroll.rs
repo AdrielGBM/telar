@@ -5,11 +5,12 @@
 use std::cell::Cell;
 use std::rc::Rc;
 
+use geometry_core::Insets;
 use platform_core::primary_scroll::DOCUMENT_SCROLL_ATTRIBUTE;
 use wasm_bindgen::JsCast;
 use wasm_bindgen::prelude::Closure;
 
-use crate::document::DOCUMENT_SCROLL_OVERRIDES;
+use crate::document::{ARRIVAL_ID, DOCUMENT_SCROLL_OVERRIDES, arrival_rule};
 
 /// The document scroll while one box holds it. Dropping it gives the host back as it was found.
 pub(crate) struct DocumentScroll {
@@ -19,6 +20,8 @@ pub(crate) struct DocumentScroll {
     found: Vec<(&'static str, String)>,
     /// Where the document was when the scroll was taken, until the frame that took it has finished changing the page.
     arrived_at: Cell<Option<(f64, f64)>>,
+    /// The arrival margin the document scroller was last given, `None` until the first frame gives it one.
+    arrival_margin: Cell<Option<Insets>>,
 }
 
 impl DocumentScroll {
@@ -62,6 +65,7 @@ impl DocumentScroll {
             listener,
             found,
             arrived_at: Cell::new(Some(arrived_at)),
+            arrival_margin: Cell::new(None),
         }
     }
 
@@ -79,6 +83,32 @@ impl DocumentScroll {
         if scroll_to.is_some() {
             self.arrived_at.set(None);
             settle(scroll_to);
+        }
+    }
+
+    /// Gives the document scroller the primary scroll's arrival margin as its `scroll-padding`, so the browser's own scrolling into view stops where Telar's does. Written into the `<style>` a prerendered page was served with, when there is one.
+    pub(crate) fn arrive_within(&self, margin: Insets) {
+        if self.arrival_margin.replace(Some(margin)) == Some(margin) {
+            return;
+        }
+        let document = self
+            .host
+            .owner_document()
+            .expect("the host is in a document");
+        let served = document.get_element_by_id(ARRIVAL_ID);
+        match (arrival_rule(margin), served) {
+            (Some(rule), Some(style)) => style.set_text_content(Some(&rule)),
+            (Some(rule), None) => {
+                let (Some(head), Ok(style)) = (document.head(), document.create_element("style"))
+                else {
+                    return;
+                };
+                let _ = style.set_attribute("id", ARRIVAL_ID);
+                style.set_text_content(Some(&rule));
+                let _ = head.append_child(style.as_ref());
+            }
+            (None, Some(style)) => style.remove(),
+            (None, None) => {}
         }
     }
 
@@ -110,6 +140,13 @@ impl Drop for DocumentScroll {
             }
         }
         let _ = self.host.remove_attribute(DOCUMENT_SCROLL_ATTRIBUTE);
+        if let Some(style) = self
+            .host
+            .owner_document()
+            .and_then(|document| document.get_element_by_id(ARRIVAL_ID))
+        {
+            style.remove();
+        }
     }
 }
 

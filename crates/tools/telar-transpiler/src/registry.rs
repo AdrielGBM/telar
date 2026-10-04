@@ -722,8 +722,19 @@ pub fn tag_attr_specs(tag: &str) -> Vec<AttrSpec> {
             );
             specs
         }
-        // Names the kept scroll position, so a remounted tree reopens where it was.
-        "scroll" => with(&[AttrSpec::free("keep")]),
+        // `keep` names the kept scroll position, so a remounted tree reopens where it was.
+        "scroll" => with(&[
+            AttrSpec::free("keep"),
+            AttrSpec::edges("arrival_margin").doc(
+                "How far short of each edge of its view the scroll stops what it brings into view (an anchor arrived at, a selection followed, a control focused), for a bar drawn over that strip: one number, or the CSS shorthand as `scroll-padding` takes it (`arrival_margin:\"40 0 0\"`). `arrival_margin_top` and its siblings name one edge. A document makes it the element's `scroll-padding`; every other target stops its own reveals there.",
+            ),
+            AttrSpec::edges("arrival_margin_top"),
+            AttrSpec::edges("arrival_margin_right"),
+            AttrSpec::edges("arrival_margin_bottom"),
+            AttrSpec::edges("arrival_margin_left"),
+            AttrSpec::edges("arrival_margin_x"),
+            AttrSpec::edges("arrival_margin_y"),
+        ]),
         "canvas" => with(&[AttrSpec::free("paint")]),
         // `input` amends the text style the tree declared, so it takes the same inheritable keys a `text` does.
         "input" => {

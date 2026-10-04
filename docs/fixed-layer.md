@@ -41,6 +41,11 @@ puts a toolbar at the bottom centre. Percentages and `sw`/`sh` resolve against t
   the layer's children or inside them.
 - **Scrolls.** A box inside a layer is in no scroll: `view_progress:` reads nothing there and `anchor:`
   reveals nothing. To follow the page's scroll from a layer, read [`use_primary_scroll()`](#reading-the-page-scroll-from-a-layer).
+- **What it covers.** A box of the layer that stands against the top edge of the surface and not the bottom
+  one, or the other way round, is a bar over that edge of the page, and the page's arrival margin reaches to
+  its far side: an anchor followed or a control focused lands below a top bar instead of under it. A bar that
+  floats clear of the edge does not count; declare it with `ScrollPage::arrival_margin` (see
+  [docs/primary-scroll.md](primary-scroll.md#arrival-margin)).
 
 ## Pointer, keyboard and stacking
 

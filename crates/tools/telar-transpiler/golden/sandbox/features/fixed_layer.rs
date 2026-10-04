@@ -172,7 +172,168 @@ pub fn fixed_layer(props: FixedLayerProps, children: Children) -> Result<Box<dyn
             );
             example(ExampleProps::props().title("use_primary_scroll() — the page's scroll, read from outside its content").build(), __deferred)?
         };
-        Container::new(LayoutStyle::new().flex_column().gap(20.0), children![__node_0, __node_1, __node_7])?
+        let __node_10 = {
+            let __deferred = Children::per_slot(
+                {
+                    let theme = theme.clone();
+                move |__request: SlotRequest<'_>| {
+                    let theme = theme.clone();
+                    let mut __slots = Slots::new();
+                    let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
+                    if __request.includes(None) {
+                        let __node_11 = {
+                            let __deferred = Children::per_slot(
+                                {
+                                    let theme = theme.clone();
+                                move |__request: SlotRequest<'_>| {
+                                    let theme = theme.clone();
+                                    let mut __slots = Slots::new();
+                                    let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
+                                    if __request.includes(None) {
+                                        let __node_12 = {
+                                            let __col_1 = {
+                                                let __row_1 = {
+                                                    let __sbox_0 = {
+                                                        let __text_4 = {
+                                                            Text::declaring(
+                                                                || "One".to_string(),
+                                                                LayoutStyle::new(),
+                                                                { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(12.0).with_color(theme.get().ink) },
+                                                            )?
+                                                        };
+                                                        StyledContainer::new(LayoutStyle::new().flex_column().padding_horizontal(10.0).padding_vertical(4.0), { let theme = theme.clone(); move |_| RectStyle::default().with_fill(theme.get().surface).with_radius(BorderRadius::all(6.0)) }, children![__text_4])?.hover_style({ let theme = theme.clone(); move |_| RectStyle::default().with_fill(theme.get().border).with_radius(BorderRadius::all(6.0)) }).to(move || anchor("arrival-one"))
+                                                    };
+                                                    let __sbox_1 = {
+                                                        let __text_5 = {
+                                                            Text::declaring(
+                                                                || "Two".to_string(),
+                                                                LayoutStyle::new(),
+                                                                { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(12.0).with_color(theme.get().ink) },
+                                                            )?
+                                                        };
+                                                        StyledContainer::new(LayoutStyle::new().flex_column().padding_horizontal(10.0).padding_vertical(4.0), { let theme = theme.clone(); move |_| RectStyle::default().with_fill(theme.get().surface).with_radius(BorderRadius::all(6.0)) }, children![__text_5])?.hover_style({ let theme = theme.clone(); move |_| RectStyle::default().with_fill(theme.get().border).with_radius(BorderRadius::all(6.0)) }).to(move || anchor("arrival-two"))
+                                                    };
+                                                    let __sbox_2 = {
+                                                        let __text_6 = {
+                                                            Text::declaring(
+                                                                || "Three".to_string(),
+                                                                LayoutStyle::new(),
+                                                                { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(12.0).with_color(theme.get().ink) },
+                                                            )?
+                                                        };
+                                                        StyledContainer::new(LayoutStyle::new().flex_column().padding_horizontal(10.0).padding_vertical(4.0), { let theme = theme.clone(); move |_| RectStyle::default().with_fill(theme.get().surface).with_radius(BorderRadius::all(6.0)) }, children![__text_6])?.hover_style({ let theme = theme.clone(); move |_| RectStyle::default().with_fill(theme.get().border).with_radius(BorderRadius::all(6.0)) }).to(move || anchor("arrival-three"))
+                                                    };
+                                                    StyledContainer::new(LayoutStyle::new().flex_row().sticky().inset_top(0.0).height(40.0).width(SizeDimension::Percent(1.0)).gap(8.0).padding_horizontal(12.0).align_items(AlignItems::CENTER), { let theme = theme.clone(); move |_| RectStyle::default().with_fill(theme.get().surface_alt).with_radius(BorderRadius::zero()) }, children![__sbox_0, __sbox_1, __sbox_2])?
+                                                };
+                                                let __row_1 = __row_1.a11y_label(|| "Bar over the sections");
+                                                let __col_2 = {
+                                                    let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
+                                                    let __text_7 = {
+                                                        Text::declaring(
+                                                            || "Section one".to_string(),
+                                                            LayoutStyle::new(),
+                                                            { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(13.0).with_color(theme.get().ink).with_font_weight(600) },
+                                                        )?
+                                                    };
+                                                    __children.push(box_item(__text_7));
+                                                    for i in 0..6 {
+                                                        let i = i.to_owned();
+                                                        let __text_8 = {
+                                                            let i = i.clone();
+                                                            Text::declaring(
+                                                                move || format!("Row {} of section one", i),
+                                                                LayoutStyle::new(),
+                                                                { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(12.0).with_color(theme.get().muted) },
+                                                            )?
+                                                        };
+                                                        __children.push(box_item(__text_8));
+                                                    }
+                                                    Container::new(LayoutStyle::new().flex_column().width(SizeDimension::Percent(1.0)).gap(6.0).padding_all(12.0), __children)?
+                                                };
+                                                let __col_2 = __col_2.page_anchor(|| "arrival-one");
+                                                let __col_3 = {
+                                                    let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
+                                                    let __text_9 = {
+                                                        Text::declaring(
+                                                            || "Section two".to_string(),
+                                                            LayoutStyle::new(),
+                                                            { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(13.0).with_color(theme.get().ink).with_font_weight(600) },
+                                                        )?
+                                                    };
+                                                    __children.push(box_item(__text_9));
+                                                    for i in 0..6 {
+                                                        let i = i.to_owned();
+                                                        let __text_10 = {
+                                                            let i = i.clone();
+                                                            Text::declaring(
+                                                                move || format!("Row {} of section two", i),
+                                                                LayoutStyle::new(),
+                                                                { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(12.0).with_color(theme.get().muted) },
+                                                            )?
+                                                        };
+                                                        __children.push(box_item(__text_10));
+                                                    }
+                                                    Container::new(LayoutStyle::new().flex_column().width(SizeDimension::Percent(1.0)).gap(6.0).padding_all(12.0), __children)?
+                                                };
+                                                let __col_3 = __col_3.page_anchor(|| "arrival-two");
+                                                let __col_4 = {
+                                                    let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
+                                                    let __text_11 = {
+                                                        Text::declaring(
+                                                            || "Section three".to_string(),
+                                                            LayoutStyle::new(),
+                                                            { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(13.0).with_color(theme.get().ink).with_font_weight(600) },
+                                                        )?
+                                                    };
+                                                    __children.push(box_item(__text_11));
+                                                    for i in 0..6 {
+                                                        let i = i.to_owned();
+                                                        let __text_12 = {
+                                                            let i = i.clone();
+                                                            Text::declaring(
+                                                                move || format!("Row {} of section three", i),
+                                                                LayoutStyle::new(),
+                                                                { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(12.0).with_color(theme.get().muted) },
+                                                            )?
+                                                        };
+                                                        __children.push(box_item(__text_12));
+                                                    }
+                                                    Container::new(LayoutStyle::new().flex_column().width(SizeDimension::Percent(1.0)).gap(6.0).padding_all(12.0), __children)?
+                                                };
+                                                let __col_4 = __col_4.page_anchor(|| "arrival-three");
+                                                Container::new(LayoutStyle::new().flex_column().width(SizeDimension::Percent(1.0)), children![__row_1, __col_2, __col_3, __col_4])?
+                                            };
+                                            LayoutScrollArea::new(LayoutStyle::new().height(260.0).width(SizeDimension::Percent(1.0)), Box::new(__col_1))?.arrival_margin(move || Insets::new(40.0, 0.0, 0.0, 0.0))
+                                        };
+                                        __children.push(box_item(__node_12));
+                                        let __text_13 = {
+                                            Text::declaring(
+                                                || "This scroll declares arrival_margin_top:40, the height of the bar stuck over it: a link in the bar brings its section to just below the bar instead of under it, and so does a control Tab brings into view. A page needs no declaration: its margin is the reach of the bars of the layers fixed over it, the boxes of a layer that stand against the top or the bottom of the surface.".to_string(),
+                                                LayoutStyle::new(),
+                                                { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(12.0).with_color(theme.get().muted) },
+                                            )?
+                                        };
+                                        __children.push(box_item(__text_13));
+                                    }
+                                    __slots.extend_default(__children);
+                                    Ok(__slots)
+                                }
+                                }
+                            );
+                            card(CardProps::props().gap(12.0).build(), __deferred)?
+                        };
+                        __children.push(box_item(__node_11));
+                        let __node_13 = code_line(CodeLineProps::props().code("scroll arrival_margin_top:40   ·   ScrollPage::arrival_margin(|| Insets::new(56.0, 0.0, 0.0, 0.0))").build(), Children::default())?;
+                        __children.push(box_item(__node_13));
+                    }
+                    __slots.extend_default(__children);
+                    Ok(__slots)
+                }
+                }
+            );
+            example(ExampleProps::props().title("arrival_margin — a place arrived at lands below the bar, not under it").build(), __deferred)?
+        };
+        Container::new(LayoutStyle::new().flex_column().gap(20.0), children![__node_0, __node_1, __node_7, __node_10])?
     };
     Ok(Box::new(__col_0))
 }

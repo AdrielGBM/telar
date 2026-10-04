@@ -104,7 +104,7 @@ pub fn prerender_page<A: App>(
         lang: i18n_core::current_locale(),
         title: ui_core::surface_title(),
         host_attributes: document.host_attributes,
-        head: renderer_dom::reset_stylesheet(),
+        head: renderer_dom::reset_stylesheet() + &document.head,
         markup: document.markup,
         state: PrerenderState {
             version: STATE_VERSION,

@@ -53,17 +53,19 @@ pub(crate) fn identity_linking(
     ))
 }
 
-/// The element for a node that means something more than a box, asking the backend to put its own scroll at `scroll_to`, and saying whether it is the surface's primary scroll. See [`renderer_core::Element::scroll_to`] and [`renderer_core::Element::primary_scroll`].
+/// The element for a box that scrolls, asking the backend to put its own scroll at `scroll_to`, saying whether it is the surface's primary scroll and how far short of its edges it stops what it brings into view. See [`renderer_core::Element::scroll_to`], [`renderer_core::Element::primary_scroll`] and [`renderer_core::Element::arrival_margin`].
 pub(crate) fn with_semantics_scrolled(
     node: NodeId,
     semantics: Semantics,
     scroll_to: Option<(f32, f32)>,
     primary: bool,
+    arrival_margin: geometry_core::Insets,
 ) -> Arc<Element> {
     Arc::new(
         element_of(node, semantics)
             .asking_to_scroll(scroll_to)
-            .as_primary_scroll(primary),
+            .as_primary_scroll(primary)
+            .arriving_within(arrival_margin),
     )
 }
 

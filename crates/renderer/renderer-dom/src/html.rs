@@ -8,7 +8,7 @@ use std::rc::Rc;
 use renderer_core::{Color, DrawCommand, ImageData, TextStyle};
 
 use crate::document::{
-    self, AUDIT_ATTRIBUTE, BoxNode, Content, DOCUMENT_SCROLL_OVERRIDES, HOST_ATTRIBUTE,
+    self, ARRIVAL_ID, AUDIT_ATTRIBUTE, BoxNode, Content, DOCUMENT_SCROLL_OVERRIDES, HOST_ATTRIBUTE,
     ID_ATTRIBUTE, Node, PaintNode, RESET, RESET_ID, Surface,
 };
 use crate::runs::{RUN_ATTRIBUTE, RUN_BOX_ATTRIBUTE, Run};
@@ -20,6 +20,8 @@ pub struct Prerendered {
     pub host_attributes: Vec<(String, String)>,
     /// The element's content.
     pub markup: String,
+    /// What this frame needs in `<head>` besides the [`reset_stylesheet`]: the document scroller's arrival margin, so a fragment the browser follows before the app runs already stops short of the bars fixed over the page. Empty when there is none.
+    pub head: String,
 }
 
 impl Prerendered {
@@ -63,6 +65,11 @@ pub fn prerender(commands: &[DrawCommand], clear: Option<Color>) -> Prerendered 
         ));
     }
     host_attributes.push(("style".to_string(), style));
+    let head = frame
+        .primary
+        .and_then(|_| document::arrival_rule(frame.arrival_margin))
+        .map(|rule| format!("<style id=\"{ARRIVAL_ID}\">{rule}</style>"))
+        .unwrap_or_default();
     let mut markup = String::new();
     for node in &frame.children {
         match node {
@@ -73,6 +80,7 @@ pub fn prerender(commands: &[DrawCommand], clear: Option<Color>) -> Prerendered 
     Prerendered {
         host_attributes,
         markup,
+        head,
     }
 }
 

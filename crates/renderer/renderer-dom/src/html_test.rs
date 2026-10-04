@@ -181,6 +181,65 @@ fn the_primary_scroll_is_the_documents_own_and_grows_with_its_content() {
     );
 }
 
+fn scroll_area(id: u64, primary: bool, margin: geometry_core::Insets) -> DrawCommand {
+    let element = Element::new(
+        ElementId(id),
+        Semantics::of(Role::ScrollArea),
+        "",
+        Rect::new(0.0, 0.0, 400.0, 300.0),
+    )
+    .as_primary_scroll(primary)
+    .arriving_within(margin);
+    DrawCommand::PushElement {
+        element: Arc::new(element),
+    }
+}
+
+#[test]
+fn the_primary_scroll_s_arrival_margin_pads_the_document_scroller_from_the_head() {
+    let margin = geometry_core::Insets::new(48.0, 0.0, 40.0, 0.0);
+    let written = prerender(
+        &[scroll_area(3, true, margin), DrawCommand::PopElement],
+        None,
+    );
+    assert_eq!(
+        written.head,
+        "<style id=\"telar-arrival\">:root{scroll-padding:48px 0px 40px 0px}</style>"
+    );
+    assert!(
+        !written.markup.contains("scroll-padding"),
+        "{}",
+        written.markup
+    );
+
+    let none = prerender(
+        &[
+            scroll_area(3, true, geometry_core::Insets::default()),
+            DrawCommand::PopElement,
+        ],
+        None,
+    );
+    assert_eq!(
+        none.head, "",
+        "a page with no margin needs nothing in its head"
+    );
+}
+
+#[test]
+fn a_scroll_inside_the_page_takes_its_arrival_margin_as_its_own_scroll_padding() {
+    let margin = geometry_core::Insets::new(40.0, 0.0, 0.0, 0.0);
+    let written = prerender(
+        &[scroll_area(5, false, margin), DrawCommand::PopElement],
+        None,
+    );
+    assert_eq!(written.head, "");
+    assert!(
+        written.markup.contains("scroll-padding:40px 0px 0px 0px;"),
+        "{}",
+        written.markup
+    );
+}
+
 #[test]
 fn paint_inside_a_box_is_a_positioned_piece_out_of_the_accessibility_tree() {
     let commands = [

@@ -2,6 +2,7 @@
 
 use std::rc::Rc;
 
+use geometry_core::Insets;
 use layout_core::{AvailableSpace, LayoutError, LayoutStyle, NodeId, SizeDimension};
 use platform_core::{Event, PrimaryScrollClaim};
 use ui_tree::{Component, EventResult, RenderNode};
@@ -16,6 +17,8 @@ use crate::scroll_area::{LayoutScrollArea, ScrollViewport};
 ///
 /// - web-dom: the document's own scroll. The page grows with the content, the browser scrolls it and shows its own bar, and the scroll events the window reports become this page's offset.
 /// - web canvas, desktop, Android, TUI and headless: a scroll area like any other, drawn at the offset inside a surface the size of the window.
+///
+/// Its [arrival margin](ScrollViewport::arrival_margin) is the strip along its top and bottom that the bars of the layers fixed over the surface cover, unless one is declared with [`arrival_margin`](Self::arrival_margin): an anchor arrived at, a selection followed or a control focused stops short of it, so it is not left under the bar.
 ///
 /// While it is alive a platform can read and move it through [`platform_core::primary_scroll_offset`] and [`platform_core::scroll_primary_to`], which is how a location adapter keeps a scroll position per history entry, and the tree reads it reactively from anywhere through [`use_primary_scroll`](crate::use_primary_scroll).
 pub struct ScrollPage {
@@ -39,7 +42,7 @@ impl ScrollPage {
         F: FnOnce(ScrollViewport) -> Result<Box<dyn LayoutItem>, LayoutError>,
     {
         let mut viewport = None;
-        let scroll_area = LayoutScrollArea::new_with(
+        let mut scroll_area = LayoutScrollArea::new_with(
             LayoutStyle::new().flex_grow(1.0).align_self_stretch(),
             |handed| {
                 viewport = Some(handed.clone());
@@ -59,6 +62,14 @@ impl ScrollPage {
         )?;
         let primary = platform_core::claim_primary_scroll(Rc::new(viewport.clone()));
         let published = crate::scroll_viewports::publish_primary(viewport.clone());
+        let rect = viewport.rect();
+        scroll_area.follow_arrival_margin(move || {
+            crate::arrival_margin::arrival_within(
+                crate::arrival_margin::covered_by_layers(),
+                crate::context::use_surface_size(),
+                rect.get(),
+            )
+        });
         Ok(Self {
             root,
             content_node,
@@ -85,6 +96,14 @@ impl ScrollPage {
                 .padding_right(insets.right);
             let _ = crate::context::set_layout_style(root, style);
         }));
+        self
+    }
+
+    /// Declares how far short of each edge of the window the page stops what it brings into view, in place of the margin it takes from the layers fixed over it. Re-read when what `margin` reads changes.
+    ///
+    /// For what the layers do not say: a bar that floats clear of the edge, a second bar stacked under the first, or no margin at all (`Insets::default()`). See [`ScrollViewport::arrival_margin`].
+    pub fn arrival_margin(mut self, margin: impl Fn() -> Insets + 'static) -> Self {
+        self.scroll_area.declare_arrival_margin(margin);
         self
     }
 

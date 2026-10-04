@@ -1,4 +1,4 @@
-//! Which scroll shows which content: the way from any node to the viewports it scrolls in, whatever order the tree was built in, and the surface's primary scroll for whoever reads it from outside its content.
+//! Which scroll shows which content: the way from any node to the viewports it scrolls in, whatever order the tree was built in, the surface's primary scroll for whoever reads it from outside its content, and the layers fixed over it.
 //!
 //! A scroll area lays its content out as a root of its own, so a climb up the layout tree from a node inside it ends at that content root and never reaches the area. This records the missing link, per surface because node ids are minted per surface.
 
@@ -19,6 +19,8 @@ struct Viewports {
     made: u64,
     /// The page whose scroll is the surface's primary scroll, with the stamp of the claim that made it so.
     primary: RwSignal<Option<(u64, ScrollViewport)>>,
+    /// The boxes of every layer fixed over the surface, with the stamp of the layer's registration.
+    layers: RwSignal<Vec<(u64, Vec<NodeId>)>>,
 }
 
 impl Default for Viewports {
@@ -27,6 +29,7 @@ impl Default for Viewports {
             by_content: FxHashMap::default(),
             made: 0,
             primary: signal(None),
+            layers: signal(Vec::new()),
         }
     }
 }
@@ -110,6 +113,43 @@ impl Drop for PrimaryPublication {
         });
         if current {
             self.primary.set(None);
+        }
+    }
+}
+
+/// Records the boxes of a layer fixed over the surface until the returned registration drops, for [`fixed_layer_boxes`] to answer.
+pub(crate) fn register_layer(boxes: Vec<NodeId>) -> LayerRegistration {
+    let (layers, stamp) = with_viewports(|v| {
+        v.made += 1;
+        (v.layers, v.made)
+    });
+    layers.update(|layers| layers.push((stamp, boxes)));
+    LayerRegistration { layers, stamp }
+}
+
+/// The boxes of every layer fixed over the surface right now, read reactively: whoever reads it runs again when a layer comes or goes.
+pub(crate) fn fixed_layer_boxes() -> Vec<NodeId> {
+    let layers = with_viewports_ref(|v| v.layers);
+    layers.with(|layers| {
+        layers
+            .iter()
+            .flat_map(|(_, boxes)| boxes.iter().copied())
+            .collect()
+    })
+}
+
+/// Keeps a layer recorded; see [`register_layer`].
+pub(crate) struct LayerRegistration {
+    layers: RwSignal<Vec<(u64, Vec<NodeId>)>>,
+    stamp: u64,
+}
+
+impl Drop for LayerRegistration {
+    fn drop(&mut self) {
+        if self.layers.is_alive() {
+            let stamp = self.stamp;
+            self.layers
+                .update(|layers| layers.retain(|(made, _)| *made != stamp));
         }
     }
 }

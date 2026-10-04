@@ -2,7 +2,7 @@
 //!
 //! A raster backend needs only the id: it is handed rects that are already where they belong, and uses the id to tell which box is which when it diffs a frame against the last. A backend whose output is a document needs that too, so it can move an element rather than rebuild it — and needs to know what a box *means*, so a button is a `<button>` and not a `<div>` that happens to be clickable.
 
-use geometry_core::Rect;
+use geometry_core::{Insets, Rect};
 
 /// What a box *is* and what to call it. Shared with the platform layer rather than defined here: the desktop announcing a checkbox and a document drawing one are describing the same box, and two vocabularies for that is how they came to disagree.
 pub use semantics_core::{
@@ -36,6 +36,8 @@ pub struct Element {
     pub scroll_to: Option<(f32, f32)>,
     /// Whether this box is the surface's primary scroll: the one scroll that stands for the whole page. A backend with a scroll of its own for the page maps this box onto it; every other backend treats it as any other box that scrolls.
     pub primary_scroll: bool,
+    /// How far short of each edge of its view a box that scrolls stops what it brings into view, because something is drawn over that strip: a bar fixed over the page. A document says it as the scroller's `scroll-padding`, so the browser's own scrolling into view (a fragment, focus, paging with the keyboard) stops there too; a target that scrolls by drawing has already applied it to every reveal.
+    pub arrival_margin: Insets,
     /// Set when the box is a picture at an address and nothing more: a document shows it as an `<img>`, which fetches, decodes and chooses a size by itself. See [`Picture`].
     pub picture: Option<std::sync::Arc<Picture>>,
     /// Set on the box a layer fixed over the surface is made of, naming the box that holds its place where it was declared.
@@ -71,6 +73,7 @@ impl Element {
             rect,
             scroll_to: None,
             primary_scroll: false,
+            arrival_margin: Insets::default(),
             picture: None,
             fixed_in_place_of: None,
         }
@@ -91,6 +94,12 @@ impl Element {
     /// Asks the backend to put this box's own scroll at `offset`. See [`Element::scroll_to`].
     pub fn asking_to_scroll(mut self, offset: Option<(f32, f32)>) -> Self {
         self.scroll_to = offset;
+        self
+    }
+
+    /// Says how far short of its view's edges this box's scroll stops what it brings into view. See [`Element::arrival_margin`].
+    pub fn arriving_within(mut self, margin: Insets) -> Self {
+        self.arrival_margin = margin;
         self
     }
 

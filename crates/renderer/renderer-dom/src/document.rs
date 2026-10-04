@@ -11,7 +11,7 @@
 use std::rc::Rc;
 use std::sync::Arc;
 
-use geometry_core::Rect;
+use geometry_core::{Insets, Rect};
 use platform_core::Destination;
 use platform_core::consumed_keys::{CONSUMED_KEYS_ATTRIBUTE, FOCUS_BOX_ATTRIBUTE};
 use renderer_core::{
@@ -29,6 +29,9 @@ pub const ID_ATTRIBUTE: &str = "data-telar-id";
 /// Marks the element the app fills, so the reset below reaches its boxes and nothing else on the page.
 pub(crate) const HOST_ATTRIBUTE: &str = "data-telar";
 pub(crate) const RESET_ID: &str = "telar-reset";
+
+/// The `<style>` that gives the document scroller the primary scroll's arrival margin, so the browser's own scrolling into view stops short of the bars fixed over the page: a fragment followed before the app has loaded, focus moved by Tab, the keyboard paging.
+pub(crate) const ARRIVAL_ID: &str = "telar-arrival";
 
 /// Where a box was told to be, beside where the browser put it. See `reconcile.rs`.
 pub(crate) const AUDIT_ATTRIBUTE: &str = "data-telar-rect";
@@ -90,6 +93,8 @@ pub(crate) struct Frame {
     pub isolate_host: bool,
     /// The box that took the document scroll this frame.
     pub primary: Option<u64>,
+    /// That box's arrival margin, which the document scroller takes as its `scroll-padding`.
+    pub arrival_margin: Insets,
     /// The host's children, in order: the layout roots and the paint the frame carries at its own level.
     pub children: Vec<Node>,
 }
@@ -276,6 +281,18 @@ pub(crate) fn srcset(picture: &Picture) -> String {
         .join(", ")
 }
 
+/// The rule [`ARRIVAL_ID`] holds for the primary scroll's arrival `margin`, or `None` while there is none.
+pub(crate) fn arrival_rule(margin: Insets) -> Option<String> {
+    (margin != Insets::default())
+        .then(|| format!(":root{{scroll-padding:{}}}", scroll_padding(margin)))
+}
+
+fn scroll_padding(margin: Insets) -> String {
+    [margin.top, margin.right, margin.bottom, margin.left]
+        .map(paint::px)
+        .join(" ")
+}
+
 /// Works out the document `commands` describe. `audit` carries each box's computed rect along, for a page that compares the two.
 pub(crate) fn describe_frame(
     commands: &[DrawCommand],
@@ -288,6 +305,7 @@ pub(crate) fn describe_frame(
         audit,
         open: vec![Open::root()],
         primary: None,
+        arrival_margin: Insets::default(),
         isolate_host: false,
         roots: Vec::new(),
         layers: Vec::new(),
@@ -321,6 +339,7 @@ pub(crate) fn describe_frame(
         background: clear.filter(|color| color.a > 0.0),
         isolate_host: walk.isolate_host,
         primary: walk.primary,
+        arrival_margin: walk.arrival_margin,
         children: roots,
     }
 }
@@ -440,6 +459,7 @@ struct Walk<'a> {
     audit: bool,
     open: Vec<Open>,
     primary: Option<u64>,
+    arrival_margin: Insets,
     isolate_host: bool,
     roots: Vec<Node>,
     /// The layers fixed over the surface, closed and waiting for the boxes that hold their places, in the order they closed.
@@ -656,6 +676,7 @@ impl Walk<'_> {
         let primary = element.primary_scroll && self.open.len() == 1 && self.primary.is_none();
         if primary {
             self.primary = Some(element.id.0);
+            self.arrival_margin = element.arrival_margin;
             self.surface.hold_document_scroll(element.id.0);
         }
         let scrolls = element.semantics.role == Role::ScrollArea && !primary;
@@ -690,6 +711,13 @@ impl Walk<'_> {
             paint::declare(&mut style, "touch-action", "pan-x pan-y");
             // What is scrolled to the end is the end. Without this the page behind takes over and the app slides away under the finger.
             paint::declare(&mut style, "overscroll-behavior", "contain");
+            if element.arrival_margin != Insets::default() {
+                paint::declare(
+                    &mut style,
+                    "scroll-padding",
+                    &scroll_padding(element.arrival_margin),
+                );
+            }
         }
         if self
             .open

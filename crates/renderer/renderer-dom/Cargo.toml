@@ -111,3 +111,7 @@ path = "src/text_paint_test.rs"
 [[test]]
 name = "current"
 path = "src/current_test.rs"
+
+[[test]]
+name = "arrival_margin"
+path = "src/arrival_margin_test.rs"

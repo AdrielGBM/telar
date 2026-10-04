@@ -283,6 +283,7 @@ impl Reconciler {
             self.document_scroll = None;
         }
         if let Some(held) = self.document_scroll.as_ref() {
+            held.arrive_within(frame.arrival_margin);
             held.keep_arrival();
         }
         self.keep_the_keyboard();
