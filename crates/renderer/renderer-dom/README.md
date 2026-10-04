@@ -52,6 +52,12 @@ the page scrolls the document, a scroll made before the app loaded is kept, and 
 against the viewport. See
 [docs/primary-scroll.md](https://github.com/AdrielGBM/telar/blob/main/docs/primary-scroll.md).
 
+`src/fixed_layer_test.rs` mounts a page the document scrolls with a layer fixed over it and a sticky stage
+after it: the layer's element stays inside the page where it was declared, so Tab walks its controls in that
+order; it stays at the top over the stuck stage; and the browser hands it the pointer only over its own
+boxes. See
+[docs/fixed-layer.md](https://github.com/AdrielGBM/telar/blob/main/docs/fixed-layer.md).
+
 The dev shell's chromedriver may not match its Chromium. In that case run the tests in Firefox:
 
 ```sh

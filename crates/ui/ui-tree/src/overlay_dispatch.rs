@@ -25,6 +25,14 @@ pub trait OverlaySink {
     fn blocking(&self) -> bool {
         true
     }
+    /// Whether `(x, y)` lands on the overlay at all. Inside its [`content_rect`](Self::content_rect) by default; a layer fixed over the page answers only over its own boxes, which one rect cannot say.
+    fn hits(&self, x: f32, y: f32) -> bool {
+        self.content_rect().contains(x, y)
+    }
+    /// Whether this is a layer fixed over the page rather than an overlay. Every overlay is drawn over every layer, so every overlay is hit-tested first, whatever order the two were registered in.
+    fn fixed(&self) -> bool {
+        false
+    }
 }
 
 reactive_core::surface_local! {
@@ -109,9 +117,11 @@ pub fn dispatch_overlays(event: &Event) -> EventResult {
         with_overlays(|r| r.captured = None);
     }
 
-    // Topmost first. A modal consumes the event over its whole barrier; a click-through overlay only where a child took it, otherwise the walk continues below and ultimately to the tree.
-    for (id, sink) in entries.iter().rev() {
-        if !sink.content_rect().contains(x, y) {
+    // Topmost first: the overlays, then the layers fixed under them. A modal consumes the event over its whole barrier; a click-through overlay only where a child took it, otherwise the walk continues below and ultimately to the tree.
+    let overlays = entries.iter().rev().filter(|(_, sink)| !sink.fixed());
+    let layers = entries.iter().rev().filter(|(_, sink)| sink.fixed());
+    for (id, sink) in overlays.chain(layers) {
+        if !sink.hits(x, y) {
             continue;
         }
         let handled = sink.dispatch(event) == EventResult::Handled;

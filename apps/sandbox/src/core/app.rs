@@ -132,6 +132,7 @@ const SECTIONS: &[SectionDef] = sections![
         "background.rsx"
     ),
     ("Positioning", crate::features::positioning::positioning, crate::features::positioning::PositioningProps, "positioning.rsx"),
+    ("Fixed layer", crate::features::fixed_layer::fixed_layer, crate::features::fixed_layer::FixedLayerProps, "fixed_layer.rsx"),
     ("Pointer & drag", crate::features::pointer::pointer, crate::features::pointer::PointerProps, "pointer.rsx"),
     ("Keyboard", crate::features::keyboard::keyboard, crate::features::keyboard::KeyboardProps, "keyboard.rsx"),
     (

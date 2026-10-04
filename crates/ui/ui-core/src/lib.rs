@@ -19,6 +19,7 @@ mod disposal;
 mod drag;
 mod element;
 mod error_boundary;
+mod fixed_layer;
 mod fling;
 pub mod focus;
 mod image;
@@ -93,6 +94,7 @@ pub use dismiss::{
 };
 pub use drag::{DragAxis, DragStart, drag_start, drag_travel};
 pub use error_boundary::{BuildFailure, ErrorBoundary};
+pub use fixed_layer::FixedLayer;
 pub use image::Image;
 pub use inherit::{Inherited, context, declare, inherited_text_style, undeclare};
 pub use input::{Caret, Input, Underline};
@@ -129,7 +131,7 @@ pub use scroll_timeline::{
     ScrollLinked, ViewRange, range_progress, scroll_progress, scroll_progress_along,
     use_scroll_viewport,
 };
-pub use scroll_viewports::{enclosing_scroll_viewport, scroll_viewports_of};
+pub use scroll_viewports::{enclosing_scroll_viewport, scroll_viewports_of, use_primary_scroll};
 pub use slots::{Children, SlotRequest, Slots, use_context};
 pub use step::{COARSE_STEP, FINE_STEP, step_factor};
 pub use styled_container::{KeyAnswer, StyledContainer, box_transform, style_follows};

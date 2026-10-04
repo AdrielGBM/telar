@@ -188,6 +188,11 @@ impl Surface for LiveSurface<'_> {
         Some(*self.origin.get_or_insert_with(|| held.surface_origin()))
     }
 
+    fn host_origin(&mut self) -> (f32, f32) {
+        let rect = self.host.get_bounding_client_rect();
+        (rect.left() as f32, rect.top() as f32)
+    }
+
     fn image_href(&mut self, data: &ImageData) -> Option<Rc<str>> {
         crate::bitmap::href(data)
     }

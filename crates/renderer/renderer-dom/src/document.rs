@@ -72,6 +72,9 @@ pub(crate) trait Surface {
     /// Where the surface's origin is in the viewport while the document scrolls the page; `None` while it does not, and a box placed against the surface is then placed inside the host.
     fn fixed_origin(&mut self) -> Option<(f32, f32)>;
 
+    /// Where the host is in the viewport while the document does not scroll the page, for a layer fixed over the surface, which is fixed against the viewport either way.
+    fn host_origin(&mut self) -> (f32, f32);
+
     /// The address a bitmap drawn inside a drawing is loaded from, or `None` for one this document cannot show.
     fn image_href(&mut self, data: &ImageData) -> Option<Rc<str>>;
 
@@ -280,6 +283,7 @@ pub(crate) fn describe_frame(
         primary: None,
         isolate_host: false,
         roots: Vec::new(),
+        layers: Vec::new(),
     };
     // Boxes inside a drawing are part of its picture, not elements of the page: it places them itself.
     let mut boxes_in_drawing = 0usize;
@@ -299,12 +303,64 @@ pub(crate) fn describe_frame(
             other => walk.paint(other),
         }
     }
+    let mut roots = walk.roots;
+    // The outermost layer closed last, and a layer declared inside it can only find its place once that one is in the tree.
+    for (place, layer) in walk.layers.into_iter().rev() {
+        if let Err(layer) = put_in_place(&mut roots, place, layer) {
+            roots.push(Node::Box(layer));
+        }
+    }
     Frame {
         background: clear.filter(|color| color.a > 0.0),
         isolate_host: walk.isolate_host,
         primary: walk.primary,
-        children: walk.roots,
+        children: roots,
     }
+}
+
+/// Puts a layer fixed over the surface where the box holding its place stands, handing it back when no box does.
+///
+/// Lifted there over every box of the page, sticky ones included, which are positioned too and come later in the document; and the layout root it sits in becomes a stacking context of its own, so the lift stays inside it and an overlay placed after that root still covers the layer.
+fn put_in_place(
+    roots: &mut [Node],
+    place: u64,
+    mut layer: Box<BoxNode>,
+) -> Result<(), Box<BoxNode>> {
+    for root in roots.iter_mut() {
+        let Node::Box(root) = root else {
+            continue;
+        };
+        if root.id == place {
+            *root = layer;
+            return Ok(());
+        }
+        let Some(holder) = box_within(root, place) else {
+            continue;
+        };
+        paint::declare(&mut layer.style, "z-index", "1");
+        *holder = *layer;
+        if !root.style.contains("isolation:") {
+            paint::declare(&mut root.style, "isolation", "isolate");
+        }
+        return Ok(());
+    }
+    Err(layer)
+}
+
+/// The box `id` somewhere beneath `node`.
+fn box_within(node: &mut BoxNode, id: u64) -> Option<&mut BoxNode> {
+    let Content::Children { boxes, .. } = &mut node.content else {
+        return None;
+    };
+    for child in boxes.iter_mut() {
+        if child.id == id {
+            return Some(child);
+        }
+        if let Some(found) = box_within(child, id) {
+            return Some(found);
+        }
+    }
+    None
 }
 
 /// A piece as it is collected, before the element it belongs to is closed.
@@ -344,6 +400,8 @@ struct Open {
     primary: bool,
     /// Whether the box is an `<img>`, whose picture the browser draws: what the widget painted for every other target is not wanted here.
     picture: bool,
+    /// Set on a layer fixed over the surface: the box holding its place where it was declared, which the element takes once the frame is walked.
+    fixed_in_place_of: Option<u64>,
 }
 
 impl Open {
@@ -361,6 +419,7 @@ impl Open {
             scrolls: false,
             primary: false,
             picture: false,
+            fixed_in_place_of: None,
         }
     }
 
@@ -376,9 +435,25 @@ struct Walk<'a> {
     primary: Option<u64>,
     isolate_host: bool,
     roots: Vec<Node>,
+    /// The layers fixed over the surface, closed and waiting for the boxes that hold their places, in the order they closed.
+    layers: Vec<(u64, Box<BoxNode>)>,
 }
 
 impl Walk<'_> {
+    /// Fixes a layer against the viewport, over the whole surface, wherever its element ends up. The layer spans the surface but takes no pointer of its own: its boxes take it back, and everywhere else a press reaches the page under it.
+    fn fix_against_viewport(&mut self, style: &mut String, rect: Rect) {
+        let (x, y) = match self.surface.fixed_origin() {
+            Some(origin) => origin,
+            None => self.surface.host_origin(),
+        };
+        paint::declare(style, "position", "fixed");
+        paint::declare(style, "left", &paint::px(rect.x + x));
+        paint::declare(style, "top", &paint::px(rect.y + y));
+        paint::declare(style, "width", &paint::px(rect.width));
+        paint::declare(style, "height", &paint::px(rect.height));
+        paint::declare(style, "pointer-events", "none");
+    }
+
     /// Places a box against the surface: inside the host, or against the viewport while the document scrolls the page, so what stands over the page stays put as it scrolls.
     fn place_on_surface(&mut self, style: &mut String, rect: Rect) {
         let (position, x, y) = match self.surface.fixed_origin() {
@@ -560,6 +635,7 @@ impl Walk<'_> {
             Some(_) => "img",
             None => tag_of(&element.semantics.role),
         };
+        let fixed_in_place_of = element.fixed_in_place_of.map(|place| place.0);
         let primary = element.primary_scroll && self.open.len() == 1 && self.primary.is_none();
         if primary {
             self.primary = Some(element.id.0);
@@ -580,9 +656,11 @@ impl Walk<'_> {
             style.push_str(UNSELECTABLE);
         }
         style.push_str(&element.layout);
-        // A box whose parent is the host is a layout root: the application computed and placed it itself, so there is no parent expressing where it goes and the declarations alone would stack them. The one place the computed rect is used instead of what the box asked for.
+        // A box whose parent is the host is a layout root: the application computed and placed it itself, so there is no parent expressing where it goes and the declarations alone would stack them. One of the two places the computed rect is used instead of what the box asked for; a layer fixed over the surface, placed against the viewport wherever its element ends up, is the other.
         // The primary scroll is the exception: it stays in the flow and grows with its content, which is what makes the document tall enough to scroll, and it is at least the surface's height so a short page still fills it.
-        if primary {
+        if fixed_in_place_of.is_some() {
+            self.fix_against_viewport(&mut style, element.rect);
+        } else if primary {
             paint::declare(&mut style, "min-height", &paint::px(element.rect.height));
         } else if self.open.len() == 1 {
             let rect = element.rect;
@@ -595,6 +673,13 @@ impl Walk<'_> {
             paint::declare(&mut style, "touch-action", "pan-x pan-y");
             // What is scrolled to the end is the end. Without this the page behind takes over and the app slides away under the finger.
             paint::declare(&mut style, "overscroll-behavior", "contain");
+        }
+        if self
+            .open
+            .last()
+            .is_some_and(|parent| parent.fixed_in_place_of.is_some())
+        {
+            paint::declare(&mut style, "pointer-events", "auto");
         }
         if element.semantics.click_through {
             paint::declare(&mut style, "pointer-events", "none");
@@ -636,6 +721,7 @@ impl Walk<'_> {
             scrolls,
             primary,
             picture: element.picture.is_some(),
+            fixed_in_place_of,
         });
     }
 
@@ -665,6 +751,7 @@ impl Walk<'_> {
             // Paint placed inside a box is placed against that box. Without this it is placed against whatever the nearest positioned ancestor happens to be, and a field's own text went to the corner of the page.
             paint::declare(&mut open.style, "position", "relative");
         }
+        let fixed_in_place_of = open.fixed_in_place_of;
         node.style = open.style;
         node.content = if let Some(drawing) = open.drawing {
             Content::Drawing(drawing.finish())
@@ -679,7 +766,10 @@ impl Walk<'_> {
                 pieces: open.pieces.into_iter().map(piece).collect(),
             }
         };
-        self.place(node);
+        match fixed_in_place_of {
+            Some(place) => self.layers.push((place, Box::new(node))),
+            None => self.place(node),
+        }
     }
 
     /// Puts a closed box where the frame says it belongs: after the boxes already placed in the element being assembled, or the host's next child.

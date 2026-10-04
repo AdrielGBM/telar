@@ -277,6 +277,12 @@ pub(crate) fn receives_input(node: NodeId) -> bool {
     true
 }
 
+/// Whether `node` or any box it was declared inside is out of layout flow, read reactively: the caller runs again when one of them is hidden or shown. Climbs the links the layout tree lacks, into the scroll areas and hoisted subtrees a box sits in, as [`receives_input`] does.
+pub(crate) fn tracks_hidden(node: NodeId) -> bool {
+    std::iter::successors(Some(node), |&at| logical_parent(at))
+        .any(layout_reactive::track_display_none)
+}
+
 pub(crate) fn is_inside(node: NodeId, ancestor: NodeId) -> bool {
     std::iter::successors(Some(node), |&at| logical_parent(at)).any(|at| at == ancestor)
 }

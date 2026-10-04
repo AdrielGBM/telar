@@ -90,6 +90,10 @@ impl Surface for PageAtRest {
         self.scrolling.then_some((0.0, 0.0))
     }
 
+    fn host_origin(&mut self) -> (f32, f32) {
+        (0.0, 0.0)
+    }
+
     fn image_href(&mut self, data: &ImageData) -> Option<Rc<str>> {
         data.linked_source()
             .map(|linked| platform_core::asset_url(&linked.url).into())

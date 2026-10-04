@@ -10,6 +10,11 @@ signals, and `set_surface_size` writes it; the runner calls the setter before th
 resize. See
 [docs/surface-size.md](https://github.com/AdrielGBM/telar/blob/main/docs/surface-size.md).
 
+`lay_out_against_surface` makes a node a layout root laid out at the surface's size and origin on every
+`relayout_if_dirty`, from the first frame on and never taken as the overlay host: what a layer fixed over the
+page is. `track_display_none` reads reactively whether a node's own style hides it. See
+[docs/fixed-layer.md](https://github.com/AdrielGBM/telar/blob/main/docs/fixed-layer.md).
+
 **Applications depend on the [`telar`](https://crates.io/crates/telar) facade, not on this crate.** Telar
 is split into small crates so a build carries only the target and the capabilities it named, and every one
 of them has to be published for the facade to be. The facade re-exports what an application needs behind

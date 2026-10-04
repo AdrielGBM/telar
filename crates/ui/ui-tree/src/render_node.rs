@@ -87,6 +87,10 @@ pub enum RenderNode {
     Overlay {
         children: NodeVec,
     },
+    /// A layer fixed over the page: hoisted like an [`Overlay`](Self::Overlay), escaping any ancestor clip, transform or layer, but composed under every overlay whatever order the two were declared in.
+    Fixed {
+        children: NodeVec,
+    },
     // A reactive boundary: the child segment maintains its own flattened commands via its own effect.
     Boundary {
         child: std::rc::Rc<crate::segment::Segment>,
@@ -227,6 +231,13 @@ impl RenderNode {
     /// A portal whose subtree is hoisted to the top layer at compose time (see [`RenderNode::Overlay`]).
     pub fn overlay(children: impl IntoIterator<Item = RenderNode>) -> Self {
         Self::Overlay {
+            children: NodeVec::collect(children),
+        }
+    }
+
+    /// A layer fixed over the page (see [`RenderNode::Fixed`]).
+    pub fn fixed(children: impl IntoIterator<Item = RenderNode>) -> Self {
+        Self::Fixed {
             children: NodeVec::collect(children),
         }
     }

@@ -38,6 +38,10 @@ pub struct Element {
     pub primary_scroll: bool,
     /// Set when the box is a picture at an address and nothing more: a document shows it as an `<img>`, which fetches, decodes and chooses a size by itself. See [`Picture`].
     pub picture: Option<std::sync::Arc<Picture>>,
+    /// Set on the box a layer fixed over the surface is made of, naming the box that holds its place where it was declared.
+    ///
+    /// The frame draws the layer after the page, which is where a raster target needs it: above every box of the page, sticky ones included. A document needs it where it was declared instead, because there the order of the elements is the order Tab walks and a reader reads, so it puts the element in that place and fixes it against the viewport.
+    pub fixed_in_place_of: Option<ElementId>,
 }
 
 /// A box that is a linked picture, as a document is told about it.
@@ -68,7 +72,14 @@ impl Element {
             scroll_to: None,
             primary_scroll: false,
             picture: None,
+            fixed_in_place_of: None,
         }
+    }
+
+    /// Says the box is a layer fixed over the surface, declared where `place` stands. See [`Element::fixed_in_place_of`].
+    pub fn fixed_in_place_of(mut self, place: ElementId) -> Self {
+        self.fixed_in_place_of = Some(place);
+        self
     }
 
     /// Says the box is `picture`; see [`Element::picture`].

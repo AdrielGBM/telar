@@ -305,11 +305,21 @@ impl ViewGen<'_> {
 
     /// Emits an `overlay` as an `Overlay` widget: a top-layer, out-of-flow portal (see `ui_core::Overlay`). Children are collected like a container; layout attrs (`align`/`justify`/`pad`) position the content within the viewport-filling layer.
     pub(super) fn emit_overlay(&mut self, el: &Element) -> ChildEmit {
-        let var = self.next_variable_name("overlay");
-        let pad = self.indent_str();
-        let style = self.make_layout_style("overlay", &el.classes, &el.attributes);
+        self.emit_hoisted(el, "overlay", "Overlay")
+    }
 
-        // `Overlay::new` takes a plain child vec, so a reactive region here stays a boxed `ReactiveList`.
+    /// Emits a `layer` as a `FixedLayer`: a non-modal layer fixed to the surface over the page (see `ui_core::FixedLayer`). Laid out like an `overlay`, against the whole surface, but it takes the pointer only over its own boxes and keeps its place in the Tab order.
+    pub(super) fn emit_layer(&mut self, el: &Element) -> ChildEmit {
+        self.emit_hoisted(el, "layer", "FixedLayer")
+    }
+
+    /// A container whose content is laid out against the surface rather than where it is declared: `ty::new(style, children)`.
+    fn emit_hoisted(&mut self, el: &Element, tag: &str, ty: &str) -> ChildEmit {
+        let var = self.next_variable_name(tag);
+        let pad = self.indent_str();
+        let style = self.make_layout_style(tag, &el.classes, &el.attributes);
+
+        // The constructor takes a plain child vec, so a reactive region here stays a boxed `ReactiveList`.
         let mode = if el.children.iter().any(forces_child_vec) {
             ChildMode::Vec
         } else {
@@ -326,7 +336,7 @@ impl ViewGen<'_> {
         let _ = writeln!(code, "{pad}let {var} = {{");
         let children =
             self.emit_children_collection(&mut code, &child_emits, &inner_pad, mode, &[]);
-        let _ = writeln!(code, "{inner_pad}Overlay::new({style}, {children})?");
+        let _ = writeln!(code, "{inner_pad}{ty}::new({style}, {children})?");
         let _ = write!(code, "{pad}}};");
         ChildEmit::Simple { name: var, code }
     }

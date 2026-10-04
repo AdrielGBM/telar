@@ -100,3 +100,6 @@ is placed for that scroll at once. The same holds for `clip:$on`, which stops an
 - A box wrapped in `animate_layout` measures its position against its parent. A sticky box
   changes that position on every scroll, so the transition animates the sticking. Do not use both on the
   same box.
+- A sticky box is drawn where the page puts it in document order, so a sticky stage declared later is drawn
+  over an earlier sticky bar once both are stuck. A bar that has to stay over everything the page scrolls
+  under it is a layer fixed over the surface instead (see [docs/fixed-layer.md](fixed-layer.md)).

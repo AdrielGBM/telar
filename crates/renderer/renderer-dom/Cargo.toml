@@ -91,3 +91,7 @@ path = "src/hydration_test.rs"
 [[test]]
 name = "reactive_layout"
 path = "src/reactive_layout_test.rs"
+
+[[test]]
+name = "fixed_layer"
+path = "src/fixed_layer_test.rs"

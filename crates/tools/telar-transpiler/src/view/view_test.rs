@@ -246,6 +246,23 @@ fn overlay_builds_overlay_widget() {
 }
 
 #[test]
+fn layer_builds_a_fixed_layer_laid_out_like_an_overlay() {
+    let src = "[view]\ncol\n    layer justify:end pad:16\n        row height:48\n            text \"bar\"\n    text \"page\"\n";
+    let code = crate::transpile_source(src, "demo", None, None)
+        .unwrap()
+        .rust_code;
+    assert!(
+        code.contains("FixedLayer::new(LayoutStyle::new().flex_column()"),
+        "a layer is a column, as an overlay is:\n{code}"
+    );
+    assert!(
+        code.contains(".justify_content(") && code.contains(".padding_all("),
+        "and takes the layout keys that place its boxes against the surface:\n{code}"
+    );
+    assert!(!code.contains("compile_error!"), "{code}");
+}
+
+#[test]
 fn box_hover_emits_hover_style() {
     let src = "[view]\nbox fill:#101010 hover_style(fill:#f0f0f0 stroke:#ff0000) radius:10\n    text \"x\"\n";
     let out = crate::transpile_source(src, "demo", None, None).unwrap();

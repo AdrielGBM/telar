@@ -217,16 +217,38 @@ fn publish(updates: Vec<Update>) {
 }
 
 /// Re-lays out every root that has been computed at least once, picking up any nodes a reactive change dirtied since the last frame. Each `compute_layout` early-returns when its root is clean and the space is unchanged, so this is cheap on a still frame. The runtime calls it once per redraw (after flushing reactive effects, before rendering) so a data change deep in the tree — e.g. a reactive list adding an item — is reflected in layout without the app shell knowing about it. Node dirtiness propagates up to the root through taffy, so a dirtied list container makes its root recompute.
+///
+/// A root that stands against the surface (see [`lay_out_against_surface`]) is laid out here at the surface's current size, from the first frame on, whether or not anything computed it before.
 pub fn relayout_if_dirty() {
+    let surface = crate::surface_size::surface_size();
+    let surface_space = (
+        AvailableSpace::Definite(surface.width),
+        AvailableSpace::Definite(surface.height),
+    );
     let roots: Vec<(NodeId, AvailableSpace, AvailableSpace)> = with_runtime(|rt| {
         rt.last_space
             .iter()
+            .filter(|(node, _)| !rt.surface_roots.contains(*node))
             .map(|(&n, &(w, h))| (n, w, h))
+            .chain(
+                rt.surface_roots
+                    .iter()
+                    .map(|&n| (n, surface_space.0, surface_space.1)),
+            )
             .collect()
     });
     for (root, width, height) in roots {
         let _ = compute_layout(root, width, height);
     }
+}
+
+/// Makes `root` a layout root that stands against the surface: every [`relayout_if_dirty`] lays it out at the surface's size and origin, until the node is freed.
+///
+/// What a layer fixed over the page is laid out as. It hangs from nothing, so its rects are surface coordinates and its window-absolute positions are recorded like the main root's, and it is never taken as the overlay host, which stays the page it stands over.
+pub fn lay_out_against_surface(root: NodeId) {
+    with_runtime(|rt| {
+        rt.surface_roots.insert(root);
+    });
 }
 
 /// How many layout passes the active surface has run: computes that found something dirty and laid it out, not the calls that found everything clean.
@@ -405,18 +427,43 @@ pub fn set_display(node: NodeId, visible: bool) {
 ///
 /// A box's rect is not enough to follow: a sticky box switched off where it was not displaced keeps its rect, and the document would go on sticking it.
 fn restyle<R>(node: NodeId, change: impl FnOnce(&mut LayoutRuntime) -> R) -> R {
-    let (result, changed) = with_runtime(|rt| {
-        let Some(&read) = rt.css_reads.get(&node) else {
-            return (change(rt), None);
-        };
-        let before = rt.engine_css(node);
+    let (result, moved) = with_runtime(|rt| {
+        let css = rt
+            .css_reads
+            .get(&node)
+            .map(|&read| (read, rt.engine_css(node)));
+        let display = rt
+            .display_reads
+            .get(&node)
+            .map(|&read| (read, rt.engine.is_display_none(node)));
         let result = change(rt);
-        (result, (rt.engine_css(node) != before).then_some(read))
+        let css = css
+            .filter(|(_, before)| rt.engine_css(node) != *before)
+            .map(|(read, _)| read);
+        let display = display
+            .filter(|(_, before)| rt.engine.is_display_none(node) != *before)
+            .map(|(read, _)| read);
+        (result, [css, display])
     });
-    if let Some(read) = changed {
+    for read in moved.into_iter().flatten() {
         read.update(|generation| *generation = generation.wrapping_add(1));
     }
     result
+}
+
+/// Whether `node`'s own style takes it out of layout flow, read reactively: the caller runs again when the node is hidden or shown.
+///
+/// One node rather than the chain [`is_hidden`] climbs, because only the caller knows how far up its question goes: a layer fixed over the page asks it of every box it was declared inside, scroll areas included, whose content the layout tree does not link to them.
+pub fn track_display_none(node: NodeId) -> bool {
+    let (hidden, read) = with_runtime(|rt| {
+        let read = *rt
+            .display_reads
+            .entry(node)
+            .or_insert_with(|| reactive_core::in_surface_world(|| signal(0u64)));
+        (rt.engine.is_display_none(node), read)
+    });
+    let _ = read.get();
+    hidden
 }
 
 /// Lays `node`'s children along the horizontal axis, after the node was built as a column. A reconciling list boxed inside a `row` calls this: its own node exists before it is attached, so the direction it should have cannot be known at construction.
@@ -558,8 +605,12 @@ struct LayoutRuntime {
     sticky_views: FxHashMap<NodeId, Rect>,
     /// The outermost sticky nodes each root's last walk met, so a new view places only their subtrees again.
     sticky_anchors: FxHashMap<NodeId, Vec<StickyAnchor>>,
+    /// The roots laid out against the surface. See [`lay_out_against_surface`].
+    surface_roots: FxHashSet<NodeId>,
     /// A generation per node whose [`declared_css`] something read, bumped by [`restyle`] when that CSS changes. Minted on first read, like `abs_pos_signals`: only a document backend reads it.
     css_reads: FxHashMap<NodeId, RwSignal<u64>>,
+    /// A generation per node whose display something tracked, bumped by [`restyle`] when the node is hidden or shown. Minted on first read, like `css_reads`. See [`track_display_none`].
+    display_reads: FxHashMap<NodeId, RwSignal<u64>>,
     // Guards against a recursive `compute()`: an effect that reads a layout signal and calls `compute_layout`.
     #[cfg(debug_assertions)]
     is_computing: bool,
@@ -579,7 +630,9 @@ impl LayoutRuntime {
             measured_at: 0,
             sticky_views: FxHashMap::default(),
             sticky_anchors: FxHashMap::default(),
+            surface_roots: FxHashSet::default(),
             css_reads: FxHashMap::default(),
+            display_reads: FxHashMap::default(),
             #[cfg(debug_assertions)]
             is_computing: false,
         }
@@ -633,8 +686,9 @@ impl LayoutRuntime {
         width: AvailableSpace,
         height: AvailableSpace,
     ) -> Result<Vec<Update>, LayoutError> {
+        let stands_on_surface = self.surface_roots.contains(&root);
         self.overlay_host.offer(root, height, || {
-            with_parents_ref(|parents| !parents.contains_key(&root))
+            !stands_on_surface && with_parents_ref(|parents| !parents.contains_key(&root))
         });
         // A changed available space must re-run layout even when the node is clean.
         let is_space_changed = self.last_space.get(&root) != Some(&(width, height));
@@ -783,8 +837,10 @@ impl LayoutRuntime {
             self.abs_pos.remove(&at);
             self.abs_pos_signals.remove(&at);
             self.css_reads.remove(&at);
+            self.display_reads.remove(&at);
             self.sticky_views.remove(&at);
             self.sticky_anchors.remove(&at);
+            self.surface_roots.remove(&at);
         }
         // A freed id is handed out again, so an anchor left naming one would place whatever reuses it.
         for anchors in self.sticky_anchors.values_mut() {

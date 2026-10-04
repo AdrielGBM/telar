@@ -20,3 +20,11 @@ fn hex_literal_hovers_a_normalized_swatch() {
     let text = hover_text(src, 1, 11).expect("hover over the hex literal");
     assert_eq!(text, "■ #ff00aa");
 }
+
+#[test]
+fn a_layer_hovers_the_type_it_builds_and_what_it_is_for() {
+    let src = "[view]\nlayer\n    text \"x\"\n";
+    let text = hover_text(src, 1, 2).expect("hover over the tag");
+    assert!(text.starts_with("`layer` → `FixedLayer::new()`"), "{text}");
+    assert!(text.contains("Tab order"), "{text}");
+}

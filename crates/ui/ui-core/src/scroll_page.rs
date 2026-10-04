@@ -17,13 +17,14 @@ use crate::scroll_area::{LayoutScrollArea, ScrollViewport};
 /// - web-dom: the document's own scroll. The page grows with the content, the browser scrolls it and shows its own bar, and the scroll events the window reports become this page's offset.
 /// - web canvas, desktop, Android, TUI and headless: a scroll area like any other, drawn at the offset inside a surface the size of the window.
 ///
-/// While it is alive a platform can read and move it through [`platform_core::primary_scroll_offset`] and [`platform_core::scroll_primary_to`], which is how a location adapter keeps a scroll position per history entry.
+/// While it is alive a platform can read and move it through [`platform_core::primary_scroll_offset`] and [`platform_core::scroll_primary_to`], which is how a location adapter keeps a scroll position per history entry, and the tree reads it reactively from anywhere through [`use_primary_scroll`](crate::use_primary_scroll).
 pub struct ScrollPage {
     root: NodeId,
     content_node: NodeId,
     scroll_area: LayoutScrollArea,
     viewport: ScrollViewport,
     _primary: PrimaryScrollClaim,
+    _published: crate::scroll_viewports::PrimaryPublication,
     _safe_area: Option<reactive_core::Effect>,
 }
 
@@ -57,12 +58,14 @@ impl ScrollPage {
             &[scroll_area.layout_node()],
         )?;
         let primary = platform_core::claim_primary_scroll(Rc::new(viewport.clone()));
+        let published = crate::scroll_viewports::publish_primary(viewport.clone());
         Ok(Self {
             root,
             content_node,
             scroll_area,
             viewport,
             _primary: primary,
+            _published: published,
             _safe_area: None,
         })
     }

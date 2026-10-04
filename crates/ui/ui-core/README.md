@@ -12,6 +12,12 @@ itself. The ring shows where `focus::is_focus_visible` says, and a box that fram
 one (a field's border) draws it with `StyledContainer::frames_focus_of`. See
 [docs/keyboard.md](https://github.com/AdrielGBM/telar/blob/main/docs/keyboard.md).
 
+`FixedLayer` (the `layer` tag) stands boxes against the surface over the page: a layout root of its own,
+hit-tested before the page but only over its boxes, with its focusables where it was declared in the Tab order.
+`use_primary_scroll` reads the page's `ScrollViewport` reactively from anywhere. See
+[docs/fixed-layer.md](https://github.com/AdrielGBM/telar/blob/main/docs/fixed-layer.md) and
+[docs/primary-scroll.md](https://github.com/AdrielGBM/telar/blob/main/docs/primary-scroll.md).
+
 Each surface keeps the title it shows: `set_app_title`, `set_page_title` and `set_title_format` feed it,
 `use_surface_title` reads it, and an effect owned by the surface announces each change to its platform as
 `WindowCommand::SetTitle`. See [docs/surface-title.md](https://github.com/AdrielGBM/telar/blob/main/docs/surface-title.md).

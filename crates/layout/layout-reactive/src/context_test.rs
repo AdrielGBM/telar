@@ -1035,3 +1035,60 @@ fn a_new_measurement_generation_relays_measured_text_once() {
         "the same generation twice measures nothing again"
     );
 }
+
+#[test]
+fn a_root_against_the_surface_is_laid_out_at_its_size_and_never_hosts_overlays() {
+    reset_layout_runtime();
+    crate::set_surface_size(geometry_core::Size::new(800.0, 600.0));
+    let page = new_container(LayoutStyle::new(), &[]).unwrap();
+    compute_layout(
+        page,
+        AvailableSpace::Definite(800.0),
+        AvailableSpace::Definite(600.0),
+    )
+    .unwrap();
+    let (bar, _) = new_leaf(LayoutStyle::new().height(48.0)).unwrap();
+    let layer = new_container(LayoutStyle::new().flex_column(), &[bar]).unwrap();
+    lay_out_against_surface(layer);
+
+    relayout_if_dirty();
+    assert_eq!(
+        track_layout(layer).unwrap().get(),
+        Rect::new(0.0, 0.0, 800.0, 600.0)
+    );
+    assert_eq!(
+        absolute_rect(bar),
+        Some(Rect::new(0.0, 0.0, 800.0, 48.0)),
+        "its positions are the surface's, as the main root's are"
+    );
+
+    let (portal, _) = new_leaf(LayoutStyle::new()).unwrap();
+    assert!(attach_overlay(portal));
+    assert_eq!(
+        parent(portal),
+        Some(page),
+        "overlays still attach to the page, though the layer was laid out after it"
+    );
+
+    remove_node(layer);
+    relayout_if_dirty();
+    assert!(track_layout(bar).is_none(), "freed with its root");
+}
+
+#[test]
+fn a_tracked_display_wakes_its_reader_when_the_node_is_hidden_or_shown() {
+    use std::cell::Cell;
+    use std::rc::Rc;
+
+    reset_layout_runtime();
+    let (node, _) = new_leaf(LayoutStyle::new()).unwrap();
+    let seen = Rc::new(Cell::new(None));
+    let wrote = seen.clone();
+    let _reader = reactive_core::effect(move || wrote.set(Some(track_display_none(node))));
+    assert_eq!(seen.get(), Some(false));
+
+    set_layout_style(node, LayoutStyle::new().shown(false)).unwrap();
+    assert_eq!(seen.get(), Some(true));
+    set_display(node, true);
+    assert_eq!(seen.get(), Some(false));
+}

@@ -80,7 +80,11 @@ fn hover_tag(tag: &str) -> Option<Hover> {
         .iter()
         .find(|(name, _)| *name == tag)
         .map(|(_, ctor)| *ctor)?;
-    Some(make_hover(format!("`{tag}` → `{rust_type}()`")))
+    let signature = format!("`{tag}` → `{rust_type}()`");
+    Some(make_hover(match telar_transpiler::builtin_tag_doc(tag) {
+        Some(doc) => format!("{signature}\n\n{doc}"),
+        None => signature,
+    }))
 }
 
 fn make_hover(text: String) -> Hover {

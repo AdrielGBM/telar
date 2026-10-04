@@ -26,10 +26,24 @@ pub fn builtin_tags() -> &'static [(&'static str, &'static str)] {
         ("canvas", "Canvas::new"),
         ("scroll", "LayoutScrollArea::new"),
         ("overlay", "Overlay::new"),
+        ("layer", "FixedLayer::new"),
         ("lazy", "Lazy::new"),
         ("mask", "Mask::new"),
         ("children", TAG_SLOT_PLACEHOLDER),
     ]
+}
+
+/// What a built-in tag is for, where its name and the type it builds do not say it: what hover shows beside the type.
+pub fn builtin_tag_doc(tag: &str) -> Option<&'static str> {
+    Some(match tag {
+        "overlay" => {
+            "A modal portal: its content is laid out against the whole surface and drawn over everything, and it takes every press over it and holds Tab inside itself while it is up. `align`/`justify`/`pad` place the content."
+        }
+        "layer" => {
+            "A layer fixed to the surface over the page, out of its flow and its scroll: a bar that stays at the top while the page scrolls under it. Laid out against the whole surface like an `overlay`, so `align`/`justify`/`pad` and its children's sizes place its boxes. Not modal: it takes the pointer only over its own boxes, and its focusables keep their place in the Tab order. Drawn over every box of the page, sticky ones included, and under every overlay."
+        }
+        _ => return None,
+    })
 }
 
 /// Layout attribute keys common to every container-like tag, paired with what each one takes.

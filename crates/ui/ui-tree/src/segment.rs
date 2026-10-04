@@ -12,22 +12,42 @@ use renderer_core::DrawCommand;
 use crate::component::Component;
 use crate::render_node::RenderNode;
 
-/// (index into `own` where the child's commands splice, child segment, whether inside an `Overlay`).
-type ChildSlots = Vec<(usize, Rc<Segment>, bool)>;
+/// (index into `own` where the child's commands splice, child segment, the stratum the splice point sits in).
+type ChildSlots = Vec<(usize, Rc<Segment>, Stratum)>;
 
-/// One entry on the flatten work stack: a node to process, or a marker that closes the current overlay region (pushed after an `Overlay`'s children so the region's end position is recorded once they are all flattened). Kept private to the flatten walk. The `Node` variant dwarfs `EndOverlay`, but boxing it would add an allocation on the hot flatten path for no real memory win (the stack is short-lived).
+/// Which part of the frame a command is drawn in, bottom to top: the page, the layers fixed over it, and the overlays above both.
+///
+/// Composed in that order whatever order they were declared in, so a dialog opened from inside the page still covers a bar fixed over it. Within one stratum the order is the document's. A command keeps the highest stratum around it: a tooltip opened from a fixed bar is an overlay, and a layer declared inside an overlay stays one.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, PartialOrd, Ord)]
+pub(crate) enum Stratum {
+    #[default]
+    Page,
+    Fixed,
+    Overlay,
+}
+
+impl Stratum {
+    const COUNT: usize = 3;
+
+    fn index(self) -> usize {
+        self as usize
+    }
+}
+
+/// One entry on the flatten work stack: a node to process, or a marker that closes the current hoisted region (pushed after an `Overlay`'s or a `Fixed`'s children so the region's end position is recorded once they are all flattened). Kept private to the flatten walk. The `Node` variant dwarfs the markers, but boxing it would add an allocation on the hot flatten path for no real memory win (the stack is short-lived).
 #[allow(clippy::large_enum_variant)]
 enum Step {
     Node(RenderNode),
     EndOverlay,
+    EndFixed,
 }
 
 /// One component's reactive boundary: its own flattened commands, the children spliced into them, and the effect that keeps both current.
 pub struct Segment {
     // Captured at mount for the devtools tree inspector.
     name: &'static str,
-    // This component's own flattened commands, excluding children, each with whether it belongs to an overlay region. One list rather than two of the same length: the flag was compared in a second pass that allocated a `Vec<bool>` per re-render to answer what the per-command comparison already knows.
-    own_commands: Rc<RefCell<Vec<(DrawCommand, bool)>>>,
+    // This component's own flattened commands, excluding children, each with the stratum it is drawn in. One list rather than two of the same length: the stratum was compared in a second pass that allocated a vec per re-render to answer what the per-command comparison already knows.
+    own_commands: Rc<RefCell<Vec<(DrawCommand, Stratum)>>>,
     // Child splice points in emission order.
     child_slots: Rc<RefCell<ChildSlots>>,
     // Set by the effect when this segment's output changes; cleared when composed.
@@ -74,7 +94,7 @@ impl Segment {
         name: &'static str,
         render: impl Fn() -> Option<RenderNode> + 'static,
     ) -> Rc<Segment> {
-        let own_commands: Rc<RefCell<Vec<(DrawCommand, bool)>>> = Default::default();
+        let own_commands: Rc<RefCell<Vec<(DrawCommand, Stratum)>>> = Default::default();
         let child_slots: Rc<RefCell<ChildSlots>> = Default::default();
         let stack: Rc<RefCell<Vec<Step>>> = Default::default();
         // Starts dirty, so the first compose includes this segment.
@@ -167,7 +187,7 @@ impl Segment {
 /// Flattens one segment's `RenderNode` into its own command list, in place: `RenderNode::Boundary` records a child-splice point instead of emitting the child's commands, which is what keeps a parent's re-render off its children. Returns whether that list changed.
 fn flatten_segment(
     root: RenderNode,
-    out: &mut Vec<(DrawCommand, bool)>,
+    out: &mut Vec<(DrawCommand, Stratum)>,
     slots: &mut ChildSlots,
     stack: &mut Vec<Step>,
 ) -> bool {
@@ -175,13 +195,19 @@ fn flatten_segment(
     stack.push(Step::Node(root));
     let mut pos: usize = 0;
     let mut changed = false;
-    // Greater than 0 means the commands emitted now are hoisted content.
+    // Greater than 0 means the commands emitted now are hoisted into that stratum.
     let mut overlay_depth: usize = 0;
+    let mut fixed_depth: usize = 0;
+    let stratum = |overlay_depth: usize, fixed_depth: usize| match (overlay_depth, fixed_depth) {
+        (0, 0) => Stratum::Page,
+        (0, _) => Stratum::Fixed,
+        _ => Stratum::Overlay,
+    };
 
     macro_rules! emit_command {
         ($command:expr) => {{
             // The layering is compared with the command, so a subtree that moved into an overlay emits the same commands and still changes the output.
-            let entry = ($command, overlay_depth > 0);
+            let entry = ($command, stratum(overlay_depth, fixed_depth));
             if pos < out.len() {
                 if out[pos] != entry {
                     out[pos] = entry;
@@ -199,6 +225,10 @@ fn flatten_segment(
         let node = match step {
             Step::EndOverlay => {
                 overlay_depth -= 1;
+                continue;
+            }
+            Step::EndFixed => {
+                fixed_depth -= 1;
                 continue;
             }
             Step::Node(node) => node,
@@ -263,8 +293,17 @@ fn flatten_segment(
                     stack.push(Step::Node(child));
                 }
             }
-            // The child's commands are owned by its own segment, so record where they splice in and whether the splice point sits inside an overlay region.
-            RenderNode::Boundary { child } => slots.push((pos, child, overlay_depth > 0)),
+            RenderNode::Fixed { children } => {
+                fixed_depth += 1;
+                stack.push(Step::EndFixed);
+                for child in children.into_iter().rev() {
+                    stack.push(Step::Node(child));
+                }
+            }
+            // The child's commands are owned by its own segment, so record where they splice in and the stratum the splice point sits in.
+            RenderNode::Boundary { child } => {
+                slots.push((pos, child, stratum(overlay_depth, fixed_depth)))
+            }
         }
     }
 
@@ -275,30 +314,25 @@ fn flatten_segment(
     changed
 }
 
-/// Lazily composes a segment subtree into a flat command list, splicing each child's current commands at its recorded position. O(total commands) but only cheap clones — the expensive `view()` + flatten already ran (per segment) and is skipped for unchanged segments. Composes a segment subtree into `out`, routing any command that belongs to an `Overlay` region into `overlay_out` instead — so overlays land at the end of the final list (drawn on top, free of any ancestor clip/transform). `in_overlay` propagates that state into child segments spliced within an overlay. See [`SegmentRoot::commands`] for the final `out ++ overlay_out` concatenation.
+/// Lazily composes a segment subtree into a flat command list, splicing each child's current commands at its recorded position. O(total commands) but only cheap clones — the expensive `view()` + flatten already ran (per segment) and is skipped for unchanged segments. Each command goes to the list of its [`Stratum`], the highest of its own and `enclosing`, so what is hoisted lands after the page, drawn on top and free of any ancestor clip or transform. See [`SegmentRoot::commands`] for how the lists are joined.
 pub(crate) fn compose_into(
     seg: &Segment,
-    out: &mut Vec<DrawCommand>,
-    overlay_out: &mut Vec<DrawCommand>,
-    in_overlay: bool,
+    strata: &mut [Vec<DrawCommand>; Stratum::COUNT],
+    enclosing: Stratum,
 ) {
     seg.is_dirty.set(false);
     let own_commands = seg.own_commands.borrow();
     let slots = seg.child_slots.borrow();
     let mut si = 0;
-    for (i, (cmd, is_overlay)) in own_commands.iter().enumerate() {
+    for (i, (cmd, own)) in own_commands.iter().enumerate() {
         while si < slots.len() && slots[si].0 == i {
-            compose_into(&slots[si].1, out, overlay_out, in_overlay || slots[si].2);
+            compose_into(&slots[si].1, strata, enclosing.max(slots[si].2));
             si += 1;
         }
-        if in_overlay || *is_overlay {
-            overlay_out.push(cmd.clone());
-        } else {
-            out.push(cmd.clone());
-        }
+        strata[enclosing.max(*own).index()].push(cmd.clone());
     }
     while si < slots.len() {
-        compose_into(&slots[si].1, out, overlay_out, in_overlay || slots[si].2);
+        compose_into(&slots[si].1, strata, enclosing.max(slots[si].2));
         si += 1;
     }
 }
@@ -355,9 +389,13 @@ impl SegmentRoot {
         if !self.cache_valid.get() || any_dirty(&self.root) {
             let mut cached = self.cached.borrow_mut();
             cached.clear();
-            // Routed aside during compose, then appended so it draws on top of, and outside any clip of, the main tree.
-            let mut overlay: Vec<DrawCommand> = Vec::new();
-            compose_into(&self.root, &mut cached, &mut overlay, false); // clears dirty flags as it walks
+            // Hoisted content is routed aside during compose, then appended so it draws on top of, and outside any clip of, the main tree: the fixed layers, then the overlays over them.
+            let mut strata: [Vec<DrawCommand>; Stratum::COUNT] = Default::default();
+            strata[Stratum::Page.index()] = std::mem::take(&mut *cached);
+            compose_into(&self.root, &mut strata, Stratum::Page); // clears dirty flags as it walks
+            let [page, fixed, overlay] = strata;
+            *cached = page;
+            cached.extend(fixed);
             cached.extend(overlay);
             drop(cached);
             self.compose_generation

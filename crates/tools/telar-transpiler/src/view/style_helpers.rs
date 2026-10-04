@@ -286,7 +286,7 @@ impl ViewGen<'_> {
             if !classes.iter().any(|c| self.class_has_direction(c)) {
                 match tag {
                     "row" | "grid" => base.push_str(".flex_row()"),
-                    "col" | "box" | "overlay" | "lazy" => base.push_str(".flex_column()"),
+                    "col" | "box" | "overlay" | "layer" | "lazy" => base.push_str(".flex_column()"),
                     _ => {}
                 }
             }
@@ -295,7 +295,7 @@ impl ViewGen<'_> {
             match tag {
                 "row" => "LayoutStyle::new().flex_row()".to_string(),
                 // Regression: `lazy` became flex only as a side effect of `set_display(true)` forcing `Display::Flex`, which stopped once that call began restoring the node's declared display.
-                "col" | "box" | "overlay" | "lazy" => {
+                "col" | "box" | "overlay" | "layer" | "lazy" => {
                     "LayoutStyle::new().flex_column()".to_string()
                 }
                 // `cols:` adds `.display_grid()`, so start neutral and fall back to flex_row when no cols are declared.

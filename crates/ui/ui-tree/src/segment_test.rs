@@ -333,3 +333,40 @@ fn animated_get_reflects_tick_in_commands_and_settles() {
         "a tick with no active animations must not bump the generation"
     );
 }
+
+struct OverlayBeforeFixed;
+impl Component for OverlayBeforeFixed {
+    fn view(&self) -> RenderNode {
+        RenderNode::group([
+            rect(1.0),
+            RenderNode::overlay([rect(2.0)]),
+            RenderNode::fixed([rect(3.0), RenderNode::overlay([rect(4.0)])]),
+            rect(5.0),
+        ])
+    }
+}
+
+/// A dialog declared before a fixed bar still covers it, and a tooltip opened from inside the bar is an overlay like any other.
+#[test]
+fn fixed_layers_compose_over_the_page_and_under_every_overlay() {
+    let root = SegmentRoot::mount(OverlayBeforeFixed);
+    let xs: Vec<f32> = root.commands().iter().map(cmd_x).collect();
+    assert_eq!(xs, vec![1.0, 5.0, 3.0, 2.0, 4.0]);
+}
+
+struct FixedParent {
+    child: Rc<Segment>,
+}
+impl Component for FixedParent {
+    fn view(&self) -> RenderNode {
+        RenderNode::group([RenderNode::fixed([self.child.boundary()]), rect(1.0)])
+    }
+}
+
+#[test]
+fn a_fixed_layer_hoists_its_child_segments() {
+    let child = Segment::mount(Leaf { x: signal(9.0) });
+    let root = SegmentRoot::mount(FixedParent { child });
+    let xs: Vec<f32> = root.commands().iter().map(cmd_x).collect();
+    assert_eq!(xs, vec![1.0, 9.0, 14.0]);
+}

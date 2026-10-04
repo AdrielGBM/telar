@@ -19,6 +19,20 @@ viewport.scroll_to(0.0, 480.0);
 reads for sticky boxes (see [docs/sticky.md](sticky.md)), and `reveal`, `scroll_to_top` and `scroll_to` move
 it on every target.
 
+## Reading it from anywhere
+
+`use_scroll_viewport()` answers only while a scroll area's content is being built. `use_primary_scroll()`
+answers from anywhere on the surface: the page's `ScrollViewport` while a `ScrollPage` holds the primary
+scroll, `None` while none does. It is reactive, so whoever reads it runs again when a page takes the primary
+scroll or lets it go (the newest page wins, as with the platform's claim below), and the viewport's offset,
+rect and `progress` are signals of their own. A bar fixed over the page (see
+[docs/fixed-layer.md](fixed-layer.md)) follows the page's scroll this way:
+
+```rsx
+[logic]
+let read = memo(|| use_primary_scroll().map_or(0.0, |page| page.progress(Axis::Vertical)));
+```
+
 ## Targets
 
 | Target | The primary scroll is |
@@ -42,7 +56,9 @@ it on every target.
 - **Pointers.** A point on the screen maps to the same surface point as before; the page's offset is what
   moves the content under it.
 - **Boxes placed against the surface.** Overlays and other layout roots besides the page are placed with
-  `position: fixed`, so they stay put while the page scrolls under them.
+  `position: fixed`, so they stay put while the page scrolls under them. A layer fixed over the page is
+  `position: fixed` too, but its element stays inside the page where it was declared, so Tab and a reader
+  reach it in that order (see [docs/fixed-layer.md](fixed-layer.md)).
 - **Before the app loads.** The built-in page leaves the document free to scroll, so a page scrolled before
   the module arrives keeps its position. The first frame reports it to the app, and puts the document back
   there if replacing the host's earlier content moved it.

@@ -125,3 +125,48 @@ fn a_page_kept_to_the_safe_area_is_padded_by_it_as_it_moves() {
     page.relayout(400.0, 300.0);
     assert_eq!((area().y, area().height), (24.0, 228.0));
 }
+
+#[test]
+fn the_primary_scroll_is_read_from_outside_the_page_and_followed() {
+    use std::cell::Cell;
+    use std::rc::Rc;
+
+    reset_layout_runtime();
+    let reads = Rc::new(Cell::new(0u32));
+    let seen = reactive_core::signal(None::<NodeId>);
+    let counted = reads.clone();
+    let _reader = reactive_core::effect(move || {
+        counted.set(counted.get() + 1);
+        seen.set(crate::use_primary_scroll().map(|viewport| viewport.area()));
+    });
+    assert_eq!(seen.peek(), None, "no page holds the primary scroll yet");
+
+    let page = ScrollPage::new(tall_box()).unwrap();
+    assert_eq!(seen.peek(), Some(page.viewport().area()));
+    assert_eq!(reads.get(), 2, "the reader ran again when the page took it");
+
+    drop(page);
+    assert_eq!(seen.peek(), None, "and again when the page let it go");
+}
+
+#[test]
+fn the_newest_page_keeps_the_primary_scroll_when_an_older_one_drops() {
+    reset_layout_runtime();
+    let old = ScrollPage::new(tall_box()).unwrap();
+    let new = ScrollPage::new(tall_box()).unwrap();
+    drop(old);
+    assert_eq!(
+        crate::use_primary_scroll().map(|viewport| viewport.area()),
+        Some(new.viewport().area())
+    );
+}
+
+#[test]
+fn the_primary_scroll_reports_how_far_the_page_has_scrolled() {
+    reset_layout_runtime();
+    let mut page = ScrollPage::new(tall_box()).unwrap();
+    page.relayout(400.0, 300.0);
+    page.viewport().scroll_to(0.0, 350.0);
+    let primary = crate::use_primary_scroll().expect("the page holds it");
+    assert_eq!(primary.progress(crate::Axis::Vertical), 0.5);
+}

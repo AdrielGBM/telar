@@ -209,3 +209,77 @@ fn click_through_overlay_consumes_when_child_handles() {
 
     unregister_overlay(id);
 }
+
+/// A bar fixed over the page: it takes the pointer over its own boxes, which sit inside a surface-sized rect it does not otherwise claim.
+struct LayerSink {
+    boxes: Vec<Rect>,
+    hits: Rc<Cell<u32>>,
+}
+
+impl OverlaySink for LayerSink {
+    fn content_rect(&self) -> Rect {
+        Rect::new(0.0, 0.0, 800.0, 600.0)
+    }
+    fn dispatch(&self, _event: &Event) -> EventResult {
+        self.hits.set(self.hits.get() + 1);
+        EventResult::Ignored
+    }
+    fn hits(&self, x: f32, y: f32) -> bool {
+        self.boxes.iter().any(|rect| rect.contains(x, y))
+    }
+    fn fixed(&self) -> bool {
+        true
+    }
+}
+
+fn layer(boxes: Vec<Rect>) -> (Rc<dyn OverlaySink>, Rc<Cell<u32>>) {
+    let hits = Rc::new(Cell::new(0));
+    let sink: Rc<dyn OverlaySink> = Rc::new(LayerSink {
+        boxes,
+        hits: Rc::clone(&hits),
+    });
+    (sink, hits)
+}
+
+#[test]
+fn a_fixed_layer_takes_the_pointer_only_over_its_own_boxes() {
+    reset();
+    let (bar, bar_hits) = layer(vec![Rect::new(0.0, 0.0, 800.0, 48.0)]);
+    let id = register_overlay(bar);
+
+    assert_eq!(
+        dispatch_overlays(&press(400.0, 20.0)),
+        EventResult::Handled,
+        "a press on the bar's own box is its, even where no child handled it"
+    );
+    dispatch_overlays(&released(400.0, 20.0));
+    assert_eq!(bar_hits.get(), 2);
+    assert_eq!(
+        dispatch_overlays(&press(400.0, 300.0)),
+        EventResult::Ignored,
+        "below the bar the press falls through to the page"
+    );
+    assert_eq!(bar_hits.get(), 2);
+
+    unregister_overlay(id);
+}
+
+#[test]
+fn an_overlay_registered_before_a_fixed_layer_is_still_hit_first() {
+    reset();
+    let (dialog, dialog_hits) = sink(Rect::new(0.0, 0.0, 800.0, 600.0));
+    let (bar, bar_hits) = layer(vec![Rect::new(0.0, 0.0, 800.0, 48.0)]);
+    let d = register_overlay(dialog);
+    let b = register_overlay(bar);
+
+    dispatch_overlays(&press(400.0, 20.0));
+    assert_eq!(dialog_hits.get(), 1, "the dialog is drawn over the bar");
+    assert_eq!(
+        bar_hits.get(),
+        0,
+        "so the bar under it does not get the press"
+    );
+
+    unregister_overlay(b);
+    unregister_overlay(d);
+}

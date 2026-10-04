@@ -64,6 +64,11 @@ pub(crate) fn with_semantics_scrolled(
     )
 }
 
+/// The element for the box a layer fixed over the surface is made of, declared where `place` stands. See [`renderer_core::Element::fixed_in_place_of`].
+pub(crate) fn fixed_in_place_of(node: NodeId, place: NodeId) -> Arc<Element> {
+    Arc::new(element_of(node, Semantics::group()).fixed_in_place_of(ElementId(place.into())))
+}
+
 /// The element for a node that means something more than a box.
 pub(crate) fn with_semantics(node: NodeId, semantics: Semantics) -> Arc<Element> {
     Arc::new(element_of(node, semantics))

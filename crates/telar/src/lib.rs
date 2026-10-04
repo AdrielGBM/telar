@@ -255,7 +255,7 @@ pub use ui_core::Svg;
 pub use ui_core::{
     AnchorRegistration, PageAnchor, ScrollLinked, ViewRange, enclosing_scroll_viewport, follow,
     has_anchor, range_progress, register_anchor, reveal_anchor, scroll_progress,
-    scroll_progress_along, scroll_viewports_of, use_scroll_viewport,
+    scroll_progress_along, scroll_viewports_of, use_primary_scroll, use_scroll_viewport,
 };
 #[cfg(feature = "runtime")]
 pub use ui_core::{
@@ -272,9 +272,9 @@ pub use ui_core::{
 pub use ui_core::{
     Accessible, Axis, BuildFailure, COARSE_STEP, Canvas, Caret, ChildSlot, Children, Clip,
     ClipAxis, ClippedItem, Component, ComponentList, Container, DEFAULT_SCRIM, DismissRegistration,
-    DragAxis, DragStart, Edge, ErrorBoundary, EventResult, FINE_STEP, Image, Inherited, Input,
-    IntoClip, KeyAnswer, KeyNav, KeyNavMove, LayoutItem, LayoutScrollArea, LayoutTransition, Lazy,
-    LineGutter, Mask, NodeId, NodeVec, Overlay, Path, PointerButtons, Presence, ReactiveList,
+    DragAxis, DragStart, Edge, ErrorBoundary, EventResult, FINE_STEP, FixedLayer, Image, Inherited,
+    Input, IntoClip, KeyAnswer, KeyNav, KeyNavMove, LayoutItem, LayoutScrollArea, LayoutTransition,
+    Lazy, LineGutter, Mask, NodeId, NodeVec, Overlay, Path, PointerButtons, Presence, ReactiveList,
     Rectangle, RenderNode, ScrollPage, ScrollViewport, ScrollbarStyle, SlotRequest, Slots,
     StyledContainer, SurfaceScaffold, SurfaceTransition, Text, TextArea, TextRun, ThemeProvider,
     Transition, Underline, VirtualList, WindowRoot, anchor_rect, animate_layout, apply_move,
