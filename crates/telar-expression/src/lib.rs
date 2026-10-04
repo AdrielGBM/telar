@@ -46,7 +46,7 @@ pub use bind::{Held, bind, bind_held};
 pub use code::{Closing, Context, ErrorCode, Found, HostError, ValueKind};
 pub use compile::{Compiled, compile};
 pub use error::{Error, ErrorKind, Errors, render};
-pub use lexer::is_identifier;
+pub use lexer::{is_identifier, references_in};
 pub use reference::{Closed, Environment, Reference, Resolver};
 pub use registry::{Arguments, CallError, Constant, Function, Implementation, Registry};
 pub use span::Span;

@@ -34,3 +34,21 @@ fn every_identifier_lexes_as_one_name_and_one_reference() {
         );
     }
 }
+
+#[test]
+fn references_are_found_where_they_are_written_and_never_inside_a_text() {
+    let source = "fmt('$5 {}', $battery.level) + $label";
+    let found = references_in(source).unwrap();
+    let written: Vec<(&str, String)> = found
+        .iter()
+        .map(|(span, reference)| (&source[span.range()], reference.dotted()))
+        .collect();
+    assert_eq!(
+        written,
+        [
+            ("$battery.level", "battery.level".to_string()),
+            ("$label", "label".to_string())
+        ]
+    );
+    assert!(references_in("'unclosed").is_err());
+}

@@ -111,6 +111,17 @@ fn continues_ident(c: char) -> bool {
     c.is_alphanumeric() || c == '_'
 }
 
+/// Every `$name.path` written in `source`, in order, with the bytes it is written at: what a host renaming or inlining a name it declares rewrites, leaving everything else as written. A text that only looks like a reference — `"$5"` — is not one.
+pub fn references_in(source: &str) -> Result<Vec<(Span, Reference)>, Error> {
+    Ok(lex(source)?
+        .into_iter()
+        .filter_map(|token| match token.kind {
+            TokenKind::Reference(reference) => Some((token.span, reference)),
+            _ => None,
+        })
+        .collect())
+}
+
 /// Whether `name` is one name as an expression writes it: letters, digits and `_`, not starting with a digit. It is what may follow `$` in a reference and what a function or a constant is called.
 ///
 /// A host that lets its user name things an expression reads — a source, a variable — checks those names with this, so every name it accepts is one an expression can spell.
