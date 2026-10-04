@@ -99,3 +99,7 @@ path = "src/fixed_layer_test.rs"
 [[test]]
 name = "dash"
 path = "src/dash_test.rs"
+
+[[test]]
+name = "transform_origin"
+path = "src/transform_origin_test.rs"

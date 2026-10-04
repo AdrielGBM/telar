@@ -1084,3 +1084,32 @@ fn a_box_whose_transform_follows_its_own_drag_is_measured_from_its_press() {
         "and it claims where it was left"
     );
 }
+
+#[test]
+fn a_box_scaled_from_its_start_claims_where_it_is_drawn() {
+    use crate::transform_origin::{TransformOrigin, box_transform_about};
+    reset_layout_runtime();
+    let (taps, on_tap) = counter();
+    let grown = boxed(placed(100.0, 100.0, 100.0), vec![])
+        .with_transform(|r| {
+            box_transform_about(r, TransformOrigin::start(), 0.0, 2.0, 2.0, 0.0, 0.0)
+        })
+        .on_press(on_tap);
+    let mut root = Container::new(full(), vec![Box::new(grown)]).unwrap();
+    lay_out(&root);
+
+    tap(&mut root, 280.0, 150.0);
+    assert_eq!(
+        taps.get(),
+        1,
+        "the growth reaches to the right of where it was laid out"
+    );
+    tap(&mut root, 80.0, 150.0);
+    assert_eq!(
+        taps.get(),
+        1,
+        "and none to the left, where a centred scale would have gone"
+    );
+    tap(&mut root, 150.0, 60.0);
+    assert_eq!(taps.get(), 2, "it grows upward about the vertical middle");
+}

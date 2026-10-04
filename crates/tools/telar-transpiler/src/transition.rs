@@ -231,7 +231,7 @@ pub(crate) fn split_top_level(s: &str, sep: char) -> Vec<String> {
 }
 
 /// Splits `s` on whitespace runs, ignoring whitespace nested inside parentheses (so `cubic-bezier(0.4, 0, 0.2, 1)` stays one token).
-fn split_top_level_ws(s: &str) -> Vec<String> {
+pub(crate) fn split_top_level_ws(s: &str) -> Vec<String> {
     split_top_level_by(s, char::is_whitespace, false)
 }
 

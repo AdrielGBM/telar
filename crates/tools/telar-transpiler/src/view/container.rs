@@ -1,5 +1,3 @@
-//! Container emitters: `col`/`row`/`grid` and `box`, plus the box gradient-paint builder.
-
 use std::collections::HashMap;
 use std::fmt::Write;
 
@@ -504,10 +502,18 @@ impl ViewGen<'_> {
         }
         let args = args.join(", ");
         let refs: Vec<&str> = values.iter().map(|(v, _)| v.as_str()).collect();
-        let call = wrap_signal_clones(
-            &refs,
-            format!("move |__r: Rect| box_transform(__r, {args})"),
-        );
+        let (call, origin_refs) = match raw("transform_origin") {
+            Some(origin) => (
+                format!("box_transform_about(__r, {}, {args})", origin_expr(&origin)),
+                origin_operands(&origin),
+            ),
+            None => (format!("box_transform(__r, {args})"), Vec::new()),
+        };
+        let refs: Vec<&str> = refs
+            .into_iter()
+            .chain(origin_refs.iter().map(String::as_str))
+            .collect();
+        let call = wrap_signal_clones(&refs, format!("move |__r: Rect| {call}"));
         format!(".with_transform({call})")
     }
 
@@ -618,6 +624,38 @@ fn consumes_keys_call(el: &Element, errors: &mut Vec<String>) -> String {
         constants.push("::telar::ConsumedKeys::EMPTY".to_string());
     }
     format!(".consumes_keys(|| {})", constants.join(" | "))
+}
+
+const ORIGIN_KEYWORDS: &[(&str, &str)] = &[("start", "0.0"), ("center", "0.5"), ("end", "1.0")];
+
+/// The operands of a `transform_origin:` value: the two coordinates of `(x y)`, or a lone keyword.
+fn origin_operands(value: &str) -> Vec<String> {
+    let inner = value
+        .strip_prefix('(')
+        .and_then(|rest| rest.strip_suffix(')'))
+        .unwrap_or(value);
+    crate::transition::split_top_level_ws(inner)
+}
+
+/// `transform_origin:start`, `transform_origin:(start end)` or `transform_origin:( 0.25)` as the `TransformOrigin` it builds. A lone keyword places the pivot on the inline axis and keeps it vertically centred; a pair is horizontal then vertical, each a keyword or a fraction of the box that may read state. Anything else is a build error.
+fn origin_expr(value: &str) -> String {
+    let operands = origin_operands(value);
+    let keyword = |operand: &str| {
+        ORIGIN_KEYWORDS
+            .iter()
+            .find(|(name, _)| *name == operand)
+            .map(|(_, v)| v.to_string())
+    };
+    let fraction = |operand: &str| {
+        keyword(operand).unwrap_or_else(|| format!("({}) as f32", substitute_reads(operand)))
+    };
+    match (value.starts_with('('), operands.as_slice()) {
+        (false, [only]) if keyword(only).is_some() => {
+            format!("TransformOrigin::new({}, 0.5)", fraction(only))
+        }
+        (true, [x, y]) => format!("TransformOrigin::new({}, {})", fraction(x), fraction(y)),
+        _ => "::core::compile_error!(\"`transform_origin:` takes start, center, end or a pair such as (start end)\")".to_string(),
+    }
 }
 
 #[cfg(test)]

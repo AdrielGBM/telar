@@ -2,7 +2,8 @@
 
 use std::rc::Rc;
 
-use geometry_core::{Rect, Transform};
+use crate::transform_origin::{TransformOrigin, box_transform_about};
+use geometry_core::Rect;
 use layout_core::{LayoutError, LayoutStyle, NodeId};
 use platform_core::{
     ConsumedKeys, Cursor, Destination, Event, IntoDestination, Key, NamedKey, NumericValue,
@@ -1236,7 +1237,7 @@ fn cell_focus_band() -> Option<renderer_core::Paint> {
     Some(use_theme_tokens().primary().with_alpha(0.35).into())
 }
 
-/// Builds the affine matrix for a box's declarative `rotate`/`scale`/`translate` attributes, pivoting rotation and scale on the box centre. Returns `None` when every component is identity, so an untransformed box skips the extra transform node entirely.
+/// Builds the affine matrix for a box's declarative `rotate`/`scale`/`translate` attributes, pivoting rotation and scale on the box centre. Returns `None` when every component is identity, so an untransformed box skips the extra transform node entirely. See [`box_transform_about`] for another pivot.
 pub fn box_transform(
     rect: Rect,
     rotate_deg: f32,
@@ -1245,20 +1246,15 @@ pub fn box_transform(
     translate_x: f32,
     translate_y: f32,
 ) -> Option<[f32; 6]> {
-    if rotate_deg == 0.0
-        && scale_x == 1.0
-        && scale_y == 1.0
-        && translate_x == 0.0
-        && translate_y == 0.0
-    {
-        return None;
-    }
-    let cx = rect.x + rect.width / 2.0;
-    let cy = rect.y + rect.height / 2.0;
-    let matrix = Transform::rotate_around(rotate_deg, cx, cy)
-        .then(Transform::scale_around(scale_x, scale_y, cx, cy))
-        .then(Transform::translate(translate_x, translate_y));
-    Some(matrix.to_array())
+    box_transform_about(
+        rect,
+        TransformOrigin::CENTER,
+        rotate_deg,
+        scale_x,
+        scale_y,
+        translate_x,
+        translate_y,
+    )
 }
 
 #[cfg(test)]

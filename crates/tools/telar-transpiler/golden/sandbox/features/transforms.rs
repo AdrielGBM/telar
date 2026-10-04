@@ -226,18 +226,111 @@ pub fn transforms(props: TransformsProps, children: Children) -> Result<Box<dyn 
         };
         let __node_7 = {
             let __deferred = Children::per_slot(
+                {
+                    let theme = theme.clone();
+                move |__request: SlotRequest<'_>| {
+                    let theme = theme.clone();
+                    let mut __slots = Slots::new();
+                    let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
+                    if __request.includes(None) {
+                        let __node_8 = {
+                            let __deferred = Children::per_slot(
+                                {
+                                    let theme = theme.clone();
+                                move |__request: SlotRequest<'_>| {
+                                    let theme = theme.clone();
+                                    let mut __slots = Slots::new();
+                                    let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
+                                    if __request.includes(None) {
+                                        let __row_1 = {
+                                            let __col_1 = {
+                                                let __sbox_5 = {
+                                                    StyledContainer::new(LayoutStyle::new().flex_column().width(56.0).height(56.0), { let theme = theme.clone(); move |_| RectStyle::default().with_fill(theme.get().primary).with_radius(BorderRadius::all(8.0)) }, children![])?.with_transform(move |__r: Rect| box_transform(__r, (0) as f32, (1.5) as f32, (1.5) as f32, (0) as f32, (0) as f32))
+                                                };
+                                                let __text_0 = {
+                                                    Text::declaring(
+                                                        || "center (default)".to_string(),
+                                                        LayoutStyle::new(),
+                                                        move |__inherited: TextStyle| __inherited.with_font_size(11.0),
+                                                    )?
+                                                };
+                                                Container::new(LayoutStyle::new().flex_column().gap(6.0).align_items(AlignItems::CENTER), children![__sbox_5, __text_0])?
+                                            };
+                                            let __col_2 = {
+                                                let __sbox_6 = {
+                                                    StyledContainer::new(LayoutStyle::new().flex_column().width(56.0).height(56.0), { let theme = theme.clone(); move |_| RectStyle::default().with_fill(theme.get().success).with_radius(BorderRadius::all(8.0)) }, children![])?.with_transform(move |__r: Rect| box_transform_about(__r, TransformOrigin::new(0.0, 0.5), (0) as f32, (1.5) as f32, (1.5) as f32, (0) as f32, (0) as f32))
+                                                };
+                                                let __text_1 = {
+                                                    Text::declaring(
+                                                        || "start".to_string(),
+                                                        LayoutStyle::new(),
+                                                        move |__inherited: TextStyle| __inherited.with_font_size(11.0),
+                                                    )?
+                                                };
+                                                Container::new(LayoutStyle::new().flex_column().gap(6.0).align_items(AlignItems::CENTER), children![__sbox_6, __text_1])?
+                                            };
+                                            let __col_3 = {
+                                                let __sbox_7 = {
+                                                    StyledContainer::new(LayoutStyle::new().flex_column().width(56.0).height(56.0), { let theme = theme.clone(); move |_| RectStyle::default().with_fill(theme.get().warning).with_radius(BorderRadius::all(8.0)) }, children![])?.with_transform(move |__r: Rect| box_transform_about(__r, TransformOrigin::new(1.0, 0.5), (0) as f32, (1.5) as f32, (1.5) as f32, (0) as f32, (0) as f32))
+                                                };
+                                                let __text_2 = {
+                                                    Text::declaring(
+                                                        || "end".to_string(),
+                                                        LayoutStyle::new(),
+                                                        move |__inherited: TextStyle| __inherited.with_font_size(11.0),
+                                                    )?
+                                                };
+                                                Container::new(LayoutStyle::new().flex_column().gap(6.0).align_items(AlignItems::CENTER), children![__sbox_7, __text_2])?
+                                            };
+                                            let __col_4 = {
+                                                let __sbox_8 = {
+                                                    StyledContainer::new(LayoutStyle::new().flex_column().width(56.0).height(56.0), { let theme = theme.clone(); move |_| RectStyle::default().with_fill(theme.get().danger).with_radius(BorderRadius::all(8.0)) }, children![])?.with_transform(move |__r: Rect| box_transform_about(__r, TransformOrigin::new(0.0, 1.0), (30) as f32, (1) as f32, (1) as f32, (0) as f32, (0) as f32))
+                                                };
+                                                let __text_3 = {
+                                                    Text::declaring(
+                                                        || "(start end)".to_string(),
+                                                        LayoutStyle::new(),
+                                                        move |__inherited: TextStyle| __inherited.with_font_size(11.0),
+                                                    )?
+                                                };
+                                                Container::new(LayoutStyle::new().flex_column().gap(6.0).align_items(AlignItems::CENTER), children![__sbox_8, __text_3])?
+                                            };
+                                            Container::new(LayoutStyle::new().flex_row().gap(56.0).justify_content(JustifyContent::CENTER).padding_vertical(24.0).padding_horizontal(48.0), children![__col_1, __col_2, __col_3, __col_4])?
+                                        };
+                                        __children.push(box_item(__row_1));
+                                    }
+                                    __slots.extend_default(__children);
+                                    Ok(__slots)
+                                }
+                                }
+                            );
+                            card(CardProps::props().build(), __deferred)?
+                        };
+                        __children.push(box_item(__node_8));
+                        let __node_9 = code_line(CodeLineProps::props().code("box scale:1.5 transform_origin:start      box rotate:30 transform_origin:(start end)").build(), Children::default())?;
+                        __children.push(box_item(__node_9));
+                    }
+                    __slots.extend_default(__children);
+                    Ok(__slots)
+                }
+                }
+            );
+            example(ExampleProps::props().title("Pivot — transform_origin picks the point rotate and scale hold still").build(), __deferred)?
+        };
+        let __node_10 = {
+            let __deferred = Children::per_slot(
                 move |__request: SlotRequest<'_>| {
                     let mut __slots = Slots::new();
                     let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
                     if __request.includes(None) {
-                        let __col_1 = {
-                            let __node_8 = prop_row(PropRowProps::props().name("scale_around").values("sx, sy, cx, cy").about("Scale about a pivot point.").build(), Children::default())?;
-                            let __node_9 = prop_row(PropRowProps::props().name("rotate_around").values("deg, cx, cy").about("Rotate about a pivot point.").build(), Children::default())?;
-                            let __node_10 = prop_row(PropRowProps::props().name(".then(other)").values("Transform").about("Compose two transforms into one matrix.").build(), Children::default())?;
-                            let __node_11 = prop_row(PropRowProps::props().name("transform_with").values("matrix, [nodes]").about("Apply a matrix to child render nodes.").build(), Children::default())?;
-                            Container::new(LayoutStyle::new().flex_column().gap(6.0), children![__node_8, __node_9, __node_10, __node_11])?
+                        let __col_5 = {
+                            let __node_11 = prop_row(PropRowProps::props().name("scale_around").values("sx, sy, cx, cy").about("Scale about a pivot point.").build(), Children::default())?;
+                            let __node_12 = prop_row(PropRowProps::props().name("rotate_around").values("deg, cx, cy").about("Rotate about a pivot point.").build(), Children::default())?;
+                            let __node_13 = prop_row(PropRowProps::props().name(".then(other)").values("Transform").about("Compose two transforms into one matrix.").build(), Children::default())?;
+                            let __node_14 = prop_row(PropRowProps::props().name("transform_with").values("matrix, [nodes]").about("Apply a matrix to child render nodes.").build(), Children::default())?;
+                            Container::new(LayoutStyle::new().flex_column().gap(6.0), children![__node_11, __node_12, __node_13, __node_14])?
                         };
-                        __children.push(box_item(__col_1));
+                        __children.push(box_item(__col_5));
                     }
                     __slots.extend_default(__children);
                     Ok(__slots)
@@ -245,7 +338,7 @@ pub fn transforms(props: TransformsProps, children: Children) -> Result<Box<dyn 
             );
             example(ExampleProps::props().title("The Transform API").build(), __deferred)?
         };
-        Container::new(LayoutStyle::new().flex_column().gap(20.0), children![__node_0, __node_1, __node_4, __node_7])?
+        Container::new(LayoutStyle::new().flex_column().gap(20.0), children![__node_0, __node_1, __node_4, __node_7, __node_10])?
     };
     Ok(Box::new(__col_0))
 }

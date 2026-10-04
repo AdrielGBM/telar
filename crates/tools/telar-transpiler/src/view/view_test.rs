@@ -1513,3 +1513,51 @@ fn a_theme_is_provided_to_a_subtree() {
         "{code}"
     );
 }
+
+fn transpiled(attrs: &str) -> String {
+    let src = format!(
+        "[logic]\nlet x = signal(0.25f32);\n[view]\ncol\n    box fill:primary {attrs}\n        text \"x\"\n"
+    );
+    crate::transpile_source(&src, "demo", None, None)
+        .unwrap()
+        .rust_code
+}
+
+#[test]
+fn a_lone_origin_keyword_pivots_on_the_inline_axis() {
+    let code = transpiled("scale:1.06 transform_origin:start");
+    assert!(
+        code.contains("box_transform_about(__r, TransformOrigin::new(0.0, 0.5),"),
+        "{code}"
+    );
+    let code = transpiled("scale:1.06 transform_origin:end");
+    assert!(code.contains("TransformOrigin::new(1.0, 0.5)"), "{code}");
+}
+
+#[test]
+fn an_origin_pair_takes_keywords_and_reactive_fractions() {
+    let code = transpiled("rotate:10 transform_origin:(end $x)");
+    assert!(
+        code.contains("TransformOrigin::new(1.0, (x.get()) as f32)"),
+        "{code}"
+    );
+    assert!(
+        code.contains("let x = x.clone();"),
+        "the signal is captured:\n{code}"
+    );
+}
+
+#[test]
+fn without_an_origin_the_pivot_stays_the_centre() {
+    let code = transpiled("scale:2");
+    assert!(code.contains("box_transform(__r,"), "{code}");
+    assert!(!code.contains("box_transform_about"), "{code}");
+}
+
+#[test]
+fn a_malformed_origin_is_a_build_error() {
+    let code = transpiled("scale:2 transform_origin:(start)");
+    assert!(code.contains("compile_error!"), "{code}");
+    let code = transpiled("scale:2 transform_origin:left");
+    assert!(code.contains("compile_error!"), "{code}");
+}

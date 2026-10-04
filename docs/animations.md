@@ -158,9 +158,12 @@ is an error, not a no-op, because the alternative is an animation that silently 
 
 **Paint** — `opacity`, `fill`, `stroke`, `color`.
 **Transform** — `rotate`, `scale`, `scale_x`, `scale_y`, `translate_x`, `translate_y`.
+
 **Text** — `font_variation`, the one text property allowed through: an axis animated on scroll or on hover is
 what a variable display face is for. A value that changes the text's extent measures it again on each change,
 which is the cost this line otherwise keeps out, paid knowingly for one text rather than for every box.
+
+`transform_origin` is the pivot `rotate` and `scale` hold still, not something to animate: `start`, `center` (the default) or `end` along the writing direction, or a pair `(x y)` of those words or fractions of the box that may read state (`transform_origin:(start 0.25)`, `transform_origin:($x $y)`). A lone word pivots on the inline axis and stays at the vertical middle; `start` and `end` swap sides in right-to-left text; `translate_*` ignores the pivot. A transition on `rotate` or `scale` runs about whatever pivot the box names. The matrix carries the pivot, so DOM, canvas, GPU and software agree, and hit-testing follows what is drawn; a terminal does not transform and ignores it. The code-level form is `ui_core::box_transform_about` with a `TransformOrigin`.
 
 Both halves are read per frame from a closure the renderer already re-runs, so animating them costs a repaint
 and nothing else.

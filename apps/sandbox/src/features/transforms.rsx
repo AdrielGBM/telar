@@ -138,6 +138,22 @@ col gap:20
                 box fill:$theme.danger radius:8 width:56 height:56 rotate:15 scale:0.85
                 box fill:$theme.ink radius:8 width:56 height:56 rotate:-12 translate_y:-8
         code_line code:"box fill:$theme.success rotate:20      box fill:$theme.danger rotate:15 scale:0.85"
+    example title:"Pivot — transform_origin picks the point rotate and scale hold still"
+        card
+            row gap:56 justify:center pad_y:24 pad_x:48
+                col gap:6 align:center
+                    box fill:$theme.primary radius:8 width:56 height:56 scale:1.5
+                    text "center (default)" font_size:11
+                col gap:6 align:center
+                    box fill:$theme.success radius:8 width:56 height:56 scale:1.5 transform_origin:start
+                    text "start" font_size:11
+                col gap:6 align:center
+                    box fill:$theme.warning radius:8 width:56 height:56 scale:1.5 transform_origin:end
+                    text "end" font_size:11
+                col gap:6 align:center
+                    box fill:$theme.danger radius:8 width:56 height:56 rotate:30 transform_origin:(start end)
+                    text "(start end)" font_size:11
+        code_line code:"box scale:1.5 transform_origin:start      box rotate:30 transform_origin:(start end)"
     example title:"The Transform API"
         col gap:6
             prop_row name:"scale_around" values:"sx, sy, cx, cy" about:"Scale about a pivot point."

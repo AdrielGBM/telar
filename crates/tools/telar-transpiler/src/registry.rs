@@ -606,6 +606,9 @@ const TRANSFORM_ATTRS: &[AttrSpec] = &[
     AttrSpec::free("scale_y"),
     AttrSpec::free("translate_x"),
     AttrSpec::free("translate_y"),
+    AttrSpec::free("transform_origin").doc(
+        "The point `rotate` and `scale` pivot on: `transform_origin:start`, `center` (the default) or `end` along the writing direction with the vertical middle, or a pair `transform_origin:(x y)` of start|center|end or fractions of the box (0 is the inline-start and top edge, 1 the inline-end and bottom edge) that may read state. `start` and `end` swap sides in right-to-left text. Moves the pivot only, and is ignored on a terminal, which does not transform.",
+    ),
 ];
 
 /// What clamps one paragraph and would be nonsense applied to a subtree, which is why these are a `text`'s alone rather than [`INHERITABLE_TEXT_ATTRS`].

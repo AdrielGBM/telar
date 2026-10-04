@@ -266,3 +266,118 @@ fn a_box_hiding_where_the_layer_was_declared_hides_the_layer() {
         .unwrap();
     assert!(drawn(&root), "and back when the section is");
 }
+
+/// A switch in a layer is a control like any other: Tab reaches it where the layer was declared, the keyboard flips it through the layer, and it says the state it is in.
+#[test]
+fn a_switch_in_a_layer_is_reached_by_tab_and_flipped_by_the_keyboard() {
+    reset_layout_runtime();
+    set_surface_size(SURFACE);
+    let before = focus::next_id();
+    focus::register_as(before, focus::FocusKind::Widget);
+
+    let on = reactive_core::signal(false);
+    let below = focus::next_id();
+    let switch = StyledContainer::new(
+        LayoutStyle::new().width(50.0).height(20.0),
+        |_r| renderer_core::RectStyle::default(),
+        vec![],
+    )
+    .unwrap()
+    .control(focus::Role::Switch)
+    .toggled(move || on.get())
+    .on_press(move || on.set(!on.peek()));
+    let mut layer = FixedLayer::new(LayoutStyle::new(), vec![Box::new(switch)]).unwrap();
+    let above = focus::next_id();
+    relayout_if_dirty();
+
+    focus::request(before);
+    focus::focus_next();
+    let landed = focus::current().expect("something took focus");
+    assert!(
+        landed > below && landed < above,
+        "Tab goes from what comes before the layer to its switch"
+    );
+
+    let key = |named| Event::KeyPressed {
+        key: platform_core::Key::Named(named),
+        modifiers: platform_core::ModifiersState::default(),
+    };
+    assert_eq!(
+        layer.on_event(&key(platform_core::NamedKey::Space)),
+        EventResult::Handled
+    );
+    assert!(on.peek(), "Space flips it");
+    assert_eq!(
+        layer.on_event(&key(platform_core::NamedKey::Enter)),
+        EventResult::Handled
+    );
+    assert!(!on.peek(), "and so does Enter");
+
+    on.set(true);
+    let switch = focus::exposed()
+        .into_iter()
+        .find(|exposed| exposed.id == landed)
+        .expect("the switch is exposed");
+    assert_eq!(switch.role, focus::Role::Switch);
+    assert_eq!(switch.toggled, Some(true));
+}
+
+/// A box in a layer scaled from its start grows where its origin says, in the surface's coordinates the layer lays it out in, however far the page under it has scrolled; the layer takes the pointer over what it draws, not over the box it laid out.
+#[test]
+fn a_box_in_a_layer_scaled_from_its_start_takes_the_pointer_where_it_is_drawn() {
+    use crate::{TransformOrigin, box_transform_about};
+
+    let taps = Rc::new(Cell::new(0));
+    reset_layout_runtime();
+    set_surface_size(SURFACE);
+    let sink = taps.clone();
+    let badge = StyledContainer::new(
+        LayoutStyle::new().width(100.0).height(48.0),
+        |_r| renderer_core::RectStyle::default(),
+        vec![],
+    )
+    .unwrap()
+    .with_transform(|r| box_transform_about(r, TransformOrigin::start(), 0.0, 2.0, 2.0, 0.0, 0.0))
+    .on_press(move || sink.set(sink.get() + 1));
+    let badge_node = badge.layout_node();
+    let mut page = ScrollPage::new_with(|_| {
+        let layer = FixedLayer::new(
+            LayoutStyle::new()
+                .flex_column()
+                .align_items(layout_core::AlignItems::START),
+            vec![Box::new(badge)],
+        )?;
+        let content = Container::new(
+            LayoutStyle::new().flex_column(),
+            vec![Box::new(layer), block(LayoutStyle::new().height(2000.0))],
+        )?;
+        Ok(Box::new(content))
+    })
+    .unwrap();
+    page.relayout(SURFACE.width, SURFACE.height);
+    relayout_if_dirty();
+    page.viewport().scroll_to(0.0, 500.0);
+    relayout_if_dirty();
+    assert_eq!(
+        track_layout(badge_node).unwrap().get(),
+        Rect::new(0.0, 0.0, 100.0, 48.0)
+    );
+
+    let tap = |x, y| {
+        let pressed = dispatch_overlays(&press(x, y));
+        dispatch_overlays(&release(x, y));
+        pressed
+    };
+    assert_eq!(tap(150.0, 20.0), EventResult::Handled);
+    assert_eq!(
+        taps.get(),
+        1,
+        "the growth past its laid-out edge is the box's"
+    );
+    assert_eq!(
+        tap(250.0, 20.0),
+        EventResult::Ignored,
+        "past what it draws the press goes on to the page"
+    );
+    assert_eq!(taps.get(), 1);
+}
