@@ -129,6 +129,77 @@ fn an_absolute_fill_pins_every_edge() {
     }
 }
 
+/// A replaced element — the `<svg>` a canvas becomes, an `<img>`, a control — is not stretched between its insets by a browser, so the size Taffy gives it is written down.
+#[test]
+fn an_absolute_fill_says_it_covers_the_whole_box() {
+    let out = css(LayoutStyle::new().absolute_fill());
+    assert!(out.contains("width:100%;height:100%;"), "got {out}");
+}
+
+#[test]
+fn a_pinned_side_leaves_out_its_insets_and_margins() {
+    let out = css(LayoutStyle::new()
+        .absolute()
+        .inset_top(10.0)
+        .inset_bottom(SizeDimension::Percent(0.1))
+        .inset_start(SizeDimension::Px(30.0))
+        .inset_end(SizeDimension::Px(40.0))
+        .margin_inline_start(SizeDimension::Px(5.0))
+        .margin_block_end(SizeDimension::Px(6.0)));
+    assert!(
+        out.contains("width:calc(100% - 30px - 40px - 5px);"),
+        "got {out}"
+    );
+    assert!(
+        out.contains("height:calc(100% - 10px - 10% - 6px);"),
+        "got {out}"
+    );
+}
+
+#[test]
+fn a_side_pinned_at_one_edge_only_is_left_to_its_content() {
+    let out = css(LayoutStyle::new()
+        .absolute()
+        .inset_top(0.0)
+        .inset_start(SizeDimension::Px(0.0)));
+    assert!(!out.contains("width:"), "got {out}");
+    assert!(!out.contains("height:"), "got {out}");
+}
+
+#[test]
+fn a_size_the_style_gives_wins_over_its_insets() {
+    let out = css(LayoutStyle::new()
+        .absolute_fill()
+        .width(SizeDimension::Px(120.0)));
+    assert!(out.contains("width:120px;height:100%;"), "got {out}");
+}
+
+/// Taffy fills the width from the insets and lets a ratio answer for the height before reading the height's own insets.
+#[test]
+fn a_ratio_answers_for_the_height_of_a_pinned_box() {
+    let out = css(LayoutStyle::new().absolute_fill().aspect_ratio(2.0));
+    assert!(out.contains("width:100%;"), "got {out}");
+    assert!(!out.contains("height:"), "got {out}");
+}
+
+/// `100%` in a height is the containing block's height, and a percentage margin is of its width.
+#[test]
+fn a_percentage_margin_on_the_block_axis_is_left_to_the_browser() {
+    let out = css(LayoutStyle::new()
+        .absolute_fill()
+        .margin_block_start(SizeDimension::Percent(0.05)));
+    assert!(out.contains("width:100%;"), "got {out}");
+    assert!(!out.contains("height:"), "got {out}");
+}
+
+#[test]
+fn only_an_absolute_box_is_sized_by_its_insets() {
+    let out = css(LayoutStyle::new().inset_top(0.0).inset_bottom(0.0));
+    assert!(!out.contains("height:"), "got {out}");
+    let out = css(LayoutStyle::new().absolute_fill().sticky());
+    assert!(!out.contains("width:"), "got {out}");
+}
+
 #[test]
 fn an_unpinned_absolute_box_leaves_its_edges_alone() {
     let out = css(LayoutStyle::new().absolute());

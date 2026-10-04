@@ -17,8 +17,9 @@ internals.
 ## Running the browser test
 
 `src/layout_parity_test.rs` lays one tree out twice — once through Taffy, once as the CSS this crate writes —
-and compares every box against `getBoundingClientRect`. It needs a real browser, so it runs on the wasm
-target through `wasm-bindgen-test-runner`:
+and compares every box against `getBoundingClientRect`. A box can be a drawing, which the document makes an
+`<svg>`: a browser sizes that as a replaced element, so a canvas pinned by its insets is held to the size Taffy
+gave it too. It needs a real browser, so it runs on the wasm target through `wasm-bindgen-test-runner`:
 
 ```sh
 cargo test -p telar-renderer-dom --target wasm32-unknown-unknown

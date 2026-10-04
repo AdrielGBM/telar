@@ -112,8 +112,15 @@ fn css_of(style: &Style, sticky: Option<&StickyInsets>) -> Css {
         }
     }
 
-    for (property, value) in [("width", style.size.width), ("height", style.size.height)] {
-        if let Some(value) = dimension(value) {
+    let pinned = match sticky {
+        Some(_) => taffy::Size::default(),
+        None => pinned_size(style),
+    };
+    for (property, value, pinned) in [
+        ("width", style.size.width, pinned.width),
+        ("height", style.size.height, pinned.height),
+    ] {
+        if let Some(value) = dimension(value).or(pinned) {
             css.push(property, &value);
         }
     }
@@ -196,6 +203,66 @@ fn css_of(style: &Style, sticky: Option<&StickyInsets>) -> Css {
     }
 
     css
+}
+
+/// The size an absolute box with an `auto` side takes from the insets pinning both of that side's edges, written out.
+///
+/// CSS stretches such a box between its insets only when it lays the box out itself. An `<svg>`, an `<img>` or a form control is a replaced element: pinned by every edge with its size left `auto`, it keeps its own natural size instead, and an `absolute_fill` canvas came out 300 by 150 in the corner of the box it was meant to cover. Taffy has no such boxes, so the size it derives is written down by the steps it takes: a side the style or a ratio already gives stays as it is, the width comes from its insets first, and a ratio then answers for the height before the height's own insets are read.
+fn pinned_size(style: &Style) -> taffy::Size<Option<String>> {
+    let mut pinned = taffy::Size::default();
+    if style.position != Position::Absolute {
+        return pinned;
+    }
+    let given = |side: Dimension| side.into_raw().tag() != CompactLength::AUTO_TAG;
+    let ratio = style.aspect_ratio.is_some();
+    if !given(style.size.width) && !(ratio && given(style.size.height)) {
+        pinned.width = span(
+            (style.inset.left, style.inset.right),
+            (style.margin.left, style.margin.right),
+            true,
+        );
+    }
+    let width_known = given(style.size.width) || pinned.width.is_some();
+    if !given(style.size.height) && !(ratio && width_known) {
+        pinned.height = span(
+            (style.inset.top, style.inset.bottom),
+            (style.margin.top, style.margin.bottom),
+            false,
+        );
+    }
+    pinned
+}
+
+/// The containing block's side less two insets and the margins beside them, or nothing when an edge is unpinned or the length cannot be said.
+///
+/// A percentage margin is a fraction of the containing block's *width* on every side, which `100%` in a `height` is not; a vertical one is left to the browser, which stretches every box but a replaced one correctly.
+fn span(
+    insets: (LengthPercentageAuto, LengthPercentageAuto),
+    margins: (LengthPercentageAuto, LengthPercentageAuto),
+    horizontal: bool,
+) -> Option<String> {
+    let mut taken = Vec::new();
+    for inset in [insets.0, insets.1] {
+        let compact = inset.into_raw();
+        if compact.tag() == CompactLength::AUTO_TAG {
+            return None;
+        }
+        taken.push(length_of(compact)?);
+    }
+    for margin in [margins.0, margins.1] {
+        let compact = margin.into_raw();
+        match compact.tag() {
+            CompactLength::AUTO_TAG => {}
+            CompactLength::PERCENT_TAG if !horizontal => return None,
+            _ => taken.push(length_of(compact)?),
+        }
+    }
+    taken.retain(|length| length != "0px" && length != "0%");
+    Some(if taken.is_empty() {
+        "100%".to_string()
+    } else {
+        format!("calc(100% - {})", taken.join(" - "))
+    })
 }
 
 /// A track list, or nothing when there are no tracks to describe.

@@ -40,6 +40,8 @@ struct Spec {
     children: Vec<Spec>,
     /// A leaf that measures a string, as a `text` does: Taffy asks the document's measurer, the browser lays the glyphs out itself.
     text: Option<(String, Styled)>,
+    /// What the box means, which decides the element a document makes of it.
+    semantics: fn() -> Semantics,
 }
 
 /// A text's style: given, or fitted to a width as `font_size:fit(…)` asks, at the size its measure found.
@@ -81,6 +83,7 @@ fn a_box(style: LayoutStyle) -> Spec {
         style,
         children: Vec::new(),
         text: None,
+        semantics: Semantics::group,
     }
 }
 
@@ -89,6 +92,7 @@ fn holding(style: LayoutStyle, children: Vec<Spec>) -> Spec {
         style,
         children,
         text: None,
+        semantics: Semantics::group,
     }
 }
 
@@ -97,6 +101,7 @@ fn text_leaf(text: &str, style: TextStyle) -> Spec {
         style: LayoutStyle::new(),
         children: Vec::new(),
         text: Some((text.to_owned(), Styled::Given(Box::new(style)))),
+        semantics: Semantics::group,
     }
 }
 
@@ -113,6 +118,15 @@ fn fitted_leaf(text: &str, fit: FontFit, at: impl Fn(f32) -> TextStyle + 'static
                 size: Rc::new(Cell::new(16.0)),
             },
         )),
+        semantics: Semantics::group,
+    }
+}
+
+/// A canvas's box: a document draws it as an `<svg>`, which a browser sizes as a replaced element.
+fn drawing(style: LayoutStyle) -> Spec {
+    Spec {
+        semantics: Semantics::drawing,
+        ..a_box(style)
     }
 }
 
@@ -125,6 +139,7 @@ struct Built {
     node: NodeId,
     children: Vec<Built>,
     text: Option<(String, Styled)>,
+    semantics: fn() -> Semantics,
 }
 
 fn build(engine: &mut LayoutEngine, spec: Spec) -> Built {
@@ -154,6 +169,7 @@ fn build(engine: &mut LayoutEngine, spec: Spec) -> Built {
             node,
             children: Vec::new(),
             text: Some((text, style)),
+            semantics: spec.semantics,
         };
     }
     let children: Vec<Built> = spec
@@ -169,6 +185,7 @@ fn build(engine: &mut LayoutEngine, spec: Spec) -> Built {
         node,
         children,
         text: None,
+        semantics: spec.semantics,
     }
 }
 
@@ -188,7 +205,7 @@ fn frame(engine: &LayoutEngine, built: &Built, origin: (f32, f32), out: &mut Vec
     out.push(DrawCommand::PushElement {
         element: Arc::new(Element::new(
             ElementId(built.node.into()),
-            Semantics::group(),
+            (built.semantics)(),
             css.into_string(),
             rect,
         )),
@@ -629,6 +646,41 @@ fn an_aspect_ratio_gives_the_same_second_side() {
     );
 }
 
+/// A canvas is an `<svg>` in a document, and a browser stretches a replaced element between its insets only once its size is written down: left `auto`, an `absolute:fill` canvas came out 300 by 150 in the corner of the box it was meant to cover.
+#[wasm_bindgen_test]
+fn a_drawing_pinned_by_its_insets_covers_what_they_pin_it_to() {
+    for direction in [Direction::Ltr, Direction::Rtl] {
+        parity(
+            &format!("drawings pinned to their parent ({direction:?})"),
+            direction,
+            surface(
+                LayoutStyle::new().flex_column().padding_all(30.0),
+                vec![holding(
+                    LayoutStyle::new()
+                        .width(640.0)
+                        .height(480.0)
+                        .padding_all(10.0),
+                    vec![
+                        drawing(LayoutStyle::new().absolute_fill()),
+                        drawing(
+                            LayoutStyle::new()
+                                .absolute()
+                                .inset_top(SizeDimension::Percent(0.1))
+                                .inset_bottom(24.0)
+                                .inset_start(SizeDimension::Px(40.0))
+                                .inset_end(SizeDimension::Px(16.0))
+                                .margin_inline_start(SizeDimension::Px(8.0))
+                                .margin_block_end(SizeDimension::Px(4.0)),
+                        ),
+                        drawing(LayoutStyle::new().absolute_fill().width(200.0)),
+                        drawing(LayoutStyle::new().absolute_fill().aspect_ratio(4.0)),
+                    ],
+                )],
+            ),
+        );
+    }
+}
+
 /// A logical edge is resolved once, by the same `resolve` the layout pass runs — so what the browser is told is already physical and needs no `dir` of its own. If the two ever resolved separately, this is the case that would come apart.
 #[wasm_bindgen_test]
 fn an_rtl_row_starts_at_the_right_in_both() {
@@ -717,7 +769,7 @@ fn content_frame(
     out.push(DrawCommand::PushElement {
         element: Arc::new(Element::new(
             ElementId(built.node.into()),
-            Semantics::group(),
+            (built.semantics)(),
             css.into_string(),
             rect,
         )),
