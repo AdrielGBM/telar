@@ -535,6 +535,9 @@ where
             tracing::error!("begin_frame failed: {e}");
             return false;
         }
+        if msg.owed {
+            renderer.owe_present();
+        }
         let commands: &[renderer_core::DrawCommand] =
             if renderer.applies_scale_factor() || msg.scale_factor == 1.0 {
                 &msg.commands
@@ -694,6 +697,7 @@ where
             commands,
             clear,
             timestamp: web_time::Instant::now(),
+            owed: self.pacer.presentation_owed,
         }
     }
 
@@ -974,6 +978,10 @@ where
         self._flush_notify = None;
         // Owed to a surface that is gone: kept, it would wake a suspended loop every frame, and the resume asks for its own first frame.
         self.pacer.frame_owed = false;
+    }
+
+    fn owe_presentation(&mut self) {
+        self.pacer.presentation_owed = true;
     }
 
     fn new_events(&mut self) {

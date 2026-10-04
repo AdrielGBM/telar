@@ -897,6 +897,40 @@ mod in_place {
     }
 
     #[test]
+    fn an_unchanged_frame_that_is_owed_commits_the_surface_without_a_buffer() {
+        let scenario = dirty_scenarios::all()
+            .into_iter()
+            .next()
+            .expect("a shared scenario");
+        let size = scenario.size;
+        for layout in [ShmLayout::Rgba, ShmLayout::Argb] {
+            let (mut renderer, screen) = presenting(size, Compositor::Holds, layout);
+            frame(&mut renderer, size, &scenario.new);
+            let before = {
+                let screen = screen.lock().unwrap();
+                (screen.created, screen.commits.len())
+            };
+
+            frame(&mut renderer, size, &scenario.new);
+            assert_eq!(screen.lock().unwrap().state_commits, 0, "{layout:?}");
+
+            renderer.owe_present();
+            frame(&mut renderer, size, &scenario.new);
+            frame(&mut renderer, size, &scenario.new);
+            let screen = screen.lock().unwrap();
+            assert_eq!(
+                screen.state_commits, 1,
+                "{layout:?}: owed once, committed once"
+            );
+            assert_eq!(
+                (screen.created, screen.commits.len()),
+                before,
+                "{layout:?}: no buffer was taken for it"
+            );
+        }
+    }
+
+    #[test]
     fn a_buffer_still_held_when_the_window_goes_idle_is_freed_once_released() {
         let scenario = dirty_scenarios::all()
             .into_iter()

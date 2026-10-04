@@ -34,6 +34,7 @@ pub(super) trait Wire: Send {
     fn wait(&mut self) -> bool;
     // Attaches `buffer`, marking it held until the compositor releases it, and damages `changed`.
     fn commit(&mut self, buffer: &mut Self::Buffer, changed: &FrameOp, width: u32, height: u32);
+    fn commit_state(&mut self);
 }
 
 struct Slot<B> {
@@ -233,6 +234,9 @@ pub(super) trait AlphaPresenter: Send {
     /// The last frame committed, as premultiplied RGBA bytes, when the buffers hold that layout.
     fn presented(&self) -> Option<&[u8]>;
 
+    /// Commits the surface as it is, with no new frame, so state queued on it by its owner takes effect.
+    fn commit_state(&mut self);
+
     /// Forgets a frame `begin` started that will never be presented, leaving the buffer it was drawing into untrusted.
     fn abandon(&mut self);
 
@@ -354,6 +358,10 @@ impl<W: Wire> AlphaPresenter for ShmPresenter<W> {
         }
         let front = &self.chain.as_ref()?.front;
         (front.age == 1).then(|| rgba_bytes(front.buffer.pixels()))
+    }
+
+    fn commit_state(&mut self) {
+        self.wire.commit_state();
     }
 
     fn abandon(&mut self) {

@@ -713,6 +713,10 @@ where
     D: HasDisplayHandle,
     W: HasWindowHandle,
 {
+    fn owe_present(&mut self) {
+        self.present_owed = true;
+    }
+
     // Built up front on the thread that will draw, so the first frame does not pay for loading fonts mid-frame.
     fn bind_to_render_thread(&mut self) {
         self.ensure_caches();

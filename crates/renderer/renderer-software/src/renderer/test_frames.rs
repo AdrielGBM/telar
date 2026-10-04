@@ -70,6 +70,7 @@ mod memory {
         pub(in super::super) pixels: Vec<u32>,
         pub(in super::super) size: (usize, usize),
         pub(in super::super) commits: Vec<FrameOp>,
+        pub(in super::super) state_commits: usize,
         pub(in super::super) created: usize,
         pub(in super::super) alive: usize,
         // Makes every buffer the presenter asks for fail to be created.
@@ -166,6 +167,10 @@ mod memory {
         }
 
         fn dispatch_pending(&mut self) {}
+
+        fn commit_state(&mut self) {
+            self.screen.lock().unwrap().state_commits += 1;
+        }
 
         fn wait(&mut self) -> bool {
             let mut screen = self.screen.lock().unwrap();

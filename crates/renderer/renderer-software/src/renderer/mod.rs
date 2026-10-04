@@ -74,6 +74,7 @@ pub struct SoftwareRenderer<D: HasDisplayHandle, W: HasWindowHandle> {
     // Cache for compute_layer_bounds: avoids re-traversing commands when input and dimensions are unchanged.
     layer_bounds_cache: Option<(u64, Vec<Option<LayerBox>>)>,
     present_log: PresentLog,
+    present_owed: bool,
     // Used to present without softbuffer's swizzle and copy. softbuffer still owns surface creation and buffer geometry; this is a second acquired reference used only at present time.
     #[cfg(target_os = "android")]
     native_window: Option<ndk::native_window::NativeWindow>,
@@ -184,6 +185,7 @@ where
             expanded_commands_cache: None,
             layer_bounds_cache: None,
             present_log: PresentLog::new(),
+            present_owed: false,
             #[cfg(target_os = "android")]
             native_window,
             #[cfg(target_os = "linux")]
@@ -239,6 +241,7 @@ where
             expanded_commands_cache: None,
             layer_bounds_cache: None,
             present_log: PresentLog::new(),
+            present_owed: false,
             #[cfg(target_os = "android")]
             native_window: None,
             #[cfg(target_os = "linux")]
@@ -356,8 +359,12 @@ where
         if let Some(alpha) = &mut self.target.alpha {
             let _present = perf::span(Phase::Present);
             self.present_log.record(op);
+            let owed = std::mem::take(&mut self.present_owed);
             // Nothing new since the last present is already on screen, and committing it again would only take a buffer.
             if matches!(self.present_log.pending(), FrameOp::NoChange) {
+                if owed {
+                    alpha.commit_state();
+                }
                 return Ok(());
             }
             if alpha.draws_in_place() {

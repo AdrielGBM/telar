@@ -14,6 +14,8 @@ pub(super) struct FrameMsg {
     pub(super) commands: Vec<renderer_core::DrawCommand>,
     pub(super) clear: Option<renderer_core::Color>,
     pub(super) timestamp: web_time::Instant,
+    // Must reach the compositor even if it changes nothing, so it is never dropped as stale.
+    pub(super) owed: bool,
 }
 
 /// Drives `renderer` on a thread of its own, fed one [`FrameMsg`] at a time.
@@ -57,7 +59,7 @@ where
                 };
                 // Never skip a frame that resizes: the surface is reconfigured inside `begin_frame`, so dropping one leaves it at the old size and the window shows clipped content until the next accepted frame.
                 let size_changed = msg.width != current_width || msg.height != current_height;
-                if !size_changed && msg.timestamp.elapsed() > FRAME_BUDGET {
+                if !size_changed && !msg.owed && msg.timestamp.elapsed() > FRAME_BUDGET {
                     let _ = ret_tx.send(msg.commands);
                     continue;
                 }
@@ -73,6 +75,9 @@ where
                 }
                 current_width = msg.width;
                 current_height = msg.height;
+                if msg.owed {
+                    renderer.owe_present();
+                }
                 // A wgpu validation error is fatal by default and would abort the process from this render thread, so the frame is dropped and the app recovers on the next correctly-sized one. Recovery needs `panic=unwind`, which the consuming binary's profile decides.
                 let _ = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
                     let commands: &[renderer_core::DrawCommand] =

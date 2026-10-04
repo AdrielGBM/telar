@@ -48,6 +48,9 @@ pub trait RenderBackend {
         None
     }
 
+    /// Makes the next [`render_frame`](Self::render_frame) reach the compositor even if it draws nothing new, for surface state that only a commit applies. A backend that presents every frame it is handed has nothing to do.
+    fn owe_present(&mut self) {}
+
     /// Whether this backend applies `begin_frame`'s `scale_factor` itself — the hardware path folds it into the shader's transform. A backend that returns `false` (the default, and what the software rasteriser does) must be handed commands already scaled into physical pixels, which is why the frame pipeline runs [`ScaleScratch`](crate::ScaleScratch) for it.
     fn applies_scale_factor(&self) -> bool {
         false
@@ -96,6 +99,10 @@ impl RenderBackend for Box<dyn RenderBackend + Send> {
 
     fn release_idle_buffers(&mut self) -> Option<std::time::Duration> {
         (**self).release_idle_buffers()
+    }
+
+    fn owe_present(&mut self) {
+        (**self).owe_present()
     }
 
     fn applies_scale_factor(&self) -> bool {

@@ -96,6 +96,7 @@ fn frame(width: u32, height: u32, scale_factor: f32, age: Duration) -> FrameMsg 
         commands: vec![rect(20.0)],
         clear: None,
         timestamp: Instant::now() - age,
+        owed: false,
     }
 }
 

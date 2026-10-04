@@ -175,6 +175,8 @@ pub trait EventHandler<W: Window> {
     ///
     /// For a backend whose surfaces outlive the state they were built from — a shell whose bars are described by a config file the user edits — this is the difference between a reload and a restart: the window, its renderer and its place on screen are kept, and only the tree is built again. A handler with no tree to rebuild leaves it a no-op.
     fn remount(&mut self, _window: &W) {}
+    /// Makes the next [`on_redraw`](Self::on_redraw) reach the compositor even though nothing in the UI changed, for a backend holding surface state that only the commit of a presented frame applies.
+    fn owe_presentation(&mut self) {}
     /// Called by the platform at the start of each event-loop iteration, before dispatching any events. Pairs with [`about_to_wait`](Self::about_to_wait) to bracket all event processing within a reactive batch.
     fn new_events(&mut self) {}
     /// Called by the platform after all events in the iteration have been dispatched, before idling. Must close the reactive batch opened by [`new_events`](Self::new_events); returning `Some(duration)` sets the idle timeout. Pairs with [`new_events`](Self::new_events) — the platform guarantees these are called in matching pairs for each iteration.
@@ -227,6 +229,9 @@ impl<W: Window> EventHandler<W> for Box<dyn EventHandler<W>> {
     }
     fn remount(&mut self, window: &W) {
         (**self).remount(window)
+    }
+    fn owe_presentation(&mut self) {
+        (**self).owe_presentation()
     }
     fn new_events(&mut self) {
         (**self).new_events()

@@ -348,6 +348,11 @@ impl Wire for WaylandWire {
         self.surface.commit();
         let _ = self.event_queue.flush();
     }
+
+    fn commit_state(&mut self) {
+        self.surface.commit();
+        let _ = self.event_queue.flush();
+    }
 }
 
 /// Builds a presenter over the app's existing Wayland surface, or `None` when the handles are not Wayland or the connection/globals cannot be set up (the caller then falls back to opaque softbuffer).
