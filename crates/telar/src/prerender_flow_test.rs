@@ -5,9 +5,10 @@ use std::sync::Arc;
 use platform_headless::HeadlessPlatform;
 use renderer_record::{Recording, RecordingFactory};
 use telar::{
-    App, AppConfig, AppPathsProvider, Color, Component, Container, LayoutStyle, LocationFormat,
-    NoPaths, Role, SizeDimension, SystemPreferences, Text, TextStyle, WindowRoot, hot_signal,
-    location_history, prerender_page, reset_layout_runtime, run_with_platform_and_renderer,
+    App, AppConfig, AppPathsProvider, Color, Component, Container, LayoutStyle, Location,
+    LocationFormat, NoPaths, RectStyle, Role, SizeDimension, StyledContainer, SystemPreferences,
+    Text, TextStyle, WindowRoot, follow_location_locale, hot_signal, location_history,
+    prerender_page, reset_layout_runtime, run_with_platform_and_renderer,
 };
 use telar_project::{
     PageLocation, PageRequest, Preferences, PrerenderRequest, PrerenderedPage, Surface,
@@ -15,6 +16,9 @@ use telar_project::{
 
 const WIDTH: u32 = 640;
 const HEIGHT: u32 = 480;
+
+// Every test here writes under the same base: the location format a page is written in is one for the whole process.
+const BASE: &str = "/site/";
 
 struct Site;
 
@@ -38,12 +42,25 @@ impl App for Site {
         let section = Container::new(LayoutStyle::new().flex_column(), vec![Box::new(body)])
             .unwrap()
             .role(Role::Section);
+        let home = Text::new(
+            || "Home".to_string(),
+            LayoutStyle::new(),
+            || TextStyle::new(16.0, Color::BLACK),
+        )
+        .unwrap();
+        let link = StyledContainer::new(
+            LayoutStyle::new(),
+            |_| RectStyle::default(),
+            vec![Box::new(home)],
+        )
+        .unwrap()
+        .to(|| Location::root().segment("docs"));
         let main = Container::new(
             LayoutStyle::new()
                 .flex_column()
                 .width(SizeDimension::Percent(1.0))
                 .height(SizeDimension::Percent(1.0)),
-            vec![Box::new(heading), Box::new(section)],
+            vec![Box::new(heading), Box::new(section), Box::new(link)],
         )
         .unwrap()
         .role(Role::Main);
@@ -67,6 +84,7 @@ fn request(page: PageRequest) -> PrerenderRequest {
             color_scheme: Some("light".to_string()),
             ..Preferences::default()
         },
+        base: BASE.to_string(),
     }
 }
 
@@ -185,4 +203,30 @@ fn the_page_for_an_address_with_none_names_no_location() {
     let page = written(PageRequest::NotFound);
     assert_eq!(page.state.location, None);
     assert!(!page.markup.is_empty());
+}
+
+#[test]
+fn a_page_links_under_the_base_it_is_served_at() {
+    let page = written(docs());
+    assert!(
+        page.markup.contains("href=\"/site/docs\""),
+        "{}",
+        page.markup
+    );
+    assert_eq!(page.state.location.as_deref(), Some("/docs"));
+    assert_eq!(page.base_locale, None);
+}
+
+#[test]
+fn a_page_says_which_locale_its_address_falls_back_to() {
+    follow_location_locale(["en", "es"], "es");
+    let page = written(docs());
+    assert_eq!(page.locales, ["en", "es"]);
+    assert_eq!(page.base_locale.as_deref(), Some("es"));
+    assert_eq!(page.state.location.as_deref(), Some("/es/docs"));
+    assert!(
+        page.markup.contains("href=\"/site/es/docs\""),
+        "{}",
+        page.markup
+    );
 }

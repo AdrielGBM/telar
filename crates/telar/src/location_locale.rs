@@ -2,14 +2,14 @@
 //!
 //! In the facade for the same reason as `system_locale`: `i18n-core` stays on `reactive-core` alone, and `platform-core` knows nothing of translations.
 
-use std::cell::Cell;
+use std::cell::RefCell;
 use std::rc::Rc;
 
 use crate::user_preferences::LOCALE_KEY;
 
 thread_local! {
     // An `Effect` handle is inert, so the effect gets a scope of its own that a re-call disposes; otherwise two bindings would race to write the address.
-    static FOLLOW: Cell<Option<reactive_core::OwnerId>> = const { Cell::new(None) };
+    static FOLLOW: RefCell<Option<(reactive_core::OwnerId, Rc<Binding>)>> = const { RefCell::new(None) };
 }
 
 /// Makes the locale part of where the user is: every location the app's address holds names one of `available`, and the active locale and that one follow each other.
@@ -32,20 +32,27 @@ pub fn follow_location_locale(
         available: available.clone(),
         base,
     });
-    if let Some(previous) = FOLLOW.take() {
+    if let Some((previous, _)) = FOLLOW.take() {
         reactive_core::dispose_owner(previous);
     }
     platform_core::bind_location_locale(available, binding.clone());
     let scope = reactive_core::detached(reactive_core::owner_scope);
+    let followed = binding.clone();
     reactive_core::effect(move || {
         let Some(active) = i18n_core::use_locale() else {
             return;
         };
-        let carried = binding.carried(&active);
+        let carried = followed.carried(&active);
         platform_core::set_location_locale(carried);
         services_core::store_preference(LOCALE_KEY, Some(carried));
     });
-    FOLLOW.set(Some(scope.id()));
+    FOLLOW.set(Some((scope.id(), binding)));
+}
+
+/// The locale an address falls back to, as the last [`follow_location_locale`] named it; `None` for an app whose addresses carry none.
+#[cfg(all(feature = "prerender", not(target_arch = "wasm32")))]
+pub(crate) fn location_base_locale() -> Option<String> {
+    FOLLOW.with_borrow(|follow| follow.as_ref().map(|(_, binding)| binding.base.clone()))
 }
 
 struct Binding {

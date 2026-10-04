@@ -41,14 +41,16 @@ pub(crate) fn run_web_dev(
             std::process::exit(1);
         }
     };
-    eprintln!("[cargo-telar] Serving http://localhost:{port}/");
+    let base = config.web.base_path();
+    eprintln!("[cargo-telar] Serving http://localhost:{port}{base}");
 
     let serve_from = dist.clone();
     std::thread::spawn(move || {
         for stream in listener.incoming().flatten() {
             let root = serve_from.clone();
+            let base = base.clone();
             // One thread per request: a page pulls a handful of files and then holds a poll open, and a sequential server would make the poll block the next reload's fetches.
-            std::thread::spawn(move || serve(stream, &root));
+            std::thread::spawn(move || serve(stream, &root, &base));
         }
     });
 
@@ -142,7 +144,7 @@ const RELOAD_SCRIPT: &str = r#"    <script id="telar-dev-reload">
     </script>
 "#;
 
-fn serve(mut stream: TcpStream, root: &Path) {
+fn serve(mut stream: TcpStream, root: &Path, base: &str) {
     let mut reader = BufReader::new(match stream.try_clone() {
         Ok(stream) => stream,
         Err(_) => return,
@@ -182,7 +184,17 @@ fn serve(mut stream: TcpStream, root: &Path) {
             return;
         }
     };
-    let Some((mut file, path, len)) = resolve(root, target).and_then(|path| {
+    if base != "/" && target.split(['?', '#']).next() == Some("/") {
+        respond(
+            &mut stream,
+            "302 Found",
+            &[("location", base.to_string())],
+            b"",
+            head_only,
+        );
+        return;
+    }
+    let Some((mut file, path, len)) = resolve(root, base, target).and_then(|path| {
         let file = std::fs::File::open(&path).ok()?;
         let len = file.metadata().ok()?.len();
         Some((file, path, len))
@@ -359,11 +371,15 @@ fn digits(text: &str) -> Option<u64> {
     }
 }
 
-/// The file a request target names, or `None` for anything that tries to leave the directory. A directory, the root included, serves its `index.html`.
-fn resolve(root: &Path, target: &str) -> Option<PathBuf> {
+/// The file a request target under `base` names, or `None` for one outside `base` or one that tries to leave the directory. A directory, the root included, serves its `index.html`.
+fn resolve(root: &Path, base: &str, target: &str) -> Option<PathBuf> {
     let path = target.split(['?', '#']).next().unwrap_or("/");
     let decoded = percent_decode(path)?;
-    let relative = decoded.trim_start_matches('/');
+    let under_base = decoded.strip_prefix(base.trim_end_matches('/'))?;
+    if !under_base.is_empty() && !under_base.starts_with('/') {
+        return None;
+    }
+    let relative = under_base.trim_start_matches('/');
     let escapes = relative
         .split('/')
         .any(|part| part == ".." || part.contains([':', '\\', '\0']));

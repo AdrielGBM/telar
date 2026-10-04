@@ -107,7 +107,7 @@ its locale, so a copied link, a reload and a prerendered page each open in the r
 
 | Target | Where the locale lives |
 | --- | --- |
-| Web (DOM and canvas) | The first segment under the base path: `/es/`, `/portfolio/en/projects#team`. `/` is handled like any address without a locale; serving it as a negotiation page belongs to the web packaging. |
+| Web (DOM and canvas) | The first segment under the base path: `/es/`, `/portfolio/en/projects#team`. `/` is handled like any address without a locale; serving it as a negotiation page belongs to the web packaging ([docs/web-packaging.md](web-packaging.md#the-root-of-a-site-in-several-locales)). |
 | Desktop, terminal | In every entry of the history saved in `UserPrefs`, and in `--location /en/projects`. Also kept as `telar.locale`, for a launch with no saved history. |
 | Android | The `ACTION_VIEW` link (`https://example.com/en/projects`), and `telar.locale` for a launch without one. |
 | Headless | The fixed location: `HeadlessPlatform::with_location([route.to_location().with_locale("en")])` is one route in one language, which is what a prerender of each route × locale builds. |
@@ -128,8 +128,9 @@ two segments there as it always was.
 Notes on the less obvious cases:
 
 - **Web base path.** `WebOptions::location` (a `LocationFormat`) sets the base path and the trailing slash.
-  Left unset, the base comes from the page's `<base href>` directory, and is `/` when there is none. A
-  format that names no locales reads the ones the app declared.
+  Left unset, the base comes from the page's `<base href>` directory, and is `/` when there is none; a packaged
+  build writes that `<base href>` from `[telar.web] base`. A format that names no locales reads the ones the
+  app declared.
   `?telar-*` page settings are removed from the locations the app sees, and added back to every address it
   pushes, so a setting made by a link survives navigation.
 - **Web scroll.** The browser's own scroll restoration is turned off (`history.scrollRestoration =

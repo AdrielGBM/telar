@@ -32,6 +32,7 @@ fn written(pages: Vec<PageLocation>, locales: &[&str]) -> PrerenderedPage {
         },
         pages,
         locales: locales.iter().map(|locale| locale.to_string()).collect(),
+        base_locale: locales.first().map(|locale| locale.to_string()),
         settled: true,
     }
 }
@@ -68,11 +69,23 @@ fn every_page_is_written_in_every_locale_the_address_carries() {
     );
 }
 
+fn site(toml: &str) -> Site {
+    let web: telar_project::WebSection = toml::from_str(toml).unwrap();
+    Site::new(&web, Path::new("/nonexistent"), "portfolio").unwrap()
+}
+
 #[test]
 fn a_page_takes_its_language_title_markup_and_state_from_what_the_app_wrote() {
-    let html = page_for(&base(), &written(Vec::new(), &[]), Some(2))
-        .render(DEFAULT_TEMPLATE)
-        .unwrap();
+    let location = at(&["projects"]).in_locale("es");
+    let html = page_for(
+        &base(),
+        &written(Vec::new(), &[]),
+        &site(""),
+        Some(&location),
+        &SitePages::root_only(),
+    )
+    .render(DEFAULT_TEMPLATE)
+    .unwrap();
     assert!(html.contains(r#"<html lang="es" dir="ltr">"#), "{html}");
     assert!(
         html.contains("<title>Proyectos — Portafolio</title>"),
@@ -88,19 +101,66 @@ fn a_page_takes_its_language_title_markup_and_state_from_what_the_app_wrote() {
     );
     assert!(html.contains(r#""location":"/es/projects""#), "{html}");
     assert!(
-        html.contains(r#"import init from "../../app-0123456789ab.js";"#),
+        html.contains(r#"import init from "/app-0123456789ab.js";"#),
         "{html}"
     );
 }
 
 #[test]
-fn the_page_served_at_any_address_writes_its_urls_from_the_root() {
-    let page = page_for(&base(), &written(Vec::new(), &[]), None);
-    assert_eq!(page.base, "/");
-    assert_eq!(
-        page_for(&base(), &written(Vec::new(), &[]), Some(0)).base,
-        "./"
+fn a_page_carries_its_description_canonical_and_alternates() {
+    let site = site("origin = \"https://example.com\"");
+    let pages = site_pages(&written(vec![at(&["projects"])], &["es", "en"]));
+    let location = at(&["projects"]).in_locale("en");
+    let html = page_for(
+        &base(),
+        &written(Vec::new(), &[]),
+        &site,
+        Some(&location),
+        &pages,
+    )
+    .render(DEFAULT_TEMPLATE)
+    .unwrap();
+    for tag in [
+        r#"<link rel="canonical" href="https://example.com/en/projects/" />"#,
+        r#"<link rel="alternate" href="https://example.com/es/projects/" hreflang="es" />"#,
+        r#"<link rel="alternate" href="https://example.com/es/projects/" hreflang="x-default" />"#,
+        r#"<meta property="og:title" content="Proyectos — Portafolio" />"#,
+    ] {
+        assert!(html.contains(tag), "{tag} in {html}");
+    }
+}
+
+#[test]
+fn the_page_for_a_missing_address_names_no_place_of_its_own() {
+    let site = site("origin = \"https://example.com\"\nbase = \"/docs/\"");
+    let page = page_for(
+        &base(),
+        &written(Vec::new(), &[]),
+        &site,
+        None,
+        &SitePages::root_only(),
     );
+    let html = page.render(DEFAULT_TEMPLATE).unwrap();
+    assert!(!html.contains("canonical"), "{html}");
+    assert!(html.contains(r#"<base href="/docs/" />"#), "{html}");
+    assert!(
+        html.contains(r#"import init from "/docs/app-0123456789ab.js";"#),
+        "{html}"
+    );
+}
+
+#[test]
+fn the_pages_of_a_site_whose_addresses_carry_a_locale_fall_back_to_its_base_locale() {
+    let mut root = written(vec![at(&["projects"])], &["en", "es"]);
+    root.base_locale = Some("es".to_string());
+    let pages = site_pages(&root);
+    assert_eq!(pages.base_locale.as_deref(), Some("es"));
+    assert_eq!(pages.pages.len(), 4);
+    assert!(!pages.pages.contains(&PageLocation::root()));
+
+    let plain = site_pages(&written(vec![at(&["projects"]), at(&[".."])], &[]));
+    assert_eq!(plain.base_locale, None);
+    assert_eq!(plain.pages, [PageLocation::root(), at(&["projects"])]);
 }
 
 #[test]

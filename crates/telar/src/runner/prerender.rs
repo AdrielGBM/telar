@@ -83,6 +83,8 @@ pub fn prerender_page<A: App>(
     let mut app = LocalApp(app);
     let surface = request.surface;
 
+    platform_core::set_location_format(platform_core::LocationFormat::new(&request.base));
+    platform_core::set_asset_base(&request.base);
     app.set_system_preferences(&system_preferences(&request.preferences));
     let size = geometry_core::Size::new(surface.width as f32, surface.height as f32);
     app.set_surface_size(size);
@@ -123,6 +125,7 @@ pub fn prerender_page<A: App>(
             })
             .collect(),
         locales: platform_core::location_locales(),
+        base_locale: crate::location_locale::location_base_locale(),
         settled,
     };
     drop(tree);

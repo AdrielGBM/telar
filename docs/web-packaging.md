@@ -15,26 +15,39 @@ Everything here only means something to a browser, so it lives in the packaging 
 [telar.web]
 template = "web/index.html"   # the page template; default shown
 public = "web/public"         # copied verbatim into the output; default shown
+base = "/"                    # the path the site is served under; default shown
+origin = "https://example.com"          # the scheme and host it is served at; no default
+description = "meta.description"        # a catalog key, read in each page's locale
+og_image = { es = "og/es.png", en = "og/en.png" }   # or one path or URL for every locale
+theme_color = { light = "#f4f4f2", dark = "#101112" } # or one color
+host = "static"               # or "cloudflare-pages"; default shown
 ```
 
-Both paths are relative to the package root and inherited from a workspace `telar.toml` key by key, like
-the rest of `[telar]`. A project with no `[telar.web]` gets the defaults, and a default that does not exist
-is fine: no template means the built-in page, no public directory means nothing to copy. A path you **name**
-that does not exist is an error. So is a misspelled key, as everywhere else in `telar.toml`.
+The two paths are relative to the package root. Every key is inherited from a workspace `telar.toml` key by
+key, like the rest of `[telar]`. A project with no `[telar.web]` gets the defaults, and a default that does
+not exist is fine: no template means the built-in page, no public directory means nothing to copy. A path you
+**name** that does not exist is an error. So is a misspelled key, as everywhere else in `telar.toml`, and so is
+a value that cannot describe a site: an `origin` with a path, a `base` with `..` in it, an `og_image` of the
+site with no `origin` to make its URL from, or `host = "cloudflare-pages"` under a `base` other than `/`.
+
+The keys after `public` describe the site rather than the build; see [Describing the site](#describing-the-site)
+and [Host profiles](#host-profiles).
 
 ## Output
 
 | File | What it is |
 | --- | --- |
-| `index.html` | The page, expanded from the template. |
+| `index.html` | The page, expanded from the template. With `--prerender` and an address that carries a locale, the [negotiating root](#the-root-of-a-site-in-several-locales) instead. |
 | `<locale>/<path>/index.html`, `404.html` | With `--prerender`, every page of the app written ahead of time; see [Prerendering](prerender.md). |
+| `sitemap.xml` | With `--prerender` and an `origin`: every page written, with its translations; see [The sitemap](#the-sitemap). |
 | `app-<hash>.js` | The `wasm-bindgen` glue, pointed at the hashed module. |
 | `app_bg-<hash>.wasm` | The module. |
 | `fonts/<name>-<hash>.<ext>` | Each face `[[telar.fonts]]` declares; see [Fonts as assets](fonts.md). |
 | `images/<hash>.<ext>`, `images/<hash>-<width>w.<ext>` | Each picture an `img src:"…"` bakes, and its smaller copies; see [Pictures](#pictures). |
 | `asset-manifest.json` | Logical path → hashed path for every hashed file. |
 | everything from `web/public/` | Copied as is, at the same relative path. |
-| `*.br`, `*.gz` | Release builds only: precompressed copies (see below). |
+| `*.br`, `*.gz` | Release builds for `host = "static"` only: precompressed copies (see below). |
+| `_headers`, `_redirects`, `_worker.js`, `_routes.json` | `host = "cloudflare-pages"` only; see [Host profiles](#host-profiles). |
 
 The output directory is assembled beside `web/` and swapped in whole, so it only ever holds one build:
 nothing from a previous build is left behind, and a server reading it mid-build sees the last complete one.
@@ -52,7 +65,7 @@ starting point to copy into `web/index.html`.
 | `%telar.title%` | value | the page title, escaped | the package name |
 | `%telar.renderer%` | value | the `--renderer` choice, for `data-telar-renderer` | `auto` |
 | `%telar.host%` | attributes | the attributes of a prerendered page's host element, inside its start tag | nothing |
-| `%telar.meta%` | block | `<meta>`/`<link>` tags for the document | a `description` |
+| `%telar.meta%` | block | the `<base>`, `<meta>` and `<link>` tags that describe the page ([Describing the site](#describing-the-site)) | a `description` and the preview tags |
 | `%telar.fonts%` | block | a preload and an `@font-face` rule per declared face ([fonts](fonts.md)) | nothing |
 | `%telar.bootstrap%` | block | the preloads and the module script that start the app | always present |
 | `%telar.prerendered%` | block | prerendered markup for the host element ([prerendering](prerender.md)) | nothing |
@@ -87,10 +100,18 @@ The rules:
   page scrolled before the module loads keeps its position. A template that fixes the document in place
   takes that away. See [docs/primary-scroll.md](primary-scroll.md).
 
-URLs the page writes for output files start with `./`, which resolves against a page at the output root. A
-prerendered page further down writes them from where it is (`../../`), and `404.html` from `/`. The
-bootstrap also writes `<meta name="telar-assets" content="./">`: the app resolves it once, when it starts, and
-fetches every file the build shipped from there, so an address it pushes later does not move them.
+URLs the page writes for output files start with the site's base path (`/app-….js`, or `/docs/app-….js` under
+`base = "/docs/"`), so every page reaches the same files from any depth, and `404.html` from any address a
+host serves it at. The bootstrap also writes `<meta name="telar-assets" content="/">`: the app resolves it
+once, when it starts, and fetches every file the build shipped from there, so an address it pushes later does
+not move them. A site that is not at the root of its domain says where it is with `base`; the build is then
+served from that path only, by the dev server too.
+
+Under a `base` other than `/`, `%telar.meta%` starts with `<base href="/docs/">`. That is where the app reads
+the path its own addresses live under (see [docs/location.md](location.md)), and what every relative URL in the
+document resolves against, so keep `%telar.meta%` above any element of the template that names a URL. A
+fragment-only link of the template's own (`href="#main"`) resolves against it too: write it with the page's
+path, or let the app draw it with `anchor:`.
 
 A `web/index.html` written before templates existed, loading `./app.js` directly, is refused with a message
 naming `%telar.bootstrap%`: the glue now has a hashed name, so a hand-written reference to it cannot work.
@@ -151,12 +172,124 @@ as `.well-known/`. These files are reached by URLs something outside the build a
 (`/robots.txt`, `/favicon.ico`, `/.well-known/security.txt`, an Open Graph image), so their names are never
 hashed and they are not in the manifest; serve them with ordinary revalidating cache headers.
 
-A public file cannot replace something the build writes: `index.html`, `asset-manifest.json` or a hashed
-file of the same name is an error naming the file to move.
+A public file cannot replace something the build writes: `index.html`, `asset-manifest.json`, a hashed
+file, and with `--prerender` `404.html` and `sitemap.xml`, or under `cloudflare-pages` `_worker.js` and
+`_routes.json`, of the same name is an error naming the file to move. A page `--prerender` writes at the path
+of a public file is one too. `_headers` and `_redirects` are the exception: the profile extends them.
+
+## Describing the site
+
+What a crawler, a link preview or a browser's own interface reads about a page is not something a
+component says: it is derived from `[telar.web]`, the app's catalogs, its routes and the titles the app gives
+them (see [docs/surface-title.md](surface-title.md)). `%telar.meta%` writes it, on every page the build
+writes, in this order:
+
+| Tag | From | When |
+| --- | --- | --- |
+| `<base href>` | `base` | `base` is not `/` |
+| `<meta name="description">` | the message under `description` in the page's locale, or the locale it negotiates to, or the catalog's default; without the key, `<app>, a Telar application.` | always |
+| `<meta name="theme-color">` | `theme_color`; a `{ light, dark }` table writes one per `prefers-color-scheme` | `theme_color` is set |
+| `<link rel="canonical">` | `origin` + the page's address | `origin` is set, on every page but `404.html` |
+| `<link rel="alternate" hreflang>` | the same page in every locale the address carries, and `x-default` for the base locale's | `origin` is set and the page is in a locale |
+| `og:type`, `og:title`, `og:description` | `website`, the page title, the description | always |
+| `og:url` | the canonical address | `origin` is set |
+| `og:locale`, `og:locale:alternate` | the page's locale and the others the address carries, as `es`, `en_US` | always; the alternates on a page in a locale |
+| `og:image` | `og_image` for the page's locale, else the base locale's; a path is a file of the public directory, made a URL with `origin` and `base` | `og_image` is set |
+| `twitter:card` | `summary_large_image` with an image, `summary` without | always |
+
+A page's address is its directory with the closing `/` (`https://example.com/es/projects/`), which is what a
+static host serves `es/projects/index.html` at. The description key has to be plain text in every locale that
+has it, a message with no `{arguments}` and no plural forms, and a key the catalog does not have is an error.
+So is an `og_image` path that is not a file of the public directory: name the picture, say
+`web/public/og/es.png` as `"og/es.png"`, and it is copied and linked with the rest.
+
+Search engines want full URLs for all of this, so a site with no `origin` gets the description, the theme
+color and the preview text, and no canonical, alternate-language or `og:url` tags. A `--prerender` build
+without one says so. Until a site has its domain, an `origin` placeholder is fine: it is one key to change.
+
+## The root of a site in several locales
+
+When the app's address carries its locale (`follow_location_locale`, see [docs/location.md](location.md)),
+`/` is not a page: every page lives under its locale (`/es/`, `/en/projects/`). With `--prerender`, the build
+writes `index.html` as the page that sends a reader to theirs:
+
+- **With scripts**, it picks a locale from `navigator.languages` with the rule `negotiate_locale` uses, the
+  one the app uses when an address names no locale: for each preferred tag in order, an exact match ignoring
+  case, then the first locale with the same language; the base locale when nothing matches. It then
+  `location.replace`s to that locale's root, keeping the query and the fragment, so the root leaves no entry
+  in the history. The script is the rule written once in JavaScript and shared with the Cloudflare Pages
+  worker below; a test runs both against `negotiate_locale` itself.
+- **Without scripts**, a `<noscript>` refresh goes to the base locale's root, and the page lists a link to
+  every locale's root, labelled with that root's title in its own language.
+- **For a crawler**, it carries `<link rel="alternate" hreflang>` to every locale's root, `x-default` to the
+  base locale's, and, with an `origin`, a canonical link to the base locale's root.
+
+The base locale is the one `follow_location_locale(available, base)` names, as the app reports it while the
+page is prerendered.
+
+A plain build (no `--prerender`) writes no such page: its `index.html` is the app, which chooses the locale
+itself and rewrites the address.
+
+## The sitemap
+
+A `--prerender` build of a site with an `origin` writes `sitemap.xml`: every page it wrote, each with an
+`<xhtml:link rel="alternate" hreflang>` to every translation of it and `x-default` to the base locale's. The
+negotiating root and `404.html` are not in it. Point crawlers at it from `web/public/robots.txt`:
+
+```text
+Sitemap: https://example.com/sitemap.xml
+```
+
+## Host profiles
+
+`host` names the static host the output is shaped for. What the build writes for it only means something to
+that host and is written beside the site, never into a page.
+
+### `static` (the default)
+
+Any server that maps paths to files. Release builds carry precompressed copies (see
+[Precompression](#precompression)), and nothing else is written for the host. Cache headers are the server's
+configuration: give the hashed files `Cache-Control: public, max-age=31536000, immutable`, the pages
+`no-cache`, and `/` `Vary: Accept-Language` if the server negotiates it.
+
+### `cloudflare-pages`
+
+Cloudflare Pages, deployed from the output directory (with the Git integration or `wrangler pages deploy`).
+It serves the site at the root of its domain, so this profile needs `base = "/"`.
+
+- **`_headers`**: `public, max-age=31536000, immutable` for every file in `asset-manifest.json` and everything
+  under `images/`; `no-cache` for `/`, `404.html`, and every page (as `/<locale>/*` for each locale, or each
+  page's own path when the address carries none); `Vary: Accept-Language` on `/` when it negotiates. Pages
+  joins the values of every rule a request matches, so no page rule ever covers a hashed file.
+- **`_redirects`**: when the address carries a locale, a `302` from each page's address without one
+  (`/projects` and `/projects/`) to the base locale's (`/es/projects/`).
+- **`_worker.js`** and **`_routes.json`**: when the address carries a locale, a worker that answers `/` with a
+  `302` to the root of the locale `Accept-Language` negotiates to (by `q`, then order; `*` and `q=0` ignored),
+  keeping the query, with `Vary: Accept-Language` and `Cache-Control: no-cache`. `_routes.json` sends only `/`
+  to it, so every other request is a static file and costs no invocation. The negotiating `index.html` is still
+  there for a request the worker does not answer.
+- **No precompressed copies.** Cloudflare compresses at its edge by the response's content type, and its list
+  includes `application/wasm` along with HTML, JavaScript, CSS, JSON and SVG
+  ([Cloudflare docs](https://developers.cloudflare.com/speed/optimization/content/compression/)); `.br` and
+  `.gz` files would only be uploaded and never served.
+- **A warning for every file over 25 MiB**, the largest Pages serves.
+
+A `_headers` or `_redirects` in the public directory is kept, with the derived rules written after it: every
+matching header rule applies, and the first matching redirect wins, so the project's own redirects come
+first. The result has to fit Pages' limits (100 header rules, 2,100 redirects) or the build stops and says
+which file is over. `_worker.js` and `_routes.json` are the build's; one in the public directory is an error.
+
+The worker is Pages' "advanced mode" rather than a `functions/` directory: Pages reads `functions/` from the
+project root, never from the output it deploys, while `_worker.js` and `_routes.json` travel with the output.
+`_headers` and `_redirects` do not apply to what the worker answers, which is why it sets its own headers.
+
+The worker can only read `Accept-Language`. A reader who chose another locale in the app (kept in
+`localStorage`, see [docs/user-preferences.md](user-preferences.md)) is still sent to the negotiated one at
+`/`; their choice holds from the first page they open from there.
 
 ## Precompression
 
-A release build writes a `.br` (brotli, quality 11) and a `.gz` (gzip, best) beside every file of at least
+A release build for `host = "static"` writes a `.br` (brotli, quality 11) and a `.gz` (gzip, best) beside every file of at least
 1 KiB whose format is not already compressed: HTML, JavaScript, CSS, JSON, the module, SVG, XML, plain text,
 `.ttf`/`.otf` and similar, in every directory of the output, public files included. PNG, JPEG, WebP, AVIF,
 `woff2`, video and audio are skipped, since a second pass over them only costs time. Servers that know the
@@ -165,8 +298,8 @@ original; those that do not ignore them.
 
 ## The dev server
 
-`cargo telar dev --target web` serves the output on `http://localhost:8080/` with `cache-control: no-store`
-and reloads the page after each rebuild. It rebuilds on changes under `src/`, `crates/` and `apps/`, and on
+`cargo telar dev --target web` serves the output on `http://localhost:8080/` (under `base`, with `/` redirecting
+there, when the site names one) with `cache-control: no-store` and reloads the page after each rebuild. It rebuilds on changes under `src/`, `crates/` and `apps/`, and on
 changes to the template's directory and the public directory.
 
 - **Media types** follow the file extension: HTML, JavaScript, `wasm` (`application/wasm`, which streaming

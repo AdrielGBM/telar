@@ -173,6 +173,49 @@ fn the_web_table_names_its_template_and_public_directory() {
 }
 
 #[test]
+fn the_site_keys_are_inherited_key_by_key() {
+    let root = std::env::temp_dir().join(format!("telar_inherit_web_{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&root);
+    let package_root = root.join("apps/site");
+    std::fs::create_dir_all(&package_root).unwrap();
+    std::fs::write(root.join("Cargo.toml"), "[workspace]\nmembers = []\n").unwrap();
+    std::fs::write(
+        root.join(MANIFEST_FILENAME),
+        "[telar.web]\norigin = \"https://example.com\"\nhost = \"cloudflare-pages\"\ndescription = \"site.description\"\n",
+    )
+    .unwrap();
+    std::fs::write(
+        package_root.join(MANIFEST_FILENAME),
+        "[telar.web]\nog_image = \"og.png\"\ntheme_color = \"#000\"\ndescription = \"app.description\"\n",
+    )
+    .unwrap();
+
+    let web = TelarManifest::load(&package_root)
+        .expect("an image of the site is fine once the workspace names the origin")
+        .telar
+        .web;
+    let _ = std::fs::remove_dir_all(&root);
+    assert_eq!(web.origin(), Some("https://example.com"));
+    assert_eq!(web.host(), crate::WebHost::CloudflarePages);
+    assert_eq!(web.description.as_deref(), Some("app.description"));
+    assert_eq!(
+        web.og_image,
+        Some(crate::OgImage::Shared("og.png".to_string()))
+    );
+    assert_eq!(web.base_path(), "/");
+}
+
+#[test]
+fn a_web_table_that_cannot_describe_a_site_is_an_error_naming_the_key() {
+    let root = package(
+        "web_invalid",
+        Some("[telar.web]\norigin = \"example.com\"\n"),
+    );
+    let error = TelarManifest::load(&root).unwrap_err().to_string();
+    assert!(error.contains("origin"), "{error}");
+}
+
+#[test]
 fn a_package_naming_any_face_replaces_the_workspace_set_whole() {
     let root = std::env::temp_dir().join(format!("telar_inherit_fonts_{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&root);

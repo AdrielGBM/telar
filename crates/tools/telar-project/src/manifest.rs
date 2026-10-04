@@ -11,6 +11,7 @@ use std::path::{Path, PathBuf};
 use serde::Deserialize;
 
 use crate::fonts::FontDeclaration;
+use crate::web::{OgImage, ThemeColor, WebHost};
 
 /// The file this describes, in the package root.
 pub const MANIFEST_FILENAME: &str = "telar.toml";
@@ -85,6 +86,18 @@ pub struct WebSection {
     pub template: Option<String>,
     /// The directory copied verbatim into the output, joined onto the package root. Default `"web/public"`.
     pub public: Option<String>,
+    /// The scheme and host the site is served at (`"https://example.com"`): what canonical links, alternate-language links, Open Graph URLs and the sitemap are written against.
+    pub origin: Option<String>,
+    /// The path the site is served under. Default `"/"`.
+    pub base: Option<String>,
+    /// The catalog key a page's description is read from, in the page's own locale.
+    pub description: Option<String>,
+    /// The picture a link preview shows: a file of the site or a full URL, for every locale or per locale.
+    pub og_image: Option<OgImage>,
+    /// The color a browser paints its interface in before the app has drawn.
+    pub theme_color: Option<ThemeColor>,
+    /// The host the output is shaped for. Default `"static"`.
+    pub host: Option<WebHost>,
     /// What `cargo telar build --target web --prerender` builds each page under.
     #[serde(default)]
     pub prerender: PrerenderSection,
@@ -228,12 +241,20 @@ impl TelarManifest {
             .map(|root| Self::read(&root))
             .transpose()?
             .flatten();
-        Ok(match (own, inherited) {
+        let manifest = match (own, inherited) {
             (Some(own), Some(base)) => Self {
                 telar: own.telar.over(base.telar),
             },
             (own, base) => own.or(base).unwrap_or_default(),
-        })
+        };
+        let problems = manifest.telar.web.problems();
+        if !problems.is_empty() {
+            return Err(ManifestError::Invalid {
+                path: package_root.join(MANIFEST_FILENAME),
+                message: problems.join("; "),
+            });
+        }
+        Ok(manifest)
     }
 
     fn read(dir: &Path) -> Result<Option<Self>, ManifestError> {
@@ -287,6 +308,12 @@ impl TelarSection {
             web: WebSection {
                 template: self.web.template.or(base.web.template),
                 public: self.web.public.or(base.web.public),
+                origin: self.web.origin.or(base.web.origin),
+                base: self.web.base.or(base.web.base),
+                description: self.web.description.or(base.web.description),
+                og_image: self.web.og_image.or(base.web.og_image),
+                theme_color: self.web.theme_color.or(base.web.theme_color),
+                host: self.web.host.or(base.web.host),
                 prerender: self.web.prerender.over(base.web.prerender),
             },
             // Whole rather than merged: a package naming any face of its own is declaring the set it ships.

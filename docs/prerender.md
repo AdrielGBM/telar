@@ -49,7 +49,7 @@ that follows no address, gets its root page alone.
 
 | File | What it is |
 | --- | --- |
-| `index.html` | The app at its root. Under an address that carries a locale, the root in the locale the app settled on. |
+| `index.html` | The app at its root. Under an address that carries a locale, the page that sends a reader to the root of their locale instead; see [the root of a site in several locales](web-packaging.md#the-root-of-a-site-in-several-locales). |
 | `<locale>/<segments…>/index.html` | Every page in every locale the address carries (`en/index.html`, `es/projects/index.html`); `<segments…>/index.html` when it carries none. |
 | `404.html` | What the app shows at an address it has no page for. Its URLs are written from the site's root, since a host serves it at any depth. |
 
@@ -60,12 +60,16 @@ Each is the page template expanded as for a plain build, with:
 - `%telar.host%`: the attributes of that element — `data-telar`, the surface's background and color scheme,
   and the document-scroll overrides when the page's root scrolls as the document;
 - `%telar.state%`: the inputs, as `<script type="application/json" id="telar-state">`;
-- `%telar.meta%` followed by the stylesheet the boxes need to look as they will once the app runs;
+- `%telar.meta%`: the tags that describe the page (its description, canonical and alternate-language links,
+  link-preview tags; see [Describing the site](web-packaging.md#describing-the-site)), followed by the
+  stylesheet the boxes need to look as they will once the app runs;
 - `%telar.lang%`, `%telar.dir%` and `%telar.title%` from the page itself: its locale and the surface title the
   app derived for it (see [docs/surface-title.md](surface-title.md)).
 
-Every URL a page writes for an output file is relative to the page (`../../app-….js` two directories down), so
-the site works from any directory on any static host.
+Every URL a page writes for an output file starts with the site's base path (`/app-….js`, `/docs/app-….js`
+under `base = "/docs/"`), and so do the links and pictures inside it: the app is prerendered with that base as
+the path its addresses and its files live under, the same one it reads from the page once it runs. With
+`--prerender` the build also writes `sitemap.xml` when the site has an `origin`.
 
 ## How a page is written
 
@@ -135,9 +139,5 @@ Prerendering means something only to a browser, and a page is written once whate
 
 ## Limits
 
-- `404.html` writes its URLs from `/`, which is right for a site at the root of its domain; a site served
-  under a path needs that path as its base, which `[telar.web]` does not name yet.
-- Under an address that carries a locale, `/` holds the root page in the locale the app chose; choosing the
-  reader's on arrival is the page that will negotiate it.
 - The client does not adopt the prerendered elements yet: it builds its own and they replace the served ones
   in its first frame, which is the same document, so nothing visible moves.

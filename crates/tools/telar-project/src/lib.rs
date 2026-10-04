@@ -16,6 +16,7 @@ pub mod naming;
 mod paths;
 mod prerender;
 mod theme;
+mod web;
 
 pub use assets::{
     ASSET_ARTIFACT_FORMAT, ASSET_KINDS, ASSETS_INDEX_FILENAME, ASSETS_MODULE,
@@ -55,3 +56,4 @@ pub use prerender::{
     PrerenderState, PrerenderedPage, STATE_ELEMENT_ID, STATE_VERSION, Surface,
 };
 pub use theme::{normalize_theme_path, theme_type_in_config};
+pub use web::{OgImage, SchemeColors, ThemeColor, WebHost, is_absolute_url};

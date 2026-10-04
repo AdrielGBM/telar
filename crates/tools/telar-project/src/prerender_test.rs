@@ -43,6 +43,7 @@ fn a_request_reads_back_as_it_was_written() {
             color_scheme: Some("dark".to_string()),
             ..Preferences::default()
         },
+        base: "/docs/".to_string(),
     };
     let written = serde_json::to_string(&request).unwrap();
     assert!(written.contains("\"kind\":\"at\""), "{written}");
@@ -52,4 +53,11 @@ fn a_request_reads_back_as_it_was_written() {
     );
     let not_found = serde_json::to_string(&PageRequest::NotFound).unwrap();
     assert_eq!(not_found, "{\"kind\":\"not_found\"}");
+}
+
+#[test]
+fn a_request_from_a_packager_that_names_no_base_is_for_a_site_at_the_root() {
+    let written = r#"{"out":"/tmp/page.json","page":{"kind":"not_found"},"surface":{"width":1,"height":1},"preferences":{}}"#;
+    let request: PrerenderRequest = serde_json::from_str(written).unwrap();
+    assert_eq!(request.base, "/");
 }

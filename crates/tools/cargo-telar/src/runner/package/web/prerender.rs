@@ -2,7 +2,7 @@
 //!
 //! The app is built once more for the machine running the build, with `telar/prerender`, and started once per page with the request in [`PRERENDER_ENV`]. What it writes back is filled into the same template the build already expanded, so a prerendered page differs from the plain one only in what the host element holds, the state it carries and the page's own language and title.
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 
@@ -11,10 +11,12 @@ use telar_project::{
 };
 
 use super::assets;
+use super::negotiation;
 use super::page::Page;
+use super::site::{PageMeta, Site, SitePages};
 
 /// The page a static host serves for an address it has no file for.
-const NOT_FOUND_FILE: &str = "404.html";
+pub(super) const NOT_FOUND_FILE: &str = "404.html";
 
 /// Builds the app's own binary for this machine, with the frontend `frontend` names and `telar/prerender`, and returns where cargo put it.
 pub(super) fn build_host_binary(
@@ -116,7 +118,9 @@ fn plan(discovered: &PrerenderedPage) -> Vec<PageLocation> {
         .collect()
 }
 
-/// Writes every page of the site into `out`, over the plain `index.html` the build already wrote, and a `404.html`. Returns how many pages it wrote.
+/// Writes every page of the site into `out`, over the plain `index.html` the build already wrote, and a `404.html`, and says which it wrote.
+///
+/// Under an address that carries a locale, `/` is no page of its own: the root page negotiates the reader's locale and sends them to its root.
 pub(super) fn write_pages(
     out: &Path,
     base: &Page,
@@ -124,7 +128,8 @@ pub(super) fn write_pages(
     binary: &Path,
     package_root: &Path,
     settings: &PrerenderSection,
-) -> Result<usize, String> {
+    site: &Site,
+) -> Result<SitePages, String> {
     let scratch = std::env::temp_dir().join(format!("telar-prerender-{}", std::process::id()));
     std::fs::create_dir_all(&scratch)
         .map_err(|e| format!("could not create {}: {e}", scratch.display()))?;
@@ -134,6 +139,7 @@ pub(super) fn write_pages(
             page,
             surface: settings.surface(),
             preferences: settings.preferences(),
+            base: site.base().to_string(),
         };
         prerender(binary, package_root, &request)
     };
@@ -144,53 +150,72 @@ pub(super) fn write_pages(
         },
         0,
     )?;
-    write_page(
-        &out.join("index.html"),
-        base,
-        template,
-        &root,
-        Some(0),
-        true,
-    )?;
-    let mut written = 1;
-    for (index, location) in plan(&root).into_iter().enumerate() {
-        if location == PageLocation::root() {
-            continue;
+    let pages = site_pages(&root);
+    let mut root_titles = BTreeMap::new();
+    for (index, location) in pages.pages.iter().enumerate() {
+        let page = match location == &PageLocation::root() {
+            true => root.clone(),
+            false => run(
+                PageRequest::At {
+                    location: location.clone(),
+                },
+                index + 1,
+            )?,
+        };
+        if let (Some(locale), true) = (&location.locale, location.segments.is_empty()) {
+            root_titles.insert(locale.clone(), page.title.clone());
         }
         let Some(file) = location.file() else {
-            eprintln!(
-                "[cargo-telar] skipping the page at /{}: a segment no file path can hold",
-                location.segments.join("/")
-            );
             continue;
         };
-        let page = run(
-            PageRequest::At {
-                location: location.clone(),
-            },
-            index + 1,
-        )?;
+        let filled = page_for(base, &page, site, Some(location), &pages);
         write_page(
             &out.join(file),
-            base,
+            &filled,
             template,
-            &page,
-            Some(location.depth()),
-            false,
+            location == &PageLocation::root(),
         )?;
-        written += 1;
+    }
+    if let Some(base_locale) = &pages.base_locale {
+        let html = negotiation::root_page(site, &pages, base_locale, &root_titles);
+        std::fs::write(out.join("index.html"), html)
+            .map_err(|e| format!("could not write {}: {e}", out.join("index.html").display()))?;
     }
     let not_found = run(PageRequest::NotFound, usize::MAX)?;
-    write_page(
-        &out.join(NOT_FOUND_FILE),
-        base,
-        template,
-        &not_found,
-        None,
-        false,
-    )?;
+    let filled = page_for(base, &not_found, site, None, &pages);
+    write_page(&out.join(NOT_FOUND_FILE), &filled, template, false)?;
     let _ = std::fs::remove_dir_all(&scratch);
-    Ok(written)
+    Ok(pages)
+}
+
+/// The pages to write once the app has said which it has, and the locales its address carries; a page no file path can hold is left out, with a note.
+fn site_pages(root: &PrerenderedPage) -> SitePages {
+    let pages = plan(root)
+        .into_iter()
+        .filter(|location| {
+            let held = location.file().is_some();
+            if !held {
+                eprintln!(
+                    "[cargo-telar] skipping the page at /{}: a segment no file path can hold",
+                    location.segments.join("/")
+                );
+            }
+            held
+        })
+        .collect();
+    let base_locale = match root.locales.is_empty() {
+        true => None,
+        false => root
+            .base_locale
+            .clone()
+            .or_else(|| root.locales.first().cloned()),
+    };
+    SitePages {
+        pages,
+        locales: root.locales.clone(),
+        base_locale,
+        not_found: true,
+    }
 }
 
 /// Runs the app once for `request` and reads back the page it wrote.
@@ -242,8 +267,14 @@ fn describe(page: &PageRequest) -> String {
     }
 }
 
-/// The plain page with what the app wrote for one place filled in. `depth` is how far below the output root the file is, which its URLs are written against; `None` is a page served at any depth, which writes them from the site's root.
-fn page_for(base: &Page, page: &PrerenderedPage, depth: Option<usize>) -> Page {
+/// The plain page with what the app wrote for one place filled in, and the tags that describe it. `location` is `None` for the page served at any address.
+fn page_for(
+    base: &Page,
+    page: &PrerenderedPage,
+    site: &Site,
+    location: Option<&PageLocation>,
+    pages: &SitePages,
+) -> Page {
     let mut filled = base.clone();
     if let Some(lang) = &page.lang {
         filled.lang = lang.clone();
@@ -252,11 +283,13 @@ fn page_for(base: &Page, page: &PrerenderedPage, depth: Option<usize>) -> Page {
     if !page.title.is_empty() {
         filled.title = page.title.clone();
     }
-    filled.base = match depth {
-        Some(0) => "./".to_string(),
-        Some(depth) => "../".repeat(depth),
-        None => "/".to_string(),
-    };
+    filled.base = site.base().to_string();
+    filled.meta = site.head_tags(&PageMeta {
+        title: &filled.title,
+        lang: &filled.lang,
+        location,
+        pages,
+    });
     filled.host = page.host_attributes.clone();
     filled.head.push(page.head.clone());
     filled.prerendered = page.markup.clone();
@@ -264,15 +297,8 @@ fn page_for(base: &Page, page: &PrerenderedPage, depth: Option<usize>) -> Page {
     filled
 }
 
-fn write_page(
-    path: &Path,
-    base: &Page,
-    template: &str,
-    page: &PrerenderedPage,
-    depth: Option<usize>,
-    replace: bool,
-) -> Result<(), String> {
-    let html = page_for(base, page, depth)
+fn write_page(path: &Path, page: &Page, template: &str, replace: bool) -> Result<(), String> {
+    let html = page
         .render(template)
         .map_err(|e| format!("the page template: {e}"))?;
     if let Some(dir) = path.parent() {

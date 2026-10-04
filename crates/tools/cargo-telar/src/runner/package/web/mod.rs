@@ -3,7 +3,7 @@
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-use telar_project::{FontDeclaration, WebSection};
+use telar_project::{FontDeclaration, PageLocation, WebHost, WebSection};
 
 use super::{dist_dir, tool_missing};
 use crate::runner::cli::{Target, WebRenderer};
@@ -13,14 +13,18 @@ use crate::runner::config::{
 };
 
 mod assets;
+mod cloudflare;
 mod fonts;
 mod images;
 mod media;
+mod negotiation;
 mod page;
 mod prerender;
+mod site;
 
 use assets::{Assets, MANIFEST_FILE};
-use page::{Bootstrap, DEFAULT_TEMPLATE, HeadTag, Page};
+use page::{Bootstrap, DEFAULT_TEMPLATE, Page};
+use site::{PageMeta, SITEMAP_FILE, Site, SitePages};
 
 pub(crate) use media::{compressible, media_type};
 
@@ -125,6 +129,8 @@ pub(crate) fn build_web_bundle(
     recreate_dir(&staging)?;
 
     let locale = config.default_locale().unwrap_or_else(|| "en".to_string());
+    let site = Site::new(&config.web, &package_root, &resolved.name())?;
+    let host = config.web.host();
     run_wasm_bindgen(&module, &staging)?;
     optimise(&staging.join(format!("{BUNDLE}_bg.wasm")), release);
     let (page, template) = assemble(
@@ -132,11 +138,15 @@ pub(crate) fn build_web_bundle(
         &package_root,
         &config.web,
         &config.fonts,
-        &resolved.name(),
-        renderer,
-        &locale,
+        &Shell {
+            app_name: &resolved.name(),
+            renderer,
+            locale: &locale,
+            site: &site,
+            reserved: &reserved_paths(prerender, host),
+        },
     )?;
-    if prerender {
+    let pages = if prerender {
         let binary =
             prerender::build_host_binary(&rest, &frontend, &package_root.join("Cargo.toml"))?;
         let pages = prerender::write_pages(
@@ -146,18 +156,72 @@ pub(crate) fn build_web_bundle(
             &binary,
             &package_root,
             &config.web.prerender,
+            &site,
         )?;
-        eprintln!("[cargo-telar] Prerendered {pages} page(s) and a 404 page");
-    }
+        eprintln!(
+            "[cargo-telar] Prerendered {} page(s) and a 404 page",
+            pages.pages.len()
+        );
+        write_sitemap(&staging, &site, &pages)?;
+        pages
+    } else {
+        SitePages::root_only()
+    };
     images::ship_images(
         &staging,
         &images::local_crates(&resolved.workspace_root, &resolved.name())?,
     )?;
-    if release {
-        assets::precompress(&staging)?;
+    match host {
+        WebHost::Static if release => assets::precompress(&staging)?,
+        WebHost::Static => {}
+        WebHost::CloudflarePages => {
+            cloudflare::write_host_files(&staging, &site, &pages)?;
+            for (file, len) in cloudflare::oversized(&staging)? {
+                eprintln!(
+                    "[cargo-telar] warning: {file} is {:.1} MiB, and Cloudflare Pages serves no file over {} MiB",
+                    len as f64 / (1024.0 * 1024.0),
+                    cloudflare::MAX_FILE_BYTES / (1024 * 1024)
+                );
+            }
+        }
     }
     publish(&staging, &out)?;
     Ok(out)
+}
+
+/// The paths a build writes itself, which a public file of the same name would collide with.
+fn reserved_paths(prerender: bool, host: WebHost) -> Vec<&'static str> {
+    let mut reserved = vec![PAGE_FILE, MANIFEST_FILE];
+    if prerender {
+        reserved.extend([prerender::NOT_FOUND_FILE, SITEMAP_FILE]);
+    }
+    if host == WebHost::CloudflarePages {
+        reserved.extend([cloudflare::WORKER_FILE, cloudflare::ROUTES_FILE]);
+    }
+    reserved
+}
+
+fn write_sitemap(out: &Path, site: &Site, pages: &SitePages) -> Result<(), String> {
+    match site.sitemap(pages) {
+        Some(sitemap) => assets::write_new(&out.join(SITEMAP_FILE), sitemap.as_bytes()),
+        None => {
+            eprintln!(
+                "[cargo-telar] note: `[telar.web] origin` is not set, so the pages carry no canonical or alternate-language links and no sitemap is written"
+            );
+            Ok(())
+        }
+    }
+}
+
+/// What the page around the app is built from, beyond the project's own files.
+struct Shell<'a> {
+    app_name: &'a str,
+    renderer: Option<WebRenderer>,
+    /// The locale the plain page is written in.
+    locale: &'a str,
+    site: &'a Site,
+    /// The paths of the output a public file may not take.
+    reserved: &'a [&'a str],
 }
 
 /// Everything after `wasm-bindgen`: the hashed bootstrap files, the public directory, the page and the manifest.
@@ -168,9 +232,7 @@ fn assemble(
     package_root: &Path,
     web: &WebSection,
     fonts: &[FontDeclaration],
-    app_name: &str,
-    renderer: Option<WebRenderer>,
-    locale: &str,
+    shell: &Shell,
 ) -> Result<(Page, String), String> {
     let mut assets = Assets::new(out);
     let module = assets.adopt(&format!("{BUNDLE}_bg.wasm"))?;
@@ -179,7 +241,7 @@ fn assemble(
 
     let (public, named) = web.public_dir(package_root);
     if public.is_dir() {
-        assets::copy_public(&public, out, &[PAGE_FILE, MANIFEST_FILE])?;
+        assets::copy_public(&public, out, shell.reserved)?;
     } else if named {
         return Err(format!(
             "`[telar.web] public` names {}, which is not a directory",
@@ -187,14 +249,17 @@ fn assemble(
         ));
     }
 
-    let mut page = Page::new(app_name, Bootstrap { glue, module });
-    page.lang = locale.to_string();
-    page.dir = layout_core::Direction::for_locale(locale);
-    page.renderer = renderer;
-    page.meta.push(HeadTag::meta(
-        "description",
-        format!("{app_name}, a Telar application."),
-    ));
+    let mut page = Page::new(shell.app_name, Bootstrap { glue, module });
+    page.lang = shell.locale.to_string();
+    page.dir = layout_core::Direction::for_locale(shell.locale);
+    page.renderer = shell.renderer;
+    page.base = shell.site.base().to_string();
+    page.meta = shell.site.head_tags(&PageMeta {
+        title: shell.app_name,
+        lang: shell.locale,
+        location: Some(&PageLocation::root()),
+        pages: &SitePages::root_only(),
+    });
     fonts::declare_fonts(&mut page, &mut assets, package_root, fonts)?;
     let (template, origin) = read_template(web, package_root)?;
     let html = page

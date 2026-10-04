@@ -139,6 +139,18 @@ impl HeadTag {
         Self::bare("link").attr("rel", rel).attr("href", href)
     }
 
+    /// `<meta property="…" content="…">`, the spelling Open Graph reads.
+    pub(crate) fn property(property: impl Into<String>, content: impl Into<String>) -> Self {
+        Self::bare("meta")
+            .attr("property", property)
+            .attr("content", content)
+    }
+
+    /// `<base href="…">`: what every relative URL in the document, and the address the app reads its locations under, resolve against.
+    pub(crate) fn base(href: impl Into<String>) -> Self {
+        Self::bare("base").attr("href", href)
+    }
+
     /// A font the page will need, fetched with the page rather than once CSS asks for it. `crossorigin` is required even on the same origin: fonts are always fetched in CORS mode, and a preload in any other mode is fetched twice.
     pub(crate) fn font_preload(href: impl Into<String>, media_type: impl Into<String>) -> Self {
         Self::link("preload", href)
@@ -160,7 +172,7 @@ impl HeadTag {
         }
     }
 
-    fn html(&self) -> String {
+    pub(super) fn html(&self) -> String {
         let mut html = format!("<{}", self.element);
         for (name, value) in &self.attributes {
             html.push(' ');
@@ -214,7 +226,7 @@ pub(crate) struct Page {
     pub(crate) prerendered: String,
     /// `%telar.state%`, the `telar-state` script when there is state to carry.
     pub(crate) state: Option<serde_json::Value>,
-    /// What every URL the page writes for an output file starts with. `./` resolves against the page, which is right for a page at the output root.
+    /// What every URL the page writes for an output file starts with: the path the site is served under, so a page at any depth, and one served at any address, reaches the same files.
     pub(crate) base: String,
 }
 
@@ -232,7 +244,7 @@ impl Page {
             renderer: None,
             prerendered: String::new(),
             state: None,
-            base: "./".to_string(),
+            base: "/".to_string(),
         }
     }
 
@@ -414,11 +426,11 @@ fn lines(tags: &[HeadTag]) -> String {
 }
 
 /// JSON that is safe inside a `<script>`: `<` only ever occurs inside a JSON string, where `<` means the same thing and cannot close the element.
-fn script_json(value: &serde_json::Value) -> String {
+pub(super) fn script_json(value: &serde_json::Value) -> String {
     value.to_string().replace('<', "\\u003c")
 }
 
-fn escape(text: &str) -> String {
+pub(super) fn escape(text: &str) -> String {
     let mut escaped = String::with_capacity(text.len());
     for c in text.chars() {
         match c {

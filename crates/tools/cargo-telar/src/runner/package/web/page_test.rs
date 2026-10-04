@@ -36,11 +36,11 @@ fn the_built_in_page_expands_with_nothing_fed_but_the_bootstrap() {
     assert!(!html.contains("%telar."), "every marker expanded:\n{html}");
     assert!(html.contains(r#"<html lang="en" dir="ltr">"#));
     assert!(html.contains("<title>demo</title>"));
-    assert!(html.contains(r#"<link rel="modulepreload" href="./app-0123456789ab.js" />"#));
+    assert!(html.contains(r#"<link rel="modulepreload" href="/app-0123456789ab.js" />"#));
     assert!(html.contains(
-        r#"<link rel="preload" href="./app_bg-ba9876543210.wasm" as="fetch" type="application/wasm" crossorigin />"#
+        r#"<link rel="preload" href="/app_bg-ba9876543210.wasm" as="fetch" type="application/wasm" crossorigin />"#
     ));
-    assert!(html.contains(r#"import init from "./app-0123456789ab.js";"#));
+    assert!(html.contains(r#"import init from "/app-0123456789ab.js";"#));
     assert!(html.contains("wasm.telar_start();"));
     assert!(html.contains(r#"<div id="telar-root" data-telar-renderer="auto"></div>"#));
     assert!(!html.contains("telar-state"), "no state, no script");
@@ -77,7 +77,7 @@ fn a_block_marker_indents_every_line_it_writes_like_its_own() {
         script,
         [
             "  <script type=\"module\">",
-            "    import init from \"./app-0123456789ab.js\";",
+            "    import init from \"/app-0123456789ab.js\";",
             "    const wasm = await init();",
             "    wasm.telar_start();",
             "  </script>",
@@ -105,9 +105,9 @@ fn every_fed_marker_lands_where_the_template_puts_it() {
     assert!(html.contains(r#"<meta name="description" content="Hola" />"#));
     assert!(html.contains(r#"<link rel="canonical" href="https://example.com/es/" />"#));
     assert!(html.contains(
-        r#"<link rel="preload" href="./fonts/a-0123.woff2" as="font" type="font/woff2" crossorigin data-telar-family="A" />"#
+        r#"<link rel="preload" href="/fonts/a-0123.woff2" as="font" type="font/woff2" crossorigin data-telar-family="A" />"#
     ));
-    assert!(html.contains(r#"src: url("./fonts/a-0123.woff2") format("woff2");"#));
+    assert!(html.contains(r#"src: url("/fonts/a-0123.woff2") format("woff2");"#));
     assert!(html.contains(
         r#"<div id="telar-root" data-telar-renderer="dom"><main data-telar-id="1">Hola</main></div>"#
     ));
@@ -222,23 +222,6 @@ fn a_marker_left_out_is_an_error_only_when_the_build_has_content_for_it() {
         fonts.render(&template),
         Err(TemplateError::Missing(Marker::Fonts))
     );
-}
-
-#[test]
-fn a_page_below_the_root_reaches_every_file_through_its_own_base() {
-    let mut page = page();
-    page.base = "../../".to_string();
-    page.fonts.push(face("fonts/a-0123.woff2", true));
-    let html = page.render(DEFAULT_TEMPLATE).unwrap();
-    assert!(
-        html.contains(r#"href="../../fonts/a-0123.woff2""#),
-        "{html}"
-    );
-    assert!(
-        html.contains(r#"src: url("../../fonts/a-0123.woff2")"#),
-        "{html}"
-    );
-    assert!(html.contains(r#"import init from "../../app-0123456789ab.js";"#));
 }
 
 #[test]

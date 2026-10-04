@@ -32,6 +32,13 @@ pub struct PrerenderRequest {
     pub surface: Surface,
     /// What the reader is assumed to prefer.
     pub preferences: Preferences,
+    /// The path the site is served under, with a leading and a closing `/`: what the page's links and the build's files are written under.
+    #[serde(default = "root_path")]
+    pub base: String,
+}
+
+fn root_path() -> String {
+    "/".to_string()
 }
 
 /// Which page a request is for.
@@ -138,6 +145,9 @@ pub struct PrerenderedPage {
     pub pages: Vec<PageLocation>,
     /// The locales its address carries, as `follow_location_locale` bound them.
     pub locales: Vec<String>,
+    /// The locale an address falls back to when nothing chooses another, as `follow_location_locale` bound it.
+    #[serde(default)]
+    pub base_locale: Option<String>,
     /// Whether the last two frames were the same, which is when the page is what the app shows rather than a moment on the way there.
     pub settled: bool,
 }

@@ -97,14 +97,17 @@ fn site(name: &str) -> PathBuf {
 #[test]
 fn a_request_target_names_a_file_under_the_root() {
     let root = site("files");
-    assert_eq!(resolve(&root, "/app.js"), Some(root.join("app.js")));
-    assert_eq!(resolve(&root, "/app.js?v=2#top"), Some(root.join("app.js")));
+    assert_eq!(resolve(&root, "/", "/app.js"), Some(root.join("app.js")));
     assert_eq!(
-        resolve(&root, "/fonts/Inter%20Display.woff2"),
+        resolve(&root, "/", "/app.js?v=2#top"),
+        Some(root.join("app.js"))
+    );
+    assert_eq!(
+        resolve(&root, "/", "/fonts/Inter%20Display.woff2"),
         Some(root.join("fonts/Inter Display.woff2"))
     );
     assert_eq!(
-        resolve(&root, "/.well-known/security.txt"),
+        resolve(&root, "/", "/.well-known/security.txt"),
         Some(root.join(".well-known/security.txt"))
     );
     let _ = std::fs::remove_dir_all(&root);
@@ -113,9 +116,35 @@ fn a_request_target_names_a_file_under_the_root() {
 #[test]
 fn a_directory_serves_its_index() {
     let root = site("index");
-    assert_eq!(resolve(&root, "/"), Some(root.join("index.html")));
-    assert_eq!(resolve(&root, "/es/"), Some(root.join("es/index.html")));
-    assert_eq!(resolve(&root, "/docs"), Some(root.join("docs/index.html")));
+    assert_eq!(resolve(&root, "/", "/"), Some(root.join("index.html")));
+    assert_eq!(
+        resolve(&root, "/", "/es/"),
+        Some(root.join("es/index.html"))
+    );
+    assert_eq!(
+        resolve(&root, "/", "/docs"),
+        Some(root.join("docs/index.html"))
+    );
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+#[test]
+fn a_site_under_a_base_serves_only_below_it() {
+    let root = site("base");
+    assert_eq!(
+        resolve(&root, "/docs/", "/docs/app.js"),
+        Some(root.join("app.js"))
+    );
+    assert_eq!(
+        resolve(&root, "/docs/", "/docs/"),
+        Some(root.join("index.html"))
+    );
+    assert_eq!(
+        resolve(&root, "/docs/", "/docs"),
+        Some(root.join("index.html"))
+    );
+    assert_eq!(resolve(&root, "/docs/", "/app.js"), None);
+    assert_eq!(resolve(&root, "/docs/", "/docsy/app.js"), None);
     let _ = std::fs::remove_dir_all(&root);
 }
 
@@ -133,7 +162,7 @@ fn a_target_that_would_leave_the_root_is_refused() {
         "/%zz",
         "/%e",
     ] {
-        assert_eq!(resolve(root, target), None, "{target}");
+        assert_eq!(resolve(root, "/", target), None, "{target}");
     }
 }
 
