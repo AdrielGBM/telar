@@ -106,7 +106,7 @@ impl PressGesture {
         EventResult::Ignored
     }
 
-    /// Complete the tap: a release by the same button that armed it, still inside `rect` (a drag past the slop already cleared the origin), fires the matching callback — unless the hold already crossed the long-press threshold, in which case the release fires nothing (the long press consumed the gesture).
+    /// Complete the tap: a release by the same button that armed it, still inside `rect` (a drag past the slop already cleared the origin) and not over something drawn in front of it ([`crate::pointer::pointer_occluded`]: a sibling on top, or the part of it a viewport has scrolled out of view, where the box already showed the press cancelled), fires the matching callback — unless the hold already crossed the long-press threshold, in which case the release fires nothing (the long press consumed the gesture).
     pub(crate) fn release(&mut self, event: &Event, rect: Rect) -> EventResult {
         if let Event::PointerReleased { x, y, button, .. } = event {
             if self.armed_button.as_ref() != Some(button) {
@@ -118,7 +118,7 @@ impl PressGesture {
             let armed = self.press_origin.take().is_some();
             self.press_started_at = None;
             let armed_button = self.armed_button.take();
-            if armed && rect.contains(*x as f32, *y as f32) {
+            if armed && rect.contains(*x as f32, *y as f32) && !crate::pointer::pointer_occluded() {
                 match armed_button {
                     Some(PointerButton::Primary) => {
                         self.fire_primary();

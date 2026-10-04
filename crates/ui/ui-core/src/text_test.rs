@@ -466,3 +466,72 @@ fn em_declared_above_is_of_the_size_it_inherits() {
     );
     assert_eq!(crate::inherit::inherited_text_style(node).font_size, 30.0);
 }
+
+/// A link run something else is drawn in front of — a sibling on top, the part of the text a viewport has scrolled out of view — is not under the pointer: it takes no link shape, and a release there follows nothing.
+#[test]
+fn a_covered_link_run_takes_no_shape_and_follows_nothing() {
+    use platform_core::{
+        Cursor, Destination, Location, PointerButton, PointerSource, location_history,
+        receive_location_history,
+    };
+    use renderer_core::{Declared, Span};
+    reset_layout_runtime();
+    receive_location_history(vec![Location::root()]);
+    let link = Destination::Route(Location::root().segment("team"));
+    let mut text = Text::spanned(
+        || "Meet the team today".to_string(),
+        move || vec![Span::new(9..13, Declared::default()).linking_to(link.clone())],
+        LayoutStyle::new(),
+        || TextStyle::new(16.0, Color::BLACK),
+    )
+    .unwrap();
+    let root = new_container(LayoutStyle::new().flex_row(), &[text.layout_node()]).unwrap();
+    compute_layout(
+        root,
+        AvailableSpace::Definite(600.0),
+        AvailableSpace::MaxContent,
+    )
+    .unwrap();
+    let rect = track_layout(text.layout_node()).unwrap().get();
+    let style = TextStyle::new(16.0, Color::BLACK);
+    let before = crate::text_metrics::measure_text("Meet the ", None, 600.0, &style).0;
+    let (x, y) = (
+        (rect.x + before + 4.0) as f64,
+        (rect.y + rect.height / 2.0) as f64,
+    );
+    let moved = Event::PointerMoved {
+        x,
+        y,
+        source: PointerSource::Mouse,
+    };
+
+    {
+        let _covered = crate::pointer::occlude();
+        text.on_event(&moved);
+    }
+    assert_eq!(crate::cursor::requested_cursor(), Cursor::Default);
+    text.on_event(&moved);
+    assert_eq!(crate::cursor::requested_cursor(), Cursor::Pointer);
+
+    text.on_event(&Event::PointerPressed {
+        x,
+        y,
+        button: PointerButton::Primary,
+        source: PointerSource::Mouse,
+    });
+    let released = {
+        let _covered = crate::pointer::occlude();
+        text.on_event(&Event::PointerReleased {
+            x,
+            y,
+            button: PointerButton::Primary,
+            source: PointerSource::Mouse,
+        })
+    };
+    assert_eq!(released, EventResult::Ignored);
+    assert_eq!(
+        location_history(),
+        vec![Location::root()],
+        "nothing followed"
+    );
+}

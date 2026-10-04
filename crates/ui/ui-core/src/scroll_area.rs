@@ -17,7 +17,7 @@ use crate::input_region::{InputHandle, Placement};
 use crate::kept::kept;
 use crate::layout_item::{LayoutItem, mount_item_segment};
 use crate::layout_leaf::LayoutLeaf;
-use crate::pointer::{clip_pointer_event, offset_pointer};
+use crate::pointer::{clip_pointer_event, occlude, offset_pointer, pointer_coords};
 
 /// How a scroll area's bars are painted, and how wide they are.
 pub struct ScrollbarStyle {
@@ -226,9 +226,21 @@ fn handle_scroll_event(
         return EventResult::Handled;
     }
 
-    let Some(event) = clip_pointer_event(event, viewport) else {
-        return EventResult::Ignored;
+    // A move or a release reaches the content wherever the pointer is, as a container broadcasts them, so a press armed inside — a drag carried out past the viewport — keeps following and ends where it is let go (pointer capture). Outside the viewport it comes covered, so nothing scrolled out of view reads it as hover.
+    let outside =
+        pointer_coords(event).is_some_and(|(x, y)| !viewport.contains(x as f32, y as f32));
+    let captured = matches!(
+        event,
+        Event::PointerMoved { .. } | Event::PointerReleased { .. }
+    );
+    let event = match captured {
+        true => event,
+        false => match clip_pointer_event(event, viewport) {
+            Some(event) => event,
+            None => return EventResult::Ignored,
+        },
     };
+    let _covered = (outside && captured).then(occlude);
 
     let (origin_x, origin_y) = content_origin(viewport, scroll_x.get(), scroll_y.get());
     let adjusted = offset_pointer(event, origin_x as f64, origin_y as f64);

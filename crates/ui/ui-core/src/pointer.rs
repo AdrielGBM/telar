@@ -90,7 +90,7 @@ pub(crate) fn pointer_occluded() -> bool {
     OCCLUDED.with(|c| c.get())
 }
 
-struct OccludedGuard(bool);
+pub(crate) struct OccludedGuard(bool);
 
 impl Drop for OccludedGuard {
     fn drop(&mut self) {
@@ -99,7 +99,7 @@ impl Drop for OccludedGuard {
 }
 
 /// Marks everything dispatched until the guard drops as covered. Set-only on the way down: a subtree inside something covered is covered too, whatever its own children are stacked like.
-fn occlude() -> OccludedGuard {
+pub(crate) fn occlude() -> OccludedGuard {
     OccludedGuard(OCCLUDED.with(|c| c.replace(true)))
 }
 

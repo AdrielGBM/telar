@@ -300,7 +300,7 @@ impl Text {
         renderer_core::link_at(&spans, index).map(|(run, link)| (run, link.clone()))
     }
 
-    /// A press, a drag and a release over the link spans: a tap on one follows it, and the pointer takes the link shape over one. A document answers its own `<a>` and reports it back instead (see [`Event::RunActivated`]).
+    /// A press, a drag and a release over the link spans: a tap on one follows it, and the pointer takes the link shape over one. Over a span something else is drawn in front of — a sibling on top, or a part a viewport has scrolled out of view — neither happens ([`crate::pointer::pointer_occluded`]). A document answers its own `<a>` and reports it back instead (see [`Event::RunActivated`]).
     fn follow_runs(&mut self, event: &Event) -> EventResult {
         if self.spans.is_none() || crate::link::surface_follows_links() {
             return EventResult::Ignored;
@@ -314,7 +314,8 @@ impl Text {
                     self.pressed_run = None;
                 }
                 if matches!(source, platform_core::PointerSource::Mouse) {
-                    let over = self.link_under(x, y).is_some();
+                    let over =
+                        !crate::pointer::pointer_occluded() && self.link_under(x, y).is_some();
                     if over || self.link_cursor.is_some() {
                         self.link_cursor
                             .get_or_insert_with(|| {
@@ -346,6 +347,9 @@ impl Text {
                 let Some((pressed, _)) = self.pressed_run.take() else {
                     return EventResult::Ignored;
                 };
+                if crate::pointer::pointer_occluded() {
+                    return EventResult::Ignored;
+                }
                 match self.link_under(*x as f32, *y as f32) {
                     Some((run, destination)) if run == pressed => {
                         crate::link::follow_pressed(&destination, crate::modifiers());

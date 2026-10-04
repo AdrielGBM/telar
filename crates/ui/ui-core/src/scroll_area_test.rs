@@ -692,16 +692,97 @@ fn scroll_clamps_to_zero() {
 }
 
 #[test]
-fn pointer_outside_viewport_is_ignored() {
+fn a_press_outside_the_viewport_is_not_this_areas() {
     let mut sa = make_scroll_area();
-    let result = sa.on_event(&Event::PointerMoved {
+    let result = sa.on_event(&Event::PointerPressed {
         x: 500.0,
         y: 100.0,
+        button: platform_core::PointerButton::Primary,
         source: PointerSource::Mouse,
     });
     assert!(
         matches!(result, EventResult::Ignored),
-        "a pointer outside the viewport is not this area's business"
+        "a press outside the viewport is not this area's business"
+    );
+}
+
+/// A drag that starts on the content and leaves the viewport keeps following, the way a container broadcasts moves and releases (pointer capture): the content hears every move and the release wherever they are, in its own coordinates, and outside the viewport as covered, so nothing there reads them as hover.
+#[test]
+fn moves_and_releases_outside_the_viewport_reach_the_content_as_covered() {
+    use std::cell::RefCell;
+    use std::rc::Rc;
+
+    type Heard = Rc<RefCell<Vec<(&'static str, f64, bool)>>>;
+    struct Listening {
+        leaf: LayoutLeaf,
+        heard: Heard,
+    }
+    impl Component for Listening {
+        fn view(&self) -> RenderNode {
+            RenderNode::Empty
+        }
+        fn on_event(&mut self, event: &Event) -> EventResult {
+            let covered = crate::pointer::pointer_occluded();
+            let said = match event {
+                Event::PointerPressed { y, .. } => ("press", *y),
+                Event::PointerMoved { y, .. } => ("move", *y),
+                Event::PointerReleased { y, .. } => ("release", *y),
+                _ => return EventResult::Ignored,
+            };
+            self.heard.borrow_mut().push((said.0, said.1, covered));
+            EventResult::Handled
+        }
+    }
+    impl LayoutItem for Listening {
+        fn layout_node(&self) -> NodeId {
+            self.leaf.node
+        }
+    }
+
+    reset_layout_runtime();
+    let heard: Heard = Rc::default();
+    let leaf = LayoutLeaf::register(LayoutStyle::new().width(400.0).height(1000.0)).unwrap();
+    let node = leaf.node;
+    let content = Listening {
+        leaf,
+        heard: Rc::clone(&heard),
+    };
+    let mut sa = ScrollArea::new(|| Rect::new(0.0, 50.0, 400.0, 300.0), Box::new(content));
+    compute_layout(
+        node,
+        AvailableSpace::Definite(400.0),
+        AvailableSpace::MaxContent,
+    )
+    .unwrap();
+
+    sa.on_event(&Event::PointerPressed {
+        x: 100.0,
+        y: 100.0,
+        button: platform_core::PointerButton::Primary,
+        source: PointerSource::Mouse,
+    });
+    sa.on_event(&Event::PointerMoved {
+        x: 100.0,
+        y: 600.0,
+        source: PointerSource::Mouse,
+    });
+    sa.on_event(&Event::PointerReleased {
+        x: 100.0,
+        y: 600.0,
+        button: platform_core::PointerButton::Primary,
+        source: PointerSource::Mouse,
+    });
+    assert_eq!(
+        *heard.borrow(),
+        [
+            ("press", 50.0, false),
+            ("move", 550.0, true),
+            ("release", 550.0, true)
+        ]
+    );
+    assert!(
+        !crate::pointer::pointer_occluded(),
+        "the cover is lifted once the move is delivered"
     );
 }
 
@@ -891,4 +972,49 @@ fn view_no_hbar_when_content_fits_x() {
     } else {
         panic!("expected Group");
     }
+}
+
+/// A press near the viewport's edge let go just past it, still within the tap slop, lands on the part of the same box the viewport has scrolled out of view: the box showed the press cancelled there, as it reads the release as covered, so it fires nothing. Let go inside the viewport, it fires.
+#[test]
+fn a_release_over_content_scrolled_out_of_view_fires_no_tap() {
+    use crate::styled_container::StyledContainer;
+    use platform_core::PointerButton;
+    use reactive_core::signal;
+
+    reset_layout_runtime();
+    let pressed = signal(0i32);
+    let tall = StyledContainer::new(
+        LayoutStyle::new().width(400.0).height(1000.0),
+        |_r| RectStyle::default(),
+        vec![],
+    )
+    .unwrap()
+    .on_press(move || pressed.update(|n| *n += 1));
+    let node = tall.layout_node();
+    let mut sa = ScrollArea::new(|| Rect::new(0.0, 0.0, 400.0, 300.0), Box::new(tall));
+    compute_layout(
+        node,
+        AvailableSpace::Definite(400.0),
+        AvailableSpace::MaxContent,
+    )
+    .unwrap();
+    let tap = |sa: &mut ScrollArea, release_y: f64| {
+        sa.on_event(&Event::PointerPressed {
+            x: 100.0,
+            y: 296.0,
+            button: PointerButton::Primary,
+            source: PointerSource::Mouse,
+        });
+        sa.on_event(&Event::PointerReleased {
+            x: 100.0,
+            y: release_y,
+            button: PointerButton::Primary,
+            source: PointerSource::Mouse,
+        });
+    };
+
+    tap(&mut sa, 304.0);
+    assert_eq!(pressed.get(), 0, "let go over what is scrolled out of view");
+    tap(&mut sa, 298.0);
+    assert_eq!(pressed.get(), 1, "let go inside the viewport");
 }
