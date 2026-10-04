@@ -90,3 +90,16 @@ fn run_default_frontend<A: App, D: crate::DevPlugin>(_config: AppConfig, _app: A
          or `tui` for the terminal"
     );
 }
+
+/// Installs what lays text out for the frontend a `cargo telar test` run stands in for, since no runner is going to.
+///
+/// A terminal build measures in cells, exactly as [`run_tui_app_with_name`](super::run_tui_app_with_name) does. Anything else measures with the glyph shaper over the faces `config` declares (`[[telar.fonts]]` arrives here through `telar::app!`), so a preview's text takes the room it takes in the window rather than room from a stand-in that could hide an overflow.
+#[cfg(all(feature = "previews", not(target_os = "android")))]
+pub(crate) fn install_preview_text_metrics(config: &AppConfig) {
+    #[cfg(feature = "tui")]
+    if tui_selected() {
+        super::tui::install_cell_measure(renderer_tui::CellSize::default());
+        return;
+    }
+    super::font_config::install_shaper_fonts(config.clone());
+}

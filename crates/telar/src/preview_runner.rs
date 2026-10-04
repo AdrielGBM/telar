@@ -108,6 +108,7 @@ pub fn try_run_test(entries: Vec<PreviewEntry>, config: AppConfig) -> ! {
 
     let width = config.window.width as f32;
     let height = config.window.height as f32;
+    crate::runner::install_preview_text_metrics(&config);
     println!("running {} preview component(s)", entries.len());
 
     let mut passed = 0usize;

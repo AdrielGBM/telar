@@ -32,6 +32,13 @@ impl Default for TuiOptions {
     }
 }
 
+/// Makes the process measure and snap sizes in terminal cells, as everything built after it expects to.
+pub(super) fn install_cell_measure(cell: CellSize) {
+    renderer_core::set_text_metrics(CellMetrics::new(cell));
+    // Declared before the tree exists, because it is honoured where sizes are authored: a `LayoutStyle` built under the default unit grid would keep the fractional padding this is here to remove. See `geometry_core::grid`.
+    geometry_core::set_layout_grid(geometry_core::LayoutGrid::new(cell.width, cell.height));
+}
+
 /// Runs an app in the terminal it was launched from.
 ///
 /// The one thing that has to happen before anything else is the measurer: layout asks how wide a string is while the tree is being built, and the answer here is a count of cells rather than a shaped advance. It is installed unconditionally, so it wins over the raster measurer any later font load would offer.
@@ -41,12 +48,7 @@ pub fn run_tui_app_with_name<A: App>(
     app: A,
     app_name: &str,
 ) {
-    renderer_core::set_text_metrics(CellMetrics::new(options.cell));
-    // Declared before the tree exists, because it is honoured where sizes are authored: a `LayoutStyle` built under the default unit grid would keep the fractional padding this is here to remove. See `geometry_core::grid`.
-    geometry_core::set_layout_grid(geometry_core::LayoutGrid::new(
-        options.cell.width,
-        options.cell.height,
-    ));
+    install_cell_measure(options.cell);
     // A cell is the smallest step this surface can show, so easing across a wheel notch would repaint the screen several times to draw the same rows.
     ui_tree::set_smooth_wheel(false);
     services_core::set_clipboard(Arc::new(OscClipboard::new()));

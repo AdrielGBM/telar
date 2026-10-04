@@ -51,6 +51,10 @@ name = "location_flow"
 path = "src/location_flow_test.rs"
 
 [[test]]
+name = "preview_harness"
+path = "src/preview_harness_test.rs"
+
+[[test]]
 name = "prerender_flow"
 path = "src/prerender_flow_test.rs"
 
@@ -299,8 +303,10 @@ hot-reload = ["dev", "desktop-bare", "telar-macros/hot-reload"]
 ## whoever sets it, and no longer carries the preview harness or the markup of every block.
 ##
 ## Carries no frontend of its own: `cargo telar test` builds and lays a preview out without drawing it, and a
-## terminal application must not acquire a window on the way to being tested.
-previews = ["runtime", "telar-macros/preview"]
+## terminal application must not acquire a window on the way to being tested. It does carry the shaper,
+## because laying text out needs a measurer and nothing else in the build is guaranteed to bring one; a
+## terminal build still measures in cells.
+previews = ["runtime", "shaper", "telar-macros/preview"]
 
 ## The preview host that renders those blocks in a window. Injected by `cargo telar preview`.
 preview = ["previews", "desktop-bare"]
@@ -419,7 +425,7 @@ renderer-record = { workspace = true }
 # Self-referencing so the integration tests get the opt-in `testing` module without it being a default that
 # ships in every binary. Nothing here covers an asset transport any more: `src/http_assets_test.rs` moved to
 # `telar-dynamic` along with the transport it exercises.
-telar = { path = ".", features = ["testing", "watch", "prerender"] }
+telar = { path = ".", features = ["testing", "watch", "prerender", "previews"] }
 
 [lints.rust]
 unexpected_cfgs = { level = "warn", check-cfg = ['cfg(docsrs)'] }

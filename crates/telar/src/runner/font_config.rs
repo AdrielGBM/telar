@@ -27,6 +27,22 @@ impl SystemFonts {
     }
 }
 
+/// Loads the application's faces into the shaper and installs the shaper's measurer, for a process that lays text out without ever building a renderer.
+///
+/// No paths provider, as in [`prerender_page`](super::prerender_page): a measurement-only run has no platform to ask where the system fonts are.
+#[cfg(all(feature = "previews", not(target_os = "android")))]
+pub(super) fn install_shaper_fonts(config: crate::AppConfig) {
+    let crate::AppConfig {
+        fonts: faces,
+        font_family: family,
+        ..
+    } = config;
+    renderer_text::fonts::install(build_font_config(
+        FontSetup { faces, family },
+        &SystemFonts::from_provider(&services_core::NoPaths),
+    ));
+}
+
 #[cfg(feature = "hardware")]
 pub(super) fn hardware_cache_path(
     app_name: &str,
