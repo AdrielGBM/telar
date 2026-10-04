@@ -120,3 +120,29 @@ fn the_horizontal_bar_drags_the_same_way() {
     sa.on_event(&moved(200.0, 296.0));
     assert_eq!(sa.core.scroll_x.get(), 300.0);
 }
+
+/// On a surface drawn in whole cells a thumb is whole cells long and starts on one, wherever the scroll has taken it: a fractional thumb is drawn one cell longer at some offsets than at others.
+#[test]
+fn on_a_cell_grid_the_thumb_is_whole_cells_wherever_it_is() {
+    let grid = geometry_core::LayoutGrid::new(8.0, 16.0);
+    for scroll in [0.0, 5.0, 8.0, 13.0, 16.0] {
+        let thumb = Thumb::of(Axis::Vertical, grid, 0.0, 896.0, 912.0, scroll).unwrap();
+        assert_eq!(thumb.length % 16.0, 0.0, "{} long", thumb.length);
+        assert_eq!(thumb.start % 16.0, 0.0, "at {}", thumb.start);
+    }
+    let thumb = Thumb::of(Axis::Horizontal, grid, 0.0, 300.0, 1000.0, 0.0).unwrap();
+    assert_eq!(thumb.length % 8.0, 0.0, "{} wide", thumb.length);
+    let unit = Thumb::of(
+        Axis::Vertical,
+        geometry_core::LayoutGrid::new(1.0, 1.0),
+        0.0,
+        300.0,
+        1000.0,
+        0.0,
+    )
+    .unwrap();
+    assert_eq!(
+        unit.length, 90.0,
+        "a surface that does not quantise keeps the exact length"
+    );
+}

@@ -3,7 +3,7 @@
 use std::cell::RefCell;
 use std::rc::Rc;
 
-use geometry_core::Rect;
+use geometry_core::{LayoutGrid, Rect};
 use layout_core::{AvailableSpace, LayoutError, LayoutStyle, NodeId};
 use platform_core::Event;
 use reactive_core::{Effect, ReadSignal, RwSignal, effect, signal};
@@ -43,6 +43,22 @@ enum Axis {
     Horizontal,
 }
 
+impl Axis {
+    fn snap_size(self, grid: LayoutGrid, length: f32) -> f32 {
+        match self {
+            Self::Vertical => grid.snap_size_y(length),
+            Self::Horizontal => grid.snap_size_x(length),
+        }
+    }
+
+    fn snap_pos(self, grid: LayoutGrid, at: f32) -> f32 {
+        match self {
+            Self::Vertical => grid.snap_pos_y(at),
+            Self::Horizontal => grid.snap_pos_x(at),
+        }
+    }
+}
+
 /// Shortest a thumb is allowed to get, so a very long document still leaves something to take hold of.
 const MIN_THUMB: f32 = 24.0;
 
@@ -57,16 +73,25 @@ struct Thumb {
 }
 
 impl Thumb {
-    /// `None` when the content fits, which is when there is no bar to draw or to grab.
-    fn of(origin: f32, viewport: f32, content: f32, scroll: f32) -> Option<Self> {
+    /// `None` when the content fits, which is when there is no bar to draw or to grab. On a surface that quantises the thumb is whole cells long and starts on one, like every other box, so it keeps its size as it travels.
+    fn of(
+        axis: Axis,
+        grid: LayoutGrid,
+        origin: f32,
+        viewport: f32,
+        content: f32,
+        scroll: f32,
+    ) -> Option<Self> {
         if content <= viewport {
             return None;
         }
-        let length = (viewport / content * viewport).max(MIN_THUMB);
+        let length = axis
+            .snap_size(grid, (viewport / content * viewport).max(MIN_THUMB))
+            .min(viewport);
         let max_scroll = (content - viewport).max(1.0);
         let travel = (viewport - length).max(0.0);
         Some(Self {
-            start: origin + (scroll / max_scroll) * travel,
+            start: axis.snap_pos(grid, origin + (scroll / max_scroll) * travel),
             length,
             travel,
             max_scroll,
@@ -99,33 +124,47 @@ fn draw_scrollbars(
             .with_radius(BorderRadius::all(scrollbar_style.corner_radius))
     };
 
-    let vbar = Thumb::of(viewport.y, viewport.height, content_rect.height, scroll_y)
-        .map(|thumb| {
-            RenderNode::rect(
-                Rect::new(
-                    viewport.x + viewport.width - scrollbar_style.width,
-                    thumb.start,
-                    scrollbar_style.width - 2.0,
-                    thumb.length,
-                ),
-                style(),
-            )
-        })
-        .unwrap_or(RenderNode::Empty);
+    let vbar = Thumb::of(
+        Axis::Vertical,
+        geometry_core::layout_grid(),
+        viewport.y,
+        viewport.height,
+        content_rect.height,
+        scroll_y,
+    )
+    .map(|thumb| {
+        RenderNode::rect(
+            Rect::new(
+                viewport.x + viewport.width - scrollbar_style.width,
+                thumb.start,
+                scrollbar_style.width - 2.0,
+                thumb.length,
+            ),
+            style(),
+        )
+    })
+    .unwrap_or(RenderNode::Empty);
 
-    let hbar = Thumb::of(viewport.x, viewport.width, content_rect.width, scroll_x)
-        .map(|thumb| {
-            RenderNode::rect(
-                Rect::new(
-                    thumb.start,
-                    viewport.y + viewport.height - scrollbar_style.width,
-                    thumb.length,
-                    scrollbar_style.width - 2.0,
-                ),
-                style(),
-            )
-        })
-        .unwrap_or(RenderNode::Empty);
+    let hbar = Thumb::of(
+        Axis::Horizontal,
+        geometry_core::layout_grid(),
+        viewport.x,
+        viewport.width,
+        content_rect.width,
+        scroll_x,
+    )
+    .map(|thumb| {
+        RenderNode::rect(
+            Rect::new(
+                thumb.start,
+                viewport.y + viewport.height - scrollbar_style.width,
+                thumb.length,
+                scrollbar_style.width - 2.0,
+            ),
+            style(),
+        )
+    })
+    .unwrap_or(RenderNode::Empty);
 
     (vbar, hbar)
 }
@@ -422,7 +461,14 @@ impl ScrollCore {
             return false;
         };
 
-        let Some(thumb) = Thumb::of(origin, extent, content_extent, offset.get()) else {
+        let Some(thumb) = Thumb::of(
+            axis,
+            geometry_core::layout_grid(),
+            origin,
+            extent,
+            content_extent,
+            offset.get(),
+        ) else {
             return false;
         };
         self.catch_all();
@@ -450,7 +496,14 @@ impl ScrollCore {
             ),
             Axis::Horizontal => (x, viewport.x, viewport.width, content.width, self.scroll_x),
         };
-        if let Some(thumb) = Thumb::of(origin, extent, content_extent, offset.get()) {
+        if let Some(thumb) = Thumb::of(
+            axis,
+            geometry_core::layout_grid(),
+            origin,
+            extent,
+            content_extent,
+            offset.get(),
+        ) {
             self.command_axis(axis, thumb.scroll_for(origin, along - grab));
         }
     }
