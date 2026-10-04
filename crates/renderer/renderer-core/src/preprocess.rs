@@ -114,7 +114,7 @@ fn scale_command(cmd: &DrawCommand, sf: f32) -> DrawCommand {
         DrawCommand::Line { p1, p2, style } => DrawCommand::Line {
             p1: p1.scale(sf),
             p2: p2.scale(sf),
-            style: (*style).scale(sf),
+            style: Arc::new((**style).scale(sf)),
         },
         DrawCommand::Path { data, style } => DrawCommand::Path {
             data: Arc::new(scale_path_data(data, sf)),

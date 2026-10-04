@@ -31,7 +31,12 @@ impl ViewGen<'_> {
             ),
         };
 
-        let path_style = self.path_style_expr(el);
+        let (dash, dash_err) = match stroke_dash_call(el) {
+            Ok(call) => (call, None),
+            Err(e) => (String::new(), Some(e)),
+        };
+        let parse_err = parse_err.or(dash_err);
+        let path_style = self.path_style_expr(el, &dash);
 
         // Explicit width/height win; otherwise the path's own extent sizes its box so it does not collapse to zero.
         let mut layout = self.make_layout_style("path", &el.classes, &el.attributes);
@@ -68,8 +73,8 @@ impl ViewGen<'_> {
         ChildEmit::Simple { name: var, code }
     }
 
-    /// Builds the `PathStyle { … }` literal from `fill`/`stroke`/`stroke_width`/`fill_rule` attributes. Colours reuse `color_expr` (theme token / `#hex` / `$signal`), matching `box fill:`.
-    fn path_style_expr(&self, el: &Element) -> String {
+    /// Builds the `PathStyle { … }` literal from `fill`/`stroke`/`stroke_width`/`fill_rule` attributes, with `dash` chained onto the stroke. Colours reuse `color_expr` (theme token / `#hex` / `$signal`), matching `box fill:`.
+    fn path_style_expr(&self, el: &Element, dash: &str) -> String {
         let fill = el
             .attributes
             .iter()
@@ -92,7 +97,7 @@ impl ViewGen<'_> {
                     .filter(|value| !value.is_empty())
                     .map(|value| crate::style::number_or(&value, "1.0"))
                     .unwrap_or_else(|| "1.0".to_string());
-                format!("Some(Stroke::new({color}, {width}))")
+                format!("Some(Stroke::new({color}, {width}){dash})")
             }
             None => "None".to_string(),
         };
@@ -109,6 +114,79 @@ impl ViewGen<'_> {
             "PathStyle {{ fill: {fill}, stroke: {stroke}, shadow: None, fill_rule: {fill_rule} }}"
         )
     }
+}
+
+/// The `.with_dash(…)` call `stroke_dash:` and `stroke_dash_offset:` ask for, empty when there is no pattern, or why the pattern cannot be one.
+fn stroke_dash_call(el: &Element) -> Result<String, String> {
+    let value = |key: &str| {
+        el.attributes
+            .iter()
+            .find(|a| a.key == key)
+            .map(|a| a.value.text().trim().to_string())
+    };
+    let Some(pattern) = value("stroke_dash") else {
+        return match value("stroke_dash_offset") {
+            Some(_) => Err("rsx: `stroke_dash_offset` needs a `stroke_dash` pattern".to_string()),
+            None => Ok(String::new()),
+        };
+    };
+    if value("stroke").is_none() {
+        return Err("rsx: `stroke_dash` dashes the `stroke`, and this path has none".to_string());
+    }
+    let lengths = parse_dash_pattern(&pattern)?;
+    let offset = match value("stroke_dash_offset") {
+        Some(offset) => offset
+            .parse::<f32>()
+            .ok()
+            .filter(|n| n.is_finite())
+            .ok_or_else(|| format!("rsx: `stroke_dash_offset` must be a number, got `{offset}`"))?,
+        None => 0.0,
+    };
+    let lengths: Vec<String> = lengths.into_iter().map(format_f32).collect();
+    Ok(format!(
+        ".with_dash(&[{}], {})",
+        lengths.join(", "),
+        format_f32(offset)
+    ))
+}
+
+/// The most lengths a pattern may hold once an odd list is repeated: `Dash::CAPACITY` in renderer-core, which this crate does not depend on.
+const DASH_CAPACITY: usize = 16;
+
+/// Parses a dash pattern the way SVG writes `stroke-dasharray`: lengths separated by spaces or commas, drawn first. The same patterns `Dash::new` accepts, so a pattern that would silently draw a solid stroke is a build error instead.
+fn parse_dash_pattern(pattern: &str) -> Result<Vec<f32>, String> {
+    let lengths = pattern
+        .split(|c: char| c == ',' || c.is_whitespace())
+        .filter(|part| !part.is_empty())
+        .map(|part| {
+            part.parse::<f32>()
+                .ok()
+                .filter(|n| n.is_finite() && *n >= 0.0)
+                .ok_or_else(|| {
+                    format!("rsx: `stroke_dash` lengths are numbers of zero or more, got `{part}`")
+                })
+        })
+        .collect::<Result<Vec<f32>, String>>()?;
+    if lengths.is_empty() {
+        return Err(
+            "rsx: `stroke_dash` needs at least one length, like `stroke_dash:\"1 4\"`".to_string(),
+        );
+    }
+    if lengths.iter().all(|n| *n == 0.0) {
+        return Err("rsx: `stroke_dash` draws nothing when every length is zero".to_string());
+    }
+    let repeated = if lengths.len() % 2 == 1 {
+        lengths.len() * 2
+    } else {
+        lengths.len()
+    };
+    if repeated > DASH_CAPACITY {
+        return Err(format!(
+            "rsx: `stroke_dash` holds at most {DASH_CAPACITY} lengths (an odd list counts twice), got {}",
+            lengths.len()
+        ));
+    }
+    Ok(lengths)
 }
 
 /// A parsed path: the `PathData::new()…` builder-chain expression plus the maximum x/y extent reached (including Bézier control points), used to size the wrapping canvas when width/height are omitted.

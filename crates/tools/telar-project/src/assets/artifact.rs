@@ -27,7 +27,7 @@ use serde::{Deserialize, Serialize};
 /// mandatory, not discretionary: [`check_artifact`] treats any mismatch here as fatal on its own, without
 /// even looking at `telar_version`, because a shape it can't parse makes that second comparison moot.
 /// Compared against an index's own [`AssetIndex::format`] by [`check_artifact`].
-pub const ASSET_ARTIFACT_FORMAT: u32 = 3;
+pub const ASSET_ARTIFACT_FORMAT: u32 = 4;
 
 /// The module every baked `static` is wired under once a macro declares `#[path = "…/assets.rs"] pub mod
 /// __rsx_assets;`, mirroring [`crate::I18N_MODULE`]. Unused by this module itself — the generated source

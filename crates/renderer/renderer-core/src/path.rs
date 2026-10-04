@@ -53,6 +53,13 @@ impl PathData {
         Self::default()
     }
 
+    pub(crate) fn from_verbs(verbs: Vec<PathVerb>) -> Self {
+        Self {
+            verbs,
+            ..Self::default()
+        }
+    }
+
     pub fn verbs(&self) -> &[PathVerb] {
         &self.verbs
     }

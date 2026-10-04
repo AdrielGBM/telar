@@ -68,3 +68,30 @@ fn stroke_with_join_sets_join() {
     let s = Stroke::new(Color::BLACK, 1.0).with_join(LineJoin::Bevel);
     assert_eq!(s.join, LineJoin::Bevel);
 }
+
+#[test]
+fn stroke_new_is_solid() {
+    assert_eq!(Stroke::new(Color::BLACK, 1.0).dash, None);
+}
+
+#[test]
+fn stroke_with_dash_sets_the_pattern() {
+    let s = Stroke::new(Color::BLACK, 1.0).with_dash(&[1.0, 4.0], 2.0);
+    assert_eq!(s.dash, Dash::new(&[1.0, 4.0], 2.0));
+    assert_eq!(s.dash.map(|d| d.lengths().to_vec()), Some(vec![1.0, 4.0]));
+}
+
+#[test]
+fn stroke_with_a_pattern_that_draws_nothing_stays_solid() {
+    let s = Stroke::new(Color::BLACK, 1.0).with_dash(&[0.0, 0.0], 0.0);
+    assert_eq!(s.dash, None);
+}
+
+#[test]
+fn scaling_a_stroke_scales_its_dash() {
+    use crate::Scale;
+    let s = Stroke::new(Color::BLACK, 1.0)
+        .with_dash(&[1.0, 4.0], 1.0)
+        .scale(2.0);
+    assert_eq!(s.dash, Dash::new(&[2.0, 8.0], 2.0));
+}

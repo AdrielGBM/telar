@@ -272,6 +272,46 @@ fn a_filled_path_covers_its_interior() {
     assert_eq!(buf.get(5, 1).unwrap().bg, Rgb::BLACK, "outside the path");
 }
 
+fn line_cmd(stroke: renderer_core::Stroke) -> DrawCommand {
+    DrawCommand::Line {
+        p1: geometry_core::Point::new(0.0, 0.0),
+        p2: geometry_core::Point::new(8.0 * 3.0, 0.0),
+        style: Arc::new(stroke),
+    }
+}
+
+#[test]
+fn a_dashed_stroke_is_drawn_in_dashed_line_characters() {
+    let solid = renderer_core::Stroke::new(Color::WHITE, 1.0);
+    for (stroke, expected) in [
+        (solid, "────  "),
+        (solid.with_dash(&[4.0, 4.0], 0.0), "╌╌╌╌  "),
+        (solid.with_dash(&[1.0, 4.0], 0.0), "┈┈┈┈  "),
+    ] {
+        let mut buf = grid(6, 1);
+        paint(&mut buf, &[line_cmd(stroke)]);
+        assert_eq!(row(&buf, 0), expected);
+    }
+}
+
+#[test]
+fn a_dashed_path_runs_vertically_in_dashed_line_characters() {
+    let mut buf = grid(1, 3);
+    let path = renderer_core::PathData::new()
+        .move_to(geometry_core::Point::new(0.0, 0.0))
+        .line_to(geometry_core::Point::new(0.0, 16.0 * 2.0));
+    paint(
+        &mut buf,
+        &[DrawCommand::Path {
+            data: Arc::new(path),
+            style: Arc::new(renderer_core::PathStyle::default().with_stroke(
+                renderer_core::Stroke::new(Color::WHITE, 1.0).with_dash(&[1.0, 4.0], 0.0),
+            )),
+        }],
+    );
+    assert_eq!((0..3).map(|r| row(&buf, r)).collect::<String>(), "┊┊┊");
+}
+
 fn element_linking(id: u64, destination: renderer_core::Destination) -> DrawCommand {
     DrawCommand::PushElement {
         element: Arc::new(renderer_core::Element::new(

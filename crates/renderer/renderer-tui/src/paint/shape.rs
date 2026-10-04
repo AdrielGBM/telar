@@ -265,15 +265,15 @@ impl Painter<'_> {
         let a = t.apply(p1);
         let b = t.apply(p2);
         let color = sample(&paint, (a.x + b.x) * 0.5, (a.y + b.y) * 0.5);
-        self.stroke_segment(a, b, color);
+        self.stroke_segment(a, b, color, Run::of(style));
     }
 
     /// One straight run, walked in cells. The character says which way the run is heading, which is as much direction as a cell can carry.
-    fn stroke_segment(&mut self, a: Point, b: Point, color: Color) {
+    fn stroke_segment(&mut self, a: Point, b: Point, color: Color, run: Run) {
         let from = (self.cell.col_at(a.x), self.cell.row_at(a.y));
         let to = (self.cell.col_at(b.x), self.cell.row_at(b.y));
         let (dc, dr) = (to.0 - from.0, to.1 - from.1);
-        let ch = run_char(dc, dr);
+        let ch = run.char(dc, dr);
         let steps = dc.abs().max(dr.abs()).max(1);
         for i in 0..=steps {
             let k = i as f32 / steps as f32;
@@ -299,12 +299,13 @@ impl Painter<'_> {
         }
         if let Some(stroke) = &style.stroke {
             let paint = mapped(&stroke.paint, self.matrix(), self.scale());
+            let run = Run::of(stroke);
             for polygon in &polygons {
                 for pair in polygon.windows(2) {
                     let mid =
                         Point::new((pair[0].x + pair[1].x) * 0.5, (pair[0].y + pair[1].y) * 0.5);
                     let color = sample(&paint, mid.x, mid.y);
-                    self.stroke_segment(pair[0], pair[1], color);
+                    self.stroke_segment(pair[0], pair[1], color, run);
                 }
             }
         }
@@ -472,13 +473,40 @@ fn cubic(a: Point, c1: Point, c2: Point, b: Point, t: f32) -> Point {
 }
 
 /// The character for a run heading `(dc, dr)` cells. A run within 30° of an axis reads as that axis; the rest are the two diagonals.
-fn run_char(dc: i32, dr: i32) -> char {
-    match (dc.abs(), dr.abs()) {
-        (0, 0) => '·',
-        (c, r) if r * 2 <= c => '─',
-        (c, r) if c * 2 <= r => '│',
-        _ if (dc > 0) == (dr > 0) => '╲',
-        _ => '╱',
+/// How a stroke reads in cells. A cell is far coarser than any dash pattern, so a dashed stroke is drawn in the dashed line characters rather than cut into dashes: dotted when it draws less than it skips, dashed otherwise. Unicode has no dashed diagonals, so a slanted run stays solid.
+#[derive(Clone, Copy)]
+enum Run {
+    Solid,
+    Dashed,
+    Dotted,
+}
+
+impl Run {
+    fn of(stroke: &Stroke) -> Self {
+        let Some(dash) = stroke.dash else {
+            return Run::Solid;
+        };
+        let drawn: f32 = dash.lengths().iter().step_by(2).sum();
+        if drawn * 2.0 < dash.period() {
+            Run::Dotted
+        } else {
+            Run::Dashed
+        }
+    }
+
+    fn char(self, dc: i32, dr: i32) -> char {
+        let (horizontal, vertical) = match self {
+            Run::Solid => ('─', '│'),
+            Run::Dashed => ('╌', '╎'),
+            Run::Dotted => ('┈', '┊'),
+        };
+        match (dc.abs(), dr.abs()) {
+            (0, 0) => '·',
+            (c, r) if r * 2 <= c => horizontal,
+            (c, r) if c * 2 <= r => vertical,
+            _ if (dc > 0) == (dr > 0) => '╲',
+            _ => '╱',
+        }
     }
 }
 

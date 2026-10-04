@@ -47,7 +47,7 @@ pub enum DrawCommand {
     Line {
         p1: Point,
         p2: Point,
-        style: Stroke,
+        style: Arc<Stroke>,
     },
     Path {
         data: Arc<PathData>,

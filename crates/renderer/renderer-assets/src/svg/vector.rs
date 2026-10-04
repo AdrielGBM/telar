@@ -5,7 +5,7 @@ use geometry_core::Point;
 use usvg::tiny_skia_path::{Point as SkiaPoint, Transform as SkiaTransform};
 
 use renderer_core::{
-    Color, FillRule, Gradient, LineCap, LineJoin, Paint, PathData, PathStyle, Stroke,
+    Color, Dash, FillRule, Gradient, LineCap, LineJoin, Paint, PathData, PathStyle, Stroke,
 };
 
 use super::{Unsupported, VectorCommand};
@@ -99,10 +99,6 @@ fn convert_path(
         };
     }
     if let Some(stroke) = path.stroke() {
-        // No dashed-stroke primitive.
-        if stroke.dasharray().is_some() {
-            return Err(Unsupported);
-        }
         let paint = convert_paint(stroke.paint(), stroke.opacity().get(), &total, tint, false)?;
         // A theme icon-stroke token overrides the glyph's own stroke width in userspace units (e.g. Lucide's 2), so it still scales into widget space by the same fit `scale`.
         let width = stroke_override.unwrap_or_else(|| stroke.width().get());
@@ -111,6 +107,10 @@ fn convert_path(
             width: width * scale,
             cap: map_cap(stroke.linecap()),
             join: map_join(stroke.linejoin()),
+            dash: stroke
+                .dasharray()
+                .and_then(|pattern| Dash::new(pattern, stroke.dashoffset()))
+                .and_then(|dash| dash.scaled(scale)),
         });
     }
 

@@ -11,7 +11,7 @@ pub(crate) fn to_skia_color(color: renderer_core::Color) -> tiny_skia::Color {
     .expect("channels clamped to [0,1]")
 }
 
-pub(crate) fn to_skia_line_cap(cap: renderer_core::LineCap) -> tiny_skia::LineCap {
+fn to_skia_line_cap(cap: renderer_core::LineCap) -> tiny_skia::LineCap {
     match cap {
         renderer_core::LineCap::Butt => tiny_skia::LineCap::Butt,
         renderer_core::LineCap::Round => tiny_skia::LineCap::Round,
@@ -19,11 +19,23 @@ pub(crate) fn to_skia_line_cap(cap: renderer_core::LineCap) -> tiny_skia::LineCa
     }
 }
 
-pub(crate) fn to_skia_line_join(join: renderer_core::LineJoin) -> tiny_skia::LineJoin {
+fn to_skia_line_join(join: renderer_core::LineJoin) -> tiny_skia::LineJoin {
     match join {
         renderer_core::LineJoin::Miter => tiny_skia::LineJoin::Miter,
         renderer_core::LineJoin::Round => tiny_skia::LineJoin::Round,
         renderer_core::LineJoin::Bevel => tiny_skia::LineJoin::Bevel,
+    }
+}
+
+pub(crate) fn to_skia_stroke(stroke: &renderer_core::Stroke) -> tiny_skia::Stroke {
+    tiny_skia::Stroke {
+        width: stroke.width,
+        line_cap: to_skia_line_cap(stroke.cap),
+        line_join: to_skia_line_join(stroke.join),
+        dash: stroke
+            .dash
+            .and_then(|dash| tiny_skia::StrokeDash::new(dash.lengths().to_vec(), dash.offset())),
+        ..Default::default()
     }
 }
 

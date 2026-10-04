@@ -332,7 +332,6 @@ fn move_clone_emitted_for_type_annotated_signal() {
     );
 }
 
-// Regression: a closure argument on its own line gets its clone ahead of the whole call, never inside the argument list where a `let` would not parse.
 #[test]
 fn move_clone_in_call_arg_closure_precedes_the_statement() {
     let src =
@@ -2116,6 +2115,48 @@ fn path_tag_signal_fill_is_cloned() {
 }
 
 #[test]
+fn path_tag_stroke_dash_dashes_the_stroke() {
+    let src = "[view]\npath d:\"M0,0 L10,0\" stroke:#000000 stroke_dash:\"1 4\" stroke_dash_offset:2 width:10 height:10\n";
+    let code = transpile_source(src, "demo", None, None).unwrap().rust_code;
+    assert!(
+        code.contains("1.0).with_dash(&[1.0, 4.0], 2.0))"),
+        "the pattern and offset chain onto the stroke:\n{code}"
+    );
+    assert!(!code.contains("compile_error!"), "{code}");
+}
+
+#[test]
+fn path_tag_stroke_dash_without_an_offset_starts_at_zero() {
+    let src = "[view]\npath d:\"M0,0 L10,0\" stroke:#000000 stroke_dash:3 width:10 height:10\n";
+    let code = transpile_source(src, "demo", None, None).unwrap().rust_code;
+    assert!(code.contains(".with_dash(&[3.0], 0.0)"), "{code}");
+}
+
+#[test]
+fn path_tag_stroke_dash_that_cannot_be_a_pattern_is_a_compile_error() {
+    for attrs in [
+        "stroke:#000000 stroke_dash:\"0 0\"",
+        "stroke:#000000 stroke_dash:\"1 -4\"",
+        "stroke:#000000 stroke_dash:\"1 4\" stroke_dash_offset:far",
+        "stroke:#000000 stroke_dash_offset:2",
+        "stroke_dash:\"1 4\"",
+    ] {
+        let src = format!("[view]\npath d:\"M0,0 L10,0\" {attrs} width:10 height:10\n");
+        let code = transpile_source(&src, "demo", None, None)
+            .unwrap()
+            .rust_code;
+        assert!(
+            code.contains("compile_error!"),
+            "`{attrs}` is refused:\n{code}"
+        );
+        assert!(
+            !code.contains(".with_dash("),
+            "`{attrs}` draws no dashes:\n{code}"
+        );
+    }
+}
+
+#[test]
 fn path_tag_invalid_d_is_compile_error() {
     let src = "[view]\npath d:\"L10,10\" width:10 height:10\n";
     let code = transpile_source(src, "demo", None, None).unwrap().rust_code;
@@ -2607,7 +2648,6 @@ fn transpile_formatted(src: &str) -> (String, String) {
     (formatted, code)
 }
 
-// Regression (T-12.7): rustfmt breaks a long `let x = memo(move || ..)` after the `=`, and the clone `let`s must still precede the whole statement.
 #[test]
 fn fmt_split_let_memo_keeps_clone_before_statement() {
     let src = "[logic]\nlet first_signal = signal(0i32);\nlet second_signal = signal(1i32);\nlet combined_value_of_both = memo(move || crate::helpers::combine(first_signal.get(), second_signal.get()));\n[view]\ntext \"hi\"\n";
@@ -2628,7 +2668,6 @@ fn fmt_split_let_memo_keeps_clone_before_statement() {
     assert_logic_parses(&code);
 }
 
-// Statement shapes a formatter or an author spreads over several lines must all keep their clones ahead of the statement.
 #[test]
 fn multi_line_statements_hoist_clones_before_the_statement() {
     let shapes = [
@@ -2671,4 +2710,27 @@ fn layout_and_opacity_values_leave_their_delimiters_behind() {
     assert!(!code.contains(".shown(("), "{code}");
     assert!(code.contains("move || fade.get() * 0.5"), "{code}");
     assert!(!code.contains("|| (fade"), "{code}");
+}
+
+/// A statement whose clones are hoisted above it still maps each of its lines to the `.rsx` line it came from, and the clones to none, so an error the compiler reports inside the closure is relayed on the line the author wrote it on.
+#[test]
+fn a_statement_with_hoisted_clones_maps_every_line_to_its_own_source_line() {
+    let src = "[logic]\nlet s = signal(0i32);\nlet doubled =\n    memo(move || {\n        s.get() * 2\n    });\n[view]\ntext \"x\"\n";
+    let result = transpile_source(src, "demo", None, None).unwrap();
+    let lines: Vec<&str> = result.rust_code.lines().collect();
+    assert_eq!(lines.len(), result.source_map.len());
+    let at = |needle: &str| {
+        lines
+            .iter()
+            .position(|line| line.contains(needle))
+            .unwrap_or_else(|| panic!("{needle} in\n{}", result.rust_code))
+    };
+    let clone = at("let s_rsx_mv = s.clone();");
+    let head = at("let doubled =");
+    assert!(clone < head, "{}", result.rust_code);
+    assert_eq!(result.source_map[clone], None);
+    assert_eq!(result.source_map[head], Some(2));
+    assert_eq!(result.source_map[at("memo(move || {")], Some(3));
+    assert_eq!(result.source_map[at("s_rsx_mv.get() * 2")], Some(4));
+    assert_eq!(result.source_map[at("});")], Some(5));
 }

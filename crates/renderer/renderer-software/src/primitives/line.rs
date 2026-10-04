@@ -3,7 +3,7 @@
 use geometry_core::{Point, Rect};
 use renderer_core::Stroke;
 
-use crate::primitives::{fill_to_paint, to_skia_line_cap};
+use crate::primitives::{fill_to_paint, to_skia_stroke};
 
 pub(crate) fn draw_line(
     pixmap: &mut tiny_skia::PixmapMut<'_>,
@@ -37,11 +37,5 @@ pub(crate) fn draw_line(
     let mut paint = fill_to_paint(style.paint);
     paint.anti_alias = true;
 
-    let stroke = tiny_skia::Stroke {
-        width: style.width,
-        line_cap: to_skia_line_cap(style.cap),
-        ..Default::default()
-    };
-
-    pixmap.stroke_path(&path, &paint, &stroke, transform, clip);
+    pixmap.stroke_path(&path, &paint, &to_skia_stroke(&style), transform, clip);
 }

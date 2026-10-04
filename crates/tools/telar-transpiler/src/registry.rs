@@ -720,6 +720,12 @@ pub fn tag_attr_specs(tag: &str) -> Vec<AttrSpec> {
             AttrSpec::color("fill"),
             AttrSpec::free("stroke"),
             AttrSpec::free("stroke_width"),
+            AttrSpec::free("stroke_dash").doc(
+                "Draws the `stroke` in dashes: lengths that alternate drawn and skipped, drawn first, separated by spaces or commas. `stroke_dash:\"1 4\"` is a dotted line; an odd list repeats, as in SVG. Every target dashes it except the terminal, which draws a dashed or dotted line character.",
+            ),
+            AttrSpec::free("stroke_dash_offset").doc(
+                "How far into the `stroke_dash` pattern the stroke starts, a plain number; a positive one shifts the dashes back along the path.",
+            ),
             AttrSpec::free("fill_rule"),
         ]),
         _ if is_builtin_tag(tag) => LAYOUT_ATTRS.to_vec(),

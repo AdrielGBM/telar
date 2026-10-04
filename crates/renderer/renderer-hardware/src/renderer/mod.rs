@@ -9,7 +9,7 @@ use rustc_hash::FxHasher;
 use geometry_core::Rect;
 use raw_window_handle::{HasDisplayHandle, HasWindowHandle};
 use renderer_core::{
-    BlendMode, Color, DrawCommand, ImageFill, Raster, RenderBackend, RendererError,
+    BlendMode, Color, DrawCommand, ImageFill, Raster, RenderBackend, RendererError, Stroke,
     expand_fill_layers, hash_pod_slice,
 };
 
@@ -1031,6 +1031,18 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
             self.pending_line_instances.len() as u32,
             |start, end| DrawStep::LineBatch { start, end },
         );
+    }
+
+    fn push_line(&mut self, from: geometry_core::Point, to: geometry_core::Point, style: Stroke) {
+        let (x1, y1) = self.draw_state.apply_point(from.x, from.y);
+        let (x2, y2) = self.draw_state.apply_point(to.x, to.y);
+        self.pending_line_instances
+            .push(crate::primitives::line::prepare_line(
+                geometry_core::Point::new(x1, y1),
+                geometry_core::Point::new(x2, y2),
+                style,
+                self.draw_state.cumulative_matrix,
+            ));
     }
 
     /// One quad of a picture, placed through the bounds of `rect` transformed by the current matrix and sampling `uv`: a rotation or a skew is not something this pipeline draws.

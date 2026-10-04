@@ -57,7 +57,7 @@ pub use preprocess::{ScaleScratch, blur_padding, blur_sigma, expand_fill_layers}
 pub use renderer::{BuiltRenderer, RenderBackend, RendererBuild, RendererFactory};
 pub use shadow::ShadowLayout;
 pub use style::{
-    Border, Clamp, Declared, FillRule, FontFamily, FontFeatures, FontStyle, FontTag,
+    Border, Clamp, Dash, Declared, FillRule, FontFamily, FontFeatures, FontStyle, FontTag,
     FontVariations, Gradient, GradientKind, GradientStop, GradientStops, LineCap, LineHeight,
     LineJoin, Paint, PathStyle, Raster, RectStyle, Scale, Shadow, ShapeStyle, Span, Stroke,
     TextAlign, TextLength, TextShadow, TextStyle, TextWrap, border_inner_shape, link_at,

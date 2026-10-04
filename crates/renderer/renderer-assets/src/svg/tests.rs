@@ -180,6 +180,22 @@ fn stroke_override_replaces_every_stroke_width() {
 }
 
 #[test]
+fn a_dashed_stroke_stays_vector_and_scales_its_pattern() {
+    let svg = r##"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10" width="10" height="10"><path d="M0 5 L10 5" stroke="#000000" stroke-width="1" stroke-dasharray="1 2 3" stroke-dashoffset="1" fill="none"/></svg>"##;
+    let data = SvgData::from_str(svg).unwrap();
+    let cmds = data.commands_for(20.0, 20.0, None, None, ObjectFit::Contain);
+    let dash = only_path(&cmds)
+        .1
+        .stroke
+        .as_ref()
+        .expect("stroked path")
+        .dash
+        .expect("a dashed stroke");
+    assert_eq!(dash.lengths(), &[2.0, 4.0, 6.0, 2.0, 4.0, 6.0]);
+    assert_eq!(dash.offset(), 2.0);
+}
+
+#[test]
 fn commands_for_is_memoized() {
     let svg = r##"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10" width="10" height="10"><rect width="10" height="10" fill="#ff0000"/></svg>"##;
     let data = SvgData::from_str(svg).unwrap();
@@ -326,6 +342,7 @@ mod equivalence {
     const STROKE: &str = r##"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" width="20" height="20"><rect x="2" y="2" width="16" height="16" fill="none" stroke="#00ff00" stroke-width="2"/></svg>"##;
     const GRADIENT: &str = r##"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10" width="10" height="10"><defs><linearGradient id="g" gradientUnits="userSpaceOnUse" x1="0" y1="0" x2="10" y2="0"><stop offset="0" stop-color="#000000"/><stop offset="1" stop-color="#ffffff"/></linearGradient></defs><rect width="10" height="10" fill="url(#g)"/></svg>"##;
     const OPACITY_GROUP: &str = r##"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10" width="10" height="10"><g opacity="0.5"><rect width="10" height="10" fill="#00ff00"/></g></svg>"##;
+    const DASHED: &str = r##"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" width="20" height="20"><rect x="2" y="2" width="16" height="16" fill="none" stroke="#00ff00" stroke-width="2" stroke-dasharray="1 4" stroke-dashoffset="3"/></svg>"##;
     const RASTER: &str = r##"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10" width="10" height="10"><defs><filter id="b"><feGaussianBlur stdDeviation="1"/></filter></defs><g filter="url(#b)"><rect width="10" height="10" fill="#ff0000"/></g></svg>"##;
 
     #[test]
@@ -336,6 +353,11 @@ mod equivalence {
     #[test]
     fn stroke_equivalent() {
         assert_vector_equivalent(STROKE);
+    }
+
+    #[test]
+    fn dashed_stroke_equivalent() {
+        assert_vector_equivalent(DASHED);
     }
 
     #[test]

@@ -197,6 +197,7 @@ Everything here is either always present or one word away. Nothing is bundled.
 - **Location** — one address per app on every target: browser history with scroll restoration, `--location` deep links remembered between runs, Android `ACTION_VIEW` and the back button. → [docs/location.md](docs/location.md)
 - **Surface title** — the window, tab, recents label or terminal title is derived from the app's title, the current route's title and the locale, and follows all three. → [docs/surface-title.md](docs/surface-title.md)
 - **Links** — `to:` makes a box a link to a route, an anchor on the page or a URI outside the app: a real `<a href>` on web-dom, `open_uri` through the system everywhere else, OSC 8 in a terminal. → [docs/links.md](docs/links.md)
+- **Dashed strokes** — `stroke_dash:"1 4"` on a `path`, or `Stroke::with_dash` in a `canvas`, dashes an outline on every renderer: SVG `stroke-dasharray` on web-dom, `tiny-skia`'s own dashing on the CPU, dashes cut before tessellation on the GPU, dashed line characters in a terminal. → [docs/dashed-strokes.md](docs/dashed-strokes.md)
 - **Images and SVG** — baked into the binary at build time out of `src:"…"`, with no parser in the binary. → `svg`
 - **Translation catalogs** baked the same way, with `t!` validating keys and arguments at compile time.
 

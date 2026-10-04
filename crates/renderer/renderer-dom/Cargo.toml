@@ -95,3 +95,7 @@ path = "src/reactive_layout_test.rs"
 [[test]]
 name = "fixed_layer"
 path = "src/fixed_layer_test.rs"
+
+[[test]]
+name = "dash"
+path = "src/dash_test.rs"

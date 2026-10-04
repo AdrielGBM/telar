@@ -196,9 +196,83 @@ fn draw_paths(rect: Rect) -> RenderNode {
     RenderNode::transform_with([scale, 0.0, 0.0, scale, 0.0, 0.0], kids)
 }
 
+const DASH_CELL: f32 = 24.0;
+
+fn draw_dashes(rect: Rect) -> RenderNode {
+    let t = crate::core::theme::theme();
+    let mut kids: Vec<RenderNode> = Vec::new();
+
+    let (cols, rows) = ((rect.width / DASH_CELL).floor() as usize, 3usize);
+    let mut grid = PathData::new();
+    for row in 0..=rows {
+        let y = row as f32 * DASH_CELL + 0.5;
+        grid = grid
+            .move_to(Point::new(0.0, y))
+            .line_to(Point::new(cols as f32 * DASH_CELL, y));
+    }
+    for col in 0..=cols {
+        let x = col as f32 * DASH_CELL + 0.5;
+        grid = grid
+            .move_to(Point::new(x, 0.0))
+            .line_to(Point::new(x, rows as f32 * DASH_CELL));
+    }
+    kids.push(RenderNode::path(
+        Arc::new(grid),
+        PathStyle::default().with_stroke(Stroke::new(t.muted, 1.0).with_dash(&[1.0, 4.0], 0.0)),
+    ));
+
+    let top = rows as f32 * DASH_CELL + 28.0;
+    let samples = [
+        (
+            Stroke::new(t.primary, 2.0).with_dash(&[8.0, 4.0], 0.0),
+            "8 4",
+        ),
+        (
+            Stroke::new(t.success, 3.0)
+                .with_cap(LineCap::Round)
+                .with_dash(&[0.0, 7.0], 0.0),
+            "0 7, round caps",
+        ),
+        (
+            Stroke::new(t.danger, 2.0).with_dash(&[10.0, 4.0, 2.0, 4.0], 0.0),
+            "10 4 2 4",
+        ),
+    ];
+    let mut waves: Vec<RenderNode> = Vec::new();
+    let mut x = 0.0f32;
+    for (stroke, label) in samples {
+        let wave = PathData::new()
+            .move_to(Point::new(x, top + 20.0))
+            .cubic_to(
+                Point::new(x + 40.0, top - 10.0),
+                Point::new(x + 80.0, top + 50.0),
+                Point::new(x + 140.0, top + 20.0),
+            );
+        waves.push(RenderNode::path(
+            Arc::new(wave),
+            PathStyle::default().with_stroke(stroke),
+        ));
+        waves.push(RenderNode::text(
+            label,
+            Rect {
+                x,
+                y: top + 50.0,
+                width: 150.0,
+                height: 14.0,
+            },
+            TextStyle::new(11.0, t.muted),
+        ));
+        x += 170.0;
+    }
+    let scale = (rect.width / PATHS_DESIGN_W).min(1.0);
+    kids.push(RenderNode::transform_with([scale, 0.0, 0.0, scale, 0.0, 0.0], waves));
+
+    RenderNode::group(kids)
+}
+
 [view]
 col gap:20
-    doc_header kicker:"MEDIA" title:"Paths" desc:"Build vector geometry with PathData — lines, quadratic and cubic Béziers, winding vs even-odd fills, stroke caps, and per-path shadows — then draw it in a Canvas."
+    doc_header kicker:"MEDIA" title:"Paths" desc:"Build vector geometry with PathData — lines, quadratic and cubic Béziers, winding vs even-odd fills, stroke caps and dashes, and per-path shadows — then draw it in a Canvas."
     example title:"Polygons, curves, fills and a path shadow"
         card
             canvas paint:draw_paths height:430
@@ -210,9 +284,19 @@ col gap:20
                 path d:"M6,42 L34,70 L74,14" stroke:$theme.success stroke_width:7 width:80 height:80
                 path d:"M40,2 L50,30 L80,30 L56,48 L64,78 L40,60 L16,78 L24,48 L0,30 L30,30 Z" fill:$theme.warning stroke:$theme.ink stroke_width:1 width:80 height:80
         code_line code:"path d:\"M0,0 L100,0 L50,80 Z\" fill:$theme.primary stroke:$theme.ink stroke_width:2 width:100 height:80"
+    example title:"Dashed strokes"
+        card
+            col gap:16
+                canvas paint:draw_dashes height:180
+                row gap:28 align:center
+                    path d:"M0,40 L120,40" stroke:$theme.ink stroke_width:1 stroke_dash:"1 4" width:120 height:80
+                    path d:"M0,0 L100,0 L50,80 Z" stroke:$theme.primary stroke_width:2 stroke_dash:"6 3" width:100 height:80
+                    path d:"M40,2 L50,30 L80,30 L56,48 L64,78 L40,60 L16,78 L24,48 L0,30 L30,30 Z" stroke:$theme.warning stroke_width:2 stroke_dash:"8 4" stroke_dash_offset:4 width:80 height:80
+        code_line code:"path d:\"M0,0 L100,0 L50,80 Z\" stroke:$theme.primary stroke_width:2 stroke_dash:\"6 3\"   /   Stroke::new(c, 1.0).with_dash(&[1.0, 4.0], 0.0)"
     example title:"The PathData API"
         col gap:6
             prop_row name:"move_to / line_to" values:"Point" about:"Start a subpath, add a straight segment."
             prop_row name:"quad_to / cubic_to" values:"Points" about:"Quadratic and cubic Bézier curves."
             prop_row name:"fill_rule" values:"Winding · EvenOdd" about:"How overlapping regions are filled."
             prop_row name:"Stroke::with_cap" values:"Butt·Round·Square" about:"Line ends (and with_join for corners)."
+            prop_row name:"Stroke::with_dash" values:"pattern, offset" about:"Drawn and skipped lengths, and where the stroke starts in them."

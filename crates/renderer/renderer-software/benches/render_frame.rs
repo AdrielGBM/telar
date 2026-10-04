@@ -52,7 +52,7 @@ fn dense_ui() -> Vec<DrawCommand> {
             .with_stroke(Stroke::new(Color::from_rgb_u8(40, 120, 80), 1.0)),
     );
 
-    let separator = Stroke::new(Color::from_rgb_u8(56, 62, 78), 1.0);
+    let separator = Arc::new(Stroke::new(Color::from_rgb_u8(56, 62, 78), 1.0));
     let label: Arc<str> = Arc::from("Item label");
     let title: Arc<str> = Arc::from("Section title");
 
@@ -77,7 +77,7 @@ fn dense_ui() -> Vec<DrawCommand> {
     cmds.push(DrawCommand::Line {
         p1: Point::new(0.0, 48.0),
         p2: Point::new(WIDTH as f32, 48.0),
-        style: separator,
+        style: separator.clone(),
     });
     cmds.push(DrawCommand::PopLayer);
 
@@ -144,7 +144,7 @@ fn dense_ui() -> Vec<DrawCommand> {
             cmds.push(DrawCommand::Line {
                 p1: Point::new(x + 16.0, y + 48.0),
                 p2: Point::new(x + cell_w - 16.0, y + 48.0),
-                style: separator,
+                style: separator.clone(),
             });
             if layered {
                 cmds.push(DrawCommand::PopLayer);

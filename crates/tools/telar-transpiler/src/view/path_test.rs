@@ -81,3 +81,20 @@ fn unsupported_command_errors() {
         "an arc is not supported, and saying so beats emitting nothing"
     );
 }
+
+#[test]
+fn a_dash_pattern_reads_spaces_and_commas() {
+    assert_eq!(parse_dash_pattern("1 4").unwrap(), vec![1.0, 4.0]);
+    assert_eq!(parse_dash_pattern("1, 4,2.5").unwrap(), vec![1.0, 4.0, 2.5]);
+    assert_eq!(parse_dash_pattern("3").unwrap(), vec![3.0]);
+}
+
+#[test]
+fn a_dash_pattern_that_draws_nothing_is_refused() {
+    assert!(parse_dash_pattern("").is_err());
+    assert!(parse_dash_pattern("0 0").is_err());
+    assert!(parse_dash_pattern("1 -4").is_err());
+    assert!(parse_dash_pattern("1 four").is_err());
+    assert!(parse_dash_pattern("1 2 3 4 5 6 7 8 9").is_err());
+    assert!(parse_dash_pattern("1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16").is_ok());
+}

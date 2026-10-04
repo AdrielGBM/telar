@@ -635,6 +635,54 @@ fn a_rounded_clip_cuts_the_corners_of_what_a_clip_inside_it_draws() {
     assert_ne!(at(150, 150), BACKGROUND, "well inside both clips it paints");
 }
 
+#[test]
+fn a_dashed_stroke_paints_its_dashes_and_leaves_its_gaps() {
+    const SIZE: (u32, u32) = (64, 64);
+    const WHITE: [u8; 4] = [255, 255, 255, 255];
+    let dashed = Stroke::new(Color::WHITE, 2.0).with_dash(&[4.0, 4.0], 0.0);
+    let path = PathData::new()
+        .move_to(Point::new(10.0, 20.0))
+        .line_to(Point::new(42.0, 20.0));
+    let commands = vec![
+        DrawCommand::Path {
+            data: Arc::new(path),
+            style: Arc::new(PathStyle::default().with_stroke(dashed)),
+        },
+        DrawCommand::Line {
+            p1: Point::new(10.0, 40.0),
+            p2: Point::new(42.0, 40.0),
+            style: Arc::new(dashed),
+        },
+    ];
+    let drawn = draw(SIZE, &[&commands], false);
+    let at = |x, y| pixel(&drawn, SIZE.0, x, y);
+
+    for (what, row) in [("a path", 20), ("a line", 40)] {
+        for start in [10, 18, 26, 34] {
+            assert_eq!(
+                at(start + 1, row),
+                WHITE,
+                "{what} paints the dash at {start}"
+            );
+            assert_eq!(
+                at(start + 2, row - 1),
+                WHITE,
+                "{what} paints the dash at {start}"
+            );
+            assert_eq!(
+                at(start + 5, row),
+                BACKGROUND,
+                "{what} leaves the gap after {start}"
+            );
+            assert_eq!(
+                at(start + 6, row - 1),
+                BACKGROUND,
+                "{what} leaves the gap after {start}"
+            );
+        }
+    }
+}
+
 // Draws `old`, then `new` with a draw that panics before its first command, as the render thread would catch it, then `new` again, which has to match a fresh frame.
 fn assert_recovers_from_a_frame_that_panics(
     what: &str,

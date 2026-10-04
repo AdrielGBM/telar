@@ -49,6 +49,40 @@ fn a_path_with_no_fill_is_not_filled_black() {
 }
 
 #[test]
+fn a_dashed_stroke_names_its_pattern_and_offset() {
+    let mut d = drawing();
+    d.path(
+        &PathData::new()
+            .move_to(Point::new(0.0, 0.0))
+            .line_to(Point::new(10.0, 0.0)),
+        &PathStyle::default()
+            .with_stroke(Stroke::new(Color::BLACK, 1.0).with_dash(&[1.0, 4.0], 2.0)),
+    );
+    d.line(
+        Point::new(0.0, 0.0),
+        Point::new(0.0, 10.0),
+        &Stroke::new(Color::BLACK, 1.0).with_dash(&[3.0], 0.0),
+    );
+    let out = d.finish();
+    assert!(
+        out.contains("stroke-dasharray=\"1 4\" stroke-dashoffset=\"2\""),
+        "{out}"
+    );
+    assert!(out.contains("stroke-dasharray=\"3 3\"/>"), "{out}");
+}
+
+#[test]
+fn a_solid_stroke_names_no_pattern() {
+    let mut d = drawing();
+    d.line(
+        Point::new(0.0, 0.0),
+        Point::new(0.0, 10.0),
+        &Stroke::new(Color::BLACK, 1.0),
+    );
+    assert!(!d.finish().contains("stroke-dash"));
+}
+
+#[test]
 fn an_even_odd_fill_says_so() {
     let data = PathData::new()
         .move_to(Point::new(0.0, 0.0))

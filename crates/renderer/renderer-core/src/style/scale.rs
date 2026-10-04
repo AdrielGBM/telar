@@ -49,6 +49,7 @@ impl Scale for Stroke {
             width: self.width * sf,
             cap: self.cap,
             join: self.join,
+            dash: self.dash.and_then(|dash| dash.scaled(sf)),
         }
     }
 }

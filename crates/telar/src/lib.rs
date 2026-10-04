@@ -157,8 +157,8 @@ pub use reactive_core::{
 pub use renderer_assets::{SvgData, SvgError, VectorCommand};
 #[cfg(feature = "runtime")]
 pub use renderer_core::{
-    BlendMode, Border, BorderRadius, Clamp, Color, Declared, DrawCommand, DrawState, FillRule,
-    FontFamily, FontFeatures, FontStyle, FontTag, FontVariations, Gradient, GradientKind,
+    BlendMode, Border, BorderRadius, Clamp, Color, Dash, Declared, DrawCommand, DrawState,
+    FillRule, FontFamily, FontFeatures, FontStyle, FontTag, FontVariations, Gradient, GradientKind,
     GradientStop, GradientStops, ImageData, ImageFill, ImageSlice, LayerMask, LineCap, LineHeight,
     LineJoin, Paint, PathData, PathStyle, PathVerb, Raster, RectStyle, RendererError, Role, Scale,
     Semantics, Shadow, ShapeStyle, Span, Stroke, TextAlign, TextLength, TextShadow, TextStyle,

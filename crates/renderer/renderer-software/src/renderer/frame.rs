@@ -582,7 +582,7 @@ where
                         &mut canvas.pixmap,
                         *p1,
                         *p2,
-                        *style,
+                        **style,
                         canvas.transform,
                         canvas.mask,
                         canvas.clip,

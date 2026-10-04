@@ -192,7 +192,7 @@ fn a_gradient_line_varies_along_its_length() {
     let cmds = vec![DrawCommand::Line {
         p1: Point::new(x0, y),
         p2: Point::new(x1, y),
-        style: Stroke::new(red_to_blue(x0, x1, y), 10.0),
+        style: Arc::new(Stroke::new(red_to_blue(x0, x1, y), 10.0)),
     }];
 
     renderer.begin_frame(w, h, 1.0, 1).expect("begin_frame");
@@ -212,6 +212,53 @@ fn a_gradient_line_varies_along_its_length() {
         rb > rr,
         "the line's end should lean blue, r={rr} b={rb} — a flattened paint uses stop 0 everywhere"
     );
+}
+
+/// lyon strokes solid lines, so a dashed path and a dashed line both reach the GPU already cut into their dashes.
+#[test]
+fn a_dashed_stroke_leaves_its_gaps_on_the_gpu() {
+    let (w, h) = (64u32, 48u32);
+    let Some(mut renderer) = headless(w, h) else {
+        return;
+    };
+
+    let dashed = Stroke::new(Color::WHITE, 4.0).with_dash(&[8.0, 8.0], 0.0);
+    let cmds = vec![
+        DrawCommand::Path {
+            data: Arc::new(
+                PathData::new()
+                    .move_to(Point::new(8.0, 16.0))
+                    .line_to(Point::new(56.0, 16.0)),
+            ),
+            style: Arc::new(PathStyle {
+                stroke: Some(dashed),
+                ..Default::default()
+            }),
+        },
+        DrawCommand::Line {
+            p1: Point::new(8.0, 32.0),
+            p2: Point::new(56.0, 32.0),
+            style: Arc::new(dashed),
+        },
+    ];
+
+    renderer.begin_frame(w, h, 1.0, 1).expect("begin_frame");
+    renderer
+        .render_frame(&cmds, Some(Color::BLACK))
+        .expect("render_frame");
+    let pixels = renderer.read_rgba().expect("read_rgba");
+    let red = |x: u32, y: u32| pixels[((y * w + x) * 4) as usize];
+
+    for (what, y) in [("path", 16), ("line", 32)] {
+        for dash in [12, 28, 44] {
+            assert!(red(dash, y) > 200, "the {what} paints its dash at x={dash}");
+            assert!(
+                red(dash + 8, y) < 40,
+                "the {what} leaves its gap at x={}",
+                dash + 8
+            );
+        }
+    }
 }
 
 // `highlight` recolors exactly one cell, so two renders differing only in it produce a single-cell dirty rect.

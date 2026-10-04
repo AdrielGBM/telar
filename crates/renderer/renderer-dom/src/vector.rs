@@ -399,6 +399,13 @@ impl Drawing {
             renderer_core::LineJoin::Round => attr(attrs, "stroke-linejoin", "round"),
             renderer_core::LineJoin::Bevel => attr(attrs, "stroke-linejoin", "bevel"),
         }
+        if let Some(dash) = &stroke.dash {
+            let lengths: Vec<String> = dash.lengths().iter().map(|length| round(*length)).collect();
+            attr(attrs, "stroke-dasharray", &lengths.join(" "));
+            if dash.offset() != 0.0 {
+                attr(attrs, "stroke-dashoffset", &round(dash.offset()));
+            }
+        }
     }
 
     fn paint(&mut self, p: &Paint) -> String {

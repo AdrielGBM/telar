@@ -12,7 +12,7 @@ use crate::image::byte_string_literal;
 use renderer_core::ImageData;
 #[cfg(feature = "bake")]
 use renderer_core::{
-    Color, FillRule, Gradient, GradientKind, LineCap, LineJoin, Paint, PathData, PathStyle,
+    Color, Dash, FillRule, Gradient, GradientKind, LineCap, LineJoin, Paint, PathData, PathStyle,
     PathVerb, Stroke,
 };
 
@@ -165,12 +165,28 @@ fn ser_opt_stroke(stroke: &Option<Stroke>) -> String {
     match stroke {
         None => "None".to_string(),
         Some(st) => format!(
-            "Some(Stroke {{ paint: {}, width: {}, cap: {}, join: {} }})",
+            "Some(Stroke {{ paint: {}, width: {}, cap: {}, join: {}, dash: {} }})",
             ser_paint(&st.paint),
             fmt_f32(st.width),
             ser_cap(st.cap),
             ser_join(st.join),
+            ser_opt_dash(st.dash.as_ref()),
         ),
+    }
+}
+
+#[cfg(feature = "bake")]
+fn ser_opt_dash(dash: Option<&Dash>) -> String {
+    match dash {
+        None => "None".to_string(),
+        Some(dash) => {
+            let lengths: Vec<String> = dash.lengths().iter().map(|l| fmt_f32(*l)).collect();
+            format!(
+                "Dash::new(&[{}], {})",
+                lengths.join(", "),
+                fmt_f32(dash.offset())
+            )
+        }
     }
 }
 

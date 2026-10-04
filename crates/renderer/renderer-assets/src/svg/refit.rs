@@ -77,6 +77,7 @@ fn refit_stroke(stroke: Stroke, sx: f32, sy: f32, dx: f32, dy: f32, tint: Option
         width: stroke.width * mean_scale(sx, sy),
         cap: stroke.cap,
         join: stroke.join,
+        dash: stroke.dash.and_then(|dash| dash.scaled(mean_scale(sx, sy))),
     }
 }
 

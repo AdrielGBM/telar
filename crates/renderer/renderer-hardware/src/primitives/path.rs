@@ -12,7 +12,7 @@ use lyon::tessellation::{
     BuffersBuilder, FillOptions, FillTessellator, FillVertex, StrokeOptions, StrokeTessellator,
     StrokeVertex, VertexBuffers,
 };
-use renderer_core::{FillRule, LineCap, LineJoin, PathData, PathStyle, PathVerb};
+use renderer_core::{Dash, FillRule, LineCap, LineJoin, PathData, PathStyle, PathVerb};
 use wgpu::Device;
 
 #[repr(C)]
@@ -138,6 +138,7 @@ struct StrokeGeomKey {
     width_bits: u32,
     cap: u8,
     join: u8,
+    dash: Option<Dash>,
 }
 
 struct CachedGeom {
@@ -297,10 +298,10 @@ pub(crate) fn prepare_path(
             width_bits: s.width.to_bits(),
             cap: s.cap as u8,
             join: s.join as u8,
+            dash: s.dash,
         };
 
         if !cache.stroke.contains(&stroke_key) {
-            let lyon_path = lyon_path.get_or_insert_with(|| build_lyon_path(data));
             let mut geometry: VertexBuffers<[f32; 2], u32> = VertexBuffers::new();
             let mut tessellator = StrokeTessellator::new();
             let line_cap = to_lyon_line_cap(s.cap);
@@ -310,8 +311,17 @@ pub(crate) fn prepare_path(
                 .with_start_cap(line_cap)
                 .with_end_cap(line_cap)
                 .with_line_join(line_join);
+            // lyon strokes solid lines only, so a dashed stroke tessellates the path already cut into its dashes.
+            let dashed;
+            let stroked = match s.dash {
+                Some(dash) => {
+                    dashed = build_lyon_path(&dash.split(data, options.tolerance));
+                    &dashed
+                }
+                None => &*lyon_path.get_or_insert_with(|| build_lyon_path(data)),
+            };
             match tessellator.tessellate_path(
-                &*lyon_path,
+                stroked,
                 &options,
                 &mut BuffersBuilder::new(&mut geometry, |v: StrokeVertex| {
                     [v.position().x, v.position().y]

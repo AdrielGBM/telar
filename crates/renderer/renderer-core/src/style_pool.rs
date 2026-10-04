@@ -1,6 +1,6 @@
 //! Field-by-field hashing for the style types, which carry floats and so cannot be hashed as plain bytes.
 
-use std::hash::Hasher;
+use std::hash::{Hash, Hasher};
 
 use rustc_hash::FxHasher;
 
@@ -218,12 +218,24 @@ fn hash_opt_stroke(s: Option<&Stroke>, h: &mut FxHasher) {
         None => h.write_u8(0),
         Some(stroke) => {
             h.write_u8(1);
-            hash_paint(&stroke.paint, h);
-            h.write_u32(stroke.width.to_bits());
-            h.write_u8(stroke.cap as u8);
-            h.write_u8(stroke.join as u8);
+            write_stroke(stroke, h);
         }
     }
+}
+
+/// The content hash of a stroke: paint, width, cap, join and dash.
+pub(crate) fn hash_stroke(s: &Stroke) -> u64 {
+    let mut h = FxHasher::default();
+    write_stroke(s, &mut h);
+    h.finish()
+}
+
+fn write_stroke(stroke: &Stroke, h: &mut FxHasher) {
+    hash_paint(&stroke.paint, h);
+    h.write_u32(stroke.width.to_bits());
+    h.write_u8(stroke.cap as u8);
+    h.write_u8(stroke.join as u8);
+    stroke.dash.hash(h);
 }
 
 fn hash_opt_shadow(s: Option<&Shadow>, h: &mut FxHasher) {

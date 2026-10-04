@@ -2,6 +2,7 @@
 
 use crate::Color;
 
+use super::dash::Dash;
 use super::gradient::Gradient;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -76,6 +77,8 @@ pub struct Stroke {
     pub width: f32,
     pub cap: LineCap,
     pub join: LineJoin,
+    /// The pattern the stroke is drawn in, or `None` for a solid one. See [`Dash`].
+    pub dash: Option<Dash>,
 }
 
 impl Stroke {
@@ -85,7 +88,14 @@ impl Stroke {
             width,
             cap: LineCap::default(),
             join: LineJoin::default(),
+            dash: None,
         }
+    }
+
+    /// Draws the stroke in dashes: `pattern` alternates drawn and skipped lengths, starting with a drawn one, and `offset` is how far into it the stroke starts. `with_dash(&[1.0, 4.0], 0.0)` is a dotted line. A pattern that draws no dashes leaves the stroke solid; see [`Dash::new`].
+    pub fn with_dash(mut self, pattern: &[f32], offset: f32) -> Self {
+        self.dash = Dash::new(pattern, offset);
+        self
     }
 
     pub fn with_cap(mut self, cap: LineCap) -> Self {

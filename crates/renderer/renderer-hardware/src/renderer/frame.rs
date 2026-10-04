@@ -1267,18 +1267,14 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
                     if self.batch_line_start.is_none() {
                         self.batch_line_start = Some(self.pending_line_instances.len() as u32);
                     }
-                    use geometry_core::Point;
-                    let (lx1, ly1) = self.draw_state.apply_point(p1.x, p1.y);
-                    let (lx2, ly2) = self.draw_state.apply_point(p2.x, p2.y);
-                    let tp1 = Point::new(lx1, ly1);
-                    let tp2 = Point::new(lx2, ly2);
-                    self.pending_line_instances
-                        .push(crate::primitives::line::prepare_line(
-                            tp1,
-                            tp2,
-                            *style,
-                            self.draw_state.cumulative_matrix,
-                        ));
+                    match style.dash {
+                        Some(dash) => {
+                            for (from, to) in dash.split_segment(*p1, *p2) {
+                                self.push_line(from, to, **style);
+                            }
+                        }
+                        None => self.push_line(*p1, *p2, **style),
+                    }
                 }
                 DrawCommand::Path { data, style } => {
                     let style = **style;

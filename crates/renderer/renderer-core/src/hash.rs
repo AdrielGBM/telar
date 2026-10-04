@@ -6,7 +6,9 @@ use std::sync::Arc;
 use rustc_hash::FxHasher;
 
 use crate::DrawCommand;
-use crate::style_pool::{hash_declared, hash_path_style, hash_rect_style, hash_text_style};
+use crate::style_pool::{
+    hash_declared, hash_path_style, hash_rect_style, hash_stroke, hash_text_style,
+};
 
 /// Feeds a command list into `h`, hashing by content so a rebuilt but identical frame hashes the same.
 pub fn hash_draw_commands_into<H: Hasher>(cmds: &[DrawCommand], h: &mut H) {
@@ -65,7 +67,7 @@ pub fn hash_draw_commands_into<H: Hasher>(cmds: &[DrawCommand], h: &mut H) {
                 p1.y.to_bits().hash(h);
                 p2.x.to_bits().hash(h);
                 p2.y.to_bits().hash(h);
-                style.width.to_bits().hash(h);
+                hash_stroke(style).hash(h);
             }
             DrawCommand::Path { data, style } => {
                 4u8.hash(h);

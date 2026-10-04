@@ -4,9 +4,9 @@ use std::sync::Arc;
 
 use geometry_core::Rect;
 use renderer_cache::Cache;
-use renderer_core::{FillRule, PathData, PathStyle, PathVerb};
+use renderer_core::{Dash, FillRule, PathData, PathStyle, PathVerb};
 
-use crate::primitives::{fill_to_paint, to_skia_line_cap, to_skia_line_join};
+use crate::primitives::{fill_to_paint, to_skia_stroke};
 
 /// Whether a path encloses any pixels, which is what makes filling it mean something.
 ///
@@ -66,8 +66,8 @@ pub(crate) struct PathShadowCacheKey {
     /// Whether the shadow fills, and under which rule. A path drawn only as a stroke casts a hollow shadow; the same path filled casts a solid one, and the two used to share an entry.
     has_fill: bool,
     even_odd: bool,
-    /// The stroke's width, cap and join, or `None` when the path is not stroked. Width above all: a hairline and a ten-pixel stroke cast visibly different shadows from identical geometry.
-    stroke: Option<(u32, u8, u8)>,
+    /// The stroke's width, cap, join and dash, or `None` when the path is not stroked. Width above all: a hairline and a ten-pixel stroke cast visibly different shadows from identical geometry.
+    stroke: Option<(u32, u8, u8, Option<Dash>)>,
 }
 
 pub(crate) type PathShadowCache = Cache<PathShadowCacheKey, tiny_skia::Pixmap>;
@@ -149,7 +149,7 @@ pub(crate) fn draw_path(
                 even_odd: style.fill_rule == FillRule::EvenOdd,
                 stroke: style
                     .stroke
-                    .map(|s| (s.width.to_bits(), s.cap as u8, s.join as u8)),
+                    .map(|s| (s.width.to_bits(), s.cap as u8, s.join as u8, s.dash)),
             };
 
             let dx = -b.x() + padding as f32;
@@ -178,13 +178,13 @@ pub(crate) fn draw_path(
                         tmp_pmap.fill_path(path, shadow_paint, rule, shifted, None);
                     }
                     if let Some(s) = stroke_style {
-                        let stroke = tiny_skia::Stroke {
-                            width: s.width,
-                            line_cap: to_skia_line_cap(s.cap),
-                            line_join: to_skia_line_join(s.join),
-                            ..Default::default()
-                        };
-                        tmp_pmap.stroke_path(path, shadow_paint, &stroke, shifted, None);
+                        tmp_pmap.stroke_path(
+                            path,
+                            shadow_paint,
+                            &to_skia_stroke(&s),
+                            shifted,
+                            None,
+                        );
                     }
                 };
 
@@ -235,14 +235,6 @@ pub(crate) fn draw_path(
     if let Some(s) = style.stroke {
         let mut paint = fill_to_paint(s.paint);
         paint.anti_alias = true;
-        let line_cap = to_skia_line_cap(s.cap);
-        let line_join = to_skia_line_join(s.join);
-        let stroke = tiny_skia::Stroke {
-            width: s.width,
-            line_cap,
-            line_join,
-            ..Default::default()
-        };
-        pixmap.stroke_path(&path, &paint, &stroke, transform, clip);
+        pixmap.stroke_path(&path, &paint, &to_skia_stroke(&s), transform, clip);
     }
 }
