@@ -429,3 +429,37 @@ fn a_mask_source_is_a_definition_and_its_content_is_shown_through_it() {
         "the source is never drawn itself: {body}"
     );
 }
+
+#[test]
+fn paint_placed_on_the_surface_lands_in_the_innermost_box() {
+    let mut d = Drawing::at(7, Rect::new(0.0, 300.0, 400.0, 200.0));
+    d.open_box(Rect::new(56.0, 428.0, 200.0, 80.0));
+    d.open_clip_on_surface(Rect::new(56.0, 428.0, 200.0, 80.0), BorderRadius::zero());
+    d.open_matrix_on_surface([1.5, 0.0, 0.0, 1.5, -28.0, -234.0]);
+    d.rect_on_surface(
+        Rect::new(56.0, 428.0, 200.0, 80.0),
+        &RectStyle::default().with_fill(Paint::Gradient(Gradient::linear(
+            Point::new(56.0, 428.0),
+            Point::new(256.0, 428.0),
+            &[(0.0, Color::BLACK), (1.0, Color::WHITE)],
+        ))),
+    );
+    let out = d.finish();
+    assert!(out.contains("<g transform=\"translate(56,128)\">"), "{out}");
+    assert!(
+        out.contains("<clipPath id=\"t7-1\"><rect x=\"0\" y=\"0\" width=\"200\" height=\"80\"/>"),
+        "{out}"
+    );
+    assert!(
+        out.contains("<g transform=\"matrix(1.5,0,0,1.5,0,-20)\">"),
+        "the scale about (56, 468) on the surface is the scale about (0, 40) in the box: {out}"
+    );
+    assert!(
+        out.contains("x1=\"0\" y1=\"0\" x2=\"200\" y2=\"0\""),
+        "{out}"
+    );
+    assert!(
+        out.contains("<rect x=\"0\" y=\"0\" width=\"200\" height=\"80\" fill=\"url(#t7-2)\"/>"),
+        "{out}"
+    );
+}

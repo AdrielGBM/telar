@@ -105,6 +105,10 @@ name = "transform_origin"
 path = "src/transform_origin_test.rs"
 
 [[test]]
+name = "drawn_box"
+path = "src/drawn_box_test.rs"
+
+[[test]]
 name = "text_paint"
 path = "src/text_paint_test.rs"
 

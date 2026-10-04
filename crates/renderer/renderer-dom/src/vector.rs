@@ -32,8 +32,8 @@ pub struct Drawing {
     groups: Vec<Group>,
     /// The id of the mask a source just defined, for the layer it applies to.
     pending_mask: Option<String>,
-    /// Where each box open inside the drawing lies in layout, innermost last, the drawing's own box first.
-    origins: Vec<(f32, f32)>,
+    /// Where layout put each box open inside the drawing on the surface, innermost last, the drawing's own box first.
+    boxes: Vec<Rect>,
     next_def: u32,
     /// Namespaces this element's definition ids, since every drawing in the page shares one id space.
     prefix: u64,
@@ -46,30 +46,72 @@ impl Drawing {
             body: String::new(),
             groups: Vec::new(),
             pending_mask: None,
-            origins: vec![(0.0, 0.0)],
+            boxes: vec![Rect::new(0.0, 0.0, 0.0, 0.0)],
             next_def: 0,
             prefix,
         }
     }
 
-    /// A drawing of the box laid out at `origin`, whose boxes inside it are placed relative to it: see [`open_box`](Self::open_box).
-    pub fn at(prefix: u64, origin: (f32, f32)) -> Self {
+    /// A drawing of the box layout put at `frame`, whose boxes inside it are placed relative to it: see [`open_box`](Self::open_box).
+    pub fn at(prefix: u64, frame: Rect) -> Self {
         Self {
-            origins: vec![origin],
+            boxes: vec![frame],
             ..Self::new(prefix)
         }
     }
 
-    /// A box inside the drawing, laid out at `origin`: what it draws is in its own coordinates, as a document's box is, so it is moved to where it lies inside the box around it.
-    pub fn open_box(&mut self, origin: (f32, f32)) {
-        let (x, y) = self.origins.last().copied().unwrap_or_default();
+    /// A box inside the drawing, laid out at `frame`: what it draws is in its own coordinates, as a document's box is, so it is moved to where it lies inside the box around it.
+    pub fn open_box(&mut self, frame: Rect) {
+        let around = self.innermost_box();
         self.body.push_str(&format!(
             "<g transform=\"translate({},{})\">",
-            round(origin.0 - x),
-            round(origin.1 - y)
+            round(frame.x - around.x),
+            round(frame.y - around.y)
         ));
         self.groups.push(Group::Placed);
-        self.origins.push(origin);
+        self.boxes.push(frame);
+    }
+
+    /// Where layout put the innermost box open in the drawing, on the surface.
+    pub fn innermost_box(&self) -> Rect {
+        self.boxes
+            .last()
+            .copied()
+            .unwrap_or(Rect::new(0.0, 0.0, 0.0, 0.0))
+    }
+
+    /// [`rect`](Self::rect), for one placed on the surface rather than in the innermost box's own coordinates.
+    pub fn rect_on_surface(&mut self, rect: Rect, style: &RectStyle) {
+        let (x, y) = self.origin();
+        let mut style = *style;
+        style.fill = style.fill.map(|fill| moved_paint(fill, -x, -y));
+        if let Some(border) = style.border.as_mut() {
+            border.paint = moved_paint(border.paint, -x, -y);
+        }
+        self.rect(
+            Rect::new(rect.x - x, rect.y - y, rect.width, rect.height),
+            &style,
+        );
+    }
+
+    /// [`open_clip`](Self::open_clip), for a clip placed on the surface rather than in the innermost box's own coordinates.
+    pub fn open_clip_on_surface(&mut self, rect: Rect, radius: BorderRadius) {
+        let (x, y) = self.origin();
+        self.open_clip(
+            Rect::new(rect.x - x, rect.y - y, rect.width, rect.height),
+            radius,
+        );
+    }
+
+    /// [`open_matrix`](Self::open_matrix), for a matrix that moves points on the surface rather than in the innermost box's own coordinates.
+    pub fn open_matrix_on_surface(&mut self, m: [f32; 6]) {
+        let (x, y) = self.origin();
+        self.open_matrix(crate::paint::rebased(m, x, y));
+    }
+
+    fn origin(&self) -> (f32, f32) {
+        let frame = self.innermost_box();
+        (frame.x, frame.y)
     }
 
     pub fn rect(&mut self, rect: Rect, style: &RectStyle) {
@@ -273,16 +315,7 @@ impl Drawing {
     }
 
     pub fn open_matrix(&mut self, m: [f32; 6]) {
-        let [a, b, c, d, e, f] = m;
-        self.open(&format!(
-            "<g transform=\"matrix({},{},{},{},{},{})\">",
-            round(a),
-            round(b),
-            round(c),
-            round(d),
-            round(e),
-            round(f)
-        ));
+        self.open(&format!("<g transform=\"{}\">", crate::paint::spelled(m)));
     }
 
     /// A layer in an SVG blends with what the same drawing put beneath it: the `<svg>` isolates its content from the page behind.
@@ -357,7 +390,7 @@ impl Drawing {
         };
         self.body.push_str("</g>");
         if matches!(group, Group::Placed) {
-            self.origins.pop();
+            self.boxes.pop();
         }
         if let Group::MaskSource { drawn, id } = group {
             let source = std::mem::replace(&mut self.body, drawn);
@@ -461,6 +494,13 @@ pub fn frame_svg(
         round(rect.height),
         gradient_def("f", &moved(*gradient, -rect.x, -rect.y)),
     )
+}
+
+fn moved_paint(paint: Paint, dx: f32, dy: f32) -> Paint {
+    match paint {
+        Paint::Gradient(g) => Paint::Gradient(moved(g, dx, dy)),
+        solid => solid,
+    }
 }
 
 fn moved(g: Gradient, dx: f32, dy: f32) -> Gradient {

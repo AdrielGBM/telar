@@ -389,3 +389,116 @@ fn a_layer_whose_place_is_missing_still_stands_over_the_surface() {
         .collect();
     assert_eq!(ids, [1, 10]);
 }
+
+fn open_at(id: u64, semantics: Semantics, rect: Rect) -> DrawCommand {
+    DrawCommand::PushElement {
+        element: Arc::new(Element::new(ElementId(id), semantics, "", rect)),
+    }
+}
+
+fn filled(rect: Rect) -> DrawCommand {
+    DrawCommand::Rect {
+        rect,
+        style: Arc::new(renderer_core::RectStyle::filled(Color::WHITE, 0.0)),
+    }
+}
+
+fn drawn(commands: &[DrawCommand]) -> String {
+    let frame = describe_frame(commands, None, &mut Fixed, false);
+    match &only_box(&frame).content {
+        Content::Drawing(markup) => markup.clone(),
+        _ => panic!("the box is a drawing"),
+    }
+}
+
+/// A box scaled 1.5x from its start, 128px down a drawing that is itself 300px down the page: the scale is about (56, 468) on the surface, which is (0, 40) in the box.
+#[test]
+fn a_box_inside_a_drawing_transforms_and_cuts_itself_where_it_stands() {
+    let at = Rect::new(56.0, 428.0, 200.0, 80.0);
+    let markup = drawn(&[
+        open_at(1, Semantics::drawing(), Rect::new(0.0, 300.0, 400.0, 200.0)),
+        open_at(2, Semantics::group(), at),
+        DrawCommand::PushClip {
+            rect: at,
+            radius: renderer_core::BorderRadius::zero(),
+        },
+        DrawCommand::PushMatrix {
+            matrix: [1.5, 0.0, 0.0, 1.5, -28.0, -234.0],
+        },
+        filled(at),
+        DrawCommand::PopMatrix,
+        DrawCommand::PopClip,
+        DrawCommand::PopElement,
+        DrawCommand::PopElement,
+    ]);
+    assert!(
+        markup.contains("<g transform=\"translate(56,128)\">"),
+        "{markup}"
+    );
+    assert!(
+        markup.contains("<rect x=\"0\" y=\"0\" width=\"200\" height=\"80\"/></clipPath>"),
+        "{markup}"
+    );
+    assert!(
+        markup.contains("<g transform=\"matrix(1.5,0,0,1.5,0,-20)\">"),
+        "{markup}"
+    );
+    assert!(
+        markup.contains("<rect x=\"0\" y=\"0\" width=\"200\" height=\"80\" fill=\"#ffffff\"/>"),
+        "{markup}"
+    );
+}
+
+/// What a canvas draws starts at its own corner, transforms included, wherever the canvas is on the page.
+#[test]
+fn artwork_inside_a_drawing_keeps_its_own_coordinates() {
+    let markup = drawn(&[
+        open_at(
+            1,
+            Semantics::drawing(),
+            Rect::new(40.0, 300.0, 100.0, 100.0),
+        ),
+        DrawCommand::PushMatrix {
+            matrix: [2.0, 0.0, 0.0, 2.0, 0.0, 0.0],
+        },
+        filled(Rect::new(10.0, 10.0, 20.0, 20.0)),
+        DrawCommand::PopMatrix,
+        DrawCommand::PushMatrix {
+            matrix: [2.0, 0.0, 0.0, 2.0, 0.0, 0.0],
+        },
+        filled(Rect::new(0.0, 0.0, 100.0, 100.0)),
+        DrawCommand::PopMatrix,
+        DrawCommand::PopElement,
+    ]);
+    assert_eq!(
+        markup,
+        "<g transform=\"matrix(2,0,0,2,0,0)\"><rect x=\"10\" y=\"10\" width=\"20\" height=\"20\" fill=\"#ffffff\"/></g>\
+<g transform=\"matrix(2,0,0,2,0,0)\"><rect x=\"0\" y=\"0\" width=\"100\" height=\"100\" fill=\"#ffffff\"/></g>"
+    );
+}
+
+/// A frame drawn at the box's own corner says its matrix is in the box's coordinates too, so there is nothing to rebase.
+#[test]
+fn a_matrix_around_a_frame_at_the_corner_is_already_the_boxs_own() {
+    let frame = describe_frame(
+        &[
+            open_at(1, Semantics::group(), Rect::new(200.0, 100.0, 100.0, 50.0)),
+            DrawCommand::PushMatrix {
+                matrix: [1.5, 0.0, 0.0, 1.5, 0.0, -12.5],
+            },
+            filled(Rect::new(0.0, 0.0, 100.0, 50.0)),
+            DrawCommand::PopMatrix,
+            DrawCommand::PopElement,
+        ],
+        None,
+        &mut Fixed,
+        false,
+    );
+    let node = only_box(&frame);
+    assert!(
+        node.style
+            .contains("transform:matrix(1.5,0,0,1.5,0,-12.5);"),
+        "{}",
+        node.style
+    );
+}

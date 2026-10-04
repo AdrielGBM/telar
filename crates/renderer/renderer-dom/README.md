@@ -71,6 +71,15 @@ control the browser scrolls to on focus all land clear of the bar, and a page do
 step. See
 [docs/primary-scroll.md](https://github.com/AdrielGBM/telar/blob/main/docs/primary-scroll.md#arrival-margin).
 
+`src/transform_origin_test.rs` checks that a box scaled about the pivot `transform_origin` names lands where
+it says, as an element and drawn inside a drawing, and that a canvas's own transform stays in its canvas.
+`src/drawn_box_test.rs` mounts real widgets on a page the document scrolls: a box scaled from its start inside
+a mask, on a sticky stage below the top of the page, lands on the same box laid out as an element, at rest
+and stuck, a canvas inside the mask keeps its own transform, and the mask and a canvas beside it, both `<svg>`s
+pinned to fill the stage, cover it. A box inside a drawing sends its frame,
+transform and clip where layout put it on the surface; the drawing rebases them into the box's own
+coordinates, where a leaf's artwork already is (see [`document.rs`](src/document.rs)'s `draw`).
+
 The dev shell's chromedriver may not match its Chromium. In that case run the tests in Firefox:
 
 ```sh

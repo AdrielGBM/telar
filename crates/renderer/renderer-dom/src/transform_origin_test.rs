@@ -140,3 +140,107 @@ fn a_pair_pins_the_corner_it_names() {
         75.0,
     );
 }
+
+/// Draws `commands` into a fresh host and returns where the browser put the shape filled with `fill`, in the host's coordinates.
+fn drawn_at(commands: &[DrawCommand], fill: &str) -> Rect {
+    let host = host();
+    let mut renderer = DomRenderer::new(host.clone()).expect("a renderer on the host");
+    renderer
+        .render_frame(commands, None)
+        .expect("the frame reconciled");
+    let at = host.get_bounding_client_rect();
+    let shown = host
+        .query_selector(&format!("[fill=\"{fill}\"]"))
+        .expect("a selector")
+        .unwrap_or_else(|| panic!("a shape filled {fill}"))
+        .get_bounding_client_rect();
+    host.remove();
+    Rect::new(
+        (shown.x() - at.x()) as f32,
+        (shown.y() - at.y()) as f32,
+        shown.width() as f32,
+        shown.height() as f32,
+    )
+}
+
+/// A drawing 300px down the page, holding `BOX` 100px further down, as a mask's content holds the boxes it shows.
+const DRAWING: Rect = Rect {
+    x: 0.0,
+    y: 300.0,
+    width: 400.0,
+    height: 300.0,
+};
+
+const BELOW: Rect = Rect {
+    x: BOX.x,
+    y: BOX.y + DRAWING.y,
+    ..BOX
+};
+
+#[wasm_bindgen_test]
+fn a_box_inside_a_drawing_scales_about_its_own_start() {
+    set_direction(Direction::Ltr);
+    let matrix = box_transform_about(BELOW, TransformOrigin::start(), 0.0, 1.5, 1.5, 0.0, 0.0)
+        .expect("not identity");
+    let commands = vec![
+        DrawCommand::PushElement {
+            element: Arc::new(Element::new(
+                ElementId(1),
+                Semantics::drawing(),
+                "",
+                DRAWING,
+            )),
+        },
+        DrawCommand::PushElement {
+            element: Arc::new(Element::new(ElementId(2), Semantics::group(), "", BELOW)),
+        },
+        DrawCommand::PushMatrix { matrix },
+        DrawCommand::Rect {
+            rect: BELOW,
+            style: Arc::new(RectStyle::default().with_fill(Color::from_rgb_u8(200, 30, 40))),
+        },
+        DrawCommand::PopMatrix,
+        DrawCommand::PopElement,
+        DrawCommand::PopElement,
+    ];
+    assert_rect(
+        "inside a drawing",
+        drawn_at(&commands, "#c81e28"),
+        200.0,
+        387.5,
+        150.0,
+        75.0,
+    );
+}
+
+/// What a canvas draws is in its own coordinates, its own transforms included, however far down the page the canvas is.
+#[wasm_bindgen_test]
+fn artwork_scaled_by_its_own_transform_stays_in_its_canvas() {
+    let commands = vec![
+        DrawCommand::PushElement {
+            element: Arc::new(Element::new(
+                ElementId(1),
+                Semantics::drawing(),
+                "",
+                DRAWING,
+            )),
+        },
+        DrawCommand::PushMatrix {
+            matrix: [2.0, 0.0, 0.0, 2.0, 0.0, 0.0],
+        },
+        DrawCommand::Rect {
+            rect: Rect::new(10.0, 10.0, 20.0, 20.0),
+            style: Arc::new(RectStyle::default().with_fill(Color::from_rgb_u8(30, 40, 200))),
+        },
+        DrawCommand::PopMatrix,
+        DrawCommand::PopElement,
+    ];
+    assert_rect(
+        "artwork",
+        drawn_at(&commands, "#1e28c8"),
+        20.0,
+        320.0,
+        40.0,
+        40.0,
+    );
+}

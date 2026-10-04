@@ -312,20 +312,21 @@ pub(crate) fn describe_frame(
     };
     // Boxes inside a drawing are part of its picture, not elements of the page: it places them itself.
     let mut boxes_in_drawing = 0usize;
-    for command in commands {
+    for (at, command) in commands.iter().enumerate() {
+        let rest = &commands[at + 1..];
         let in_drawing = walk.open.last().is_some_and(|open| open.drawing.is_some());
         match command {
             DrawCommand::PushElement { .. } if in_drawing => {
                 boxes_in_drawing += 1;
-                walk.paint(command);
+                walk.paint(command, rest);
             }
             DrawCommand::PopElement if boxes_in_drawing > 0 => {
                 boxes_in_drawing -= 1;
-                walk.paint(command);
+                walk.paint(command, rest);
             }
             DrawCommand::PushElement { element } => walk.push(element),
             DrawCommand::PopElement => walk.pop(),
-            other => walk.paint(other),
+            other => walk.paint(other, rest),
         }
     }
     let mut roots = walk.roots;
@@ -537,7 +538,7 @@ impl Walk<'_> {
     }
 
     /// Everything that is not an element boundary: what the open box paints.
-    fn paint(&mut self, command: &DrawCommand) {
+    fn paint(&mut self, command: &DrawCommand, rest: &[DrawCommand]) {
         if self
             .open
             .last()
@@ -565,7 +566,7 @@ impl Walk<'_> {
             return;
         };
         if let Some(drawing) = open.drawing.as_mut() {
-            draw(drawing, command, self.surface);
+            draw(drawing, command, rest, self.surface);
             return;
         }
         match command {
@@ -576,14 +577,13 @@ impl Walk<'_> {
                 // The box's own background is the one that is the box. Anything else is paint the widget put inside it, and folding that into the background would spread one small mark over the whole element.
                 if is_own_box(*rect, open.box_rect) {
                     open.painted = true;
-                    // A matrix this box's own paint sits inside is the box's own transform, and now it is known to be: the boxes it also wraps are moved by moving the box.
+                    // A matrix this box's own paint sits inside is the box's own transform, and now it is known to be: the boxes it also wraps are moved by moving the box. It is written in the same coordinates as the frame, the surface's or the box's own.
                     if let Some(matrix) = open.moved.take() {
-                        let at = open.box_rect;
                         paint::declare(&mut open.style, "transform-origin", "0 0");
                         paint::declare(
                             &mut open.style,
                             "transform",
-                            &paint::matrix(matrix, at.x, at.y),
+                            &paint::matrix(matrix, rect.x, rect.y),
                         );
                     }
                     paint::rect_style(style, *rect, &mut open.style);
@@ -757,7 +757,7 @@ impl Walk<'_> {
         self.open.push(Open {
             node: Some(node),
             box_rect: element.rect,
-            drawing: drawing.then(|| Drawing::at(element.id.0, (element.rect.x, element.rect.y))),
+            drawing: drawing.then(|| Drawing::at(element.id.0, element.rect)),
             style,
             painted: false,
             boxes: Vec::new(),
@@ -900,16 +900,49 @@ fn describe(element: &Element, tag: &'static str) -> Described {
 
 /// Whether a painted rect is the box it was painted in, in either of the two ways a widget can say so: a box that draws its own frame knows where it is, and a leaf that draws inside itself starts at its corner.
 fn is_own_box(rect: Rect, box_rect: Rect) -> bool {
-    let same = |a: f32, b: f32| (a - b).abs() < 0.01;
-    same(rect.width, box_rect.width)
-        && same(rect.height, box_rect.height)
-        && ((same(rect.x, box_rect.x) && same(rect.y, box_rect.y))
-            || (same(rect.x, 0.0) && same(rect.y, 0.0)))
+    is_where_laid_out(rect, box_rect)
+        || is_where_laid_out(rect, Rect::new(0.0, 0.0, box_rect.width, box_rect.height))
 }
 
-/// What one command adds to the picture an element is drawing.
-fn draw(drawing: &mut Drawing, command: &DrawCommand, surface: &mut dyn Surface) {
+/// Whether a painted rect is the box's frame drawn where layout put the box on the surface.
+fn is_where_laid_out(rect: Rect, box_rect: Rect) -> bool {
+    let same = |a: f32, b: f32| (a - b).abs() < 0.01;
+    same(rect.x, box_rect.x)
+        && same(rect.y, box_rect.y)
+        && same(rect.width, box_rect.width)
+        && same(rect.height, box_rect.height)
+}
+
+/// Whether the matrix or clip that `rest` follows is the box's own transform or cut, around a frame the box draws where it is on the surface, which puts them on the surface too. One opened inside a leaf's artwork is in the leaf's own coordinates, like the artwork.
+fn opens_onto_own_frame(rest: &[DrawCommand], box_rect: Rect) -> bool {
+    rest.iter()
+        .find(|command| {
+            !matches!(
+                command,
+                DrawCommand::PushMatrix { .. }
+                    | DrawCommand::PushClip { .. }
+                    | DrawCommand::PushLayer { .. }
+            )
+        })
+        .is_some_and(|command| {
+            matches!(command, DrawCommand::Rect { rect, .. } if is_where_laid_out(*rect, box_rect))
+        })
+}
+
+/// What one command adds to the picture an element is drawing; `rest` is what the frame draws after it.
+///
+/// A box inside a drawing is drawn in its own coordinates, but a box that draws its own frame draws it where layout put it on the surface, and its transform and cut with it, as it does outside a drawing. Written as they came, a box scaled from its start was scaled about a point as far down as the box is on the page.
+fn draw(
+    drawing: &mut Drawing,
+    command: &DrawCommand,
+    rest: &[DrawCommand],
+    surface: &mut dyn Surface,
+) {
+    let box_rect = drawing.innermost_box();
     match command {
+        DrawCommand::Rect { rect, style } if is_where_laid_out(*rect, box_rect) => {
+            drawing.rect_on_surface(*rect, style)
+        }
         DrawCommand::Rect { rect, style } => drawing.rect(*rect, style),
         DrawCommand::Text {
             text, rect, style, ..
@@ -937,7 +970,13 @@ fn draw(drawing: &mut Drawing, command: &DrawCommand, surface: &mut dyn Surface)
                 *fill,
             );
         }
+        DrawCommand::PushClip { rect, radius } if opens_onto_own_frame(rest, box_rect) => {
+            drawing.open_clip_on_surface(*rect, *radius)
+        }
         DrawCommand::PushClip { rect, radius } => drawing.open_clip(*rect, *radius),
+        DrawCommand::PushMatrix { matrix } if opens_onto_own_frame(rest, box_rect) => {
+            drawing.open_matrix_on_surface(*matrix)
+        }
         DrawCommand::PushMatrix { matrix } => drawing.open_matrix(*matrix),
         DrawCommand::PushLayer {
             opacity,
@@ -948,7 +987,7 @@ fn draw(drawing: &mut Drawing, command: &DrawCommand, surface: &mut dyn Surface)
         DrawCommand::PopClip | DrawCommand::PopMatrix | DrawCommand::PopLayer => {
             drawing.close_group()
         }
-        DrawCommand::PushElement { element } => drawing.open_box((element.rect.x, element.rect.y)),
+        DrawCommand::PushElement { element } => drawing.open_box(element.rect),
         DrawCommand::PopElement => drawing.close_group(),
     }
 }

@@ -439,16 +439,19 @@ mod text_tests;
 ///
 /// Rebasing puts the fixed point back where the widget meant it. Paired with `transform-origin: 0 0`, since the arithmetic assumes the element's own origin is what stays put, and CSS otherwise assumes its centre.
 pub fn matrix(m: [f32; 6], x: f32, y: f32) -> String {
+    spelled(rebased(m, x, y))
+}
+
+/// An absolute-space matrix in the coordinates of a box whose own top-left is at `(x, y)`: see [`matrix`].
+pub fn rebased(m: [f32; 6], x: f32, y: f32) -> [f32; 6] {
     let [a, b, c, d, e, f] = m;
-    format!(
-        "matrix({},{},{},{},{},{})",
-        round(a),
-        round(b),
-        round(c),
-        round(d),
-        round(a * x + c * y + e - x),
-        round(b * x + d * y + f - y)
-    )
+    [a, b, c, d, a * x + c * y + e - x, b * x + d * y + f - y]
+}
+
+/// A matrix as the `matrix()` function CSS and SVG both read.
+pub fn spelled(m: [f32; 6]) -> String {
+    let [a, b, c, d, e, f] = m.map(round);
+    format!("matrix({a},{b},{c},{d},{e},{f})")
 }
 
 #[cfg(test)]
