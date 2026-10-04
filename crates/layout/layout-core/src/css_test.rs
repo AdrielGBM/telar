@@ -223,3 +223,11 @@ fn the_last_position_given_is_the_one_written() {
     let written = css(LayoutStyle::new().absolute_fill().sticky());
     assert!(written.contains("position:sticky;"), "got {written}");
 }
+
+/// What `position: static` is for a box with insets: a browser that still read them would offset it where Telar does not.
+#[test]
+fn a_sticky_box_switched_off_says_nothing_of_its_insets() {
+    let written = css(LayoutStyle::new().sticky_when(false).inset_top(12.0));
+    assert!(written.contains("position:relative;"), "got {written}");
+    assert!(!written.contains("top:"), "got {written}");
+}

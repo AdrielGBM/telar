@@ -38,7 +38,7 @@ pub fn builtin_tags() -> &'static [(&'static str, &'static str)] {
 const LAYOUT_ATTRS: &[AttrSpec] = &[
     AttrSpec::free("track_rect"),
     AttrSpec::free("clip").doc(
-        "Cuts a node's output to its laid-out rect: bare, or a `Clip` shape naming axis, radius and inset.",
+        "Cuts a node's output to its laid-out rect: bare, or a `Clip` shape naming axis, radius and inset. A value reading `$state` is followed and may yield a `Clip`, an `Option<Clip>` or a `bool`, so `clip:$cut` stops and starts cutting without a rebuild.",
     ),
     AttrSpec::num("width"),
     AttrSpec::num("height"),
@@ -67,8 +67,8 @@ const LAYOUT_ATTRS: &[AttrSpec] = &[
     AttrSpec::num("inset_top"),
     AttrSpec::num("inset_bottom"),
     AttrSpec::keywords("absolute", ABSOLUTE_VALUES),
-    AttrSpec::keywords("sticky", STICKY_VALUES).doc(
-        "Stays in the flow but sticks to the edges its insets name while the nearest scroll viewport scrolls, never leaving its parent. `sticky inset_top:0` pins a header.",
+    AttrSpec::boolean("sticky").doc(
+        "Stays in the flow but sticks to the edges its insets name while the nearest scroll viewport scrolls, never leaving its parent. `sticky inset_top:0` pins a header; `sticky:$pinned` follows state, and switched off the box is an ordinary one in the flow whose insets wait for it to stick again.",
     ),
     AttrSpec::boolean("shown").doc(
         "Whether the node is in flow, re-resolved from what it reads — unlike `display:none`, which could not undo itself.",
@@ -306,9 +306,6 @@ pub const AXIS_VALUES: &[(&str, &str)] = &[
 
 /// `absolute` — out of flow, pinned by the insets the author names; `absolute:fill` is the all-four-at-zero shorthand. The empty spelling is the bare flag.
 pub const ABSOLUTE_VALUES: &[(&str, &str)] = &[("", "absolute"), ("fill", "absolute_fill")];
-
-/// `sticky` — a flag: in the flow, displaced by the insets the author names while its scroll viewport scrolls.
-pub const STICKY_VALUES: &[(&str, &str)] = &[("", "sticky")];
 
 /// `wrap` — a flag, spelled bare or as its own name.
 pub const WRAP_VALUES: &[(&str, &str)] = &[("", "flex_wrap")];

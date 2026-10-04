@@ -20,7 +20,7 @@ pub(crate) enum InputMode {
 pub(crate) enum Placement {
     Offset(Rc<dyn Fn() -> (f32, f32)>),
     Transform(Rc<dyn Fn() -> Option<[f32; 6]>>),
-    Clip(Rc<dyn Fn() -> Rect>),
+    Clip(Rc<dyn Fn() -> Option<Rect>>),
 }
 
 struct Answer {
@@ -514,7 +514,10 @@ fn place(node: NodeId, shape: Shape, clipped: bool) -> Option<Shape> {
                 Some(matrix) => shape.transformed(matrix),
                 None => shape,
             },
-            Placement::Clip(clip) if clipped => shape.clipped(clip())?,
+            Placement::Clip(clip) if clipped => match clip() {
+                Some(clip) => shape.clipped(clip)?,
+                None => shape,
+            },
             Placement::Clip(_) => shape,
         };
     }
@@ -542,12 +545,10 @@ fn unplace(node: NodeId, x: f32, y: f32) -> Option<(f32, f32)> {
                 }
                 None => point,
             },
-            Placement::Clip(clip) => {
-                if !clip().contains(point.0, point.1) {
-                    return None;
-                }
-                point
-            }
+            Placement::Clip(clip) => match clip() {
+                Some(clip) if !clip.contains(point.0, point.1) => return None,
+                _ => point,
+            },
         };
     }
     Some(point)

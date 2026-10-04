@@ -26,6 +26,7 @@ web-sys = { workspace = true, features = ["CanvasRenderingContext2d", "HtmlCanva
 js-sys.workspace = true
 layout-core = { workspace = true }
 platform-web.workspace = true
+reactive-core.workspace = true
 ui-components.workspace = true
 ui-core.workspace = true
 ui-tree.workspace = true
@@ -82,3 +83,7 @@ path = "src/audit_test.rs"
 [[test]]
 name = "hydration"
 path = "src/hydration_test.rs"
+
+[[test]]
+name = "reactive_layout"
+path = "src/reactive_layout_test.rs"

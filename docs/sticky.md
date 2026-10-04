@@ -27,6 +27,7 @@ LayoutStyle::new().sticky().inset_top(0.0)
 | `.rsx` | Rust | Meaning |
 | --- | --- | --- |
 | `sticky` | `LayoutStyle::sticky()` | Makes the box sticky. `absolute` and `absolute:fill` turn it off again, and the last one written wins. |
+| `sticky:$on` | `.sticky_when(on)` | Sticky while `on` is `true`; see [Switching it by state](#switching-it-by-state). Any `bool` expression works, and one that reads state is followed. |
 | `inset_top:N` | `.inset_top(N)` | Stays at least `N` below the viewport's top edge. |
 | `inset_bottom:N` | `.inset_bottom(N)` | Stays at least `N` above the viewport's bottom edge. |
 | `inset_start:N` / `inset_end:N` | `.inset_start(N)` / `.inset_end(N)` | Same on the inline axis. They follow the writing direction, like every logical edge. |
@@ -58,14 +59,40 @@ it using the view: the part of the content the viewport shows, in the content's 
 The moved rect is what a node's rect signal publishes (`track_layout`), so hit-testing, `visible_rect`,
 anchored overlays and the paint of every backend all read the same position.
 
+## Switching it by state
+
+`sticky:` takes a value, and a value that reads state is followed like any other layout value: the box keeps
+an effect that re-resolves its style, so it starts and stops sticking without being rebuilt. A stage that
+sticks normally and stays put under reduced motion:
+
+```rsx
+[logic]
+let reduced = memo(|| use_reduced_motion() == Some(true));
+
+[view]
+col height:300sh
+    box sticky:!$reduced inset_top:0 height:100sh
+        text "stage"
+```
+
+```rust
+LayoutStyle::new().sticky_when(!reduced.get()).inset_top(0.0)
+```
+
+Switched off, the box is an ordinary box in the flow, as CSS `position: static` is. Its insets are kept for
+when it sticks again and are never applied as a relative offset, so the box sits exactly where layout put it.
+The switch lays the root out again and walks it with the view it already has, so a box switched on mid-scroll
+is placed for that scroll at once. The same holds for `clip:$on`, which stops and starts cutting the box (see
+`ClippedItem::following`).
+
 ## Targets
 
 | Target | How it sticks |
 | --- | --- |
-| web-dom | The box also gets native `position: sticky` with the same insets, so the compositor holds it between frames. The rect Telar computes is still what hit-testing reads, and the layout parity test (`crates/renderer/renderer-dom/src/layout_parity_test.rs`) checks that both agree in Firefox. A `clip` becomes `overflow: clip`, not `overflow: hidden`, because a `hidden` box is a scroll container and a sticky box inside it would stick to that box instead of to the viewport. |
-| GPU, software, web canvas, Android | The moved rect is drawn directly. |
+| web-dom | The box also gets native `position: sticky` with the same insets, so the compositor holds it between frames. The rect Telar computes is still what hit-testing reads, and the layout parity test (`crates/renderer/renderer-dom/src/layout_parity_test.rs`) checks that both agree in Firefox. A `clip` becomes `overflow: clip` on the clipped box's own element, not `overflow: hidden`, because a `hidden` box is a scroll container and a sticky box inside it would stick to that box instead of to the viewport. A switched `sticky:` or `clip:` rewrites the `style` of the element the box already has, even when nothing moved (`crates/renderer/renderer-dom/src/reactive_layout_test.rs`): switched off, the element is `position: relative` with no insets. |
+| GPU, software, web canvas, Android | The moved rect is drawn directly. A switch is the next frame's rect, and its clip node or none. |
 | TUI | The same, on the cell grid. The offset is snapped the same way the scroll offset is and the insets are snapped like every inset, so the box sticks in whole cells and lines up exactly with the viewport's edge. |
-| headless | The moved rect is published, so tests read where the box is stuck. |
+| headless | The moved rect is published, so tests read where the box is stuck, and where it is after a switch. |
 
 ## Limits
 

@@ -273,7 +273,7 @@ pub use ui_core::{
     Accessible, Axis, BuildFailure, COARSE_STEP, Canvas, Caret, ChildSlot, Children, Clip,
     ClipAxis, ClippedItem, Component, ComponentList, Container, DEFAULT_SCRIM, DismissRegistration,
     DragAxis, DragStart, Edge, ErrorBoundary, EventResult, FINE_STEP, Image, Inherited, Input,
-    KeyAnswer, KeyNav, KeyNavMove, LayoutItem, LayoutScrollArea, LayoutTransition, Lazy,
+    IntoClip, KeyAnswer, KeyNav, KeyNavMove, LayoutItem, LayoutScrollArea, LayoutTransition, Lazy,
     LineGutter, Mask, NodeId, NodeVec, Overlay, Path, PointerButtons, Presence, ReactiveList,
     Rectangle, RenderNode, ScrollPage, ScrollViewport, ScrollbarStyle, Slots, StyledContainer,
     SurfaceScaffold, SurfaceTransition, Text, TextArea, TextRun, ThemeProvider, Transition,

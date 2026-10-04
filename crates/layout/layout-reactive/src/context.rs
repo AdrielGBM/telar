@@ -390,7 +390,7 @@ pub fn mark_dirty(node: NodeId) -> Result<(), LayoutError> {
 ///
 /// What a widget whose style is *derived* from reactive state calls when that state moves — a theme's metric tokens, today. Unlike rebuilding the widget it keeps the node, its children, and everything they hold; the engine re-resolves the new style against the current direction exactly as it would at construction.
 pub fn set_layout_style(node: NodeId, style: LayoutStyle) -> Result<(), LayoutError> {
-    with_runtime(|rt| {
+    restyle(node, |rt| {
         rt.engine.set_style(node, style)?;
         rt.engine.mark_dirty(node)
     })
@@ -398,7 +398,25 @@ pub fn set_layout_style(node: NodeId, style: LayoutStyle) -> Result<(), LayoutEr
 
 /// Shows or hides a node in layout flow. A hidden node takes no space (and lays out none of its subtree); mark an ancestor dirty and recompute for the change to take effect. Used for responsive layouts (e.g. collapsing a sidebar on narrow windows).
 pub fn set_display(node: NodeId, visible: bool) {
-    with_runtime(|rt| rt.engine.set_display(node, visible))
+    restyle(node, |rt| rt.engine.set_display(node, visible))
+}
+
+/// Applies `change` to `node`'s style, then tells whoever read its [`declared_css`] if that CSS is no longer what they read.
+///
+/// A box's rect is not enough to follow: a sticky box switched off where it was not displaced keeps its rect, and the document would go on sticking it.
+fn restyle<R>(node: NodeId, change: impl FnOnce(&mut LayoutRuntime) -> R) -> R {
+    let (result, changed) = with_runtime(|rt| {
+        let Some(&read) = rt.css_reads.get(&node) else {
+            return (change(rt), None);
+        };
+        let before = rt.engine_css(node);
+        let result = change(rt);
+        (result, (rt.engine_css(node) != before).then_some(read))
+    });
+    if let Some(read) = changed {
+        read.update(|generation| *generation = generation.wrapping_add(1));
+    }
+    result
 }
 
 /// Lays `node`'s children along the horizontal axis, after the node was built as a column. A reconciling list boxed inside a `row` calls this: its own node exists before it is attached, so the direction it should have cannot be known at construction.
@@ -540,6 +558,8 @@ struct LayoutRuntime {
     sticky_views: FxHashMap<NodeId, Rect>,
     /// The outermost sticky nodes each root's last walk met, so a new view places only their subtrees again.
     sticky_anchors: FxHashMap<NodeId, Vec<StickyAnchor>>,
+    /// A generation per node whose [`declared_css`] something read, bumped by [`restyle`] when that CSS changes. Minted on first read, like `abs_pos_signals`: only a document backend reads it.
+    css_reads: FxHashMap<NodeId, RwSignal<u64>>,
     // Guards against a recursive `compute()`: an effect that reads a layout signal and calls `compute_layout`.
     #[cfg(debug_assertions)]
     is_computing: bool,
@@ -559,9 +579,17 @@ impl LayoutRuntime {
             measured_at: 0,
             sticky_views: FxHashMap::default(),
             sticky_anchors: FxHashMap::default(),
+            css_reads: FxHashMap::default(),
             #[cfg(debug_assertions)]
             is_computing: false,
         }
+    }
+
+    /// `node`'s declared CSS against the direction and surface the engine last resolved with, which reads no signal.
+    fn engine_css(&self, node: NodeId) -> Option<layout_core::Css> {
+        self.engine
+            .declared_style(node)
+            .map(|style| style.to_css(self.engine.direction(), self.engine.surface_size()))
     }
 
     pub(crate) fn new_leaf(
@@ -754,6 +782,7 @@ impl LayoutRuntime {
             self.root_auto.remove(&at);
             self.abs_pos.remove(&at);
             self.abs_pos_signals.remove(&at);
+            self.css_reads.remove(&at);
             self.sticky_views.remove(&at);
             self.sticky_anchors.remove(&at);
         }
@@ -774,18 +803,24 @@ mod tests;
 ///
 /// For a backend whose output is a document rather than pixels: it is handed the box's intent, not the rect the intent produced, so the browser can lay the box out itself. `None` for a node this runtime does not own — a widget mid-teardown, or one built on another surface.
 ///
-/// Subscribes the caller to the surface's size when the style is written as a fraction of it: those lengths reach the document as pixels, which go stale on a resize even where the box's own rect happens not to move.
+/// Subscribes the caller to the surface's size when the style is written as a fraction of it: those lengths reach the document as pixels, which go stale on a resize even where the box's own rect happens not to move. And to the style itself, for the same reason: a box can stop sticking without moving.
 pub fn declared_css(node: NodeId) -> Option<layout_core::Css> {
     let direction = crate::direction::current_direction();
     let surface = crate::surface_size::surface_size();
-    let (css, follows_surface) = with_runtime(|rt| {
-        rt.engine.declared_style(node).map(|style| {
+    let (css, follows_surface, read) = with_runtime(|rt| {
+        let (css, follows_surface) = rt.engine.declared_style(node).map(|style| {
             (
                 style.to_css(direction, surface),
                 style.is_surface_relative(),
             )
-        })
+        })?;
+        let read = *rt
+            .css_reads
+            .entry(node)
+            .or_insert_with(|| reactive_core::in_surface_world(|| signal(0u64)));
+        Some((css, follows_surface, read))
     })?;
+    let _ = read.get();
     if follows_surface {
         crate::surface_size::use_surface_size();
     }

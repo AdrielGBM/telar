@@ -160,3 +160,58 @@ fn a_removed_sticky_node_is_forgotten() {
     page.engine.remove(page.bar);
     assert!(page.engine.sticky.is_empty());
 }
+
+/// Switched off, the box sits where layout put it, and its inset is not turned into a relative offset on the way.
+#[test]
+fn a_sticky_box_switched_off_stays_in_the_flow() {
+    let mut page = page(LayoutStyle::new().sticky().inset_top(30.0));
+    page.engine
+        .set_style(
+            page.bar,
+            LayoutStyle::new()
+                .sticky_when(false)
+                .inset_top(30.0)
+                .height(50.0)
+                .padding_all(5.0),
+        )
+        .unwrap();
+    page.engine
+        .compute_layout(
+            page.root,
+            AvailableSpace::Definite(400.0),
+            AvailableSpace::MaxContent,
+        )
+        .unwrap();
+    let (rects, anchors) = rects_in_view(&page, scrolled(300.0));
+    assert!(anchors.is_empty());
+    assert_eq!(rects[&page.bar].y, 120.0);
+    assert_eq!(rects[&page.label].y, 125.0);
+}
+
+#[test]
+fn a_sticky_box_switched_back_on_sticks_again() {
+    let mut page = page(LayoutStyle::new().sticky_when(false).inset_top(10.0));
+    page.engine
+        .set_style(
+            page.bar,
+            LayoutStyle::new()
+                .sticky_when(true)
+                .inset_top(10.0)
+                .height(50.0)
+                .padding_all(5.0),
+        )
+        .unwrap();
+    page.engine
+        .compute_layout(
+            page.root,
+            AvailableSpace::Definite(400.0),
+            AvailableSpace::MaxContent,
+        )
+        .unwrap();
+    let (rects, anchors) = rects_in_view(&page, scrolled(300.0));
+    assert_eq!(
+        anchors.iter().map(StickyAnchor::node).collect::<Vec<_>>(),
+        vec![page.bar]
+    );
+    assert_eq!(rects[&page.bar].y, 310.0);
+}

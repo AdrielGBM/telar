@@ -17,6 +17,9 @@ enum Slot {
 }
 let slot = signal(Slot::Empty);
 
+let pinned = signal(true);
+let cut = signal(true);
+
 // Matched once at construction: no `$` in the scrutinee, so this is an ordinary Rust `match`.
 let caption: Option<&'static str> = Some("read from a plain Option, decided once");
 
@@ -61,6 +64,24 @@ col gap:20
                     text "The track ended, and the stage left with it." font_size:12 color:$theme.muted
                     box height:120 width:100%
         code_line code:"col height:600 > box sticky inset_top:40     (the track is the containing block the stage stays inside)"
+    example title:"sticky:$on and clip:$on — the same box, switched by state"
+        card gap:12
+            row gap:16
+                toggle checked:$pinned label:"stage sticks"
+                toggle checked:$cut label:"strip clips"
+            scroll height:200 width:100%
+                col width:100% gap:12
+                    text "Switched off, the stage stays where the flow put it; its inset waits for it to stick again." font_size:12 color:$theme.muted
+                    col height:600 width:100%
+                        box fill:$theme.purple radius:10 height:120 width:100% sticky:$pinned inset_top:40 align:center justify:center
+                            text "stage" font_size:14 color:$theme.on_primary
+                    box height:120 width:100%
+            box fill:$theme.surface_alt radius:8 width:220 height:40 pad:8 clip:$cut
+                row gap:8
+                    for i in 0..6
+                        box fill:$theme.cyan radius:6 width:60 height:24 shrink:0 align:center justify:center
+                            text "{i}" font_size:12 color:$theme.on_primary
+        code_line code:"box sticky:$pinned inset_top:40     ·   box clip:$cut     (a bool, a Clip or an Option<Clip>)"
     example title:"An inset is an ordinary layout value, so it can be reactive"
         card gap:12
             box fill:$theme.surface_alt radius:10 height:120 width:220
@@ -113,7 +134,8 @@ col gap:20
     example title:"Attributes"
         col gap:6
             prop_row name:"absolute" values:"flag · fill" about:"Out of flow. Bare pins only the edges you name; fill pins all four at zero."
-            prop_row name:"sticky" values:"flag" about:"In the flow, but held at the insets you name while the nearest scroll viewport scrolls; never leaves its parent."
+            prop_row name:"sticky" values:"flag · bool" about:"In the flow, but held at the insets you name while the nearest scroll viewport scrolls; never leaves its parent. A value reading state switches it without a rebuild."
+            prop_row name:"clip" values:"flag · Clip · bool" about:"Cuts what the box draws, and the pointer, at its rect. A value reading state reshapes the cut or switches it off without a rebuild."
             prop_row name:"inset_start / _end" values:"number · %" about:"Distance from the leading and trailing edge — mirrors under RTL."
             prop_row name:"inset_top / _bottom" values:"number · %" about:"Distance from the top and bottom edge. On a sticky box a % is of the viewport."
             prop_row name:"margin_start / _end" values:"number · %" about:"Logical outer spacing, in the flow rather than out of it."

@@ -251,3 +251,31 @@ fn going_absolute_stops_sticking() {
     assert!(!LayoutStyle::new().sticky().absolute().is_sticky());
     assert!(!LayoutStyle::new().sticky().absolute_fill().is_sticky());
 }
+
+#[test]
+fn a_sticky_box_switched_off_keeps_its_insets_from_taffy_too() {
+    let style = LayoutStyle::new().sticky_when(false).inset_top(10.0);
+    let resolved = style.resolve(Direction::Ltr, Size::ZERO);
+    assert_eq!(resolved.position, taffy::Position::Relative);
+    assert!(resolved.inset.top.is_auto());
+    assert!(style.sticky_insets(Direction::Ltr, Size::ZERO).is_none());
+    assert!(!style.is_sticky());
+}
+
+#[test]
+fn sticky_when_is_the_last_position_written() {
+    assert!(LayoutStyle::new().sticky_when(true).is_sticky());
+    assert!(LayoutStyle::new().absolute().sticky_when(true).is_sticky());
+    assert!(!LayoutStyle::new().sticky().sticky_when(false).is_sticky());
+    let absolute = LayoutStyle::new()
+        .sticky_when(false)
+        .absolute()
+        .inset_top(4.0);
+    assert!(
+        !absolute
+            .resolve(Direction::Ltr, Size::ZERO)
+            .inset
+            .top
+            .is_auto()
+    );
+}

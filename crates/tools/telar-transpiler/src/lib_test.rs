@@ -947,6 +947,47 @@ fn shown_is_a_layout_value_that_re_resolves() {
     );
 }
 
+/// The same box sticks or does not as state says, without being rebuilt: a reduced-motion variant that switches the sticking off rather than faking it with a track the box cannot travel.
+#[test]
+fn sticky_follows_what_it_reads() {
+    let out = transpile_source(
+        "[logic]\nlet pinned = signal(true);\n[view]\ncol height:600\n    box sticky:$pinned inset_top:0 height:40\n",
+        "demo",
+        None,
+        None,
+    )
+    .unwrap();
+    let code = &out.rust_code;
+    assert!(code.contains(".sticky_when(pinned.get())"), "{code}");
+    assert!(code.contains(".styled_by("), "{code}");
+
+    let negated = transpile_source(
+        "[logic]\nlet reduced = signal(false);\n[view]\ncol height:600\n    box sticky:!$reduced inset_top:0 height:40\n",
+        "demo",
+        None,
+        None,
+    )
+    .unwrap();
+    assert!(
+        negated.rust_code.contains(".sticky_when(!reduced.get())"),
+        "{}",
+        negated.rust_code
+    );
+
+    let constant = transpile_source(
+        "[view]\ncol height:600\n    box sticky inset_top:0 height:40\n",
+        "demo",
+        None,
+        None,
+    )
+    .unwrap();
+    assert!(
+        !constant.rust_code.contains(".styled_by("),
+        "the bare flag cannot change:\n{}",
+        constant.rust_code
+    );
+}
+
 /// A field that opens holding the keyboard, says who holds it, and can be given up — the three things a field that stands in for something else needs, and the three that used to keep one in hand-written Rust. `focus_id:` in particular is not something `[logic]` could do: it runs before the widget exists.
 #[test]
 fn a_field_can_open_focused_say_so_and_be_given_up() {
@@ -2239,6 +2280,36 @@ fn a_clip_is_the_shape_its_value_names() {
     assert!(
         rounded.contains("Clip::both().rounded(8.0).inset(1.0))"),
         "{rounded}"
+    );
+}
+
+/// A clip reading state is a closure the item re-reads on every render, so it can stop cutting, or change shape, without rebuilding what it wraps.
+#[test]
+fn a_clip_follows_what_it_reads() {
+    let code = transpile_source(
+        "[logic]\nlet cut = signal(true);\n[view]\nbox width:100 height:40 clip:$cut\n    text \"a\"\n",
+        "demo",
+        None,
+        None,
+    )
+    .unwrap()
+    .rust_code;
+    assert!(
+        code.contains("ClippedItem::following(box_item(") && code.contains("move || cut.get()"),
+        "{code}"
+    );
+
+    let shaped = transpile_source(
+        "[logic]\nlet r = signal(4.0_f32);\n[view]\nbox width:100 clip:(Clip::both().rounded($r))\n    text \"a\"\n",
+        "demo",
+        None,
+        None,
+    )
+    .unwrap()
+    .rust_code;
+    assert!(
+        shaped.contains("move || Clip::both().rounded(r.get())"),
+        "{shaped}"
     );
 }
 

@@ -539,21 +539,28 @@ impl<'a> ViewGen<'a> {
     /// Wraps a node's widget in a [`ClippedItem`] when it carries `clip`, cutting its rendered output to the shape the value names.
     ///
     /// `clip` on its own is `Clip::both()`; a value is a `Clip` expression, so `clip:Clip::x()` cuts the left and right edges only — the thing CSS cannot say, since `overflow: hidden` on one axis forces the other out of `visible` — and `clip:(Clip::both().rounded(8.0))` follows a rounded box's own corners. The value used to be an axis keyword from a closed set of three, which is why a rounded box's clipped child cut its corners square and the markup had no word for the radius the renderer already took.
+    ///
+    /// A value reading `$state` is followed, and may yield a `Clip`, an `Option<Clip>` or a `bool`: `clip:$cut` stops and starts cutting without rebuilding what it wraps.
     fn clip_tail(&mut self, el: &Element, emit: ChildEmit) -> ChildEmit {
         let Some(attr) = el.attributes.iter().find(|a| a.key == "clip") else {
             return emit;
         };
         let shape = match attr.value.text().trim() {
-            "" => "Clip::both()".to_string(),
-            expr => redundant_parens(expr).unwrap_or(expr).to_string(),
+            "" => "Clip::both()",
+            expr => redundant_parens(expr).unwrap_or(expr),
         };
         match emit {
             ChildEmit::Simple { name, code } => {
                 let pad = self.indent_str();
                 let wrapped = self.next_variable_name("clipped");
-                let code = format!(
-                    "{code}\n{pad}let {wrapped} = ClippedItem::new(box_item({name}), {shape});"
-                );
+                let clipped = if shape.contains('$') {
+                    let read = self
+                        .clone_captures(&[shape], format!("move || {}", substitute_reads(shape)));
+                    format!("ClippedItem::following(box_item({name}), {read})")
+                } else {
+                    format!("ClippedItem::new(box_item({name}), {shape})")
+                };
+                let code = format!("{code}\n{pad}let {wrapped} = {clipped};");
                 ChildEmit::Simple {
                     name: wrapped,
                     code,

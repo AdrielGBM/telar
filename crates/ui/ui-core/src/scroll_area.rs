@@ -896,7 +896,7 @@ impl LayoutScrollArea {
         );
         input.place(
             content_node,
-            Placement::Clip(Rc::new(move || viewport.peek())),
+            Placement::Clip(Rc::new(move || Some(viewport.peek()))),
         );
 
         Ok(Self {

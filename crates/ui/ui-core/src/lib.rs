@@ -103,7 +103,7 @@ pub use keyboard::{
     reset as reset_keyboard,
 };
 pub use keynav::{KeyNav, KeyNavMove, key_nav_apply, key_nav_apply_grid};
-pub use layout_item::{Clip, ClipAxis, ClipPointer, ClippedItem, LayoutItem, box_item};
+pub use layout_item::{Clip, ClipAxis, ClipPointer, ClippedItem, IntoClip, LayoutItem, box_item};
 pub use layout_transition::{LayoutTransition, animate_layout};
 pub use lazy::Lazy;
 pub use line_gutter::LineGutter;

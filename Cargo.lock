@@ -5848,6 +5848,7 @@ dependencies = [
  "telar-layout-core",
  "telar-platform-core",
  "telar-platform-web",
+ "telar-reactive-core",
  "telar-renderer-core",
  "telar-ui-components",
  "telar-ui-core",

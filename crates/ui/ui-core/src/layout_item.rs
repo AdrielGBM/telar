@@ -277,11 +277,36 @@ pub trait LayoutItem: Component {
 /// Wraps a child so its rendered output is clipped to the child's own layout rect. When the child collapses to a zero rect (e.g. a section hidden via `display:none`), the clip is empty, so nothing inside draws — even a widget left with a stale rect or one that paints at fixed coordinates. Layout is unchanged: `layout_node` passes through to the wrapped child.
 ///
 /// The pointer stops at the same edge. A press, a move or the wheel landing outside the clip never reaches the subtree, so a widget cut off by the clip cannot take the click that visually belongs to whatever is drawn over it — clipped away is *gone*, not merely invisible. Everything else passes through: a release or a `CursorLeft` is how a widget that was pressed or hovered inside the clip settles again, and swallowing those would leave it stuck in a state the pointer has already left.
+///
+/// The clip may follow state ([`following`](Self::following)): read on every render, so it can change shape or stop cutting without the subtree being rebuilt.
 pub struct ClippedItem {
     inner: Box<dyn LayoutItem>,
     rect: RwSignal<Rect>,
-    clip: Clip,
+    clip: Rc<dyn Fn() -> Option<Clip>>,
     _input: InputHandle,
+}
+
+/// What a clip that follows state may be read as: a shape, a shape or none, or whether to cut at the node's rect at all.
+pub trait IntoClip {
+    fn into_clip(self) -> Option<Clip>;
+}
+
+impl IntoClip for Clip {
+    fn into_clip(self) -> Option<Clip> {
+        Some(self)
+    }
+}
+
+impl IntoClip for Option<Clip> {
+    fn into_clip(self) -> Option<Clip> {
+        self
+    }
+}
+
+impl IntoClip for bool {
+    fn into_clip(self) -> Option<Clip> {
+        self.then(Clip::both)
+    }
 }
 
 /// The shape a [`ClippedItem`] cuts to: which edges do the cutting, how round the corners are, and how far in from the edge the cut sits.
@@ -360,6 +385,16 @@ pub enum ClipAxis {
     Vertical,
 }
 
+/// Cuts `view` to `rect`, inside the box's own element when it has one: a document clips the element the cut is opened in, and a cut opened before the box's element clipped whatever box held it. A raster target reads the element as structure only, so it draws the same either way.
+fn cut_inside(view: RenderNode, rect: Rect, radius: BorderRadius) -> RenderNode {
+    match view {
+        RenderNode::Element { element, children } => {
+            RenderNode::element(element, [RenderNode::clip(rect, radius, children)])
+        }
+        view => RenderNode::clip(rect, radius, [view]),
+    }
+}
+
 /// Half the extent of the free axis of a one-way clip: past any window a platform hands out, and small enough to stay exact in an `f32`, so the axis bounds nothing without being an infinity the renderer has to special-case.
 const UNBOUNDED: f32 = 1.0e6;
 
@@ -368,21 +403,35 @@ impl ClippedItem {
     ///
     /// A one-way clip is what a strip of items wants when it has to stop at its ends but not across its thickness: a tab bar or a toolbar cut where the room runs out, whose items still carry a focus ring, a badge or a shadow past the strip's own edge. CSS cannot express this — one axis set to `hidden` forces the other out of `visible` — so a row that only wanted its ends cut has to clip the overflow it meant to keep.
     pub fn new(inner: Box<dyn LayoutItem>, clip: Clip) -> Self {
+        Self::following(inner, move || clip)
+    }
+
+    /// A clip that follows what `clip` reads: a [`Clip`], an `Option<Clip>` where `None` cuts nothing, or a `bool` for [`Clip::both`] or nothing.
+    pub fn following<T: IntoClip>(
+        inner: Box<dyn LayoutItem>,
+        clip: impl Fn() -> T + 'static,
+    ) -> Self {
         let node = inner.layout_node();
         let rect = track_layout(node).expect("clipped item's node not registered");
+        let clip: Rc<dyn Fn() -> Option<Clip>> = Rc::new(move || clip().into_clip());
         let mut input = InputHandle::new();
-        if clip.pointer == ClipPointer::Stop {
-            input.place(
-                node,
-                Placement::Clip(Rc::new(move || Self::cut(rect.peek(), clip))),
-            );
-        }
+        let stopping = Rc::clone(&clip);
+        input.place(
+            node,
+            Placement::Clip(Rc::new(move || {
+                Self::stopping(stopping()).map(|clip| Self::cut(rect.peek(), clip))
+            })),
+        );
         Self {
             inner,
             rect,
             clip,
             _input: input,
         }
+    }
+
+    fn stopping(clip: Option<Clip>) -> Option<Clip> {
+        clip.filter(|clip| clip.pointer == ClipPointer::Stop)
     }
 
     fn cut(rect: Rect, clip: Clip) -> Rect {
@@ -422,19 +471,22 @@ impl LayoutItem for ClippedItem {
 
 impl Component for ClippedItem {
     fn view(&self) -> RenderNode {
-        RenderNode::clip(
-            Self::cut(self.rect.get(), self.clip),
-            self.clip.radius,
-            [self.inner.view()],
-        )
+        match (self.clip)() {
+            Some(clip) => cut_inside(
+                self.inner.view(),
+                Self::cut(self.rect.get(), clip),
+                clip.radius,
+            ),
+            None => self.inner.view(),
+        }
     }
 
     fn on_event(&mut self, event: &Event) -> EventResult {
-        if self.clip.pointer == ClipPointer::Through {
+        let Some(clip) = Self::stopping((self.clip)()) else {
             return self.inner.on_event(event);
-        }
+        };
         let outside =
-            |x: f64, y: f64| !Self::cut(self.rect.get(), self.clip).contains(x as f32, y as f32);
+            |x: f64, y: f64| !Self::cut(self.rect.get(), clip).contains(x as f32, y as f32);
         match event {
             Event::PointerPressed { x, y, .. }
             | Event::PointerMoved { x, y, .. }

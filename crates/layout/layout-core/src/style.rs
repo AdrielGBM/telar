@@ -277,8 +277,18 @@ pub(crate) struct LogicalStyle {
     pub(crate) leading_margin: Option<(bool, f32)>,
     /// Set by [`LayoutStyle::bordered`] on a surface that draws strokes in whole cells: the cell its frame needs, reserved at resolution from the padding the box actually resolved to.
     pub(crate) stroke_cell: Option<LayoutGrid>,
-    /// Set by [`LayoutStyle::sticky`]. Taffy has no sticky position and would read the insets as a relative offset, so they are taken out of what it is handed.
-    pub(crate) sticky: bool,
+    /// Set by [`LayoutStyle::sticky`] and [`LayoutStyle::sticky_when`]. Taffy has no sticky position and would read the insets as a relative offset, so they are taken out of what it is handed whether the node sticks right now or not.
+    pub(crate) sticky: Sticky,
+}
+
+/// Whether a node was made sticky, and whether it sticks right now.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub(crate) enum Sticky {
+    #[default]
+    Never,
+    Sticking,
+    /// Made sticky and switched off: an ordinary box in the flow whose insets wait for it to stick again instead of becoming a relative offset.
+    Resting,
 }
 
 impl LogicalStyle {
@@ -449,7 +459,7 @@ impl LayoutStyle {
     /// Takes the node out of normal flow (`position: absolute`) with all four insets pinned to 0, so it fills its containing block without affecting sibling layout — used by `overlay` to cover the viewport. Combine with `flex_column`/alignment to position the overlay's content within the layer.
     pub fn absolute_fill(mut self) -> Self {
         self.inner.position = taffy::Position::Absolute;
-        self.logical.sticky = false;
+        self.logical.sticky = Sticky::Never;
         let zero = LengthPercentageAuto::length(0.0);
         self.inner.inset = taffy::Rect {
             left: zero,
@@ -465,22 +475,33 @@ impl LayoutStyle {
     /// Takes the node out of normal flow (`position: absolute`) leaving every inset at `auto`, so the edges it is pinned by are exactly the ones the caller names. [`absolute_fill`](Self::absolute_fill) is this plus all four insets at 0; a floating panel wants three of them and its own size on the fourth axis, which pinning everything would override.
     pub fn absolute(mut self) -> Self {
         self.inner.position = taffy::Position::Absolute;
-        self.logical.sticky = false;
+        self.logical.sticky = Sticky::Never;
         self
     }
 
     /// Keeps the node in the flow but sticks it to the edges its insets name while its nearest scroll viewport scrolls, as CSS `position: sticky` does: it keeps that distance from the viewport's edge and never leaves its parent's content box.
     ///
     /// Layout places it exactly as it would an ordinary box. The displacement is a pass run after layout against the part of the tree the viewport shows (see [`LayoutEngine::walk_in_view`](crate::LayoutEngine::walk_in_view)), so a scroll moves it without laying anything out again. A percentage inset is a fraction of the viewport.
-    pub fn sticky(mut self) -> Self {
+    pub fn sticky(self) -> Self {
+        self.sticky_when(true)
+    }
+
+    /// [`sticky`](Self::sticky) while `on`, and otherwise an ordinary box in the flow, as CSS `position: static` is: the insets wait for it to stick again and never become a relative offset.
+    ///
+    /// What a style that follows state writes, so a box can stop sticking (under reduced motion, say) without being rebuilt. Like `sticky`, it replaces whatever position came before it.
+    pub fn sticky_when(mut self, on: bool) -> Self {
         self.inner.position = taffy::Position::Relative;
-        self.logical.sticky = true;
+        self.logical.sticky = if on {
+            Sticky::Sticking
+        } else {
+            Sticky::Resting
+        };
         self
     }
 
-    /// Whether [`sticky`](Self::sticky) was the last position this style was given.
+    /// Whether the box sticks: [`sticky`](Self::sticky), or [`sticky_when`](Self::sticky_when) with `true`, was the last position this style was given.
     pub fn is_sticky(&self) -> bool {
-        self.logical.sticky
+        self.logical.sticky == Sticky::Sticking
     }
 
     /// Inset from the top edge, for a node taken out of flow or made [`sticky`](Self::sticky). Physical, not logical: `top` does not swap under RTL the way [`inset_start`](Self::inset_start) does.
@@ -812,10 +833,10 @@ impl LayoutStyle {
     ///
     /// Does not place the leading margin ([`LogicalStyle::leading_margin`]) — the engine does that afterwards, since it needs the parent's axis to know which physical edge "leading" means.
     ///
-    /// A sticky node's insets are left out: taffy would read them as a relative offset. [`sticky_insets`](Self::sticky_insets) is where they go instead.
+    /// A sticky node's insets are left out, whether it sticks right now or not: taffy would read them as a relative offset. [`sticky_insets`](Self::sticky_insets) is where they go instead.
     pub(crate) fn resolve(&self, direction: Direction, surface: Size) -> Style {
         let mut style = self.resolve_all(direction, surface);
-        if self.logical.sticky {
+        if self.logical.sticky != Sticky::Never {
             style.inset = taffy::Rect {
                 left: LengthPercentageAuto::auto(),
                 right: LengthPercentageAuto::auto(),
@@ -832,8 +853,7 @@ impl LayoutStyle {
         direction: Direction,
         surface: Size,
     ) -> Option<StickyInsets> {
-        self.logical
-            .sticky
+        self.is_sticky()
             .then(|| StickyInsets::of(self.resolve_all(direction, surface).inset))
     }
 

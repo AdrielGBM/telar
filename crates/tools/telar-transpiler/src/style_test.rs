@@ -220,9 +220,18 @@ fn a_flag_key_keeps_its_bare_form() {
 #[test]
 fn sticky_is_a_bare_flag_that_keeps_its_insets() {
     assert_eq!(call("sticky", "").as_deref(), Some(".sticky()"));
-    assert!(
-        invalid("sticky", "top").is_some(),
-        "the edge is named by an inset, not by the flag"
+}
+
+/// A value is whether it sticks, which is what lets a style that reads state switch it off and on again.
+#[test]
+fn a_sticky_value_says_whether_it_sticks() {
+    assert_eq!(
+        call("sticky", "$pinned").as_deref(),
+        Some(".sticky_when(pinned.get())")
+    );
+    assert_eq!(
+        call("sticky", "false").as_deref(),
+        Some(".sticky_when(false)")
     );
 }
 
