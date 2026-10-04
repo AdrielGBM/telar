@@ -16,12 +16,20 @@ pub fn system(props: SystemProps, children: Children) -> Result<Box<dyn LayoutIt
     let __owner = telar::owner_scope();
     #[allow(unused_imports)] use telar::use_theme;
     #[allow(unused_variables)] let theme = telar::Theme::<core::theme::SandboxTheme>::default();
+    #[allow(unused_variables)] let scheme = telar::ResolvedScheme;
+
+    fn scheme_name(scheme: telar::ColorScheme) -> &'static str {
+        match scheme {
+            telar::ColorScheme::Light => "light",
+            telar::ColorScheme::Dark => "dark",
+        }
+    }
 
     fn reading<T: std::fmt::Debug>(value: Option<T>) -> String {
         value.map_or_else(|| "unknown".to_string(), |v| format!("{v:?}"))
     }
 
-    let scheme = memo(|| reading(telar::use_color_scheme()));
+    let system_scheme = memo(|| reading(telar::use_color_scheme()));
     let reduced = memo(|| reading(telar::use_system_reduced_motion()));
     let contrast = memo(|| reading(telar::use_high_contrast()));
     let locales = memo(|| {
@@ -34,21 +42,20 @@ pub fn system(props: SystemProps, children: Children) -> Result<Box<dyn LayoutIt
         let insets = telar::use_safe_area_insets();
         format!("top {} · right {} · bottom {} · left {}", insets.top, insets.right, insets.bottom, insets.left)
     });
-    let resolved = memo(|| format!("{:?}", telar::use_resolved_scheme()));
 
     let __col_0 = {
         let __node_0 = doc_header(DocHeaderProps::props().kicker("FOUNDATIONS").title("System preferences").desc("What the platform says the user prefers — colour scheme, reduced motion, more contrast and languages — read live. Change them in the system settings and this page follows without a restart; the theme follows the scheme and every animation stops under reduced motion.").build(), Children::default())?;
         let __node_1 = {
             let __deferred = Children::per_slot(
                 {
-                    let scheme = scheme.clone();
+                    let system_scheme = system_scheme.clone();
                     let theme = theme.clone();
                     let reduced = reduced.clone();
                     let contrast = contrast.clone();
                     let locales = locales.clone();
                     let negotiated = negotiated.clone();
                 move |__request: SlotRequest<'_>| {
-                    let scheme = scheme.clone();
+                    let system_scheme = system_scheme.clone();
                     let theme = theme.clone();
                     let reduced = reduced.clone();
                     let contrast = contrast.clone();
@@ -60,14 +67,14 @@ pub fn system(props: SystemProps, children: Children) -> Result<Box<dyn LayoutIt
                         let __node_2 = {
                             let __deferred = Children::per_slot(
                                 {
-                                    let scheme = scheme.clone();
+                                    let system_scheme = system_scheme.clone();
                                     let theme = theme.clone();
                                     let reduced = reduced.clone();
                                     let contrast = contrast.clone();
                                     let locales = locales.clone();
                                     let negotiated = negotiated.clone();
                                 move |__request: SlotRequest<'_>| {
-                                    let scheme = scheme.clone();
+                                    let system_scheme = system_scheme.clone();
                                     let theme = theme.clone();
                                     let reduced = reduced.clone();
                                     let contrast = contrast.clone();
@@ -77,9 +84,9 @@ pub fn system(props: SystemProps, children: Children) -> Result<Box<dyn LayoutIt
                                     let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
                                     if __request.includes(None) {
                                         let __text_0 = {
-                                            let scheme = scheme.clone();
+                                            let system_scheme = system_scheme.clone();
                                             Text::declaring(
-                                                move || format!("color scheme · {}", { scheme.get() }),
+                                                move || format!("color scheme · {}", { system_scheme.get() }),
                                                 LayoutStyle::new(),
                                                 { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(15.0).with_color(theme.get().ink) },
                                             )?
@@ -202,11 +209,11 @@ pub fn system(props: SystemProps, children: Children) -> Result<Box<dyn LayoutIt
             let __deferred = Children::per_slot(
                 {
                     let chosen = chosen.clone();
-                    let resolved = resolved.clone();
+                    let scheme = scheme.clone();
                     let theme = theme.clone();
                 move |__request: SlotRequest<'_>| {
                     let chosen = chosen.clone();
-                    let resolved = resolved.clone();
+                    let scheme = scheme.clone();
                     let theme = theme.clone();
                     let mut __slots = Slots::new();
                     let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
@@ -215,20 +222,20 @@ pub fn system(props: SystemProps, children: Children) -> Result<Box<dyn LayoutIt
                             let __deferred = Children::per_slot(
                                 {
                                     let chosen = chosen.clone();
-                                    let resolved = resolved.clone();
+                                    let scheme = scheme.clone();
                                     let theme = theme.clone();
                                 move |__request: SlotRequest<'_>| {
                                     let chosen = chosen.clone();
-                                    let resolved = resolved.clone();
+                                    let scheme = scheme.clone();
                                     let theme = theme.clone();
                                     let mut __slots = Slots::new();
                                     let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
                                     if __request.includes(None) {
                                         let __text_7 = {
                                             let chosen = chosen.clone();
-                                            let resolved = resolved.clone();
+                                            let scheme = scheme.clone();
                                             Text::declaring(
-                                                move || format!("Chosen: {} · in use: {}", { chosen.get() }, { resolved.get() }),
+                                                move || format!("Chosen: {} · in use: {}", { chosen.get() }, { scheme_name(scheme.get()) }),
                                                 LayoutStyle::new(),
                                                 { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(13.0).with_color(theme.get().ink) },
                                             )?
@@ -258,7 +265,7 @@ pub fn system(props: SystemProps, children: Children) -> Result<Box<dyn LayoutIt
                             card(CardProps::props().gap(8.0).build(), __deferred)?
                         };
                         __children.push(box_item(__node_8));
-                        let __node_12 = code_line(CodeLineProps::props().code("set_scheme_preference(SchemePreference::Dark)   ·   use_resolved_scheme()   ·   store_preference(key, value)").build(), Children::default())?;
+                        let __node_12 = code_line(CodeLineProps::props().code("set_scheme_preference(SchemePreference::Dark)   ·   $scheme   ·   store_preference(key, value)").build(), Children::default())?;
                         __children.push(box_item(__node_12));
                     }
                     __slots.extend_default(__children);

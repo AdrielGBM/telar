@@ -81,6 +81,8 @@ hands it back. `use_resolved_scheme()` is the scheme the app is in (the preferen
 `use_color_scheme()`, a system that reports none taken as light), `use_scheme_preference()` the choice itself,
 and `is_dark()` and `use_mode()` read the active mode reactively. The choice is app state: it is the same on
 every target, survives a hot reload, and persists between sessions where the target keeps preferences.
+In `.rsx`, `$scheme` is `use_resolved_scheme()` as a built-in name (see [themes](themes.md)); a `let scheme` in
+`[logic]` takes the name over.
 
 ### Choosing reduced motion
 

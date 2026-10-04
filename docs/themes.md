@@ -14,6 +14,14 @@ caller keeps to switch the subtree later. A value that reads `$state` is followe
 theme is swapped in place and only the readers under it run again. The global `set_theme` no longer reaches the
 subtree.
 
+`$scheme` is the scheme the app is in, read the way `$theme` is: it is `use_resolved_scheme()` as a built-in
+name, so a component needs no `let scheme = memo(use_resolved_scheme);` and reads follow a change of the system's
+scheme or of `set_scheme_preference`. Its value is a `ColorScheme`, so `$scheme == ColorScheme::Dark` works in any
+expression, and inside a closure it is the handle: `|| log($scheme.get())`. A `let scheme` in `[logic]` takes the
+name over, and then `$scheme` is that binding, with no built-in injected; rename it to use both. The built-in is
+`ResolvedScheme`, a zero-sized `Copy` handle with a `get()`, and it is the same on every target because the
+scheme itself is.
+
 In Rust:
 
 | Item | What it is |
@@ -33,8 +41,7 @@ written inline would:
 
 ```rsx
 [logic]
-let scheme = memo(use_resolved_scheme);
-let palette = follow_theme(move || AppTheme::for_act(act, scheme.get()));
+let palette = follow_theme(move || AppTheme::for_act(act, use_resolved_scheme()));
 let ctx = Context { progress, calm };
 
 [view]

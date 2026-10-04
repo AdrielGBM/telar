@@ -139,6 +139,18 @@ thread_local! {
     static FOLLOW: Cell<Option<reactive_core::OwnerId>> = const { Cell::new(None) };
 }
 
+/// A handle to the resolved scheme, read with `.get()` like any other reactive source.
+///
+/// It is what `$scheme` names in `.rsx`: `$scheme` is `scheme.get()`, which is [`use_resolved_scheme`] read inside whatever closure asks, so it follows a change of the system's scheme or of the [`SchemePreference`]. Zero-sized and `Copy`, so it moves into any number of closures with nothing to clone.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct ResolvedScheme;
+
+impl ResolvedScheme {
+    pub fn get(&self) -> ColorScheme {
+        use_resolved_scheme()
+    }
+}
+
 /// Drives the active mode from the resolved scheme ([`use_resolved_scheme`]) — light → `light`, dark → `dark` — updating live as the system's scheme or the [`SchemePreference`] changes. Also designates the pair so `is_dark` stays consistent. Re-calling replaces the previous follower.
 ///
 /// Under `System`, an unknown scheme is not a vote for light: it leaves an active mode alone, and selects `light` only when no mode is active yet. A manual [`set_mode`] of another mode still wins until the next change re-drives it; a person choosing light or dark is [`set_scheme_preference`], which holds.

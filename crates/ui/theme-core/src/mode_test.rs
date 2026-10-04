@@ -172,3 +172,14 @@ fn the_resolved_scheme_follows_the_preference_and_takes_an_unknown_system_as_lig
         Some(SchemePreference::Dark)
     );
 }
+
+#[test]
+fn the_resolved_scheme_handle_follows_the_preference_and_the_system() {
+    reset();
+    let handle = ResolvedScheme;
+    assert_eq!(handle.get(), ColorScheme::Light);
+    scheme(Some(ColorScheme::Dark));
+    assert_eq!(handle.get(), ColorScheme::Dark);
+    set_scheme_preference(SchemePreference::Light);
+    assert_eq!(handle.get(), ColorScheme::Light);
+}

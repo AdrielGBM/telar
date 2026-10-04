@@ -259,6 +259,7 @@ pub(crate) fn transpile(input: TranspileInput<'_>) -> Result<TranspiledSource, T
     let style_section = generate_style_section(&doc.style, input.theme_type);
 
     let mut locals = scan_locals(logic_source);
+    let view_locals_bind_scheme = locals.iter().any(|name| name == "scheme");
     // The recipe is a parameter, not a `[logic]` binding, but a placeholder builds from it wherever it stands, so a closure around one has to clone it in like a local.
     if view_uses_slot(&doc.view.nodes) && !locals.iter().any(|l| l == "children") {
         locals.push("children".to_string());
@@ -268,6 +269,7 @@ pub(crate) fn transpile(input: TranspileInput<'_>) -> Result<TranspiledSource, T
         .with_signals(signals.iter().map(|s| s.name.clone()).collect());
     let view_body = view_gen.generate_root(&doc.view.nodes);
     let uses_theme = view_gen.uses_theme();
+    let scheme_line = scheme_binding(&view_body, view_locals_bind_scheme);
 
     let logic = logic_source.trim_end().to_string();
 
@@ -368,6 +370,9 @@ pub(crate) fn transpile(input: TranspileInput<'_>) -> Result<TranspiledSource, T
             ),
             None,
         );
+    }
+    if let Some(binding) = scheme_line {
+        code.push(binding, None);
     }
     // Injected, so it has no `.rsx` line of its own and the body's lines stay identical to their source.
     if context_struct.is_some() {
@@ -473,6 +478,9 @@ pub(crate) fn transpile(input: TranspileInput<'_>) -> Result<TranspiledSource, T
                     ),
                     None,
                 );
+            }
+            if let Some(binding) = scheme_binding(&pbody, false) {
+                code.push(binding, None);
             }
             // A path rather than a `[logic]` name: the logic zone is emitted inside the component fn, which a sibling preview fn cannot see into. Process-wide setup belongs in `telar::dev_entry`'s `setup` closure instead.
             if let Some(fixture) = preview_fixture(preview) {
@@ -923,6 +931,12 @@ pub(crate) fn module_root(
         expr_spans: Vec::new(),
         shadows: Vec::new(),
     })
+}
+
+/// The binding behind `$scheme`, for a view that reads it and whose `[logic]` does not bind a `scheme` of its own. A declared `scheme` wins outright, so a component written before the built-in existed keeps meaning what it says.
+fn scheme_binding(view_body: &str, shadowed: bool) -> Option<&'static str> {
+    (!shadowed && contains_ident(view_body, "scheme"))
+        .then_some("    #[allow(unused_variables)] let scheme = telar::ResolvedScheme;\n")
 }
 
 #[cfg(test)]
