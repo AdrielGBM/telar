@@ -403,6 +403,10 @@ fn collect_snippets(nodes: &[ViewNode], scope: &mut Vec<String>, out: &mut Vec<S
                         out.push(ScopedSnippet::new(attr.value.text().to_string(), scope));
                     }
                 }
+                // A placeholder builds its slot from the component's `children` recipe where it stands, so a rebuilding closure around it has to clone that binding in.
+                if el.tag == "children" {
+                    out.push(ScopedSnippet::new("children".to_string(), scope));
+                }
                 collect_snippets(&el.children, scope, out);
             }
             ViewNode::IfBlock(block) => {

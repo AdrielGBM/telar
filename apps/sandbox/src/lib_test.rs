@@ -368,3 +368,60 @@ fn all_theme_variants_build() {
         .expect("layout");
     }
 }
+
+fn slot_text_colors(tree: &telar::ComponentList) -> Vec<(String, telar::Color)> {
+    let mut drawn = Vec::new();
+    telar::for_each_with_matrix(&tree.commands(), |command, _| {
+        if let telar::DrawCommand::Text { text, style, .. } = command
+            && (text.starts_with("Nested at the call site")
+                || text.starts_with("and inside the panel"))
+        {
+            drawn.push((text.to_string(), style.color.solid_color()));
+        }
+    });
+    drawn
+}
+
+/// `themed_panel` has the shape of a scroll scene: a `follow_theme` palette provided by its root's `theme:` and a `children in:ctx` one box below it. What the color page nests in it is built where `children` stands, so it reads the panel's theme and context rather than the page's, and the global theme no longer reaches it.
+#[test]
+fn slot_children_are_built_inside_the_scopes_they_are_placed_in() {
+    use crate::core::theme::SandboxTheme;
+    telar::set_theme(SandboxTheme::modern());
+    telar::reset_layout_runtime();
+    let content = crate::features::color::color(
+        crate::features::color::ColorProps::props().build(),
+        telar::Children::default(),
+    )
+    .expect("color section builds");
+    let mut tree = telar::ComponentList::new(telar::WindowRoot::new(content));
+    let resize = Event::WindowResized {
+        width: 1200,
+        height: 4000,
+    };
+    tree.on_event(&resize);
+
+    let midnight = SandboxTheme::midnight();
+    let expected = vec![
+        (
+            "Nested at the call site, drawn in Midnight".to_string(),
+            midnight.ink,
+        ),
+        (
+            "and inside the panel's context: midnight".to_string(),
+            midnight.muted,
+        ),
+    ];
+    assert_eq!(
+        slot_text_colors(&tree),
+        expected,
+        "the slot children read the panel's theme and context, not the page's"
+    );
+
+    telar::set_theme(SandboxTheme::pastel());
+    tree.on_event(&resize);
+    assert_eq!(
+        slot_text_colors(&tree),
+        expected,
+        "and the global theme reaches them no more than it reaches the panel"
+    );
+}

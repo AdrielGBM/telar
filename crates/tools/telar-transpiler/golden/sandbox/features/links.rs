@@ -22,68 +22,72 @@ pub fn links(props: LinksProps, children: Children) -> Result<Box<dyn LayoutItem
     let __col_0 = {
         let __node_0 = doc_header(DocHeaderProps::props().kicker("NAVIGATION").title("Links").desc("to: makes a box a link: somewhere in the app, somewhere on the page, or somewhere outside it. It joins the tab order, follows on a tap or Enter, and is announced with where it goes. Each target goes there its own way: a real <a href> in a document, a new tab from a canvas, the system browser on the desktop, an ACTION_VIEW intent on Android, OSC 8 in a terminal.").build(), Children::default())?;
         let __node_1 = {
-            let __deferred = Children::new(
+            let __deferred = Children::per_slot(
                 {
                     let page = page.clone();
                     let theme = theme.clone();
-                move || {
+                move |__request: SlotRequest<'_>| {
                     let page = page.clone();
                     let theme = theme.clone();
                     let mut __slots = Slots::new();
                     let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-                    let __node_2 = {
-                        let __deferred = Children::new(
-                            {
-                                let page = page.clone();
-                                let theme = theme.clone();
-                            move || {
-                                let page = page.clone();
-                                let theme = theme.clone();
-                                let mut __slots = Slots::new();
-                                let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-                                let __row_0 = {
-                                    let __sbox_0 = {
-                                        let __text_0 = {
-                                            let page = page.clone();
+                    if __request.includes(None) {
+                        let __node_2 = {
+                            let __deferred = Children::per_slot(
+                                {
+                                    let page = page.clone();
+                                    let theme = theme.clone();
+                                move |__request: SlotRequest<'_>| {
+                                    let page = page.clone();
+                                    let theme = theme.clone();
+                                    let mut __slots = Slots::new();
+                                    let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
+                                    if __request.includes(None) {
+                                        let __row_0 = {
+                                            let __sbox_0 = {
+                                                let __text_0 = {
+                                                    let page = page.clone();
+                                                    Text::declaring(
+                                                        move || format!("Open /links/{}", { page.get() }),
+                                                        LayoutStyle::new(),
+                                                        { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(14.0).with_color(theme.get().primary) },
+                                                    )?
+                                                };
+                                                StyledContainer::new(LayoutStyle::new().flex_column().padding_horizontal(14.0).padding_vertical(6.0), { let theme = theme.clone(); move |_| RectStyle::default().with_fill(theme.get().surface_alt).with_radius(BorderRadius::all(8.0)) }, children![__text_0])?.hover_style({ let theme = theme.clone(); move |_| RectStyle::default().with_fill(theme.get().border).with_radius(BorderRadius::all(8.0)) }).to({ let page = page.clone(); move || Location::root().segment("links").segment(page.get().to_string()) })
+                                            };
+                                            let __sbox_1 = {
+                                                let __text_1 = {
+                                                    Text::declaring(
+                                                        || "Next page".to_string(),
+                                                        LayoutStyle::new(),
+                                                        { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(14.0).with_color(theme.get().ink) },
+                                                    )?
+                                                };
+                                                StyledContainer::new(LayoutStyle::new().flex_column().padding_horizontal(14.0).padding_vertical(6.0), { let theme = theme.clone(); move |_| RectStyle::default().with_fill(theme.get().surface_alt).with_radius(BorderRadius::all(8.0)) }, children![__text_1])?.hover_style({ let theme = theme.clone(); move |_| RectStyle::default().with_fill(theme.get().border).with_radius(BorderRadius::all(8.0)) }).on_press({ let page = page.clone(); move || page.set(page.get() + 1) })
+                                            };
+                                            Container::new(LayoutStyle::new().flex_row().gap(10.0).align_items(AlignItems::CENTER), children![__sbox_0, __sbox_1])?
+                                        };
+                                        __children.push(box_item(__row_0));
+                                        let __text_2 = {
                                             Text::declaring(
-                                                move || format!("Open /links/{}", { page.get() }),
+                                                || "A plain press pushes the route onto the app's history. Ctrl, Cmd or Shift open it beside this one where there is a beside: a browser tab.".to_string(),
                                                 LayoutStyle::new(),
-                                                { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(14.0).with_color(theme.get().primary) },
+                                                { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(12.0).with_color(theme.get().muted) },
                                             )?
                                         };
-                                        StyledContainer::new(LayoutStyle::new().flex_column().padding_horizontal(14.0).padding_vertical(6.0), { let theme = theme.clone(); move |_| RectStyle::default().with_fill(theme.get().surface_alt).with_radius(BorderRadius::all(8.0)) }, children![__text_0])?.hover_style({ let theme = theme.clone(); move |_| RectStyle::default().with_fill(theme.get().border).with_radius(BorderRadius::all(8.0)) }).to({ let page = page.clone(); move || Location::root().segment("links").segment(page.get().to_string()) })
-                                    };
-                                    let __sbox_1 = {
-                                        let __text_1 = {
-                                            Text::declaring(
-                                                || "Next page".to_string(),
-                                                LayoutStyle::new(),
-                                                { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(14.0).with_color(theme.get().ink) },
-                                            )?
-                                        };
-                                        StyledContainer::new(LayoutStyle::new().flex_column().padding_horizontal(14.0).padding_vertical(6.0), { let theme = theme.clone(); move |_| RectStyle::default().with_fill(theme.get().surface_alt).with_radius(BorderRadius::all(8.0)) }, children![__text_1])?.hover_style({ let theme = theme.clone(); move |_| RectStyle::default().with_fill(theme.get().border).with_radius(BorderRadius::all(8.0)) }).on_press({ let page = page.clone(); move || page.set(page.get() + 1) })
-                                    };
-                                    Container::new(LayoutStyle::new().flex_row().gap(10.0).align_items(AlignItems::CENTER), children![__sbox_0, __sbox_1])?
-                                };
-                                __children.push(box_item(__row_0));
-                                let __text_2 = {
-                                    Text::declaring(
-                                        || "A plain press pushes the route onto the app's history. Ctrl, Cmd or Shift open it beside this one where there is a beside: a browser tab.".to_string(),
-                                        LayoutStyle::new(),
-                                        { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(12.0).with_color(theme.get().muted) },
-                                    )?
-                                };
-                                __children.push(box_item(__text_2));
-                                __slots.extend_default(__children);
-                                Ok(__slots)
-                            }
-                            }
-                        );
-                        card(CardProps::props().gap(10.0).build(), __deferred)?
-                    };
-                    __children.push(box_item(__node_2));
-                    let __node_3 = code_line(CodeLineProps::props().code("box to:Page::Project(slug)   ·   any typed Route, or a Location").build(), Children::default())?;
-                    __children.push(box_item(__node_3));
+                                        __children.push(box_item(__text_2));
+                                    }
+                                    __slots.extend_default(__children);
+                                    Ok(__slots)
+                                }
+                                }
+                            );
+                            card(CardProps::props().gap(10.0).build(), __deferred)?
+                        };
+                        __children.push(box_item(__node_2));
+                        let __node_3 = code_line(CodeLineProps::props().code("box to:Page::Project(slug)   ·   any typed Route, or a Location").build(), Children::default())?;
+                        __children.push(box_item(__node_3));
+                    }
                     __slots.extend_default(__children);
                     Ok(__slots)
                 }
@@ -92,54 +96,58 @@ pub fn links(props: LinksProps, children: Children) -> Result<Box<dyn LayoutItem
             example(ExampleProps::props().title("A route in the app").build(), __deferred)?
         };
         let __node_4 = {
-            let __deferred = Children::new(
+            let __deferred = Children::per_slot(
                 {
                     let theme = theme.clone();
-                move || {
+                move |__request: SlotRequest<'_>| {
                     let theme = theme.clone();
                     let mut __slots = Slots::new();
                     let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-                    let __node_5 = {
-                        let __deferred = Children::new(
-                            {
-                                let theme = theme.clone();
-                            move || {
-                                let theme = theme.clone();
-                                let mut __slots = Slots::new();
-                                let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-                                let __sbox_2 = {
-                                    let __text_3 = {
-                                        Text::declaring(
-                                            || "Telar on GitHub".to_string(),
-                                            LayoutStyle::new(),
-                                            { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(14.0).with_color(theme.get().primary) },
-                                        )?
-                                    };
-                                    StyledContainer::new(LayoutStyle::new().flex_column().padding_horizontal(14.0).padding_vertical(6.0), { let theme = theme.clone(); move |_| RectStyle::default().with_fill(theme.get().surface_alt).with_radius(BorderRadius::all(8.0)) }, children![__text_3])?.hover_style({ let theme = theme.clone(); move |_| RectStyle::default().with_fill(theme.get().border).with_radius(BorderRadius::all(8.0)) }).to(move || external("https://github.com/AdrielGBM/telar"))
-                                };
-                                let __sbox_2 = __sbox_2.page_anchor(|| "outside");
-                                __children.push(box_item(__sbox_2));
-                                let __sbox_3 = {
-                                    let __text_4 = {
-                                        Text::declaring(
-                                            || "Write an email".to_string(),
-                                            LayoutStyle::new(),
-                                            { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(14.0).with_color(theme.get().primary) },
-                                        )?
-                                    };
-                                    StyledContainer::new(LayoutStyle::new().flex_column().padding_horizontal(14.0).padding_vertical(6.0), { let theme = theme.clone(); move |_| RectStyle::default().with_fill(theme.get().surface_alt).with_radius(BorderRadius::all(8.0)) }, children![__text_4])?.hover_style({ let theme = theme.clone(); move |_| RectStyle::default().with_fill(theme.get().border).with_radius(BorderRadius::all(8.0)) }).to(move || external("mailto:someone@example.com"))
-                                };
-                                __children.push(box_item(__sbox_3));
-                                __slots.extend_default(__children);
-                                Ok(__slots)
-                            }
-                            }
-                        );
-                        card(CardProps::props().gap(10.0).build(), __deferred)?
-                    };
-                    __children.push(box_item(__node_5));
-                    let __node_6 = code_line(CodeLineProps::props().code("box to:external(\"https://…\")   ·   open_uri: the portal or xdg-open, ShellExecute, NSWorkspace, window.open").build(), Children::default())?;
-                    __children.push(box_item(__node_6));
+                    if __request.includes(None) {
+                        let __node_5 = {
+                            let __deferred = Children::per_slot(
+                                {
+                                    let theme = theme.clone();
+                                move |__request: SlotRequest<'_>| {
+                                    let theme = theme.clone();
+                                    let mut __slots = Slots::new();
+                                    let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
+                                    if __request.includes(None) {
+                                        let __sbox_2 = {
+                                            let __text_3 = {
+                                                Text::declaring(
+                                                    || "Telar on GitHub".to_string(),
+                                                    LayoutStyle::new(),
+                                                    { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(14.0).with_color(theme.get().primary) },
+                                                )?
+                                            };
+                                            StyledContainer::new(LayoutStyle::new().flex_column().padding_horizontal(14.0).padding_vertical(6.0), { let theme = theme.clone(); move |_| RectStyle::default().with_fill(theme.get().surface_alt).with_radius(BorderRadius::all(8.0)) }, children![__text_3])?.hover_style({ let theme = theme.clone(); move |_| RectStyle::default().with_fill(theme.get().border).with_radius(BorderRadius::all(8.0)) }).to(move || external("https://github.com/AdrielGBM/telar"))
+                                        };
+                                        let __sbox_2 = __sbox_2.page_anchor(|| "outside");
+                                        __children.push(box_item(__sbox_2));
+                                        let __sbox_3 = {
+                                            let __text_4 = {
+                                                Text::declaring(
+                                                    || "Write an email".to_string(),
+                                                    LayoutStyle::new(),
+                                                    { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(14.0).with_color(theme.get().primary) },
+                                                )?
+                                            };
+                                            StyledContainer::new(LayoutStyle::new().flex_column().padding_horizontal(14.0).padding_vertical(6.0), { let theme = theme.clone(); move |_| RectStyle::default().with_fill(theme.get().surface_alt).with_radius(BorderRadius::all(8.0)) }, children![__text_4])?.hover_style({ let theme = theme.clone(); move |_| RectStyle::default().with_fill(theme.get().border).with_radius(BorderRadius::all(8.0)) }).to(move || external("mailto:someone@example.com"))
+                                        };
+                                        __children.push(box_item(__sbox_3));
+                                    }
+                                    __slots.extend_default(__children);
+                                    Ok(__slots)
+                                }
+                                }
+                            );
+                            card(CardProps::props().gap(10.0).build(), __deferred)?
+                        };
+                        __children.push(box_item(__node_5));
+                        let __node_6 = code_line(CodeLineProps::props().code("box to:external(\"https://…\")   ·   open_uri: the portal or xdg-open, ShellExecute, NSWorkspace, window.open").build(), Children::default())?;
+                        __children.push(box_item(__node_6));
+                    }
                     __slots.extend_default(__children);
                     Ok(__slots)
                 }
@@ -148,53 +156,57 @@ pub fn links(props: LinksProps, children: Children) -> Result<Box<dyn LayoutItem
             example(ExampleProps::props().title("Outside the app").build(), __deferred)?
         };
         let __node_7 = {
-            let __deferred = Children::new(
+            let __deferred = Children::per_slot(
                 {
                     let theme = theme.clone();
-                move || {
+                move |__request: SlotRequest<'_>| {
                     let theme = theme.clone();
                     let mut __slots = Slots::new();
                     let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-                    let __node_8 = {
-                        let __deferred = Children::new(
-                            {
-                                let theme = theme.clone();
-                            move || {
-                                let theme = theme.clone();
-                                let mut __slots = Slots::new();
-                                let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-                                let __text_5 = {
-                                    Text::runs(
-                                        vec![
-                                            TextRun::new(|| "A run of a paragraph can link too: read ".to_string()),
-                                            TextRun::new(|| "the Telar repository".to_string()).declaring({ let theme = theme.clone(); move || Declared::default().with_color(theme.get().primary) }).to(move || external("https://github.com/AdrielGBM/telar")),
-                                            TextRun::new(|| ", or ".to_string()),
-                                            TextRun::new(|| "go back to the top".to_string()).declaring({ let theme = theme.clone(); move || Declared::default().with_color(theme.get().primary).with_font_weight(600) }).to(move || anchor("top")),
-                                            TextRun::new(|| " without leaving the sentence.".to_string()),
-                                        ],
-                                        LayoutStyle::new(),
-                                        { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(14.0).with_color(theme.get().ink) },
-                                    )?
-                                };
-                                __children.push(box_item(__text_5));
-                                let __text_6 = {
-                                    Text::declaring(
-                                        || "One text, shaped and wrapped as one. A document writes each link run as an <a href> inside the paragraph; elsewhere a tap on its glyphs follows it, and a reader hears it as a link.".to_string(),
-                                        LayoutStyle::new(),
-                                        { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(12.0).with_color(theme.get().muted) },
-                                    )?
-                                };
-                                __children.push(box_item(__text_6));
-                                __slots.extend_default(__children);
-                                Ok(__slots)
-                            }
-                            }
-                        );
-                        card(CardProps::props().gap(10.0).build(), __deferred)?
-                    };
-                    __children.push(box_item(__node_8));
-                    let __node_9 = code_line(CodeLineProps::props().code("text  >  span \"words\" to:external(\"https://…\") color:$theme.primary").build(), Children::default())?;
-                    __children.push(box_item(__node_9));
+                    if __request.includes(None) {
+                        let __node_8 = {
+                            let __deferred = Children::per_slot(
+                                {
+                                    let theme = theme.clone();
+                                move |__request: SlotRequest<'_>| {
+                                    let theme = theme.clone();
+                                    let mut __slots = Slots::new();
+                                    let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
+                                    if __request.includes(None) {
+                                        let __text_5 = {
+                                            Text::runs(
+                                                vec![
+                                                    TextRun::new(|| "A run of a paragraph can link too: read ".to_string()),
+                                                    TextRun::new(|| "the Telar repository".to_string()).declaring({ let theme = theme.clone(); move || Declared::default().with_color(theme.get().primary) }).to(move || external("https://github.com/AdrielGBM/telar")),
+                                                    TextRun::new(|| ", or ".to_string()),
+                                                    TextRun::new(|| "go back to the top".to_string()).declaring({ let theme = theme.clone(); move || Declared::default().with_color(theme.get().primary).with_font_weight(600) }).to(move || anchor("top")),
+                                                    TextRun::new(|| " without leaving the sentence.".to_string()),
+                                                ],
+                                                LayoutStyle::new(),
+                                                { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(14.0).with_color(theme.get().ink) },
+                                            )?
+                                        };
+                                        __children.push(box_item(__text_5));
+                                        let __text_6 = {
+                                            Text::declaring(
+                                                || "One text, shaped and wrapped as one. A document writes each link run as an <a href> inside the paragraph; elsewhere a tap on its glyphs follows it, and a reader hears it as a link.".to_string(),
+                                                LayoutStyle::new(),
+                                                { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(12.0).with_color(theme.get().muted) },
+                                            )?
+                                        };
+                                        __children.push(box_item(__text_6));
+                                    }
+                                    __slots.extend_default(__children);
+                                    Ok(__slots)
+                                }
+                                }
+                            );
+                            card(CardProps::props().gap(10.0).build(), __deferred)?
+                        };
+                        __children.push(box_item(__node_8));
+                        let __node_9 = code_line(CodeLineProps::props().code("text  >  span \"words\" to:external(\"https://…\") color:$theme.primary").build(), Children::default())?;
+                        __children.push(box_item(__node_9));
+                    }
                     __slots.extend_default(__children);
                     Ok(__slots)
                 }
@@ -203,63 +215,67 @@ pub fn links(props: LinksProps, children: Children) -> Result<Box<dyn LayoutItem
             example(ExampleProps::props().title("Inside a paragraph").build(), __deferred)?
         };
         let __node_10 = {
-            let __deferred = Children::new(
+            let __deferred = Children::per_slot(
                 {
                     let theme = theme.clone();
-                move || {
+                move |__request: SlotRequest<'_>| {
                     let theme = theme.clone();
                     let mut __slots = Slots::new();
                     let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-                    let __node_11 = {
-                        let __deferred = Children::new(
-                            {
-                                let theme = theme.clone();
-                            move || {
-                                let theme = theme.clone();
-                                let mut __slots = Slots::new();
-                                let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-                                let __row_1 = {
-                                    let __sbox_4 = {
-                                        let __text_7 = {
+                    if __request.includes(None) {
+                        let __node_11 = {
+                            let __deferred = Children::per_slot(
+                                {
+                                    let theme = theme.clone();
+                                move |__request: SlotRequest<'_>| {
+                                    let theme = theme.clone();
+                                    let mut __slots = Slots::new();
+                                    let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
+                                    if __request.includes(None) {
+                                        let __row_1 = {
+                                            let __sbox_4 = {
+                                                let __text_7 = {
+                                                    Text::declaring(
+                                                        || "Back to the top".to_string(),
+                                                        LayoutStyle::new(),
+                                                        { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(14.0).with_color(theme.get().primary) },
+                                                    )?
+                                                };
+                                                StyledContainer::new(LayoutStyle::new().flex_column().padding_horizontal(14.0).padding_vertical(6.0), { let theme = theme.clone(); move |_| RectStyle::default().with_fill(theme.get().surface_alt).with_radius(BorderRadius::all(8.0)) }, children![__text_7])?.hover_style({ let theme = theme.clone(); move |_| RectStyle::default().with_fill(theme.get().border).with_radius(BorderRadius::all(8.0)) }).to(move || anchor("top"))
+                                            };
+                                            let __sbox_5 = {
+                                                let __text_8 = {
+                                                    Text::declaring(
+                                                        || "To the external links".to_string(),
+                                                        LayoutStyle::new(),
+                                                        { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(14.0).with_color(theme.get().primary) },
+                                                    )?
+                                                };
+                                                StyledContainer::new(LayoutStyle::new().flex_column().padding_horizontal(14.0).padding_vertical(6.0), { let theme = theme.clone(); move |_| RectStyle::default().with_fill(theme.get().surface_alt).with_radius(BorderRadius::all(8.0)) }, children![__text_8])?.hover_style({ let theme = theme.clone(); move |_| RectStyle::default().with_fill(theme.get().border).with_radius(BorderRadius::all(8.0)) }).to(move || anchor("outside"))
+                                            };
+                                            Container::new(LayoutStyle::new().flex_row().gap(10.0).align_items(AlignItems::CENTER), children![__sbox_4, __sbox_5])?
+                                        };
+                                        __children.push(box_item(__row_1));
+                                        let __text_9 = {
                                             Text::declaring(
-                                                || "Back to the top".to_string(),
+                                                || "A box named with anchor: is a place on the page. Following a link to it brings it to the top of every scroll it sits in and adds a history entry, so back returns to where you were. A document gives it that id, so #outside in the address opens there.".to_string(),
                                                 LayoutStyle::new(),
-                                                { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(14.0).with_color(theme.get().primary) },
+                                                { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(12.0).with_color(theme.get().muted) },
                                             )?
                                         };
-                                        StyledContainer::new(LayoutStyle::new().flex_column().padding_horizontal(14.0).padding_vertical(6.0), { let theme = theme.clone(); move |_| RectStyle::default().with_fill(theme.get().surface_alt).with_radius(BorderRadius::all(8.0)) }, children![__text_7])?.hover_style({ let theme = theme.clone(); move |_| RectStyle::default().with_fill(theme.get().border).with_radius(BorderRadius::all(8.0)) }).to(move || anchor("top"))
-                                    };
-                                    let __sbox_5 = {
-                                        let __text_8 = {
-                                            Text::declaring(
-                                                || "To the external links".to_string(),
-                                                LayoutStyle::new(),
-                                                { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(14.0).with_color(theme.get().primary) },
-                                            )?
-                                        };
-                                        StyledContainer::new(LayoutStyle::new().flex_column().padding_horizontal(14.0).padding_vertical(6.0), { let theme = theme.clone(); move |_| RectStyle::default().with_fill(theme.get().surface_alt).with_radius(BorderRadius::all(8.0)) }, children![__text_8])?.hover_style({ let theme = theme.clone(); move |_| RectStyle::default().with_fill(theme.get().border).with_radius(BorderRadius::all(8.0)) }).to(move || anchor("outside"))
-                                    };
-                                    Container::new(LayoutStyle::new().flex_row().gap(10.0).align_items(AlignItems::CENTER), children![__sbox_4, __sbox_5])?
-                                };
-                                __children.push(box_item(__row_1));
-                                let __text_9 = {
-                                    Text::declaring(
-                                        || "A box named with anchor: is a place on the page. Following a link to it brings it to the top of every scroll it sits in and adds a history entry, so back returns to where you were. A document gives it that id, so #outside in the address opens there.".to_string(),
-                                        LayoutStyle::new(),
-                                        { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(12.0).with_color(theme.get().muted) },
-                                    )?
-                                };
-                                __children.push(box_item(__text_9));
-                                __slots.extend_default(__children);
-                                Ok(__slots)
-                            }
-                            }
-                        );
-                        card(CardProps::props().gap(10.0).build(), __deferred)?
-                    };
-                    __children.push(box_item(__node_11));
-                    let __node_12 = code_line(CodeLineProps::props().code("box anchor:\"outside\"   ·   box to:anchor(\"outside\")").build(), Children::default())?;
-                    __children.push(box_item(__node_12));
+                                        __children.push(box_item(__text_9));
+                                    }
+                                    __slots.extend_default(__children);
+                                    Ok(__slots)
+                                }
+                                }
+                            );
+                            card(CardProps::props().gap(10.0).build(), __deferred)?
+                        };
+                        __children.push(box_item(__node_11));
+                        let __node_12 = code_line(CodeLineProps::props().code("box anchor:\"outside\"   ·   box to:anchor(\"outside\")").build(), Children::default())?;
+                        __children.push(box_item(__node_12));
+                    }
                     __slots.extend_default(__children);
                     Ok(__slots)
                 }

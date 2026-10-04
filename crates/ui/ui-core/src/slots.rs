@@ -3,11 +3,14 @@
 use std::any::Any;
 use std::rc::Rc;
 
-use layout_core::LayoutError;
+use layout_core::{LayoutError, NodeId};
+use platform_core::Event;
+use reactive_core::OwnerId;
+use ui_tree::{Component, EventResult, RenderNode};
 
-use crate::layout_item::LayoutItem;
+use crate::layout_item::{Child, LayoutItem, build_owned, make_child};
 
-/// The children a component receives from its call site, grouped by slot. A bare child lands in the default slot (`None`); a child written with `slot:"name"` lands in that named slot. Inside the component, the `children` placeholder drains the default slot and `children name:"x"` drains the `"x"` slot — each in call-site order. Draining is one-shot: a slot placeholder consumes its children, so referencing the same slot twice yields an empty list the second time.
+/// The children a component receives from its call site, grouped by slot. A bare child lands in the default slot (`None`); a child written with `slot:"name"` lands in that named slot. [`take_default`](Self::take_default) and [`take`](Self::take) drain one slot in call-site order, and draining is one-shot: taking the same slot twice yields an empty list the second time.
 #[derive(Default)]
 pub struct Slots {
     items: Vec<(Option<&'static str>, Box<dyn LayoutItem>)>,
@@ -48,6 +51,15 @@ impl Slots {
         self.take_matching(|n| *n == Some(name))
     }
 
+    /// Drains the children `request` asks for into a `Slots` of their own, keeping their slot names.
+    pub fn take_requested(&mut self, request: SlotRequest<'_>) -> Slots {
+        let (items, rest) = std::mem::take(&mut self.items)
+            .into_iter()
+            .partition(|(name, _)| request.includes(*name));
+        self.items = rest;
+        Slots { items }
+    }
+
     fn take_matching(
         &mut self,
         pred: impl Fn(&Option<&'static str>) -> bool,
@@ -66,33 +78,159 @@ impl Slots {
     }
 }
 
+/// Which slots one run of a [`Children`] recipe is asked to build.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum SlotRequest<'a> {
+    /// Every slot, which is what [`Children::build`] asks for.
+    All,
+    /// One slot, `None` naming the default one: what a `children` placeholder asks for where it stands.
+    Only(Option<&'a str>),
+}
+
+impl SlotRequest<'_> {
+    /// Whether a child routed to `slot` belongs in this build.
+    pub fn includes(self, slot: Option<&str>) -> bool {
+        match self {
+            Self::All => true,
+            Self::Only(wanted) => wanted == slot,
+        }
+    }
+}
+
 /// A component's markup children, **not yet built**.
 ///
 /// [`Slots`] is the list a call site already made; this is the recipe for making it. The difference is the whole of what a compound component needs, and it comes from one fact about how a tree is assembled here: a child is an argument, so it is constructed *before* the parent it is passed to. A `Select.Item` that wanted to know which select it belongs to, what is currently chosen, or what to call when it is picked, was asking a question about something that did not exist yet.
 ///
 /// Handed the recipe instead, the parent builds its context first and then runs the recipe inside it, so a child reaches the parent through [`use_context`](crate::use_context) rather than through props threaded down by hand. The recipe is `Fn`, not `FnOnce`, for a second reason that is not theoretical: a dropdown rebuilds its rows every time the panel opens, so the children have to be makeable more than once.
+///
+/// The children see whatever is in force where the recipe runs — a [`provide_theme`](crate::provide_theme) scope, a context, anything an owner above provides — exactly as a child written inline there would. That is why a `children` placeholder builds its slot where it stands ([`build_slot`](Self::build_slot)) rather than once up front.
 #[derive(Clone)]
-pub struct Children(Rc<dyn Fn() -> Result<Slots, LayoutError>>);
+pub struct Children(Rc<Recipe>);
+
+type Recipe = dyn Fn(SlotRequest<'_>) -> Result<Slots, LayoutError>;
 
 impl Children {
+    /// A recipe that builds every slot on each run. A component that places its slots separately then builds the slots it did not ask for and frees them, which is why a call site in markup hands over [`per_slot`](Self::per_slot) instead.
     pub fn new(build: impl Fn() -> Result<Slots, LayoutError> + 'static) -> Self {
+        Self(Rc::new(move |_| build()))
+    }
+
+    /// A recipe that builds only the slots each run asks for: what a call site in markup hands over, so each slot can be built inside the scopes of the node it is placed in.
+    pub fn per_slot(
+        build: impl Fn(SlotRequest<'_>) -> Result<Slots, LayoutError> + 'static,
+    ) -> Self {
         Self(Rc::new(build))
     }
 
     /// Builds the children with `context` visible to every one of them, and to anything they build in turn.
     ///
-    /// The scope is nested, so a select inside a select's own row shadows the outer one rather than colliding with it. It no longer *closes* when this returns: the owner it opens lives as long as the children built under it, which is what lets one of their handlers read the context later — the one moment it was previously unavailable, and the one that matters.
+    /// The scope is nested, so a select inside a select's own row shadows the outer one rather than colliding with it. It does not close when this returns: each child is mounted under the owner that provides it, so the context is still in force when the child draws or one of its handlers fires later.
     pub fn build_with<T: Any + 'static>(&self, context: T) -> Result<Slots, LayoutError> {
-        services_core::Scope::with(|| {
-            // The scope is fresh, so the only failure is a component providing the same type twice.
-            let _ = services_core::provide(context);
-            (self.0)()
-        })
+        within(context, || (self.0)(SlotRequest::All))
     }
 
     /// Builds the children with no context of their own, for a component that has nothing to tell them.
     pub fn build(&self) -> Result<Slots, LayoutError> {
-        (self.0)()
+        (self.0)(SlotRequest::All)
+    }
+
+    /// Builds one slot (`None` for the default one) under the current owner, so its children see the theme and contexts in force where this is called. What a `children` placeholder runs where it stands, once per placement.
+    pub fn build_slot(&self, slot: Option<&str>) -> Result<Vec<Box<dyn LayoutItem>>, LayoutError> {
+        self.requested(slot).map(|built| only(slot, built))
+    }
+
+    /// [`build_slot`](Self::build_slot) with `context` visible to the slot's children, as [`build_with`](Self::build_with) provides it.
+    pub fn build_slot_with<T: Any + 'static>(
+        &self,
+        slot: Option<&str>,
+        context: T,
+    ) -> Result<Vec<Box<dyn LayoutItem>>, LayoutError> {
+        within(context, || self.requested(slot)).map(|built| only(slot, built))
+    }
+
+    /// Runs the recipe for `slot`, freeing whatever a recipe that ignores the request built for the other slots.
+    fn requested(&self, slot: Option<&str>) -> Result<Slots, LayoutError> {
+        let request = SlotRequest::Only(slot);
+        let mut built = (self.0)(request)?;
+        let wanted = built.take_requested(request);
+        for (_, unplaced) in built.items {
+            crate::context::remove_node(unplaced.layout_node());
+        }
+        Ok(wanted)
+    }
+}
+
+/// The children routed to `slot`.
+fn only(slot: Option<&str>, mut built: Slots) -> Vec<Box<dyn LayoutItem>> {
+    match slot {
+        None => built.take_default(),
+        Some(name) => built.take(name),
+    }
+}
+
+/// Runs `build` under a fresh owner that provides `context`, and mounts each child it built under that owner.
+fn within<T: Any + 'static>(
+    context: T,
+    build: impl FnOnce() -> Result<Slots, LayoutError>,
+) -> Result<Slots, LayoutError> {
+    let nodes = crate::context::record_nodes();
+    let (built, owner) = build_owned(|| {
+        // The owner is fresh, so the only failure is a component providing the same type twice.
+        let _ = services_core::provide(context);
+        build()
+    })?;
+    nodes.keep();
+    let items = built
+        .items
+        .into_iter()
+        .map(|(slot, item)| {
+            (
+                slot,
+                Box::new(InContext::mount(owner, item)) as Box<dyn LayoutItem>,
+            )
+        })
+        .collect();
+    Ok(Slots { items })
+}
+
+/// A child mounted under the owner that provided its context, rather than under the container it is placed in, so it draws and takes events with that context in force, as a [`ThemeProvider`](crate::ThemeProvider) does for its theme. Adds no layout node.
+struct InContext {
+    child: Child,
+}
+
+impl InContext {
+    fn mount(owner: OwnerId, item: Box<dyn LayoutItem>) -> Self {
+        Self {
+            child: reactive_core::with_owner(Some(owner), || make_child(item)),
+        }
+    }
+}
+
+impl LayoutItem for InContext {
+    fn layout_node(&self) -> NodeId {
+        self.child.node()
+    }
+
+    fn occludes(&self) -> bool {
+        self.child
+            .item
+            .try_borrow()
+            .map(|item| item.occludes())
+            .unwrap_or(true)
+    }
+}
+
+impl Component for InContext {
+    fn view(&self) -> RenderNode {
+        self.child.boundary()
+    }
+
+    fn on_event(&mut self, event: &Event) -> EventResult {
+        self.child.deliver(event)
+    }
+
+    fn debug_name(&self) -> &'static str {
+        "InContext"
     }
 }
 
@@ -103,10 +241,10 @@ impl Default for Children {
 }
 
 impl From<Slots> for Children {
-    /// For a caller holding children it already built — a test, or a component forwarding what it was given. The recipe hands them out once and is empty on any later call, since a built widget cannot be made twice.
+    /// For a caller holding children it already built — a test, or a component forwarding what it was given. Each slot is handed out once and is empty on any later request for it, since a built widget cannot be made twice.
     fn from(slots: Slots) -> Self {
-        let cell = std::cell::RefCell::new(Some(slots));
-        Self::new(move || Ok(cell.borrow_mut().take().unwrap_or_default()))
+        let cell = std::cell::RefCell::new(slots);
+        Self::per_slot(move |request| Ok(cell.borrow_mut().take_requested(request)))
     }
 }
 

@@ -23,46 +23,50 @@ pub fn sliders(props: SlidersProps, children: Children) -> Result<Box<dyn Layout
     let __col_0 = {
         let __node_0 = doc_header(DocHeaderProps::props().kicker("INTERACTION").title("Slider").desc("A drag-driven control built on the on_drag primitive — track, fill, and thumb are wired up for you. Set min/max to read the value back in your own range (no memo needed), step to quantize it, and label to caption it.").build(), Children::default())?;
         let __node_1 = {
-            let __deferred = Children::new(
+            let __deferred = Children::per_slot(
                 {
                     let volume = volume.clone();
                     let theme = theme.clone();
-                move || {
+                move |__request: SlotRequest<'_>| {
                     let volume = volume.clone();
                     let theme = theme.clone();
                     let mut __slots = Slots::new();
                     let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-                    let __node_2 = {
-                        let __deferred = Children::new(
-                            {
-                                let volume = volume.clone();
-                                let theme = theme.clone();
-                            move || {
-                                let volume = volume.clone();
-                                let theme = theme.clone();
-                                let mut __slots = Slots::new();
-                                let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-                                let __node_3 = slider(SliderProps::props().value(volume.clone()).min(0.0).max(100.0).step(1.0).width(260.0).build(), Children::default())?;
-                                __children.push(box_item(__node_3));
-                                let __text_0 = {
+                    if __request.includes(None) {
+                        let __node_2 = {
+                            let __deferred = Children::per_slot(
+                                {
                                     let volume = volume.clone();
-                                    Text::declaring(
-                                        move || format!("Volume · {}%", { volume.get() }),
-                                        LayoutStyle::new(),
-                                        { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(14.0).with_color(theme.get().muted) },
-                                    )?
-                                };
-                                __children.push(box_item(__text_0));
-                                __slots.extend_default(__children);
-                                Ok(__slots)
-                            }
-                            }
-                        );
-                        card(CardProps::props().gap(8.0).build(), __deferred)?
-                    };
-                    __children.push(box_item(__node_2));
-                    let __node_4 = code_line(CodeLineProps::props().code("slider value:$volume min:0 max:100 step:1 width:260").build(), Children::default())?;
-                    __children.push(box_item(__node_4));
+                                    let theme = theme.clone();
+                                move |__request: SlotRequest<'_>| {
+                                    let volume = volume.clone();
+                                    let theme = theme.clone();
+                                    let mut __slots = Slots::new();
+                                    let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
+                                    if __request.includes(None) {
+                                        let __node_3 = slider(SliderProps::props().value(volume.clone()).min(0.0).max(100.0).step(1.0).width(260.0).build(), Children::default())?;
+                                        __children.push(box_item(__node_3));
+                                        let __text_0 = {
+                                            let volume = volume.clone();
+                                            Text::declaring(
+                                                move || format!("Volume · {}%", { volume.get() }),
+                                                LayoutStyle::new(),
+                                                { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(14.0).with_color(theme.get().muted) },
+                                            )?
+                                        };
+                                        __children.push(box_item(__text_0));
+                                    }
+                                    __slots.extend_default(__children);
+                                    Ok(__slots)
+                                }
+                                }
+                            );
+                            card(CardProps::props().gap(8.0).build(), __deferred)?
+                        };
+                        __children.push(box_item(__node_2));
+                        let __node_4 = code_line(CodeLineProps::props().code("slider value:$volume min:0 max:100 step:1 width:260").build(), Children::default())?;
+                        __children.push(box_item(__node_4));
+                    }
                     __slots.extend_default(__children);
                     Ok(__slots)
                 }
@@ -71,46 +75,50 @@ pub fn sliders(props: SlidersProps, children: Children) -> Result<Box<dyn Layout
             example(ExampleProps::props().title("min / max — the value reads back in your range, not 0..1").build(), __deferred)?
         };
         let __node_5 = {
-            let __deferred = Children::new(
+            let __deferred = Children::per_slot(
                 {
                     let temp = temp.clone();
                     let theme = theme.clone();
-                move || {
+                move |__request: SlotRequest<'_>| {
                     let temp = temp.clone();
                     let theme = theme.clone();
                     let mut __slots = Slots::new();
                     let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-                    let __node_6 = {
-                        let __deferred = Children::new(
-                            {
-                                let temp = temp.clone();
-                                let theme = theme.clone();
-                            move || {
-                                let temp = temp.clone();
-                                let theme = theme.clone();
-                                let mut __slots = Slots::new();
-                                let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-                                let __node_7 = slider(SliderProps::props().value(temp.clone()).min(60.0).max(80.0).step(5.0).label("Temperature").width(260.0).build(), Children::default())?;
-                                __children.push(box_item(__node_7));
-                                let __text_1 = {
+                    if __request.includes(None) {
+                        let __node_6 = {
+                            let __deferred = Children::per_slot(
+                                {
                                     let temp = temp.clone();
-                                    Text::declaring(
-                                        move || format!("{}°F", { temp.get() }),
-                                        LayoutStyle::new(),
-                                        { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(14.0).with_color(theme.get().muted) },
-                                    )?
-                                };
-                                __children.push(box_item(__text_1));
-                                __slots.extend_default(__children);
-                                Ok(__slots)
-                            }
-                            }
-                        );
-                        card(CardProps::props().gap(8.0).build(), __deferred)?
-                    };
-                    __children.push(box_item(__node_6));
-                    let __node_8 = code_line(CodeLineProps::props().code("slider value:$temp min:60 max:80 step:5 label:'Temperature'").build(), Children::default())?;
-                    __children.push(box_item(__node_8));
+                                    let theme = theme.clone();
+                                move |__request: SlotRequest<'_>| {
+                                    let temp = temp.clone();
+                                    let theme = theme.clone();
+                                    let mut __slots = Slots::new();
+                                    let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
+                                    if __request.includes(None) {
+                                        let __node_7 = slider(SliderProps::props().value(temp.clone()).min(60.0).max(80.0).step(5.0).label("Temperature").width(260.0).build(), Children::default())?;
+                                        __children.push(box_item(__node_7));
+                                        let __text_1 = {
+                                            let temp = temp.clone();
+                                            Text::declaring(
+                                                move || format!("{}°F", { temp.get() }),
+                                                LayoutStyle::new(),
+                                                { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(14.0).with_color(theme.get().muted) },
+                                            )?
+                                        };
+                                        __children.push(box_item(__text_1));
+                                    }
+                                    __slots.extend_default(__children);
+                                    Ok(__slots)
+                                }
+                                }
+                            );
+                            card(CardProps::props().gap(8.0).build(), __deferred)?
+                        };
+                        __children.push(box_item(__node_6));
+                        let __node_8 = code_line(CodeLineProps::props().code("slider value:$temp min:60 max:80 step:5 label:'Temperature'").build(), Children::default())?;
+                        __children.push(box_item(__node_8));
+                    }
                     __slots.extend_default(__children);
                     Ok(__slots)
                 }
@@ -119,18 +127,20 @@ pub fn sliders(props: SlidersProps, children: Children) -> Result<Box<dyn Layout
             example(ExampleProps::props().title("label + step — a captioned, quantized range").build(), __deferred)?
         };
         let __node_9 = {
-            let __deferred = Children::new(
-                move || {
+            let __deferred = Children::per_slot(
+                move |__request: SlotRequest<'_>| {
                     let mut __slots = Slots::new();
                     let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-                    let __col_1 = {
-                        let __node_10 = prop_row(PropRowProps::props().name("value").values("signal").about("bound number; reads back in [min,max].").build(), Children::default())?;
-                        let __node_11 = prop_row(PropRowProps::props().name("min / max").values("number").about("reported range (default 0..1).").build(), Children::default())?;
-                        let __node_12 = prop_row(PropRowProps::props().name("step").values("number").about("quantize to multiples (0 = continuous).").build(), Children::default())?;
-                        let __node_13 = prop_row(PropRowProps::props().name("label").values("text").about("optional caption stacked above the track.").build(), Children::default())?;
-                        Container::new(LayoutStyle::new().flex_column().gap(6.0), children![__node_10, __node_11, __node_12, __node_13])?
-                    };
-                    __children.push(box_item(__col_1));
+                    if __request.includes(None) {
+                        let __col_1 = {
+                            let __node_10 = prop_row(PropRowProps::props().name("value").values("signal").about("bound number; reads back in [min,max].").build(), Children::default())?;
+                            let __node_11 = prop_row(PropRowProps::props().name("min / max").values("number").about("reported range (default 0..1).").build(), Children::default())?;
+                            let __node_12 = prop_row(PropRowProps::props().name("step").values("number").about("quantize to multiples (0 = continuous).").build(), Children::default())?;
+                            let __node_13 = prop_row(PropRowProps::props().name("label").values("text").about("optional caption stacked above the track.").build(), Children::default())?;
+                            Container::new(LayoutStyle::new().flex_column().gap(6.0), children![__node_10, __node_11, __node_12, __node_13])?
+                        };
+                        __children.push(box_item(__col_1));
+                    }
                     __slots.extend_default(__children);
                     Ok(__slots)
                 }

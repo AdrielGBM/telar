@@ -109,50 +109,54 @@ pub fn motion(props: MotionProps, children: Children) -> Result<Box<dyn LayoutIt
     let __col_0 = {
         let __node_0 = doc_header(DocHeaderProps::props().kicker("INTERACTION").title("Motion").desc("Beyond transitions, the motion kernel gives you springs and keyframe timelines driven from Rust — velocity-preserving bounces, staggered loops, and one-shot playback.").build(), Children::default())?;
         let __node_1 = {
-            let __deferred = Children::new(
+            let __deferred = Children::per_slot(
                 {
                     let theme = theme.clone();
                     let scale = scale.clone();
                     let big = big.clone();
-                move || {
+                move |__request: SlotRequest<'_>| {
                     let theme = theme.clone();
                     let scale = scale.clone();
                     let big = big.clone();
                     let mut __slots = Slots::new();
                     let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-                    let __node_2 = {
-                        let __deferred = Children::new(
-                            {
-                                let theme = theme.clone();
-                                let scale = scale.clone();
-                                let big = big.clone();
-                            move || {
-                                let theme = theme.clone();
-                                let scale = scale.clone();
-                                let big = big.clone();
-                                let mut __slots = Slots::new();
-                                let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-                                let __row_0 = {
-                                    let __sbox_0 = {
-                                        let __sbox_1 = {
-                                            StyledContainer::new(LayoutStyle::new().flex_column().width(60.0).height(60.0), { let theme = theme.clone(); move |_| RectStyle::default().with_fill(theme.get().primary).with_radius(BorderRadius::all(12.0)) }, children![])?.with_transform({ let scale = scale.clone(); move |__r: Rect| box_transform(__r, (0) as f32, (scale.get()) as f32, (scale.get()) as f32, (0) as f32, (0) as f32) })
+                    if __request.includes(None) {
+                        let __node_2 = {
+                            let __deferred = Children::per_slot(
+                                {
+                                    let theme = theme.clone();
+                                    let scale = scale.clone();
+                                    let big = big.clone();
+                                move |__request: SlotRequest<'_>| {
+                                    let theme = theme.clone();
+                                    let scale = scale.clone();
+                                    let big = big.clone();
+                                    let mut __slots = Slots::new();
+                                    let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
+                                    if __request.includes(None) {
+                                        let __row_0 = {
+                                            let __sbox_0 = {
+                                                let __sbox_1 = {
+                                                    StyledContainer::new(LayoutStyle::new().flex_column().width(60.0).height(60.0), { let theme = theme.clone(); move |_| RectStyle::default().with_fill(theme.get().primary).with_radius(BorderRadius::all(12.0)) }, children![])?.with_transform({ let scale = scale.clone(); move |__r: Rect| box_transform(__r, (0) as f32, (scale.get()) as f32, (scale.get()) as f32, (0) as f32, (0) as f32) })
+                                                };
+                                                StyledContainer::new(LayoutStyle::new().flex_column().width(100.0).height(100.0).align_items(AlignItems::CENTER).justify_content(JustifyContent::CENTER), move |_| RectStyle::default(), children![__sbox_1])?
+                                            };
+                                            let __node_3 = button(ButtonProps::props().label("Bounce").fill(Reactive::of({ let theme = theme.clone(); move || theme.get().primary })).on_press(std::rc::Rc::new({ let big = big.clone(); let scale = scale.clone(); move || { big.toggle(); scale.retarget(if big.get() { 1.3 } else { 0.6 }) } })).build(), Children::default())?;
+                                            Container::new(LayoutStyle::new().flex_row().gap(20.0).align_items(AlignItems::CENTER), children![__sbox_0, __node_3])?
                                         };
-                                        StyledContainer::new(LayoutStyle::new().flex_column().width(100.0).height(100.0).align_items(AlignItems::CENTER).justify_content(JustifyContent::CENTER), move |_| RectStyle::default(), children![__sbox_1])?
-                                    };
-                                    let __node_3 = button(ButtonProps::props().label("Bounce").fill(Reactive::of({ let theme = theme.clone(); move || theme.get().primary })).on_press(std::rc::Rc::new({ let big = big.clone(); let scale = scale.clone(); move || { big.toggle(); scale.retarget(if big.get() { 1.3 } else { 0.6 }) } })).build(), Children::default())?;
-                                    Container::new(LayoutStyle::new().flex_row().gap(20.0).align_items(AlignItems::CENTER), children![__sbox_0, __node_3])?
-                                };
-                                __children.push(box_item(__row_0));
-                                __slots.extend_default(__children);
-                                Ok(__slots)
-                            }
-                            }
-                        );
-                        card(CardProps::props().gap(12.0).build(), __deferred)?
-                    };
-                    __children.push(box_item(__node_2));
-                    let __node_4 = code_line(CodeLineProps::props().code("box fill:$theme.primary radius:12 width:60 height:60 scale:$scale   // scale.retarget(1.3)").build(), Children::default())?;
-                    __children.push(box_item(__node_4));
+                                        __children.push(box_item(__row_0));
+                                    }
+                                    __slots.extend_default(__children);
+                                    Ok(__slots)
+                                }
+                                }
+                            );
+                            card(CardProps::props().gap(12.0).build(), __deferred)?
+                        };
+                        __children.push(box_item(__node_2));
+                        let __node_4 = code_line(CodeLineProps::props().code("box fill:$theme.primary radius:12 width:60 height:60 scale:$scale   // scale.retarget(1.3)").build(), Children::default())?;
+                        __children.push(box_item(__node_4));
+                    }
                     __slots.extend_default(__children);
                     Ok(__slots)
                 }
@@ -161,33 +165,37 @@ pub fn motion(props: MotionProps, children: Children) -> Result<Box<dyn LayoutIt
             example(ExampleProps::props().title("Spring — retarget a value and it settles with a natural bounce").build(), __deferred)?
         };
         let __node_5 = {
-            let __deferred = Children::new(
+            let __deferred = Children::per_slot(
                 {
                     let equalizer = equalizer.clone();
-                move || {
+                move |__request: SlotRequest<'_>| {
                     let equalizer = equalizer.clone();
                     let mut __slots = Slots::new();
                     let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-                    let __node_6 = {
-                        let __deferred = Children::new(
-                            {
-                                let equalizer = equalizer.clone();
-                            move || {
-                                let equalizer = equalizer.clone();
-                                let mut __slots = Slots::new();
-                                let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-                                let __canvas_0 = Canvas::new(LayoutStyle::new().width(196.0).height(56.0), equalizer)?;
-                                __children.push(box_item(__canvas_0));
-                                __slots.extend_default(__children);
-                                Ok(__slots)
-                            }
-                            }
-                        );
-                        card(CardProps::props().build(), __deferred)?
-                    };
-                    __children.push(box_item(__node_6));
-                    let __node_7 = code_line(CodeLineProps::props().code("Keyframes::new(8.0).hold(i·110ms).then(48.0, 300ms, EaseInOut).start(Repeat::PingPong)").build(), Children::default())?;
-                    __children.push(box_item(__node_7));
+                    if __request.includes(None) {
+                        let __node_6 = {
+                            let __deferred = Children::per_slot(
+                                {
+                                    let equalizer = equalizer.clone();
+                                move |__request: SlotRequest<'_>| {
+                                    let equalizer = equalizer.clone();
+                                    let mut __slots = Slots::new();
+                                    let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
+                                    if __request.includes(None) {
+                                        let __canvas_0 = Canvas::new(LayoutStyle::new().width(196.0).height(56.0), equalizer)?;
+                                        __children.push(box_item(__canvas_0));
+                                    }
+                                    __slots.extend_default(__children);
+                                    Ok(__slots)
+                                }
+                                }
+                            );
+                            card(CardProps::props().build(), __deferred)?
+                        };
+                        __children.push(box_item(__node_6));
+                        let __node_7 = code_line(CodeLineProps::props().code("Keyframes::new(8.0).hold(i·110ms).then(48.0, 300ms, EaseInOut).start(Repeat::PingPong)").build(), Children::default())?;
+                        __children.push(box_item(__node_7));
+                    }
                     __slots.extend_default(__children);
                     Ok(__slots)
                 }
@@ -196,53 +204,57 @@ pub fn motion(props: MotionProps, children: Children) -> Result<Box<dyn LayoutIt
             example(ExampleProps::props().title("Staggered keyframes — six PingPong loops offset by hold()").build(), __deferred)?
         };
         let __node_8 = {
-            let __deferred = Children::new(
+            let __deferred = Children::per_slot(
                 {
                     let progress = progress.clone();
                     let theme = theme.clone();
                     let progress_bar = progress_bar.clone();
-                move || {
+                move |__request: SlotRequest<'_>| {
                     let progress = progress.clone();
                     let theme = theme.clone();
                     let progress_bar = progress_bar.clone();
                     let mut __slots = Slots::new();
                     let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-                    let __node_9 = {
-                        let __deferred = Children::new(
-                            {
-                                let progress = progress.clone();
-                                let theme = theme.clone();
-                                let progress_bar = progress_bar.clone();
-                            move || {
-                                let progress = progress.clone();
-                                let theme = theme.clone();
-                                let progress_bar = progress_bar.clone();
-                                let mut __slots = Slots::new();
-                                let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-                                let __row_1 = {
-                                    let __canvas_1 = Canvas::new(LayoutStyle::new().width(240.0).height(14.0), progress_bar)?;
-                                    let __text_0 = {
-                                        let progress = progress.clone();
-                                        Text::declaring(
-                                            move || format!("{}%", { progress.get().round() }),
-                                            LayoutStyle::new(),
-                                            { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(12.0).with_color(theme.get().muted) },
-                                        )?
-                                    };
-                                    let __node_10 = button(ButtonProps::props().label("Replay").fill(Reactive::of({ let theme = theme.clone(); move || theme.get().primary })).on_press(std::rc::Rc::new({ let progress = progress.clone(); move || { progress.restart() } })).build(), Children::default())?;
-                                    Container::new(LayoutStyle::new().flex_row().gap(12.0).align_items(AlignItems::CENTER), children![__canvas_1, __text_0, __node_10])?
-                                };
-                                __children.push(box_item(__row_1));
-                                __slots.extend_default(__children);
-                                Ok(__slots)
-                            }
-                            }
-                        );
-                        card(CardProps::props().gap(12.0).build(), __deferred)?
-                    };
-                    __children.push(box_item(__node_9));
-                    let __node_11 = code_line(CodeLineProps::props().code("Keyframes::new(0.0).then(100.0, 1100ms, EaseInOut).start(Repeat::Once)").build(), Children::default())?;
-                    __children.push(box_item(__node_11));
+                    if __request.includes(None) {
+                        let __node_9 = {
+                            let __deferred = Children::per_slot(
+                                {
+                                    let progress = progress.clone();
+                                    let theme = theme.clone();
+                                    let progress_bar = progress_bar.clone();
+                                move |__request: SlotRequest<'_>| {
+                                    let progress = progress.clone();
+                                    let theme = theme.clone();
+                                    let progress_bar = progress_bar.clone();
+                                    let mut __slots = Slots::new();
+                                    let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
+                                    if __request.includes(None) {
+                                        let __row_1 = {
+                                            let __canvas_1 = Canvas::new(LayoutStyle::new().width(240.0).height(14.0), progress_bar)?;
+                                            let __text_0 = {
+                                                let progress = progress.clone();
+                                                Text::declaring(
+                                                    move || format!("{}%", { progress.get().round() }),
+                                                    LayoutStyle::new(),
+                                                    { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(12.0).with_color(theme.get().muted) },
+                                                )?
+                                            };
+                                            let __node_10 = button(ButtonProps::props().label("Replay").fill(Reactive::of({ let theme = theme.clone(); move || theme.get().primary })).on_press(std::rc::Rc::new({ let progress = progress.clone(); move || { progress.restart() } })).build(), Children::default())?;
+                                            Container::new(LayoutStyle::new().flex_row().gap(12.0).align_items(AlignItems::CENTER), children![__canvas_1, __text_0, __node_10])?
+                                        };
+                                        __children.push(box_item(__row_1));
+                                    }
+                                    __slots.extend_default(__children);
+                                    Ok(__slots)
+                                }
+                                }
+                            );
+                            card(CardProps::props().gap(12.0).build(), __deferred)?
+                        };
+                        __children.push(box_item(__node_9));
+                        let __node_11 = code_line(CodeLineProps::props().code("Keyframes::new(0.0).then(100.0, 1100ms, EaseInOut).start(Repeat::Once)").build(), Children::default())?;
+                        __children.push(box_item(__node_11));
+                    }
                     __slots.extend_default(__children);
                     Ok(__slots)
                 }
@@ -251,58 +263,62 @@ pub fn motion(props: MotionProps, children: Children) -> Result<Box<dyn LayoutIt
             example(ExampleProps::props().title("One-shot timeline — Replay restarts the same handle").build(), __deferred)?
         };
         let __node_12 = {
-            let __deferred = Children::new(
+            let __deferred = Children::per_slot(
                 {
                     let scrub_color = scrub_color.clone();
                     let scrub = scrub.clone();
                     let theme = theme.clone();
-                move || {
+                move |__request: SlotRequest<'_>| {
                     let scrub_color = scrub_color.clone();
                     let scrub = scrub.clone();
                     let theme = theme.clone();
                     let mut __slots = Slots::new();
                     let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-                    let __node_13 = {
-                        let __deferred = Children::new(
-                            {
-                                let scrub_color = scrub_color.clone();
-                                let scrub = scrub.clone();
-                                let theme = theme.clone();
-                            move || {
-                                let scrub_color = scrub_color.clone();
-                                let scrub = scrub.clone();
-                                let theme = theme.clone();
-                                let mut __slots = Slots::new();
-                                let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-                                let __row_2 = {
-                                    let __sbox_2 = {
-                                        StyledContainer::new(LayoutStyle::new().flex_column().width(56.0).height(56.0), { let scrub_color = scrub_color.clone(); move |_| RectStyle::default().with_fill(scrub_color.get()).with_radius(BorderRadius::all(10.0)) }, children![])?
-                                    };
-                                    let __col_1 = {
-                                        let __node_14 = slider(SliderProps::props().value(scrub.clone()).min(0.0).max(100.0).step(1.0).width(220.0).build(), Children::default())?;
-                                        let __text_1 = {
-                                            let scrub = scrub.clone();
-                                            Text::declaring(
-                                                move || format!("p = {}", { scrub.get() / 100.0 }),
-                                                LayoutStyle::new(),
-                                                { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(12.0).with_color(theme.get().muted) },
-                                            )?
+                    if __request.includes(None) {
+                        let __node_13 = {
+                            let __deferred = Children::per_slot(
+                                {
+                                    let scrub_color = scrub_color.clone();
+                                    let scrub = scrub.clone();
+                                    let theme = theme.clone();
+                                move |__request: SlotRequest<'_>| {
+                                    let scrub_color = scrub_color.clone();
+                                    let scrub = scrub.clone();
+                                    let theme = theme.clone();
+                                    let mut __slots = Slots::new();
+                                    let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
+                                    if __request.includes(None) {
+                                        let __row_2 = {
+                                            let __sbox_2 = {
+                                                StyledContainer::new(LayoutStyle::new().flex_column().width(56.0).height(56.0), { let scrub_color = scrub_color.clone(); move |_| RectStyle::default().with_fill(scrub_color.get()).with_radius(BorderRadius::all(10.0)) }, children![])?
+                                            };
+                                            let __col_1 = {
+                                                let __node_14 = slider(SliderProps::props().value(scrub.clone()).min(0.0).max(100.0).step(1.0).width(220.0).build(), Children::default())?;
+                                                let __text_1 = {
+                                                    let scrub = scrub.clone();
+                                                    Text::declaring(
+                                                        move || format!("p = {}", { scrub.get() / 100.0 }),
+                                                        LayoutStyle::new(),
+                                                        { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(12.0).with_color(theme.get().muted) },
+                                                    )?
+                                                };
+                                                Container::new(LayoutStyle::new().flex_column().gap(6.0).flex_grow(1.0), children![__node_14, __text_1])?
+                                            };
+                                            Container::new(LayoutStyle::new().flex_row().gap(14.0).align_items(AlignItems::CENTER), children![__sbox_2, __col_1])?
                                         };
-                                        Container::new(LayoutStyle::new().flex_column().gap(6.0).flex_grow(1.0), children![__node_14, __text_1])?
-                                    };
-                                    Container::new(LayoutStyle::new().flex_row().gap(14.0).align_items(AlignItems::CENTER), children![__sbox_2, __col_1])?
-                                };
-                                __children.push(box_item(__row_2));
-                                __slots.extend_default(__children);
-                                Ok(__slots)
-                            }
-                            }
-                        );
-                        card(CardProps::props().gap(8.0).build(), __deferred)?
-                    };
-                    __children.push(box_item(__node_13));
-                    let __node_15 = code_line(CodeLineProps::props().code("Timeline::builder(a).then(b, …).then(c, …).build().sample(p)").build(), Children::default())?;
-                    __children.push(box_item(__node_15));
+                                        __children.push(box_item(__row_2));
+                                    }
+                                    __slots.extend_default(__children);
+                                    Ok(__slots)
+                                }
+                                }
+                            );
+                            card(CardProps::props().gap(8.0).build(), __deferred)?
+                        };
+                        __children.push(box_item(__node_13));
+                        let __node_15 = code_line(CodeLineProps::props().code("Timeline::builder(a).then(b, …).then(c, …).build().sample(p)").build(), Children::default())?;
+                        __children.push(box_item(__node_15));
+                    }
                     __slots.extend_default(__children);
                     Ok(__slots)
                 }

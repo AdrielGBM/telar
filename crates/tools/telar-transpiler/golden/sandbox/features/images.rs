@@ -36,41 +36,45 @@ pub fn images(props: ImagesProps, children: Children) -> Result<Box<dyn LayoutIt
     let __col_0 = {
         let __node_0 = doc_header(DocHeaderProps::props().kicker("MEDIA").title("Images").desc("img draws an RGBA bitmap. Feed it an Arc<ImageData> built in Rust, or a quoted path that is decoded and baked into the binary at build time.").build(), Children::default())?;
         let __node_1 = {
-            let __deferred = Children::new(
+            let __deferred = Children::per_slot(
                 {
                     let gradient = gradient.clone();
-                move || {
+                move |__request: SlotRequest<'_>| {
                     let gradient = gradient.clone();
                     let mut __slots = Slots::new();
                     let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-                    let __node_2 = {
-                        let __deferred = Children::new(
-                            {
-                                let gradient = gradient.clone();
-                            move || {
-                                let gradient = gradient.clone();
-                                let mut __slots = Slots::new();
-                                let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-                                let __img_0 = {
-                                    let __src = gradient.clone();
-                                    Image::new(
-                                        LayoutStyle::new().width(128.0).height(128.0),
-                                        move || __src.clone(),
-                                        move || Raster::Smooth,
-                                        move || ObjectFit::Contain,
-                                    )?
-                                };
-                                __children.push(box_item(__img_0));
-                                __slots.extend_default(__children);
-                                Ok(__slots)
-                            }
-                            }
-                        );
-                        card(CardProps::props().build(), __deferred)?
-                    };
-                    __children.push(box_item(__node_2));
-                    let __node_3 = code_line(CodeLineProps::props().code("let gradient = Arc::new(make_gradient(128, 128));   img src:gradient").build(), Children::default())?;
-                    __children.push(box_item(__node_3));
+                    if __request.includes(None) {
+                        let __node_2 = {
+                            let __deferred = Children::per_slot(
+                                {
+                                    let gradient = gradient.clone();
+                                move |__request: SlotRequest<'_>| {
+                                    let gradient = gradient.clone();
+                                    let mut __slots = Slots::new();
+                                    let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
+                                    if __request.includes(None) {
+                                        let __img_0 = {
+                                            let __src = gradient.clone();
+                                            Image::new(
+                                                LayoutStyle::new().width(128.0).height(128.0),
+                                                move || __src.clone(),
+                                                move || Raster::Smooth,
+                                                move || ObjectFit::Contain,
+                                            )?
+                                        };
+                                        __children.push(box_item(__img_0));
+                                    }
+                                    __slots.extend_default(__children);
+                                    Ok(__slots)
+                                }
+                                }
+                            );
+                            card(CardProps::props().build(), __deferred)?
+                        };
+                        __children.push(box_item(__node_2));
+                        let __node_3 = code_line(CodeLineProps::props().code("let gradient = Arc::new(make_gradient(128, 128));   img src:gradient").build(), Children::default())?;
+                        __children.push(box_item(__node_3));
+                    }
                     __slots.extend_default(__children);
                     Ok(__slots)
                 }
@@ -79,77 +83,81 @@ pub fn images(props: ImagesProps, children: Children) -> Result<Box<dyn LayoutIt
             example(ExampleProps::props().title("A procedural bitmap built from raw pixels").build(), __deferred)?
         };
         let __node_4 = {
-            let __deferred = Children::new(
+            let __deferred = Children::per_slot(
                 {
                     let theme = theme.clone();
                     let checker = checker.clone();
-                move || {
+                move |__request: SlotRequest<'_>| {
                     let theme = theme.clone();
                     let checker = checker.clone();
                     let mut __slots = Slots::new();
                     let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-                    let __node_5 = {
-                        let __deferred = Children::new(
-                            {
-                                let theme = theme.clone();
-                                let checker = checker.clone();
-                            move || {
-                                let theme = theme.clone();
-                                let checker = checker.clone();
-                                let mut __slots = Slots::new();
-                                let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-                                let __row_0 = {
-                                    let __col_1 = {
-                                        let __img_1 = {
-                                            let __src = checker.clone();
-                                            Image::new(
-                                                LayoutStyle::new().width(120.0).height(120.0),
-                                                move || __src.clone(),
-                                                move || Raster::Smooth,
-                                                move || ObjectFit::Contain,
-                                            )?
+                    if __request.includes(None) {
+                        let __node_5 = {
+                            let __deferred = Children::per_slot(
+                                {
+                                    let theme = theme.clone();
+                                    let checker = checker.clone();
+                                move |__request: SlotRequest<'_>| {
+                                    let theme = theme.clone();
+                                    let checker = checker.clone();
+                                    let mut __slots = Slots::new();
+                                    let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
+                                    if __request.includes(None) {
+                                        let __row_0 = {
+                                            let __col_1 = {
+                                                let __img_1 = {
+                                                    let __src = checker.clone();
+                                                    Image::new(
+                                                        LayoutStyle::new().width(120.0).height(120.0),
+                                                        move || __src.clone(),
+                                                        move || Raster::Smooth,
+                                                        move || ObjectFit::Contain,
+                                                    )?
+                                                };
+                                                let __text_0 = {
+                                                    Text::declaring(
+                                                        || "Linear".to_string(),
+                                                        LayoutStyle::new(),
+                                                        { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(12.0).with_color(theme.get().muted) },
+                                                    )?
+                                                };
+                                                Container::new(style_swatch().flex_column(), children![__img_1, __text_0])?
+                                            };
+                                            let __col_2 = {
+                                                let __img_2 = {
+                                                    let __src = checker.clone();
+                                                    Image::new(
+                                                        LayoutStyle::new().width(120.0).height(120.0),
+                                                        move || __src.clone(),
+                                                        move || Raster::Pixel,
+                                                        move || ObjectFit::Contain,
+                                                    )?
+                                                };
+                                                let __text_1 = {
+                                                    Text::declaring(
+                                                        || "Nearest".to_string(),
+                                                        LayoutStyle::new(),
+                                                        { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(12.0).with_color(theme.get().muted) },
+                                                    )?
+                                                };
+                                                Container::new(style_swatch().flex_column(), children![__img_2, __text_1])?
+                                            };
+                                            Container::new(LayoutStyle::new().flex_row().gap(20.0).align_items(AlignItems::END).flex_wrap(), children![__col_1, __col_2])?
                                         };
-                                        let __text_0 = {
-                                            Text::declaring(
-                                                || "Linear".to_string(),
-                                                LayoutStyle::new(),
-                                                { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(12.0).with_color(theme.get().muted) },
-                                            )?
-                                        };
-                                        Container::new(style_swatch().flex_column(), children![__img_1, __text_0])?
-                                    };
-                                    let __col_2 = {
-                                        let __img_2 = {
-                                            let __src = checker.clone();
-                                            Image::new(
-                                                LayoutStyle::new().width(120.0).height(120.0),
-                                                move || __src.clone(),
-                                                move || Raster::Pixel,
-                                                move || ObjectFit::Contain,
-                                            )?
-                                        };
-                                        let __text_1 = {
-                                            Text::declaring(
-                                                || "Nearest".to_string(),
-                                                LayoutStyle::new(),
-                                                { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(12.0).with_color(theme.get().muted) },
-                                            )?
-                                        };
-                                        Container::new(style_swatch().flex_column(), children![__img_2, __text_1])?
-                                    };
-                                    Container::new(LayoutStyle::new().flex_row().gap(20.0).align_items(AlignItems::END).flex_wrap(), children![__col_1, __col_2])?
-                                };
-                                __children.push(box_item(__row_0));
-                                __slots.extend_default(__children);
-                                Ok(__slots)
-                            }
-                            }
-                        );
-                        card(CardProps::props().build(), __deferred)?
-                    };
-                    __children.push(box_item(__node_5));
-                    let __node_6 = code_line(CodeLineProps::props().code("img src:checker raster:nearest   (a 64px bitmap upscaled to 120)").build(), Children::default())?;
-                    __children.push(box_item(__node_6));
+                                        __children.push(box_item(__row_0));
+                                    }
+                                    __slots.extend_default(__children);
+                                    Ok(__slots)
+                                }
+                                }
+                            );
+                            card(CardProps::props().build(), __deferred)?
+                        };
+                        __children.push(box_item(__node_5));
+                        let __node_6 = code_line(CodeLineProps::props().code("img src:checker raster:nearest   (a 64px bitmap upscaled to 120)").build(), Children::default())?;
+                        __children.push(box_item(__node_6));
+                    }
                     __slots.extend_default(__children);
                     Ok(__slots)
                 }
@@ -158,96 +166,100 @@ pub fn images(props: ImagesProps, children: Children) -> Result<Box<dyn LayoutIt
             example(ExampleProps::props().title("Scaling filter — Linear smooths, Nearest keeps hard pixels").build(), __deferred)?
         };
         let __node_7 = {
-            let __deferred = Children::new(
+            let __deferred = Children::per_slot(
                 {
                     let theme = theme.clone();
                     let gradient = gradient.clone();
-                move || {
+                move |__request: SlotRequest<'_>| {
                     let theme = theme.clone();
                     let gradient = gradient.clone();
                     let mut __slots = Slots::new();
                     let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-                    let __node_8 = {
-                        let __deferred = Children::new(
-                            {
-                                let theme = theme.clone();
-                                let gradient = gradient.clone();
-                            move || {
-                                let theme = theme.clone();
-                                let gradient = gradient.clone();
-                                let mut __slots = Slots::new();
-                                let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-                                let __row_1 = {
-                                    let __col_3 = {
-                                        let __img_3 = {
-                                            let __src = gradient.clone();
-                                            Image::new(
-                                                LayoutStyle::new().width(150.0).height(80.0),
-                                                move || __src.clone(),
-                                                move || Raster::Smooth,
-                                                move || ObjectFit::Contain,
-                                            )?
+                    if __request.includes(None) {
+                        let __node_8 = {
+                            let __deferred = Children::per_slot(
+                                {
+                                    let theme = theme.clone();
+                                    let gradient = gradient.clone();
+                                move |__request: SlotRequest<'_>| {
+                                    let theme = theme.clone();
+                                    let gradient = gradient.clone();
+                                    let mut __slots = Slots::new();
+                                    let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
+                                    if __request.includes(None) {
+                                        let __row_1 = {
+                                            let __col_3 = {
+                                                let __img_3 = {
+                                                    let __src = gradient.clone();
+                                                    Image::new(
+                                                        LayoutStyle::new().width(150.0).height(80.0),
+                                                        move || __src.clone(),
+                                                        move || Raster::Smooth,
+                                                        move || ObjectFit::Contain,
+                                                    )?
+                                                };
+                                                let __text_2 = {
+                                                    Text::declaring(
+                                                        || "contain (default)".to_string(),
+                                                        LayoutStyle::new(),
+                                                        { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(12.0).with_color(theme.get().muted) },
+                                                    )?
+                                                };
+                                                Container::new(style_swatch().flex_column(), children![__img_3, __text_2])?
+                                            };
+                                            let __col_4 = {
+                                                let __img_4 = {
+                                                    let __src = gradient.clone();
+                                                    Image::new(
+                                                        LayoutStyle::new().width(150.0).height(80.0),
+                                                        move || __src.clone(),
+                                                        move || Raster::Smooth,
+                                                        move || ObjectFit::Cover,
+                                                    )?
+                                                };
+                                                let __text_3 = {
+                                                    Text::declaring(
+                                                        || "cover".to_string(),
+                                                        LayoutStyle::new(),
+                                                        { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(12.0).with_color(theme.get().muted) },
+                                                    )?
+                                                };
+                                                Container::new(style_swatch().flex_column(), children![__img_4, __text_3])?
+                                            };
+                                            let __col_5 = {
+                                                let __img_5 = {
+                                                    let __src = gradient.clone();
+                                                    Image::new(
+                                                        LayoutStyle::new().width(150.0).height(80.0),
+                                                        move || __src.clone(),
+                                                        move || Raster::Smooth,
+                                                        move || ObjectFit::Fill,
+                                                    )?
+                                                };
+                                                let __text_4 = {
+                                                    Text::declaring(
+                                                        || "fill".to_string(),
+                                                        LayoutStyle::new(),
+                                                        { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(12.0).with_color(theme.get().muted) },
+                                                    )?
+                                                };
+                                                Container::new(style_swatch().flex_column(), children![__img_5, __text_4])?
+                                            };
+                                            Container::new(LayoutStyle::new().flex_row().gap(20.0).flex_wrap().align_items(AlignItems::START), children![__col_3, __col_4, __col_5])?
                                         };
-                                        let __text_2 = {
-                                            Text::declaring(
-                                                || "contain (default)".to_string(),
-                                                LayoutStyle::new(),
-                                                { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(12.0).with_color(theme.get().muted) },
-                                            )?
-                                        };
-                                        Container::new(style_swatch().flex_column(), children![__img_3, __text_2])?
-                                    };
-                                    let __col_4 = {
-                                        let __img_4 = {
-                                            let __src = gradient.clone();
-                                            Image::new(
-                                                LayoutStyle::new().width(150.0).height(80.0),
-                                                move || __src.clone(),
-                                                move || Raster::Smooth,
-                                                move || ObjectFit::Cover,
-                                            )?
-                                        };
-                                        let __text_3 = {
-                                            Text::declaring(
-                                                || "cover".to_string(),
-                                                LayoutStyle::new(),
-                                                { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(12.0).with_color(theme.get().muted) },
-                                            )?
-                                        };
-                                        Container::new(style_swatch().flex_column(), children![__img_4, __text_3])?
-                                    };
-                                    let __col_5 = {
-                                        let __img_5 = {
-                                            let __src = gradient.clone();
-                                            Image::new(
-                                                LayoutStyle::new().width(150.0).height(80.0),
-                                                move || __src.clone(),
-                                                move || Raster::Smooth,
-                                                move || ObjectFit::Fill,
-                                            )?
-                                        };
-                                        let __text_4 = {
-                                            Text::declaring(
-                                                || "fill".to_string(),
-                                                LayoutStyle::new(),
-                                                { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(12.0).with_color(theme.get().muted) },
-                                            )?
-                                        };
-                                        Container::new(style_swatch().flex_column(), children![__img_5, __text_4])?
-                                    };
-                                    Container::new(LayoutStyle::new().flex_row().gap(20.0).flex_wrap().align_items(AlignItems::START), children![__col_3, __col_4, __col_5])?
-                                };
-                                __children.push(box_item(__row_1));
-                                __slots.extend_default(__children);
-                                Ok(__slots)
-                            }
-                            }
-                        );
-                        card(CardProps::props().build(), __deferred)?
-                    };
-                    __children.push(box_item(__node_8));
-                    let __node_9 = code_line(CodeLineProps::props().code("img src:gradient fit:cover width:150 height:80").build(), Children::default())?;
-                    __children.push(box_item(__node_9));
+                                        __children.push(box_item(__row_1));
+                                    }
+                                    __slots.extend_default(__children);
+                                    Ok(__slots)
+                                }
+                                }
+                            );
+                            card(CardProps::props().build(), __deferred)?
+                        };
+                        __children.push(box_item(__node_8));
+                        let __node_9 = code_line(CodeLineProps::props().code("img src:gradient fit:cover width:150 height:80").build(), Children::default())?;
+                        __children.push(box_item(__node_9));
+                    }
                     __slots.extend_default(__children);
                     Ok(__slots)
                 }
@@ -256,47 +268,51 @@ pub fn images(props: ImagesProps, children: Children) -> Result<Box<dyn LayoutIt
             example(ExampleProps::props().title("object-fit — how the bitmap fills a non-square box").build(), __deferred)?
         };
         let __node_10 = {
-            let __deferred = Children::new(
-                move || {
+            let __deferred = Children::per_slot(
+                move |__request: SlotRequest<'_>| {
                     let mut __slots = Slots::new();
                     let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-                    let __node_11 = {
-                        let __deferred = Children::new(
-                            move || {
-                                let mut __slots = Slots::new();
-                                let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-                                let __row_2 = {
-                                    let __img_6 = {
-                                        Image::new(
-                                            LayoutStyle::new().width(64.0).height(64.0),
-                                            move || std::sync::Arc::clone(&crate::__rsx_assets::ASSET_A2C18B25),
-                                            move || Raster::Smooth,
-                                            move || ObjectFit::Contain,
-                                        )?.with_priority()
-                                    };
-                                    let __img_6 = __img_6.a11y_label(|| "A baked dot");
-                                    let __img_7 = {
-                                        Image::new(
-                                            LayoutStyle::new().width(96.0).height(96.0),
-                                            move || std::sync::Arc::clone(&crate::__rsx_assets::ASSET_A2C18B25),
-                                            move || Raster::Pixel,
-                                            move || ObjectFit::Contain,
-                                        )?
-                                    };
-                                    Container::new(LayoutStyle::new().flex_row().gap(20.0).align_items(AlignItems::CENTER), children![__img_6, __img_7])?
-                                };
-                                __children.push(box_item(__row_2));
-                                __slots.extend_default(__children);
-                                Ok(__slots)
-                            }
-                        );
-                        card(CardProps::props().build(), __deferred)?
-                    };
-                    __children.push(box_item(__node_11));
-                    let __node_12 = code_line(CodeLineProps::props().code("img src:'assets/dot.png'   (decoded + baked, no runtime loader)").build(), Children::default())?;
-                    __children.push(box_item(__node_12));
-                    let __node_13 = code_line(CodeLineProps::props().code("on the web: a file beside the page, fetched first with priority").build(), Children::default())?;
-                    __children.push(box_item(__node_13));
+                    if __request.includes(None) {
+                        let __node_11 = {
+                            let __deferred = Children::per_slot(
+                                move |__request: SlotRequest<'_>| {
+                                    let mut __slots = Slots::new();
+                                    let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
+                                    if __request.includes(None) {
+                                        let __row_2 = {
+                                            let __img_6 = {
+                                                Image::new(
+                                                    LayoutStyle::new().width(64.0).height(64.0),
+                                                    move || std::sync::Arc::clone(&crate::__rsx_assets::ASSET_A2C18B25),
+                                                    move || Raster::Smooth,
+                                                    move || ObjectFit::Contain,
+                                                )?.with_priority()
+                                            };
+                                            let __img_6 = __img_6.a11y_label(|| "A baked dot");
+                                            let __img_7 = {
+                                                Image::new(
+                                                    LayoutStyle::new().width(96.0).height(96.0),
+                                                    move || std::sync::Arc::clone(&crate::__rsx_assets::ASSET_A2C18B25),
+                                                    move || Raster::Pixel,
+                                                    move || ObjectFit::Contain,
+                                                )?
+                                            };
+                                            Container::new(LayoutStyle::new().flex_row().gap(20.0).align_items(AlignItems::CENTER), children![__img_6, __img_7])?
+                                        };
+                                        __children.push(box_item(__row_2));
+                                    }
+                                    __slots.extend_default(__children);
+                                    Ok(__slots)
+                                }
+                            );
+                            card(CardProps::props().build(), __deferred)?
+                        };
+                        __children.push(box_item(__node_11));
+                        let __node_12 = code_line(CodeLineProps::props().code("img src:'assets/dot.png'   (decoded + baked, no runtime loader)").build(), Children::default())?;
+                        __children.push(box_item(__node_12));
+                        let __node_13 = code_line(CodeLineProps::props().code("on the web: a file beside the page, fetched first with priority").build(), Children::default())?;
+                        __children.push(box_item(__node_13));
+                    }
                     __slots.extend_default(__children);
                     Ok(__slots)
                 }
@@ -304,18 +320,20 @@ pub fn images(props: ImagesProps, children: Children) -> Result<Box<dyn LayoutIt
             example(ExampleProps::props().title("A PNG baked from disk at build time").build(), __deferred)?
         };
         let __node_14 = {
-            let __deferred = Children::new(
-                move || {
+            let __deferred = Children::per_slot(
+                move |__request: SlotRequest<'_>| {
                     let mut __slots = Slots::new();
                     let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-                    let __col_6 = {
-                        let __node_15 = prop_row(PropRowProps::props().name("src").values("Arc<ImageData> · 'path'").about("Runtime bitmap, or a baked file path.").build(), Children::default())?;
-                        let __node_16 = prop_row(PropRowProps::props().name("filter").values("Linear · Nearest").about("Sampling when scaled (default Linear).").build(), Children::default())?;
-                        let __node_17 = prop_row(PropRowProps::props().name("fit").values("contain · cover · fill").about("Aspect handling in the box (default contain).").build(), Children::default())?;
-                        let __node_18 = prop_row(PropRowProps::props().name("priority").values("flag").about("On the web, fetched at once rather than lazily.").build(), Children::default())?;
-                        Container::new(LayoutStyle::new().flex_column().gap(6.0), children![__node_15, __node_16, __node_17, __node_18])?
-                    };
-                    __children.push(box_item(__col_6));
+                    if __request.includes(None) {
+                        let __col_6 = {
+                            let __node_15 = prop_row(PropRowProps::props().name("src").values("Arc<ImageData> · 'path'").about("Runtime bitmap, or a baked file path.").build(), Children::default())?;
+                            let __node_16 = prop_row(PropRowProps::props().name("filter").values("Linear · Nearest").about("Sampling when scaled (default Linear).").build(), Children::default())?;
+                            let __node_17 = prop_row(PropRowProps::props().name("fit").values("contain · cover · fill").about("Aspect handling in the box (default contain).").build(), Children::default())?;
+                            let __node_18 = prop_row(PropRowProps::props().name("priority").values("flag").about("On the web, fetched at once rather than lazily.").build(), Children::default())?;
+                            Container::new(LayoutStyle::new().flex_column().gap(6.0), children![__node_15, __node_16, __node_17, __node_18])?
+                        };
+                        __children.push(box_item(__col_6));
+                    }
                     __slots.extend_default(__children);
                     Ok(__slots)
                 }

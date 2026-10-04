@@ -3,6 +3,7 @@ use crate::shared::components::card::{card, CardProps};
 use crate::shared::components::code_line::{code_line, CodeLineProps};
 use crate::shared::components::doc_header::{doc_header, DocHeaderProps};
 use crate::shared::components::example::{example, ExampleProps};
+use crate::shared::components::themed_panel::{themed_panel, ThemedPanelContext, ThemedPanelProps};
 
 let night = signal(true);
 
@@ -84,3 +85,9 @@ col gap:20
                     text "primary" font_size:12 color:$theme.on_primary
             button label:"Switch this one" ghost on_press:(|| $night.toggle())
         code_line code:"col theme:(if $night { Theme::midnight() } else { Theme::pastel() })"
+    example title:"A component's theme reaches what it wraps"
+        card gap:8
+            themed_panel mode:"midnight"
+                text "Nested at the call site, drawn in {$theme.name}" font_size:14 color:$theme.ink
+                text "and inside the panel's context: {use_context::<ThemedPanelContext>().map(|panel| panel.mode).unwrap_or_default()}" font_size:12 color:$theme.muted
+        code_line code:"col theme:(…)  ›  children in:ctx   — slot children are built where they are placed"

@@ -138,26 +138,30 @@ pub fn transforms(props: TransformsProps, children: Children) -> Result<Box<dyn 
     let __col_0 = {
         let __node_0 = doc_header(DocHeaderProps::props().kicker("MEDIA").title("Transforms").desc("Wrap any render node in an affine matrix to scale, rotate, or translate it. Transforms compose with .then(), so you can rotate and then scale around the same point.").build(), Children::default())?;
         let __node_1 = {
-            let __deferred = Children::new(
-                move || {
+            let __deferred = Children::per_slot(
+                move |__request: SlotRequest<'_>| {
                     let mut __slots = Slots::new();
                     let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-                    let __node_2 = {
-                        let __deferred = Children::new(
-                            move || {
-                                let mut __slots = Slots::new();
-                                let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-                                let __canvas_0 = Canvas::new(LayoutStyle::new().height(360.0), draw_transforms)?;
-                                __children.push(box_item(__canvas_0));
-                                __slots.extend_default(__children);
-                                Ok(__slots)
-                            }
-                        );
-                        card(CardProps::props().build(), __deferred)?
-                    };
-                    __children.push(box_item(__node_2));
-                    let __node_3 = code_line(CodeLineProps::props().code("Transform::rotate_around(a, cx, cy).then(Transform::scale_around(s, s, cx, cy))").build(), Children::default())?;
-                    __children.push(box_item(__node_3));
+                    if __request.includes(None) {
+                        let __node_2 = {
+                            let __deferred = Children::per_slot(
+                                move |__request: SlotRequest<'_>| {
+                                    let mut __slots = Slots::new();
+                                    let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
+                                    if __request.includes(None) {
+                                        let __canvas_0 = Canvas::new(LayoutStyle::new().height(360.0), draw_transforms)?;
+                                        __children.push(box_item(__canvas_0));
+                                    }
+                                    __slots.extend_default(__children);
+                                    Ok(__slots)
+                                }
+                            );
+                            card(CardProps::props().build(), __deferred)?
+                        };
+                        __children.push(box_item(__node_2));
+                        let __node_3 = code_line(CodeLineProps::props().code("Transform::rotate_around(a, cx, cy).then(Transform::scale_around(s, s, cx, cy))").build(), Children::default())?;
+                        __children.push(box_item(__node_3));
+                    }
                     __slots.extend_default(__children);
                     Ok(__slots)
                 }
@@ -165,50 +169,54 @@ pub fn transforms(props: TransformsProps, children: Children) -> Result<Box<dyn 
             example(ExampleProps::props().title("Scale, rotate, and a composed rotate-then-scale").build(), __deferred)?
         };
         let __node_4 = {
-            let __deferred = Children::new(
+            let __deferred = Children::per_slot(
                 {
                     let theme = theme.clone();
-                move || {
+                move |__request: SlotRequest<'_>| {
                     let theme = theme.clone();
                     let mut __slots = Slots::new();
                     let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-                    let __node_5 = {
-                        let __deferred = Children::new(
-                            {
-                                let theme = theme.clone();
-                            move || {
-                                let theme = theme.clone();
-                                let mut __slots = Slots::new();
-                                let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-                                let __row_0 = {
-                                    let __sbox_0 = {
-                                        StyledContainer::new(LayoutStyle::new().flex_column().width(56.0).height(56.0), { let theme = theme.clone(); move |_| RectStyle::default().with_fill(theme.get().primary).with_radius(BorderRadius::all(8.0)) }, children![])?
-                                    };
-                                    let __sbox_1 = {
-                                        StyledContainer::new(LayoutStyle::new().flex_column().width(56.0).height(56.0), { let theme = theme.clone(); move |_| RectStyle::default().with_fill(theme.get().success).with_radius(BorderRadius::all(8.0)) }, children![])?.with_transform(move |__r: Rect| box_transform(__r, (20) as f32, (1) as f32, (1) as f32, (0) as f32, (0) as f32))
-                                    };
-                                    let __sbox_2 = {
-                                        StyledContainer::new(LayoutStyle::new().flex_column().width(56.0).height(56.0), { let theme = theme.clone(); move |_| RectStyle::default().with_fill(theme.get().warning).with_radius(BorderRadius::all(8.0)) }, children![])?.with_transform(move |__r: Rect| box_transform(__r, (0) as f32, (1.3) as f32, (1.3) as f32, (0) as f32, (0) as f32))
-                                    };
-                                    let __sbox_3 = {
-                                        StyledContainer::new(LayoutStyle::new().flex_column().width(56.0).height(56.0), { let theme = theme.clone(); move |_| RectStyle::default().with_fill(theme.get().danger).with_radius(BorderRadius::all(8.0)) }, children![])?.with_transform(move |__r: Rect| box_transform(__r, (15) as f32, (0.85) as f32, (0.85) as f32, (0) as f32, (0) as f32))
-                                    };
-                                    let __sbox_4 = {
-                                        StyledContainer::new(LayoutStyle::new().flex_column().width(56.0).height(56.0), { let theme = theme.clone(); move |_| RectStyle::default().with_fill(theme.get().ink).with_radius(BorderRadius::all(8.0)) }, children![])?.with_transform(move |__r: Rect| box_transform(__r, (-12) as f32, (1) as f32, (1) as f32, (0) as f32, (-8) as f32))
-                                    };
-                                    Container::new(LayoutStyle::new().flex_row().gap(24.0).justify_content(JustifyContent::CENTER).padding_vertical(16.0), children![__sbox_0, __sbox_1, __sbox_2, __sbox_3, __sbox_4])?
-                                };
-                                __children.push(box_item(__row_0));
-                                __slots.extend_default(__children);
-                                Ok(__slots)
-                            }
-                            }
-                        );
-                        card(CardProps::props().build(), __deferred)?
-                    };
-                    __children.push(box_item(__node_5));
-                    let __node_6 = code_line(CodeLineProps::props().code("box fill:$theme.success rotate:20      box fill:$theme.danger rotate:15 scale:0.85").build(), Children::default())?;
-                    __children.push(box_item(__node_6));
+                    if __request.includes(None) {
+                        let __node_5 = {
+                            let __deferred = Children::per_slot(
+                                {
+                                    let theme = theme.clone();
+                                move |__request: SlotRequest<'_>| {
+                                    let theme = theme.clone();
+                                    let mut __slots = Slots::new();
+                                    let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
+                                    if __request.includes(None) {
+                                        let __row_0 = {
+                                            let __sbox_0 = {
+                                                StyledContainer::new(LayoutStyle::new().flex_column().width(56.0).height(56.0), { let theme = theme.clone(); move |_| RectStyle::default().with_fill(theme.get().primary).with_radius(BorderRadius::all(8.0)) }, children![])?
+                                            };
+                                            let __sbox_1 = {
+                                                StyledContainer::new(LayoutStyle::new().flex_column().width(56.0).height(56.0), { let theme = theme.clone(); move |_| RectStyle::default().with_fill(theme.get().success).with_radius(BorderRadius::all(8.0)) }, children![])?.with_transform(move |__r: Rect| box_transform(__r, (20) as f32, (1) as f32, (1) as f32, (0) as f32, (0) as f32))
+                                            };
+                                            let __sbox_2 = {
+                                                StyledContainer::new(LayoutStyle::new().flex_column().width(56.0).height(56.0), { let theme = theme.clone(); move |_| RectStyle::default().with_fill(theme.get().warning).with_radius(BorderRadius::all(8.0)) }, children![])?.with_transform(move |__r: Rect| box_transform(__r, (0) as f32, (1.3) as f32, (1.3) as f32, (0) as f32, (0) as f32))
+                                            };
+                                            let __sbox_3 = {
+                                                StyledContainer::new(LayoutStyle::new().flex_column().width(56.0).height(56.0), { let theme = theme.clone(); move |_| RectStyle::default().with_fill(theme.get().danger).with_radius(BorderRadius::all(8.0)) }, children![])?.with_transform(move |__r: Rect| box_transform(__r, (15) as f32, (0.85) as f32, (0.85) as f32, (0) as f32, (0) as f32))
+                                            };
+                                            let __sbox_4 = {
+                                                StyledContainer::new(LayoutStyle::new().flex_column().width(56.0).height(56.0), { let theme = theme.clone(); move |_| RectStyle::default().with_fill(theme.get().ink).with_radius(BorderRadius::all(8.0)) }, children![])?.with_transform(move |__r: Rect| box_transform(__r, (-12) as f32, (1) as f32, (1) as f32, (0) as f32, (-8) as f32))
+                                            };
+                                            Container::new(LayoutStyle::new().flex_row().gap(24.0).justify_content(JustifyContent::CENTER).padding_vertical(16.0), children![__sbox_0, __sbox_1, __sbox_2, __sbox_3, __sbox_4])?
+                                        };
+                                        __children.push(box_item(__row_0));
+                                    }
+                                    __slots.extend_default(__children);
+                                    Ok(__slots)
+                                }
+                                }
+                            );
+                            card(CardProps::props().build(), __deferred)?
+                        };
+                        __children.push(box_item(__node_5));
+                        let __node_6 = code_line(CodeLineProps::props().code("box fill:$theme.success rotate:20      box fill:$theme.danger rotate:15 scale:0.85").build(), Children::default())?;
+                        __children.push(box_item(__node_6));
+                    }
                     __slots.extend_default(__children);
                     Ok(__slots)
                 }
@@ -217,18 +225,20 @@ pub fn transforms(props: TransformsProps, children: Children) -> Result<Box<dyn 
             example(ExampleProps::props().title("Declarative — rotate / scale / translate as box attributes (no Canvas, no Rust)").build(), __deferred)?
         };
         let __node_7 = {
-            let __deferred = Children::new(
-                move || {
+            let __deferred = Children::per_slot(
+                move |__request: SlotRequest<'_>| {
                     let mut __slots = Slots::new();
                     let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-                    let __col_1 = {
-                        let __node_8 = prop_row(PropRowProps::props().name("scale_around").values("sx, sy, cx, cy").about("Scale about a pivot point.").build(), Children::default())?;
-                        let __node_9 = prop_row(PropRowProps::props().name("rotate_around").values("deg, cx, cy").about("Rotate about a pivot point.").build(), Children::default())?;
-                        let __node_10 = prop_row(PropRowProps::props().name(".then(other)").values("Transform").about("Compose two transforms into one matrix.").build(), Children::default())?;
-                        let __node_11 = prop_row(PropRowProps::props().name("transform_with").values("matrix, [nodes]").about("Apply a matrix to child render nodes.").build(), Children::default())?;
-                        Container::new(LayoutStyle::new().flex_column().gap(6.0), children![__node_8, __node_9, __node_10, __node_11])?
-                    };
-                    __children.push(box_item(__col_1));
+                    if __request.includes(None) {
+                        let __col_1 = {
+                            let __node_8 = prop_row(PropRowProps::props().name("scale_around").values("sx, sy, cx, cy").about("Scale about a pivot point.").build(), Children::default())?;
+                            let __node_9 = prop_row(PropRowProps::props().name("rotate_around").values("deg, cx, cy").about("Rotate about a pivot point.").build(), Children::default())?;
+                            let __node_10 = prop_row(PropRowProps::props().name(".then(other)").values("Transform").about("Compose two transforms into one matrix.").build(), Children::default())?;
+                            let __node_11 = prop_row(PropRowProps::props().name("transform_with").values("matrix, [nodes]").about("Apply a matrix to child render nodes.").build(), Children::default())?;
+                            Container::new(LayoutStyle::new().flex_column().gap(6.0), children![__node_8, __node_9, __node_10, __node_11])?
+                        };
+                        __children.push(box_item(__col_1));
+                    }
                     __slots.extend_default(__children);
                     Ok(__slots)
                 }

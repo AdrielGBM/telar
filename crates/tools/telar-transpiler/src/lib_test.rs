@@ -1652,8 +1652,8 @@ fn transition_color_on_text_wraps_text_style() {
 fn a_compound_component_receives_its_children_as_a_recipe() {
     let code = paint_code("menu label:\"Edit\"\n    item label:\"Undo\"\n    separator");
     assert!(
-        code.contains("Children::new(") && code.contains("Ok(__slots)"),
-        "the children are a closure returning the slots:\n{code}"
+        code.contains("Children::per_slot(") && code.contains("Ok(__slots)"),
+        "the children are a closure returning the slots it is asked for:\n{code}"
     );
     assert!(
         code.contains("menu(MenuProps::props().label(\"Edit\").build(), __deferred)"),
@@ -1678,8 +1678,8 @@ fn a_context_struct_makes_an_rsx_component_compound() {
         "and the component takes the recipe rather than built children:\n{code}"
     );
     assert!(
-        code.contains("let mut __slots = children.build_with(ctx)?;"),
-        "run inside the context `[logic]` built, before the view drains it:\n{code}"
+        code.contains("__children.extend(children.build_slot_with(None, ctx)?);"),
+        "built inside the context `[logic]` built, where the placeholder stands:\n{code}"
     );
     // An alias is rewritten, not renamed: renaming in place would shift every column rustc reports for the line.
     assert!(
@@ -2526,4 +2526,71 @@ fn an_unknown_blend_mode_is_a_compile_error_not_a_silent_drop() {
         code.contains("compile_error!"),
         "an unrecognised blend keyword should be refused, not silently dropped:\n{code}"
     );
+}
+
+/// The scroll-scene shape: a root that provides its own theme and a `children` placeholder one box below it. The slot is built inside the theme's scope, where the placeholder stands, rather than in `[logic]` before that scope exists.
+#[test]
+fn a_slot_is_built_inside_the_theme_of_the_node_it_is_placed_in() {
+    let src = "[logic]\n#[derive(Clone, Copy)]\npub struct Context {\n    pub pick: u32,\n}\n\nlet palette = follow_theme(|| Palette::night());\nlet ctx = Context { pick: 1 };\n\n[view]\ncol theme:(palette)\n    col sticky\n        children in:ctx\n";
+    let code = transpile_source(src, "scene", None, None)
+        .unwrap()
+        .rust_code;
+    let themed = code
+        .find("provide_theme(palette, || {")
+        .unwrap_or_else(|| panic!("the root provides the palette:\n{code}"));
+    let built = code
+        .find("children.build_slot_with(None, ctx)?")
+        .unwrap_or_else(|| panic!("the placeholder builds its slot:\n{code}"));
+    assert!(
+        themed < built,
+        "the slot is built inside the theme's scope:\n{code}"
+    );
+    assert!(
+        !code.contains("children.build_with(") && !code.contains("children.build()"),
+        "and nothing builds the children up front:\n{code}"
+    );
+}
+
+/// A placeholder inside a reactive branch builds its slot again each time the branch is rebuilt, so the branch clones the recipe in rather than moving it.
+#[test]
+fn a_slot_inside_a_reactive_branch_is_rebuilt_with_it() {
+    let src = "[logic]\nlet open = signal(true);\n\n[view]\ncol\n    if $open\n        children\n";
+    let code = transpile_source(src, "reveal", None, None)
+        .unwrap()
+        .rust_code;
+    assert!(
+        code.contains("let children = children.clone();"),
+        "the branch owns its own handle on the recipe:\n{code}"
+    );
+    assert!(
+        code.contains("children.build_slot(None)?"),
+        "and builds the slot where the placeholder stands:\n{code}"
+    );
+}
+
+/// Each run of children bound for one slot is guarded by the request, so a placeholder asking for the header builds the header and nothing else.
+#[test]
+fn a_call_site_builds_only_the_slot_it_is_asked_for() {
+    let code = paint_code("card\n    text \"Title\" slot:\"header\"\n    text \"Body\"");
+    assert!(
+        code.contains("if __request.includes(Some(\"header\")) {")
+            && code.contains("if __request.includes(None) {"),
+        "each slot's children sit under their own guard:\n{code}"
+    );
+}
+
+/// A component forwarding its own children into a named slot of another hands them to that slot, the one its guard builds them for.
+#[test]
+fn forwarded_children_reach_the_named_slot_they_are_routed_to() {
+    let src = "[view]\ncard\n    children slot:\"header\"\n    text \"Body\"\n";
+    let code = transpile_source(src, "titled", None, None)
+        .unwrap()
+        .rust_code;
+    let guard = code
+        .find("if __request.includes(Some(\"header\")) {")
+        .unwrap_or_else(|| panic!("the forwarded children sit under the header's guard:\n{code}"));
+    let routed = code
+        .find("__slots.push(Some(\"header\"), __item);")
+        .unwrap_or_else(|| panic!("and land in the header slot:\n{code}"));
+    assert!(guard < routed, "inside that guard:\n{code}");
 }

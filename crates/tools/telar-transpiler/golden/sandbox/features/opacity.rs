@@ -28,75 +28,79 @@ pub fn opacity(props: OpacityProps, children: Children) -> Result<Box<dyn Layout
     let __col_0 = {
         let __node_0 = doc_header(DocHeaderProps::props().kicker("SURFACES").title("Opacity & layers").desc("opacity fades a box and everything inside it as a single layer, so nested transparencies multiply the way you would expect.").build(), Children::default())?;
         let __node_1 = {
-            let __deferred = Children::new(
+            let __deferred = Children::per_slot(
                 {
                     let theme = theme.clone();
-                move || {
+                move |__request: SlotRequest<'_>| {
                     let theme = theme.clone();
                     let mut __slots = Slots::new();
                     let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-                    let __node_2 = {
-                        let __deferred = Children::new(
-                            {
-                                let theme = theme.clone();
-                            move || {
-                                let theme = theme.clone();
-                                let mut __slots = Slots::new();
-                                let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-                                let __row_0 = {
-                                    let __sbox_0 = {
-                                        let __text_0 = {
-                                            Text::declaring(
-                                                || "1.0".to_string(),
-                                                LayoutStyle::new(),
-                                                move |__inherited: TextStyle| __inherited,
-                                            )?
+                    if __request.includes(None) {
+                        let __node_2 = {
+                            let __deferred = Children::per_slot(
+                                {
+                                    let theme = theme.clone();
+                                move |__request: SlotRequest<'_>| {
+                                    let theme = theme.clone();
+                                    let mut __slots = Slots::new();
+                                    let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
+                                    if __request.includes(None) {
+                                        let __row_0 = {
+                                            let __sbox_0 = {
+                                                let __text_0 = {
+                                                    Text::declaring(
+                                                        || "1.0".to_string(),
+                                                        LayoutStyle::new(),
+                                                        move |__inherited: TextStyle| __inherited,
+                                                    )?
+                                                };
+                                                StyledContainer::new(style_center().flex_column().width(120.0).height(72.0), { let theme = theme.clone(); move |_| RectStyle::default().with_fill(theme.get().danger).with_radius(BorderRadius::all(10.0)) }, children![__text_0])?.with_opacity(|| 1.0)
+                                            };
+                                            let __sbox_1 = {
+                                                let __text_1 = {
+                                                    Text::declaring(
+                                                        || "0.6".to_string(),
+                                                        LayoutStyle::new(),
+                                                        move |__inherited: TextStyle| __inherited,
+                                                    )?
+                                                };
+                                                StyledContainer::new(style_center().flex_column().width(120.0).height(72.0), { let theme = theme.clone(); move |_| RectStyle::default().with_fill(theme.get().danger).with_radius(BorderRadius::all(10.0)) }, children![__text_1])?.with_opacity(|| 0.6)
+                                            };
+                                            let __sbox_2 = {
+                                                let __text_2 = {
+                                                    Text::declaring(
+                                                        || "0.3".to_string(),
+                                                        LayoutStyle::new(),
+                                                        move |__inherited: TextStyle| __inherited,
+                                                    )?
+                                                };
+                                                StyledContainer::new(style_center().flex_column().width(120.0).height(72.0), { let theme = theme.clone(); move |_| RectStyle::default().with_fill(theme.get().danger).with_radius(BorderRadius::all(10.0)) }, children![__text_2])?.with_opacity(|| 0.3)
+                                            };
+                                            let __sbox_3 = {
+                                                let __text_3 = {
+                                                    Text::declaring(
+                                                        || "0.1".to_string(),
+                                                        LayoutStyle::new(),
+                                                        move |__inherited: TextStyle| __inherited,
+                                                    )?
+                                                };
+                                                StyledContainer::new(style_center().flex_column().width(120.0).height(72.0), { let theme = theme.clone(); move |_| RectStyle::default().with_fill(theme.get().danger).with_radius(BorderRadius::all(10.0)) }, children![__text_3])?.with_opacity(|| 0.1)
+                                            };
+                                            Container::new(LayoutStyle::new().flex_row().gap(14.0).flex_wrap(), children![__sbox_0, __sbox_1, __sbox_2, __sbox_3])?.declaring({ let theme = theme.clone(); move || Declared::default().with_font_size(16.0).with_color(theme.get().on_primary) })
                                         };
-                                        StyledContainer::new(style_center().flex_column().width(120.0).height(72.0), { let theme = theme.clone(); move |_| RectStyle::default().with_fill(theme.get().danger).with_radius(BorderRadius::all(10.0)) }, children![__text_0])?.with_opacity(|| 1.0)
-                                    };
-                                    let __sbox_1 = {
-                                        let __text_1 = {
-                                            Text::declaring(
-                                                || "0.6".to_string(),
-                                                LayoutStyle::new(),
-                                                move |__inherited: TextStyle| __inherited,
-                                            )?
-                                        };
-                                        StyledContainer::new(style_center().flex_column().width(120.0).height(72.0), { let theme = theme.clone(); move |_| RectStyle::default().with_fill(theme.get().danger).with_radius(BorderRadius::all(10.0)) }, children![__text_1])?.with_opacity(|| 0.6)
-                                    };
-                                    let __sbox_2 = {
-                                        let __text_2 = {
-                                            Text::declaring(
-                                                || "0.3".to_string(),
-                                                LayoutStyle::new(),
-                                                move |__inherited: TextStyle| __inherited,
-                                            )?
-                                        };
-                                        StyledContainer::new(style_center().flex_column().width(120.0).height(72.0), { let theme = theme.clone(); move |_| RectStyle::default().with_fill(theme.get().danger).with_radius(BorderRadius::all(10.0)) }, children![__text_2])?.with_opacity(|| 0.3)
-                                    };
-                                    let __sbox_3 = {
-                                        let __text_3 = {
-                                            Text::declaring(
-                                                || "0.1".to_string(),
-                                                LayoutStyle::new(),
-                                                move |__inherited: TextStyle| __inherited,
-                                            )?
-                                        };
-                                        StyledContainer::new(style_center().flex_column().width(120.0).height(72.0), { let theme = theme.clone(); move |_| RectStyle::default().with_fill(theme.get().danger).with_radius(BorderRadius::all(10.0)) }, children![__text_3])?.with_opacity(|| 0.1)
-                                    };
-                                    Container::new(LayoutStyle::new().flex_row().gap(14.0).flex_wrap(), children![__sbox_0, __sbox_1, __sbox_2, __sbox_3])?.declaring({ let theme = theme.clone(); move || Declared::default().with_font_size(16.0).with_color(theme.get().on_primary) })
-                                };
-                                __children.push(box_item(__row_0));
-                                __slots.extend_default(__children);
-                                Ok(__slots)
-                            }
-                            }
-                        );
-                        card(CardProps::props().build(), __deferred)?
-                    };
-                    __children.push(box_item(__node_2));
-                    let __node_3 = code_line(CodeLineProps::props().code("box fill:$theme.danger opacity:0.3").build(), Children::default())?;
-                    __children.push(box_item(__node_3));
+                                        __children.push(box_item(__row_0));
+                                    }
+                                    __slots.extend_default(__children);
+                                    Ok(__slots)
+                                }
+                                }
+                            );
+                            card(CardProps::props().build(), __deferred)?
+                        };
+                        __children.push(box_item(__node_2));
+                        let __node_3 = code_line(CodeLineProps::props().code("box fill:$theme.danger opacity:0.3").build(), Children::default())?;
+                        __children.push(box_item(__node_3));
+                    }
                     __slots.extend_default(__children);
                     Ok(__slots)
                 }
@@ -105,42 +109,46 @@ pub fn opacity(props: OpacityProps, children: Children) -> Result<Box<dyn Layout
             example(ExampleProps::props().title("A single fill at descending opacity").build(), __deferred)?
         };
         let __node_4 = {
-            let __deferred = Children::new(
+            let __deferred = Children::per_slot(
                 {
                     let theme = theme.clone();
-                move || {
+                move |__request: SlotRequest<'_>| {
                     let theme = theme.clone();
                     let mut __slots = Slots::new();
                     let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-                    let __node_5 = {
-                        let __deferred = Children::new(
-                            {
-                                let theme = theme.clone();
-                            move || {
-                                let theme = theme.clone();
-                                let mut __slots = Slots::new();
-                                let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-                                let __sbox_4 = {
-                                    let __text_4 = {
-                                        Text::declaring(
-                                            || "gradient at 0.75".to_string(),
-                                            LayoutStyle::new(),
-                                            { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(16.0).with_color(theme.get().on_primary) },
-                                        )?
-                                    };
-                                    StyledContainer::new(style_center().flex_column().height(80.0), { let theme = theme.clone(); move |r| RectStyle { fill: Some(Paint::Gradient(Gradient::linear(Point::new(r.x, r.y + r.height * 0.5), Point::new(r.x + r.width, r.y + r.height * 0.5), &[(0.0, theme.get().primary), (0.5, theme.get().purple), (1.0, theme.get().danger)]))), border: None, shadow: None, radius: BorderRadius::all(12.0) } }, children![__text_4])?.with_opacity(|| 0.75)
-                                };
-                                __children.push(box_item(__sbox_4));
-                                __slots.extend_default(__children);
-                                Ok(__slots)
-                            }
-                            }
-                        );
-                        card(CardProps::props().build(), __deferred)?
-                    };
-                    __children.push(box_item(__node_5));
-                    let __node_6 = code_line(CodeLineProps::props().code("box fill:linear(horizontal, $theme.primary, $theme.danger) opacity:0.75").build(), Children::default())?;
-                    __children.push(box_item(__node_6));
+                    if __request.includes(None) {
+                        let __node_5 = {
+                            let __deferred = Children::per_slot(
+                                {
+                                    let theme = theme.clone();
+                                move |__request: SlotRequest<'_>| {
+                                    let theme = theme.clone();
+                                    let mut __slots = Slots::new();
+                                    let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
+                                    if __request.includes(None) {
+                                        let __sbox_4 = {
+                                            let __text_4 = {
+                                                Text::declaring(
+                                                    || "gradient at 0.75".to_string(),
+                                                    LayoutStyle::new(),
+                                                    { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(16.0).with_color(theme.get().on_primary) },
+                                                )?
+                                            };
+                                            StyledContainer::new(style_center().flex_column().height(80.0), { let theme = theme.clone(); move |r| RectStyle { fill: Some(Paint::Gradient(Gradient::linear(Point::new(r.x, r.y + r.height * 0.5), Point::new(r.x + r.width, r.y + r.height * 0.5), &[(0.0, theme.get().primary), (0.5, theme.get().purple), (1.0, theme.get().danger)]))), border: None, shadow: None, radius: BorderRadius::all(12.0) } }, children![__text_4])?.with_opacity(|| 0.75)
+                                        };
+                                        __children.push(box_item(__sbox_4));
+                                    }
+                                    __slots.extend_default(__children);
+                                    Ok(__slots)
+                                }
+                                }
+                            );
+                            card(CardProps::props().build(), __deferred)?
+                        };
+                        __children.push(box_item(__node_5));
+                        let __node_6 = code_line(CodeLineProps::props().code("box fill:linear(horizontal, $theme.primary, $theme.danger) opacity:0.75").build(), Children::default())?;
+                        __children.push(box_item(__node_6));
+                    }
                     __slots.extend_default(__children);
                     Ok(__slots)
                 }
@@ -149,52 +157,56 @@ pub fn opacity(props: OpacityProps, children: Children) -> Result<Box<dyn Layout
             example(ExampleProps::props().title("Layer opacity applies to a gradient and its label together").build(), __deferred)?
         };
         let __node_7 = {
-            let __deferred = Children::new(
+            let __deferred = Children::per_slot(
                 {
                     let theme = theme.clone();
-                move || {
+                move |__request: SlotRequest<'_>| {
                     let theme = theme.clone();
                     let mut __slots = Slots::new();
                     let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-                    let __node_8 = {
-                        let __deferred = Children::new(
-                            {
-                                let theme = theme.clone();
-                            move || {
-                                let theme = theme.clone();
-                                let mut __slots = Slots::new();
-                                let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-                                let __sbox_5 = {
-                                    let __text_5 = {
-                                        Text::declaring(
-                                            || "outer · 0.6".to_string(),
-                                            LayoutStyle::new(),
-                                            { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(12.0).with_color(theme.get().on_primary) },
-                                        )?
-                                    };
-                                    let __sbox_6 = {
-                                        let __text_6 = {
-                                            Text::declaring(
-                                                || "inner · 0.6".to_string(),
-                                                LayoutStyle::new(),
-                                                { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(14.0).with_color(theme.get().on_primary) },
-                                            )?
+                    if __request.includes(None) {
+                        let __node_8 = {
+                            let __deferred = Children::per_slot(
+                                {
+                                    let theme = theme.clone();
+                                move |__request: SlotRequest<'_>| {
+                                    let theme = theme.clone();
+                                    let mut __slots = Slots::new();
+                                    let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
+                                    if __request.includes(None) {
+                                        let __sbox_5 = {
+                                            let __text_5 = {
+                                                Text::declaring(
+                                                    || "outer · 0.6".to_string(),
+                                                    LayoutStyle::new(),
+                                                    { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(12.0).with_color(theme.get().on_primary) },
+                                                )?
+                                            };
+                                            let __sbox_6 = {
+                                                let __text_6 = {
+                                                    Text::declaring(
+                                                        || "inner · 0.6".to_string(),
+                                                        LayoutStyle::new(),
+                                                        { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(14.0).with_color(theme.get().on_primary) },
+                                                    )?
+                                                };
+                                                StyledContainer::new(style_center().flex_column().flex_grow(1.0), { let theme = theme.clone(); move |_| RectStyle::default().with_fill(theme.get().danger).with_radius(BorderRadius::all(8.0)) }, children![__text_6])?.with_opacity(|| 0.6)
+                                            };
+                                            StyledContainer::new(LayoutStyle::new().flex_column().height(120.0).padding_all(14.0).gap(8.0), { let theme = theme.clone(); move |_| RectStyle::default().with_fill(theme.get().primary).with_radius(BorderRadius::all(10.0)) }, children![__text_5, __sbox_6])?.with_opacity(|| 0.6)
                                         };
-                                        StyledContainer::new(style_center().flex_column().flex_grow(1.0), { let theme = theme.clone(); move |_| RectStyle::default().with_fill(theme.get().danger).with_radius(BorderRadius::all(8.0)) }, children![__text_6])?.with_opacity(|| 0.6)
-                                    };
-                                    StyledContainer::new(LayoutStyle::new().flex_column().height(120.0).padding_all(14.0).gap(8.0), { let theme = theme.clone(); move |_| RectStyle::default().with_fill(theme.get().primary).with_radius(BorderRadius::all(10.0)) }, children![__text_5, __sbox_6])?.with_opacity(|| 0.6)
-                                };
-                                __children.push(box_item(__sbox_5));
-                                __slots.extend_default(__children);
-                                Ok(__slots)
-                            }
-                            }
-                        );
-                        card(CardProps::props().build(), __deferred)?
-                    };
-                    __children.push(box_item(__node_8));
-                    let __node_9 = code_line(CodeLineProps::props().code("box opacity:0.6   >   box opacity:0.6   (layers multiply)").build(), Children::default())?;
-                    __children.push(box_item(__node_9));
+                                        __children.push(box_item(__sbox_5));
+                                    }
+                                    __slots.extend_default(__children);
+                                    Ok(__slots)
+                                }
+                                }
+                            );
+                            card(CardProps::props().build(), __deferred)?
+                        };
+                        __children.push(box_item(__node_8));
+                        let __node_9 = code_line(CodeLineProps::props().code("box opacity:0.6   >   box opacity:0.6   (layers multiply)").build(), Children::default())?;
+                        __children.push(box_item(__node_9));
+                    }
                     __slots.extend_default(__children);
                     Ok(__slots)
                 }
@@ -203,46 +215,50 @@ pub fn opacity(props: OpacityProps, children: Children) -> Result<Box<dyn Layout
             example(ExampleProps::props().title("Nested — outer 0.6 × inner 0.6 combine to about 0.36").build(), __deferred)?
         };
         let __node_10 = {
-            let __deferred = Children::new(
+            let __deferred = Children::per_slot(
                 {
                     let theme = theme.clone();
-                move || {
+                move |__request: SlotRequest<'_>| {
                     let theme = theme.clone();
                     let mut __slots = Slots::new();
                     let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-                    let __node_11 = {
-                        let __deferred = Children::new(
-                            {
-                                let theme = theme.clone();
-                            move || {
-                                let theme = theme.clone();
-                                let mut __slots = Slots::new();
-                                let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-                                let __node_12 = {
-                                    let __text_7 = {
-                                        Text::declaring(
-                                            || "FIELD".to_string(),
-                                            LayoutStyle::new(),
-                                            { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(96.0).with_color(theme.get().ink).with_font_weight(900).with_text_align(TextAlign::Center) },
-                                        )?
-                                    };
-                                    let __sbox_7 = {
-                                        StyledContainer::new(LayoutStyle::new().flex_column().width(SizeDimension::Percent(1.0)).height(120.0), { let theme = theme.clone(); move |r| RectStyle { fill: Some(Paint::Gradient(Gradient::linear(Point::new(r.x, r.y + r.height * 0.5), Point::new(r.x + r.width, r.y + r.height * 0.5), &[(0.0, theme.get().primary), (0.5, theme.get().purple), (1.0, theme.get().danger)]))), border: None, shadow: None, radius: BorderRadius::zero() } }, children![])?
-                                    };
-                                    Mask::new(LayoutStyle::new().width(SizeDimension::Percent(1.0)).height(120.0), box_item(__text_7), box_item(__sbox_7))?
-                                };
-                                let __node_12 = __node_12.a11y_label(|| "FIELD");
-                                __children.push(box_item(__node_12));
-                                __slots.extend_default(__children);
-                                Ok(__slots)
-                            }
-                            }
-                        );
-                        card(CardProps::props().build(), __deferred)?
-                    };
-                    __children.push(box_item(__node_11));
-                    let __node_13 = code_line(CodeLineProps::props().code("mask  >  text \"FIELD\" (the source, never shown)  +  box fill:linear(…) (seen through it)").build(), Children::default())?;
-                    __children.push(box_item(__node_13));
+                    if __request.includes(None) {
+                        let __node_11 = {
+                            let __deferred = Children::per_slot(
+                                {
+                                    let theme = theme.clone();
+                                move |__request: SlotRequest<'_>| {
+                                    let theme = theme.clone();
+                                    let mut __slots = Slots::new();
+                                    let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
+                                    if __request.includes(None) {
+                                        let __node_12 = {
+                                            let __text_7 = {
+                                                Text::declaring(
+                                                    || "FIELD".to_string(),
+                                                    LayoutStyle::new(),
+                                                    { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(96.0).with_color(theme.get().ink).with_font_weight(900).with_text_align(TextAlign::Center) },
+                                                )?
+                                            };
+                                            let __sbox_7 = {
+                                                StyledContainer::new(LayoutStyle::new().flex_column().width(SizeDimension::Percent(1.0)).height(120.0), { let theme = theme.clone(); move |r| RectStyle { fill: Some(Paint::Gradient(Gradient::linear(Point::new(r.x, r.y + r.height * 0.5), Point::new(r.x + r.width, r.y + r.height * 0.5), &[(0.0, theme.get().primary), (0.5, theme.get().purple), (1.0, theme.get().danger)]))), border: None, shadow: None, radius: BorderRadius::zero() } }, children![])?
+                                            };
+                                            Mask::new(LayoutStyle::new().width(SizeDimension::Percent(1.0)).height(120.0), box_item(__text_7), box_item(__sbox_7))?
+                                        };
+                                        let __node_12 = __node_12.a11y_label(|| "FIELD");
+                                        __children.push(box_item(__node_12));
+                                    }
+                                    __slots.extend_default(__children);
+                                    Ok(__slots)
+                                }
+                                }
+                            );
+                            card(CardProps::props().build(), __deferred)?
+                        };
+                        __children.push(box_item(__node_11));
+                        let __node_13 = code_line(CodeLineProps::props().code("mask  >  text \"FIELD\" (the source, never shown)  +  box fill:linear(…) (seen through it)").build(), Children::default())?;
+                        __children.push(box_item(__node_13));
+                    }
                     __slots.extend_default(__children);
                     Ok(__slots)
                 }

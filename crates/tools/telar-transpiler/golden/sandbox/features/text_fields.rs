@@ -22,52 +22,56 @@ pub fn text_fields(props: TextFieldsProps, children: Children) -> Result<Box<dyn
     let __col_0 = {
         let __node_0 = doc_header(DocHeaderProps::props().kicker("INTERACTION").title("Text field").desc("text_field wraps the input primitive in a bordered, padded box (from the components catalogue, not a base tag): an optional label stacks above it, and a muted placeholder shows while the bound value is empty.").build(), Children::default())?;
         let __node_1 = {
-            let __deferred = Children::new(
+            let __deferred = Children::per_slot(
                 {
                     let name = name.clone();
                     let query = query.clone();
                     let theme = theme.clone();
-                move || {
+                move |__request: SlotRequest<'_>| {
                     let name = name.clone();
                     let query = query.clone();
                     let theme = theme.clone();
                     let mut __slots = Slots::new();
                     let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-                    let __node_2 = {
-                        let __deferred = Children::new(
-                            {
-                                let name = name.clone();
-                                let query = query.clone();
-                                let theme = theme.clone();
-                            move || {
-                                let name = name.clone();
-                                let query = query.clone();
-                                let theme = theme.clone();
-                                let mut __slots = Slots::new();
-                                let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-                                let __node_3 = text_field(TextFieldProps::props().value(name.clone()).label("Name").placeholder("Type your name").build(), Children::default())?;
-                                __children.push(box_item(__node_3));
-                                let __node_4 = text_field(TextFieldProps::props().value(query.clone()).placeholder("Search…").build(), Children::default())?;
-                                __children.push(box_item(__node_4));
-                                let __text_0 = {
+                    if __request.includes(None) {
+                        let __node_2 = {
+                            let __deferred = Children::per_slot(
+                                {
                                     let name = name.clone();
-                                    Text::declaring(
-                                        move || format!("Hello, {}", { name.get() }),
-                                        LayoutStyle::new(),
-                                        { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(14.0).with_color(theme.get().muted) },
-                                    )?
-                                };
-                                __children.push(box_item(__text_0));
-                                __slots.extend_default(__children);
-                                Ok(__slots)
-                            }
-                            }
-                        );
-                        card(CardProps::props().gap(10.0).build(), __deferred)?
-                    };
-                    __children.push(box_item(__node_2));
-                    let __node_5 = code_line(CodeLineProps::props().code("text_field value:$name label:'Name' placeholder:'Type your name'   (bordered box + label + muted placeholder while empty)").build(), Children::default())?;
-                    __children.push(box_item(__node_5));
+                                    let query = query.clone();
+                                    let theme = theme.clone();
+                                move |__request: SlotRequest<'_>| {
+                                    let name = name.clone();
+                                    let query = query.clone();
+                                    let theme = theme.clone();
+                                    let mut __slots = Slots::new();
+                                    let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
+                                    if __request.includes(None) {
+                                        let __node_3 = text_field(TextFieldProps::props().value(name.clone()).label("Name").placeholder("Type your name").build(), Children::default())?;
+                                        __children.push(box_item(__node_3));
+                                        let __node_4 = text_field(TextFieldProps::props().value(query.clone()).placeholder("Search…").build(), Children::default())?;
+                                        __children.push(box_item(__node_4));
+                                        let __text_0 = {
+                                            let name = name.clone();
+                                            Text::declaring(
+                                                move || format!("Hello, {}", { name.get() }),
+                                                LayoutStyle::new(),
+                                                { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(14.0).with_color(theme.get().muted) },
+                                            )?
+                                        };
+                                        __children.push(box_item(__text_0));
+                                    }
+                                    __slots.extend_default(__children);
+                                    Ok(__slots)
+                                }
+                                }
+                            );
+                            card(CardProps::props().gap(10.0).build(), __deferred)?
+                        };
+                        __children.push(box_item(__node_2));
+                        let __node_5 = code_line(CodeLineProps::props().code("text_field value:$name label:'Name' placeholder:'Type your name'   (bordered box + label + muted placeholder while empty)").build(), Children::default())?;
+                        __children.push(box_item(__node_5));
+                    }
                     __slots.extend_default(__children);
                     Ok(__slots)
                 }

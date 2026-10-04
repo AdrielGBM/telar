@@ -22,45 +22,49 @@ pub fn pills(props: PillsProps, children: Children) -> Result<Box<dyn LayoutItem
     let __col_0 = {
         let __node_0 = doc_header(DocHeaderProps::props().kicker("PRESENTATION").title("Badges & chips").desc("badge is a small solid status tag; chip is a softer outlined pill, optionally removable via on_close. Both are components.").build(), Children::default())?;
         let __node_1 = {
-            let __deferred = Children::new(
+            let __deferred = Children::per_slot(
                 {
                     let theme = theme.clone();
-                move || {
+                move |__request: SlotRequest<'_>| {
                     let theme = theme.clone();
                     let mut __slots = Slots::new();
                     let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-                    let __node_2 = {
-                        let __deferred = Children::new(
-                            {
-                                let theme = theme.clone();
-                            move || {
-                                let theme = theme.clone();
-                                let mut __slots = Slots::new();
-                                let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-                                let __row_0 = {
-                                    let __text_0 = {
-                                        Text::declaring(
-                                            || "Inbox".to_string(),
-                                            LayoutStyle::new(),
-                                            { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(15.0).with_color(theme.get().ink) },
-                                        )?
-                                    };
-                                    let __node_3 = badge(BadgeProps::props().label("12").build(), Children::default())?;
-                                    let __node_4 = badge(BadgeProps::props().label("NEW").color(Reactive::of({ let theme = theme.clone(); move || theme.get().success })).build(), Children::default())?;
-                                    let __node_5 = badge(BadgeProps::props().label("BETA").color(Reactive::of({ let theme = theme.clone(); move || theme.get().purple })).build(), Children::default())?;
-                                    Container::new(LayoutStyle::new().flex_row().gap(8.0).align_items(AlignItems::CENTER), children![__text_0, __node_3, __node_4, __node_5])?
-                                };
-                                __children.push(box_item(__row_0));
-                                __slots.extend_default(__children);
-                                Ok(__slots)
-                            }
-                            }
-                        );
-                        card(CardProps::props().gap(10.0).build(), __deferred)?
-                    };
-                    __children.push(box_item(__node_2));
-                    let __node_6 = code_line(CodeLineProps::props().code("badge label:'NEW' color:$theme.success").build(), Children::default())?;
-                    __children.push(box_item(__node_6));
+                    if __request.includes(None) {
+                        let __node_2 = {
+                            let __deferred = Children::per_slot(
+                                {
+                                    let theme = theme.clone();
+                                move |__request: SlotRequest<'_>| {
+                                    let theme = theme.clone();
+                                    let mut __slots = Slots::new();
+                                    let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
+                                    if __request.includes(None) {
+                                        let __row_0 = {
+                                            let __text_0 = {
+                                                Text::declaring(
+                                                    || "Inbox".to_string(),
+                                                    LayoutStyle::new(),
+                                                    { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(15.0).with_color(theme.get().ink) },
+                                                )?
+                                            };
+                                            let __node_3 = badge(BadgeProps::props().label("12").build(), Children::default())?;
+                                            let __node_4 = badge(BadgeProps::props().label("NEW").color(Reactive::of({ let theme = theme.clone(); move || theme.get().success })).build(), Children::default())?;
+                                            let __node_5 = badge(BadgeProps::props().label("BETA").color(Reactive::of({ let theme = theme.clone(); move || theme.get().purple })).build(), Children::default())?;
+                                            Container::new(LayoutStyle::new().flex_row().gap(8.0).align_items(AlignItems::CENTER), children![__text_0, __node_3, __node_4, __node_5])?
+                                        };
+                                        __children.push(box_item(__row_0));
+                                    }
+                                    __slots.extend_default(__children);
+                                    Ok(__slots)
+                                }
+                                }
+                            );
+                            card(CardProps::props().gap(10.0).build(), __deferred)?
+                        };
+                        __children.push(box_item(__node_2));
+                        let __node_6 = code_line(CodeLineProps::props().code("badge label:'NEW' color:$theme.success").build(), Children::default())?;
+                        __children.push(box_item(__node_6));
+                    }
                     __slots.extend_default(__children);
                     Ok(__slots)
                 }
@@ -69,51 +73,55 @@ pub fn pills(props: PillsProps, children: Children) -> Result<Box<dyn LayoutItem
             example(ExampleProps::props().title("badge — a small solid accent tag").build(), __deferred)?
         };
         let __node_7 = {
-            let __deferred = Children::new(
+            let __deferred = Children::per_slot(
                 {
                     let tags = tags.clone();
                     let theme = theme.clone();
-                move || {
+                move |__request: SlotRequest<'_>| {
                     let tags = tags.clone();
                     let theme = theme.clone();
                     let mut __slots = Slots::new();
                     let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-                    let __node_8 = {
-                        let __deferred = Children::new(
-                            {
-                                let tags = tags.clone();
-                                let theme = theme.clone();
-                            move || {
-                                let tags = tags.clone();
-                                let theme = theme.clone();
-                                let mut __slots = Slots::new();
-                                let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-                                let __row_1 = {
-                                    let __node_9 = chip(ChipProps::props().label("design").build(), Children::default())?;
-                                    let __node_10 = chip(ChipProps::props().label("rust").build(), Children::default())?;
-                                    let __node_11 = chip(ChipProps::props().label("removable").on_close(std::rc::Rc::new({ let tags = tags.clone(); move || { tags.update(|n| if *n > 0 { *n -= 1 }) } })).build(), Children::default())?;
-                                    Container::new(LayoutStyle::new().flex_row().gap(8.0).align_items(AlignItems::CENTER), children![__node_9, __node_10, __node_11])?
-                                };
-                                __children.push(box_item(__row_1));
-                                let __text_1 = {
+                    if __request.includes(None) {
+                        let __node_8 = {
+                            let __deferred = Children::per_slot(
+                                {
                                     let tags = tags.clone();
-                                    Text::declaring(
-                                        move || format!("chips · {}", { tags.get() }),
-                                        LayoutStyle::new(),
-                                        { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(13.0).with_color(theme.get().muted) },
-                                    )?
-                                };
-                                __children.push(box_item(__text_1));
-                                __slots.extend_default(__children);
-                                Ok(__slots)
-                            }
-                            }
-                        );
-                        card(CardProps::props().gap(10.0).build(), __deferred)?
-                    };
-                    __children.push(box_item(__node_8));
-                    let __node_12 = code_line(CodeLineProps::props().code("chip label:'removable' on_close:|| remove()").build(), Children::default())?;
-                    __children.push(box_item(__node_12));
+                                    let theme = theme.clone();
+                                move |__request: SlotRequest<'_>| {
+                                    let tags = tags.clone();
+                                    let theme = theme.clone();
+                                    let mut __slots = Slots::new();
+                                    let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
+                                    if __request.includes(None) {
+                                        let __row_1 = {
+                                            let __node_9 = chip(ChipProps::props().label("design").build(), Children::default())?;
+                                            let __node_10 = chip(ChipProps::props().label("rust").build(), Children::default())?;
+                                            let __node_11 = chip(ChipProps::props().label("removable").on_close(std::rc::Rc::new({ let tags = tags.clone(); move || { tags.update(|n| if *n > 0 { *n -= 1 }) } })).build(), Children::default())?;
+                                            Container::new(LayoutStyle::new().flex_row().gap(8.0).align_items(AlignItems::CENTER), children![__node_9, __node_10, __node_11])?
+                                        };
+                                        __children.push(box_item(__row_1));
+                                        let __text_1 = {
+                                            let tags = tags.clone();
+                                            Text::declaring(
+                                                move || format!("chips · {}", { tags.get() }),
+                                                LayoutStyle::new(),
+                                                { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(13.0).with_color(theme.get().muted) },
+                                            )?
+                                        };
+                                        __children.push(box_item(__text_1));
+                                    }
+                                    __slots.extend_default(__children);
+                                    Ok(__slots)
+                                }
+                                }
+                            );
+                            card(CardProps::props().gap(10.0).build(), __deferred)?
+                        };
+                        __children.push(box_item(__node_8));
+                        let __node_12 = code_line(CodeLineProps::props().code("chip label:'removable' on_close:|| remove()").build(), Children::default())?;
+                        __children.push(box_item(__node_12));
+                    }
                     __slots.extend_default(__children);
                     Ok(__slots)
                 }
@@ -122,17 +130,19 @@ pub fn pills(props: PillsProps, children: Children) -> Result<Box<dyn LayoutItem
             example(ExampleProps::props().title("chip — a softer outlined pill; on_close makes it removable").build(), __deferred)?
         };
         let __node_13 = {
-            let __deferred = Children::new(
-                move || {
+            let __deferred = Children::per_slot(
+                move |__request: SlotRequest<'_>| {
                     let mut __slots = Slots::new();
                     let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-                    let __col_1 = {
-                        let __node_14 = prop_row(PropRowProps::props().name("label").values("text").about("the tag / pill text.").build(), Children::default())?;
-                        let __node_15 = prop_row(PropRowProps::props().name("color").values("token").about("badge fill / chip accent (default: theme).").build(), Children::default())?;
-                        let __node_16 = prop_row(PropRowProps::props().name("on_close").values("closure").about("chip only; adds a × that fires this.").build(), Children::default())?;
-                        Container::new(LayoutStyle::new().flex_column().gap(6.0), children![__node_14, __node_15, __node_16])?
-                    };
-                    __children.push(box_item(__col_1));
+                    if __request.includes(None) {
+                        let __col_1 = {
+                            let __node_14 = prop_row(PropRowProps::props().name("label").values("text").about("the tag / pill text.").build(), Children::default())?;
+                            let __node_15 = prop_row(PropRowProps::props().name("color").values("token").about("badge fill / chip accent (default: theme).").build(), Children::default())?;
+                            let __node_16 = prop_row(PropRowProps::props().name("on_close").values("closure").about("chip only; adds a × that fires this.").build(), Children::default())?;
+                            Container::new(LayoutStyle::new().flex_column().gap(6.0), children![__node_14, __node_15, __node_16])?
+                        };
+                        __children.push(box_item(__col_1));
+                    }
                     __slots.extend_default(__children);
                     Ok(__slots)
                 }

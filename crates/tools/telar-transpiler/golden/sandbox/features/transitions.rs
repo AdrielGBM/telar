@@ -28,72 +28,76 @@ pub fn transitions(props: TransitionsProps, children: Children) -> Result<Box<dy
     let __col_0 = {
         let __node_0 = doc_header(DocHeaderProps::props().kicker("INTERACTION").title("Transitions").desc("Add transition(…) to any animatable property and a value change eases over time instead of snapping. Choose a duration + easing, or a spring.").build(), Children::default())?;
         let __node_1 = {
-            let __deferred = Children::new(
+            let __deferred = Children::per_slot(
                 {
                     let accent = accent.clone();
                     let theme = theme.clone();
                     let alt = alt.clone();
-                move || {
+                move |__request: SlotRequest<'_>| {
                     let accent = accent.clone();
                     let theme = theme.clone();
                     let alt = alt.clone();
                     let mut __slots = Slots::new();
                     let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-                    let __node_2 = {
-                        let __deferred = Children::new(
-                            {
-                                let accent = accent.clone();
-                                let theme = theme.clone();
-                                let alt = alt.clone();
-                            move || {
-                                let accent = accent.clone();
-                                let theme = theme.clone();
-                                let alt = alt.clone();
-                                let mut __slots = Slots::new();
-                                let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-                                let __row_0 = {
-                                    let __col_1 = {
-                                        let __sbox_0 = {
-                                            let __transition_0 = motion::Animated::new(accent.get(), motion::tween(std::time::Duration::from_millis(250), motion::Easing::EaseOut));
-                                            StyledContainer::new(LayoutStyle::new().flex_column().width(72.0).height(72.0), { let accent = accent.clone(); move |_| RectStyle::default().with_fill({ __transition_0.retarget(accent.get()); __transition_0.get() }).with_radius(BorderRadius::all(14.0)) }, children![])?
+                    if __request.includes(None) {
+                        let __node_2 = {
+                            let __deferred = Children::per_slot(
+                                {
+                                    let accent = accent.clone();
+                                    let theme = theme.clone();
+                                    let alt = alt.clone();
+                                move |__request: SlotRequest<'_>| {
+                                    let accent = accent.clone();
+                                    let theme = theme.clone();
+                                    let alt = alt.clone();
+                                    let mut __slots = Slots::new();
+                                    let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
+                                    if __request.includes(None) {
+                                        let __row_0 = {
+                                            let __col_1 = {
+                                                let __sbox_0 = {
+                                                    let __transition_0 = motion::Animated::new(accent.get(), motion::tween(std::time::Duration::from_millis(250), motion::Easing::EaseOut));
+                                                    StyledContainer::new(LayoutStyle::new().flex_column().width(72.0).height(72.0), { let accent = accent.clone(); move |_| RectStyle::default().with_fill({ __transition_0.retarget(accent.get()); __transition_0.get() }).with_radius(BorderRadius::all(14.0)) }, children![])?
+                                                };
+                                                let __text_0 = {
+                                                    Text::declaring(
+                                                        || "250ms ease-out".to_string(),
+                                                        LayoutStyle::new(),
+                                                        { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(11.0).with_color(theme.get().muted) },
+                                                    )?
+                                                };
+                                                Container::new(LayoutStyle::new().flex_column().gap(6.0).align_items(AlignItems::CENTER), children![__sbox_0, __text_0])?
+                                            };
+                                            let __col_2 = {
+                                                let __sbox_1 = {
+                                                    let __transition_1 = motion::Animated::new(accent.get(), motion::spring(170.0, 16.0));
+                                                    StyledContainer::new(LayoutStyle::new().flex_column().width(72.0).height(72.0), { let accent = accent.clone(); move |_| RectStyle::default().with_fill({ __transition_1.retarget(accent.get()); __transition_1.get() }).with_radius(BorderRadius::all(14.0)) }, children![])?
+                                                };
+                                                let __text_1 = {
+                                                    Text::declaring(
+                                                        || "spring(170, 16)".to_string(),
+                                                        LayoutStyle::new(),
+                                                        { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(11.0).with_color(theme.get().muted) },
+                                                    )?
+                                                };
+                                                Container::new(LayoutStyle::new().flex_column().gap(6.0).align_items(AlignItems::CENTER), children![__sbox_1, __text_1])?
+                                            };
+                                            let __node_3 = button(ButtonProps::props().label("Toggle").fill(Reactive::of({ let theme = theme.clone(); move || theme.get().primary })).on_press(std::rc::Rc::new({ let alt = alt.clone(); let accent = accent.clone(); let theme = theme.clone(); move || { alt.toggle(); accent.set(if alt.get() { theme.get().purple } else { theme.get().primary }) } })).build(), Children::default())?;
+                                            Container::new(LayoutStyle::new().flex_row().gap(14.0).align_items(AlignItems::CENTER).flex_wrap(), children![__col_1, __col_2, __node_3])?
                                         };
-                                        let __text_0 = {
-                                            Text::declaring(
-                                                || "250ms ease-out".to_string(),
-                                                LayoutStyle::new(),
-                                                { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(11.0).with_color(theme.get().muted) },
-                                            )?
-                                        };
-                                        Container::new(LayoutStyle::new().flex_column().gap(6.0).align_items(AlignItems::CENTER), children![__sbox_0, __text_0])?
-                                    };
-                                    let __col_2 = {
-                                        let __sbox_1 = {
-                                            let __transition_1 = motion::Animated::new(accent.get(), motion::spring(170.0, 16.0));
-                                            StyledContainer::new(LayoutStyle::new().flex_column().width(72.0).height(72.0), { let accent = accent.clone(); move |_| RectStyle::default().with_fill({ __transition_1.retarget(accent.get()); __transition_1.get() }).with_radius(BorderRadius::all(14.0)) }, children![])?
-                                        };
-                                        let __text_1 = {
-                                            Text::declaring(
-                                                || "spring(170, 16)".to_string(),
-                                                LayoutStyle::new(),
-                                                { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(11.0).with_color(theme.get().muted) },
-                                            )?
-                                        };
-                                        Container::new(LayoutStyle::new().flex_column().gap(6.0).align_items(AlignItems::CENTER), children![__sbox_1, __text_1])?
-                                    };
-                                    let __node_3 = button(ButtonProps::props().label("Toggle").fill(Reactive::of({ let theme = theme.clone(); move || theme.get().primary })).on_press(std::rc::Rc::new({ let alt = alt.clone(); let accent = accent.clone(); let theme = theme.clone(); move || { alt.toggle(); accent.set(if alt.get() { theme.get().purple } else { theme.get().primary }) } })).build(), Children::default())?;
-                                    Container::new(LayoutStyle::new().flex_row().gap(14.0).align_items(AlignItems::CENTER).flex_wrap(), children![__col_1, __col_2, __node_3])?
-                                };
-                                __children.push(box_item(__row_0));
-                                __slots.extend_default(__children);
-                                Ok(__slots)
-                            }
-                            }
-                        );
-                        card(CardProps::props().gap(12.0).build(), __deferred)?
-                    };
-                    __children.push(box_item(__node_2));
-                    let __node_4 = code_line(CodeLineProps::props().code("box fill:$accent transition(fill 250ms ease-out)").build(), Children::default())?;
-                    __children.push(box_item(__node_4));
+                                        __children.push(box_item(__row_0));
+                                    }
+                                    __slots.extend_default(__children);
+                                    Ok(__slots)
+                                }
+                                }
+                            );
+                            card(CardProps::props().gap(12.0).build(), __deferred)?
+                        };
+                        __children.push(box_item(__node_2));
+                        let __node_4 = code_line(CodeLineProps::props().code("box fill:$accent transition(fill 250ms ease-out)").build(), Children::default())?;
+                        __children.push(box_item(__node_4));
+                    }
                     __slots.extend_default(__children);
                     Ok(__slots)
                 }
@@ -102,51 +106,55 @@ pub fn transitions(props: TransitionsProps, children: Children) -> Result<Box<dy
             example(ExampleProps::props().title("Color — the fill eases to its new value").build(), __deferred)?
         };
         let __node_5 = {
-            let __deferred = Children::new(
+            let __deferred = Children::per_slot(
                 {
                     let theme = theme.clone();
                     let fade = fade.clone();
-                move || {
+                move |__request: SlotRequest<'_>| {
                     let theme = theme.clone();
                     let fade = fade.clone();
                     let mut __slots = Slots::new();
                     let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-                    let __node_6 = {
-                        let __deferred = Children::new(
-                            {
-                                let theme = theme.clone();
-                                let fade = fade.clone();
-                            move || {
-                                let theme = theme.clone();
-                                let fade = fade.clone();
-                                let mut __slots = Slots::new();
-                                let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-                                let __row_1 = {
-                                    let __sbox_2 = {
-                                        let __text_2 = {
-                                            Text::declaring(
-                                                || "fade".to_string(),
-                                                LayoutStyle::new(),
-                                                { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(13.0).with_color(theme.get().on_primary) },
-                                            )?
+                    if __request.includes(None) {
+                        let __node_6 = {
+                            let __deferred = Children::per_slot(
+                                {
+                                    let theme = theme.clone();
+                                    let fade = fade.clone();
+                                move |__request: SlotRequest<'_>| {
+                                    let theme = theme.clone();
+                                    let fade = fade.clone();
+                                    let mut __slots = Slots::new();
+                                    let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
+                                    if __request.includes(None) {
+                                        let __row_1 = {
+                                            let __sbox_2 = {
+                                                let __text_2 = {
+                                                    Text::declaring(
+                                                        || "fade".to_string(),
+                                                        LayoutStyle::new(),
+                                                        { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(13.0).with_color(theme.get().on_primary) },
+                                                    )?
+                                                };
+                                                let __transition_2 = motion::Animated::new(fade.get(), motion::tween(std::time::Duration::from_millis(300), motion::Easing::EaseInOut));
+                                                StyledContainer::new(LayoutStyle::new().flex_column().width(130.0).height(64.0).align_items(AlignItems::CENTER).justify_content(JustifyContent::CENTER), { let theme = theme.clone(); let fade = fade.clone(); move |_| RectStyle::default().with_fill(theme.get().primary).with_radius(BorderRadius::all(12.0)) }, children![__text_2])?.with_opacity({ let fade = fade.clone(); move || { __transition_2.retarget(fade.get()); __transition_2.get() } })
+                                            };
+                                            let __node_7 = button(ButtonProps::props().label("Toggle").fill(Reactive::of({ let theme = theme.clone(); move || theme.get().primary })).on_press(std::rc::Rc::new({ let fade = fade.clone(); move || { let v = fade.peek(); fade.set(if v > 0.5 { 0.15 } else { 1.0 }) } })).build(), Children::default())?;
+                                            Container::new(LayoutStyle::new().flex_row().gap(14.0).align_items(AlignItems::CENTER).flex_wrap(), children![__sbox_2, __node_7])?
                                         };
-                                        let __transition_2 = motion::Animated::new(fade.get(), motion::tween(std::time::Duration::from_millis(300), motion::Easing::EaseInOut));
-                                        StyledContainer::new(LayoutStyle::new().flex_column().width(130.0).height(64.0).align_items(AlignItems::CENTER).justify_content(JustifyContent::CENTER), { let theme = theme.clone(); let fade = fade.clone(); move |_| RectStyle::default().with_fill(theme.get().primary).with_radius(BorderRadius::all(12.0)) }, children![__text_2])?.with_opacity({ let fade = fade.clone(); move || { __transition_2.retarget(fade.get()); __transition_2.get() } })
-                                    };
-                                    let __node_7 = button(ButtonProps::props().label("Toggle").fill(Reactive::of({ let theme = theme.clone(); move || theme.get().primary })).on_press(std::rc::Rc::new({ let fade = fade.clone(); move || { let v = fade.peek(); fade.set(if v > 0.5 { 0.15 } else { 1.0 }) } })).build(), Children::default())?;
-                                    Container::new(LayoutStyle::new().flex_row().gap(14.0).align_items(AlignItems::CENTER).flex_wrap(), children![__sbox_2, __node_7])?
-                                };
-                                __children.push(box_item(__row_1));
-                                __slots.extend_default(__children);
-                                Ok(__slots)
-                            }
-                            }
-                        );
-                        card(CardProps::props().build(), __deferred)?
-                    };
-                    __children.push(box_item(__node_6));
-                    let __node_8 = code_line(CodeLineProps::props().code("box opacity:$fade transition(opacity 300ms ease-in-out)").build(), Children::default())?;
-                    __children.push(box_item(__node_8));
+                                        __children.push(box_item(__row_1));
+                                    }
+                                    __slots.extend_default(__children);
+                                    Ok(__slots)
+                                }
+                                }
+                            );
+                            card(CardProps::props().build(), __deferred)?
+                        };
+                        __children.push(box_item(__node_6));
+                        let __node_8 = code_line(CodeLineProps::props().code("box opacity:$fade transition(opacity 300ms ease-in-out)").build(), Children::default())?;
+                        __children.push(box_item(__node_8));
+                    }
                     __slots.extend_default(__children);
                     Ok(__slots)
                 }
@@ -155,48 +163,52 @@ pub fn transitions(props: TransitionsProps, children: Children) -> Result<Box<dy
             example(ExampleProps::props().title("Opacity — the same signal, animated").build(), __deferred)?
         };
         let __node_9 = {
-            let __deferred = Children::new(
+            let __deferred = Children::per_slot(
                 {
                     let theme = theme.clone();
                     let stepped_x = stepped_x.clone();
                     let stepped = stepped.clone();
-                move || {
+                move |__request: SlotRequest<'_>| {
                     let theme = theme.clone();
                     let stepped_x = stepped_x.clone();
                     let stepped = stepped.clone();
                     let mut __slots = Slots::new();
                     let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-                    let __node_10 = {
-                        let __deferred = Children::new(
-                            {
-                                let theme = theme.clone();
-                                let stepped_x = stepped_x.clone();
-                                let stepped = stepped.clone();
-                            move || {
-                                let theme = theme.clone();
-                                let stepped_x = stepped_x.clone();
-                                let stepped = stepped.clone();
-                                let mut __slots = Slots::new();
-                                let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-                                let __row_2 = {
-                                    let __sbox_3 = {
-                                        let __transition_3 = motion::Animated::new((stepped_x.get()) as f32, motion::tween(std::time::Duration::from_millis(600), motion::Easing::Steps(6, motion::StepPosition::JumpEnd)));
-                                        StyledContainer::new(LayoutStyle::new().flex_column().width(24.0).height(24.0), { let theme = theme.clone(); move |_| RectStyle::default().with_fill(theme.get().primary).with_radius(BorderRadius::all(6.0)) }, children![])?.with_transform({ let stepped_x = stepped_x.clone(); move |__r: Rect| box_transform(__r, (0) as f32, (1) as f32, (1) as f32, { __transition_3.retarget((stepped_x.get()) as f32); __transition_3.get() }, (0) as f32) })
-                                    };
-                                    let __node_11 = button(ButtonProps::props().label("Move").fill(Reactive::of({ let theme = theme.clone(); move || theme.get().primary })).on_press(std::rc::Rc::new({ let stepped = stepped.clone(); move || { stepped.toggle() } })).build(), Children::default())?;
-                                    Container::new(LayoutStyle::new().flex_row().gap(14.0).align_items(AlignItems::CENTER).flex_wrap(), children![__sbox_3, __node_11])?
-                                };
-                                __children.push(box_item(__row_2));
-                                __slots.extend_default(__children);
-                                Ok(__slots)
-                            }
-                            }
-                        );
-                        card(CardProps::props().gap(12.0).build(), __deferred)?
-                    };
-                    __children.push(box_item(__node_10));
-                    let __node_12 = code_line(CodeLineProps::props().code("box translate_x:$x transition(translate_x 600ms steps(6, jump-end))").build(), Children::default())?;
-                    __children.push(box_item(__node_12));
+                    if __request.includes(None) {
+                        let __node_10 = {
+                            let __deferred = Children::per_slot(
+                                {
+                                    let theme = theme.clone();
+                                    let stepped_x = stepped_x.clone();
+                                    let stepped = stepped.clone();
+                                move |__request: SlotRequest<'_>| {
+                                    let theme = theme.clone();
+                                    let stepped_x = stepped_x.clone();
+                                    let stepped = stepped.clone();
+                                    let mut __slots = Slots::new();
+                                    let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
+                                    if __request.includes(None) {
+                                        let __row_2 = {
+                                            let __sbox_3 = {
+                                                let __transition_3 = motion::Animated::new((stepped_x.get()) as f32, motion::tween(std::time::Duration::from_millis(600), motion::Easing::Steps(6, motion::StepPosition::JumpEnd)));
+                                                StyledContainer::new(LayoutStyle::new().flex_column().width(24.0).height(24.0), { let theme = theme.clone(); move |_| RectStyle::default().with_fill(theme.get().primary).with_radius(BorderRadius::all(6.0)) }, children![])?.with_transform({ let stepped_x = stepped_x.clone(); move |__r: Rect| box_transform(__r, (0) as f32, (1) as f32, (1) as f32, { __transition_3.retarget((stepped_x.get()) as f32); __transition_3.get() }, (0) as f32) })
+                                            };
+                                            let __node_11 = button(ButtonProps::props().label("Move").fill(Reactive::of({ let theme = theme.clone(); move || theme.get().primary })).on_press(std::rc::Rc::new({ let stepped = stepped.clone(); move || { stepped.toggle() } })).build(), Children::default())?;
+                                            Container::new(LayoutStyle::new().flex_row().gap(14.0).align_items(AlignItems::CENTER).flex_wrap(), children![__sbox_3, __node_11])?
+                                        };
+                                        __children.push(box_item(__row_2));
+                                    }
+                                    __slots.extend_default(__children);
+                                    Ok(__slots)
+                                }
+                                }
+                            );
+                            card(CardProps::props().gap(12.0).build(), __deferred)?
+                        };
+                        __children.push(box_item(__node_10));
+                        let __node_12 = code_line(CodeLineProps::props().code("box translate_x:$x transition(translate_x 600ms steps(6, jump-end))").build(), Children::default())?;
+                        __children.push(box_item(__node_12));
+                    }
                     __slots.extend_default(__children);
                     Ok(__slots)
                 }
@@ -205,18 +217,20 @@ pub fn transitions(props: TransitionsProps, children: Children) -> Result<Box<dy
             example(ExampleProps::props().title("Steps — a mechanical jump instead of a continuous ease").build(), __deferred)?
         };
         let __node_13 = {
-            let __deferred = Children::new(
-                move || {
+            let __deferred = Children::per_slot(
+                move |__request: SlotRequest<'_>| {
                     let mut __slots = Slots::new();
                     let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-                    let __col_3 = {
-                        let __node_14 = prop_row(PropRowProps::props().name("transition(…)").values("prop dur easing").about("e.g. fill 250ms ease-out — runs when the value changes.").build(), Children::default())?;
-                        let __node_15 = prop_row(PropRowProps::props().name("properties").values("fill·stroke·color·opacity").about("Only these animate today.").build(), Children::default())?;
-                        let __node_16 = prop_row(PropRowProps::props().name("steps(n, pos)").values("jump-start·jump-end·jump-none·jump-both").about("n flat plateaus instead of a curve, CSS steps() semantics.").build(), Children::default())?;
-                        let __node_17 = prop_row(PropRowProps::props().name("spring(k, c)").values("stiffness, damping").about("Physics curve instead of a fixed duration.").build(), Children::default())?;
-                        Container::new(LayoutStyle::new().flex_column().gap(6.0), children![__node_14, __node_15, __node_16, __node_17])?
-                    };
-                    __children.push(box_item(__col_3));
+                    if __request.includes(None) {
+                        let __col_3 = {
+                            let __node_14 = prop_row(PropRowProps::props().name("transition(…)").values("prop dur easing").about("e.g. fill 250ms ease-out — runs when the value changes.").build(), Children::default())?;
+                            let __node_15 = prop_row(PropRowProps::props().name("properties").values("fill·stroke·color·opacity").about("Only these animate today.").build(), Children::default())?;
+                            let __node_16 = prop_row(PropRowProps::props().name("steps(n, pos)").values("jump-start·jump-end·jump-none·jump-both").about("n flat plateaus instead of a curve, CSS steps() semantics.").build(), Children::default())?;
+                            let __node_17 = prop_row(PropRowProps::props().name("spring(k, c)").values("stiffness, damping").about("Physics curve instead of a fixed duration.").build(), Children::default())?;
+                            Container::new(LayoutStyle::new().flex_column().gap(6.0), children![__node_14, __node_15, __node_16, __node_17])?
+                        };
+                        __children.push(box_item(__col_3));
+                    }
                     __slots.extend_default(__children);
                     Ok(__slots)
                 }

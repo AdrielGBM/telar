@@ -21,7 +21,6 @@ pub fn example(props: ExampleProps, children: Children) -> Result<Box<dyn Layout
     #[allow(unused_imports)] use telar::use_theme;
     #[allow(unused_variables)] let theme = telar::Theme::<core::theme::SandboxTheme>::default();
 
-    let mut __slots = children.build()?;
     let __col_0 = {
         let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
         let __text_0 = {
@@ -32,7 +31,7 @@ pub fn example(props: ExampleProps, children: Children) -> Result<Box<dyn Layout
             )?
         };
         __children.push(box_item(__text_0));
-        __children.extend(__slots.take_default());
+        __children.extend(children.build_slot(None)?);
         Container::new(LayoutStyle::new().flex_column().gap(8.0), __children)?
     };
     Ok(Box::new(__col_0))
@@ -43,39 +42,43 @@ pub fn example_preview_0() -> Result<Box<dyn LayoutItem>, LayoutError> {
     #[allow(unused_imports)] use telar::use_theme;
     #[allow(unused_variables)] let theme = telar::Theme::<core::theme::SandboxTheme>::default();
     let __node_0 = {
-        let __deferred = Children::new(
+        let __deferred = Children::per_slot(
             {
                 let theme = theme.clone();
-            move || {
+            move |__request: SlotRequest<'_>| {
                 let theme = theme.clone();
                 let mut __slots = Slots::new();
                 let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-                let __node_1 = {
-                    let __deferred = Children::new(
-                        {
-                            let theme = theme.clone();
-                        move || {
-                            let theme = theme.clone();
-                            let mut __slots = Slots::new();
-                            let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-                            let __text_0 = {
-                                Text::declaring(
-                                    || "The demo and its code snippet stack here.".to_string(),
-                                    LayoutStyle::new(),
-                                    { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(13.0).with_color(theme.get().muted) },
-                                )?
-                            };
-                            __children.push(box_item(__text_0));
-                            __slots.extend_default(__children);
-                            Ok(__slots)
-                        }
-                        }
-                    );
-                    card(CardProps::props().gap(10.0).build(), __deferred)?
-                };
-                __children.push(box_item(__node_1));
-                let __node_2 = code_line(CodeLineProps::props().code("row justify:between").build(), Children::default())?;
-                __children.push(box_item(__node_2));
+                if __request.includes(None) {
+                    let __node_1 = {
+                        let __deferred = Children::per_slot(
+                            {
+                                let theme = theme.clone();
+                            move |__request: SlotRequest<'_>| {
+                                let theme = theme.clone();
+                                let mut __slots = Slots::new();
+                                let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
+                                if __request.includes(None) {
+                                    let __text_0 = {
+                                        Text::declaring(
+                                            || "The demo and its code snippet stack here.".to_string(),
+                                            LayoutStyle::new(),
+                                            { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(13.0).with_color(theme.get().muted) },
+                                        )?
+                                    };
+                                    __children.push(box_item(__text_0));
+                                }
+                                __slots.extend_default(__children);
+                                Ok(__slots)
+                            }
+                            }
+                        );
+                        card(CardProps::props().gap(10.0).build(), __deferred)?
+                    };
+                    __children.push(box_item(__node_1));
+                    let __node_2 = code_line(CodeLineProps::props().code("row justify:between").build(), Children::default())?;
+                    __children.push(box_item(__node_2));
+                }
                 __slots.extend_default(__children);
                 Ok(__slots)
             }

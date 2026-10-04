@@ -130,7 +130,7 @@ pub use scroll_timeline::{
     use_scroll_viewport,
 };
 pub use scroll_viewports::{enclosing_scroll_viewport, scroll_viewports_of};
-pub use slots::{Children, Slots, use_context};
+pub use slots::{Children, SlotRequest, Slots, use_context};
 pub use step::{COARSE_STEP, FINE_STEP, step_factor};
 pub use styled_container::{KeyAnswer, StyledContainer, box_transform, style_follows};
 pub use surface::{DEFAULT_SCRIM, Edge, SurfaceScaffold, SurfaceTransition};

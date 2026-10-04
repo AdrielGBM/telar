@@ -37,100 +37,104 @@ pub fn blend(props: BlendProps, children: Children) -> Result<Box<dyn LayoutItem
     let __col_0 = {
         let __node_0 = doc_header(DocHeaderProps::props().kicker("SURFACES").title("Blend modes").desc("blend composites a box and everything inside it onto what is beneath it through a mode, the same way CSS mix-blend-mode does: a texture multiplies or screens over a wallpaper instead of covering it plainly.").build(), Children::default())?;
         let __node_1 = {
-            let __deferred = Children::new(
+            let __deferred = Children::per_slot(
                 {
                     let theme = theme.clone();
-                move || {
+                move |__request: SlotRequest<'_>| {
                     let theme = theme.clone();
                     let mut __slots = Slots::new();
                     let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-                    let __node_2 = {
-                        let __deferred = Children::new(
-                            {
-                                let theme = theme.clone();
-                            move || {
-                                let theme = theme.clone();
-                                let mut __slots = Slots::new();
-                                let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-                                let __row_0 = {
-                                    let __sbox_0 = {
-                                        let __sbox_1 = {
-                                            let __text_0 = {
-                                                Text::declaring(
-                                                    || "normal".to_string(),
-                                                    LayoutStyle::new(),
-                                                    { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(12.0).with_color(theme.get().ink) },
-                                                )?
+                    if __request.includes(None) {
+                        let __node_2 = {
+                            let __deferred = Children::per_slot(
+                                {
+                                    let theme = theme.clone();
+                                move |__request: SlotRequest<'_>| {
+                                    let theme = theme.clone();
+                                    let mut __slots = Slots::new();
+                                    let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
+                                    if __request.includes(None) {
+                                        let __row_0 = {
+                                            let __sbox_0 = {
+                                                let __sbox_1 = {
+                                                    let __text_0 = {
+                                                        Text::declaring(
+                                                            || "normal".to_string(),
+                                                            LayoutStyle::new(),
+                                                            { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(12.0).with_color(theme.get().ink) },
+                                                        )?
+                                                    };
+                                                    StyledContainer::new(style_blend_swatch().flex_column(), { let theme = theme.clone(); move |_| RectStyle::default().with_fill(theme.get().warning).with_radius(BorderRadius::all(10.0)) }, children![__text_0])?.with_blend(|| BlendMode::Normal)
+                                                };
+                                                StyledContainer::new(style_blend_center().width(96.0).height(96.0).flex_column(), { let theme = theme.clone(); move |r| RectStyle { fill: Some(Paint::Gradient(Gradient::linear(Point::new(r.x, r.y + r.height * 0.5), Point::new(r.x + r.width, r.y + r.height * 0.5), &[(0.0, theme.get().primary), (0.5, theme.get().purple), (1.0, theme.get().danger)]))), border: None, shadow: None, radius: BorderRadius::all(10.0) } }, children![__sbox_1])?
                                             };
-                                            StyledContainer::new(style_blend_swatch().flex_column(), { let theme = theme.clone(); move |_| RectStyle::default().with_fill(theme.get().warning).with_radius(BorderRadius::all(10.0)) }, children![__text_0])?.with_blend(|| BlendMode::Normal)
-                                        };
-                                        StyledContainer::new(style_blend_center().width(96.0).height(96.0).flex_column(), { let theme = theme.clone(); move |r| RectStyle { fill: Some(Paint::Gradient(Gradient::linear(Point::new(r.x, r.y + r.height * 0.5), Point::new(r.x + r.width, r.y + r.height * 0.5), &[(0.0, theme.get().primary), (0.5, theme.get().purple), (1.0, theme.get().danger)]))), border: None, shadow: None, radius: BorderRadius::all(10.0) } }, children![__sbox_1])?
-                                    };
-                                    let __sbox_2 = {
-                                        let __sbox_3 = {
-                                            let __text_1 = {
-                                                Text::declaring(
-                                                    || "multiply".to_string(),
-                                                    LayoutStyle::new(),
-                                                    { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(12.0).with_color(theme.get().ink) },
-                                                )?
+                                            let __sbox_2 = {
+                                                let __sbox_3 = {
+                                                    let __text_1 = {
+                                                        Text::declaring(
+                                                            || "multiply".to_string(),
+                                                            LayoutStyle::new(),
+                                                            { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(12.0).with_color(theme.get().ink) },
+                                                        )?
+                                                    };
+                                                    StyledContainer::new(style_blend_swatch().flex_column(), { let theme = theme.clone(); move |_| RectStyle::default().with_fill(theme.get().warning).with_radius(BorderRadius::all(10.0)) }, children![__text_1])?.with_blend(|| BlendMode::Multiply)
+                                                };
+                                                StyledContainer::new(style_blend_center().width(96.0).height(96.0).flex_column(), { let theme = theme.clone(); move |r| RectStyle { fill: Some(Paint::Gradient(Gradient::linear(Point::new(r.x, r.y + r.height * 0.5), Point::new(r.x + r.width, r.y + r.height * 0.5), &[(0.0, theme.get().primary), (0.5, theme.get().purple), (1.0, theme.get().danger)]))), border: None, shadow: None, radius: BorderRadius::all(10.0) } }, children![__sbox_3])?
                                             };
-                                            StyledContainer::new(style_blend_swatch().flex_column(), { let theme = theme.clone(); move |_| RectStyle::default().with_fill(theme.get().warning).with_radius(BorderRadius::all(10.0)) }, children![__text_1])?.with_blend(|| BlendMode::Multiply)
-                                        };
-                                        StyledContainer::new(style_blend_center().width(96.0).height(96.0).flex_column(), { let theme = theme.clone(); move |r| RectStyle { fill: Some(Paint::Gradient(Gradient::linear(Point::new(r.x, r.y + r.height * 0.5), Point::new(r.x + r.width, r.y + r.height * 0.5), &[(0.0, theme.get().primary), (0.5, theme.get().purple), (1.0, theme.get().danger)]))), border: None, shadow: None, radius: BorderRadius::all(10.0) } }, children![__sbox_3])?
-                                    };
-                                    let __sbox_4 = {
-                                        let __sbox_5 = {
-                                            let __text_2 = {
-                                                Text::declaring(
-                                                    || "screen".to_string(),
-                                                    LayoutStyle::new(),
-                                                    { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(12.0).with_color(theme.get().ink) },
-                                                )?
+                                            let __sbox_4 = {
+                                                let __sbox_5 = {
+                                                    let __text_2 = {
+                                                        Text::declaring(
+                                                            || "screen".to_string(),
+                                                            LayoutStyle::new(),
+                                                            { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(12.0).with_color(theme.get().ink) },
+                                                        )?
+                                                    };
+                                                    StyledContainer::new(style_blend_swatch().flex_column(), { let theme = theme.clone(); move |_| RectStyle::default().with_fill(theme.get().warning).with_radius(BorderRadius::all(10.0)) }, children![__text_2])?.with_blend(|| BlendMode::Screen)
+                                                };
+                                                StyledContainer::new(style_blend_center().width(96.0).height(96.0).flex_column(), { let theme = theme.clone(); move |r| RectStyle { fill: Some(Paint::Gradient(Gradient::linear(Point::new(r.x, r.y + r.height * 0.5), Point::new(r.x + r.width, r.y + r.height * 0.5), &[(0.0, theme.get().primary), (0.5, theme.get().purple), (1.0, theme.get().danger)]))), border: None, shadow: None, radius: BorderRadius::all(10.0) } }, children![__sbox_5])?
                                             };
-                                            StyledContainer::new(style_blend_swatch().flex_column(), { let theme = theme.clone(); move |_| RectStyle::default().with_fill(theme.get().warning).with_radius(BorderRadius::all(10.0)) }, children![__text_2])?.with_blend(|| BlendMode::Screen)
-                                        };
-                                        StyledContainer::new(style_blend_center().width(96.0).height(96.0).flex_column(), { let theme = theme.clone(); move |r| RectStyle { fill: Some(Paint::Gradient(Gradient::linear(Point::new(r.x, r.y + r.height * 0.5), Point::new(r.x + r.width, r.y + r.height * 0.5), &[(0.0, theme.get().primary), (0.5, theme.get().purple), (1.0, theme.get().danger)]))), border: None, shadow: None, radius: BorderRadius::all(10.0) } }, children![__sbox_5])?
-                                    };
-                                    let __sbox_6 = {
-                                        let __sbox_7 = {
-                                            let __text_3 = {
-                                                Text::declaring(
-                                                    || "difference".to_string(),
-                                                    LayoutStyle::new(),
-                                                    { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(12.0).with_color(theme.get().on_primary) },
-                                                )?
+                                            let __sbox_6 = {
+                                                let __sbox_7 = {
+                                                    let __text_3 = {
+                                                        Text::declaring(
+                                                            || "difference".to_string(),
+                                                            LayoutStyle::new(),
+                                                            { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(12.0).with_color(theme.get().on_primary) },
+                                                        )?
+                                                    };
+                                                    StyledContainer::new(style_blend_swatch().flex_column(), { let theme = theme.clone(); move |_| RectStyle::default().with_fill(theme.get().warning).with_radius(BorderRadius::all(10.0)) }, children![__text_3])?.with_blend(|| BlendMode::Difference)
+                                                };
+                                                StyledContainer::new(style_blend_center().width(96.0).height(96.0).flex_column(), { let theme = theme.clone(); move |r| RectStyle { fill: Some(Paint::Gradient(Gradient::linear(Point::new(r.x, r.y + r.height * 0.5), Point::new(r.x + r.width, r.y + r.height * 0.5), &[(0.0, theme.get().primary), (0.5, theme.get().purple), (1.0, theme.get().danger)]))), border: None, shadow: None, radius: BorderRadius::all(10.0) } }, children![__sbox_7])?
                                             };
-                                            StyledContainer::new(style_blend_swatch().flex_column(), { let theme = theme.clone(); move |_| RectStyle::default().with_fill(theme.get().warning).with_radius(BorderRadius::all(10.0)) }, children![__text_3])?.with_blend(|| BlendMode::Difference)
-                                        };
-                                        StyledContainer::new(style_blend_center().width(96.0).height(96.0).flex_column(), { let theme = theme.clone(); move |r| RectStyle { fill: Some(Paint::Gradient(Gradient::linear(Point::new(r.x, r.y + r.height * 0.5), Point::new(r.x + r.width, r.y + r.height * 0.5), &[(0.0, theme.get().primary), (0.5, theme.get().purple), (1.0, theme.get().danger)]))), border: None, shadow: None, radius: BorderRadius::all(10.0) } }, children![__sbox_7])?
-                                    };
-                                    let __sbox_8 = {
-                                        let __sbox_9 = {
-                                            let __text_4 = {
-                                                Text::declaring(
-                                                    || "color-dodge".to_string(),
-                                                    LayoutStyle::new(),
-                                                    { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(12.0).with_color(theme.get().ink) },
-                                                )?
+                                            let __sbox_8 = {
+                                                let __sbox_9 = {
+                                                    let __text_4 = {
+                                                        Text::declaring(
+                                                            || "color-dodge".to_string(),
+                                                            LayoutStyle::new(),
+                                                            { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(12.0).with_color(theme.get().ink) },
+                                                        )?
+                                                    };
+                                                    StyledContainer::new(style_blend_swatch().flex_column(), { let theme = theme.clone(); move |_| RectStyle::default().with_fill(theme.get().warning).with_radius(BorderRadius::all(10.0)) }, children![__text_4])?.with_blend(|| BlendMode::ColorDodge)
+                                                };
+                                                StyledContainer::new(style_blend_center().width(96.0).height(96.0).flex_column(), { let theme = theme.clone(); move |r| RectStyle { fill: Some(Paint::Gradient(Gradient::linear(Point::new(r.x, r.y + r.height * 0.5), Point::new(r.x + r.width, r.y + r.height * 0.5), &[(0.0, theme.get().primary), (0.5, theme.get().purple), (1.0, theme.get().danger)]))), border: None, shadow: None, radius: BorderRadius::all(10.0) } }, children![__sbox_9])?
                                             };
-                                            StyledContainer::new(style_blend_swatch().flex_column(), { let theme = theme.clone(); move |_| RectStyle::default().with_fill(theme.get().warning).with_radius(BorderRadius::all(10.0)) }, children![__text_4])?.with_blend(|| BlendMode::ColorDodge)
+                                            Container::new(LayoutStyle::new().flex_row().gap(16.0).flex_wrap(), children![__sbox_0, __sbox_2, __sbox_4, __sbox_6, __sbox_8])?
                                         };
-                                        StyledContainer::new(style_blend_center().width(96.0).height(96.0).flex_column(), { let theme = theme.clone(); move |r| RectStyle { fill: Some(Paint::Gradient(Gradient::linear(Point::new(r.x, r.y + r.height * 0.5), Point::new(r.x + r.width, r.y + r.height * 0.5), &[(0.0, theme.get().primary), (0.5, theme.get().purple), (1.0, theme.get().danger)]))), border: None, shadow: None, radius: BorderRadius::all(10.0) } }, children![__sbox_9])?
-                                    };
-                                    Container::new(LayoutStyle::new().flex_row().gap(16.0).flex_wrap(), children![__sbox_0, __sbox_2, __sbox_4, __sbox_6, __sbox_8])?
-                                };
-                                __children.push(box_item(__row_0));
-                                __slots.extend_default(__children);
-                                Ok(__slots)
-                            }
-                            }
-                        );
-                        card(CardProps::props().pad(24.0).build(), __deferred)?
-                    };
-                    __children.push(box_item(__node_2));
-                    let __node_3 = code_line(CodeLineProps::props().code("box fill:$theme.warning blend:multiply").build(), Children::default())?;
-                    __children.push(box_item(__node_3));
+                                        __children.push(box_item(__row_0));
+                                    }
+                                    __slots.extend_default(__children);
+                                    Ok(__slots)
+                                }
+                                }
+                            );
+                            card(CardProps::props().pad(24.0).build(), __deferred)?
+                        };
+                        __children.push(box_item(__node_2));
+                        let __node_3 = code_line(CodeLineProps::props().code("box fill:$theme.warning blend:multiply").build(), Children::default())?;
+                        __children.push(box_item(__node_3));
+                    }
                     __slots.extend_default(__children);
                     Ok(__slots)
                 }
@@ -139,24 +143,26 @@ pub fn blend(props: BlendProps, children: Children) -> Result<Box<dyn LayoutItem
             example(ExampleProps::props().title("A tinted disc over a striped backdrop, at each mode").build(), __deferred)?
         };
         let __node_4 = {
-            let __deferred = Children::new(
+            let __deferred = Children::per_slot(
                 {
                     let theme = theme.clone();
-                move || {
+                move |__request: SlotRequest<'_>| {
                     let theme = theme.clone();
                     let mut __slots = Slots::new();
                     let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-                    let __col_1 = {
-                        let __text_5 = {
-                            Text::declaring(
-                                || "The blended swatch above composites against its own backdrop box, not against the page: the parent that holds it gets `isolation: isolate` on web so a texture meant to multiply against its neighbor does not also ghost into content several levels up. GPU and software already render each layer through its own compositing pass, so they need no such fix; TUI has no notion of a backdrop to blend against and ignores the attribute.".to_string(),
-                                LayoutStyle::new(),
-                                { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(13.0).with_color(theme.get().muted) },
-                            )?
+                    if __request.includes(None) {
+                        let __col_1 = {
+                            let __text_5 = {
+                                Text::declaring(
+                                    || "The blended swatch above composites against its own backdrop box, not against the page: the parent that holds it gets `isolation: isolate` on web so a texture meant to multiply against its neighbor does not also ghost into content several levels up. GPU and software already render each layer through its own compositing pass, so they need no such fix; TUI has no notion of a backdrop to blend against and ignores the attribute.".to_string(),
+                                    LayoutStyle::new(),
+                                    { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(13.0).with_color(theme.get().muted) },
+                                )?
+                            };
+                            Container::new(LayoutStyle::new().flex_column().gap(8.0), children![__text_5])?
                         };
-                        Container::new(LayoutStyle::new().flex_column().gap(8.0), children![__text_5])?
-                    };
-                    __children.push(box_item(__col_1));
+                        __children.push(box_item(__col_1));
+                    }
                     __slots.extend_default(__children);
                     Ok(__slots)
                 }
@@ -165,15 +171,17 @@ pub fn blend(props: BlendProps, children: Children) -> Result<Box<dyn LayoutItem
             example(ExampleProps::props().title("Isolated from what is behind the card").build(), __deferred)?
         };
         let __node_5 = {
-            let __deferred = Children::new(
-                move || {
+            let __deferred = Children::per_slot(
+                move |__request: SlotRequest<'_>| {
                     let mut __slots = Slots::new();
                     let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-                    let __col_2 = {
-                        let __node_6 = prop_row(PropRowProps::props().name("blend").values("normal · multiply · screen · overlay · darken · lighten · color-dodge · color-burn · hard-light · soft-light · difference · exclusion · hue · saturation · color · luminosity · plus").about("Composites the box through a CSS mix-blend-mode-style mode; normal is the default and costs nothing extra.").build(), Children::default())?;
-                        Container::new(LayoutStyle::new().flex_column().gap(6.0), children![__node_6])?
-                    };
-                    __children.push(box_item(__col_2));
+                    if __request.includes(None) {
+                        let __col_2 = {
+                            let __node_6 = prop_row(PropRowProps::props().name("blend").values("normal · multiply · screen · overlay · darken · lighten · color-dodge · color-burn · hard-light · soft-light · difference · exclusion · hue · saturation · color · luminosity · plus").about("Composites the box through a CSS mix-blend-mode-style mode; normal is the default and costs nothing extra.").build(), Children::default())?;
+                            Container::new(LayoutStyle::new().flex_column().gap(6.0), children![__node_6])?
+                        };
+                        __children.push(box_item(__col_2));
+                    }
                     __slots.extend_default(__children);
                     Ok(__slots)
                 }

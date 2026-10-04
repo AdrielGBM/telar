@@ -1,12 +1,16 @@
 use std::cell::RefCell;
 use std::rc::Rc;
 
-use layout_core::LayoutStyle;
+use geometry_core::Color;
+use layout_core::{AvailableSpace, LayoutStyle};
+use renderer_core::{DrawCommand, RectStyle, ShapeStyle};
+use ui_tree::ComponentList;
 
 use super::*;
 use crate::container::Container;
-use crate::context::reset_layout_runtime;
+use crate::context::{compute_layout, live_node_count, reset_layout_runtime};
 use crate::layout_item::box_item;
+use crate::rect::Rectangle;
 
 #[derive(Clone)]
 struct Menu(&'static str);
@@ -89,4 +93,97 @@ fn the_recipe_can_be_run_more_than_once() {
         assert_eq!(children.build_with(Menu("edit")).unwrap().len(), 1);
     }
     assert_eq!(seen.borrow().len(), 3, "a fresh set of rows each time");
+}
+
+fn empty_box() -> Result<Box<dyn LayoutItem>, LayoutError> {
+    Ok(box_item(Container::new(LayoutStyle::new(), vec![])?))
+}
+
+/// A slot built where it is placed sees what the owner around the placement provides, which is what a `theme:` or a context on the node holding a `children` placeholder relies on.
+#[test]
+fn a_slot_sees_what_is_provided_where_it_is_placed() {
+    reset_layout_runtime();
+    let seen = Rc::new(RefCell::new(Vec::new()));
+    let children = spy(seen.clone());
+    {
+        let _placement = reactive_core::owner_scope();
+        services_core::provide(Menu("placed")).unwrap();
+        children.build_slot(None).unwrap();
+    }
+    children.build_slot(None).unwrap();
+    assert_eq!(*seen.borrow(), vec![Some("placed"), None]);
+}
+
+const RED: Color = Color::rgba(1.0, 0.0, 0.0, 1.0);
+
+#[derive(Clone)]
+struct Shade(Color);
+
+/// The context is read when the children draw, long after the build that provided it returned, not only while they were being made.
+#[test]
+fn a_context_stays_in_force_when_its_children_draw() {
+    reset_layout_runtime();
+    let children = Children::new(|| {
+        let swatch = Rectangle::new(LayoutStyle::new().width(10.0).height(10.0), || {
+            RectStyle::default().with_fill(use_context::<Shade>().map_or(Color::BLACK, |s| s.0))
+        })?;
+        let mut slots = Slots::new();
+        slots.push(None, box_item(swatch));
+        Ok(slots)
+    });
+    let row = Container::new(
+        LayoutStyle::new().width(100.0).height(20.0),
+        children.build_slot_with(None, Shade(RED)).unwrap(),
+    )
+    .unwrap();
+    compute_layout(
+        row.layout_node(),
+        AvailableSpace::Definite(100.0),
+        AvailableSpace::Definite(20.0),
+    )
+    .unwrap();
+    let tree = ComponentList::new(row);
+    let fills: Vec<Color> = tree
+        .commands()
+        .iter()
+        .filter_map(|c| match c {
+            DrawCommand::Rect { style, .. } => style.fill.as_ref().map(|p| p.solid_color()),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(fills, vec![RED]);
+}
+
+/// A recipe that ignores which slot it was asked for still hands back only that slot, and frees what it built for the others rather than leaving their nodes behind.
+#[test]
+fn a_slot_asked_of_a_recipe_that_builds_them_all_frees_the_rest() {
+    reset_layout_runtime();
+    let children = Children::new(|| {
+        let mut slots = Slots::new();
+        slots.push(Some("header"), empty_box()?);
+        slots.push(None, empty_box()?);
+        slots.push(None, empty_box()?);
+        Ok(slots)
+    });
+    let before = live_node_count();
+    let header = children.build_slot(Some("header")).unwrap();
+    assert_eq!(header.len(), 1);
+    assert_eq!(
+        live_node_count(),
+        before + 1,
+        "only the header's node is left"
+    );
+}
+
+/// Children handed over already built go out one slot per request, and a slot asked for again is empty, since a widget cannot be built twice.
+#[test]
+fn built_children_hand_out_each_slot_once() {
+    reset_layout_runtime();
+    let mut slots = Slots::new();
+    slots.push(Some("header"), empty_box().unwrap());
+    slots.push(None, empty_box().unwrap());
+    let children = Children::from(slots);
+    assert_eq!(children.build_slot(None).unwrap().len(), 1);
+    assert_eq!(children.build_slot(Some("header")).unwrap().len(), 1);
+    assert!(children.build_slot(None).unwrap().is_empty());
 }

@@ -24,3 +24,32 @@ In Rust:
 | `nearest_theme()` | The theme provided at or above the current owner, if any. |
 
 Every target resolves themes the same way: they are reactive state, read where a style is built.
+
+## Components and their slots
+
+A component's `theme:` reaches what a call site nests inside it. The `children` placeholder builds its slot where
+it stands, under the node it is placed in, so those children draw in the theme in force there, exactly as a child
+written inline would:
+
+```rsx
+[logic]
+let scheme = memo(use_resolved_scheme);
+let palette = follow_theme(move || AppTheme::for_act(act, scheme.get()));
+let ctx = Context { progress, calm };
+
+[view]
+col theme:(palette) fill:$theme.background
+    col sticky
+        children in:ctx
+```
+
+The same holds for every scope around the placeholder: a context an owner above provides, a locale, and the value
+`in:` hands the slot, which stays readable through `use_context` when the children draw or handle an event later,
+not only while they are built. Each `children` placement builds its own slot, so a placeholder inside a reactive
+`if`/`for` builds its children again whenever the branch is rebuilt.
+
+In Rust, `Children::build_slot(slot)` and `Children::build_slot_with(slot, context)` build one slot under the
+current owner; `build()` and `build_with(context)` build every slot at once. A component written in Rust that wants
+its children inside a scope builds them inside it.
+
+Every target behaves the same: slots are built when the tree is, before any backend sees it.

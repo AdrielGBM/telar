@@ -41,7 +41,7 @@ impl ViewGen<'_> {
         ChildEmit::Simple { name: var, code }
     }
 
-    /// Emits a compound component's children as a `Children` recipe: the same slot-building body [`Self::emit_slots`] produces, moved inside a closure the callee runs once it has a context to run it in.
+    /// Emits a compound component's children as a `Children` recipe: the same slot-building body [`Self::emit_slots`] produces, moved inside a closure the callee runs once per slot it places, where it places it.
     ///
     /// The closure is `Fn` rather than `FnOnce` — a dropdown remakes its rows on every open — so every signal it reads is cloned in ahead of it, exactly as a reactive `if`/`for` branch does. Bound to a `let` first, because the body is statements and a closure body cannot be spliced into an argument position.
     fn emit_deferred_children(&mut self, children: &[ViewNode], code: &mut String) -> String {
@@ -68,11 +68,13 @@ impl ViewGen<'_> {
                 )
             })
             .collect();
-        let inner = format!("{pad}    move || {{\n{per_run}{closure}\n{pad}    }}");
+        let inner = format!(
+            "{pad}    move |__request: SlotRequest<'_>| {{\n{per_run}{closure}\n{pad}    }}"
+        );
         let built = super::signals::clone_block_multiline(&idents, inner, &format!("{pad}    "));
         let _ = writeln!(
             code,
-            "{pad}let __deferred = Children::new(\n{built}\n{pad});"
+            "{pad}let __deferred = Children::per_slot(\n{built}\n{pad});"
         );
         "__deferred".to_string()
     }
@@ -150,6 +152,8 @@ impl ViewGen<'_> {
 
     /// Emits the markup children of a component call into a `Slots` value: a child written with `slot:"name"` goes to that named slot; every other child (including `if`/`for` control flow) goes to the default slot. Returns the expression naming the built value (`__slots`).
     ///
+    /// Each run of children bound for one slot sits under an `if __request.includes(…)`, so a placeholder asking for one slot builds that slot and nothing else. A view `let` stays outside every guard, since a later sibling in any slot may read it.
+    ///
     /// `slot:` (route, here) and `children name:` (receive, in [`Self::emit_slot`]) deliberately use different keys — the same route/receive asymmetry as HTML slots and Vue's `<template #x>` vs `slot="x"`. This is not a naming inconsistency to fix; do not rename either side to match the other.
     fn emit_slots(&mut self, children: &[ViewNode], code: &mut String) -> String {
         let pad = self.indent_str();
@@ -161,6 +165,7 @@ impl ViewGen<'_> {
         // Call-site children flow into a `Slots`, so there is no container here to host a transparent fragment and a reactive region must stay on the boxed path. The callee decides where its placeholder sits, so the caller's axis must not leak into the slot bodies.
         self.within_host(false, |g| {
             g.with_child_sink(ChildMode::Vec, |g| {
+                let mut guarded: Option<Option<String>> = None;
                 for child in children {
                     let slot_name = match child {
                         ViewNode::Element(el) => el
@@ -170,6 +175,23 @@ impl ViewGen<'_> {
                             .map(|a| a.value.text().to_string()),
                         _ => None,
                     };
+                    match child {
+                        ViewNode::Comment(_) => {}
+                        ViewNode::LetStmt(_) => g.close_slot_guard(&mut guarded, code),
+                        _ if guarded.as_ref() != Some(&slot_name) => {
+                            g.close_slot_guard(&mut guarded, code);
+                            let _ = writeln!(
+                                code,
+                                "{}if __request.includes({}) {{",
+                                g.indent_str(),
+                                slot_arg(slot_name.as_deref())
+                            );
+                            g.indent += 1;
+                            guarded = Some(slot_name.clone());
+                        }
+                        _ => {}
+                    }
+                    let pad = g.indent_str();
                     let emit = match (child, &slot_name) {
                         (ViewNode::Element(el), Some(_)) => {
                             let mut stripped = el.clone();
@@ -195,31 +217,84 @@ impl ViewGen<'_> {
                                 }
                             }
                         }
-                        ChildEmit::Dynamic { code: c } => {
-                            let _ = writeln!(code, "{c}");
-                        }
+                        ChildEmit::Dynamic { code: c } => match &slot_name {
+                            Some(n) => {
+                                let _ = writeln!(
+                                    code,
+                                    "{pad}{{\n{pad}let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();\n{c}\n{pad}for __item in __children {{\n{pad}    __slots.push(Some({}), __item);\n{pad}}}\n{pad}}}",
+                                    rust_str(n)
+                                );
+                            }
+                            None => {
+                                let _ = writeln!(code, "{c}");
+                            }
+                        },
                         ChildEmit::Fragment { .. } => {
                             unreachable!("component-slot children never enter a slot host")
                         }
                     }
                 }
+                g.close_slot_guard(&mut guarded, code);
             })
         });
         let _ = writeln!(code, "{pad}__slots.extend_default(__children);");
         "__slots".to_string()
     }
 
-    /// Emits a `children` slot placeholder: splices the caller-supplied children for this slot into the enclosing container's `__children` vec. `children` drains the default slot; `children name:"x"` drains the named slot `"x"`. Dynamic, so the container builds a `__children` vec (see `forces_child_vec`).
+    /// Emits a `children` slot placeholder: builds the caller-supplied children for this slot where it stands and splices them into the enclosing container's child accumulator. `children` builds the default slot, `children name:"x"` the named slot `"x"`, and `in:ctx` makes `ctx` readable to them. Dynamic, so the container builds a child vec (see `forces_child_vec`).
+    ///
+    /// Built here rather than once up front, so the slot is made under the owner of the node it is placed in and sees that node's `theme:` and every context provided around it, exactly as a child written inline there would. Each placement builds its own slot.
     ///
     /// Receives via `name:`, the counterpart to the caller's `slot:` in [`Self::emit_slots`] — see that doc comment for why the two ends intentionally don't share a key.
     pub(super) fn emit_slot(&mut self, el: &Element) -> ChildEmit {
         let pad = self.indent_str();
-        let expr = match el.attributes.iter().find(|a| a.key == "name") {
-            Some(a) => format!("__slots.take({})", rust_str(a.value.text())),
-            None => "__slots.take_default()".to_string(),
+        let slot = slot_arg(
+            el.attributes
+                .iter()
+                .find(|a| a.key == "name")
+                .map(|a| a.value.text()),
+        );
+        let built = match el.attributes.iter().find(|a| a.key == "in") {
+            Some(context) => format!(
+                "children.build_slot_with({slot}, {})?",
+                self.slot_context_arg(context)
+            ),
+            None => format!("children.build_slot({slot})?"),
         };
-        ChildEmit::Dynamic {
-            code: format!("{pad}__children.extend({expr});"),
+        let code = match self.child_sinks.last() {
+            Some(sink) if sink.slots => format!(
+                "{pad}{}.extend({built}.into_iter().map(ChildSlot::stat));",
+                sink.var
+            ),
+            Some(sink) => format!("{pad}{}.extend({built});", sink.var),
+            None => format!("{pad}__children.extend({built});"),
+        };
+        ChildEmit::Dynamic { code }
+    }
+
+    /// The `in:` value a placeholder builds its slot inside. A lone `[logic]` binding is cloned wherever the placement may run again or another placement still needs it, as a component prop is.
+    fn slot_context_arg(&self, attr: &Attr) -> String {
+        let text = attr.value.text();
+        let lead = text.len() - text.trim_start().len();
+        let value = text.trim();
+        let (start, expr) = match super::redundant_parens(value) {
+            Some(inner) => (attr.value_start + lead + 1, inner),
+            None => (attr.value_start + lead, value),
+        };
+        let marker = expr_marker(start, expr.len());
+        let reused = self.must_clone_local(expr) || !self.loop_variables.is_empty();
+        if self.is_local(expr) && reused {
+            format!("{marker}{expr}.clone()")
+        } else {
+            format!("{marker}{expr}")
+        }
+    }
+
+    /// Ends the `if __request.includes(…)` block [`Self::emit_slots`] has open, if any.
+    fn close_slot_guard(&mut self, guarded: &mut Option<Option<String>>, code: &mut String) {
+        if guarded.take().is_some() {
+            self.indent -= 1;
+            let _ = writeln!(code, "{}}}", self.indent_str());
         }
     }
 
@@ -338,5 +413,13 @@ fn props_type(tag: &str) -> String {
     match tag.rsplit_once("::") {
         Some((module, name)) => format!("{module}::{}Props", to_pascal_case(name)),
         None => to_pascal_case(tag) + "Props",
+    }
+}
+
+/// A slot as the runtime names it: `None` for the default slot, `Some("name")` for a named one.
+fn slot_arg(name: Option<&str>) -> String {
+    match name {
+        Some(name) => format!("Some({})", rust_str(name)),
+        None => "None".to_string(),
     }
 }

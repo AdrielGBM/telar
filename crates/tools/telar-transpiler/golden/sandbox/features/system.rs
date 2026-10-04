@@ -39,7 +39,7 @@ pub fn system(props: SystemProps, children: Children) -> Result<Box<dyn LayoutIt
     let __col_0 = {
         let __node_0 = doc_header(DocHeaderProps::props().kicker("FOUNDATIONS").title("System preferences").desc("What the platform says the user prefers — colour scheme, reduced motion, more contrast and languages — read live. Change them in the system settings and this page follows without a restart; the theme follows the scheme and every animation stops under reduced motion.").build(), Children::default())?;
         let __node_1 = {
-            let __deferred = Children::new(
+            let __deferred = Children::per_slot(
                 {
                     let scheme = scheme.clone();
                     let theme = theme.clone();
@@ -47,7 +47,7 @@ pub fn system(props: SystemProps, children: Children) -> Result<Box<dyn LayoutIt
                     let contrast = contrast.clone();
                     let locales = locales.clone();
                     let negotiated = negotiated.clone();
-                move || {
+                move |__request: SlotRequest<'_>| {
                     let scheme = scheme.clone();
                     let theme = theme.clone();
                     let reduced = reduced.clone();
@@ -56,79 +56,83 @@ pub fn system(props: SystemProps, children: Children) -> Result<Box<dyn LayoutIt
                     let negotiated = negotiated.clone();
                     let mut __slots = Slots::new();
                     let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-                    let __node_2 = {
-                        let __deferred = Children::new(
-                            {
-                                let scheme = scheme.clone();
-                                let theme = theme.clone();
-                                let reduced = reduced.clone();
-                                let contrast = contrast.clone();
-                                let locales = locales.clone();
-                                let negotiated = negotiated.clone();
-                            move || {
-                                let scheme = scheme.clone();
-                                let theme = theme.clone();
-                                let reduced = reduced.clone();
-                                let contrast = contrast.clone();
-                                let locales = locales.clone();
-                                let negotiated = negotiated.clone();
-                                let mut __slots = Slots::new();
-                                let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-                                let __text_0 = {
+                    if __request.includes(None) {
+                        let __node_2 = {
+                            let __deferred = Children::per_slot(
+                                {
                                     let scheme = scheme.clone();
-                                    Text::declaring(
-                                        move || format!("color scheme · {}", { scheme.get() }),
-                                        LayoutStyle::new(),
-                                        { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(15.0).with_color(theme.get().ink) },
-                                    )?
-                                };
-                                __children.push(box_item(__text_0));
-                                let __text_1 = {
+                                    let theme = theme.clone();
                                     let reduced = reduced.clone();
-                                    Text::declaring(
-                                        move || format!("reduced motion · {}", { reduced.get() }),
-                                        LayoutStyle::new(),
-                                        { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(15.0).with_color(theme.get().ink) },
-                                    )?
-                                };
-                                __children.push(box_item(__text_1));
-                                let __text_2 = {
                                     let contrast = contrast.clone();
-                                    Text::declaring(
-                                        move || format!("high contrast · {}", { contrast.get() }),
-                                        LayoutStyle::new(),
-                                        { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(15.0).with_color(theme.get().ink) },
-                                    )?
-                                };
-                                __children.push(box_item(__text_2));
-                                let __text_3 = {
                                     let locales = locales.clone();
-                                    Text::declaring(
-                                        move || format!("languages · {}", { locales.get() }),
-                                        LayoutStyle::new(),
-                                        { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(15.0).with_color(theme.get().ink) },
-                                    )?
-                                };
-                                __children.push(box_item(__text_3));
-                                let __text_4 = {
                                     let negotiated = negotiated.clone();
-                                    Text::declaring(
-                                        move || format!("negotiated against es, en · {}", { negotiated.get() }),
-                                        LayoutStyle::new(),
-                                        { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(15.0).with_color(theme.get().primary) },
-                                    )?
-                                };
-                                __children.push(box_item(__text_4));
-                                __slots.extend_default(__children);
-                                Ok(__slots)
-                            }
-                            }
-                        );
-                        card(CardProps::props().gap(6.0).build(), __deferred)?
-                    };
-                    __children.push(box_item(__node_2));
-                    let __node_3 = code_line(CodeLineProps::props().code("use_color_scheme()   ·   use_system_reduced_motion()   ·   use_high_contrast()   ·   use_preferred_locales()").build(), Children::default())?;
-                    __children.push(box_item(__node_3));
+                                move |__request: SlotRequest<'_>| {
+                                    let scheme = scheme.clone();
+                                    let theme = theme.clone();
+                                    let reduced = reduced.clone();
+                                    let contrast = contrast.clone();
+                                    let locales = locales.clone();
+                                    let negotiated = negotiated.clone();
+                                    let mut __slots = Slots::new();
+                                    let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
+                                    if __request.includes(None) {
+                                        let __text_0 = {
+                                            let scheme = scheme.clone();
+                                            Text::declaring(
+                                                move || format!("color scheme · {}", { scheme.get() }),
+                                                LayoutStyle::new(),
+                                                { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(15.0).with_color(theme.get().ink) },
+                                            )?
+                                        };
+                                        __children.push(box_item(__text_0));
+                                        let __text_1 = {
+                                            let reduced = reduced.clone();
+                                            Text::declaring(
+                                                move || format!("reduced motion · {}", { reduced.get() }),
+                                                LayoutStyle::new(),
+                                                { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(15.0).with_color(theme.get().ink) },
+                                            )?
+                                        };
+                                        __children.push(box_item(__text_1));
+                                        let __text_2 = {
+                                            let contrast = contrast.clone();
+                                            Text::declaring(
+                                                move || format!("high contrast · {}", { contrast.get() }),
+                                                LayoutStyle::new(),
+                                                { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(15.0).with_color(theme.get().ink) },
+                                            )?
+                                        };
+                                        __children.push(box_item(__text_2));
+                                        let __text_3 = {
+                                            let locales = locales.clone();
+                                            Text::declaring(
+                                                move || format!("languages · {}", { locales.get() }),
+                                                LayoutStyle::new(),
+                                                { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(15.0).with_color(theme.get().ink) },
+                                            )?
+                                        };
+                                        __children.push(box_item(__text_3));
+                                        let __text_4 = {
+                                            let negotiated = negotiated.clone();
+                                            Text::declaring(
+                                                move || format!("negotiated against es, en · {}", { negotiated.get() }),
+                                                LayoutStyle::new(),
+                                                { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(15.0).with_color(theme.get().primary) },
+                                            )?
+                                        };
+                                        __children.push(box_item(__text_4));
+                                    }
+                                    __slots.extend_default(__children);
+                                    Ok(__slots)
+                                }
+                                }
+                            );
+                            card(CardProps::props().gap(6.0).build(), __deferred)?
+                        };
+                        __children.push(box_item(__node_2));
+                        let __node_3 = code_line(CodeLineProps::props().code("use_color_scheme()   ·   use_system_reduced_motion()   ·   use_high_contrast()   ·   use_preferred_locales()").build(), Children::default())?;
+                        __children.push(box_item(__node_3));
+                    }
                     __slots.extend_default(__children);
                     Ok(__slots)
                 }
@@ -137,52 +141,56 @@ pub fn system(props: SystemProps, children: Children) -> Result<Box<dyn LayoutIt
             example(ExampleProps::props().title("As the platform reports them right now").build(), __deferred)?
         };
         let __node_4 = {
-            let __deferred = Children::new(
+            let __deferred = Children::per_slot(
                 {
                     let safe_area = safe_area.clone();
                     let theme = theme.clone();
-                move || {
+                move |__request: SlotRequest<'_>| {
                     let safe_area = safe_area.clone();
                     let theme = theme.clone();
                     let mut __slots = Slots::new();
                     let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-                    let __node_5 = {
-                        let __deferred = Children::new(
-                            {
-                                let safe_area = safe_area.clone();
-                                let theme = theme.clone();
-                            move || {
-                                let safe_area = safe_area.clone();
-                                let theme = theme.clone();
-                                let mut __slots = Slots::new();
-                                let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-                                let __text_5 = {
+                    if __request.includes(None) {
+                        let __node_5 = {
+                            let __deferred = Children::per_slot(
+                                {
                                     let safe_area = safe_area.clone();
-                                    Text::declaring(
-                                        move || format!("{}", { safe_area.get() }),
-                                        LayoutStyle::new(),
-                                        { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(13.0).with_color(theme.get().ink) },
-                                    )?
-                                };
-                                __children.push(box_item(__text_5));
-                                let __text_6 = {
-                                    Text::declaring(
-                                        || "Status and navigation bars, a notch, rounded corners: Android's window insets, a page's env(safe-area-inset-*) when drawn to the edges, zero on a desktop window and a terminal.".to_string(),
-                                        LayoutStyle::new(),
-                                        { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(12.0).with_color(theme.get().muted) },
-                                    )?
-                                };
-                                __children.push(box_item(__text_6));
-                                __slots.extend_default(__children);
-                                Ok(__slots)
-                            }
-                            }
-                        );
-                        card(CardProps::props().gap(6.0).build(), __deferred)?
-                    };
-                    __children.push(box_item(__node_5));
-                    let __node_6 = code_line(CodeLineProps::props().code("use_safe_area_insets()   ·   ScrollPage::new(content).keep_to_safe_area()").build(), Children::default())?;
-                    __children.push(box_item(__node_6));
+                                    let theme = theme.clone();
+                                move |__request: SlotRequest<'_>| {
+                                    let safe_area = safe_area.clone();
+                                    let theme = theme.clone();
+                                    let mut __slots = Slots::new();
+                                    let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
+                                    if __request.includes(None) {
+                                        let __text_5 = {
+                                            let safe_area = safe_area.clone();
+                                            Text::declaring(
+                                                move || format!("{}", { safe_area.get() }),
+                                                LayoutStyle::new(),
+                                                { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(13.0).with_color(theme.get().ink) },
+                                            )?
+                                        };
+                                        __children.push(box_item(__text_5));
+                                        let __text_6 = {
+                                            Text::declaring(
+                                                || "Status and navigation bars, a notch, rounded corners: Android's window insets, a page's env(safe-area-inset-*) when drawn to the edges, zero on a desktop window and a terminal.".to_string(),
+                                                LayoutStyle::new(),
+                                                { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(12.0).with_color(theme.get().muted) },
+                                            )?
+                                        };
+                                        __children.push(box_item(__text_6));
+                                    }
+                                    __slots.extend_default(__children);
+                                    Ok(__slots)
+                                }
+                                }
+                            );
+                            card(CardProps::props().gap(6.0).build(), __deferred)?
+                        };
+                        __children.push(box_item(__node_5));
+                        let __node_6 = code_line(CodeLineProps::props().code("use_safe_area_insets()   ·   ScrollPage::new(content).keep_to_safe_area()").build(), Children::default())?;
+                        __children.push(box_item(__node_6));
+                    }
                     __slots.extend_default(__children);
                     Ok(__slots)
                 }
@@ -191,64 +199,68 @@ pub fn system(props: SystemProps, children: Children) -> Result<Box<dyn LayoutIt
             example(ExampleProps::props().title("The safe area — what the system keeps of the surface").build(), __deferred)?
         };
         let __node_7 = {
-            let __deferred = Children::new(
+            let __deferred = Children::per_slot(
                 {
                     let chosen = chosen.clone();
                     let resolved = resolved.clone();
                     let theme = theme.clone();
-                move || {
+                move |__request: SlotRequest<'_>| {
                     let chosen = chosen.clone();
                     let resolved = resolved.clone();
                     let theme = theme.clone();
                     let mut __slots = Slots::new();
                     let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-                    let __node_8 = {
-                        let __deferred = Children::new(
-                            {
-                                let chosen = chosen.clone();
-                                let resolved = resolved.clone();
-                                let theme = theme.clone();
-                            move || {
-                                let chosen = chosen.clone();
-                                let resolved = resolved.clone();
-                                let theme = theme.clone();
-                                let mut __slots = Slots::new();
-                                let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-                                let __text_7 = {
+                    if __request.includes(None) {
+                        let __node_8 = {
+                            let __deferred = Children::per_slot(
+                                {
                                     let chosen = chosen.clone();
                                     let resolved = resolved.clone();
-                                    Text::declaring(
-                                        move || format!("Chosen: {} · in use: {}", { chosen.get() }, { resolved.get() }),
-                                        LayoutStyle::new(),
-                                        { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(13.0).with_color(theme.get().ink) },
-                                    )?
-                                };
-                                __children.push(box_item(__text_7));
-                                let __row_0 = {
-                                    let __node_9 = button(ButtonProps::props().label("System").ghost(true).on_press(std::rc::Rc::new(move || telar::set_scheme_preference(telar::SchemePreference::System))).build(), Children::default())?;
-                                    let __node_10 = button(ButtonProps::props().label("Light").ghost(true).on_press(std::rc::Rc::new(move || telar::set_scheme_preference(telar::SchemePreference::Light))).build(), Children::default())?;
-                                    let __node_11 = button(ButtonProps::props().label("Dark").ghost(true).on_press(std::rc::Rc::new(move || telar::set_scheme_preference(telar::SchemePreference::Dark))).build(), Children::default())?;
-                                    Container::new(LayoutStyle::new().flex_row().gap(8.0), children![__node_9, __node_10, __node_11])?
-                                };
-                                __children.push(box_item(__row_0));
-                                let __text_8 = {
-                                    Text::declaring(
-                                        || "A fixed choice holds whatever the system does until it is changed here, and is kept in the target's preference store: a file beside prefs.toml, or localStorage on the web.".to_string(),
-                                        LayoutStyle::new(),
-                                        { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(12.0).with_color(theme.get().muted) },
-                                    )?
-                                };
-                                __children.push(box_item(__text_8));
-                                __slots.extend_default(__children);
-                                Ok(__slots)
-                            }
-                            }
-                        );
-                        card(CardProps::props().gap(8.0).build(), __deferred)?
-                    };
-                    __children.push(box_item(__node_8));
-                    let __node_12 = code_line(CodeLineProps::props().code("set_scheme_preference(SchemePreference::Dark)   ·   use_resolved_scheme()   ·   store_preference(key, value)").build(), Children::default())?;
-                    __children.push(box_item(__node_12));
+                                    let theme = theme.clone();
+                                move |__request: SlotRequest<'_>| {
+                                    let chosen = chosen.clone();
+                                    let resolved = resolved.clone();
+                                    let theme = theme.clone();
+                                    let mut __slots = Slots::new();
+                                    let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
+                                    if __request.includes(None) {
+                                        let __text_7 = {
+                                            let chosen = chosen.clone();
+                                            let resolved = resolved.clone();
+                                            Text::declaring(
+                                                move || format!("Chosen: {} · in use: {}", { chosen.get() }, { resolved.get() }),
+                                                LayoutStyle::new(),
+                                                { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(13.0).with_color(theme.get().ink) },
+                                            )?
+                                        };
+                                        __children.push(box_item(__text_7));
+                                        let __row_0 = {
+                                            let __node_9 = button(ButtonProps::props().label("System").ghost(true).on_press(std::rc::Rc::new(move || telar::set_scheme_preference(telar::SchemePreference::System))).build(), Children::default())?;
+                                            let __node_10 = button(ButtonProps::props().label("Light").ghost(true).on_press(std::rc::Rc::new(move || telar::set_scheme_preference(telar::SchemePreference::Light))).build(), Children::default())?;
+                                            let __node_11 = button(ButtonProps::props().label("Dark").ghost(true).on_press(std::rc::Rc::new(move || telar::set_scheme_preference(telar::SchemePreference::Dark))).build(), Children::default())?;
+                                            Container::new(LayoutStyle::new().flex_row().gap(8.0), children![__node_9, __node_10, __node_11])?
+                                        };
+                                        __children.push(box_item(__row_0));
+                                        let __text_8 = {
+                                            Text::declaring(
+                                                || "A fixed choice holds whatever the system does until it is changed here, and is kept in the target's preference store: a file beside prefs.toml, or localStorage on the web.".to_string(),
+                                                LayoutStyle::new(),
+                                                { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(12.0).with_color(theme.get().muted) },
+                                            )?
+                                        };
+                                        __children.push(box_item(__text_8));
+                                    }
+                                    __slots.extend_default(__children);
+                                    Ok(__slots)
+                                }
+                                }
+                            );
+                            card(CardProps::props().gap(8.0).build(), __deferred)?
+                        };
+                        __children.push(box_item(__node_8));
+                        let __node_12 = code_line(CodeLineProps::props().code("set_scheme_preference(SchemePreference::Dark)   ·   use_resolved_scheme()   ·   store_preference(key, value)").build(), Children::default())?;
+                        __children.push(box_item(__node_12));
+                    }
                     __slots.extend_default(__children);
                     Ok(__slots)
                 }

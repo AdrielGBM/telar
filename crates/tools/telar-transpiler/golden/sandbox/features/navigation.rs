@@ -62,106 +62,110 @@ pub fn navigation(props: NavigationProps, children: Children) -> Result<Box<dyn 
     let __col_0 = {
         let __node_0 = doc_header(DocHeaderProps::props().kicker("NAVIGATION").title("Tabs, accordion & address").desc("tabs is a bound selected-index bar; pair it with reactive ifs to swap panels. accordion is an inline collapsible section that pushes its siblings as it opens. Both are components.").build(), Children::default())?;
         let __node_1 = {
-            let __deferred = Children::new(
+            let __deferred = Children::per_slot(
                 {
                     let tab = tab.clone();
                     let theme = theme.clone();
-                move || {
+                move |__request: SlotRequest<'_>| {
                     let tab = tab.clone();
                     let theme = theme.clone();
                     let mut __slots = Slots::new();
                     let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-                    let __node_2 = {
-                        let __deferred = Children::new(
-                            {
-                                let tab = tab.clone();
-                                let theme = theme.clone();
-                            move || {
-                                let tab = tab.clone();
-                                let theme = theme.clone();
-                                let mut __slots = Slots::new();
-                                let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-                                let __node_3 = tabs(TabsProps::props().selected(tab.clone()).items(vec!["Overview","Pricing","Team"]).build(), Children::default())?;
-                                __children.push(box_item(__node_3));
-                                let __node_4 = ReactiveList::new(
-                                    { let tab = tab.clone(); move || vec![tab.get() == 0] },
-                                    |__cond: &bool| *__cond,
-                                    {
-                                        let theme = theme.clone();
-                                    move |__cond: bool| -> Result<Box<dyn LayoutItem>, LayoutError> {
-                                        if __cond {
-                                            let __text_0 = {
-                                                Text::declaring(
-                                                    || "Overview — what the product does.".to_string(),
-                                                    LayoutStyle::new(),
-                                                    { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(14.0).with_color(theme.get().ink) },
-                                                )?
-                                            };
-                                            Ok(box_item(__text_0))
-                                        } else {
-                                            Ok(box_item(Container::column(children![])?))
-                                        }
+                    if __request.includes(None) {
+                        let __node_2 = {
+                            let __deferred = Children::per_slot(
+                                {
+                                    let tab = tab.clone();
+                                    let theme = theme.clone();
+                                move |__request: SlotRequest<'_>| {
+                                    let tab = tab.clone();
+                                    let theme = theme.clone();
+                                    let mut __slots = Slots::new();
+                                    let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
+                                    if __request.includes(None) {
+                                        let __node_3 = tabs(TabsProps::props().selected(tab.clone()).items(vec!["Overview","Pricing","Team"]).build(), Children::default())?;
+                                        __children.push(box_item(__node_3));
+                                        let __node_4 = ReactiveList::new(
+                                            { let tab = tab.clone(); move || vec![tab.get() == 0] },
+                                            |__cond: &bool| *__cond,
+                                            {
+                                                let theme = theme.clone();
+                                            move |__cond: bool| -> Result<Box<dyn LayoutItem>, LayoutError> {
+                                                if __cond {
+                                                    let __text_0 = {
+                                                        Text::declaring(
+                                                            || "Overview — what the product does.".to_string(),
+                                                            LayoutStyle::new(),
+                                                            { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(14.0).with_color(theme.get().ink) },
+                                                        )?
+                                                    };
+                                                    Ok(box_item(__text_0))
+                                                } else {
+                                                    Ok(box_item(Container::column(children![])?))
+                                                }
+                                            }
+                                            },
+                                            0.0,
+                                        )?;
+                                        __children.push(box_item(__node_4));
+                                        let __node_5 = ReactiveList::new(
+                                            { let tab = tab.clone(); move || vec![tab.get() == 1] },
+                                            |__cond: &bool| *__cond,
+                                            {
+                                                let theme = theme.clone();
+                                            move |__cond: bool| -> Result<Box<dyn LayoutItem>, LayoutError> {
+                                                if __cond {
+                                                    let __text_1 = {
+                                                        Text::declaring(
+                                                            || "Pricing — plans and limits.".to_string(),
+                                                            LayoutStyle::new(),
+                                                            { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(14.0).with_color(theme.get().ink) },
+                                                        )?
+                                                    };
+                                                    Ok(box_item(__text_1))
+                                                } else {
+                                                    Ok(box_item(Container::column(children![])?))
+                                                }
+                                            }
+                                            },
+                                            0.0,
+                                        )?;
+                                        __children.push(box_item(__node_5));
+                                        let __node_6 = ReactiveList::new(
+                                            { let tab = tab.clone(); move || vec![tab.get() == 2] },
+                                            |__cond: &bool| *__cond,
+                                            {
+                                                let theme = theme.clone();
+                                            move |__cond: bool| -> Result<Box<dyn LayoutItem>, LayoutError> {
+                                                if __cond {
+                                                    let __text_2 = {
+                                                        Text::declaring(
+                                                            || "Team — who is behind it.".to_string(),
+                                                            LayoutStyle::new(),
+                                                            { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(14.0).with_color(theme.get().ink) },
+                                                        )?
+                                                    };
+                                                    Ok(box_item(__text_2))
+                                                } else {
+                                                    Ok(box_item(Container::column(children![])?))
+                                                }
+                                            }
+                                            },
+                                            0.0,
+                                        )?;
+                                        __children.push(box_item(__node_6));
                                     }
-                                    },
-                                    0.0,
-                                )?;
-                                __children.push(box_item(__node_4));
-                                let __node_5 = ReactiveList::new(
-                                    { let tab = tab.clone(); move || vec![tab.get() == 1] },
-                                    |__cond: &bool| *__cond,
-                                    {
-                                        let theme = theme.clone();
-                                    move |__cond: bool| -> Result<Box<dyn LayoutItem>, LayoutError> {
-                                        if __cond {
-                                            let __text_1 = {
-                                                Text::declaring(
-                                                    || "Pricing — plans and limits.".to_string(),
-                                                    LayoutStyle::new(),
-                                                    { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(14.0).with_color(theme.get().ink) },
-                                                )?
-                                            };
-                                            Ok(box_item(__text_1))
-                                        } else {
-                                            Ok(box_item(Container::column(children![])?))
-                                        }
-                                    }
-                                    },
-                                    0.0,
-                                )?;
-                                __children.push(box_item(__node_5));
-                                let __node_6 = ReactiveList::new(
-                                    { let tab = tab.clone(); move || vec![tab.get() == 2] },
-                                    |__cond: &bool| *__cond,
-                                    {
-                                        let theme = theme.clone();
-                                    move |__cond: bool| -> Result<Box<dyn LayoutItem>, LayoutError> {
-                                        if __cond {
-                                            let __text_2 = {
-                                                Text::declaring(
-                                                    || "Team — who is behind it.".to_string(),
-                                                    LayoutStyle::new(),
-                                                    { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(14.0).with_color(theme.get().ink) },
-                                                )?
-                                            };
-                                            Ok(box_item(__text_2))
-                                        } else {
-                                            Ok(box_item(Container::column(children![])?))
-                                        }
-                                    }
-                                    },
-                                    0.0,
-                                )?;
-                                __children.push(box_item(__node_6));
-                                __slots.extend_default(__children);
-                                Ok(__slots)
-                            }
-                            }
-                        );
-                        card(CardProps::props().gap(10.0).build(), __deferred)?
-                    };
-                    __children.push(box_item(__node_2));
-                    let __node_7 = code_line(CodeLineProps::props().code("tabs selected:$tab items:vec!['Overview','Pricing','Team']").build(), Children::default())?;
-                    __children.push(box_item(__node_7));
+                                    __slots.extend_default(__children);
+                                    Ok(__slots)
+                                }
+                                }
+                            );
+                            card(CardProps::props().gap(10.0).build(), __deferred)?
+                        };
+                        __children.push(box_item(__node_2));
+                        let __node_7 = code_line(CodeLineProps::props().code("tabs selected:$tab items:vec!['Overview','Pricing','Team']").build(), Children::default())?;
+                        __children.push(box_item(__node_7));
+                    }
                     __slots.extend_default(__children);
                     Ok(__slots)
                 }
@@ -170,68 +174,74 @@ pub fn navigation(props: NavigationProps, children: Children) -> Result<Box<dyn 
             example(ExampleProps::props().title("tabs — a bound index; swap panels with reactive ifs").build(), __deferred)?
         };
         let __node_8 = {
-            let __deferred = Children::new(
+            let __deferred = Children::per_slot(
                 {
                     let open = open.clone();
                     let theme = theme.clone();
-                move || {
+                move |__request: SlotRequest<'_>| {
                     let open = open.clone();
                     let theme = theme.clone();
                     let mut __slots = Slots::new();
                     let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-                    let __node_9 = {
-                        let __deferred = Children::new(
-                            {
-                                let open = open.clone();
-                                let theme = theme.clone();
-                            move || {
-                                let open = open.clone();
-                                let theme = theme.clone();
-                                let mut __slots = Slots::new();
-                                let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-                                let __node_10 = {
-                                    let __deferred = Children::new(
-                                        {
-                                            let theme = theme.clone();
-                                        move || {
-                                            let theme = theme.clone();
-                                            let mut __slots = Slots::new();
-                                            let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-                                            let __text_3 = {
-                                                Text::declaring(
-                                                    || "Ships in 2–3 business days. Free over $50.".to_string(),
-                                                    LayoutStyle::new(),
-                                                    { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(14.0).with_color(theme.get().muted) },
-                                                )?
-                                            };
-                                            __children.push(box_item(__text_3));
-                                            __slots.extend_default(__children);
-                                            Ok(__slots)
-                                        }
-                                        }
-                                    );
-                                    accordion(AccordionProps::props().title("Shipping details").open(open.clone()).build(), __deferred)?
-                                };
-                                __children.push(box_item(__node_10));
-                                let __text_4 = {
+                    if __request.includes(None) {
+                        let __node_9 = {
+                            let __deferred = Children::per_slot(
+                                {
                                     let open = open.clone();
-                                    Text::declaring(
-                                        move || format!("open · {}", { open.get() }),
-                                        LayoutStyle::new(),
-                                        { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(13.0).with_color(theme.get().muted) },
-                                    )?
-                                };
-                                __children.push(box_item(__text_4));
-                                __slots.extend_default(__children);
-                                Ok(__slots)
-                            }
-                            }
-                        );
-                        card(CardProps::props().gap(10.0).build(), __deferred)?
-                    };
-                    __children.push(box_item(__node_9));
-                    let __node_11 = code_line(CodeLineProps::props().code("accordion title:'Shipping details' open:$open  >  …body…").build(), Children::default())?;
-                    __children.push(box_item(__node_11));
+                                    let theme = theme.clone();
+                                move |__request: SlotRequest<'_>| {
+                                    let open = open.clone();
+                                    let theme = theme.clone();
+                                    let mut __slots = Slots::new();
+                                    let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
+                                    if __request.includes(None) {
+                                        let __node_10 = {
+                                            let __deferred = Children::per_slot(
+                                                {
+                                                    let theme = theme.clone();
+                                                move |__request: SlotRequest<'_>| {
+                                                    let theme = theme.clone();
+                                                    let mut __slots = Slots::new();
+                                                    let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
+                                                    if __request.includes(None) {
+                                                        let __text_3 = {
+                                                            Text::declaring(
+                                                                || "Ships in 2–3 business days. Free over $50.".to_string(),
+                                                                LayoutStyle::new(),
+                                                                { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(14.0).with_color(theme.get().muted) },
+                                                            )?
+                                                        };
+                                                        __children.push(box_item(__text_3));
+                                                    }
+                                                    __slots.extend_default(__children);
+                                                    Ok(__slots)
+                                                }
+                                                }
+                                            );
+                                            accordion(AccordionProps::props().title("Shipping details").open(open.clone()).build(), __deferred)?
+                                        };
+                                        __children.push(box_item(__node_10));
+                                        let __text_4 = {
+                                            let open = open.clone();
+                                            Text::declaring(
+                                                move || format!("open · {}", { open.get() }),
+                                                LayoutStyle::new(),
+                                                { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(13.0).with_color(theme.get().muted) },
+                                            )?
+                                        };
+                                        __children.push(box_item(__text_4));
+                                    }
+                                    __slots.extend_default(__children);
+                                    Ok(__slots)
+                                }
+                                }
+                            );
+                            card(CardProps::props().gap(10.0).build(), __deferred)?
+                        };
+                        __children.push(box_item(__node_9));
+                        let __node_11 = code_line(CodeLineProps::props().code("accordion title:'Shipping details' open:$open  >  …body…").build(), Children::default())?;
+                        __children.push(box_item(__node_11));
+                    }
                     __slots.extend_default(__children);
                     Ok(__slots)
                 }
@@ -240,70 +250,74 @@ pub fn navigation(props: NavigationProps, children: Children) -> Result<Box<dyn 
             example(ExampleProps::props().title("accordion — a collapsible section, open bound to a signal").build(), __deferred)?
         };
         let __node_12 = {
-            let __deferred = Children::new(
+            let __deferred = Children::per_slot(
                 {
                     let address = address.clone();
                     let depth = depth.clone();
                     let theme = theme.clone();
                     let panes = panes.clone();
-                move || {
+                move |__request: SlotRequest<'_>| {
                     let address = address.clone();
                     let depth = depth.clone();
                     let theme = theme.clone();
                     let panes = panes.clone();
                     let mut __slots = Slots::new();
                     let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-                    let __node_13 = {
-                        let __deferred = Children::new(
-                            {
-                                let address = address.clone();
-                                let depth = depth.clone();
-                                let theme = theme.clone();
-                                let panes = panes.clone();
-                            move || {
-                                let address = address.clone();
-                                let depth = depth.clone();
-                                let theme = theme.clone();
-                                let panes = panes.clone();
-                                let mut __slots = Slots::new();
-                                let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-                                let __row_0 = {
-                                    let __node_14 = button(ButtonProps::props().label("Overview").on_press(std::rc::Rc::new(move || { panes.push(Pane::Overview) })).build(), Children::default())?;
-                                    let __node_15 = button(ButtonProps::props().label("Pricing").on_press(std::rc::Rc::new(move || { panes.push(Pane::Pricing) })).build(), Children::default())?;
-                                    let __node_16 = button(ButtonProps::props().label("Team").on_press(std::rc::Rc::new(move || { panes.push(Pane::Team) })).build(), Children::default())?;
-                                    let __node_17 = button(ButtonProps::props().label("Back").ghost(true).on_press(std::rc::Rc::new(move || { navigate_back(); })).build(), Children::default())?;
-                                    Container::new(LayoutStyle::new().flex_row().gap(8.0).flex_wrap(), children![__node_14, __node_15, __node_16, __node_17])?
-                                };
-                                __children.push(box_item(__row_0));
-                                let __text_5 = {
+                    if __request.includes(None) {
+                        let __node_13 = {
+                            let __deferred = Children::per_slot(
+                                {
                                     let address = address.clone();
                                     let depth = depth.clone();
-                                    Text::declaring(
-                                        move || format!("{} · {} deep", { address.get() }, { depth.get() }),
-                                        LayoutStyle::new(),
-                                        { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(14.0).with_color(theme.get().ink) },
-                                    )?
-                                };
-                                __children.push(box_item(__text_5));
-                                let __text_6 = {
+                                    let theme = theme.clone();
+                                    let panes = panes.clone();
+                                move |__request: SlotRequest<'_>| {
                                     let address = address.clone();
-                                    Text::declaring(
-                                        move || format!("Open it again with --location {} on desktop or in a terminal, or reload the page on the web.", { address.get() }),
-                                        LayoutStyle::new(),
-                                        { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(13.0).with_color(theme.get().muted) },
-                                    )?
-                                };
-                                __children.push(box_item(__text_6));
-                                __slots.extend_default(__children);
-                                Ok(__slots)
-                            }
-                            }
-                        );
-                        card(CardProps::props().gap(10.0).build(), __deferred)?
-                    };
-                    __children.push(box_item(__node_13));
-                    let __node_18 = code_line(CodeLineProps::props().code("let panes = Navigator::new(Pane::Overview).follow_location();").build(), Children::default())?;
-                    __children.push(box_item(__node_18));
+                                    let depth = depth.clone();
+                                    let theme = theme.clone();
+                                    let panes = panes.clone();
+                                    let mut __slots = Slots::new();
+                                    let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
+                                    if __request.includes(None) {
+                                        let __row_0 = {
+                                            let __node_14 = button(ButtonProps::props().label("Overview").on_press(std::rc::Rc::new(move || { panes.push(Pane::Overview) })).build(), Children::default())?;
+                                            let __node_15 = button(ButtonProps::props().label("Pricing").on_press(std::rc::Rc::new(move || { panes.push(Pane::Pricing) })).build(), Children::default())?;
+                                            let __node_16 = button(ButtonProps::props().label("Team").on_press(std::rc::Rc::new(move || { panes.push(Pane::Team) })).build(), Children::default())?;
+                                            let __node_17 = button(ButtonProps::props().label("Back").ghost(true).on_press(std::rc::Rc::new(move || { navigate_back(); })).build(), Children::default())?;
+                                            Container::new(LayoutStyle::new().flex_row().gap(8.0).flex_wrap(), children![__node_14, __node_15, __node_16, __node_17])?
+                                        };
+                                        __children.push(box_item(__row_0));
+                                        let __text_5 = {
+                                            let address = address.clone();
+                                            let depth = depth.clone();
+                                            Text::declaring(
+                                                move || format!("{} · {} deep", { address.get() }, { depth.get() }),
+                                                LayoutStyle::new(),
+                                                { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(14.0).with_color(theme.get().ink) },
+                                            )?
+                                        };
+                                        __children.push(box_item(__text_5));
+                                        let __text_6 = {
+                                            let address = address.clone();
+                                            Text::declaring(
+                                                move || format!("Open it again with --location {} on desktop or in a terminal, or reload the page on the web.", { address.get() }),
+                                                LayoutStyle::new(),
+                                                { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(13.0).with_color(theme.get().muted) },
+                                            )?
+                                        };
+                                        __children.push(box_item(__text_6));
+                                    }
+                                    __slots.extend_default(__children);
+                                    Ok(__slots)
+                                }
+                                }
+                            );
+                            card(CardProps::props().gap(10.0).build(), __deferred)?
+                        };
+                        __children.push(box_item(__node_13));
+                        let __node_18 = code_line(CodeLineProps::props().code("let panes = Navigator::new(Pane::Overview).follow_location();").build(), Children::default())?;
+                        __children.push(box_item(__node_18));
+                    }
                     __slots.extend_default(__children);
                     Ok(__slots)
                 }
@@ -312,19 +326,21 @@ pub fn navigation(props: NavigationProps, children: Children) -> Result<Box<dyn 
             example(ExampleProps::props().title("follow_location — a page stack that is the app's address").build(), __deferred)?
         };
         let __node_19 = {
-            let __deferred = Children::new(
-                move || {
+            let __deferred = Children::per_slot(
+                move |__request: SlotRequest<'_>| {
                     let mut __slots = Slots::new();
                     let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-                    let __col_1 = {
-                        let __node_20 = prop_row(PropRowProps::props().name("items").values("vec![..]").about("tabs labels, one button each.").build(), Children::default())?;
-                        let __node_21 = prop_row(PropRowProps::props().name("selected").values("signal").about("tabs active index (u32), two-way.").build(), Children::default())?;
-                        let __node_22 = prop_row(PropRowProps::props().name("title").values("text").about("accordion header label.").build(), Children::default())?;
-                        let __node_23 = prop_row(PropRowProps::props().name("open").values("signal").about("accordion expanded bool, two-way.").build(), Children::default())?;
-                        let __node_24 = prop_row(PropRowProps::props().name("follow_location").values("Navigator<R: Route>").about("the stack becomes the app's history on every target.").build(), Children::default())?;
-                        Container::new(LayoutStyle::new().flex_column().gap(6.0), children![__node_20, __node_21, __node_22, __node_23, __node_24])?
-                    };
-                    __children.push(box_item(__col_1));
+                    if __request.includes(None) {
+                        let __col_1 = {
+                            let __node_20 = prop_row(PropRowProps::props().name("items").values("vec![..]").about("tabs labels, one button each.").build(), Children::default())?;
+                            let __node_21 = prop_row(PropRowProps::props().name("selected").values("signal").about("tabs active index (u32), two-way.").build(), Children::default())?;
+                            let __node_22 = prop_row(PropRowProps::props().name("title").values("text").about("accordion header label.").build(), Children::default())?;
+                            let __node_23 = prop_row(PropRowProps::props().name("open").values("signal").about("accordion expanded bool, two-way.").build(), Children::default())?;
+                            let __node_24 = prop_row(PropRowProps::props().name("follow_location").values("Navigator<R: Route>").about("the stack becomes the app's history on every target.").build(), Children::default())?;
+                            Container::new(LayoutStyle::new().flex_column().gap(6.0), children![__node_20, __node_21, __node_22, __node_23, __node_24])?
+                        };
+                        __children.push(box_item(__col_1));
+                    }
                     __slots.extend_default(__children);
                     Ok(__slots)
                 }

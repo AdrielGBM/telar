@@ -2,7 +2,7 @@
 //!
 //! These tables are the single source of truth shared between the transpiler's codegen (`view.rs`, `style.rs`) and downstream tooling such as `telar-analyzer` (completions, hover, go-to-definition). Keep them in sync with the `match` arms in [`crate::view`] (`emit_element`) and [`crate::style`] (`layout_prop_call`).
 
-/// Sentinel constructor for the `children` slot placeholder, which builds no widget: it splices the caller-supplied children (from the component's `Slots` argument) into the enclosing container.
+/// Sentinel constructor for the `children` slot placeholder, which builds no widget of its own: it builds the call site's children for its slot where it stands, from the component's `Children` recipe, and splices them into the enclosing container.
 pub const TAG_SLOT_PLACEHOLDER: &str = "<slot placeholder>";
 
 /// Built-in RSX tags paired with the Rust type they build, spelled as that type's canonical constructor.
@@ -625,7 +625,14 @@ pub fn tag_attr_specs(tag: &str) -> Vec<AttrSpec> {
             specs
         }
         // Spliced children own their own style, so the placeholder takes no layout or paint keys.
-        "children" => vec![AttrSpec::free("name"), AttrSpec::free("in")],
+        "children" => vec![
+            AttrSpec::free("name").doc(
+                "Places the call site's children routed with `slot:\"name\"`; without it, the ones routed nowhere. Each placement builds its slot where it stands, so the children see the `theme:` and contexts in force there.",
+            ),
+            AttrSpec::free("in").doc(
+                "A value the slot's children read with `use_context`, while they are built and whenever they draw or handle an event later.",
+            ),
+        ],
         // box/col/row/grid share one paint set; grid adds its track keys.
         "grid" => {
             let mut specs = with(CONTAINER_PAINT);

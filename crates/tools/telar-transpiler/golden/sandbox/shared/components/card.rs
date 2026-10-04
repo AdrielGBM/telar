@@ -21,11 +21,10 @@ pub fn card(props: CardProps, children: Children) -> Result<Box<dyn LayoutItem>,
     let __owner = telar::owner_scope();
     #[allow(unused_imports)] use telar::use_theme;
     #[allow(unused_variables)] let theme = telar::Theme::<core::theme::SandboxTheme>::default();
-    let mut __slots = children.build()?;
     let __sbox_0 = {
         let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-        __children.extend(__slots.take("header"));
-        __children.extend(__slots.take_default());
+        __children.extend(children.build_slot(Some("header"))?);
+        __children.extend(children.build_slot(None)?);
         StyledContainer::new(LayoutStyle::new().flex_column().padding_all(props.pad).gap(props.gap).bordered(), { let theme = theme.clone(); move |_| RectStyle { fill: Some(Paint::Solid(theme.get().surface)), border: Some(Border { paint: Paint::Solid(theme.get().border), widths: [1.0; 4] }), shadow: None, radius: BorderRadius::all(12.0) } }, __children)?.styled_by({ let props = props.clone(); move || LayoutStyle::new().flex_column().padding_all(props.pad).gap(props.gap).bordered() })
     };
     Ok(Box::new(__sbox_0))
@@ -36,37 +35,41 @@ pub fn card_preview_0() -> Result<Box<dyn LayoutItem>, LayoutError> {
     #[allow(unused_imports)] use telar::use_theme;
     #[allow(unused_variables)] let theme = telar::Theme::<core::theme::SandboxTheme>::default();
     let __node_0 = {
-        let __deferred = Children::new(
+        let __deferred = Children::per_slot(
             {
                 let theme = theme.clone();
-            move || {
+            move |__request: SlotRequest<'_>| {
                 let theme = theme.clone();
                 let mut __slots = Slots::new();
                 let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-                let __text_0 = {
-                    Text::declaring(
-                        || "Header".to_string(),
-                        LayoutStyle::new(),
-                        { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(16.0).with_color(theme.get().ink) },
-                    )?
-                };
-                __slots.push(Some("header"), box_item(__text_0));
-                let __text_1 = {
-                    Text::declaring(
-                        || "A card is the standard surface panel.".to_string(),
-                        LayoutStyle::new(),
-                        { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(13.0).with_color(theme.get().muted) },
-                    )?
-                };
-                __children.push(box_item(__text_1));
-                let __text_2 = {
-                    Text::declaring(
-                        || "Bare children stack with the gap you pass; slot:\"header\" pins a header on top.".to_string(),
-                        LayoutStyle::new(),
-                        { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(13.0).with_color(theme.get().muted) },
-                    )?
-                };
-                __children.push(box_item(__text_2));
+                if __request.includes(Some("header")) {
+                    let __text_0 = {
+                        Text::declaring(
+                            || "Header".to_string(),
+                            LayoutStyle::new(),
+                            { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(16.0).with_color(theme.get().ink) },
+                        )?
+                    };
+                    __slots.push(Some("header"), box_item(__text_0));
+                }
+                if __request.includes(None) {
+                    let __text_1 = {
+                        Text::declaring(
+                            || "A card is the standard surface panel.".to_string(),
+                            LayoutStyle::new(),
+                            { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(13.0).with_color(theme.get().muted) },
+                        )?
+                    };
+                    __children.push(box_item(__text_1));
+                    let __text_2 = {
+                        Text::declaring(
+                            || "Bare children stack with the gap you pass; slot:\"header\" pins a header on top.".to_string(),
+                            LayoutStyle::new(),
+                            { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(13.0).with_color(theme.get().muted) },
+                        )?
+                    };
+                    __children.push(box_item(__text_2));
+                }
                 __slots.extend_default(__children);
                 Ok(__slots)
             }

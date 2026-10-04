@@ -258,15 +258,19 @@ pub(crate) fn transpile(input: TranspileInput<'_>) -> Result<TranspiledSource, T
 
     let style_section = generate_style_section(&doc.style, input.theme_type);
 
+    let mut locals = scan_locals(logic_source);
+    // The recipe is a parameter, not a `[logic]` binding, but a placeholder builds from it wherever it stands, so a closure around one has to clone it in like a local.
+    if view_uses_slot(&doc.view.nodes) && !locals.iter().any(|l| l == "children") {
+        locals.push("children".to_string());
+    }
     let mut view_gen = ViewGen::with_theme(&doc.style.classes, input.theme_type, input.assets)
-        .with_locals(scan_locals(logic_source))
+        .with_locals(locals)
         .with_signals(signals.iter().map(|s| s.name.clone()).collect());
     let view_body = view_gen.generate_root(&doc.view.nodes);
     let uses_theme = view_gen.uses_theme();
 
     let logic = logic_source.trim_end().to_string();
 
-    let has_slot = view_uses_slot(&doc.view.nodes);
     let ret = "Result<Box<dyn LayoutItem>, LayoutError>";
     // One signature for every component removes the need for a registry describing each callee's arity: an unused props builder is empty, and unplaced children never run their recipe.
     let signature = format!("pub fn {fn_name}(props: {props_type}, children: Children) -> {ret}");
@@ -418,15 +422,6 @@ pub(crate) fn transpile(input: TranspileInput<'_>) -> Result<TranspiledSource, T
             code.push(&format!("    {emitted_line}\n"), src);
         }
         code.push("\n", None);
-    }
-
-    // Run once here and drained by every `children` placeholder, so a two-slot component builds its children once.
-    if has_slot {
-        let build = match slot_context_expr(&doc.view.nodes) {
-            Some(ctx) => format!("children.build_with({ctx})?"),
-            None => "children.build()?".to_string(),
-        };
-        code.push(&format!("    let mut __slots = {build};\n"), None);
     }
 
     let view_prefix_len = code.out.len();
@@ -676,26 +671,6 @@ fn node_uses_slot(node: &ViewNode) -> bool {
         ViewNode::MatchBlock(b) => b.arms.iter().any(|arm| view_uses_slot(&arm.body)),
         ViewNode::LetStmt(_) | ViewNode::Comment(_) => false,
     }
-}
-
-/// The `in:` value of a `children` placeholder — the context a compound component builds its children inside. `None` when no placeholder names one, which means the children are built with nothing to read.
-///
-/// Read off the view rather than off the placeholder that emits it, because the build happens once for the whole component: two `children` placeholders drain one build, exactly as two eager slot placeholders drain one `Slots`.
-fn slot_context_expr(nodes: &[ViewNode]) -> Option<String> {
-    nodes.iter().find_map(|node| match node {
-        ViewNode::Element(el) if el.tag == "children" => el
-            .attributes
-            .iter()
-            .find(|a| a.key == "in")
-            .map(|a| a.value.text().trim().to_string())
-            .or_else(|| slot_context_expr(&el.children)),
-        ViewNode::Element(el) => slot_context_expr(&el.children),
-        ViewNode::IfBlock(b) => slot_context_expr(&b.then_branch)
-            .or_else(|| b.else_branch.as_deref().and_then(slot_context_expr)),
-        ViewNode::ForBlock(b) => slot_context_expr(&b.body),
-        ViewNode::MatchBlock(b) => b.arms.iter().find_map(|arm| slot_context_expr(&arm.body)),
-        ViewNode::LetStmt(_) | ViewNode::Comment(_) => None,
-    })
 }
 
 /// Extracts `pub struct Props { … }` (plus any preceding `#[…]` attribute lines) from the logic zone, renames it to `{PascalFnName}Props`, and returns `(struct_code, default_impl, span)`. `default_impl` is `Some` only when the struct uses inline `field: Type = expr` defaults (a synthesized `Default` impl); it is emitted after the struct with no source mapping. `span` is the struct's `[start, end]` (inclusive) line span within `logic`, so the caller can map the struct back to source. The emitted struct, the `.rsx` line each of its lines came from (`None` for a line the transpiler injected), and the span of the declaration lifted out of `[logic]`.

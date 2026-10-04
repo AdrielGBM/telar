@@ -24,69 +24,73 @@ pub fn keyboard(props: KeyboardProps, children: Children) -> Result<Box<dyn Layo
     let __col_0 = {
         let __node_0 = doc_header(DocHeaderProps::props().kicker("INTERACTION").title("Keyboard").desc("Each focusable control says which keys it keeps while it holds focus. On a web page the rest go back to the browser: Tab moves through the page's own focus order, and the arrows and Space scroll it. A custom control declares its keys with consumes_keys.").build(), Children::default())?;
         let __node_1 = {
-            let __deferred = Children::new(
+            let __deferred = Children::per_slot(
                 {
                     let theme = theme.clone();
                     let pressed = pressed.clone();
                     let focused = focused.clone();
                     let level = level.clone();
-                move || {
+                move |__request: SlotRequest<'_>| {
                     let theme = theme.clone();
                     let pressed = pressed.clone();
                     let focused = focused.clone();
                     let level = level.clone();
                     let mut __slots = Slots::new();
                     let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-                    let __node_2 = {
-                        let __deferred = Children::new(
-                            {
-                                let theme = theme.clone();
-                                let pressed = pressed.clone();
-                                let focused = focused.clone();
-                                let level = level.clone();
-                            move || {
-                                let theme = theme.clone();
-                                let pressed = pressed.clone();
-                                let focused = focused.clone();
-                                let level = level.clone();
-                                let mut __slots = Slots::new();
-                                let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-                                let __row_0 = {
-                                    let __node_3 = button(ButtonProps::props().label("Before").fill(Reactive::of({ let theme = theme.clone(); move || theme.get().primary })).on_press(std::rc::Rc::new({ let pressed = pressed.clone(); move || pressed.update(|__v| *__v += 1) })).build(), Children::default())?;
-                                    let __sbox_0 = {
-                                        let __text_0 = {
-                                            let level = level.clone();
+                    if __request.includes(None) {
+                        let __node_2 = {
+                            let __deferred = Children::per_slot(
+                                {
+                                    let theme = theme.clone();
+                                    let pressed = pressed.clone();
+                                    let focused = focused.clone();
+                                    let level = level.clone();
+                                move |__request: SlotRequest<'_>| {
+                                    let theme = theme.clone();
+                                    let pressed = pressed.clone();
+                                    let focused = focused.clone();
+                                    let level = level.clone();
+                                    let mut __slots = Slots::new();
+                                    let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
+                                    if __request.includes(None) {
+                                        let __row_0 = {
+                                            let __node_3 = button(ButtonProps::props().label("Before").fill(Reactive::of({ let theme = theme.clone(); move || theme.get().primary })).on_press(std::rc::Rc::new({ let pressed = pressed.clone(); move || pressed.update(|__v| *__v += 1) })).build(), Children::default())?;
+                                            let __sbox_0 = {
+                                                let __text_0 = {
+                                                    let level = level.clone();
+                                                    Text::declaring(
+                                                        move || format!("level {} / 10", { level.get() }),
+                                                        LayoutStyle::new(),
+                                                        { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(13.0).with_color(theme.get().ink) },
+                                                    )?
+                                                };
+                                                StyledContainer::new(LayoutStyle::new().flex_column().padding_horizontal(16.0).padding_vertical(10.0).bordered(), { let theme = theme.clone(); move |_| RectStyle { fill: Some(Paint::Solid(theme.get().surface_alt)), border: Some(Border { paint: Paint::Solid(theme.get().border), widths: [1.0; 4] }), shadow: None, radius: BorderRadius::all(8.0) } }, children![__text_0])?.focus_style({ let theme = theme.clone(); move |_| RectStyle { fill: None, border: Some(Border { paint: Paint::Solid(theme.get().primary), widths: [1.0; 4] }), shadow: None, radius: BorderRadius::zero() } }).on_press(move || ()).on_key({ let focused = focused.clone(); let level = level.clone(); move |key: &Key| -> bool { if !focused.get() { return false; } match key { Key::Named(NamedKey::ArrowRight | NamedKey::ArrowUp) => { level.set((level.get() + 1).min(10)); true } Key::Named(NamedKey::ArrowLeft | NamedKey::ArrowDown) => { level.set((level.get() - 1).max(0)); true } _ => false } } }).on_focus({ let focused = focused.clone(); move |now| focused.set(now) }).consumes_keys(|| ::telar::ConsumedKeys::ARROWS).role(::telar::Role::Slider)
+                                            };
+                                            let __node_4 = button(ButtonProps::props().label("After").outline(Reactive::of({ let theme = theme.clone(); move || theme.get().primary })).on_press(std::rc::Rc::new({ let pressed = pressed.clone(); move || pressed.update(|__v| *__v += 1) })).build(), Children::default())?;
+                                            Container::new(LayoutStyle::new().flex_row().gap(12.0).flex_wrap().align_items(AlignItems::CENTER), children![__node_3, __sbox_0, __node_4])?
+                                        };
+                                        __children.push(box_item(__row_0));
+                                        let __text_1 = {
+                                            let pressed = pressed.clone();
                                             Text::declaring(
-                                                move || format!("level {} / 10", { level.get() }),
+                                                move || format!("Tab moves between all three. With the level focused, the arrows change it and the page does not scroll; on a button, the arrows scroll the page. Buttons pressed · {}", { pressed.get() }),
                                                 LayoutStyle::new(),
-                                                { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(13.0).with_color(theme.get().ink) },
+                                                { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(12.0).with_color(theme.get().muted) },
                                             )?
                                         };
-                                        StyledContainer::new(LayoutStyle::new().flex_column().padding_horizontal(16.0).padding_vertical(10.0).bordered(), { let theme = theme.clone(); move |_| RectStyle { fill: Some(Paint::Solid(theme.get().surface_alt)), border: Some(Border { paint: Paint::Solid(theme.get().border), widths: [1.0; 4] }), shadow: None, radius: BorderRadius::all(8.0) } }, children![__text_0])?.focus_style({ let theme = theme.clone(); move |_| RectStyle { fill: None, border: Some(Border { paint: Paint::Solid(theme.get().primary), widths: [1.0; 4] }), shadow: None, radius: BorderRadius::zero() } }).on_press(move || ()).on_key({ let focused = focused.clone(); let level = level.clone(); move |key: &Key| -> bool { if !focused.get() { return false; } match key { Key::Named(NamedKey::ArrowRight | NamedKey::ArrowUp) => { level.set((level.get() + 1).min(10)); true } Key::Named(NamedKey::ArrowLeft | NamedKey::ArrowDown) => { level.set((level.get() - 1).max(0)); true } _ => false } } }).on_focus({ let focused = focused.clone(); move |now| focused.set(now) }).consumes_keys(|| ::telar::ConsumedKeys::ARROWS).role(::telar::Role::Slider)
-                                    };
-                                    let __node_4 = button(ButtonProps::props().label("After").outline(Reactive::of({ let theme = theme.clone(); move || theme.get().primary })).on_press(std::rc::Rc::new({ let pressed = pressed.clone(); move || pressed.update(|__v| *__v += 1) })).build(), Children::default())?;
-                                    Container::new(LayoutStyle::new().flex_row().gap(12.0).flex_wrap().align_items(AlignItems::CENTER), children![__node_3, __sbox_0, __node_4])?
-                                };
-                                __children.push(box_item(__row_0));
-                                let __text_1 = {
-                                    let pressed = pressed.clone();
-                                    Text::declaring(
-                                        move || format!("Tab moves between all three. With the level focused, the arrows change it and the page does not scroll; on a button, the arrows scroll the page. Buttons pressed · {}", { pressed.get() }),
-                                        LayoutStyle::new(),
-                                        { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(12.0).with_color(theme.get().muted) },
-                                    )?
-                                };
-                                __children.push(box_item(__text_1));
-                                __slots.extend_default(__children);
-                                Ok(__slots)
-                            }
-                            }
-                        );
-                        card(CardProps::props().gap(12.0).build(), __deferred)?
-                    };
-                    __children.push(box_item(__node_2));
-                    let __node_5 = code_line(CodeLineProps::props().code("box role:slider focus_style(…) consumes_keys:arrows on_key:(|key| …)").build(), Children::default())?;
-                    __children.push(box_item(__node_5));
+                                        __children.push(box_item(__text_1));
+                                    }
+                                    __slots.extend_default(__children);
+                                    Ok(__slots)
+                                }
+                                }
+                            );
+                            card(CardProps::props().gap(12.0).build(), __deferred)?
+                        };
+                        __children.push(box_item(__node_2));
+                        let __node_5 = code_line(CodeLineProps::props().code("box role:slider focus_style(…) consumes_keys:arrows on_key:(|key| …)").build(), Children::default())?;
+                        __children.push(box_item(__node_5));
+                    }
                     __slots.extend_default(__children);
                     Ok(__slots)
                 }
@@ -95,15 +99,17 @@ pub fn keyboard(props: KeyboardProps, children: Children) -> Result<Box<dyn Layo
             example(ExampleProps::props().title("consumes_keys — a custom control that keeps the arrows, beside plain buttons").build(), __deferred)?
         };
         let __node_6 = {
-            let __deferred = Children::new(
-                move || {
+            let __deferred = Children::per_slot(
+                move |__request: SlotRequest<'_>| {
                     let mut __slots = Slots::new();
                     let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-                    let __col_1 = {
-                        let __node_7 = prop_row(PropRowProps::props().name("consumes_keys").values("arrows · up · down · left · right · space · enter · tab · pageup · pagedown · home · end · activation · paging · edges · scrolling · none").about("The keys this box keeps while focused, in place of what its role keeps. Names are comma- or space-separated; a $-reading expression that yields a ConsumedKeys is re-read every render.").build(), Children::default())?;
-                        Container::new(LayoutStyle::new().flex_column().gap(6.0), children![__node_7])?
-                    };
-                    __children.push(box_item(__col_1));
+                    if __request.includes(None) {
+                        let __col_1 = {
+                            let __node_7 = prop_row(PropRowProps::props().name("consumes_keys").values("arrows · up · down · left · right · space · enter · tab · pageup · pagedown · home · end · activation · paging · edges · scrolling · none").about("The keys this box keeps while focused, in place of what its role keeps. Names are comma- or space-separated; a $-reading expression that yields a ConsumedKeys is re-read every render.").build(), Children::default())?;
+                            Container::new(LayoutStyle::new().flex_column().gap(6.0), children![__node_7])?
+                        };
+                        __children.push(box_item(__col_1));
+                    }
                     __slots.extend_default(__children);
                     Ok(__slots)
                 }

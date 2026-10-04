@@ -318,8 +318,8 @@ fn component_default_slot_takes_slots_arg() {
         "a slotted component takes a Slots argument:\n{code}"
     );
     assert!(
-        code.contains("__children.extend(__slots.take_default());"),
-        "the default slot splices take_default():\n{code}"
+        code.contains("__children.extend(children.build_slot(None)?);"),
+        "the default slot is built where it is placed:\n{code}"
     );
 }
 
@@ -329,12 +329,12 @@ fn component_named_and_default_slots() {
     let out = crate::transpile_source(src, "panel", None, None).unwrap();
     let code = &out.rust_code;
     assert!(
-        code.contains("__children.extend(__slots.take(\"header\"));"),
-        "named slot drains take(\"header\"):\n{code}"
+        code.contains("__children.extend(children.build_slot(Some(\"header\"))?);"),
+        "the named slot is built where it is placed:\n{code}"
     );
     assert!(
-        code.contains("__children.extend(__slots.take_default());"),
-        "default slot drains take_default():\n{code}"
+        code.contains("__children.extend(children.build_slot(None)?);"),
+        "and so is the default one:\n{code}"
     );
 }
 
