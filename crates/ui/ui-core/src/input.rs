@@ -125,6 +125,10 @@ impl Input {
         style: impl FnOnce(layout_core::NodeId) -> Rc<dyn Fn() -> TextStyle>,
     ) -> Result<Self, LayoutError> {
         let leaf = LayoutLeaf::register(layout_style)?;
+        let declared = style(leaf.node);
+        // A field shows what was typed: its caret and selection index the value, and a case that changed a letter's length would put them between the wrong letters.
+        let style: Rc<dyn Fn() -> TextStyle> =
+            Rc::new(move || declared().with_text_case(renderer_core::TextCase::AsWritten));
         let caret = value.with(|s| s.len());
         let id = focus::next_id();
         // As the kind that takes keys as text, so an app-level shortcut table stands aside while the caret is here.
@@ -137,7 +141,7 @@ impl Input {
             value,
             caret: signal(caret),
             anchor: signal(None),
-            style: style(leaf.node),
+            style,
             id,
             leaf,
             on_submit: None,

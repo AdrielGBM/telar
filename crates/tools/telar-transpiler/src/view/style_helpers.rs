@@ -1,6 +1,7 @@
 //! Paint/layout style helpers shared across the styled emitters: paint-attr merging, `RectStyle` assembly, opacity/transition closures, and `LayoutStyle` building.
 
 use std::collections::HashMap;
+use std::fmt::Write;
 
 use telar_parser::{Attr, Element, Value};
 
@@ -113,13 +114,16 @@ impl ViewGen<'_> {
             shadow,
             &radius,
         );
-        let opacity_call = match pattrs.iter().find(|a| a.key == "opacity") {
-            Some(a) => format!(
-                ".with_opacity({})",
-                self.opacity_closure(a, transitions, hoists)
-            ),
-            None => String::new(),
-        };
+        let mut layer_calls = String::new();
+        for (key, method) in [
+            ("opacity", "with_opacity"),
+            ("backdrop_blur", "with_backdrop_blur"),
+        ] {
+            if let Some(a) = pattrs.iter().find(|a| a.key == key) {
+                let closure = self.scalar_closure(a, transitions, hoists);
+                let _ = write!(layer_calls, ".{method}({closure})");
+            }
+        }
         // Every paint value, not just colours: a `$signal` reaching the closure through a radius or a border side has to be cloned in for the same reason a fill does.
         let raw_values: Vec<&str> = pattrs
             .iter()
@@ -127,7 +131,7 @@ impl ViewGen<'_> {
             .map(|a| a.value.text())
             .collect();
         let closure = wrap_signal_clones(&raw_values, format!("move |{param}| {rect_style}"));
-        (closure, opacity_call)
+        (closure, layer_calls)
     }
 
     /// The four border thicknesses for a box, or `None` when the plain `stroke_width` says all it needs to.
@@ -169,8 +173,8 @@ impl ViewGen<'_> {
         )
     }
 
-    /// Resolves the `.with_opacity(..)` closure argument for a `StyledContainer`. Opacity is now a closure (T-3.1) so it re-reads reactively: a `$signal` becomes `move || sig.get()` (cloning captured signals), a bare number stays a static `|| 0.5`, and a `transition(opacity …)` wraps the value in the animation retarget+get block backed by a hoisted `Animated`.
-    fn opacity_closure(
+    /// Resolves the closure a `StyledContainer` re-reads a number through, `.with_opacity(..)` or `.with_backdrop_blur(..)`: a `$signal` becomes `move || sig.get()` (cloning captured signals), a bare number stays a static `|| 0.5`, and a `transition(<key> …)` wraps the value in the animation retarget+get block backed by a hoisted `Animated`.
+    fn scalar_closure(
         &mut self,
         attr: &Attr,
         transitions: &HashMap<String, String>,
@@ -192,24 +196,19 @@ impl ViewGen<'_> {
             .iter()
             .map(|s| format!("let {}{s} = {s}.clone(); ", super::shadow_marker(s)))
             .collect();
-        if let Some(curve) = transitions.get("opacity") {
+        if let Some(curve) = transitions.get(attr.key.as_str()) {
             let name = self.next_transition_name();
             hoists.push(format!(
                 "let {name} = motion::Animated::new({expr}, {curve});"
             ));
-            let closure = format!("move || {{ {name}.retarget({expr}); {name}.get() }}");
-            match clone_prefix.is_empty() {
-                true => closure,
-                false => format!("{{ {clone_prefix}{closure} }}"),
-            }
+            with_clones(
+                &clone_prefix,
+                format!("move || {{ {name}.retarget({expr}); {name}.get() }}"),
+            )
         } else if is_static {
             format!("|| {expr}")
         } else {
-            let closure = format!("move || {expr}");
-            match clone_prefix.is_empty() {
-                true => closure,
-                false => format!("{{ {clone_prefix}{closure} }}"),
-            }
+            with_clones(&clone_prefix, format!("move || {expr}"))
         }
     }
 
@@ -402,5 +401,14 @@ fn is_literal_value(tag: &str, key: &str, value: &str) -> bool {
         Some(ValueKind::Edges) => v.split_whitespace().all(number),
         // A colour is paint, already a closure the renderer re-runs; anything else is a key with no schema.
         Some(ValueKind::Color) | None => true,
+    }
+}
+
+/// `closure` behind the clones it captures, or bare when it captures none: a block holding nothing but the closure is the `unused_braces` rustc warns of in the generated code.
+fn with_clones(clone_prefix: &str, closure: String) -> String {
+    if clone_prefix.is_empty() {
+        closure
+    } else {
+        format!("{{ {clone_prefix}{closure} }}")
     }
 }

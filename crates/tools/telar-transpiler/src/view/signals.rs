@@ -256,7 +256,7 @@ fn dollar_spans(s: &str) -> impl Iterator<Item = (usize, usize)> {
     })
 }
 
-/// The distinct identifiers a `move` closure must clone so its captures stay independent of the outer bindings: every `$name` signal referenced across `snippets` (raw, still carrying `$`), deduped, followed by any `loop_variables` a snippet uses (also deduped against the signals). Pass `&[]` for `loop_variables` at a call site with no loop scope (e.g. the free-standing [`wrap_signal_clones`]); the three clone emitters ([`wrap_signal_clones`], `clone_bindings`, `opacity_closure`) all format this list for their own context (block wrapper / standalone statements / inline prefix).
+/// The distinct identifiers a `move` closure must clone so its captures stay independent of the outer bindings: every `$name` signal referenced across `snippets` (raw, still carrying `$`), deduped, followed by any `loop_variables` a snippet uses (also deduped against the signals). Pass `&[]` for `loop_variables` at a call site with no loop scope (e.g. the free-standing [`wrap_signal_clones`]); the three clone emitters ([`wrap_signal_clones`], `clone_bindings`, `scalar_closure`) all format this list for their own context (block wrapper / standalone statements / inline prefix).
 pub(super) fn captured_idents(snippets: &[&str], loop_variables: &[String]) -> Vec<String> {
     captured_idents_with(snippets, loop_variables, &[])
 }
@@ -491,7 +491,7 @@ pub(super) fn clone_block_multiline(idents: &[String], closure: String, pad: &st
 pub(crate) fn is_paint_key(key: &str) -> bool {
     matches!(
         key,
-        "fill" | "stroke" | "stroke_width" | "radius" | "opacity"
+        "fill" | "stroke" | "stroke_width" | "radius" | "opacity" | "backdrop_blur"
     ) || key.starts_with("shadow")
         || is_side_key(key)
         || is_corner_key(key)
@@ -529,7 +529,7 @@ pub(super) fn has_paint(pattrs: &[Attr]) -> bool {
     pattrs.iter().any(|a| {
         matches!(
             a.key.as_str(),
-            "fill" | "stroke" | "radius" | "opacity" | "blend"
+            "fill" | "stroke" | "radius" | "opacity" | "blend" | "backdrop_blur"
         ) || a.key.starts_with("shadow")
             // A corner counts the way `radius` does; a side does not, the way `stroke_width` does not.
             || is_corner_key(&a.key)

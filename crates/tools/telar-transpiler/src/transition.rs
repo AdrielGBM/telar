@@ -20,6 +20,7 @@ pub(crate) struct TransitionSpec {
 /// `font_variation` is the one text property let through, and knowingly: an axis that changes the text's extent measures it again on each step, which a variable display face animated on scroll pays for one text.
 const SUPPORTED_PROPS: &[&str] = &[
     "opacity",
+    "backdrop_blur",
     "fill",
     "stroke",
     "color",

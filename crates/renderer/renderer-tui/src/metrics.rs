@@ -1,6 +1,6 @@
 //! What a string is worth to layout when a "pixel" is a fraction of a character cell.
 
-use renderer_core::{Span, TextAlign, TextMetrics, TextStyle, TextWrap};
+use renderer_core::{Span, TextAlign, TextMetrics, TextStyle, TextWrap, case_text};
 use unicode_segmentation::UnicodeSegmentation;
 
 use crate::wrap::{WrapConfig, WrappedLine, grapheme_cols, line_cols, wrap};
@@ -88,20 +88,22 @@ impl TextMetrics for CellMetrics {
     fn measure(
         &self,
         text: &str,
-        _spans: Option<&[Span]>,
+        spans: Option<&[Span]>,
         max_width: f32,
         style: &TextStyle,
     ) -> (f32, f32) {
-        self.extent(text, max_width, style)
+        self.extent(&case_text(text, spans, style).text, max_width, style)
     }
 
-    fn min_content(&self, text: &str, _spans: Option<&[Span]>, style: &TextStyle) -> (f32, f32) {
+    fn min_content(&self, text: &str, spans: Option<&[Span]>, style: &TextStyle) -> (f32, f32) {
+        let cased = case_text(text, spans, style);
+        let text = cased.text.as_ref();
         let widest = text.split_whitespace().map(line_cols).max().unwrap_or(0);
         self.extent(text, f32::from(widest) * self.cell.width, style)
     }
 
     fn ink_bounds(&self, text: &str, max_width: f32, style: &TextStyle) -> (f32, f32) {
-        self.extent(text, max_width, style)
+        self.extent(&case_text(text, None, style).text, max_width, style)
     }
 
     fn line_height(&self, _font_size: f32) -> f32 {
@@ -112,7 +114,7 @@ impl TextMetrics for CellMetrics {
     fn index_at(
         &self,
         text: &str,
-        _spans: Option<&[Span]>,
+        spans: Option<&[Span]>,
         max_width: f32,
         style: &TextStyle,
         (x, y): (f32, f32),
@@ -120,6 +122,8 @@ impl TextMetrics for CellMetrics {
         if x < 0.0 || y < 0.0 {
             return None;
         }
+        let cased = case_text(text, spans, style);
+        let text = cased.text.as_ref();
         let mut lines = Vec::new();
         self.lines(text, max_width, style, &mut lines);
         let line = lines.get((y / self.cell.height) as usize)?;
@@ -134,7 +138,7 @@ impl TextMetrics for CellMetrics {
         for (offset, grapheme) in text[line.range.clone()].grapheme_indices(true) {
             let width = grapheme_cols(grapheme);
             if (col..col + width).contains(&target) {
-                return Some(line.range.start + offset);
+                return Some(cased.source_index(line.range.start + offset));
             }
             col += width;
         }

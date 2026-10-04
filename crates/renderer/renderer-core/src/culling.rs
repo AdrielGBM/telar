@@ -2,8 +2,8 @@
 
 use geometry_core::{Rect, Transform};
 
-use crate::DrawCommand;
 use crate::transform_clip_rect;
+use crate::{DrawCommand, Span, TextStyle};
 
 /// Font ascender/line-height metrics expressed as ratios relative to `font_size`. Default values are conservative approximations that hold for most common fonts.
 #[derive(Clone, Copy)]
@@ -72,13 +72,16 @@ pub fn command_visual_rect(
                 None => r,
             })
         }
-        DrawCommand::Text { rect, style, .. } => {
+        DrawCommand::Text {
+            rect, style, spans, ..
+        } => {
             // Glyphs can extend outside rect: ascenders above rect.y and the line height may exceed rect.height. Expand the visual rect to cover the real glyph extent so that dirty-rect computation and culling never under-estimate the painted area.
             let font_size = style.font_size;
             let shadow = style.text_shadow.cast();
             let line_h = font_size * font_metrics.line_height_factor;
             let ascender_overshoot = font_size * font_metrics.ascender_ratio;
-            let extra_bottom = (line_h - rect.height).max(0.0);
+            let extra_bottom =
+                (line_h - rect.height).max(0.0) + underline_overshoot(style, spans.as_deref());
             let r = transform_clip_rect(
                 matrix,
                 Rect::new(
@@ -184,6 +187,26 @@ impl<T> Default for PaintBounds<T> {
         Self::new()
     }
 }
+
+/// How far below the text's own box an underline may reach: as far as its offset and thickness would take it were the last baseline on the box's bottom edge, a bound the real line never exceeds.
+fn underline_overshoot(style: &TextStyle, spans: Option<&[Span]>) -> f32 {
+    let reach = |style: &TextStyle| {
+        let decoration = style.decoration;
+        if !decoration.is_drawn() {
+            return 0.0;
+        }
+        let from_font = style.font_size * UNDERLINE_FROM_FONT_RATIO;
+        (decoration.offset.or_font(from_font) + decoration.thickness.or_font(from_font)).max(0.0)
+    };
+    spans
+        .unwrap_or_default()
+        .iter()
+        .map(|span| reach(&span.over.over(style, geometry_core::Size::ZERO)))
+        .fold(reach(style), f32::max)
+}
+
+/// A bound on a face's own underline offset and thickness, each as a fraction of the size: faces put both well under a tenth of the em.
+const UNDERLINE_FROM_FONT_RATIO: f32 = 0.15;
 
 #[cfg(test)]
 #[path = "culling_test.rs"]

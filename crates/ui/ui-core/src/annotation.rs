@@ -53,6 +53,13 @@ pub(crate) fn peek(node: NodeId) -> Option<Annotation> {
     Some(annotation.peek_with(Clone::clone)).filter(|annotation| !annotation.is_empty())
 }
 
+/// The language `node` is written in: the nearest `lang` said on it or above it, or the surface's own, the active locale. Resolved along the layout tree, the nesting a document writes its `lang` attributes along, so the case a shaper maps text into follows the language the page declares.
+pub(crate) fn language_at(node: NodeId) -> Option<Arc<str>> {
+    layout_reactive::ancestors(node)
+        .find_map(|at| of(at).and_then(|annotation| annotation.lang))
+        .or_else(|| i18n_core::use_locale().map(Arc::from))
+}
+
 /// The signal `node`'s annotation lives in, made on first use and withdrawn with the owner that made it.
 pub(crate) fn slot(node: NodeId) -> RwSignal<Annotation> {
     if let Some(existing) = signal_of(node)

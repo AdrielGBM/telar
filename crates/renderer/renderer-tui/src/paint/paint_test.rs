@@ -389,3 +389,52 @@ fn a_mask_source_is_never_drawn_and_its_content_is() {
     assert!(!row(&buf, 0).contains("SOURCE"), "{:?}", row(&buf, 0));
     assert!(row(&buf, 1).starts_with("content"), "{:?}", row(&buf, 1));
 }
+
+fn styled_text_cmd(text: &str, rect: Rect, style: TextStyle) -> DrawCommand {
+    DrawCommand::Text {
+        text: text.into(),
+        spans: None,
+        rect,
+        style: Arc::new(style),
+    }
+}
+
+#[test]
+fn a_text_case_is_drawn_in_the_cells_and_measured_the_same() {
+    let mut buf = grid(12, 1);
+    let style = TextStyle::new(14.0, Paint::Solid(Color::WHITE))
+        .with_text_case(renderer_core::TextCase::Upper);
+    paint(
+        &mut buf,
+        &[styled_text_cmd(
+            "straße",
+            Rect::new(0.0, 0.0, 8.0 * 12.0, 16.0),
+            style.clone(),
+        )],
+    );
+    assert_eq!(row(&buf, 0), "STRASSE     ");
+    let metrics = crate::CellMetrics::new(CellSize::default());
+    assert_eq!(
+        renderer_core::TextMetrics::measure(&metrics, "straße", None, 1000.0, &style).0,
+        8.0 * 7.0,
+        "measured as the seven cells it draws"
+    );
+}
+
+#[test]
+fn an_underline_marks_its_cells_and_nothing_else() {
+    let mut buf = grid(12, 2);
+    let underlined = TextStyle::new(14.0, Paint::Solid(Color::WHITE))
+        .with_underline(true)
+        .with_underline_offset(4.0);
+    paint(
+        &mut buf,
+        &[
+            styled_text_cmd("link", Rect::new(0.0, 0.0, 8.0 * 12.0, 16.0), underlined),
+            text_cmd("text", Rect::new(0.0, 16.0, 8.0 * 12.0, 16.0)),
+        ],
+    );
+    assert!(buf.get(0, 0).unwrap().attrs.contains(Attrs::UNDERLINE));
+    assert!(buf.get(3, 0).unwrap().attrs.contains(Attrs::UNDERLINE));
+    assert!(!buf.get(0, 1).unwrap().attrs.contains(Attrs::UNDERLINE));
+}

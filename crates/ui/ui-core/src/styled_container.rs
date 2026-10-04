@@ -490,7 +490,7 @@ impl StyledContainer {
         self
     }
 
-    /// Draws the box over a copy of what is beneath it in the same surface, blurred `radius` px across, as CSS `backdrop-filter: blur()` does: a frosted panel over a picture the same window draws. What lies beneath the surface itself is the compositor's to blur, not this.
+    /// Draws the box over a copy of what is beneath it in the same surface, blurred `radius` px across: a frosted panel over a picture the same window draws. A radius, as a shadow's blur is, so CSS `backdrop-filter: blur(10px)`, which names the deviation, is a radius of 20. What lies beneath the surface itself is the compositor's to blur, not this.
     pub fn with_backdrop_blur(mut self, radius: impl Fn() -> f32 + 'static) -> Self {
         self.backdrop_blur = Some(Box::new(radius));
         self

@@ -26,6 +26,7 @@ ui-tree = { workspace = true }
 rustc-hash = { workspace = true }
 web-time = { workspace = true }
 tracing.workspace = true
+i18n-core.workspace = true
 
 [features]
 default = []

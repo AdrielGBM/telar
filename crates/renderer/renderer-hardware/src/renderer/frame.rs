@@ -152,6 +152,7 @@ fn at_scale(style: renderer_core::TextStyle, scale: f32) -> renderer_core::TextS
                 })
             }
         },
+        decoration: renderer_core::Scale::scale(style.decoration, scale),
         ..style
     }
 }
@@ -1198,6 +1199,35 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
                         self.pending_steps.push(DrawStep::ShadowPlaceholder {
                             op_index: self.pending_shadows.len() - 1,
                         });
+                    }
+                    let underlines = crate::caches::with_shared(|caches| {
+                        caches.text_shaper.decorations(
+                            text,
+                            spans.as_deref(),
+                            translated,
+                            &style,
+                            self.scale_factor,
+                        )
+                    })
+                    .unwrap_or_default();
+                    // Beneath the glyphs, as a document paints an underline, so a descender crosses it rather than being cut by it.
+                    if !underlines.is_empty() {
+                        self.flush_text();
+                        if self.batch_rect_start.is_none() {
+                            self.batch_rect_start = Some(self.pending_instances.len() as u32);
+                        }
+                        for underline in underlines {
+                            self.pending_instances
+                                .push(crate::primitives::rect::prepare_rect(
+                                    underline.rect,
+                                    &renderer_core::RectStyle {
+                                        fill: Some(underline.paint),
+                                        ..renderer_core::RectStyle::default()
+                                    },
+                                    geometry_core::Transform::IDENTITY.to_array(),
+                                ));
+                        }
+                        self.flush_rect();
                     }
                     if self.batch_text_start.is_none() {
                         self.batch_text_start = Some(self.pending_text_instances.len() as u32);

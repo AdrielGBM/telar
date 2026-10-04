@@ -21,6 +21,8 @@ impl Painter<'_> {
         if cells.is_empty() {
             return;
         }
+        let cased = renderer_core::case_text(text, spans, style);
+        let (text, spans) = (cased.text.as_ref(), cased.spans.as_deref());
         let cols = cells.cols();
 
         // The painter re-wraps rather than trusting what layout measured, at the cell width of the box it actually got. The two can differ by a column when a box was sized in pixels, and a paragraph laid out one column wider than it is drawn loses its last word.
@@ -115,6 +117,9 @@ fn attrs_of(style: &TextStyle) -> Attrs {
     // A terminal has one face, so a weight below normal is the only "lighter" it can offer.
     if style.font_weight <= 300 {
         attrs = attrs.with(Attrs::DIM);
+    }
+    if style.decoration.is_drawn() {
+        attrs = attrs.with(Attrs::UNDERLINE);
     }
     attrs
 }

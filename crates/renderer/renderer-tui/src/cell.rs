@@ -68,6 +68,7 @@ impl Attrs {
     pub const DIM: Self = Self(1 << 2);
     /// The trailing column of a double-width grapheme. It draws nothing: the wide cell to its left already covers it, and writing anything here would push the row out of alignment.
     pub const WIDE_TAIL: Self = Self(1 << 3);
+    pub const UNDERLINE: Self = Self(1 << 4);
 
     pub const NONE: Self = Self(0);
 

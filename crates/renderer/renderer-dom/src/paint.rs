@@ -310,6 +310,10 @@ pub fn text_style(style: &TextStyle, out: &mut String) {
     if !style.font_features.is_empty() {
         declare(out, "font-feature-settings", &style.font_features.to_css());
     }
+    if style.text_case != renderer_core::TextCase::AsWritten {
+        declare(out, "text-transform", style.text_case.css_name());
+    }
+    decoration_style(&style.decoration, &style.color, out);
     // Always said, because the document's default is not Telar's. `normal` collapses a run of spaces to one and a newline to a space, so a source listing came out as a single line thousands of characters wide. What Telar means is `pre-wrap`. It is also what keeps the two engines agreeing on height: a document that collapsed newlines measured one line where layout had reserved twenty, and the scroll area went on believing there was content the browser no longer had.
     declare(
         out,
@@ -374,6 +378,50 @@ pub fn span_style(over: &renderer_core::Declared, out: &mut String) {
     }
     if let Some(features) = &over.font_features {
         declare(out, "font-feature-settings", &features.to_css());
+    }
+    if let Some(case) = over.text_case {
+        declare(out, "text-transform", case.css_name());
+    }
+    match over.decoration_line {
+        Some(renderer_core::DecorationLine::Underline) => {
+            declare(out, "text-decoration-line", "underline");
+            declare(out, "text-decoration-skip-ink", "none");
+        }
+        Some(renderer_core::DecorationLine::None) => declare(out, "text-decoration-line", "none"),
+        None => {}
+    }
+    if let Some(renderer_core::DecorationLength::Length(offset)) = over.decoration_offset {
+        declare(out, "text-underline-offset", &length(offset));
+    }
+    if let Some(renderer_core::DecorationLength::Length(thickness)) = over.decoration_thickness {
+        declare(out, "text-decoration-thickness", &length(thickness));
+    }
+    if let Some(paint) = over.decoration_color {
+        declare(out, "text-decoration-color", &color(paint.solid_color()));
+    }
+}
+
+/// A backdrop blur of Telar's `radius` as the CSS `blur()` that draws it: CSS takes the Gaussian's deviation, half the radius every other target blurs by, as `box-shadow` halves its own.
+pub fn backdrop_filter(radius: f32) -> String {
+    format!("blur({})", px(renderer_core::blur_sigma(radius)))
+}
+
+/// The line a text draws along its glyphs, as the `text-decoration` longhands. Skipping ink is off because no other target lifts the line around a descender, and a gradient comes down to its first stop because CSS paints a decoration in a colour only; text filled with one is `transparent`, so its line is never left to `currentColor`.
+fn decoration_style(decoration: &renderer_core::TextDecoration, ink: &Paint, out: &mut String) {
+    if !decoration.is_drawn() {
+        return;
+    }
+    declare(out, "text-decoration-line", "underline");
+    declare(out, "text-decoration-skip-ink", "none");
+    if let renderer_core::DecorationMetric::Px(offset) = decoration.offset {
+        declare(out, "text-underline-offset", &px(offset));
+    }
+    if let renderer_core::DecorationMetric::Px(thickness) = decoration.thickness {
+        declare(out, "text-decoration-thickness", &px(thickness));
+    }
+    let paint = decoration.color.unwrap_or(*ink);
+    if decoration.color.is_some() || matches!(paint, Paint::Gradient(_)) {
+        declare(out, "text-decoration-color", &color(paint.solid_color()));
     }
 }
 

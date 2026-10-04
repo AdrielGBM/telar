@@ -224,6 +224,7 @@ pub(crate) fn draw_text(
                 rect.height,
                 current_clip_rect,
             ) {
+                draw_underlines(pixmap, shaper, text, spans, rect, style, transform, clip);
                 blit_body(pixmap, shaper, text, spans, rect, style, transform, clip);
             }
         }
@@ -242,8 +243,40 @@ pub(crate) fn draw_text(
         return;
     }
 
+    draw_underlines(pixmap, shaper, text, spans, rect, style, transform, clip);
     blit_body(pixmap, shaper, text, spans, rect, style, transform, clip);
     draw_colr_fallback(pixmap, shaper, text, rect, style, transform, clip);
+}
+
+/// Fills the underlines the style asks for, beneath the glyphs as a document paints them, from the same whole-pixel origin [`blit_body`] puts the glyphs at.
+#[allow(clippy::too_many_arguments)]
+fn draw_underlines(
+    pixmap: &mut tiny_skia::PixmapMut<'_>,
+    shaper: &mut renderer_text::TextShaper,
+    text: &str,
+    spans: Option<&[renderer_core::Span]>,
+    rect: Rect,
+    style: &TextStyle,
+    transform: tiny_skia::Transform,
+    clip: Option<&tiny_skia::Mask>,
+) {
+    let origin = Rect::new(
+        rect.x as i32 as f32,
+        rect.y as i32 as f32,
+        rect.width,
+        rect.height,
+    );
+    for underline in shaper.decorations(text, spans, origin, style, 1.0) {
+        let r = underline.rect;
+        if let Some(area) = tiny_skia::Rect::from_xywh(r.x, r.y, r.width, r.height) {
+            pixmap.fill_rect(
+                area,
+                &crate::primitives::fill_to_paint(underline.paint),
+                transform,
+                clip,
+            );
+        }
+    }
 }
 
 /// Blits the text body at `rect` from the shaper's raster.

@@ -207,6 +207,9 @@ const CONTAINER_PAINT: &[AttrSpec] = &[
     AttrSpec::keywords("blend", BLEND_VALUES).doc(
         "Composites the box and everything inside it onto what is beneath it through a blend mode, as CSS `mix-blend-mode` does: `multiply`/`screen` for a texture over a wallpaper, `normal` (the default) to cover it plainly. Ignored in TUI, which has no notion of a backdrop to blend against.",
     ),
+    AttrSpec::free("backdrop_blur").doc(
+        "Blurs what the surface drew beneath the box, a radius in pixels as `shadow_blur` is (CSS `backdrop-filter: blur(10px)` is `backdrop_blur:20`), so a translucent `fill` reads as frosted glass. A `$`-reading value is followed, and `transition(backdrop_blur 300ms)` animates it. A document blurs the page behind the box; TUI ignores it and shows the fill alone.",
+    ),
     AttrSpec::free("on_press"),
     AttrSpec::free("on_alt_press").doc(
         "Separate from `on_press`, or every pressable box would swallow right- and middle-clicks too.",
@@ -423,6 +426,16 @@ pub const FONT_STYLE_VALUES: &[(&str, &str)] = &[
     ("oblique", "FontStyle::Oblique"),
 ];
 
+/// `text_case:` — the case text is shown in, paired with the `TextCase` variant each spelling is; `uppercase` and `lowercase` are CSS's words for the same two.
+pub const TEXT_CASE_VALUES: &[(&str, &str)] = &[
+    ("upper", "TextCase::Upper"),
+    ("uppercase", "TextCase::Upper"),
+    ("lower", "TextCase::Lower"),
+    ("lowercase", "TextCase::Lower"),
+    ("capitalize", "TextCase::Capitalize"),
+    ("none", "TextCase::AsWritten"),
+];
+
 /// `text_wrap:` — whether text wraps into its box or keeps one line.
 ///
 /// Named apart from the container's `wrap:`, which is flex-wrap and one character away from the `nowrap` flag this replaces.
@@ -598,6 +611,20 @@ const INHERITABLE_TEXT_ATTRS: &[AttrSpec] = &[
     AttrSpec::free("font_features").doc(
         "Which OpenType features are on: `font_features:(tnum, liga 0, ss01)`; a tag named alone is turned on. Replaces what it inherits.",
     ),
+    AttrSpec::keywords("text_case", TEXT_CASE_VALUES).doc(
+        "The case the text is shown in, whatever case it is written in: `upper`, `lower`, `capitalize` (each word's first letter) or `none`. Mapped by the rules of the text's `lang:` (Turkish dots its capital İ), measured as shown on every target, and read out as written. An `input` keeps the case it was typed in.",
+    ),
+    AttrSpec::boolean("underline").doc(
+        "Draws a line under the glyphs: bare, `true`/`false`, or a `$`-reading expression, so `underline:$hovered` follows the pointer. Its offset, thickness and colour are the font's own and the text's unless `underline_offset`, `underline_thickness` and `underline_color` say otherwise.",
+    ),
+    AttrSpec::num("underline_offset").doc(
+        "How far below the baseline the underline's top edge sits, as CSS `text-underline-offset`: pixels, `em` of the text's size (`0.18em`) or a fraction of the surface.",
+    ),
+    AttrSpec::num("underline_thickness").doc(
+        "How thick the underline is: pixels, `em` of the text's size or a fraction of the surface; never thinner than a device pixel.",
+    ),
+    AttrSpec::color("underline_color")
+        .doc("The underline's colour; the text's own when it names none."),
 ];
 
 /// The transform attributes, appended to every container's key set. See [`is_transform_attr`].

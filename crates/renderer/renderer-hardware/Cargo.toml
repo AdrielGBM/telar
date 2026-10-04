@@ -44,6 +44,10 @@ path = "src/headless_smoke_test.rs"
 name = "image_blend"
 path = "src/image_blend_test.rs"
 
+[[test]]
+name = "text_decoration"
+path = "src/text_decoration_test.rs"
+
 [[bench]]
 name = "render_frame"
 harness = false

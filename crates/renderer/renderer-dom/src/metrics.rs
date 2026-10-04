@@ -4,7 +4,7 @@
 
 use std::cell::RefCell;
 
-use renderer_core::{Span, TextMetrics, TextStyle, TextWrap};
+use renderer_core::{Span, TextMetrics, TextStyle, TextWrap, case_text};
 use wasm_bindgen::JsCast;
 
 // Here rather than in the measurer, so the measurer stays a unit struct and satisfies the `Send + Sync` its runtime slot is declared with — which on a single-threaded target means nothing, but has to be true for it to be installed at all.
@@ -224,16 +224,18 @@ impl TextMetrics for CanvasTextMetrics {
     fn measure(
         &self,
         text: &str,
-        _spans: Option<&[Span]>,
+        spans: Option<&[Span]>,
         max_width: f32,
         style: &TextStyle,
     ) -> (f32, f32) {
-        let (width, lines) = wrap(text, max_width, style);
+        let (width, lines) = wrap(&case_text(text, spans, style).text, max_width, style);
         (width, lines as f32 * line_height(style))
     }
 
     fn min_content(&self, text: &str, spans: Option<&[Span]>, style: &TextStyle) -> (f32, f32) {
-        let widest = crate::wrap::widest_word(text, |word| width_of(word, style));
+        let widest = crate::wrap::widest_word(&case_text(text, spans, style).text, |word| {
+            width_of(word, style)
+        });
         self.measure(text, spans, widest, style)
     }
 

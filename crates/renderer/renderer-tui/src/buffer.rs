@@ -233,6 +233,7 @@ impl Pen {
             (Attrs::BOLD, b"\x1b[1m".as_slice()),
             (Attrs::DIM, b"\x1b[2m".as_slice()),
             (Attrs::ITALIC, b"\x1b[3m".as_slice()),
+            (Attrs::UNDERLINE, b"\x1b[4m".as_slice()),
         ] {
             if attrs.contains(flag) && !current.contains(flag) {
                 out.extend_from_slice(code);

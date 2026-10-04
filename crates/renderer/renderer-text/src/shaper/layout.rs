@@ -3,8 +3,8 @@
 use super::TextShaper;
 use super::cache::{ShapingCacheKey, hash_text, text_style_bits};
 use super::{
-    effective_line_height, from_cosmic_color, glyph_index_at, make_buffer, physical_glyph,
-    resolve_coverage, shape_buffer,
+    effective_line_height, from_cosmic_color, glyph_index_at, make_buffer, make_cased_buffer,
+    physical_glyph, resolve_coverage, shape_buffer,
 };
 use cosmic_text::{CacheKey, SwashContent, Wrap};
 use geometry_core::{Color, Rect};
@@ -366,15 +366,17 @@ impl TextShaper {
             width: max_width,
             height: 100000.0,
         };
-        let buffer = make_buffer(
+        let cased = renderer_core::case_text(text, spans, style);
+        let buffer = make_cased_buffer(
             &mut self.font_system,
             &mut self.family_availability,
-            text,
-            spans.filter(|s| !s.is_empty()),
+            &cased.text,
+            cased.spans.as_deref(),
             rect,
             style,
         );
         glyph_index_at(&buffer, effective_line_height(style), at)
+            .map(|shown| cased.source_index(shown))
     }
 
     pub fn measure_min_content(
@@ -394,11 +396,12 @@ impl TextShaper {
             width: 0.0,
             height: 100000.0,
         };
+        let cased = renderer_core::case_text(text, spans, style);
         let mut buffer = shape_buffer(
             &mut self.font_system,
             &mut self.family_availability,
-            text,
-            spans,
+            &cased.text,
+            cased.spans.as_deref(),
             rect,
             style,
         );

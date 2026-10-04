@@ -5,9 +5,9 @@ use std::hash::{Hash, Hasher};
 use rustc_hash::FxHasher;
 
 use crate::{
-    Border, BorderRadius, Declared, FillRule, FontFamily, FontStyle, Gradient, GradientKind,
-    LineHeight, Paint, PathStyle, Raster, RectStyle, Shadow, Stroke, TextShadow, TextStyle,
-    TextWrap,
+    Border, BorderRadius, Declared, DecorationLength, DecorationMetric, FillRule, FontFamily,
+    FontStyle, Gradient, GradientKind, LineHeight, Paint, PathStyle, Raster, RectStyle, Shadow,
+    Stroke, TextCase, TextDecoration, TextShadow, TextStyle, TextWrap,
 };
 
 // Styles carry f32 fields and enums without a fixed bit layout, so they are not `bytemuck::Pod`; each field is hashed explicitly (f32 via `to_bits` to stay total over NaN) instead.
@@ -52,7 +52,43 @@ pub fn hash_text_style(s: &TextStyle) -> u64 {
     h.write_u8(u8::from(s.text_wrap == TextWrap::NoWrap));
     h.write_u64(s.font_variations.key());
     h.write_u64(s.font_features.key());
+    // Folded in only when set, so a style without either hashes as it always has.
+    if s.text_case != TextCase::AsWritten {
+        h.write_u8(s.text_case as u8);
+        h.write(s.lang.as_deref().unwrap_or_default().as_bytes());
+    }
+    if s.decoration != TextDecoration::default() {
+        hash_decoration(&s.decoration, &mut h);
+    }
     h.finish()
+}
+
+fn hash_decoration(d: &TextDecoration, h: &mut FxHasher) {
+    h.write_u8(d.line as u8);
+    hash_metric(d.offset, h);
+    hash_metric(d.thickness, h);
+    hash_opt_paint(d.color.as_ref(), h);
+}
+
+fn hash_metric(metric: DecorationMetric, h: &mut FxHasher) {
+    match metric {
+        DecorationMetric::FromFont => h.write_u8(0),
+        DecorationMetric::Px(px) => {
+            h.write_u8(1);
+            h.write_u32(px.to_bits());
+        }
+    }
+}
+
+fn hash_opt_decoration_length(length: Option<DecorationLength>, h: &mut FxHasher) {
+    match length {
+        None => h.write_u8(0),
+        Some(DecorationLength::FromFont) => h.write_u8(1),
+        Some(DecorationLength::Length(length)) => {
+            h.write_u8(2);
+            hash_opt_length(Some(length), h);
+        }
+    }
 }
 
 /// The content hash of a path's paint.
@@ -146,6 +182,11 @@ pub fn hash_declared(d: &Declared) -> u64 {
     });
     h.write_u64(d.font_variations.as_ref().map_or(0, |v| v.key() ^ 1));
     h.write_u64(d.font_features.as_ref().map_or(0, |f| f.key() ^ 1));
+    h.write_u8(d.text_case.map_or(0, |case| 1 + case as u8));
+    h.write_u8(d.decoration_line.map_or(0, |line| 1 + line as u8));
+    hash_opt_decoration_length(d.decoration_offset, &mut h);
+    hash_opt_decoration_length(d.decoration_thickness, &mut h);
+    hash_opt_paint(d.decoration_color.as_ref(), &mut h);
     h.finish()
 }
 

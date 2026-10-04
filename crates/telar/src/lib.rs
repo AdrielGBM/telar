@@ -157,13 +157,14 @@ pub use reactive_core::{
 pub use renderer_assets::{SvgData, SvgError, VectorCommand};
 #[cfg(feature = "runtime")]
 pub use renderer_core::{
-    BlendMode, Border, BorderRadius, Clamp, Color, Dash, Declared, DrawCommand, DrawState,
-    FillRule, FitWidth, FontFamily, FontFeatures, FontFit, FontStyle, FontTag, FontVariations,
-    Gradient, GradientKind, GradientStop, GradientStops, ImageData, ImageFill, ImageSlice,
-    LayerMask, LineCap, LineHeight, LineJoin, Paint, PathData, PathStyle, PathVerb, Raster,
-    RectStyle, RendererError, Role, Scale, Semantics, Shadow, ShapeStyle, Span, Stroke, TextAlign,
-    TextLength, TextShadow, TextStyle, TextWrap, fitted_font_size, for_each_with_matrix,
-    hash_draw_commands, measure_text, text_metrics_generation, transform_clip_rect,
+    BlendMode, Border, BorderRadius, Clamp, Color, Dash, Declared, DecorationLength,
+    DecorationLine, DecorationMetric, DrawCommand, DrawState, FillRule, FitWidth, FontFamily,
+    FontFeatures, FontFit, FontStyle, FontTag, FontVariations, Gradient, GradientKind,
+    GradientStop, GradientStops, ImageData, ImageFill, ImageSlice, LayerMask, LineCap, LineHeight,
+    LineJoin, Paint, PathData, PathStyle, PathVerb, Raster, RectStyle, RendererError, Role, Scale,
+    Semantics, Shadow, ShapeStyle, Span, Stroke, TextAlign, TextCase, TextDecoration, TextLength,
+    TextShadow, TextStyle, TextWrap, fitted_font_size, for_each_with_matrix, hash_draw_commands,
+    measure_text, text_metrics_generation, transform_clip_rect,
 };
 // The drawing half of the backend-author API: a frontend implements `RendererFactory` and installs a `TextMetrics` for whatever "how wide is this string" means on its surface.
 #[cfg(feature = "runtime")]

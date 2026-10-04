@@ -5,7 +5,10 @@ use geometry_core::{Point, Rect};
 use super::gradient::{Gradient, GradientKind};
 use super::paint::{Paint, Shadow, Stroke};
 use super::shape::{Border, PathStyle, RectStyle};
-use super::{Declared, Scale, Span, TextShadow, TextStyle};
+use super::{
+    Declared, DecorationLength, DecorationMetric, Scale, Span, TextDecoration, TextShadow,
+    TextStyle,
+};
 use crate::BorderRadius;
 
 // `Scale` is local to renderer-core, so the orphan rules permit implementing it for these foreign value types here rather than adding arithmetic to the geometry-core crate.
@@ -119,6 +122,7 @@ impl Scale for TextStyle {
             },
             // letter_spacing is a pixel advance, so it scales with font_size; line_height is a unitless multiple and rides along via `..self`.
             letter_spacing: self.letter_spacing * sf,
+            decoration: self.decoration.scale(sf),
             ..self
         }
     }
@@ -130,6 +134,9 @@ impl Scale for Declared {
             font_size: self.font_size.map(|v| scale_length(v, sf)),
             color: self.color.map(|c| c.scale(sf)),
             letter_spacing: self.letter_spacing.map(|v| scale_length(v, sf)),
+            decoration_offset: self.decoration_offset.map(|v| scale_decoration(v, sf)),
+            decoration_thickness: self.decoration_thickness.map(|v| scale_decoration(v, sf)),
+            decoration_color: self.decoration_color.map(|c| c.scale(sf)),
             ..self
         }
     }
@@ -149,5 +156,27 @@ fn scale_length(length: crate::TextLength, sf: f32) -> crate::TextLength {
     match length {
         crate::TextLength::Px(px) => crate::TextLength::Px(px * sf),
         other => other,
+    }
+}
+
+impl Scale for TextDecoration {
+    fn scale(self, sf: f32) -> Self {
+        let metric = |metric| match metric {
+            DecorationMetric::Px(px) => DecorationMetric::Px(px * sf),
+            from_font => from_font,
+        };
+        TextDecoration {
+            offset: metric(self.offset),
+            thickness: metric(self.thickness),
+            color: self.color.map(|c| c.scale(sf)),
+            ..self
+        }
+    }
+}
+
+fn scale_decoration(length: DecorationLength, sf: f32) -> DecorationLength {
+    match length {
+        DecorationLength::Length(length) => DecorationLength::Length(scale_length(length, sf)),
+        from_font => from_font,
     }
 }

@@ -1,6 +1,6 @@
 //! The cache keys shaping, rasterization and COLR lookup are all addressed by.
 
-use renderer_core::{Color, FontFamily, LineHeight, Raster, TextStyle, TextWrap};
+use renderer_core::{Color, FontFamily, LineHeight, Raster, TextCase, TextStyle, TextWrap};
 use rustc_hash::FxHasher;
 use std::hash::{Hash, Hasher};
 
@@ -21,6 +21,7 @@ pub fn text_style_bits(style: &TextStyle) -> u32 {
         && style.raster == Raster::Smooth
         && style.font_variations.is_empty()
         && style.font_features.is_empty()
+        && style.text_case == TextCase::AsWritten
     {
         return packed;
     }
@@ -32,6 +33,10 @@ pub fn text_style_bits(style: &TextStyle) -> u32 {
     style.raster.hash(&mut h);
     style.font_variations.key().hash(&mut h);
     style.font_features.key().hash(&mut h);
+    if style.text_case != TextCase::AsWritten {
+        style.text_case.hash(&mut h);
+        style.lang.hash(&mut h);
+    }
     h.finish() as u32
 }
 

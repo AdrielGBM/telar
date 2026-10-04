@@ -13,6 +13,7 @@ use std::sync::Arc;
 mod atlas;
 mod cache;
 mod colr;
+mod decoration;
 mod layout;
 mod metrics;
 mod raster;
@@ -22,6 +23,7 @@ mod tests;
 pub use atlas::{ATLAS_SIZE, GlyphAtlas, GlyphInfo};
 pub use cache::{TextCacheKey, make_text_cache_key, text_style_bits};
 pub use colr::ColrGlyph;
+pub use decoration::DecorationStroke;
 
 use crate::fonts::{self, Fonts};
 
@@ -68,6 +70,7 @@ pub struct TextShaper {
     font_metrics_cache: Option<renderer_core::FontMetrics>,
     // Whether a `Named` family in a `Stack` has an installed face — a `fontdb::Database::query` per distinct name rather than per shape call. Unbounded like `blank_glyphs`, for the same reason: the set is bounded by the family names an application actually names, not by how often it shapes.
     family_availability: rustc_hash::FxHashMap<Arc<str>, bool>,
+    underline_metrics: rustc_hash::FxHashMap<fontdb::ID, decoration::UnderlineMetrics>,
     /// The [`fonts::faces_generation`] this shaper's database was cloned at.
     faces: u64,
     /// The families its default face is routed to: its own configuration's, kept when it takes faces another configuration loaded.
@@ -232,8 +235,9 @@ fn shape_buffer(
             let runs = styled_runs(text, spans, style);
             // A loop rather than `.iter().map(...).collect()`: each run resolves its family against the font database through the same `&mut` cache, which a closure re-invoked per item cannot reborrow as readily as a plain loop body can.
             let mut resolved: Vec<(&str, Attrs<'_>)> = Vec::with_capacity(runs.len());
-            for (slice, run_style) in runs.iter() {
-                let mut run_attrs = text_attrs(run_style, font_system, family_availability);
+            for (run, (slice, run_style)) in runs.iter().enumerate() {
+                let mut run_attrs =
+                    text_attrs(run_style, font_system, family_availability).metadata(run + 1);
                 if run_style.font_size != style.font_size
                     && run_style.font_size > 0.0
                     && effective_line_height(run_style) > 0.0
@@ -319,8 +323,28 @@ fn visual_line_starts(buffer: &Buffer) -> Vec<usize> {
         .collect()
 }
 
-/// Shapes `text` into `rect`, then applies `max_lines`/`ellipsis` clamping: cosmic-text has no public ellipsis, so a clamped overflow is truncated at the start of the first dropped visual line, and (with ellipsis) `…` is appended and characters are dropped until it fits.
+/// Shapes `text` into `rect` in the case its style shows it in (see [`renderer_core::TextCase`]), clamped as [`make_cased_buffer`] clamps it.
 fn make_buffer(
+    font_system: &mut FontSystem,
+    family_availability: &mut rustc_hash::FxHashMap<Arc<str>, bool>,
+    text: &str,
+    spans: Option<&[Span]>,
+    rect: Rect,
+    style: &TextStyle,
+) -> Buffer {
+    let cased = renderer_core::case_text(text, spans, style);
+    make_cased_buffer(
+        font_system,
+        family_availability,
+        &cased.text,
+        cased.spans.as_deref(),
+        rect,
+        style,
+    )
+}
+
+/// Shapes `text` into `rect`, then applies `max_lines`/`ellipsis` clamping: cosmic-text has no public ellipsis, so a clamped overflow is truncated at the start of the first dropped visual line, and (with ellipsis) `…` is appended and characters are dropped until it fits.
+fn make_cased_buffer(
     font_system: &mut FontSystem,
     family_availability: &mut rustc_hash::FxHashMap<Arc<str>, bool>,
     text: &str,
@@ -502,6 +526,7 @@ impl TextShaper {
             blank_glyphs: FxHashSet::default(),
             font_metrics_cache: None,
             family_availability: rustc_hash::FxHashMap::default(),
+            underline_metrics: rustc_hash::FxHashMap::default(),
         }
     }
 
@@ -594,6 +619,7 @@ impl TextShaper {
         self.blank_glyphs.clear();
         self.font_metrics_cache = None;
         self.family_availability.clear();
+        self.underline_metrics.clear();
     }
 }
 

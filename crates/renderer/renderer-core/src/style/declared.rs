@@ -3,8 +3,8 @@
 use geometry_core::Size;
 
 use super::{
-    FontFamily, FontFeatures, FontStyle, FontVariations, LineHeight, Paint, Raster, TextAlign,
-    TextLength, TextShadow, TextStyle, TextWrap,
+    DecorationLength, DecorationLine, FontFamily, FontFeatures, FontStyle, FontVariations,
+    LineHeight, Paint, Raster, TextAlign, TextCase, TextLength, TextShadow, TextStyle, TextWrap,
 };
 
 /// What one place says about the text style around it, each field `None` where it says nothing.
@@ -27,6 +27,11 @@ pub struct Declared {
     pub raster: Option<Raster>,
     pub font_variations: Option<FontVariations>,
     pub font_features: Option<FontFeatures>,
+    pub text_case: Option<TextCase>,
+    pub decoration_line: Option<DecorationLine>,
+    pub decoration_offset: Option<DecorationLength>,
+    pub decoration_thickness: Option<DecorationLength>,
+    pub decoration_color: Option<Paint>,
 }
 
 impl Declared {
@@ -74,6 +79,21 @@ impl Declared {
         if let Some(font_features) = &self.font_features {
             out.font_features = font_features.clone();
         }
+        if let Some(text_case) = self.text_case {
+            out.text_case = text_case;
+        }
+        if let Some(line) = self.decoration_line {
+            out.decoration.line = line;
+        }
+        if let Some(offset) = self.decoration_offset {
+            out.decoration.offset = offset.resolve(out.font_size, surface);
+        }
+        if let Some(thickness) = self.decoration_thickness {
+            out.decoration.thickness = thickness.resolve(out.font_size, surface);
+        }
+        if let Some(color) = self.decoration_color {
+            out.decoration.color = Some(color);
+        }
         out
     }
 
@@ -87,6 +107,10 @@ impl Declared {
             || self
                 .letter_spacing
                 .is_some_and(TextLength::is_surface_relative)
+            || [self.decoration_offset, self.decoration_thickness]
+                .into_iter()
+                .flatten()
+                .any(DecorationLength::is_surface_relative)
     }
 
     /// This declaration with every fraction of the surface turned into the pixels it comes to on `surface`: what a span is before a renderer, which knows no surface, reads it.
@@ -96,6 +120,12 @@ impl Declared {
             letter_spacing: self
                 .letter_spacing
                 .map(|spacing| spacing.on_surface(surface)),
+            decoration_offset: self
+                .decoration_offset
+                .map(|offset| offset.on_surface(surface)),
+            decoration_thickness: self
+                .decoration_thickness
+                .map(|thickness| thickness.on_surface(surface)),
             ..self.clone()
         }
     }
@@ -157,6 +187,35 @@ impl Declared {
 
     pub fn with_font_features(mut self, font_features: FontFeatures) -> Self {
         self.font_features = Some(font_features);
+        self
+    }
+
+    pub fn with_text_case(mut self, text_case: TextCase) -> Self {
+        self.text_case = Some(text_case);
+        self
+    }
+
+    pub fn with_underline(mut self, underline: bool) -> Self {
+        self.decoration_line = Some(if underline {
+            DecorationLine::Underline
+        } else {
+            DecorationLine::None
+        });
+        self
+    }
+
+    pub fn with_underline_offset(mut self, offset: impl Into<DecorationLength>) -> Self {
+        self.decoration_offset = Some(offset.into());
+        self
+    }
+
+    pub fn with_underline_thickness(mut self, thickness: impl Into<DecorationLength>) -> Self {
+        self.decoration_thickness = Some(thickness.into());
+        self
+    }
+
+    pub fn with_underline_color(mut self, color: impl Into<Paint>) -> Self {
+        self.decoration_color = Some(color.into());
         self
     }
 }

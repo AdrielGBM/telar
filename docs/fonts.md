@@ -73,6 +73,9 @@ repaints.
 On web-dom the text is measured by a hidden element carrying the same settings whenever it names an axis or a
 feature, because a canvas `font` carries only family, size, weight and slant; a canvas measures the rest.
 
+The case a text is shown in and the line under it are text properties too: see
+[Text case and underline](text-case-and-underline.md).
+
 ## Faces that arrive later
 
 The font database only grows. Whenever faces are added to it — a declared face fetched by a canvas page, a

@@ -830,3 +830,144 @@ fn text_of_no_size_takes_no_room() {
             .is_none()
     );
 }
+
+fn plain(size: f32) -> TextStyle {
+    TextStyle::new(size, Color::BLACK)
+}
+
+#[test]
+fn a_text_case_measures_the_string_it_shows() {
+    let mut sh = TextShaper::new();
+    let shown = sh.measure_text("MENU STRASSE", None, 1000.0, &plain(16.0));
+    let cased = sh.measure_text(
+        "menu straße",
+        None,
+        1000.0,
+        &plain(16.0).with_text_case(renderer_core::TextCase::Upper),
+    );
+    assert_eq!(cased, shown);
+    let written = sh.measure_text("menu straße", None, 1000.0, &plain(16.0));
+    assert_ne!(
+        written, shown,
+        "the cache must not hand back the uncased width"
+    );
+}
+
+#[test]
+fn a_cased_text_answers_where_a_press_lands_in_the_bytes_it_was_written_in() {
+    let mut sh = TextShaper::new();
+    let style = plain(16.0).with_text_case(renderer_core::TextCase::Upper);
+    let text = "\u{fb01}x link";
+    let spans = [Span::new(5..9, Declared::default().with_font_weight(700))];
+    let (width, _) = sh.measure_text(text, Some(&spans), 1000.0, &style);
+    let index = sh
+        .index_at(text, Some(&spans), 1000.0, &style, (width - 2.0, 4.0))
+        .expect("the last glyph is under the press");
+    assert!(
+        (5..9).contains(&index),
+        "{index} lies in the written span, not the shown one"
+    );
+}
+
+#[test]
+fn nothing_underlined_draws_no_line_and_shapes_nothing() {
+    let mut sh = TextShaper::new();
+    let rect = Rect::new(0.0, 0.0, 400.0, 40.0);
+    assert!(
+        sh.decorations("plain", None, rect, &plain(16.0), 1.0)
+            .is_empty()
+    );
+}
+
+#[test]
+fn an_underline_sits_its_offset_below_the_baseline_across_the_glyphs() {
+    let mut sh = TextShaper::new();
+    let rect = Rect::new(10.0, 20.0, 400.0, 40.0);
+    let style = plain(16.0)
+        .with_underline(true)
+        .with_underline_offset(4.0)
+        .with_underline_thickness(2.0);
+    let strokes = sh.decorations("underlined", None, rect, &style, 1.0);
+    assert_eq!(strokes.len(), 1);
+    let stroke = &strokes[0];
+    let (width, _) = sh.measure_text("underlined", None, 400.0, &style);
+    assert_eq!(stroke.rect.x, 10.0);
+    assert!(
+        (stroke.rect.width - width).abs() <= 1.0,
+        "{} vs {width}",
+        stroke.rect.width
+    );
+    assert_eq!(stroke.rect.height, 2.0);
+    let buffer = make_buffer(
+        &mut sh.font_system,
+        &mut sh.family_availability,
+        "underlined",
+        None,
+        rect,
+        &style,
+    );
+    let baseline = buffer.layout_runs().next().expect("one line").line_y;
+    assert_eq!(stroke.rect.y, (20.0 + baseline + 4.0).round());
+    assert_eq!(
+        stroke.paint, style.color,
+        "no colour of its own takes the text's"
+    );
+}
+
+#[test]
+fn an_underline_from_the_font_is_at_least_a_device_pixel_and_below_the_baseline() {
+    let mut sh = TextShaper::new();
+    let rect = Rect::new(0.0, 0.0, 400.0, 40.0);
+    let strokes = sh.decorations("auto", None, rect, &plain(12.0).with_underline(true), 2.0);
+    assert_eq!(strokes.len(), 1);
+    assert!(strokes[0].rect.height >= 0.5);
+    let buffer = make_buffer(
+        &mut sh.font_system,
+        &mut sh.family_availability,
+        "auto",
+        None,
+        rect,
+        &plain(12.0),
+    );
+    let baseline = buffer.layout_runs().next().expect("one line").line_y;
+    assert!(strokes[0].rect.y >= baseline);
+}
+
+#[test]
+fn a_wrapped_underline_draws_one_line_per_line() {
+    let mut sh = TextShaper::new();
+    let style = plain(16.0).with_underline(true);
+    let (_, one_line) = sh.measure_text("word", None, 1000.0, &style);
+    let rect = Rect::new(0.0, 0.0, 60.0, one_line * 4.0);
+    let lines = sh.measure_text("word word word", None, 60.0, &style).1 / one_line;
+    let strokes = sh.decorations("word word word", None, rect, &style, 1.0);
+    assert_eq!(strokes.len() as f32, lines.round());
+    assert!(
+        strokes
+            .windows(2)
+            .all(|pair| pair[1].rect.y > pair[0].rect.y)
+    );
+}
+
+#[test]
+fn a_span_underlines_only_its_own_glyphs_in_its_own_colour() {
+    let mut sh = TextShaper::new();
+    let accent = Color::rgb(0.9, 0.2, 0.1);
+    let text = "read the docs";
+    let spans = [Span::new(
+        9..13,
+        Declared::default()
+            .with_underline(true)
+            .with_underline_color(accent),
+    )];
+    let rect = Rect::new(0.0, 0.0, 400.0, 40.0);
+    let strokes = sh.decorations(text, Some(&spans), rect, &plain(16.0), 1.0);
+    assert_eq!(strokes.len(), 1);
+    let (before, _) = sh.measure_text("read the ", None, 400.0, &plain(16.0));
+    assert!(
+        (strokes[0].rect.x - before).abs() <= 1.0,
+        "{} vs {before}",
+        strokes[0].rect.x
+    );
+    assert_eq!(strokes[0].paint, renderer_core::Paint::Solid(accent));
+}

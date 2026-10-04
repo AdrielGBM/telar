@@ -1629,3 +1629,53 @@ fn a_malformed_origin_is_a_build_error() {
     let code = transpiled("scale:2 transform_origin:left");
     assert!(code.contains("compile_error!"), "{code}");
 }
+
+/// A case, an underline and its longhands are text properties like any other: a container declares them for what lies beneath, a text amends what it inherits, and the underline may follow state.
+#[test]
+fn a_case_and_an_underline_cascade_and_follow_state() {
+    let src = "[logic]\nlet hovered = signal(false);\n[view]\ncol text_case:upper underline_offset:0.18em underline_thickness:2 underline_color:#ff0000\n    text \"Menu\" underline:$hovered\n    text \"Docs\" underline text_case:none underline_offset:4\n";
+    let code = crate::transpile_source(src, "demo", None, None)
+        .unwrap()
+        .rust_code;
+    assert!(!code.contains("compile_error!"), "{code}");
+    assert!(
+        code.contains(
+            ".declaring(move || Declared::default().with_text_case(TextCase::Upper).with_underline_offset(TextLength::Em(0.18)).with_underline_thickness(2.0).with_underline_color("
+        ),
+        "a container declares them for its subtree:\n{code}"
+    );
+    assert!(
+        code.contains(".with_underline(hovered.get())"),
+        "an underline reads state:\n{code}"
+    );
+    assert!(
+        code.contains(
+            ".with_text_case(TextCase::AsWritten).with_underline(true).with_underline_offset(4.0)"
+        ),
+        "a bare flag draws it and a text takes the case back:\n{code}"
+    );
+}
+
+/// A backdrop blur is a number the box re-reads, from state or animated, and it makes a plain `col` a styled box.
+#[test]
+fn a_backdrop_blur_is_read_and_animated_like_opacity() {
+    let src = "[logic]\nlet frost = signal(20.0f32);\n[view]\ncol backdrop_blur:20 fill:#ffffff80\n    box backdrop_blur:$frost transition(backdrop_blur 200ms)\n";
+    let code = crate::transpile_source(src, "demo", None, None)
+        .unwrap()
+        .rust_code;
+    assert!(!code.contains("compile_error!"), "{code}");
+    assert!(code.contains(".with_backdrop_blur(|| 20.0)"), "{code}");
+    assert!(
+        code.contains("motion::Animated::new(frost.get(),"),
+        "a transition animates it:\n{code}"
+    );
+    let promoted = crate::transpile_source(
+        "[view]\ncol backdrop_blur:12\n    text \"Hi\"\n",
+        "demo",
+        None,
+        None,
+    )
+    .unwrap()
+    .rust_code;
+    assert!(promoted.contains("StyledContainer::"), "{promoted}");
+}

@@ -535,3 +535,28 @@ fn a_covered_link_run_takes_no_shape_and_follows_nothing() {
         "nothing followed"
     );
 }
+
+/// A text maps its case by the rules of the language it is written in: the nearest `lang` said on a box above it, or the active locale when none is.
+#[test]
+fn a_text_is_written_in_the_language_said_nearest_above_it_or_the_locale() {
+    std::thread::spawn(|| {
+        reset_layout_runtime();
+        i18n_core::set_locale("en");
+        let text = Text::declaring(
+            || "istanbul".to_string(),
+            LayoutStyle::new(),
+            |inherited| inherited.with_text_case(renderer_core::TextCase::Upper),
+        )
+        .unwrap();
+        let outer = new_container(LayoutStyle::new(), &[text.layout_node()]).unwrap();
+        assert_eq!((text.style)().lang.as_deref(), Some("en"));
+
+        let slot = crate::annotation::slot(outer);
+        let mut said = slot.peek();
+        said.lang = Some("tr".into());
+        slot.set(said);
+        assert_eq!((text.style)().lang.as_deref(), Some("tr"));
+    })
+    .join()
+    .unwrap();
+}

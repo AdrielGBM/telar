@@ -156,3 +156,52 @@ fn axes_and_features_are_the_settings_a_browser_reads() {
         "a face left alone says nothing"
     );
 }
+
+#[test]
+fn a_text_case_is_a_text_transform_so_the_document_keeps_what_was_written() {
+    let style = TextStyle::new(12.0, Color::BLACK).with_text_case(renderer_core::TextCase::Upper);
+    assert!(css_of(&style).contains("text-transform:uppercase;"));
+    assert!(!css_of(&TextStyle::new(12.0, Color::BLACK)).contains("text-transform"));
+}
+
+#[test]
+fn an_underline_is_the_text_decoration_longhands_without_skipping_ink() {
+    let style = TextStyle::new(12.0, Color::BLACK)
+        .with_underline(true)
+        .with_underline_offset(4.0)
+        .with_underline_thickness(2.0)
+        .with_underline_color(Color::from_rgb_u8(255, 0, 0));
+    let css = css_of(&style);
+    for declaration in [
+        "text-decoration-line:underline;",
+        "text-decoration-skip-ink:none;",
+        "text-underline-offset:4px;",
+        "text-decoration-thickness:2px;",
+        "text-decoration-color:",
+    ] {
+        assert!(css.contains(declaration), "{declaration} in {css}");
+    }
+    let from_font = css_of(&TextStyle::new(12.0, Color::BLACK).with_underline(true));
+    assert!(!from_font.contains("text-underline-offset"), "{from_font}");
+    assert!(!from_font.contains("text-decoration-color"), "{from_font}");
+}
+
+#[test]
+fn a_span_says_its_own_case_and_underline_in_em_as_written() {
+    let mut css = String::new();
+    span_style(
+        &renderer_core::Declared::default()
+            .with_text_case(renderer_core::TextCase::Capitalize)
+            .with_underline(true)
+            .with_underline_offset(renderer_core::TextLength::Em(0.18)),
+        &mut css,
+    );
+    assert!(css.contains("text-transform:capitalize;"), "{css}");
+    assert!(css.contains("text-decoration-line:underline;"), "{css}");
+    assert!(css.contains("text-underline-offset:0.18em;"), "{css}");
+}
+
+#[test]
+fn a_backdrop_blur_radius_is_half_as_a_css_deviation() {
+    assert_eq!(backdrop_filter(20.0), "blur(10px)");
+}

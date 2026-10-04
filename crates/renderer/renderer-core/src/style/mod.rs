@@ -5,21 +5,25 @@ use std::sync::Arc;
 
 mod dash;
 mod declared;
+mod decoration;
 mod font_fit;
 mod font_settings;
 mod gradient;
 mod paint;
 mod scale;
 mod shape;
+mod text_case;
 mod text_length;
 
 pub use dash::Dash;
 pub use declared::{Declared, Span, link_at};
+pub use decoration::{DecorationLength, DecorationLine, DecorationMetric, TextDecoration};
 pub use font_fit::{FitWidth, FontFit};
 pub use font_settings::{FontFeatures, FontTag, FontVariations};
 pub use gradient::{Gradient, GradientKind, GradientStop, GradientStops};
 pub use paint::{FillRule, LineCap, LineJoin, Paint, Shadow, Stroke};
 pub use shape::{Border, PathStyle, RectStyle, ShapeStyle, border_inner_shape};
+pub use text_case::{CasedText, TextCase, case_text};
 pub use text_length::TextLength;
 
 /// Horizontal alignment of text within its box. `Start` is the writing-direction start (left in LTR).
@@ -225,6 +229,12 @@ pub struct TextStyle {
     pub font_variations: FontVariations,
     /// Which OpenType features are on. See [`FontFeatures`].
     pub font_features: FontFeatures,
+    /// The case the glyphs show. See [`TextCase`].
+    pub text_case: TextCase,
+    /// The line drawn along the glyphs. See [`TextDecoration`].
+    pub decoration: TextDecoration,
+    /// The language the text is written in, as a BCP 47 tag, whose rules [`text_case`](Self::text_case) follows; `None` takes the language-neutral ones.
+    pub lang: Option<Arc<str>>,
 }
 
 impl TextStyle {
@@ -244,6 +254,9 @@ impl TextStyle {
             text_wrap: TextWrap::Wrap,
             font_variations: FontVariations::default(),
             font_features: FontFeatures::default(),
+            text_case: TextCase::AsWritten,
+            decoration: TextDecoration::default(),
+            lang: None,
         }
     }
 
@@ -302,6 +315,8 @@ impl TextStyle {
             && self.text_wrap == other.text_wrap
             && self.font_variations == other.font_variations
             && self.font_features == other.font_features
+            && self.text_case == other.text_case
+            && self.lang == other.lang
     }
 
     pub fn with_font_variations(mut self, font_variations: FontVariations) -> Self {
@@ -311,6 +326,67 @@ impl TextStyle {
 
     pub fn with_font_features(mut self, font_features: FontFeatures) -> Self {
         self.font_features = font_features;
+        self
+    }
+
+    pub fn with_text_case(mut self, text_case: TextCase) -> Self {
+        self.text_case = text_case;
+        self
+    }
+
+    pub fn with_decoration(mut self, decoration: TextDecoration) -> Self {
+        self.decoration = decoration;
+        self
+    }
+
+    /// Draws a line under the glyphs, or takes it away. See [`TextDecoration`].
+    pub fn with_underline(mut self, underline: bool) -> Self {
+        self.decoration.line = if underline {
+            DecorationLine::Underline
+        } else {
+            DecorationLine::None
+        };
+        self
+    }
+
+    pub fn with_underline_offset(mut self, px: f32) -> Self {
+        self.decoration.offset = DecorationMetric::Px(px);
+        self
+    }
+
+    /// The underline offset `offset` names on a surface of `surface`: `em` of this style's size.
+    pub fn with_underline_offset_in(
+        mut self,
+        offset: TextLength,
+        surface: geometry_core::Size,
+    ) -> Self {
+        self.decoration.offset = DecorationMetric::Px(offset.resolve(self.font_size, surface));
+        self
+    }
+
+    pub fn with_underline_thickness(mut self, px: f32) -> Self {
+        self.decoration.thickness = DecorationMetric::Px(px);
+        self
+    }
+
+    /// The underline thickness `thickness` names on a surface of `surface`: `em` of this style's size.
+    pub fn with_underline_thickness_in(
+        mut self,
+        thickness: TextLength,
+        surface: geometry_core::Size,
+    ) -> Self {
+        self.decoration.thickness =
+            DecorationMetric::Px(thickness.resolve(self.font_size, surface));
+        self
+    }
+
+    pub fn with_underline_color(mut self, color: impl Into<Paint>) -> Self {
+        self.decoration.color = Some(color.into());
+        self
+    }
+
+    pub fn with_lang(mut self, lang: impl Into<Arc<str>>) -> Self {
+        self.lang = Some(lang.into());
         self
     }
 

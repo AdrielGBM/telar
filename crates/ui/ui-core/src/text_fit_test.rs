@@ -1,6 +1,6 @@
 use layout_core::{AlignItems, AvailableSpace, LayoutStyle};
 use reactive_core::signal;
-use renderer_core::{Color, DrawCommand, FontFit, TextLength, TextStyle};
+use renderer_core::{Color, DrawCommand, FontFit, TextCase, TextLength, TextStyle};
 use ui_tree::{Component, RenderNode};
 
 use crate::context::{compute_layout, new_container, reset_layout_runtime, track_layout};
@@ -158,4 +158,68 @@ fn a_fitted_line_never_wraps() {
         track_layout(text.layout_node()).unwrap().get().height <= line + 0.5,
         "a line fitted to the whole width must not break onto a second"
     );
+}
+
+/// A fit measures the string it draws, cased, so a line set in capitals comes to its width in capitals, an `ß` that becomes `SS` included.
+#[test]
+fn a_cased_fitted_line_fits_the_string_it_draws() {
+    reset_layout_runtime();
+    let text = Text::fitting(
+        || "straße".to_string(),
+        LayoutStyle::new(),
+        || FontFit::containing(1.0),
+        |inherited: TextStyle| {
+            inherited
+                .with_color(Color::BLACK)
+                .with_text_case(TextCase::Upper)
+        },
+    )
+    .unwrap();
+    let root = new_container(LayoutStyle::new().flex_column(), &[text.layout_node()]).unwrap();
+    lay_out(root, 600.0);
+    let style = drawn_style(&text.view()).unwrap();
+    let as_written = style.clone().with_text_case(TextCase::AsWritten);
+    assert!(
+        close(line_width("STRASSE", &as_written), 600.0),
+        "the capitals are {} wide at {}px",
+        line_width("STRASSE", &as_written),
+        style.font_size
+    );
+}
+
+/// A fitted text is cased in the language said nearest above it, as any text is, and fitted again when that language changes.
+#[test]
+fn a_fitted_line_is_cased_and_fitted_in_the_language_said_above_it() {
+    std::thread::spawn(|| {
+        reset_layout_runtime();
+        i18n_core::set_locale("en");
+        let text = Text::fitting(
+            || "istanbul".to_string(),
+            LayoutStyle::new(),
+            || FontFit::containing(1.0),
+            |inherited: TextStyle| inherited.with_text_case(TextCase::Upper),
+        )
+        .unwrap();
+        let root = new_container(LayoutStyle::new().flex_column(), &[text.layout_node()]).unwrap();
+        lay_out(root, 600.0);
+        let style = drawn_style(&text.view()).unwrap();
+        assert_eq!(style.lang.as_deref(), Some("en"));
+
+        let slot = crate::annotation::slot(root);
+        let mut said = slot.peek();
+        said.lang = Some("tr".into());
+        slot.set(said);
+        crate::context::relayout_if_dirty();
+        let style = drawn_style(&text.view()).unwrap();
+        assert_eq!(style.lang.as_deref(), Some("tr"));
+        let as_written = style.clone().with_text_case(TextCase::AsWritten);
+        assert!(
+            close(line_width("İSTANBUL", &as_written), 600.0),
+            "the Turkish capitals are {} wide at {}px",
+            line_width("İSTANBUL", &as_written),
+            style.font_size
+        );
+    })
+    .join()
+    .unwrap();
 }

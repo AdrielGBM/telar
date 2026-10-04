@@ -217,19 +217,33 @@ impl Text {
     ) -> Result<Self, LayoutError> {
         // The node does not exist until the leaf is registered, and that call's measure closure already reads the style, so the cell lets the style close over a node older than itself.
         let node_cell = Rc::new(std::cell::Cell::new(None::<layout_core::NodeId>));
-        let inherited: Rc<dyn Fn() -> TextStyle> = {
+        let in_language = |styled: Rc<dyn Fn() -> TextStyle>| -> Rc<dyn Fn() -> TextStyle> {
+            let cell = Rc::clone(&node_cell);
+            Rc::new(move || {
+                let style = styled();
+                if style.lang.is_some() {
+                    return style;
+                }
+                let lang = match cell.get() {
+                    Some(node) => crate::annotation::language_at(node),
+                    None => i18n_core::use_locale().map(Arc::from),
+                };
+                TextStyle { lang, ..style }
+            })
+        };
+        let inherited = in_language({
             let cell = Rc::clone(&node_cell);
             Rc::new(move || match cell.get() {
                 Some(node) => crate::inherit::inherited_text_style(node),
                 None => crate::inherit::Inherited::initial().text_style(),
             })
-        };
+        });
         let declared_by = |amend: Rc<dyn Fn(TextStyle) -> TextStyle>| {
             let inherited = Rc::clone(&inherited);
             Rc::new(move || amend(inherited())) as Rc<dyn Fn() -> TextStyle>
         };
         let (declared, fitting) = match source {
-            StyleSource::Complete(style_fn) => (style_fn, None),
+            StyleSource::Complete(style_fn) => (in_language(style_fn), None),
             StyleSource::Inheriting(amend) => (declared_by(amend), None),
             StyleSource::Fitting(amend, fit) => (
                 declared_by(Rc::clone(&amend)),

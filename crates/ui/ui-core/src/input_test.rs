@@ -600,3 +600,21 @@ fn an_underline_runs_under_the_letters_it_is_about() {
         "a field without the keyboard still shows what is wrong with it"
     );
 }
+
+/// A field inherits every text property but the case: its caret and selection index the value it shows, so it shows the value as typed.
+#[test]
+fn a_field_shows_what_was_typed_whatever_case_it_inherits() {
+    reset_layout_runtime();
+    let value = reactive_core::signal("typed".to_string());
+    let field = Input::declaring(value, LayoutStyle::new(), |inherited| inherited).unwrap();
+    let outer = new_container(LayoutStyle::new(), &[field.layout_node()]).unwrap();
+    crate::inherit::declare(
+        outer,
+        renderer_core::Declared::default()
+            .with_text_case(renderer_core::TextCase::Upper)
+            .with_underline(true),
+    );
+    let style = (field.style)();
+    assert_eq!(style.text_case, renderer_core::TextCase::AsWritten);
+    assert!(style.decoration.is_drawn(), "the rest still inherits");
+}

@@ -523,3 +523,65 @@ fn text_under_a_scaled_matrix_is_drawn_at_the_scaled_size_once() {
         "moving it changed its size: {plain} then {moved}"
     );
 }
+
+fn render_text(text: &str, style: TextStyle) -> Vec<u8> {
+    let mut renderer = SoftwareRenderer::<HeadlessWindow, HeadlessWindow>::new_headless(
+        200,
+        48,
+        SoftwareRendererConfig::default(),
+    );
+    let cmds = vec![DrawCommand::Text {
+        spans: None,
+        text: Arc::from(text),
+        rect: Rect::new(10.0, 8.0, 180.0, 30.0),
+        style: Arc::new(style),
+    }];
+    renderer.begin_frame(200, 48, 1.0, 0).unwrap();
+    renderer.render_frame(&cmds, Some(Color::BLACK)).unwrap();
+    renderer.read_rgba().expect("a frame was drawn").to_vec()
+}
+
+/// The rows of a 200-px-wide frame in which at least `min` pixels are the underline's green and nothing else.
+fn green_rows(rgba: &[u8], min: usize) -> Vec<usize> {
+    rgba.chunks(200 * 4)
+        .enumerate()
+        .filter(|(_, row)| {
+            row.chunks(4)
+                .filter(|px| px[1] > 200 && px[0] < 40 && px[2] < 40)
+                .count()
+                >= min
+        })
+        .map(|(y, _)| y)
+        .collect()
+}
+
+#[test]
+fn an_underline_is_drawn_its_thickness_thick_beneath_the_glyphs() {
+    let green = Color::from_rgb_u8(0, 255, 0);
+    let plain = TextStyle::new(16.0, Color::WHITE);
+    let underlined = plain
+        .clone()
+        .with_underline(true)
+        .with_underline_offset(4.0)
+        .with_underline_thickness(2.0)
+        .with_underline_color(green);
+    let rows = green_rows(&render_text("underline", underlined), 40);
+    assert_eq!(rows.len(), 2, "two rows thick: {rows:?}");
+    assert_eq!(rows[1], rows[0] + 1);
+    assert!(
+        green_rows(&render_text("underline", plain), 1).is_empty(),
+        "no underline asked for, none drawn"
+    );
+}
+
+#[test]
+fn a_cased_text_rasterizes_as_the_string_it_shows() {
+    let style = TextStyle::new(16.0, Color::WHITE);
+    assert_eq!(
+        render_text(
+            "menu",
+            style.clone().with_text_case(renderer_core::TextCase::Upper)
+        ),
+        render_text("MENU", style)
+    );
+}

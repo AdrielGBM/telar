@@ -182,7 +182,7 @@ is an error, not a no-op, because the alternative is an animation that silently 
 
 ### F5. What can be animated, and why the line is there
 
-**Paint** — `opacity`, `fill`, `stroke`, `color`.
+**Paint** — `opacity`, `fill`, `stroke`, `color`, `backdrop_blur`.
 **Transform** — `rotate`, `scale`, `scale_x`, `scale_y`, `translate_x`, `translate_y`.
 
 **Text** — `font_variation`, the one text property allowed through: an axis animated on scroll or on hover is

@@ -1010,6 +1010,39 @@ fn a_fitted_display_line_takes_its_share_in_both() {
     }
 }
 
+/// A fitted line in capitals is fitted by its capitals: the measure cases the string before it solves for the size, so the box Taffy gives the line, the box the browser lays the transformed glyphs out in, and the share asked for agree, `ß` turned `SS` included.
+#[wasm_bindgen_test]
+fn a_fitted_cased_line_takes_its_share_in_both() {
+    let fitted = fitted_leaf("straße", FontFit::containing(0.6), |size| {
+        display(size, 0.84, 0.02).with_text_case(renderer_core::TextCase::Upper)
+    });
+    let Some((_, styled)) = &fitted.text else {
+        unreachable!("a fitted leaf is a text")
+    };
+    let styled = styled.clone();
+    parity(
+        "a cased line fitted to 0.6 of a column",
+        Direction::Ltr,
+        surface(
+            LayoutStyle::new()
+                .flex_column()
+                .align_items(AlignItems::START)
+                .padding_all(40.0),
+            vec![fitted, sized(200.0, 20.0)],
+        ),
+    );
+    let target = 0.6 * (SURFACE.0 - 80.0);
+    let style = styled
+        .style()
+        .with_text_case(renderer_core::TextCase::AsWritten);
+    let drawn = CanvasTextMetrics.measure("STRASSE", None, 1.0e6, &style).0;
+    assert!(
+        (drawn - target).abs() <= TOLERANCE,
+        "the capitals are {drawn} wide at {}px, asked for {target}",
+        style.font_size
+    );
+}
+
 /// A fit capped by a height, as `fit(100%, max_height:20sh)` asks: the line stops growing at the height, and both engines stack what follows under the same box.
 #[wasm_bindgen_test]
 fn a_fitted_line_held_by_a_height_stacks_the_same_in_both() {
@@ -1057,4 +1090,54 @@ fn a_size_between_whole_pixels_measures_between_them() {
             ),
         );
     }
+}
+
+#[wasm_bindgen_test]
+fn a_cased_label_takes_the_room_of_the_string_it_shows() {
+    let cased = |case: renderer_core::TextCase| {
+        TextStyle::new(18.0, Color::BLACK)
+            .with_text_wrap(TextWrap::NoWrap)
+            .with_letter_spacing(1.5)
+            .with_text_case(case)
+    };
+    parity(
+        "a row of cased labels",
+        Direction::Ltr,
+        surface(
+            LayoutStyle::new()
+                .flex_row()
+                .align_items(AlignItems::START)
+                .gap(10.0),
+            vec![
+                text_leaf("work straße", cased(renderer_core::TextCase::Upper)),
+                text_leaf("ABOUT ME", cased(renderer_core::TextCase::Lower)),
+                text_leaf("get in touch", cased(renderer_core::TextCase::Capitalize)),
+                sized(40.0, 40.0),
+            ],
+        ),
+    );
+}
+
+#[wasm_bindgen_test]
+fn an_uppercase_paragraph_wraps_where_the_browser_wraps_it() {
+    parity(
+        "an uppercase paragraph in a narrow column",
+        Direction::Ltr,
+        surface(
+            LayoutStyle::new()
+                .flex_column()
+                .align_items(AlignItems::START),
+            vec![
+                holding(
+                    LayoutStyle::new().width(160.0).flex_column(),
+                    vec![text_leaf(
+                        "a short paragraph set in capitals that has to wrap",
+                        TextStyle::new(16.0, Color::BLACK)
+                            .with_text_case(renderer_core::TextCase::Upper),
+                    )],
+                ),
+                sized(40.0, 20.0),
+            ],
+        ),
+    );
 }

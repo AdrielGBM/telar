@@ -76,6 +76,17 @@ and software already render each layer through its own compositing pass, so they
 artwork path (`vector.rs`'s `Drawing::open_layer`) draws inside an `<svg>`, which isolates on its own. TUI
 has no notion of a backdrop to blend against and ignores the attribute.
 
+## Text case, underline and backdrop blur
+
+`src/text_paint_test.rs` checks the CSS these come to and how a cased text is measured: `text-transform` with
+the written text kept as the element's content, the `text-decoration` longhands (`text-underline-offset`,
+`text-decoration-thickness`, `text-decoration-color`, and `text-decoration-skip-ink: none`), and
+`backdrop-filter: blur()` at half the radius Telar takes. It also holds the canvas measurer's width for a cased
+string, Turkish included, against what the page lays out under the same `lang`. `layout_parity_test.rs` lays
+cased labels and a cased paragraph out through both engines. See
+[docs/text-case-and-underline.md](https://github.com/AdrielGBM/telar/blob/main/docs/text-case-and-underline.md)
+and [docs/backdrop-blur.md](https://github.com/AdrielGBM/telar/blob/main/docs/backdrop-blur.md).
+
 ## One document, two writers
 
 What a frame says the document is — which elements, in which order, with which attributes, CSS and SVG — is

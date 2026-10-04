@@ -383,6 +383,45 @@ impl ViewGen<'_> {
         {
             modifiers.push_str(&format!(".with_raster({variant})"));
         }
+        if let Some(variant) = attrs
+            .iter()
+            .find(|a| a.key == "text_case")
+            .and_then(|a| registry::keyword(registry::TEXT_CASE_VALUES, a.value.text().trim()))
+        {
+            modifiers.push_str(&format!(".with_text_case({variant})"));
+        }
+        if let Some(attr) = attrs.iter().find(|a| a.key == "underline") {
+            let value = attr.value.text().trim();
+            let drawn = if value.is_empty() {
+                "true".to_string()
+            } else {
+                super::signals::substitute_reads(value)
+            };
+            let _ = write!(modifiers, ".with_underline({drawn})");
+        }
+        for (key, method) in [
+            ("underline_offset", "with_underline_offset"),
+            ("underline_thickness", "with_underline_thickness"),
+        ] {
+            let Some(value) = attrs
+                .iter()
+                .find(|a| a.key == key)
+                .map(|a| a.value.text().trim().to_string())
+                .filter(|value| !value.is_empty())
+            else {
+                continue;
+            };
+            if value.contains('$') {
+                let read = super::signals::substitute_reads(&value);
+                let _ = write!(modifiers, ".{method}(({read}) as f32)");
+            } else {
+                modifiers.push_str(&length_modifier(method, &value, "0.0", target));
+            }
+        }
+        if let Some(a) = attrs.iter().find(|a| a.key == "underline_color") {
+            let color = self.color_expr(a.value.text(), Some(a.value_start));
+            let _ = write!(modifiers, ".with_underline_color({color})");
+        }
         modifiers
     }
 
@@ -408,11 +447,19 @@ impl ViewGen<'_> {
 
 /// The values of the inheritable properties that may read state, as the author wrote them: scanned for `$ident` so each signal they read clones itself into the style closure.
 pub(super) fn raw_reactive_values(attrs: &[Attr]) -> Vec<&str> {
-    ["color", "font_variation", "font_features"]
-        .iter()
-        .filter_map(|key| attrs.iter().find(|a| a.key == *key))
-        .map(|a| a.value.text())
-        .collect()
+    [
+        "color",
+        "font_variation",
+        "font_features",
+        "underline",
+        "underline_offset",
+        "underline_thickness",
+        "underline_color",
+    ]
+    .iter()
+    .filter_map(|key| attrs.iter().find(|a| a.key == *key))
+    .map(|a| a.value.text())
+    .collect()
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -541,6 +588,11 @@ fn text_layout_style(attrs: &[Attr]) -> String {
                 | "raster"
                 | "font_variation"
                 | "font_features"
+                | "text_case"
+                | "underline"
+                | "underline_offset"
+                | "underline_thickness"
+                | "underline_color"
         ) {
             continue;
         }

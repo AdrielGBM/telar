@@ -588,9 +588,19 @@ impl Walk<'_> {
                     claims_background: paint::text_claims_background(style),
                 });
             }
-            DrawCommand::PushLayer { opacity, blend, .. } => {
+            DrawCommand::PushLayer {
+                opacity,
+                blend,
+                backdrop_blur,
+                ..
+            } => {
                 if *opacity < 1.0 {
                     paint::declare(&mut open.style, "opacity", &paint::round(*opacity));
+                }
+                if *backdrop_blur > 0.0 {
+                    let filter = paint::backdrop_filter(*backdrop_blur);
+                    paint::declare(&mut open.style, "-webkit-backdrop-filter", &filter);
+                    paint::declare(&mut open.style, "backdrop-filter", &filter);
                 }
                 if *blend != BlendMode::Normal {
                     paint::declare(&mut open.style, "mix-blend-mode", blend.css_name());
