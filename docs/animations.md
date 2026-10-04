@@ -131,6 +131,32 @@ On web-dom the page's offset reaches the app with the document's `scroll` event,
 compositor by at most one frame. Handing a declarative timeline to the compositor (`animation-timeline`) is a
 separate optimisation, kept for when a measurement asks for it.
 
+### D7. A frame clock is time that runs only while it is read
+
+Some motion is a function of time rather than a transition toward a target: an idle sway, a shimmer, a procedural drift. It used to be built from a looping linear `Keyframes` read as a clock, and the author had to restart and stop it by hand. `motion::FrameClock` is that clock as a primitive, driven by the same ticker as everything else (D1).
+
+```rust
+let time = motion::use_frame_time_while(move || scene_active.get());
+let sway = memo(move || (time.get().as_secs_f32() * TAU / 0.9).sin() * 0.04);
+```
+
+| Question | Answer |
+| --- | --- |
+| Units | A `Duration` from `get()`; `millis()` and `secs()` give `f32`. |
+| Zero | The moment the clock was made. It is not wall-clock time and not time since the app started. |
+| What counts | Only frames in which the clock ran. Time with no reader, under reduced motion, or while the surface delivered no frames is not added, so the reading is continuous across those gaps and resumes where it stopped. |
+| Hidden or stalled surface | No target delivers frames to a hidden surface (web `requestAnimationFrame` stops in a background tab, a suspended desktop or Android window gets none), and the first frame back would otherwise carry the whole absence. One frame adds at most `MAX_FRAME_STEP` (100 ms), so the clock pauses across it. |
+| Who keeps it running | A reactive reader: an effect, memo or view segment that calls `get()` (or reads `read()`). The runtime knows who is subscribed, so a read that is conditional on a signal stops the clock the moment the condition is false, and a reader that is disposed releases it. `peek()` and reads outside any reactive scope are not readers. |
+| Scoping | Gate the read, or use `use_frame_time_while(f)`, which reads the clock only while `f()` is true and holds the last reading otherwise. `use_frame_time()` ties the clock to the calling scope; `FrameClock::new()` is the handle for code that owns it. |
+| Time scale | A frame's step is multiplied by `motion::scale()`, so slow motion applies. |
+| Reduced motion | The ticker hands it a scale of `0.0`. It **freezes at its current reading** and stops requesting frames: the same pause a looping `Keyframes` takes (D5), except it holds the reading where a loop snaps to the end of its step, because a clock has no end to jump to. Whatever is derived from it stays at the pose it had. When the preference clears it resumes from the same reading, without the paused gap. |
+
+**Frames.** The clock registers with the ticker like any animation and reports itself unsettled only while it has a reader and is not paused. That is the one signal every runner already uses to keep scheduling frames (`about_to_wait` → `motion_has_active`), so there is nothing per target to implement: web `requestAnimationFrame`, the desktop and Android frame callbacks (Choreographer on Android), the terminal's tick and the headless loop all take their next frame from it, and all go to sleep when the last reader leaves. Each tick writes the signal, which re-runs only its readers and dirties the tree through the usual path.
+
+**Headless and tests.** Nothing ticks by itself: the test calls `motion::tick(now)` with a hand-advanced `Instant`, as for `Keyframes`. The first tick after a clock gains a reader only sets its origin.
+
+**Terminal.** Frames are paced by the terminal loop's tick, so a clock reads smoothly only as fast as that loop redraws; the readings stay correct because they come from timestamps, not from counting frames.
+
 ## The `.rsx` transition syntax
 
 ```

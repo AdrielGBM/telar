@@ -5,6 +5,7 @@
 mod animated;
 mod curve;
 mod easing;
+mod frame_clock;
 mod keyframes;
 mod lerp;
 mod ticker;
@@ -12,6 +13,7 @@ mod ticker;
 pub use animated::Animated;
 pub use curve::{Curve, Spring, Tween, spring, tween};
 pub use easing::{Easing, StepPosition};
+pub use frame_clock::{FrameClock, MAX_FRAME_STEP, use_frame_time, use_frame_time_while};
 pub use keyframes::{Keyframes, KeyframesBuilder, Repeat, Timeline, TimelineBuilder};
 pub use lerp::Lerp;
 pub use ticker::{

@@ -29,8 +29,8 @@ pub use owner::{
 };
 pub(crate) use signals::{
     claim_transaction, create_signal_storage, notify_signal, release_transaction, set_signal_value,
-    signal_is_alive, signal_version, track_signal, try_update_signal_value, try_with_signal_value,
-    update_signal_value, with_signal_value,
+    signal_has_subscribers, signal_is_alive, signal_version, track_signal, try_update_signal_value,
+    try_with_signal_value, update_signal_value, with_signal_value,
 };
 pub use surface::{
     SurfaceEnterGuard, SurfaceHandle, current_surface, set_current_surface, set_surface_enter_hook,

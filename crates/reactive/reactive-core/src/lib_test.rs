@@ -352,3 +352,34 @@ fn a_memo_whose_value_did_not_change_wakes_nobody() {
     n.set(5);
     assert_eq!(*runs.borrow(), 1);
 }
+
+#[test]
+fn has_subscribers_follows_what_the_readers_read_now() {
+    let gate = signal(true);
+    let watched = signal(0);
+    assert!(!watched.has_subscribers());
+    let scope = owner_scope();
+    effect(move || {
+        if gate.get() {
+            watched.get();
+        }
+    });
+    assert!(watched.has_subscribers());
+    assert!(watched.read_only().has_subscribers());
+
+    gate.set(false);
+    assert!(
+        !watched.has_subscribers(),
+        "a reader that no longer reads does not count"
+    );
+
+    gate.set(true);
+    assert!(watched.has_subscribers());
+    let id = scope.id();
+    drop(scope);
+    dispose_owner(id);
+    assert!(
+        !watched.has_subscribers(),
+        "a disposed reader does not count"
+    );
+}

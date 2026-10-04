@@ -120,6 +120,7 @@ const SECTIONS: &[SectionDef] = sections![
         "transitions.rsx"
     ),
     ("Motion", crate::features::motion::motion, crate::features::motion::MotionProps, "motion.rsx"),
+    ("Frame clock", crate::features::frame_clock::frame_clock, crate::features::frame_clock::FrameClockProps, "frame_clock.rsx"),
     (
         "Scroll timelines",
         crate::features::scroll_timeline::scroll_timeline,

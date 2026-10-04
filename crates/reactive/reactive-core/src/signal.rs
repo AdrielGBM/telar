@@ -71,6 +71,13 @@ impl<T: 'static> ReadSignal<T> {
     pub fn is_alive(&self) -> bool {
         runtime::signal_is_alive(self.id)
     }
+
+    /// Whether an effect, memo or view segment is subscribed to this signal right now.
+    ///
+    /// For a producer that only has work to do while somebody is watching, such as a clock that should not run for nobody. It reflects the subscriptions as they stand: a reader that stopped reading on its last run, or was disposed, no longer counts.
+    pub fn has_subscribers(&self) -> bool {
+        runtime::signal_has_subscribers(self.id)
+    }
 }
 
 /// A read-write handle on a signal. `Copy`, for the reasons in [`ReadSignal`].
@@ -117,6 +124,13 @@ impl<T: 'static> RwSignal<T> {
     /// For the handle that legitimately outlives its owner — one kept in a store the tree does not own — so it can ask rather than find out by crashing. A handle that lives inside the tree that built it never needs this: its owner outlives it by construction.
     pub fn is_alive(&self) -> bool {
         runtime::signal_is_alive(self.id)
+    }
+
+    /// Whether an effect, memo or view segment is subscribed to this signal right now.
+    ///
+    /// For a producer that only has work to do while somebody is watching, such as a clock that should not run for nobody. It reflects the subscriptions as they stand: a reader that stopped reading on its last run, or was disposed, no longer counts.
+    pub fn has_subscribers(&self) -> bool {
+        runtime::signal_has_subscribers(self.id)
     }
 
     pub fn read_only(&self) -> ReadSignal<T> {

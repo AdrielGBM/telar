@@ -120,6 +120,16 @@ pub(crate) fn signal_version(id: SignalId) -> Option<u64> {
     RUNTIME.with(|rt| rt.borrow().signals.get(id).map(|s| s.version))
 }
 
+/// Whether a live effect or memo is subscribed to `id`. A subscriber disposed since is not counted, though its id may stay in the list until the next write prunes it.
+pub(crate) fn signal_has_subscribers(id: SignalId) -> bool {
+    RUNTIME.with(|rt| {
+        let rt = rt.borrow();
+        rt.signals
+            .get(id)
+            .is_some_and(|s| s.subscribers.iter().any(|e| rt.effects.contains_key(*e)))
+    })
+}
+
 /// Marks `id` as held by a transaction, answering `false` when one already holds it.
 pub(crate) fn claim_transaction(id: SignalId) -> bool {
     RUNTIME.with(|rt| rt.borrow_mut().transactions.insert(id))
