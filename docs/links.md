@@ -22,7 +22,7 @@ name a scheme (`https:`, `mailto:`…): a literal without one is a build error o
 | --- | --- |
 | `Destination` | `Route(Location)`, `Anchor(name)`, `Locale(tag)` (the place being shown, in another language) or `External(Uri)`. Lives in `semantics-core`, beside `Location`, because a renderer and a platform both read it. |
 | `Semantics::link` | The destination a box's element carries. `Semantics::linking_to` sets it and the `link` role together. |
-| `IntoDestination` | What `to` accepts: a `Destination`, a `Location`, or any `Route`. `Route` now lives in `platform-core` (re-exported by `navigate-core` as before) so this works without the `navigate` feature. |
+| `IntoDestination` | What `to` accepts: a `Destination`, a `Location`, or any `Route`. `Route` lives in `platform-core` and is re-exported by `telar` (and by the `telar-navigate` plugin, as the same item), so this works without a navigator. |
 | `anchor`, `in_locale`, `external` | The constructors `.rsx` names. `in_locale("en")` is a language switch that keeps the page and the anchor; see [docs/location.md](location.md#the-locale-in-the-location). |
 | `address_of` | A destination as the text a target writes where an address goes: a route in the app's `location_format()` and in the locale its address carries (`/en/projects`), an anchor as the current location with that fragment, an external URI as itself. |
 | `follow`, `follow_beside`, `follow_pressed` | Going there from app code: push the route, reveal the anchor, open the URI. `follow_pressed` reads Ctrl, Cmd or Shift as a request for a view beside this one. |

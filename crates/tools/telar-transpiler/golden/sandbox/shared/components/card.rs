@@ -3,6 +3,7 @@
 #![allow(noop_method_call)]
 #[allow(unused_imports)] use telar::*;
 #[allow(unused_imports)] use telar_components::*;
+#[allow(unused_imports)] use telar_navigate::*;
 #[allow(unused_imports)] use crate::*;
 
 // The standard surface panel used across the sandbox. The card recipe (fill:$theme.surface stroke:$theme.border

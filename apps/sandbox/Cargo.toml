@@ -20,7 +20,6 @@ path = "src/main.rs"
 telar = { workspace = true, features = [
     "runtime",
     "svg",
-    "navigate",
 ] }
 # Menus, dialogs and drawers draw over the page; steppers, accordions and reorderable lists are the rest.
 telar-components = { workspace = true, features = ["overlays", "advanced"] }
@@ -28,6 +27,7 @@ telar-components = { workspace = true, features = ["overlays", "advanced"] }
 # rather than under a `telar` feature. The demo never reaches for a name in this crate — the dependency is
 # what turns the parser on.
 telar-dynamic = { workspace = true, features = ["svg"] }
+telar-navigate = { workspace = true }
 
 serde = { workspace = true }
 

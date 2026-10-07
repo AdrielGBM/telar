@@ -1,9 +1,9 @@
 use std::cell::RefCell;
 use std::rc::Rc;
 
-use layout_core::AvailableSpace;
-use reactive_core::signal;
-use ui_core::{absolute_rect, compute_layout, new_leaf, reset_layout_runtime};
+use telar::{
+    AvailableSpace, absolute_rect, compute_layout, new_leaf, reset_layout_runtime, signal,
+};
 
 use super::*;
 

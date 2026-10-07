@@ -3,6 +3,7 @@
 #![allow(noop_method_call)]
 #[allow(unused_imports)] use telar::*;
 #[allow(unused_imports)] use telar_components::*;
+#[allow(unused_imports)] use telar_navigate::*;
 #[allow(unused_imports)] use crate::*;
 #[allow(unused_imports)] use crate::shared::components::feature_card::{feature_card, FeatureCardProps};
 #[allow(unused_imports)] use crate::shared::components::stat::{stat, StatProps};

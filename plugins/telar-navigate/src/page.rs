@@ -1,7 +1,6 @@
 //! What a page is to the host: a widget with lifecycle hooks and a policy for how long it is kept.
 
-use platform_core::Event;
-use ui_core::{Component, EventResult, LayoutItem, NodeId, RenderNode};
+use telar::{Component, Event, EventResult, LayoutItem, NodeId, RenderNode};
 
 /// A single screen managed by a [`NavHost`](crate::NavHost).
 ///

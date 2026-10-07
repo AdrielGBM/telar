@@ -3,6 +3,7 @@
 #![allow(noop_method_call)]
 #[allow(unused_imports)] use telar::*;
 #[allow(unused_imports)] use telar_components::*;
+#[allow(unused_imports)] use telar_navigate::*;
 #[allow(unused_imports)] use crate::*;
 
 // One documentation row for an attribute: its name, accepted values, and a short description.

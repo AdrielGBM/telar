@@ -1,6 +1,6 @@
 //! The Telar facade: the crate every application depends on.
 //!
-//! Re-exports the reactive primitives, the widget kernel and the geometry types, and carries the runner that turns a mounted tree into a window. The widget catalogue is not here: it is the `telar-components` plugin, which an application adds beside this crate.
+//! Re-exports the reactive primitives, the widget kernel and the geometry types, and carries the runner that turns a mounted tree into a window. The widget catalogue and the page stack are not here: they are the `telar-components` and `telar-navigate` plugins, which an application adds beside this crate.
 //!
 //! # Feature flags
 //!
@@ -229,10 +229,12 @@ pub use location::navigate_back;
 pub use location_locale::follow_location_locale;
 #[cfg(feature = "runtime")]
 pub use platform_core::{
-    ArgumentLocation, FixedLocation, HistorySink, HistoryStep, HistoryUpdate, Location,
-    LocationFormat, LocationSource, history_back, location_format, location_history,
-    location_locale, location_locales, location_pages, pages_of, push_anchor, push_location,
-    receive_location_history, replace_location,
+    ArgumentLocation, FixedLocation, HistoryFollower, HistoryFollowerId, HistorySink, HistoryStep,
+    HistoryUpdate, Location, LocationFormat, LocationSource, follow_location_history, history_back,
+    is_following_location_history, location_format, location_history, location_locale,
+    location_locales, location_pages, pages_of, push_anchor, push_location,
+    receive_location_history, replace_location, report_location_history, rewrite_location_history,
+    unfollow_location_history,
 };
 #[cfg(feature = "runtime")]
 pub use platform_core::{
@@ -297,11 +299,11 @@ pub use ui_core::{
     Presence, ReactiveList, Rectangle, RenderNode, ScrollPage, ScrollViewport, ScrollbarStyle,
     SlotRequest, Slots, StyledContainer, SurfaceScaffold, SurfaceTransition, Text, TextArea,
     TextRun, ThemeProvider, TransformOrigin, Transition, Underline, VirtualList, WindowRoot,
-    anchor_rect, animate_layout, apply_move, box_item, box_transform, box_transform_about,
-    close_overlay, compute_layout, confirm_top, current_direction, declare, dismiss_depth,
-    dismiss_top, drag_start, drag_travel, exits_in_flight, focus, follow_theme, fragment,
-    fragment_positional, inherited_text_style, insertion_index, interactive_rects, kept, key_held,
-    key_nav_apply, key_nav_apply_grid, key_pressed, line_box, logical_border_radius,
+    absolute_rect, anchor_rect, animate_layout, apply_move, box_item, box_transform,
+    box_transform_about, close_overlay, compute_layout, confirm_top, current_direction, declare,
+    dismiss_depth, dismiss_top, drag_start, drag_travel, exits_in_flight, focus, follow_theme,
+    fragment, fragment_positional, inherited_text_style, insertion_index, interactive_rects, kept,
+    key_held, key_nav_apply, key_nav_apply_grid, key_pressed, line_box, logical_border_radius,
     logical_border_widths, mark_dirty, modifiers, new_container, new_leaf, observe_keyboard,
     observe_pointer, open_overlay, overlay_state, overlay_viewport, pointer_buttons, provide_theme,
     register_transaction, relayout_if_dirty, remove_node, requested_cursor, set_children,
@@ -325,11 +327,6 @@ pub fn reset_layout_runtime() {
     install_default_text_metrics();
     ui_core::reset_layout_runtime();
 }
-
-#[cfg(feature = "navigate")]
-pub use navigate_core::{
-    NavHost, NavPage, NavTransition, Navigator, PagePolicy, SimplePage, TabHost, TabStacks,
-};
 
 #[cfg(feature = "runtime")]
 /// Offers an event to the overlay registry first, returning whether an overlay consumed it.

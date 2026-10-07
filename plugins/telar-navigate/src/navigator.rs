@@ -2,8 +2,7 @@
 
 use std::rc::Rc;
 
-use platform_core::{HistoryFollower, Location};
-use reactive_core::{RwSignal, signal};
+use telar::{HistoryFollower, Location, RwSignal, signal};
 
 use crate::Route;
 
@@ -62,7 +61,7 @@ impl<R: Clone + 'static> Navigator<R> {
     ///
     /// Prefer this over [`pop`](Self::pop) for any general back affordance: popping directly would tear the page out from under an open dialog instead of closing the dialog the user is looking at.
     pub fn back(&self) -> bool {
-        ui_core::dismiss::dismiss_top() || self.pop()
+        telar::dismiss_top() || self.pop()
     }
 
     /// Pops every page above the root in one step.
@@ -122,7 +121,7 @@ impl<R: Clone + 'static> Navigator<R> {
 
 impl<R: Route + 'static> Navigator<R> {
     /// Reactive read of the current page's location — the address a platform's
-    /// [`LocationSource`](platform_core::LocationSource) shows for it.
+    /// [`LocationSource`](telar::LocationSource) shows for it.
     pub fn location(&self) -> Location {
         self.current().to_location()
     }
@@ -137,28 +136,28 @@ impl<R: Route + 'static> Navigator<R> {
     ///
     /// An entry this route type has no page for is left out rather than guessed at, and the platform's current entry is rewritten to what the stack shows instead, so a stale or hand-edited address settles on a real page without costing the user the entries before it. When nothing in the platform's history is recognised the stack stays as it was.
     ///
-    /// The current route's [`title`](Route::title) becomes the page's part of the surface's title (see `ui_core::set_page_title`), and is derived again whenever the route — or anything its title reads, such as the active locale — moves.
+    /// The current route's [`title`](Route::title) becomes the page's part of the surface's title (see `telar::set_page_title`), and is derived again whenever the route — or anything its title reads, such as the active locale — moves.
     ///
-    /// The route type's [`pages`](Route::pages) become the app's (`platform_core::location_pages`), which is how a prerender learns which addresses to write.
+    /// The route type's [`pages`](Route::pages) become the app's (`telar::location_pages`), which is how a prerender learns which addresses to write.
     ///
     /// One navigator follows the address at a time; a later call replaces an earlier one. The binding lasts as long as the reactive owner it was made under.
     pub fn follow_location(self) -> Self {
         let follower = Rc::new(Follower { nav: self });
-        follower.adopt(&platform_core::pages_of(&platform_core::location_history()));
-        let id = platform_core::follow_location_history(follower);
+        follower.adopt(&telar::pages_of(&telar::location_history()));
+        let id = telar::follow_location_history(follower);
         let nav = self;
-        reactive_core::effect(move || platform_core::report_location_history(nav.locations()));
-        reactive_core::effect(move || {
+        telar::effect(move || telar::report_location_history(nav.locations()));
+        telar::effect(move || {
             let title = nav.current().title();
-            if platform_core::is_following_location_history(id) {
-                ui_core::set_page_title(title);
+            if telar::is_following_location_history(id) {
+                telar::set_page_title(title);
             }
         });
-        reactive_core::on_cleanup(move || {
-            if platform_core::is_following_location_history(id) {
-                ui_core::set_page_title(None);
+        telar::on_cleanup(move || {
+            if telar::is_following_location_history(id) {
+                telar::set_page_title(None);
             }
-            platform_core::unfollow_location_history(id);
+            telar::unfollow_location_history(id);
         });
         self
     }
@@ -177,7 +176,7 @@ impl<R: Route + 'static> HistoryFollower for Follower<R> {
         let shown: Vec<Location> = routes.iter().map(Route::to_location).collect();
         // Before the stack moves, so the report its effect makes finds the platform already agreeing.
         if shown != history {
-            platform_core::rewrite_location_history(shown.clone());
+            telar::rewrite_location_history(shown.clone());
         }
         if self.nav.peek_stack(|stack| {
             stack

@@ -3,6 +3,7 @@
 #![allow(noop_method_call)]
 #[allow(unused_imports)] use telar::*;
 #[allow(unused_imports)] use telar_components::*;
+#[allow(unused_imports)] use telar_navigate::*;
 #[allow(unused_imports)] use crate::*;
 
 // A panel drawn in a theme of its own. What a call site nests inside it is built where `children` stands, so it reads the panel's theme and its `Context` exactly as a child written inline would.

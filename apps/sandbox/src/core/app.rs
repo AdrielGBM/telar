@@ -3,13 +3,13 @@
 use crate::core::theme::theme;
 use telar::{
     AlignItems, App, AvailableSpace, BorderRadius, Children, Color, Component, Container, Event,
-    EventResult,
-    JustifyContent, LayoutError, LayoutItem, LayoutScrollArea, LayoutStyle, NavPage, NavTransition,
-    Navigator, NodeId, NodeVec, PagePolicy, Rect, RectStyle, RenderNode, Role, RwSignal, ShapeStyle,
-    SizeDimension, StyledContainer, TabHost, TabStacks, Text, TextStyle, compute_layout,
-    hot_signal, mark_dirty, new_container, new_leaf, reset_layout_runtime, set_display,
-    set_overlay_host, signal, transform_pointer, use_direction, use_dismiss_depth,
+    EventResult, JustifyContent, LayoutError, LayoutItem, LayoutScrollArea, LayoutStyle, NodeId,
+    NodeVec, Rect, RectStyle, RenderNode, Role, RwSignal, ShapeStyle, SizeDimension,
+    StyledContainer, Text, TextStyle, compute_layout, hot_signal, mark_dirty, new_container,
+    new_leaf, reset_layout_runtime, set_display, set_overlay_host, signal, transform_pointer,
+    use_direction, use_dismiss_depth,
 };
+use telar_navigate::{NavPage, NavTransition, Navigator, PagePolicy, TabHost, TabStacks};
 
 /// Width of the navigation rail / drawer, in px. Kept in sync with the `width:` on `sidebar.rsx`'s root.
 const SIDEBAR_W: f32 = 248.0;

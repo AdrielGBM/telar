@@ -4944,6 +4944,7 @@ dependencies = [
  "telar",
  "telar-components",
  "telar-dynamic",
+ "telar-navigate",
  "telar-platform-core",
  "telar-platform-headless",
  "telar-renderer-core",
@@ -5474,7 +5475,6 @@ dependencies = [
  "telar-layout-core",
  "telar-macros",
  "telar-motion-core",
- "telar-navigate-core",
  "telar-platform-android",
  "telar-platform-core",
  "telar-platform-desktop",
@@ -5691,14 +5691,10 @@ dependencies = [
 ]
 
 [[package]]
-name = "telar-navigate-core"
+name = "telar-navigate"
 version = "0.2.1"
 dependencies = [
- "telar-layout-core",
- "telar-motion-core",
- "telar-platform-core",
- "telar-reactive-core",
- "telar-ui-core",
+ "telar",
 ]
 
 [[package]]

@@ -92,9 +92,9 @@ fn back_closes_an_open_overlay_before_popping_a_page() {
     let nav = Navigator::new(Route::Home);
     nav.push(Route::Settings);
     let closed = std::rc::Rc::new(std::cell::Cell::new(false));
-    let id = {
+    let dialog = {
         let closed = closed.clone();
-        ui_core::dismiss::register_dismiss(std::rc::Rc::new(move || closed.set(true)))
+        telar::DismissRegistration::new(std::rc::Rc::new(move || closed.set(true)))
     };
 
     assert!(nav.back(), "the open overlay consumed the back");
@@ -112,7 +112,7 @@ fn back_closes_an_open_overlay_before_popping_a_page() {
         !nav.back(),
         "at the root with nothing open, back is unhandled so the OS gesture can take it"
     );
-    ui_core::dismiss::unregister_dismiss(id);
+    drop(dialog);
 }
 
 #[test]
@@ -166,7 +166,7 @@ fn current_is_reactive() {
     let seen = std::rc::Rc::new(std::cell::RefCell::new(Vec::<Route>::new()));
     let s = seen.clone();
     let n = nav;
-    let _e = reactive_core::effect(move || s.borrow_mut().push(n.current()));
+    let _e = telar::effect(move || s.borrow_mut().push(n.current()));
     nav.push(Route::Settings);
     nav.pop();
     assert_eq!(
@@ -177,16 +177,14 @@ fn current_is_reactive() {
 }
 
 fn at(path: &str) -> Location {
-    platform_core::LocationFormat::root().parse(path).unwrap()
+    telar::LocationFormat::root().parse(path).unwrap()
 }
 
-fn steps() -> Vec<(platform_core::HistoryStep, usize)> {
-    platform_core::take_window_commands()
+fn steps() -> Vec<(telar::HistoryStep, usize)> {
+    telar::take_window_commands()
         .into_iter()
         .filter_map(|command| match command {
-            platform_core::WindowCommand::Navigate(update) => {
-                Some((update.step, update.history.len()))
-            }
+            telar::WindowCommand::Navigate(update) => Some((update.step, update.history.len())),
             _ => None,
         })
         .collect()
@@ -194,7 +192,7 @@ fn steps() -> Vec<(platform_core::HistoryStep, usize)> {
 
 #[test]
 fn a_following_navigator_opens_on_the_address_it_was_launched_at() {
-    platform_core::receive_location_history(vec![at("/"), at("/settings")]);
+    telar::receive_location_history(vec![at("/"), at("/settings")]);
     let nav = Navigator::new(Route::Home).follow_location();
     assert_eq!(
         nav.peek_stack(<[Route]>::to_vec),
@@ -208,8 +206,8 @@ fn a_following_navigator_opens_on_the_address_it_was_launched_at() {
 
 #[test]
 fn every_move_of_the_stack_reaches_the_platform_as_one_step() {
-    use platform_core::HistoryStep;
-    platform_core::receive_location_history(vec![at("/")]);
+    use telar::HistoryStep;
+    telar::receive_location_history(vec![at("/")]);
     let nav = Navigator::new(Route::Home).follow_location();
     nav.push(Route::Settings);
     nav.push(Route::Detail);
@@ -226,27 +224,27 @@ fn every_move_of_the_stack_reaches_the_platform_as_one_step() {
             (HistoryStep::Replace, 1),
         ]
     );
-    assert_eq!(platform_core::location_history(), [at("/detail")]);
+    assert_eq!(telar::location_history(), [at("/detail")]);
 }
 
 #[test]
 fn a_platform_that_names_nothing_is_given_the_current_page() {
     let nav = Navigator::new(Route::Home).follow_location();
     assert_eq!(nav.current(), Route::Home);
-    assert_eq!(steps(), [(platform_core::HistoryStep::Replace, 1)]);
+    assert_eq!(steps(), [(telar::HistoryStep::Replace, 1)]);
 }
 
 #[test]
 fn the_platform_moving_by_itself_moves_the_stack_without_an_echo() {
-    platform_core::receive_location_history(vec![at("/")]);
+    telar::receive_location_history(vec![at("/")]);
     let nav = Navigator::new(Route::Home).follow_location();
     nav.push(Route::Settings);
     nav.push(Route::Detail);
     steps();
 
-    platform_core::receive_location_history(vec![at("/"), at("/settings")]);
+    telar::receive_location_history(vec![at("/"), at("/settings")]);
     assert_eq!(nav.current(), Route::Settings);
-    platform_core::receive_location_history(vec![at("/"), at("/settings"), at("/detail")]);
+    telar::receive_location_history(vec![at("/"), at("/settings"), at("/detail")]);
     assert_eq!(nav.depth(), 3);
     assert!(
         steps().is_empty(),
@@ -256,40 +254,37 @@ fn the_platform_moving_by_itself_moves_the_stack_without_an_echo() {
 
 #[test]
 fn an_unknown_entry_is_dropped_and_the_current_entry_rewritten_rather_than_stepped_back() {
-    platform_core::receive_location_history(vec![at("/"), at("/settings"), at("/gone")]);
+    telar::receive_location_history(vec![at("/"), at("/settings"), at("/gone")]);
     let nav = Navigator::new(Route::Home).follow_location();
     assert_eq!(
         nav.peek_stack(<[Route]>::to_vec),
         [Route::Home, Route::Settings]
     );
-    assert_eq!(steps(), [(platform_core::HistoryStep::Replace, 2)]);
+    assert_eq!(steps(), [(telar::HistoryStep::Replace, 2)]);
 
-    platform_core::receive_location_history(vec![at("/nowhere")]);
+    telar::receive_location_history(vec![at("/nowhere")]);
     assert_eq!(
         nav.depth(),
         2,
         "nothing recognised leaves the stack where it was"
     );
-    assert_eq!(steps(), [(platform_core::HistoryStep::Replace, 2)]);
+    assert_eq!(steps(), [(telar::HistoryStep::Replace, 2)]);
 }
 
 #[test]
 fn locations_asked_for_by_address_open_through_the_following_navigator() {
-    platform_core::receive_location_history(vec![at("/")]);
+    telar::receive_location_history(vec![at("/")]);
     let nav = Navigator::new(Route::Home).follow_location();
-    assert!(platform_core::push_location(at("/settings")));
-    assert!(
-        !platform_core::push_location(at("/gone")),
-        "no page, no entry"
-    );
-    assert!(platform_core::replace_location(at("/detail")));
+    assert!(telar::push_location(at("/settings")));
+    assert!(!telar::push_location(at("/gone")), "no page, no entry");
+    assert!(telar::replace_location(at("/detail")));
     assert_eq!(
         nav.peek_stack(<[Route]>::to_vec),
         [Route::Home, Route::Detail]
     );
-    assert!(platform_core::history_back());
+    assert!(telar::history_back());
     assert!(
-        !platform_core::history_back(),
+        !telar::history_back(),
         "the root is the platform's to leave"
     );
     assert_eq!(nav.current(), Route::Home);
@@ -297,16 +292,16 @@ fn locations_asked_for_by_address_open_through_the_following_navigator() {
 
 #[test]
 fn a_binding_made_under_an_owner_ends_with_it() {
-    platform_core::receive_location_history(vec![at("/")]);
+    telar::receive_location_history(vec![at("/")]);
     let owner = {
-        let scope = reactive_core::owner_scope();
+        let scope = telar::owner_scope();
         Navigator::new(Route::Home).follow_location();
         scope.id()
     };
-    reactive_core::dispose_owner(owner);
-    assert!(platform_core::push_location(at("/settings")));
+    telar::dispose_owner(owner);
+    assert!(telar::push_location(at("/settings")));
     assert_eq!(
-        platform_core::location_history(),
+        telar::location_history(),
         [at("/"), at("/settings")],
         "with nothing following, the request moves the history itself"
     );
@@ -314,18 +309,18 @@ fn a_binding_made_under_an_owner_ends_with_it() {
 
 #[test]
 fn an_anchor_on_a_page_is_that_page_and_survives_the_next_one() {
-    use platform_core::HistoryStep;
-    platform_core::receive_location_history(vec![at("/"), at("/settings#privacy")]);
+    use telar::HistoryStep;
+    telar::receive_location_history(vec![at("/"), at("/settings#privacy")]);
     let nav = Navigator::new(Route::Home).follow_location();
     assert_eq!(
         nav.peek_stack(<[Route]>::to_vec),
         [Route::Home, Route::Settings]
     );
     assert!(steps().is_empty(), "the anchor is not rewritten away");
-    assert!(platform_core::push_location(at("/detail#top")));
+    assert!(telar::push_location(at("/detail#top")));
     assert_eq!(nav.current(), Route::Detail);
     assert_eq!(
-        platform_core::location_history(),
+        telar::location_history(),
         [
             at("/"),
             at("/settings#privacy"),
@@ -342,8 +337,8 @@ fn an_anchor_on_a_page_is_that_page_and_survives_the_next_one() {
 }
 
 thread_local! {
-    static LANGUAGE: reactive_core::RwSignal<&'static str> =
-        reactive_core::detached(|| reactive_core::signal("en"));
+    static LANGUAGE: telar::RwSignal<&'static str> =
+        telar::detached(|| telar::signal("en"));
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -380,60 +375,60 @@ impl crate::Route for Page {
 
 #[test]
 fn the_followed_route_names_the_page_in_the_surface_title() {
-    ui_core::open_surface_title("Portfolio", "Portfolio");
-    platform_core::receive_location_history(vec![at("/")]);
+    telar::open_surface_title("Portfolio", "Portfolio");
+    telar::receive_location_history(vec![at("/")]);
     let nav = Navigator::new(Page::Home).follow_location();
-    assert_eq!(ui_core::surface_title(), "Portfolio");
+    assert_eq!(telar::surface_title(), "Portfolio");
     nav.push(Page::Credits);
-    assert_eq!(ui_core::surface_title(), "Credits — Portfolio");
+    assert_eq!(telar::surface_title(), "Credits — Portfolio");
     nav.pop();
-    assert_eq!(ui_core::surface_title(), "Portfolio");
+    assert_eq!(telar::surface_title(), "Portfolio");
 }
 
 #[test]
 fn the_page_title_follows_what_the_route_reads_for_it() {
-    ui_core::open_surface_title("Portfolio", "Portfolio");
-    platform_core::receive_location_history(vec![at("/"), at("/credits")]);
+    telar::open_surface_title("Portfolio", "Portfolio");
+    telar::receive_location_history(vec![at("/"), at("/credits")]);
     Navigator::new(Page::Home).follow_location();
-    assert_eq!(ui_core::surface_title(), "Credits — Portfolio");
+    assert_eq!(telar::surface_title(), "Credits — Portfolio");
     LANGUAGE.with(|language| language.set("es"));
-    assert_eq!(ui_core::surface_title(), "Créditos — Portfolio");
+    assert_eq!(telar::surface_title(), "Créditos — Portfolio");
 }
 
 #[test]
 fn a_navigator_no_longer_followed_no_longer_names_the_page() {
-    ui_core::open_surface_title("Portfolio", "Portfolio");
-    platform_core::receive_location_history(vec![at("/")]);
+    telar::open_surface_title("Portfolio", "Portfolio");
+    telar::receive_location_history(vec![at("/")]);
     let replaced = Navigator::new(Page::Home).follow_location();
     let _following = Navigator::new(Route::Home).follow_location();
     replaced.push(Page::Credits);
-    assert_eq!(ui_core::surface_title(), "Portfolio");
+    assert_eq!(telar::surface_title(), "Portfolio");
 }
 
 #[test]
 fn a_binding_that_ends_takes_its_page_title_with_it() {
-    ui_core::open_surface_title("Portfolio", "Portfolio");
-    platform_core::receive_location_history(vec![at("/"), at("/credits")]);
+    telar::open_surface_title("Portfolio", "Portfolio");
+    telar::receive_location_history(vec![at("/"), at("/credits")]);
     let owner = {
-        let scope = reactive_core::owner_scope();
+        let scope = telar::owner_scope();
         Navigator::new(Page::Home).follow_location();
         scope.id()
     };
-    assert_eq!(ui_core::surface_title(), "Credits — Portfolio");
-    reactive_core::dispose_owner(owner);
-    assert_eq!(ui_core::surface_title(), "Portfolio");
+    assert_eq!(telar::surface_title(), "Credits — Portfolio");
+    telar::dispose_owner(owner);
+    assert_eq!(telar::surface_title(), "Portfolio");
 }
 
 #[test]
 fn the_following_navigator_declares_its_route_types_pages() {
-    platform_core::receive_location_history(vec![at("/")]);
+    telar::receive_location_history(vec![at("/")]);
     let _nav = Navigator::new(Route::Home).follow_location();
-    assert_eq!(platform_core::location_pages(), [at("/"), at("/settings")]);
+    assert_eq!(telar::location_pages(), [at("/"), at("/settings")]);
 }
 
 #[test]
 fn a_route_type_that_names_no_pages_declares_none() {
-    platform_core::receive_location_history(vec![at("/")]);
+    telar::receive_location_history(vec![at("/")]);
     let _nav = Navigator::new(Page::Home).follow_location();
-    assert!(platform_core::location_pages().is_empty());
+    assert!(telar::location_pages().is_empty());
 }

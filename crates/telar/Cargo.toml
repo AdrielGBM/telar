@@ -192,9 +192,6 @@ prerender = [
 #! Optional runtime pieces, each off unless named. Every one of them is a dependency an application that
 #! does not use it should not have to link.
 
-## A reactive page stack with animated transitions.
-navigate = ["runtime", "dep:navigate-core"]
-
 ## The `Svg` widget, drawing shapes baked at build time out of `src:"…"`. No SVG parser at runtime.
 svg = ["ui-core?/svg"]
 
@@ -355,7 +352,6 @@ i18n-core = { workspace = true }
 layout-core = { workspace = true, optional = true }
 # Always-on (D2): the motion engine is small, and the facade must expose `motion::*` for transpiler codegen whatever else is off.
 motion-core = { workspace = true }
-navigate-core = { workspace = true, optional = true }
 platform-core = { workspace = true, optional = true }
 platform-headless = { workspace = true, optional = true }
 platform-tui = { workspace = true, optional = true }

@@ -26,7 +26,7 @@ struct LazyState {
 
 /// A subtree that is not built until the first time it would be shown — `lazy when:$cond { … }` in `.rsx`.
 ///
-/// This is the general form of what a [`NavHost`](../../navigate_core/struct.NavHost.html) does per route: pay for a screen when the user first reaches it, not at startup. Use it for anything expensive behind a condition the user may never satisfy — a settings panel, an inspector, a tab body, a chart that only some accounts see.
+/// This is the general form of what `telar-navigate`'s `NavHost` does per route: pay for a screen when the user first reaches it, not at startup. Use it for anything expensive behind a condition the user may never satisfy — a settings panel, an inspector, a tab body, a chart that only some accounts see.
 ///
 /// It is deliberately *not* what a reactive `if $cond` does. That builds its branch whenever the condition turns true and disposes it when it turns false, so a repeatedly toggled panel is rebuilt every time and loses whatever state it held. This builds **once**, on the first `true`, and from then on only shows or hides the same subtree — so scroll position, form entry and in-flight work survive being closed and reopened. The cost is symmetric: a subtree shown once is held until the whole block is dropped.
 pub struct Lazy {

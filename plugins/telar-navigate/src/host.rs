@@ -3,13 +3,11 @@
 use std::cell::RefCell;
 use std::rc::Rc;
 
-use layout_core::{LayoutError, LayoutStyle, SizeDimension};
-use motion_core::Animated;
-use platform_core::Event;
-use reactive_core::{OwnerId, dispose_owner, owner_scope, with_owner};
-use ui_core::{
-    Component, EventResult, LayoutItem, NodeId, RenderNode, absolute_rect, mark_dirty,
-    new_container, remove_node, set_children, set_display,
+use telar::motion::Animated;
+use telar::{
+    Component, Event, EventResult, LayoutError, LayoutItem, LayoutStyle, NodeId, OwnerId,
+    RenderNode, SizeDimension, absolute_rect, dispose_owner, mark_dirty, new_container,
+    owner_scope, remove_node, set_children, set_display, with_owner,
 };
 
 use crate::navigator::Navigator;
@@ -94,7 +92,7 @@ pub struct NavHost<R: Clone + Eq + 'static> {
     ///
     /// **Not whichever owner happens to be running when a page is wanted.** A page is built during a reconcile, and a reconcile can be reached from inside the page being left — so an ambient parent makes the incoming page a *child* of the outgoing one. [`prune`](Self::prune) then uproots the outgoing owner and every descendant with it, taking the new page's signals, effects and contexts while its layout nodes stay in the tree. What that leaves on screen is a page that draws and composes at full rate, and whose handlers still report events as handled, while nothing they set is read by anybody — a window that looks frozen with no error anywhere.
     ///
-    /// Minting rather than capturing is the half that matters in an app: a root is mounted outside every scope, so a host that captured [`current_owner`](reactive_core::current_owner) would hold `None`, and building under `None` changes nothing — [`with_owner`] pushes no frame for it and the ambient owner stays current.
+    /// Minting rather than capturing is the half that matters in an app: a root is mounted outside every scope, so a host that captured [`current_owner`](telar::current_owner) would hold `None`, and building under `None` changes nothing — [`with_owner`] pushes no frame for it and the ambient owner stays current.
     ///
     /// A page's lifetime is the host's to decide, so the host is what owns it.
     owner: Option<OwnerId>,

@@ -194,7 +194,7 @@ yourself: `cargo telar dev --target tui` compiles one frontend, and there is not
 
 ## The rest of the features
 
-Everything beyond the target — navigation, SVG, i18n — is listed with what it costs at
+Everything beyond the target — SVG, i18n, assets that arrive later — is listed with what it costs at
 **<https://docs.rs/telar#feature-flags>**. Most applications name a target and nothing else.
 
 Decoding at runtime is not among them. `telar` draws an SVG or an image that was baked from `src:"…"`, and
@@ -219,3 +219,19 @@ prelude = ["telar_components"]
 ```
 
 `cargo telar new` writes both, with no group named.
+
+Nor is the page stack. The app's address — its history on every target, `to:` links, the locale it carries —
+is in `telar`; the `Navigator` that keeps a stack of pages in step with it, the host that animates between
+them and the per-tab stacks are [`telar-navigate`](https://docs.rs/telar-navigate), a plugin you add beside
+`telar` and list in `telar.toml` the same way:
+
+```toml
+# Cargo.toml
+telar-navigate = "0.2.1"
+
+# telar.toml
+[telar]
+prelude = ["telar_components", "telar_navigate"]
+```
+
+A project that still turns on the old `navigate` feature of `telar` fails to resolve; `cargo telar check` and `cargo telar doctor` print the `cargo add` and the `prelude` line that replace it.

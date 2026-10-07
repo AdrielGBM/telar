@@ -1,10 +1,10 @@
 use std::cell::RefCell;
 use std::rc::Rc;
 
-use layout_core::{AvailableSpace, SizeDimension};
-use platform_core::Event;
-use reactive_core::{effect, signal};
-use ui_core::{absolute_rect, compute_layout, new_leaf, reset_layout_runtime};
+use telar::{
+    AvailableSpace, Event, SizeDimension, absolute_rect, compute_layout, effect, new_leaf,
+    reset_layout_runtime, signal,
+};
 
 use super::*;
 
@@ -69,7 +69,7 @@ impl NavPage for DropPage {}
 /// Holds an effect for as long as the page lives, so dropping the page must release it.
 struct EffectPage {
     node: NodeId,
-    _held: Option<reactive_core::Effect>,
+    _held: Option<telar::Effect>,
 }
 
 impl Component for EffectPage {

@@ -21,7 +21,7 @@ fn walk_project(out: Emitter<String>) {
         "reactive-core", "layout-core", "ui-core", "ui-tree", "telar-components",
         "renderer-core", "renderer-software", "renderer-hardware", "renderer-text",
         "platform-core", "platform-winit", "platform-desktop", "motion-core",
-        "theme-core", "i18n-core", "navigate-core", "services-core", "geometry-core",
+        "theme-core", "i18n-core", "telar-navigate", "services-core", "geometry-core",
     ];
     for name in names {
         // Nothing else can stop this loop: cancelling only drops the callback, so a long worker has to

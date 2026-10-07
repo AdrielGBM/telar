@@ -2,13 +2,11 @@
 
 use std::rc::Rc;
 
-use layout_core::{LayoutError, LayoutStyle, SizeDimension};
-use motion_core::Animated;
-use platform_core::Event;
-use reactive_core::{RwSignal, signal};
-use ui_core::{
-    Component, EventResult, LayoutItem, NodeId, RenderNode, absolute_rect, mark_dirty,
-    new_container, set_children, set_display,
+use telar::motion::Animated;
+use telar::{
+    Component, Event, EventResult, LayoutError, LayoutItem, LayoutStyle, NodeId, RenderNode,
+    RwSignal, SizeDimension, absolute_rect, mark_dirty, new_container, set_children, set_display,
+    signal,
 };
 
 use crate::host::NavHost;
@@ -180,7 +178,7 @@ impl<T: Clone + Eq + 'static, R: Clone + 'static> TabStacks<T, R> {
     ///
     /// Without tab history, Back stays strictly *within* a tab, which is the difference between a tab bar and browser history.
     pub fn back(&self) -> bool {
-        if ui_core::dismiss::dismiss_top() {
+        if telar::dismiss_top() {
             return true;
         }
         if self.navigator().pop() {

@@ -8,7 +8,8 @@ a terminal's tab. In Telar that name is derived rather than set. It comes from t
 3. the **locale**, because the page's title is translated, and changes with it.
 
 ```rust
-use telar::{Location, Navigator, Route, t};
+use telar::{Location, Route, t};
+use telar_navigate::Navigator;
 
 #[derive(Clone)]
 enum Page { Home, Credits }

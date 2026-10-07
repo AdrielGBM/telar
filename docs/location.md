@@ -5,7 +5,8 @@ command-line argument, a history a desktop app remembers between runs. Telar rep
 value, `Location`, and one per-target adapter, `LocationSource`, carries it to and from the platform.
 
 ```rust
-use telar::{Location, Navigator, Route};
+use telar::{Location, Route};
+use telar_navigate::Navigator;
 
 #[derive(Clone)]
 enum Page { Home, Project(String) }
@@ -29,6 +30,10 @@ impl Route for Page {
 
 let pages = Navigator::new(Page::Home).follow_location();
 ```
+
+`Navigator` comes from the [`telar-navigate`](../plugins/telar-navigate) plugin; `Location`, `Route` and the
+history are `telar`'s, and a route stack of an application's own follows the address the same way, through
+`HistoryFollower` and `follow_location_history`.
 
 `follow_location` does three things:
 

@@ -2,8 +2,8 @@
 
 use std::time::Duration;
 
-use motion_core::{Animated, Easing, tween};
-use ui_core::RenderNode;
+use telar::RenderNode;
+use telar::motion::{Animated, Easing, tween};
 
 const TRANSITION_MS: u64 = 220;
 
