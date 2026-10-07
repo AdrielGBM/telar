@@ -120,6 +120,13 @@ jobs:
         run: |
           curl -fsSL https://github.com/rustwasm/wasm-bindgen/releases/download/0.2.127/wasm-bindgen-0.2.127-x86_64-unknown-linux-musl.tar.gz \
             | tar -xz --strip-components=1 -C ~/.cargo/bin
+      # The same axe-core release the flake's devShell pins; the audits `include_str!` it at compile time.
+      - name: Fetch axe-core
+        run: |
+          mkdir -p "$RUNNER_TEMP/axe-core"
+          curl -fsSL https://registry.npmjs.org/axe-core/-/axe-core-4.13.0.tgz \
+            | tar -xz --strip-components=1 -C "$RUNNER_TEMP/axe-core" package/axe.min.js
+          echo "TELAR_AXE_CORE=$RUNNER_TEMP/axe-core/axe.min.js" >> "$GITHUB_ENV"
       - name: Taffy against the browser
         # Chrome and its driver are already on the runner; `CHROMEWEBDRIVER` is where the image puts the latter.
         run: |
