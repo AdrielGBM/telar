@@ -234,4 +234,6 @@ telar-navigate = "0.2.1"
 prelude = ["telar_components", "telar_navigate"]
 ```
 
+Writing a plugin of your own, in Rust or in `.rsx`, is covered in [plugins.md](plugins.md).
+
 A project that still turns on the old `navigate` feature of `telar` fails to resolve; `cargo telar check` and `cargo telar doctor` print the `cargo add` and the `prelude` line that replace it.

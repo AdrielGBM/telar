@@ -238,7 +238,37 @@ telar = "0.2.1"
 
 Everything behind it — the reactive graph, the layout engine, the renderers, the platform backends, the `.rsx` pipeline — is a separate `telar-*` crate. They are published because Cargo requires every dependency of a published crate to be published too, not because an application names them; the split is what lets a terminal build skip a GPU renderer. Reach for one directly only if you are writing a frontend or a tool against Telar's internals.
 
-Six exceptions. [`cargo-telar`](crates/tools/cargo-telar) is a binary you install rather than a dependency. [`telar-components`](plugins/telar-components) is a second dependency, for an application that draws the stock widgets: the facade carries the primitives they are built from and none of the widgets, so the catalogue is a plugin with no default features, one feature per group beyond the basics (`overlays`, `chrome`, `advanced`), and a `prelude = ["telar_components"]` line in `telar.toml` that lets `.rsx` call its tags. [`telar-navigate`](plugins/telar-navigate) is a third, for an application that keeps its pages on a stack: the facade carries the address, its history and `to:` links on every target, and the `Navigator` that follows them is a plugin, with a `prelude = ["telar_navigate"]` line that lets `.rsx` name it. [`telar-dynamic`](plugins/telar-dynamic) is a fourth, for an application that decodes an asset at run time rather than baking it: the facade owns the seam and ships no implementation of it, so the decoders and transports live there, one feature each. [`telar-embed`](crates/embed/telar-embed) is a fifth, for hosting a separately-compiled Telar UI inside your own — or for being one. And [`telar-expression`](plugins/telar-expression) is a sixth, for an application whose users bind properties to formulas: a typed, pure expression language checked before it runs and bound to signals, which most applications never need and so the facade does not carry.
+Two exceptions. [`cargo-telar`](crates/tools/cargo-telar) is a binary you install rather than a dependency. [`telar-embed`](crates/embed/telar-embed) is for hosting a separately-compiled Telar UI inside your own — or for being one. The rest is opt-in, and it is a plugin.
+
+### Plugins
+
+`telar` is the mechanism: traits, protocols and registries. The batteries an application may want are plugins, crates you add to your own `Cargo.toml` beside the facade, which carries none of them:
+
+| Plugin | What it adds |
+| --- | --- |
+| [`telar-components`](plugins/telar-components) | The widget catalogue. No default features; groups `overlays`, `chrome` and `advanced` |
+| [`telar-navigate`](plugins/telar-navigate) | The page stack: `Navigator`, the host that animates between pages, per-tab stacks |
+| [`telar-dynamic`](plugins/telar-dynamic) | Decoders and transports for assets that arrive at run time, one feature each |
+| [`telar-expression`](plugins/telar-expression) | A typed, pure expression language bound to signals |
+
+**The layout rule.** `plugins/` holds only crates an application author adds to their own `Cargo.toml`. A crate that a `telar` feature pulls in and compiles into the target is core, even when it is opt-in, and lives in `crates/`; `crates/tools/` is host-side tooling only. Nothing under `crates/` depends on `plugins/`, which `.github/scripts/check-layering.sh` enforces in CI.
+
+**Adding one.** Add the crate, name the feature groups you draw, and, for a plugin that ships `.rsx` tags, list it in `telar.toml` so every `.rsx` file sees them without a `use`:
+
+```sh
+cargo add telar-components --features overlays
+cargo add telar-navigate
+```
+
+```toml
+# telar.toml
+[telar]
+prelude = ["telar_components", "telar_navigate"]
+```
+
+Keep every plugin on the same version as `telar`: two copies of the kernel resolve to incompatible types. A tag missing from every `prelude`, an unknown crate and a name two entries both export are each reported on the `telar.toml` or `.rsx` line that caused them.
+
+**Writing one.** A plugin is a Rust crate that depends on `telar` and follows the component protocol, or a `[telar] library` written in `.rsx` and published with `cargo telar package` and `cargo telar publish`. Both are covered in **[docs/plugins.md](docs/plugins.md)**.
 
 <details>
 <summary><b>The crates behind the facade</b></summary>
@@ -256,7 +286,6 @@ Six exceptions. [`cargo-telar`](crates/tools/cargo-telar) is a binary you instal
 | [`telar-renderer-software`](crates/renderer/renderer-software) · [`telar-renderer-hardware`](crates/renderer/renderer-hardware) | CPU and wgpu backends |
 | [`telar-renderer-tui`](crates/renderer/renderer-tui) · [`telar-renderer-dom`](crates/renderer/renderer-dom) · [`telar-renderer-web`](crates/renderer/renderer-web) | Terminal cells, browser elements, browser canvas |
 | [`telar-renderer-text`](crates/renderer/renderer-text) · [`telar-renderer-assets`](crates/renderer/renderer-assets) | Text shaping and glyph atlas; SVG parsing and build-time asset baking |
-| [`telar-components`](plugins/telar-components) · [`telar-navigate`](plugins/telar-navigate) · [`telar-dynamic`](plugins/telar-dynamic) · [`telar-expression`](plugins/telar-expression) | The plugins: the widget catalogue; page-stack navigation; runtime asset decoders and transports; a typed expression language bound to signals — crates an application adds beside the facade, which nothing under `crates/` depends on |
 | [`telar-embed`](crates/embed/telar-embed) | Embedding a separately-compiled UI, or being one — a crate an application depends on directly |
 | [`telar-renderer-cache`](crates/renderer/renderer-cache) · [`telar-renderer-record`](crates/renderer/renderer-record) | The shared byte-budgeted cache; a backend that records instead of drawing |
 | [`telar-platform-core`](crates/platform/platform-core) and `telar-platform-{winit,desktop,android,tui,web,headless}` | Window/event abstraction and its backends |
@@ -266,6 +295,8 @@ Six exceptions. [`cargo-telar`](crates/tools/cargo-telar) is a binary you instal
 | [`telar-project`](crates/tools/telar-project) | What a project *is*: `telar.toml`, source discovery, output paths, and the build artifacts a transpile leaves behind |
 | [`telar-i18n-core`](crates/i18n/i18n-core) · [`telar-services-core`](crates/services/services-core) | i18n runtime, platform paths and DI |
 | [`telar-reactive-local`](crates/reactive/reactive-local) | Per-surface thread-local slots, split out so `platform-core` need not link the reactive runtime |
+
+The plugins are in the table above; `plugins/telar-rsx-fixture` is an unpublished test fixture, a `[telar] library` the test suite packages, unpacks read-only and compiles as a dependency.
 
 `telar-analyzer` and `telar-diagnostics` live in this repo but are distributed through GitHub Releases and the VS Code extension rather than crates.io.
 
