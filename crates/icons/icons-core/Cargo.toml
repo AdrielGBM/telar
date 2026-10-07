@@ -1,0 +1,24 @@
+[package]
+name = "telar-icons-core"
+version = { workspace = true }
+edition = { workspace = true }
+rust-version = { workspace = true }
+description = "Iconify icon sets for Telar: icon ids, the Iconify JSON format, the icon sources the baker and the runtime both resolve through, and the licence policy over them."
+keywords = ["telar", "icons", "iconify", "svg"]
+categories = ["gui", "multimedia::images"]
+readme = "README.md"
+license = { workspace = true }
+repository = { workspace = true }
+
+[features]
+default = []
+
+# An Iconify-compatible HTTP provider as a source, for a host that resolves ids ahead of time: the baker. Blocking and native only; the runtime fetches through `telar-dynamic`'s transport instead.
+http = ["dep:ureq"]
+
+[dependencies]
+serde = { workspace = true, features = ["derive"] }
+serde_json.workspace = true
+
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+ureq = { version = "3.4.0", optional = true }

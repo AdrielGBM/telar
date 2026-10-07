@@ -211,6 +211,11 @@ fn collect_watch_dirs(workspace_root: &Path) -> Vec<PathBuf> {
                 Some(member.join("src")),
                 Some(telar_project::assets_root(&member)),
                 telar_baker::locales_root(&member),
+                // The application's own icons, not its Iconify sets: those usually live in `node_modules`, which is no tree to watch recursively.
+                telar_project::TelarManifest::load_or_default(&member)
+                    .telar
+                    .icons
+                    .and_then(|icons| icons.svg_dir(&member)),
             ]
         })
         .flatten()

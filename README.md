@@ -209,6 +209,7 @@ Everything here is either always present or one word away. Nothing is bundled.
 - **Links** — `to:` makes a box a link to a route, an anchor on the page or a URI outside the app: a real `<a href>` on web-dom, `open_uri` through the system everywhere else, OSC 8 in a terminal. `current:` marks the current one (`aria-current`). → [docs/links.md](docs/links.md)
 - **Dashed strokes** — `stroke_dash:"1 4"` on a `path`, or `Stroke::with_dash` in a `canvas`, dashes an outline on every renderer: SVG `stroke-dasharray` on web-dom, `tiny-skia`'s own dashing on the CPU, dashes cut before tessellation on the GPU, dashed line characters in a terminal. → [docs/dashed-strokes.md](docs/dashed-strokes.md)
 - **Images and SVG** — baked into the binary at build time out of `src:"…"`, with no parser in the binary. → `svg`
+- **Icons** — `icon name:"mdi:home"` draws an [Iconify](https://iconify.design) icon in the colour of the text around it, baked at build time from Iconify sets on disk, your own SVGs or a provider you name, with each set's licence recorded in a notice — in the plugin [`telar-icons`](plugins/telar-icons).
 - **Translation catalogs** baked the same way, with `t!` validating keys and arguments at compile time.
 
 Both are baked by the CLI, and so is the `.rsx` itself: build through `cargo telar check`/`dev`/`build`/`test`, or run `cargo telar transpile` first. A plain `cargo build` fails with a message naming that command rather than compiling something stale, which is what keeps the decoders, the parser and the code generator out of every project's own build. A project that will not install the CLI produces the artifact itself from a `build.rs`, which is one call into `telar-transpiler` and gets real `cargo:rerun-if-changed` out of it.
@@ -250,6 +251,7 @@ Two exceptions. [`cargo-telar`](crates/tools/cargo-telar) is a binary you instal
 | [`telar-navigate`](plugins/telar-navigate) | The page stack: `Navigator`, the host that animates between pages, per-tab stacks |
 | [`telar-watch`](plugins/telar-watch) | Filesystem watching delivered on the UI thread: `watch_path` |
 | [`telar-dynamic`](plugins/telar-dynamic) | Decoders and transports for assets that arrive at run time, one feature each |
+| [`telar-icons`](plugins/telar-icons) | The `icon` tag for Iconify `set:name` ids, baked from local sets, your own SVGs or a provider you name, with each set's licence recorded; feature `runtime` resolves ids as the app runs |
 | [`telar-i18n`](plugins/telar-i18n) | CLDR plural rules for catalogs, and number and date formatting in the active locale, from ICU4X |
 | [`telar-expression`](plugins/telar-expression) | A typed, pure expression language bound to signals |
 
@@ -297,6 +299,7 @@ Keep every plugin on the same version as `telar`: two copies of the kernel resol
 | [`telar-project`](crates/tools/telar-project) | What a project *is*: `telar.toml`, source discovery, output paths, and the build artifacts a transpile leaves behind |
 | [`telar-i18n-core`](crates/i18n/i18n-core) · [`telar-services-core`](crates/services/services-core) | i18n runtime, platform paths and DI |
 | [`telar-reactive-local`](crates/reactive/reactive-local) | Per-surface thread-local slots, split out so `platform-core` need not link the reactive runtime |
+| [`telar-icons-core`](crates/icons/icons-core) | Iconify ids, sets, sources and licence policy, shared by `telar-icons` and the baker |
 
 The plugins are in the table above; `plugins/telar-rsx-fixture` is an unpublished test fixture, a `[telar] library` the test suite packages, unpacks read-only and compiles as a dependency.
 

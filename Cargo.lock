@@ -5714,6 +5714,7 @@ dependencies = [
  "serde",
  "serde_json",
  "telar-i18n-core",
+ "telar-icons-core",
  "telar-parser",
  "telar-project",
  "telar-renderer-assets",
@@ -5837,6 +5838,26 @@ name = "telar-i18n-fixture"
 version = "0.2.1"
 dependencies = [
  "telar",
+]
+
+[[package]]
+name = "telar-icons"
+version = "0.2.1"
+dependencies = [
+ "telar",
+ "telar-dynamic",
+ "telar-icons-core",
+ "telar-ui-core",
+ "tracing",
+]
+
+[[package]]
+name = "telar-icons-core"
+version = "0.2.1"
+dependencies = [
+ "serde",
+ "serde_json",
+ "ureq",
 ]
 
 [[package]]

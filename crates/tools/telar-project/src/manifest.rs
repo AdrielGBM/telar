@@ -10,7 +10,9 @@ use std::path::{Path, PathBuf};
 
 use serde::Deserialize;
 
+use crate::assets::{AssetKind, IdBaking};
 use crate::fonts::FontDeclaration;
+use crate::icons::{IconMode, IconsSection};
 use crate::prelude::PreludeEntry;
 use crate::web::{OgImage, ThemeColor, WebHost};
 
@@ -205,6 +207,8 @@ pub struct TelarSection {
     /// The faces this project ships, one entry per file. See [`FontDeclaration`].
     #[serde(default)]
     pub fonts: Vec<FontDeclaration>,
+    /// Where the ids of `telar-icons`' `icon` tag resolve and whether they are baked. `None` bakes nothing: every id is then left for a runtime source.
+    pub icons: Option<IconsSection>,
     /// The pre-`[telar.i18n]` spelling of [`I18nSection::root`].
     pub locales: Option<String>,
     /// The pre-`[telar.i18n]` spelling of [`I18nSection::default`].
@@ -258,7 +262,13 @@ impl TelarManifest {
             (own, base) => own.or(base).unwrap_or_default(),
         };
         manifest.telar.library = library;
-        let problems = manifest.telar.web.problems();
+        let problems: Vec<String> = manifest
+            .telar
+            .web
+            .problems()
+            .into_iter()
+            .chain(manifest.telar.icons.iter().flat_map(IconsSection::problems))
+            .collect();
         if !problems.is_empty() {
             return Err(ManifestError::Invalid {
                 path: package_root.join(MANIFEST_FILENAME),
@@ -358,6 +368,8 @@ impl TelarSection {
             } else {
                 self.fonts
             },
+            // Whole rather than merged: a package naming any source of its own is declaring where all of its icons come from.
+            icons: self.icons.or(base.icons),
             locales: self.locales.or(base.locales),
             default_locale: self.default_locale.or(base.default_locale),
         }
@@ -369,6 +381,21 @@ impl TelarSection {
         Some(format!(
             "`[telar] theme = \"{theme}\"` cannot be set in a `[telar] library`: a library is compiled into applications whose theme types it cannot name, so its `$theme.x` reads the shared `ThemeTokens` tokens instead. Remove the `theme` key"
         ))
+    }
+
+    /// What this package does with the ids its `.rsx` gives `kind`'s prop, as the `[telar.<section>]` that configures the kind says. A path kind, and a component kind whose section is absent, bakes nothing.
+    pub fn id_baking(&self, kind: &AssetKind) -> IdBaking {
+        let Some(component) = kind.component else {
+            return IdBaking::Off;
+        };
+        match component.section {
+            "icons" => match self.icons.as_ref().map(IconsSection::mode) {
+                Some(IconMode::Baked) => IdBaking::Required,
+                Some(IconMode::Both) => IdBaking::Literals,
+                Some(IconMode::Runtime) | None => IdBaking::Off,
+            },
+            _ => IdBaking::Off,
+        }
     }
 
     /// The crates this package's `.rsx` glob-imports, in the order declared.

@@ -171,6 +171,7 @@ pub(crate) fn build_web_bundle(
         &staging,
         &images::local_crates(&resolved.workspace_root, &resolved.name())?,
     )?;
+    ship_icon_notice(&staging, &package_root)?;
     match host {
         WebHost::Static if release => assets::precompress(&staging)?,
         WebHost::Static => {}
@@ -191,7 +192,7 @@ pub(crate) fn build_web_bundle(
 
 /// The paths a build writes itself, which a public file of the same name would collide with.
 fn reserved_paths(prerender: bool, host: WebHost) -> Vec<&'static str> {
-    let mut reserved = vec![PAGE_FILE, MANIFEST_FILE];
+    let mut reserved = vec![PAGE_FILE, MANIFEST_FILE, telar_baker::ICONS_NOTICE_FILENAME];
     if prerender {
         reserved.extend([prerender::NOT_FOUND_FILE, SITEMAP_FILE]);
     }
@@ -222,6 +223,19 @@ struct Shell<'a> {
     site: &'a Site,
     /// The paths of the output a public file may not take.
     reserved: &'a [&'a str],
+}
+
+/// The licence notice of the icons the bake put in the module, at the root of the site, where it is served beside what it describes.
+fn ship_icon_notice(out: &Path, package_root: &Path) -> Result<(), String> {
+    let notice = package_root
+        .join(".telar")
+        .join(telar_baker::ICONS_NOTICE_FILENAME);
+    if !notice.is_file() {
+        return Ok(());
+    }
+    std::fs::copy(&notice, out.join(telar_baker::ICONS_NOTICE_FILENAME))
+        .map(|_| ())
+        .map_err(|e| format!("could not copy {} into the site: {e}", notice.display()))
 }
 
 /// Everything after `wasm-bindgen`: the hashed bootstrap files, the public directory, the page and the manifest.

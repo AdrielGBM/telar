@@ -11,6 +11,7 @@ mod build;
 mod catalog;
 mod discovery;
 mod fonts;
+mod icons;
 mod library;
 mod manifest;
 pub mod naming;
@@ -24,8 +25,9 @@ mod web;
 pub use assets::{
     ASSET_ARTIFACT_FORMAT, ASSET_KINDS, ASSETS_INDEX_FILENAME, ASSETS_MODULE,
     ASSETS_SOURCE_FILENAME, ArtifactHandshake, AssetContext, AssetEntry, AssetIndex, AssetKind,
-    BakedAsset, GeneratedAssets, asset_kind_for_id, asset_kind_for_tag, check_artifact,
-    content_hash, generate_assets, read_index, static_name_for_path, write_generated,
+    BakedAsset, ComponentAsset, GeneratedAssets, IdBaking, asset_kind_for_component,
+    asset_kind_for_id, asset_kind_for_tag, check_artifact, content_hash, generate_assets,
+    read_index, static_name_for_path, write_generated,
 };
 pub use build::{
     BUILD_ARTIFACT_FORMAT, BuildEntry, BuildFailure, BuildFlavour, BuildIndex, clear_build_failure,
@@ -47,6 +49,7 @@ pub use discovery::{
 pub use fonts::{
     FontDeclaration, FontDisplay, FontFormat, FontStyleDeclaration, WeightDeclaration,
 };
+pub use icons::{IconLicensesSection, IconMode, IconsSection, UnlistedLicense};
 pub use library::{library_files, library_include, library_include_covers};
 pub use manifest::{
     DevSection, I18nSection, MANIFEST_FILENAME, ManifestError, PrerenderSection, RendererBackend,

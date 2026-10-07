@@ -228,6 +228,31 @@ catalog is used as it stands.
 application that wires its own runner from several `rsx_modules!` crates that each bake a catalog names the
 one it means with it too.
 
+### A prop that names a baked asset
+
+A built-in tag bakes a file named by path (`svg src:"logo.svg"`). A plugin's tag can have a prop the CLI bakes
+too, naming its asset by id: [`telar-icons`](../plugins/telar-icons)' `icon name:"mdi:home"` is the one there is.
+The protocol is general, and lives in `telar_project::ComponentAsset`: a tag, a prop, and a `[telar.<section>]`
+of `telar.toml` that configures where ids resolve and whether they are baked. Where the package bakes them,
+`cargo telar bake` resolves every literal the `.rsx` gives that prop and writes it into the package's artifact,
+and the transpiler hands the prop the pair `("set:name", Arc<Data>)` instead of the string, so the props type
+accepts both through `From`:
+
+```rust
+pub enum IconName {
+    Baked { id: &'static str, svg: Arc<SvgData> },
+    Named(Reactive<String>),
+}
+
+impl From<(&'static str, Arc<SvgData>)> for IconName { /* … */ }
+impl From<&'static str> for IconName { /* … */ }
+```
+
+A value that is not a literal reaches the component as written, unless the section bakes every id, where it is an
+error on the `.rsx` line. What is not general is the resolver: it runs inside the CLI at bake time, and the CLI
+loads no plugin code, so a new kind is an entry in `telar_project::ASSET_KINDS` and a resolver in `telar-baker`,
+the way a new file format is.
+
 ## A plugin in `.rsx`
 
 A package that sets `library = true` is a plugin written in the template language. Its `.rsx` files transpile to

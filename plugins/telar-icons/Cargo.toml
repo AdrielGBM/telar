@@ -1,0 +1,36 @@
+[package]
+name = "telar-icons"
+version = { workspace = true }
+edition = { workspace = true }
+rust-version = { workspace = true }
+description = "Iconify icons for Telar: an `icon` tag for `set:name` ids, baked at build time from local Iconify sets, your own SVGs or a provider you name, and resolved at run time only when asked."
+keywords = ["telar", "icons", "iconify", "svg", "gui"]
+categories = ["gui", "multimedia::images"]
+readme = "README.md"
+license = { workspace = true }
+repository = { workspace = true }
+
+[package.metadata.docs.rs]
+all-features = true
+
+[features]
+#! Nothing is on by default: an application's icons are baked by `cargo telar bake`, and the build that draws them links no parser, no client and no icon set.
+default = []
+
+## Resolves ids while the application runs, through `telar-dynamic`'s HTTP transport and its memory and disk caches, or through any `IconSource`. For ids an application cannot know ahead of time: a user's choice, a config file. Pair it with `[telar.icons] mode = "runtime"` or `"both"`.
+runtime = ["dep:telar-dynamic", "telar/async-assets"]
+
+[dependencies]
+icons-core.workspace = true
+telar = { workspace = true, features = ["runtime", "svg"] }
+telar-dynamic = { workspace = true, features = ["http", "svg"], optional = true }
+tracing.workspace = true
+
+[dev-dependencies]
+telar-dynamic = { workspace = true, features = ["svg"] }
+ui-core.workspace = true
+
+[[test]]
+name = "runtime"
+path = "src/runtime_test.rs"
+required-features = ["runtime"]

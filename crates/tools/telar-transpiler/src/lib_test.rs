@@ -2909,3 +2909,90 @@ fn a_typed_signal_keeps_its_type_in_the_hot_form_on_its_own_line() {
         "{code}"
     );
 }
+
+/// A package whose `telar.toml` configures icons with `mode`, holding the baked icon `mdi:home`.
+fn icon_package(name: &str, mode: &str) -> std::path::PathBuf {
+    let root = std::env::temp_dir().join(format!("rsx_icons_{name}_{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&root);
+    std::fs::create_dir_all(root.join(".telar")).unwrap();
+    std::fs::write(
+        root.join("telar.toml"),
+        format!("[telar.icons]\nmode = \"{mode}\"\nsvg = \"icons\"\n"),
+    )
+    .unwrap();
+    let index = AssetIndex {
+        format: ASSET_ARTIFACT_FORMAT,
+        producer: "test".to_string(),
+        telar_version: env!("CARGO_PKG_VERSION").to_string(),
+        entries: vec![AssetEntry {
+            kind: "icon".to_string(),
+            path: "mdi:home".to_string(),
+            hash: content_hash(b"<svg/>"),
+            static_name: static_name_for_path("mdi:home"),
+        }],
+    };
+    std::fs::write(root.join(".telar/assets.json"), index.to_json()).unwrap();
+    root
+}
+
+fn transpile_in(root: &std::path::Path, src: &str) -> String {
+    let assets = AssetContext::load(root, env!("CARGO_PKG_VERSION"));
+    transpile_source(src, "demo", None, Some(&assets))
+        .unwrap()
+        .rust_code
+}
+
+#[test]
+fn a_baked_icon_id_becomes_the_artifacts_pair() {
+    let root = icon_package("pair", "baked");
+    let code = transpile_in(&root, "[view]\nicon name:\"mdi:home\" size:20\n");
+    let name = static_name_for_path("mdi:home");
+    assert!(
+        code.contains(&format!(
+            "IconProps::props().name((\"mdi:home\", ::std::sync::Arc::clone(&crate::__rsx_assets::{name}))).size(20.0).build()"
+        )),
+        "{code}"
+    );
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+#[test]
+fn an_icon_the_artifact_lacks_names_the_bake() {
+    let root = icon_package("unbaked_id", "baked");
+    let code = transpile_in(&root, "[view]\nicon name:\"mdi:account\"\n");
+    assert!(code.contains(".name(compile_error!("), "{code}");
+    assert!(code.contains("cargo telar bake"), "{code}");
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+#[test]
+fn a_computed_icon_id_is_an_error_while_every_id_is_baked() {
+    let root = icon_package("dynamic", "baked");
+    let code = transpile_in(
+        &root,
+        "[logic]\nlet which = signal(String::new());\n\n[view]\nicon name:$which\n",
+    );
+    assert!(code.contains(".name(compile_error!("), "{code}");
+    assert!(code.contains("mode = \\\"runtime\\\""), "{code}");
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+#[test]
+fn a_computed_icon_id_reaches_the_component_when_only_literals_are_baked() {
+    let root = icon_package("both", "both");
+    let code = transpile_in(
+        &root,
+        "[logic]\nlet which = signal(String::new());\n\n[view]\nicon name:$which\nicon name:\"mdi:home\"\n",
+    );
+    assert!(code.contains(".name(which.clone())"), "{code}");
+    assert!(code.contains(&static_name_for_path("mdi:home")), "{code}");
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+#[test]
+fn an_icon_id_is_a_plain_string_where_nothing_bakes_it() {
+    let root = icon_package("runtime", "runtime");
+    let code = transpile_in(&root, "[view]\nicon name:\"mdi:home\"\n");
+    assert!(code.contains(".name(\"mdi:home\")"), "{code}");
+    let _ = std::fs::remove_dir_all(&root);
+}

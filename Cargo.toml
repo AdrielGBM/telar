@@ -52,6 +52,8 @@ members = [
     "plugins/telar-rsx-fixture",
     "plugins/telar-watch",
     "plugins/telar-i18n",
+    "crates/icons/icons-core",
+    "plugins/telar-icons",
 ]
 
 default-members = [
@@ -95,6 +97,8 @@ default-members = [
     "plugins/telar-navigate",
     "plugins/telar-watch",
     "plugins/telar-i18n",
+    "crates/icons/icons-core",
+    "plugins/telar-icons",
 ]
 
 [workspace.package]
@@ -137,6 +141,7 @@ panic = "abort"
 # Every crate publishes as `telar-*`; the keys keep the short internal names so `use ui_core::…` and `dep:ui-core` feature syntax stay unchanged.
 geometry-core = { package = "telar-geometry-core", path = "crates/geometry/geometry-core", version = "0.2.1" }
 i18n-core = { package = "telar-i18n-core", path = "crates/i18n/i18n-core", version = "0.2.1" }
+icons-core = { package = "telar-icons-core", path = "crates/icons/icons-core", version = "0.2.1" }
 layout-core = { package = "telar-layout-core", path = "crates/layout/layout-core", version = "0.2.1" }
 layout-reactive = { package = "telar-layout-reactive", path = "crates/layout/layout-reactive", version = "0.2.1" }
 motion-core = { package = "telar-motion-core", path = "crates/motion/motion-core", version = "0.2.1" }
@@ -172,6 +177,7 @@ telar-components = { path = "plugins/telar-components", version = "0.2.1" }
 telar-diagnostics = { path = "crates/tools/telar-diagnostics", version = "0.2.1" }
 telar-devtools = { path = "crates/devtools/telar-devtools", version = "0.2.1" }
 telar-dynamic = { path = "plugins/telar-dynamic", version = "0.2.1" }
+telar-icons = { path = "plugins/telar-icons", version = "0.2.1" }
 telar-project = { path = "crates/tools/telar-project", version = "0.2.1" }
 telar-macros = { path = "crates/tools/telar-macros", version = "0.2.1" }
 telar-navigate = { path = "plugins/telar-navigate", version = "0.2.1" }

@@ -55,7 +55,9 @@ pub fn run(args: Vec<String>) {
             | TelarCommand::Package(_)
             | TelarCommand::Publish(_)
     ) {
-        bake_workspace();
+        if !bake_workspace() {
+            std::process::exit(1);
+        }
         transpile_workspace();
     }
     match command {
@@ -66,10 +68,14 @@ pub fn run(args: Vec<String>) {
         TelarCommand::Build(args) => run_build_cmd(args),
         TelarCommand::Test(args) => run_test_cmd(args),
         TelarCommand::Check(args) => run_check_cmd(args),
-        TelarCommand::Bake => bake_workspace(),
+        TelarCommand::Bake => {
+            if !bake_workspace() {
+                std::process::exit(1);
+            }
+        }
         TelarCommand::Transpile => {
-            bake_workspace();
-            if !transpile_workspace() {
+            let baked = bake_workspace();
+            if !transpile_workspace() || !baked {
                 std::process::exit(1);
             }
         }

@@ -6,6 +6,7 @@ use telar_parser::{Attr, Element, Value, ViewNode};
 
 use crate::style::{format_f32, hex_to_color_expr};
 use telar_project::naming::to_pascal_case;
+use telar_project::{AssetContext, IdBaking};
 
 use super::signals::{rust_str, substitute_reads, wrap_signal_clones};
 use super::{ChildEmit, ChildMode, ViewGen, expr_marker};
@@ -88,12 +89,31 @@ impl ViewGen<'_> {
     fn component_props_arg(&self, tag: &str, props_attrs: &[&Attr], classes: &[String]) -> String {
         let mut setters: String = props_attrs
             .iter()
-            .map(|attr| format!(".{}({})", attr.key, self.component_attr_expr(attr)))
+            .map(|attr| {
+                let value = self
+                    .baked_id_expr(tag, attr)
+                    .unwrap_or_else(|| self.component_attr_expr(attr));
+                format!(".{}({value})", attr.key)
+            })
             .collect();
         if let Some(amendment) = self.class_surface_style(classes) {
             let _ = write!(setters, ".style({amendment})");
         }
         format!("{}::props(){setters}.build()", props_type(tag))
+    }
+
+    /// The value of a prop that names a baked asset by id — `icon name:"mdi:home"` where `[telar.icons]` bakes — or `None` for every other prop, which takes the ordinary emission.
+    ///
+    /// A literal becomes the `(id, Arc<data>)` pair the artifact answers for it, and a value that is not a literal is a `compile_error!` naming runtime mode where every id must be baked. Where only literals are baked, a computed id reaches the component as written, for its runtime source.
+    fn baked_id_expr(&self, tag: &str, attr: &Attr) -> Option<String> {
+        let name = tag.rsplit("::").next().unwrap_or(tag);
+        let (kind, baking) = self.assets?.id_baking(name, &attr.key)?;
+        let resolved = match &attr.value {
+            Value::Quoted(id) => self.assets?.resolve_id(kind, id.trim()),
+            _ if baking == IdBaking::Required => Err(AssetContext::dynamic_id_message(kind)),
+            _ => return None,
+        };
+        Some(resolved.unwrap_or_else(|message| format!("compile_error!({})", rust_str(&message))))
     }
 
     /// A `@class` on a component call, compiled onto the callee's **principal surface**.

@@ -9,12 +9,20 @@
 //!
 //! Adding a kind — fonts, shaders, audio — is an entry in [`ASSET_KINDS`](telar_project::ASSET_KINDS) plus
 //! one [`Baker`] impl here; nothing in the transpiler, the macro, or a CLI needs to change to pick it up.
+//!
+//! A kind a plugin's component names by id rather than by path — `icon name:"mdi:home"` — also needs its ids
+//! resolved into bytes before a [`Baker`] sees them. That resolver lives here too, because it runs inside the CLI
+//! and the CLI loads no plugin code: the icons `[telar.icons]` configures resolve through `telar-icons-core`'s
+//! sources, are judged against the package's licence policy, and are recorded in `.telar/icons.json` with the
+//! notice [`ICONS_NOTICE_FILENAME`] beside it.
 
 #![warn(rustdoc::broken_intra_doc_links)]
 
 use telar_project::AssetKind;
 
 mod catalog;
+mod icons;
+mod ids;
 mod image;
 mod package;
 mod svg;
@@ -23,6 +31,11 @@ mod web_image;
 pub use catalog::{
     CatalogReport, bake_catalog, catalog_files, locales_root, parse_catalog, to_source,
 };
+pub use icons::{
+    ICONS_NOTICE_FILENAME, ICONS_RECORD_FILENAME, IconRecord, RecordedIcon, RecordedSet,
+    read_icon_record,
+};
+pub use ids::{IdRef, collect_id_refs};
 pub use package::{BakeReport, bake_package, collect_asset_refs};
 pub use web_image::{WEB_IMAGES_DIR, WebImage, WebImageFile, web_image};
 
@@ -42,7 +55,7 @@ pub trait Baker {
 
 /// Every registered baker, one per [`ASSET_KINDS`](telar_project::ASSET_KINDS) entry.
 pub fn bakers() -> &'static [&'static dyn Baker] {
-    &[&svg::SvgBaker, &image::ImageBaker]
+    &[&svg::SvgBaker, &image::ImageBaker, &svg::IconBaker]
 }
 
 /// The baker for the asset kind identified by [`AssetKind::id`], or `None` if `id` names no registered baker.

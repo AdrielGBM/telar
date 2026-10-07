@@ -8,18 +8,27 @@ use std::collections::BTreeSet;
 use std::path::Path;
 
 use telar_parser::{RsxDocument, ViewNode};
-use telar_project::{AssetKind, BakedAsset, asset_kind_for_tag, assets_root};
+use telar_project::{
+    ASSET_KINDS, AssetContext, AssetIndex, AssetKind, BakedAsset, IdBaking, TelarManifest,
+    asset_kind_for_tag, assets_root,
+};
 
-/// What baking one package turned up. Warnings are collected rather than printed so each caller renders them where its user is looking — a terminal for the CLI, the LSP log for the analyzer — and none of them is fatal: a package with one unreadable asset still bakes the rest.
+use crate::ids::{IdRef, collect_id_refs};
+
+/// What baking one package turned up. Warnings and errors are collected rather than printed so each caller renders them where its user is looking — a terminal for the CLI, the LSP log for the analyzer. A warning is not fatal: a package with one unreadable asset still bakes the rest.
 #[derive(Debug, Clone, Default)]
 pub struct BakeReport {
     pub baked: usize,
     /// Whether the index differs from what was already on disk. `false` means nothing was rewritten, which is what keeps a bake from retriggering rustc or the editor's file watcher.
     pub changed: bool,
     pub warnings: Vec<String>,
+    /// What a build must not go on from: an id that has to be baked and is not a literal, one no source has, a set the licence policy refuses. Everything else is still baked, so an editor keeps answering for the rest.
+    pub errors: Vec<String>,
 }
 
 /// Bakes every asset `package_dir`'s `.rsx` files reference, writing `<package_dir>/.telar/assets.{json,rs}`. `None` when the package holds no `.rsx` at all, so a crate with nothing to bake never grows a `.telar/`.
+///
+/// That is every `src:"…"` file, and every literal id given to a component-named kind's prop where the package bakes that kind: the icons `[telar.icons]` resolves, judged against its licence policy and recorded beside the artifact.
 ///
 /// `telar_version` is the version of `telar` the *project* resolves — see [`telar_project::resolve_telar_version`]. Writing this binary's own version here would hand the macro a mismatch it cannot act on.
 pub fn bake_package(package_dir: &Path, producer: &str, telar_version: &str) -> Option<BakeReport> {
@@ -28,8 +37,17 @@ pub fn bake_package(package_dir: &Path, producer: &str, telar_version: &str) -> 
         return None;
     }
 
+    let manifest = TelarManifest::load_or_default(package_dir);
+    let id_kinds: Vec<(&'static AssetKind, IdBaking)> = ASSET_KINDS
+        .iter()
+        .map(|kind| (kind, manifest.telar.id_baking(kind)))
+        .filter(|(_, baking)| *baking != IdBaking::Off)
+        .collect();
+    let id_kind_list: Vec<&'static AssetKind> = id_kinds.iter().map(|(kind, _)| *kind).collect();
+
     let mut report = BakeReport::default();
     let mut refs: Vec<(&'static AssetKind, String)> = Vec::new();
+    let mut id_refs: Vec<IdRef> = Vec::new();
     for rsx in &rsx_files {
         let Ok(source) = std::fs::read_to_string(rsx) else {
             continue;
@@ -38,17 +56,19 @@ pub fn bake_package(package_dir: &Path, producer: &str, telar_version: &str) -> 
             continue;
         };
         collect_asset_refs(&doc, &mut refs);
+        collect_id_refs(&doc, rsx, &id_kind_list, &mut id_refs);
     }
 
     let assets_root = assets_root(package_dir);
     let telar_dir = package_dir.join(".telar");
     let previous_index = telar_project::read_index(&telar_dir).ok().flatten();
-    // An entry baked in another format is not an expression this one can reuse, however unchanged its file.
-    let reusable = previous_index
-        .as_ref()
-        .filter(|index| index.format == telar_project::ASSET_ARTIFACT_FORMAT);
-    let previous_source =
-        std::fs::read_to_string(telar_dir.join(telar_project::ASSETS_SOURCE_FILENAME)).ok();
+    let previous = Previous {
+        // An entry baked in another format is not an expression this one can reuse, however unchanged its file.
+        index: previous_index
+            .as_ref()
+            .filter(|index| index.format == telar_project::ASSET_ARTIFACT_FORMAT),
+        source: std::fs::read_to_string(telar_dir.join(telar_project::ASSETS_SOURCE_FILENAME)).ok(),
+    };
 
     let mut baked: Vec<BakedAsset> = Vec::new();
     // Keyed on path alone, matching `generate_assets`'s own uniqueness rule: two tags naming one file resolve to one entry rather than failing the whole package.
@@ -70,45 +90,54 @@ pub fn bake_package(package_dir: &Path, producer: &str, telar_version: &str) -> 
                 continue;
             }
         };
-        let hash = telar_project::content_hash(&bytes);
+        baked.extend(bake_one(kind, path, bytes, &previous, &mut report));
+    }
 
-        let cached_expr = reusable
-            .zip(previous_source.as_deref())
-            .and_then(|(index, source)| {
-                let entry = index
-                    .entries
-                    .iter()
-                    .find(|e| e.path == path && e.kind == kind.id && e.hash == hash)?;
-                init_expr_for_static(source, &entry.static_name)
-            });
-
-        let init_expr = match cached_expr {
-            Some(expr) => expr,
-            None => {
-                let Some(baker) = super::baker_for_id(kind.id) else {
-                    report
-                        .warnings
-                        .push(format!("no baker registered for asset kind `{}`", kind.id));
-                    continue;
-                };
-                match baker.bake(&bytes) {
-                    Ok(expr) => expr,
-                    Err(e) => {
-                        report
-                            .warnings
-                            .push(format!("cannot bake {} asset `{path}`: {e}", kind.label));
-                        continue;
-                    }
-                }
+    for (kind, baking) in &id_kinds {
+        if *baking == IdBaking::Required {
+            for reference in id_refs
+                .iter()
+                .filter(|reference| reference.kind.id == kind.id && reference.literal.is_none())
+            {
+                let message = AssetContext::dynamic_id_message(kind);
+                report.errors.push(format!(
+                    "{}: `{}:{}` — {}",
+                    reference.location(package_dir),
+                    kind.attr,
+                    reference.written,
+                    message.trim_start_matches("rsx: ")
+                ));
             }
-        };
-
-        baked.push(BakedAsset {
-            kind: kind.id.to_string(),
-            path,
-            content: bytes,
-            init_expr,
-        });
+        }
+    }
+    let icon_refs: Vec<IdRef> = id_refs
+        .into_iter()
+        .filter(|reference| {
+            reference
+                .kind
+                .component
+                .is_some_and(|c| c.section == "icons")
+        })
+        .collect();
+    let icons_section = manifest
+        .telar
+        .icons
+        .clone()
+        .filter(|_| id_kinds.iter().any(|(kind, _)| kind.id == "icon"))
+        .unwrap_or_default();
+    let icons = crate::icons::resolve(package_dir, &icons_section, &icon_refs);
+    report.warnings.extend(icons.warnings);
+    report.errors.extend(icons.errors);
+    let icon_kind =
+        telar_project::asset_kind_for_id("icon").expect("icon is a registered asset kind");
+    for (id, svg) in icons.icons {
+        baked.extend(bake_one(
+            icon_kind,
+            id.to_string(),
+            svg,
+            &previous,
+            &mut report,
+        ));
     }
 
     let generated = match telar_project::generate_assets(&baked, producer, telar_version) {
@@ -131,6 +160,61 @@ pub fn bake_package(package_dir: &Path, producer: &str, telar_version: &str) -> 
         report.changed = false;
     }
     Some(report)
+}
+
+/// The artifact a previous bake left, consulted so an asset whose content is unchanged keeps the expression already written for it.
+struct Previous<'a> {
+    index: Option<&'a AssetIndex>,
+    source: Option<String>,
+}
+
+/// One asset as the artifact will hold it: the expression a previous bake wrote for these exact bytes, or a fresh bake of them. `None`, with a warning, when the bytes do not bake.
+fn bake_one(
+    kind: &'static AssetKind,
+    path: String,
+    bytes: Vec<u8>,
+    previous: &Previous<'_>,
+    report: &mut BakeReport,
+) -> Option<BakedAsset> {
+    let hash = telar_project::content_hash(&bytes);
+    let cached_expr = previous
+        .index
+        .zip(previous.source.as_deref())
+        .and_then(|(index, source)| {
+            let entry = index
+                .entries
+                .iter()
+                .find(|e| e.path == path && e.kind == kind.id && e.hash == hash)?;
+            init_expr_for_static(source, &entry.static_name)
+        });
+
+    let init_expr = match cached_expr {
+        Some(expr) => expr,
+        None => {
+            let Some(baker) = super::baker_for_id(kind.id) else {
+                report
+                    .warnings
+                    .push(format!("no baker registered for asset kind `{}`", kind.id));
+                return None;
+            };
+            match baker.bake(&bytes) {
+                Ok(expr) => expr,
+                Err(e) => {
+                    report
+                        .warnings
+                        .push(format!("cannot bake {} asset `{path}`: {e}", kind.label));
+                    return None;
+                }
+            }
+        }
+    };
+
+    Some(BakedAsset {
+        kind: kind.id.to_string(),
+        path,
+        content: bytes,
+        init_expr,
+    })
 }
 
 /// The Rust expression a previous bake already wrote for `static_name`, reused so an asset whose content hash is unchanged is never re-decoded through `usvg`/`resvg`/`image` on every bake. Parses the exact single-line shape [`telar_project::generate_assets`] emits for one entry — brittle to that shape changing, which is exactly what bumping `ASSET_ARTIFACT_FORMAT` is for.

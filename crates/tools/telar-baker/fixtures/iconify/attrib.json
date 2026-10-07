@@ -1,0 +1,12 @@
+{
+  "prefix": "attrib",
+  "info": {
+    "name": "Attribution Icons",
+    "license": { "title": "CC BY 4.0", "spdx": "CC-BY-4.0", "url": "https://creativecommons.org/licenses/by/4.0/" }
+  },
+  "width": 16,
+  "height": 16,
+  "icons": {
+    "dot": { "body": "<circle cx=\"8\" cy=\"8\" r=\"4\" fill=\"currentColor\"/>" }
+  }
+}

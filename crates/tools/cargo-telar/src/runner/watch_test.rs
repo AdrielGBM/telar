@@ -41,6 +41,23 @@ fn the_asset_and_locale_roots_are_watched_too() {
     let _ = std::fs::remove_dir_all(&root);
 }
 
+#[test]
+fn the_applications_own_icons_are_watched() {
+    let root = watch_probe("icons");
+    std::fs::create_dir_all(root.join("icons/app")).unwrap();
+    std::fs::write(
+        root.join(telar_project::MANIFEST_FILENAME),
+        "[telar.icons]\nsvg = \"icons\"\n",
+    )
+    .unwrap();
+
+    let dirs = collect_watch_dirs(&root);
+
+    assert!(dirs.contains(&root.join("icons")), "{dirs:?}");
+
+    let _ = std::fs::remove_dir_all(&root);
+}
+
 /// A project from `cargo telar new` has no `[workspace]` table, and the old walk read members only — so it watched nothing whatsoever.
 #[test]
 fn a_lone_package_is_watched_at_all() {

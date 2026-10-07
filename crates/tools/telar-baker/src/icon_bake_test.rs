@@ -1,0 +1,139 @@
+//! A package that draws icons from a local Iconify set, baked the way `cargo telar bake` bakes it: only the ids its `.rsx` writes reach the artifact, and an id it computes is refused while every id must be baked.
+
+use std::path::{Path, PathBuf};
+
+use telar_baker::{ICONS_NOTICE_FILENAME, bake_package, read_icon_record};
+use telar_project::{AssetContext, read_index, static_name_for_path};
+
+const VERSION: &str = "0.2.1";
+
+fn fixtures() -> PathBuf {
+    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("fixtures/iconify")
+}
+
+fn package(name: &str, mode: &str, view: &str) -> PathBuf {
+    let root = std::env::temp_dir().join(format!("telar_icon_bake_{name}_{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&root);
+    std::fs::create_dir_all(root.join("src")).unwrap();
+    std::fs::write(
+        root.join("Cargo.toml"),
+        "[package]\nname = \"icon-app\"\nversion = \"0.1.0\"\n",
+    )
+    .unwrap();
+    std::fs::write(
+        root.join("telar.toml"),
+        format!(
+            "[telar.icons]\nmode = \"{mode}\"\niconify = \"{}\"\n",
+            fixtures().display()
+        ),
+    )
+    .unwrap();
+    std::fs::write(root.join("src/app.rsx"), view).unwrap();
+    root
+}
+
+fn baked_icons(root: &Path) -> Vec<String> {
+    read_index(&root.join(".telar"))
+        .unwrap()
+        .unwrap()
+        .entries
+        .into_iter()
+        .filter(|entry| entry.kind == "icon")
+        .map(|entry| entry.path)
+        .collect()
+}
+
+#[test]
+fn only_the_icons_the_view_names_are_baked() {
+    let root = package(
+        "used",
+        "baked",
+        "[view]\ncol\n    icon name:\"demo:home\"\n    if true\n        icon name:\"demo:house\" size:32\n    icon name:\"demo:home\"\n",
+    );
+    let report = bake_package(&root, "test", VERSION).expect("the package has .rsx");
+    assert!(report.errors.is_empty(), "{:?}", report.errors);
+    assert!(report.warnings.is_empty(), "{:?}", report.warnings);
+
+    assert_eq!(baked_icons(&root), vec!["demo:home", "demo:house"]);
+    let source = std::fs::read_to_string(root.join(".telar/assets.rs")).unwrap();
+    assert_eq!(source.matches("pub static ").count(), 2, "{source}");
+    assert!(
+        source.contains(&static_name_for_path("demo:home")),
+        "{source}"
+    );
+    assert!(
+        !source.contains(&static_name_for_path("demo:gear")),
+        "{source}"
+    );
+    assert!(source.contains("LazyLock<Arc<SvgData>>"), "{source}");
+
+    let record = read_icon_record(&root).unwrap();
+    assert_eq!(
+        record.icons.keys().collect::<Vec<_>>(),
+        vec!["demo:home", "demo:house"]
+    );
+    let notice = std::fs::read_to_string(root.join(".telar").join(ICONS_NOTICE_FILENAME)).unwrap();
+    assert!(notice.contains("Icons: home, house"), "{notice}");
+
+    let assets = AssetContext::load(&root, VERSION);
+    let kind = telar_project::asset_kind_for_id("icon").unwrap();
+    assert!(assets.resolve_id(kind, "demo:house").is_ok());
+    assert!(assets.resolve_id(kind, "demo:gear").is_err());
+}
+
+#[test]
+fn a_rebake_with_nothing_changed_rewrites_nothing() {
+    let root = package("stable", "baked", "[view]\nicon name:\"demo:star\"\n");
+    assert!(bake_package(&root, "test", VERSION).unwrap().changed);
+    let again = bake_package(&root, "test", VERSION).unwrap();
+    assert!(!again.changed);
+    assert_eq!(baked_icons(&root), vec!["demo:star"]);
+}
+
+#[test]
+fn a_computed_id_is_an_error_naming_runtime_mode() {
+    let root = package(
+        "computed",
+        "baked",
+        "[logic]\nlet which = signal(String::from(\"demo:home\"));\n\n[view]\ncol\n    icon name:\"demo:gear\"\n    icon name:$which\n",
+    );
+    let report = bake_package(&root, "test", VERSION).unwrap();
+    assert_eq!(report.errors.len(), 1, "{:?}", report.errors);
+    let error = &report.errors[0];
+    assert!(error.starts_with("src/app.rsx:"), "{error}");
+    assert!(error.contains("name:$which"), "{error}");
+    assert!(error.contains("mode = \"runtime\""), "{error}");
+    assert_eq!(
+        baked_icons(&root),
+        vec!["demo:gear"],
+        "the literal still bakes"
+    );
+}
+
+#[test]
+fn a_computed_id_is_left_for_the_runtime_when_only_literals_are_baked() {
+    let root = package(
+        "both",
+        "both",
+        "[logic]\nlet which = signal(String::new());\n\n[view]\ncol\n    icon name:\"demo:gear\"\n    icon name:$which\n",
+    );
+    let report = bake_package(&root, "test", VERSION).unwrap();
+    assert!(report.errors.is_empty(), "{:?}", report.errors);
+    assert_eq!(baked_icons(&root), vec!["demo:gear"]);
+}
+
+#[test]
+fn runtime_mode_bakes_nothing_and_ships_no_notice() {
+    let root = package("runtime", "baked", "[view]\nicon name:\"demo:home\"\n");
+    bake_package(&root, "test", VERSION).unwrap();
+    std::fs::write(
+        root.join("telar.toml"),
+        "[telar.icons]\nmode = \"runtime\"\n",
+    )
+    .unwrap();
+    let report = bake_package(&root, "test", VERSION).unwrap();
+    assert!(report.errors.is_empty(), "{:?}", report.errors);
+    assert!(baked_icons(&root).is_empty());
+    assert!(read_icon_record(&root).is_none());
+    assert!(!root.join(".telar").join(ICONS_NOTICE_FILENAME).exists());
+}

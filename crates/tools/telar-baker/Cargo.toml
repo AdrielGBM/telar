@@ -3,7 +3,7 @@ name = "telar-baker"
 version = { workspace = true }
 edition = { workspace = true }
 rust-version = { workspace = true }
-description = "Bakes .rsx asset references (SVG, image) into Rust source at build time, one baker per registered asset kind."
+description = "Bakes .rsx asset references (SVG, image, icon) into Rust source at build time, one baker per registered asset kind."
 keywords = ["telar", "rsx", "assets", "codegen", "build-time"]
 categories = ["development-tools::build-utils", "compilers"]
 readme = { workspace = true }
@@ -13,6 +13,8 @@ repository = { workspace = true }
 [dependencies]
 # The catalog model and its TOML grammar, shared with the runtime loader: the baker adds discovery and codegen on top, and parses nothing the runtime path would parse differently.
 i18n-core = { workspace = true, features = ["runtime-catalog"] }
+# The Iconify format and the icon sources, shared with `telar-icons`: an id resolves here at bake time exactly as it would at run time. `http` because a project may name a provider to bake from.
+icons-core = { workspace = true, features = ["http"] }
 # `bake` pulls in every format `image` ships (not just the PNG/JPEG an app build settles for): this crate
 # compiles once per machine, so paying for every format here is what lets `cargo-telar` and `telar-analyzer`
 # bake whatever an `.rsx` points at without asking an app to widen its own runtime decoder for it.
@@ -34,3 +36,7 @@ image = { workspace = true }
 [[test]]
 name = "formats"
 path = "src/formats_test.rs"
+
+[[test]]
+name = "icon_bake"
+path = "src/icon_bake_test.rs"

@@ -6,10 +6,13 @@ use std::path::{Path, PathBuf};
 
 use super::config::{CargoManifest, expand_member, find_package_dir};
 
-/// Bakes every workspace member's `.rsx` asset references and translation catalogs.
+/// Bakes every workspace member's `.rsx` asset references and translation catalogs, answering whether every member baked without an error.
 ///
 /// Called once from [`super::run`], before dispatching to any subcommand that goes on to invoke `cargo`, and again from each of `watch.rs`'s two loops, which spawn their own `cargo` per rebuild. **Every place in this binary that spawns `cargo` is a build route**, and a build route that has not baked compiles against a stale artifact — or, since the macro checks hashes, fails. A new one either calls this first or sits downstream of a call that did.
-pub(crate) fn bake_workspace() {
+///
+/// An error is printed here and left to the caller to act on: a one-off command exits on it, while a watch loop goes on to the build, whose `compile_error!` points at the `.rsx` line, and waits for the next edit.
+pub(crate) fn bake_workspace() -> bool {
+    let mut clean = true;
     let dir = find_package_dir(&[]);
     let workspace_root = telar_project::find_workspace_root(&dir).unwrap_or_else(|| dir.clone());
     // This binary's own version is the right fallback only because every crate here shares the workspace version; for any other project a failed resolve means cargo itself is unusable, and the build is about to say so.
@@ -29,6 +32,10 @@ pub(crate) fn bake_workspace() {
             if report.changed {
                 eprintln!("[cargo-telar] Baked {} asset(s) for {name}", report.baked);
             }
+            for error in &report.errors {
+                eprintln!("[cargo-telar] error: {name}: {error}");
+            }
+            clean &= report.errors.is_empty();
         }
         if let Some(report) = telar_baker::bake_catalog(&member, &producer, &telar_version) {
             for warning in &report.warnings {
@@ -42,6 +49,7 @@ pub(crate) fn bake_workspace() {
             }
         }
     }
+    clean
 }
 
 pub(super) fn member_dirs(workspace_root: &Path) -> Vec<PathBuf> {

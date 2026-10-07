@@ -167,7 +167,11 @@ fn ship(
         return;
     }
 
-    bake_workspace();
+    if !bake_workspace() {
+        fail(
+            "the bake reported errors, so no library can ship an artifact that answers for its sources; fix the errors above and run this again",
+        );
+    }
     if !transpile_workspace() {
         fail(
             "the transpile failed, so no library can ship an artifact that answers for its sources; fix the errors above and run this again",
