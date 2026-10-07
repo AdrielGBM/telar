@@ -51,6 +51,7 @@ members = [
     "plugins/telar-expression",
     "plugins/telar-rsx-fixture",
     "plugins/telar-watch",
+    "plugins/telar-i18n",
 ]
 
 default-members = [
@@ -93,6 +94,7 @@ default-members = [
     "plugins/telar-expression",
     "plugins/telar-navigate",
     "plugins/telar-watch",
+    "plugins/telar-i18n",
 ]
 
 [workspace.package]

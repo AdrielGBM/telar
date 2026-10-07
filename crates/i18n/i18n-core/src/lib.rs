@@ -18,7 +18,10 @@ pub use installed::{catalog, set_catalog, set_catalog_if_unset, t};
 pub use locale::{current_locale, set_locale, use_locale};
 pub use message::{Catalog, Entry, Message, Part};
 pub use negotiate::negotiate_locale;
-pub use plural::{PluralCategory, plural_category};
+pub use plural::{
+    BuiltinPluralRules, PluralCategory, PluralOperands, PluralRules, plural_category,
+    set_plural_rules,
+};
 
 /// Looks up `key` in `catalog` for the currently active locale and renders it with `args`.
 ///

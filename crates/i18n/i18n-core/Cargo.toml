@@ -15,6 +15,10 @@ name = "installed_if_unset"
 path = "src/installed_if_unset_test.rs"
 
 [[test]]
+name = "installed_plural_rules"
+path = "src/installed_plural_rules_test.rs"
+
+[[test]]
 name = "override_installed"
 path = "src/override_installed_test.rs"
 

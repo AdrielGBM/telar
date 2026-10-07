@@ -1,0 +1,20 @@
+[package]
+name = "telar-i18n"
+version = { workspace = true }
+edition = { workspace = true }
+rust-version = { workspace = true }
+description = "Locale data for Telar from ICU4X: CLDR plural rules for catalogs, and number and date formatting that follows the active locale."
+keywords = ["telar", "i18n", "l10n", "cldr", "icu4x"]
+categories = ["internationalization", "localization", "gui"]
+readme = "README.md"
+license = { workspace = true }
+repository = { workspace = true }
+
+[dependencies]
+fixed_decimal = { version = "0.7", default-features = false, features = ["ryu"] }
+icu_calendar = { version = "2.3", default-features = false }
+icu_datetime = { version = "2.3", default-features = false, features = ["compiled_data"] }
+icu_decimal = { version = "2.3", default-features = false, features = ["compiled_data"] }
+icu_locale_core = { version = "2.3", default-features = false }
+icu_plurals = { version = "2.3", default-features = false, features = ["compiled_data"] }
+telar = { workspace = true }

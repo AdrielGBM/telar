@@ -388,6 +388,13 @@ that dylib, so two rules follow from the old copy being unmapped (`dlclose`):
   safe because the plugin names it on every `translate_with_override` call rather than storing the reference; do
   not store it in a static of your own.
 
+- **A process-wide install reaches only the image that made it.** A slot such as
+  `telar::i18n::set_plural_rules` belongs to the copy of the runtime it is called in, and the dylib has its own,
+  so rules a host installs from `main` never reach the dylib's widgets. A plugin that installs something exposes
+  a function the application calls from `telar::app!`'s setup block, which runs in the host and again on every
+  load of the dylib, as [`telar-i18n`](../plugins/telar-i18n)'s `install()` is. What it installs is a `&'static`
+  item of the plugin's own, compiled into the same image as the slot, so the two are unmapped together.
+
 ## Checklist
 
 - Depends on `telar` by that name, at the exact version it is released with; documented as such.
@@ -397,4 +404,5 @@ that dylib, so two rules follow from the old copy being unmapped (`dlclose`):
   needs from `use_theme_extension::<K>()`, with `K::default()` as the built-in answers.
 - Strings through `translate_with_override` (or `t!` in a library) under the crate name.
 - No thread-local with a destructor, no stored `&'static Catalog`.
+- Anything installed process-wide behind a function the application calls from `telar::app!`'s setup block.
 - For a `.rsx` library: `cargo telar package --check` passes, and `cargo telar publish --dry-run` succeeds.

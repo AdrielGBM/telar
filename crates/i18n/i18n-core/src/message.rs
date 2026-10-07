@@ -1,6 +1,6 @@
 //! The baked message model. Every type here is `const`-constructible so the build-time catalog baker can emit a whole catalog as a single `static CATALOG: Catalog = Catalog { .. };` — pure `&'static` data with no runtime parsing and no heap, mirroring how the svg baker emits `&'static` draw commands.
 
-use crate::plural::{PluralCategory, plural_category};
+use crate::plural::{PluralCategory, PluralOperands, plural_category};
 
 /// One piece of a message: literal text, or a named placeholder to be filled from the call's arguments.
 pub enum Part {
@@ -17,7 +17,7 @@ pub enum Message {
 }
 
 impl Message {
-    /// Resolves a plural to the branch `locale` selects for the `count` argument; a non-plural message is returned unchanged.
+    /// Resolves a plural to the branch the installed [`PluralRules`](crate::PluralRules) select for `locale` and the `count` argument; a non-plural message is returned unchanged. A `count` that is not a decimal number selects as zero.
     ///
     /// Selection lives here rather than in [`render`](Self::render) because it needs the active locale — which category a count falls into is a property of the *language*, not of the message.
     pub fn select(&self, locale: &str, args: &[(&str, &str)]) -> &Message {
@@ -27,8 +27,8 @@ impl Message {
         let count = args
             .iter()
             .find(|(name, _)| *name == "count")
-            .and_then(|(_, value)| value.parse::<i64>().ok())
-            .unwrap_or(0);
+            .and_then(|(_, value)| PluralOperands::parse(value))
+            .unwrap_or_default();
         let wanted = plural_category(locale, count);
         let pick = |c: PluralCategory| branches.iter().find(|(cat, _)| *cat == c).map(|(_, m)| m);
         pick(wanted)

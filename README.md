@@ -200,7 +200,7 @@ Everything here is either always present or one word away. Nothing is bundled.
 - **Motion** — tweens and springs driven by one frame ticker, with colors interpolated in Oklch.
 - **Theming** — theme tokens plus light/dark mode, reduced motion and high contrast that can follow the OS, and the user's preferred locales, read the same way on every target. → [docs/system-preferences.md](docs/system-preferences.md)
 - **Keyboard** — each focusable control declares the keys it keeps, so a browser build shares Tab and scrolling with the host page instead of fighting it for them. → [docs/keyboard.md](docs/keyboard.md)
-- **Internationalization** — translation catalogs baked at build time; `t!` validates keys and arguments at compile time.
+- **Internationalization** — translation catalogs baked at build time; `t!` validates keys and arguments at compile time. Full CLDR plural rules and locale-aware number and date formatting are in the plugin [`telar-i18n`](plugins/telar-i18n).
 - **Two renderers** — a CPU rasterizer on `tiny-skia` and a GPU one on `wgpu`, behind the same drawing vocabulary. `desktop` and `android` bring both, and `backend = "auto"` picks per machine.
 - **A widget catalogue** — buttons, fields, selects, menus, modals, tabs, sliders, and the rest — in the plugin [`telar-components`](plugins/telar-components): add it with the groups you draw (`overlays`, `chrome`, `advanced`) and list it as a `prelude` in `telar.toml`. → [docs/targets.md](docs/targets.md#the-rest-of-the-features)
 - **Navigation** — a reactive page stack with animated transitions, or one stack per tab, that follows the app's address — in the plugin [`telar-navigate`](plugins/telar-navigate): add it and list it as a `prelude` in `telar.toml`. → [docs/targets.md](docs/targets.md#the-rest-of-the-features)
@@ -250,6 +250,7 @@ Two exceptions. [`cargo-telar`](crates/tools/cargo-telar) is a binary you instal
 | [`telar-navigate`](plugins/telar-navigate) | The page stack: `Navigator`, the host that animates between pages, per-tab stacks |
 | [`telar-watch`](plugins/telar-watch) | Filesystem watching delivered on the UI thread: `watch_path` |
 | [`telar-dynamic`](plugins/telar-dynamic) | Decoders and transports for assets that arrive at run time, one feature each |
+| [`telar-i18n`](plugins/telar-i18n) | CLDR plural rules for catalogs, and number and date formatting in the active locale, from ICU4X |
 | [`telar-expression`](plugins/telar-expression) | A typed, pure expression language bound to signals |
 
 **The layout rule.** `plugins/` holds only crates an application author adds to their own `Cargo.toml`. A crate that a `telar` feature pulls in and compiles into the target is core, even when it is opt-in, and lives in `crates/`; `crates/tools/` is host-side tooling only. Nothing under `crates/` depends on `plugins/`, which `.github/scripts/check-layering.sh` enforces in CI.

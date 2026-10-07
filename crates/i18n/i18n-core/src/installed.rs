@@ -13,7 +13,7 @@ static INSTALLED: RwLock<Option<&'static Catalog>> = RwLock::new(None);
 ///
 /// An application does not call this for the catalog it bakes from `locales/`: `telar::app!` installs that one as the binary loads, before `main` or any test runs. This is for replacing it while the application runs.
 ///
-/// Takes `&'static` because that is what a catalog is on both paths: a `static CATALOG` the transpiler baked, or the heap-leaked result of [`Catalog::from_dir`](crate::Catalog::from_dir).
+/// Takes `&'static` because that is what a catalog is on both paths: a `static CATALOG` the transpiler baked, or the heap-leaked result of `Catalog::from_dir` (feature `runtime-catalog`).
 ///
 /// The slot belongs to the copy of this crate that holds it. A **hot-reload dylib** links a copy of its own, apart from its host's, and every load of the dylib installs its baked catalog into that copy before anything in it runs, so its widgets look in a catalog that stays mapped exactly as long as they do. Only a dylib's catalog handed across that boundary, into its host's copy, would outlive its data.
 pub fn set_catalog(catalog: &'static Catalog) {
